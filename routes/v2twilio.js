@@ -1571,16 +1571,16 @@ router.post('/test-respond/:templateId', async (req, res) => {
     const twiml = new twilio.twiml.VoiceResponse();
     console.log(`🧠 [CHECKPOINT 6] ✅ TwiML response object created`);
     
-    if (result.match) {
+    if (result.scenario) {  // FIXED: was result.match, should be result.scenario
       console.log(`🧠 [CHECKPOINT 7] ✅ MATCH FOUND!`);
-      console.log(`🧠 [CHECKPOINT 7] Scenario: ${result.match.name}`);
+      console.log(`🧠 [CHECKPOINT 7] Scenario: ${result.scenario.name}`);
       console.log(`🧠 [CHECKPOINT 7] Confidence: ${(result.confidence * 100).toFixed(1)}%`);
       
       console.log(`🧠 [CHECKPOINT 8] Selecting random reply...`);
       // Pick a random reply
-      const replies = result.match.fullReplies && result.match.fullReplies.length > 0 
-        ? result.match.fullReplies 
-        : result.match.quickReplies || [];
+      const replies = result.scenario.fullReplies && result.scenario.fullReplies.length > 0 
+        ? result.scenario.fullReplies 
+        : result.scenario.quickReplies || [];
       
       console.log(`🧠 [CHECKPOINT 8] Available replies: ${replies.length}`);
       const reply = replies[Math.floor(Math.random() * replies.length)] || 'I understand.';
@@ -1638,13 +1638,13 @@ router.post('/test-respond/:templateId', async (req, res) => {
     const testResult = {
       timestamp: new Date().toISOString(),
       phrase: speechText,
-      matched: !!result.match,
+      matched: !!result.scenario,  // FIXED: was result.match, should be result.scenario
       confidence: result.confidence || 0,
-      threshold: 0.45,
-      scenario: result.match ? {
-        id: result.match.scenarioId || result.match._id,
-        name: result.match.name,
-        category: result.match.category
+      threshold: result.trace?.threshold || 0.45,
+      scenario: result.scenario ? {
+        id: result.scenario.scenarioId || result.scenario._id,
+        name: result.scenario.name,
+        category: result.scenario.category
       } : null,
       topCandidates: result.trace?.topCandidates || [],
       timing: result.trace?.timingMs || {},
