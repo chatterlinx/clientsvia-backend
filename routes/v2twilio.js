@@ -11,6 +11,7 @@ const twilio = require('twilio');
 const Company = require('../models/v2Company');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const HybridScenarioSelector = require('../services/HybridScenarioSelector');
+const MatchDiagnostics = require('../services/MatchDiagnostics');
 // 🚀 V2 SYSTEM: Using V2 AI Agent Runtime instead of legacy agent.js
 const { initializeCall, processUserInput } = require('../services/v2AIAgentRuntime');
 // V2 DELETED: Legacy aiAgentRuntime - replaced with v2AIAgentRuntime
@@ -1654,23 +1655,19 @@ router.post('/test-respond/:templateId', async (req, res) => {
     const aiAnalysis = analyzeTestResult(testResult, allScenarios);
     testResult.analysis = aiAnalysis;
     
-    // 🔬 Add detailed match diagnostics
-    testResult.diagnostics = {
-      phrase: speechText,
-      normalizedPhrase: result.trace?.normalizedPhrase || speechText.toLowerCase(),
-      phraseTerms: result.trace?.phraseTerms || [],
-      totalScenarios: allScenarios.length,
-      eligibleScenarios: result.trace?.scenariosEvaluated || 0,
-      blockedScenarios: result.trace?.scenariosBlocked || 0,
-      matchBreakdown: result.match ? {
-        bm25Score: result.score || 0,
-        semanticScore: 0, // Not yet implemented
-        regexScore: 0, // Not yet implemented
-        contextScore: 0, // Not yet implemented
-        totalScore: result.score || 0
-      } : null,
-      failureReason: !result.match ? determineFailureReason(result, allScenarios) : null
-    };
+    // 🔬 WORLD-CLASS DIAGNOSTICS: Generate comprehensive debug card
+    const debugCard = MatchDiagnostics.generateDebugCard(
+      result,
+      allScenarios,
+      speechText,
+      {
+        channel: 'voice',
+        language: 'en',
+        asrConfidence: null // Twilio doesn't provide this
+      }
+    );
+    
+    testResult.diagnostics = debugCard;
     
     if (aiAnalysis.suggestions.length > 0 || aiAnalysis.issues.length > 0) {
       console.log(`🤖 [AI ANALYSIS] Found ${aiAnalysis.suggestions.length} suggestions, ${aiAnalysis.issues.length} issues`);
@@ -1714,6 +1711,23 @@ router.get('/test-results/:templateId', (req, res) => {
     templateId,
     count: results.length,
     results
+  });
+});
+
+// 📊 GET endpoint for aggregate quality report
+router.get('/quality-report/:templateId', (req, res) => {
+  const { templateId } = req.params;
+  const limit = parseInt(req.query.limit) || 100; // Analyze more for quality metrics
+  
+  console.log(`📊 [QUALITY REPORT] Generating report for template ${templateId} (last ${limit} tests)`);
+  
+  const results = getTestResults(templateId, limit);
+  const qualityReport = MatchDiagnostics.generateQualityReport(results);
+  
+  res.json({
+    success: true,
+    templateId,
+    report: qualityReport
   });
 });
 
