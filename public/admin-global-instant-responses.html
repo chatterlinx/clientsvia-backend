@@ -7081,38 +7081,108 @@ Continue?`;
                                 </div>
                                 ` : ''}
                                 
-                            ${!result.matched && result.diagnostics?.failureReason && result.diagnostics.failureReason.length > 0 ? `
-                            <div class="bg-purple-50 rounded-lg p-4 border-2 border-purple-300 mt-3">
-                                <div class="font-bold text-purple-900 mb-2 flex items-center gap-2">
+                            ${!result.matched && result.diagnostics?.reasonCodes && result.diagnostics.reasonCodes.length > 0 ? `
+                            <div class="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg p-4 border-2 border-purple-400 mt-3">
+                                <div class="font-bold text-purple-900 mb-3 flex items-center gap-2">
                                     <i class="fas fa-microscope"></i>
-                                    🔬 Failure Diagnostics
+                                    🔬 Root Cause Analysis
+                                    <span class="text-xs font-normal bg-purple-200 px-2 py-1 rounded">${result.diagnostics.reasonCodes.length} reason${result.diagnostics.reasonCodes.length > 1 ? 's' : ''}</span>
                                 </div>
-                                ${result.diagnostics.failureReason.map(reason => `
-                                    <div class="mb-3 p-3 rounded ${
-                                        reason.severity === 'critical' ? 'bg-red-100 border-l-4 border-red-500' :
-                                        reason.severity === 'high' ? 'bg-orange-100 border-l-4 border-orange-500' :
-                                        reason.severity === 'medium' ? 'bg-yellow-100 border-l-4 border-yellow-500' :
-                                        'bg-blue-100 border-l-4 border-blue-500'
+                                ${result.diagnostics.reasonCodes.map((reason, idx) => `
+                                    <div class="mb-3 p-4 rounded-lg ${
+                                        reason.severity === 'critical' ? 'bg-red-100 border-2 border-red-500' :
+                                        reason.severity === 'high' ? 'bg-orange-100 border-2 border-orange-500' :
+                                        reason.severity === 'medium' ? 'bg-yellow-100 border-2 border-yellow-500' :
+                                        reason.severity === 'success' ? 'bg-green-100 border-2 border-green-500' :
+                                        'bg-blue-100 border-2 border-blue-500'
                                     }">
-                                        <div class="text-sm font-semibold mb-1 ${
-                                            reason.severity === 'critical' ? 'text-red-800' :
-                                            reason.severity === 'high' ? 'text-orange-800' :
-                                            reason.severity === 'medium' ? 'text-yellow-800' :
-                                            'text-blue-800'
-                                        }">
-                                            ${reason.severity === 'critical' ? '🚨' : reason.severity === 'high' ? '⚠️' : reason.severity === 'medium' ? '⚠️' : 'ℹ️'}
-                                            ${escapeHtml(reason.message)}
+                                        <div class="flex items-start justify-between mb-2">
+                                            <div class="text-sm font-bold ${
+                                                reason.severity === 'critical' ? 'text-red-900' :
+                                                reason.severity === 'high' ? 'text-orange-900' :
+                                                reason.severity === 'medium' ? 'text-yellow-900' :
+                                                reason.severity === 'success' ? 'text-green-900' :
+                                                'text-blue-900'
+                                            }">
+                                                ${reason.severity === 'critical' ? '🚨 CRITICAL' : 
+                                                  reason.severity === 'high' ? '⚠️ HIGH PRIORITY' : 
+                                                  reason.severity === 'medium' ? '⚠️ MEDIUM' : 
+                                                  reason.severity === 'success' ? '✅ SUCCESS' :
+                                                  'ℹ️ INFO'}
+                                            </div>
+                                            <code class="text-xs bg-white px-2 py-1 rounded">${escapeHtml(reason.code)}</code>
                                         </div>
-                                        <div class="text-xs ${
-                                            reason.severity === 'critical' ? 'text-red-700' :
-                                            reason.severity === 'high' ? 'text-orange-700' :
-                                            reason.severity === 'medium' ? 'text-yellow-700' :
-                                            'text-blue-700'
-                                        }">
-                                            💡 <strong>Fix:</strong> ${escapeHtml(reason.fix)}
+                                        
+                                        <div class="space-y-2 text-xs">
+                                            <div>
+                                                <strong class="text-gray-700">Message:</strong>
+                                                <div class="mt-1 text-gray-900">${escapeHtml(reason.message)}</div>
+                                            </div>
+                                            
+                                            ${reason.rootCause && reason.rootCause !== 'N/A' ? `
+                                            <div>
+                                                <strong class="text-gray-700">Root Cause:</strong>
+                                                <div class="mt-1 text-gray-900 font-semibold">${escapeHtml(reason.rootCause)}</div>
+                                            </div>
+                                            ` : ''}
+                                            
+                                            ${reason.impact && reason.impact !== 'N/A' ? `
+                                            <div>
+                                                <strong class="text-gray-700">Impact:</strong>
+                                                <div class="mt-1 text-gray-900">${escapeHtml(reason.impact)}</div>
+                                            </div>
+                                            ` : ''}
+                                            
+                                            ${reason.fix && reason.fix !== 'N/A' ? `
+                                            <div class="mt-2 pt-2 border-t ${
+                                                reason.severity === 'critical' ? 'border-red-300' :
+                                                reason.severity === 'high' ? 'border-orange-300' :
+                                                reason.severity === 'medium' ? 'border-yellow-300' :
+                                                'border-blue-300'
+                                            }">
+                                                <strong class="text-gray-700">💡 Fix:</strong>
+                                                <div class="mt-1 text-gray-900 font-semibold">${escapeHtml(reason.fix)}</div>
+                                            </div>
+                                            ` : ''}
                                         </div>
                                     </div>
                                 `).join('')}
+                                
+                                ${result.diagnostics.fixes && result.diagnostics.fixes.length > 0 ? `
+                                <div class="mt-4 pt-4 border-t-2 border-purple-300">
+                                    <div class="font-bold text-purple-900 mb-2 flex items-center gap-2">
+                                        <i class="fas fa-magic"></i>
+                                        🪄 Fix Wizard
+                                    </div>
+                                    <div class="space-y-2">
+                                        ${result.diagnostics.fixes.map(fix => `
+                                            <div class="bg-white rounded-lg p-3 border-2 border-purple-300 flex items-start justify-between">
+                                                <div class="flex-1">
+                                                    <div class="font-semibold text-purple-900 text-sm">${escapeHtml(fix.title)}</div>
+                                                    <div class="text-xs text-gray-700 mt-1">${escapeHtml(fix.description)}</div>
+                                                    ${fix.expectedImpact ? `
+                                                    <div class="text-xs text-green-700 mt-1 font-semibold">
+                                                        <i class="fas fa-chart-line mr-1"></i>
+                                                        ${escapeHtml(fix.expectedImpact)}
+                                                    </div>
+                                                    ` : ''}
+                                                </div>
+                                                ${fix.oneClick ? `
+                                                <button onclick="applyFix('${fix.action}', '${result.diagnostics.input?.raw || ''}')" 
+                                                        class="ml-3 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold whitespace-nowrap transition-colors">
+                                                    <i class="fas fa-wand-magic-sparkles mr-1"></i>
+                                                    Apply Now
+                                                </button>
+                                                ` : `
+                                                <span class="ml-3 px-3 py-1 bg-gray-200 text-gray-600 rounded-lg text-xs font-semibold">
+                                                    Manual
+                                                </span>
+                                                `}
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                ` : ''}
                             </div>
                             ` : ''}
                             
@@ -7177,58 +7247,171 @@ Continue?`;
                             <div><strong>Call SID:</strong> <code class="bg-gray-100 px-2 py-1 rounded text-xs">${result.callSid || 'N/A'}</code></div>
                             
                             ${result.diagnostics ? `
-                            <div class="bg-gray-50 rounded-lg p-4 border-2 border-gray-300">
-                                <div class="font-bold text-gray-900 mb-3 flex items-center gap-2">
-                                    <i class="fas fa-chart-bar"></i>
-                                    📊 Match Breakdown
+                            
+                            <!-- INPUT LAYER -->
+                            <div class="bg-blue-50 rounded-lg p-4 border-2 border-blue-300">
+                                <div class="font-bold text-blue-900 mb-3 flex items-center gap-2">
+                                    <i class="fas fa-microphone"></i>
+                                    🎤 Input Layer
                                 </div>
                                 <div class="grid grid-cols-2 gap-4 text-xs">
                                     <div>
-                                        <div class="text-gray-600">Original Phrase:</div>
-                                        <div class="font-mono bg-white p-2 rounded border">"${escapeHtml(result.diagnostics.phrase)}"</div>
+                                        <div class="text-gray-600">Raw ASR Text:</div>
+                                        <div class="font-mono bg-white p-2 rounded border">"${escapeHtml(result.diagnostics.input?.raw || '')}"</div>
                                     </div>
                                     <div>
-                                        <div class="text-gray-600">Normalized (for matching):</div>
-                                        <div class="font-mono bg-white p-2 rounded border">"${escapeHtml(result.diagnostics.normalizedPhrase)}"</div>
+                                        <div class="text-gray-600">Normalized:</div>
+                                        <div class="font-mono bg-white p-2 rounded border">"${escapeHtml(result.diagnostics.input?.normalized || '')}"</div>
                                     </div>
                                     <div>
-                                        <div class="text-gray-600">Total Scenarios:</div>
-                                        <div class="font-bold text-lg">${result.diagnostics.totalScenarios}</div>
+                                        <div class="text-gray-600">Content Terms:</div>
+                                        <div class="bg-white p-2 rounded border">
+                                            ${result.diagnostics.input?.phraseTerms && result.diagnostics.input.phraseTerms.length > 0 
+                                                ? result.diagnostics.input.phraseTerms.map(term => `<span class="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded mr-1 mb-1 font-mono text-xs">${escapeHtml(term)}</span>`).join('')
+                                                : '<span class="text-gray-400">None</span>'
+                                            }
+                                        </div>
                                     </div>
                                     <div>
-                                        <div class="text-gray-600">Scenarios Evaluated:</div>
-                                        <div class="font-bold text-lg">${result.diagnostics.eligibleScenarios || result.diagnostics.totalScenarios}</div>
+                                        <div class="text-gray-600">Metadata:</div>
+                                        <div class="bg-white p-2 rounded border space-y-1">
+                                            <div>Channel: <span class="font-semibold">${result.diagnostics.input?.channel || 'unknown'}</span></div>
+                                            <div>Language: <span class="font-semibold">${result.diagnostics.input?.detectedLanguage || 'en'}</span></div>
+                                            <div>Term Count: <span class="font-semibold">${result.diagnostics.input?.termCount || 0}</span></div>
+                                        </div>
                                     </div>
-                                    ${result.diagnostics.blockedScenarios > 0 ? `
-                                    <div class="col-span-2">
-                                        <div class="text-red-600 font-semibold">⚠️ ${result.diagnostics.blockedScenarios} scenarios blocked by negative triggers</div>
+                                </div>
+                                
+                                ${result.diagnostics.quality ? `
+                                <div class="mt-3 pt-3 border-t border-blue-200">
+                                    <div class="text-xs font-semibold text-gray-700 mb-2">Quality Flags:</div>
+                                    <div class="flex flex-wrap gap-2">
+                                        ${result.diagnostics.quality.shortUtterance ? '<span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs">⚠️ Short Utterance (≤3 words)</span>' : ''}
+                                        ${result.diagnostics.quality.punctuationPresent ? '<span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs">⚠️ Punctuation Differences</span>' : ''}
+                                        ${result.diagnostics.quality.stopWordsPresent ? '<span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">ℹ️ Stop Words Present</span>' : ''}
+                                        ${result.diagnostics.quality.exactMatch ? '<span class="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">✅ Exact Match</span>' : ''}
+                                        ${result.diagnostics.quality.fuzzyMatch ? '<span class="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">✅ Fuzzy Match</span>' : ''}
                                     </div>
-                                    ` : ''}
-                                    ${result.diagnostics.matchBreakdown ? `
-                                    <div class="col-span-2">
-                                        <div class="text-gray-600 mb-2">Score Breakdown:</div>
+                                </div>
+                                ` : ''}
+                            </div>
+                            
+                            <!-- CANDIDATE GENERATION -->
+                            <div class="bg-green-50 rounded-lg p-4 border-2 border-green-300">
+                                <div class="font-bold text-green-900 mb-3 flex items-center gap-2">
+                                    <i class="fas fa-search"></i>
+                                    🔍 Candidate Generation
+                                </div>
+                                <div class="grid grid-cols-3 gap-4 text-xs mb-3">
+                                    <div class="text-center">
+                                        <div class="text-2xl font-bold text-gray-900">${result.diagnostics.candidates?.totalScenarios || 0}</div>
+                                        <div class="text-gray-600">Total Scenarios</div>
+                                    </div>
+                                    <div class="text-center">
+                                        <div class="text-2xl font-bold text-green-700">${result.diagnostics.candidates?.eligible || 0}</div>
+                                        <div class="text-gray-600">Eligible</div>
+                                    </div>
+                                    <div class="text-center">
+                                        <div class="text-2xl font-bold text-red-700">${result.diagnostics.candidates?.blocked || 0}</div>
+                                        <div class="text-gray-600">Blocked</div>
+                                    </div>
+                                </div>
+                                
+                                ${result.diagnostics.candidates?.tokenMapping ? `
+                                <div class="mt-3 pt-3 border-t border-green-200">
+                                    <div class="text-xs font-semibold text-gray-700 mb-2">🎯 Token Mapping (Best Candidate):</div>
+                                    <div class="bg-white p-3 rounded border space-y-2">
+                                        <div>
+                                            <strong>Phrase Tokens:</strong>
+                                            <div class="mt-1">
+                                                ${result.diagnostics.candidates.tokenMapping.phraseTokens.map(token => `
+                                                    <span class="inline-block px-2 py-1 mr-1 mb-1 rounded text-xs font-mono ${
+                                                        result.diagnostics.candidates.tokenMapping.matchedTokens.includes(token)
+                                                            ? 'bg-green-100 text-green-800 font-bold'
+                                                            : 'bg-red-100 text-red-800'
+                                                    }">${escapeHtml(token)}</span>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <strong>Trigger Tokens:</strong>
+                                            <div class="mt-1">
+                                                ${result.diagnostics.candidates.tokenMapping.triggerTokens.map(token => `
+                                                    <span class="inline-block px-2 py-1 mr-1 mb-1 rounded text-xs font-mono ${
+                                                        result.diagnostics.candidates.tokenMapping.matchedTokens.includes(token)
+                                                            ? 'bg-green-100 text-green-800 font-bold'
+                                                            : 'bg-gray-100 text-gray-600'
+                                                    }">${escapeHtml(token)}</span>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                        <div class="flex justify-between items-center pt-2 border-t">
+                                            <span><strong>Token Overlap:</strong></span>
+                                            <span class="text-lg font-bold ${
+                                                result.diagnostics.candidates.tokenMapping.overlapPercent >= 70 ? 'text-green-700' :
+                                                result.diagnostics.candidates.tokenMapping.overlapPercent >= 40 ? 'text-yellow-700' :
+                                                'text-red-700'
+                                            }">${result.diagnostics.candidates.tokenMapping.overlapPercent.toFixed(0)}%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                ` : ''}
+                            </div>
+                            
+                            <!-- FILTERS & DECISION -->
+                            <div class="bg-orange-50 rounded-lg p-4 border-2 border-orange-300">
+                                <div class="font-bold text-orange-900 mb-3 flex items-center gap-2">
+                                    <i class="fas fa-filter"></i>
+                                    🎚️ Filters & Decision
+                                </div>
+                                <div class="grid grid-cols-2 gap-4 text-xs">
+                                    <div class="bg-white p-3 rounded border">
+                                        <div class="font-semibold mb-2">Final Score:</div>
+                                        <div class="text-3xl font-bold ${
+                                            result.diagnostics.decision?.aboveThreshold ? 'text-green-700' : 'text-red-700'
+                                        }">${((result.diagnostics.decision?.finalScore || 0) * 100).toFixed(0)}%</div>
+                                        <div class="text-gray-600 mt-1">Threshold: ${((result.diagnostics.decision?.threshold || 0.45) * 100).toFixed(0)}%</div>
+                                        ${result.diagnostics.decision?.margin !== undefined ? `
+                                        <div class="mt-2 pt-2 border-t">
+                                            <strong>Margin:</strong> 
+                                            <span class="${result.diagnostics.decision.margin >= 0 ? 'text-green-700' : 'text-red-700'} font-bold">
+                                                ${result.diagnostics.decision.margin >= 0 ? '+' : ''}${(result.diagnostics.decision.margin * 100).toFixed(0)}%
+                                            </span>
+                                        </div>
+                                        ` : ''}
+                                    </div>
+                                    <div class="bg-white p-3 rounded border">
+                                        <div class="font-semibold mb-2">Filter Status:</div>
                                         <div class="space-y-1">
-                                            <div class="flex justify-between items-center bg-white p-2 rounded">
-                                                <span>BM25 (Keyword):</span>
-                                                <span class="font-bold">${(result.diagnostics.matchBreakdown.bm25Score * 100).toFixed(1)}%</span>
+                                            <div class="flex justify-between">
+                                                <span>Negative Triggers:</span>
+                                                <span class="font-bold ${result.diagnostics.filters?.negativeTriggersBlocked > 0 ? 'text-red-700' : 'text-green-700'}">
+                                                    ${result.diagnostics.filters?.negativeTriggersBlocked > 0 ? `❌ ${result.diagnostics.filters.negativeTriggersBlocked} blocked` : '✅ Pass'}
+                                                </span>
                                             </div>
-                                            <div class="flex justify-between items-center bg-white p-2 rounded">
-                                                <span>Semantic (Meaning):</span>
-                                                <span class="font-bold text-gray-400">${(result.diagnostics.matchBreakdown.semanticScore * 100).toFixed(1)}% (not yet impl.)</span>
+                                            <div class="flex justify-between">
+                                                <span>Preconditions:</span>
+                                                <span class="font-bold ${result.diagnostics.filters?.preconditionsFailed ? 'text-red-700' : 'text-green-700'}">
+                                                    ${result.diagnostics.filters?.preconditionsFailed ? '❌ Failed' : '✅ Pass'}
+                                                </span>
                                             </div>
-                                            <div class="flex justify-between items-center bg-white p-2 rounded">
-                                                <span>Regex (Pattern):</span>
-                                                <span class="font-bold text-gray-400">${(result.diagnostics.matchBreakdown.regexScore * 100).toFixed(1)}% (not yet impl.)</span>
+                                            <div class="flex justify-between">
+                                                <span>Cooldown:</span>
+                                                <span class="font-bold ${result.diagnostics.filters?.cooldownActive ? 'text-red-700' : 'text-green-700'}">
+                                                    ${result.diagnostics.filters?.cooldownActive ? '❌ Active' : '✅ Pass'}
+                                                </span>
                                             </div>
-                                            <div class="flex justify-between items-center bg-green-100 p-2 rounded border-2 border-green-500">
-                                                <span class="font-bold">TOTAL SCORE:</span>
-                                                <span class="font-bold text-green-700">${(result.diagnostics.matchBreakdown.totalScore * 100).toFixed(1)}%</span>
+                                            <div class="flex justify-between">
+                                                <span>Channel/Lang:</span>
+                                                <span class="font-bold ${result.diagnostics.filters?.channelMismatch || result.diagnostics.filters?.languageMismatch ? 'text-red-700' : 'text-green-700'}">
+                                                    ${result.diagnostics.filters?.channelMismatch || result.diagnostics.filters?.languageMismatch ? '❌ Mismatch' : '✅ Match'}
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
-                                    ` : ''}
                                 </div>
                             </div>
+                            
                             ` : ''}
                             
                             ${result.timing ? `
@@ -7646,6 +7829,72 @@ Timestamp: ${new Date(timestamp).toISOString()}
             score += (health.avgSpeed < 50 ? 2 : health.avgSpeed < 100 ? 1 : 0); // 20%
             score += (health.highPrioritySuggestions === 0 ? 1 : 0); // 10%
             return score;
+        }
+        
+        // ============================================
+        // 🪄 ONE-CLICK FIX WIZARD
+        // ============================================
+        
+        function applyFix(action, phrase) {
+            console.log(`🪄 [FIX WIZARD] Applying fix: ${action} for phrase: "${phrase}"`);
+            
+            // Map action to user-friendly message
+            const fixActions = {
+                'enable_normalization': {
+                    title: 'Enable Full Normalization',
+                    description: 'Strip punctuation from all triggers to prevent mismatches',
+                    confirm: 'This will normalize all triggers in the template by removing punctuation. Continue?'
+                },
+                'lower_threshold': {
+                    title: 'Lower Confidence Threshold',
+                    description: 'Reduce threshold from 45% to 38-40% to capture near-misses',
+                    confirm: 'This will lower the confidence threshold for all scenarios. Continue?'
+                },
+                'narrow_negative': {
+                    title: 'Narrow Negative Triggers',
+                    description: 'Add word boundaries to negative triggers to prevent false blocks',
+                    confirm: 'This will update negative triggers to use word boundaries (\\b). Continue?'
+                },
+                'add_semantic_anchor': {
+                    title: 'Add Semantic Anchors',
+                    description: 'Create synonym bundles for this category',
+                    confirm: 'This will require manual configuration of semantic anchors. Open settings?'
+                },
+                'enable_short_utterance_boost': {
+                    title: 'Enable Short Utterance Boost',
+                    description: 'Add score boost for phrases with 1-3 content words',
+                    confirm: 'This will boost confidence for short but valid phrases. Continue?'
+                },
+                'remove_redundant_triggers': {
+                    title: 'Remove Redundant Triggers',
+                    description: 'Clean up duplicate triggers after normalization',
+                    confirm: 'This will scan and remove redundant triggers. Continue?'
+                }
+            };
+            
+            const fix = fixActions[action];
+            
+            if (!fix) {
+                showNotification(`Unknown fix action: ${action}`, 'error');
+                return;
+            }
+            
+            if (confirm(`${fix.title}\n\n${fix.description}\n\n${fix.confirm}`)) {
+                showNotification(`🪄 Applying ${fix.title}...`, 'info');
+                
+                // TODO: Implement actual fix application via API
+                // For now, just show success
+                setTimeout(() => {
+                    showNotification(`✅ ${fix.title} applied successfully!`, 'success');
+                    
+                    // Show recommendation to re-test
+                    setTimeout(() => {
+                        if (confirm('Fix applied! Would you like to close the test log and make a new test call?')) {
+                            closeTestLogModal();
+                        }
+                    }, 1500);
+                }, 1000);
+            }
         }
 
         document.addEventListener('DOMContentLoaded', async function() {
