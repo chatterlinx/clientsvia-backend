@@ -114,7 +114,9 @@ class HybridScenarioSelector {
                 'i need someone out', 'when can you come', 'i need an appointment',
                 'need appointment', 'make appointment', 'get appointment', 'set appointment',
                 'send someone', 'come over', 'come by', 'stop by', 'dispatch',
-                'need service', 'schedule service', 'book service'
+                'need service', 'schedule service', 'book service',
+                'have someone over', 'have someone out', 'send someone out',
+                'schedule a visit', 'book an appointment', 'book a visit'
             ],
             
             // Priority 3: Reschedule/Cancel
@@ -398,6 +400,107 @@ class HybridScenarioSelector {
                 trace.selectionReason = 'All scenarios blocked by negative triggers';
                 return { scenario: null, score: 0, confidence: 0, trace };
             }
+            
+            // ============================================
+            // STEP 3.5: DUAL-INTENT RESOLVER 🎯
+            // ============================================
+            // CRITICAL: Handles mixed problem + action phrases
+            // Example: "I'm having water leaks... can I schedule a visit?"
+            // 
+            // PROBLEM: "water leaks" → Emergency
+            // ACTION: "schedule a visit" → Booking
+            // 
+            // RESOLUTION LOGIC:
+            // 1. If problemScore >= 0.70 AND delta >= 0.15 → Emergency (hard route)
+            // 2. If both >= 0.45 AND delta < 0.15 → Clarifier (ask user)
+            // 3. Else → Booking (default to action)
+            
+            const resolverStart = Date.now();
+            
+            // Compute problem score (emergency keywords)
+            const problemScore = this.computeProblemScore(normalizedPhrase, phraseTerms, scoredScenarios);
+            
+            // Compute action score (booking keywords)
+            const actionScore = this.computeActionScore(normalizedPhrase, phraseTerms, scoredScenarios);
+            
+            // Resolver thresholds
+            const TH = 0.45;           // Minimum confidence threshold
+            const EM_HARD = 0.70;      // Emergency hard-route threshold
+            const DELTA = 0.15;        // Minimum score delta for decisive routing
+            
+            // Compute delta
+            const scoreDelta = Math.abs(problemScore - actionScore);
+            
+            // Resolution decision
+            let resolverDecision = {
+                problemScore: problemScore.toFixed(3),
+                actionScore: actionScore.toFixed(3),
+                delta: scoreDelta.toFixed(3),
+                route: 'booking',  // Default
+                needsClarifier: false,
+                clarifierPrompt: null,
+                reasoning: ''
+            };
+            
+            // Decision tree
+            if (problemScore >= EM_HARD && (problemScore - actionScore) >= DELTA) {
+                // Hard emergency route (problem is strong and dominant)
+                resolverDecision.route = 'emergency';
+                resolverDecision.reasoning = `Emergency hard-route: problemScore ${problemScore.toFixed(2)} >= ${EM_HARD} and delta ${scoreDelta.toFixed(2)} >= ${DELTA}`;
+                
+                // Boost emergency scenarios
+                scoredScenarios.forEach(s => {
+                    if (this.isEmergencyScenario(s.scenario)) {
+                        s.score *= 1.5;  // 50% boost
+                        s.confidence *= 1.5;
+                        s.breakdown.resolverBoost = '+50%';
+                    }
+                });
+                
+            } else if (problemScore >= TH && actionScore >= TH) {
+                // Both intents present - check if close
+                if (scoreDelta < DELTA) {
+                    // Too close to decide - need clarifier
+                    resolverDecision.route = 'clarify';
+                    resolverDecision.needsClarifier = true;
+                    resolverDecision.clarifierPrompt = `Got it, you mentioned ${this.extractProblemTopics(normalizedPhrase).join(', ')}. Is this actively urgent right now, or can we schedule a routine visit?`;
+                    resolverDecision.reasoning = `Both intents present (problem: ${problemScore.toFixed(2)}, action: ${actionScore.toFixed(2)}), delta ${scoreDelta.toFixed(2)} < ${DELTA} → clarifier needed`;
+                    
+                    // Flag the top scenario for clarification
+                    if (scoredScenarios.length > 0) {
+                        scoredScenarios[0].needsClarifier = true;
+                        scoredScenarios[0].clarifierPrompt = resolverDecision.clarifierPrompt;
+                    }
+                    
+                } else {
+                    // Clear winner based on score
+                    resolverDecision.route = problemScore > actionScore ? 'emergency' : 'booking';
+                    resolverDecision.reasoning = `Both intents present, ${resolverDecision.route} wins (problem: ${problemScore.toFixed(2)}, action: ${actionScore.toFixed(2)}, delta: ${scoreDelta.toFixed(2)})`;
+                    
+                    // Boost the winner
+                    scoredScenarios.forEach(s => {
+                        if (resolverDecision.route === 'emergency' && this.isEmergencyScenario(s.scenario)) {
+                            s.score *= 1.3;
+                            s.confidence *= 1.3;
+                            s.breakdown.resolverBoost = '+30%';
+                        } else if (resolverDecision.route === 'booking' && this.isBookingScenario(s.scenario)) {
+                            s.score *= 1.3;
+                            s.confidence *= 1.3;
+                            s.breakdown.resolverBoost = '+30%';
+                        }
+                    });
+                }
+                
+            } else {
+                // Default to booking (action intent wins if problem is weak)
+                resolverDecision.route = 'booking';
+                resolverDecision.reasoning = `Default to booking: problemScore ${problemScore.toFixed(2)} or actionScore ${actionScore.toFixed(2)} below dual-intent threshold`;
+            }
+            
+            trace.resolverDecision = resolverDecision;
+            trace.timingMs.resolver = Date.now() - resolverStart;
+            
+            logger.info('🎯 [DUAL-INTENT RESOLVER]', resolverDecision);
             
             // ============================================
             // STEP 4: SORT & SELECT BEST MATCH
@@ -824,6 +927,61 @@ class HybridScenarioSelector {
     }
     
     /**
+     * 🪟 WINDOWED MATCHING - Prevents long phrases from diluting intent
+     * Scores the BEST 7-10 word sliding window instead of full phrase
+     * 
+     * Example:
+     * "Hi, I called earlier but I forgot I have a doctor's appointment. Can I change my appointment?"
+     * Instead of scoring all 16 words (diluted by chit-chat),
+     * scores windows like:
+     * - "forgot i have doctor appointment can"
+     * - "have doctor appointment can i change"
+     * - "appointment can i change my appointment" ← BEST WINDOW
+     * 
+     * @param {Array} tokens - All tokens from phrase
+     * @param {Function} scoreFn - Function to score a window: scoreFn(windowText) => score
+     * @param {Number} windowSize - Window size (default: 10 words)
+     * @returns {Number} - Best window score
+     */
+    bestWindowScore(tokens, scoreFn, windowSize = 10) {
+        if (!tokens || tokens.length === 0) return 0;
+        
+        // If phrase is shorter than window, score the whole thing
+        if (tokens.length <= windowSize) {
+            return scoreFn(tokens.join(' '));
+        }
+        
+        let bestScore = 0;
+        
+        // Slide window across tokens
+        for (let i = 0; i <= tokens.length - windowSize; i++) {
+            const windowTokens = tokens.slice(i, i + windowSize);
+            const windowText = windowTokens.join(' ');
+            const score = scoreFn(windowText);
+            
+            if (score > bestScore) {
+                bestScore = score;
+            }
+        }
+        
+        // Also try smaller windows (7 words) for short, punchy phrases
+        const smallWindowSize = 7;
+        if (tokens.length > smallWindowSize) {
+            for (let i = 0; i <= tokens.length - smallWindowSize; i++) {
+                const windowTokens = tokens.slice(i, i + smallWindowSize);
+                const windowText = windowTokens.join(' ');
+                const score = scoreFn(windowText);
+                
+                if (score > bestScore) {
+                    bestScore = score;
+                }
+            }
+        }
+        
+        return bestScore;
+    }
+    
+    /**
      * Extract meaningful terms from phrase
      * @param {String} normalizedPhrase - Normalized phrase
      * @returns {Array} - Array of terms
@@ -955,6 +1113,144 @@ class HybridScenarioSelector {
             fillerWordsCount: this.fillerWords.size,
             version: '1.0.0'
         };
+    }
+    
+    // ============================================
+    // DUAL-INTENT RESOLVER HELPERS
+    // ============================================
+    
+    /**
+     * Compute problem score (emergency keywords detected)
+     * @param {String} normalizedPhrase - Normalized caller phrase
+     * @param {Array} phraseTerms - Extracted content terms
+     * @param {Array} scoredScenarios - All scored scenarios
+     * @returns {Number} - Problem score (0-1)
+     */
+    computeProblemScore(normalizedPhrase, phraseTerms, scoredScenarios) {
+        // Emergency keywords (urgency indicators)
+        const emergencyKeywords = this.intentKeywords.EMERGENCY || [];
+        const problemKeywords = this.intentKeywords.PROBLEM_TOPICS || [];
+        
+        let matchCount = 0;
+        let totalKeywords = emergencyKeywords.length + problemKeywords.length;
+        
+        // Check for emergency keywords
+        emergencyKeywords.forEach(keyword => {
+            if (normalizedPhrase.includes(keyword.toLowerCase())) {
+                matchCount += 2;  // Emergency keywords count double
+            }
+        });
+        
+        // Check for problem keywords
+        problemKeywords.forEach(keyword => {
+            if (normalizedPhrase.includes(keyword.toLowerCase())) {
+                matchCount += 1;
+            }
+        });
+        
+        // Also check if any emergency scenarios scored well
+        const emergencyScenarios = scoredScenarios.filter(s => this.isEmergencyScenario(s.scenario));
+        const maxEmergencyScore = emergencyScenarios.length > 0 
+            ? Math.max(...emergencyScenarios.map(s => s.score)) 
+            : 0;
+        
+        // Combine keyword match and scenario score
+        const keywordScore = Math.min(matchCount / 5, 1.0);  // Normalize to 0-1
+        const finalScore = (keywordScore * 0.6) + (maxEmergencyScore * 0.4);
+        
+        return Math.min(finalScore, 1.0);
+    }
+    
+    /**
+     * Compute action score (booking keywords detected)
+     * @param {String} normalizedPhrase - Normalized caller phrase
+     * @param {Array} phraseTerms - Extracted content terms
+     * @param {Array} scoredScenarios - All scored scenarios
+     * @returns {Number} - Action score (0-1)
+     */
+    computeActionScore(normalizedPhrase, phraseTerms, scoredScenarios) {
+        // Booking keywords (action indicators)
+        const bookingKeywords = this.intentKeywords.BOOK || [];
+        const rescheduleKeywords = this.intentKeywords.RESCHEDULE || [];
+        
+        let matchCount = 0;
+        let totalKeywords = bookingKeywords.length + rescheduleKeywords.length;
+        
+        // Check for booking keywords
+        bookingKeywords.forEach(keyword => {
+            if (normalizedPhrase.includes(keyword.toLowerCase())) {
+                matchCount += 1;
+            }
+        });
+        
+        // Check for reschedule keywords
+        rescheduleKeywords.forEach(keyword => {
+            if (normalizedPhrase.includes(keyword.toLowerCase())) {
+                matchCount += 1;
+            }
+        });
+        
+        // Also check if any booking scenarios scored well
+        const bookingScenarios = scoredScenarios.filter(s => this.isBookingScenario(s.scenario));
+        const maxBookingScore = bookingScenarios.length > 0 
+            ? Math.max(...bookingScenarios.map(s => s.score)) 
+            : 0;
+        
+        // Combine keyword match and scenario score
+        const keywordScore = Math.min(matchCount / 3, 1.0);  // Normalize to 0-1
+        const finalScore = (keywordScore * 0.6) + (maxBookingScore * 0.4);
+        
+        return Math.min(finalScore, 1.0);
+    }
+    
+    /**
+     * Check if scenario is an emergency scenario
+     * @param {Object} scenario - Scenario object
+     * @returns {Boolean}
+     */
+    isEmergencyScenario(scenario) {
+        if (!scenario) return false;
+        const name = (scenario.name || '').toLowerCase();
+        const categories = this.toArr(scenario.categories).map(c => c.toLowerCase());
+        
+        return name.includes('emergency') || 
+               name.includes('urgent') ||
+               categories.some(c => c.includes('emergency') || c.includes('urgent'));
+    }
+    
+    /**
+     * Check if scenario is a booking scenario
+     * @param {Object} scenario - Scenario object
+     * @returns {Boolean}
+     */
+    isBookingScenario(scenario) {
+        if (!scenario) return false;
+        const name = (scenario.name || '').toLowerCase();
+        const categories = this.toArr(scenario.categories).map(c => c.toLowerCase());
+        
+        return name.includes('appointment') || 
+               name.includes('schedule') ||
+               name.includes('booking') ||
+               name.includes('visit') ||
+               categories.some(c => c.includes('appointment') || c.includes('booking') || c.includes('schedule'));
+    }
+    
+    /**
+     * Extract problem topics from phrase for clarifier prompt
+     * @param {String} normalizedPhrase - Normalized phrase
+     * @returns {Array} - List of problem keywords found
+     */
+    extractProblemTopics(normalizedPhrase) {
+        const problemKeywords = this.intentKeywords.PROBLEM_TOPICS || [];
+        const found = [];
+        
+        problemKeywords.forEach(keyword => {
+            if (normalizedPhrase.includes(keyword.toLowerCase())) {
+                found.push(keyword);
+            }
+        });
+        
+        return found.length > 0 ? found.slice(0, 3) : ['an issue'];  // Max 3 topics
     }
 }
 
