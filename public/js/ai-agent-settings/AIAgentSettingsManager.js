@@ -266,7 +266,12 @@ class AIAgentSettingsManager {
      */
     async loadScenarios() {
         console.log('💬 [AI AGENT SETTINGS] Loading scenarios...');
-        // Will be implemented by ScenariosManager
+        
+        if (!this.scenariosManager) {
+            this.scenariosManager = new ScenariosManager(this);
+        }
+        
+        await this.scenariosManager.load();
     }
     
     /**
@@ -274,7 +279,12 @@ class AIAgentSettingsManager {
      */
     async loadTemplateInfo() {
         console.log('📦 [AI AGENT SETTINGS] Loading template info...');
-        // Will be implemented by TemplateInfoManager
+        
+        if (!this.templateInfoManager) {
+            this.templateInfoManager = new TemplateInfoManager(this);
+        }
+        
+        await this.templateInfoManager.load();
     }
     
     /**
@@ -282,7 +292,12 @@ class AIAgentSettingsManager {
      */
     async loadAnalytics() {
         console.log('📊 [AI AGENT SETTINGS] Loading analytics...');
-        // Will be implemented by AnalyticsManager
+        
+        if (!this.analyticsManager) {
+            this.analyticsManager = new AnalyticsManager(this);
+        }
+        
+        await this.analyticsManager.load();
     }
     
     /**
