@@ -202,7 +202,17 @@ const templateData = {
                         'This is urgent',
                         'It\'s flooding',
                         'I have a leak',
-                        'The power is out'
+                        'The power is out',
+                        'Water is pouring',
+                        'Ceiling is wet',
+                        'Sparks flying',
+                        'Burning smell',
+                        'Gas smell',
+                        'No heat at all',
+                        'No cooling at all',
+                        'Actively leaking right now',
+                        'Burst pipe',
+                        'Unsafe condition'
                     ],
                     
                     regexTriggers: [
@@ -210,6 +220,17 @@ const templateData = {
                         '(urgent|asap|right now|immediately)',
                         '(flood|leak|fire|smoke|gas)',
                         'not working'
+                    ],
+                    
+                    negativeTriggers: [
+                        'schedule a visit',
+                        'book an appointment',
+                        'appointment please',
+                        'schedule me in',
+                        'can i schedule',
+                        'can we schedule',
+                        'set up a time',
+                        'make an appointment'
                     ],
                     
                     quickReplies: [
