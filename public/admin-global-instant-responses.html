@@ -7664,6 +7664,15 @@ Continue?`;
             const timestamp = new Date().toISOString();
             const health = calculateTemplateHealth(lastTestResults);
             
+            // Calculate pipeline integrity metrics
+            const hasValidDiagnostics = lastTestResults.filter(r => r.diagnostics && r.diagnostics.input).length;
+            const diagnosticsCompleteness = lastTestResults.length > 0 
+                ? ((hasValidDiagnostics / lastTestResults.length) * 100).toFixed(0) 
+                : 0;
+            
+            const totalScenarios = lastTestResults[0]?.diagnostics?.candidates?.totalScenarios || template?.stats?.totalScenarios || 0;
+            const hasReasonCodes = lastTestResults.filter(r => r.diagnostics?.reasonCodes?.length > 0).length;
+            
             let report = `
 ╔═══════════════════════════════════════════════════════════════════════════════╗
 ║                    🧪 GLOBAL AI BRAIN TEST REPORT                              ║
@@ -7673,6 +7682,18 @@ Continue?`;
 🔢 VERSION: ${template?.version || 'N/A'}
 📅 GENERATED: ${new Date(timestamp).toLocaleString()}
 🧪 TOTAL TESTS: ${lastTestResults.length}
+
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                      🔧 PIPELINE INTEGRITY CHECK                               ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+Matcher:             ${totalScenarios > 0 ? `✅ Loaded ${totalScenarios} scenarios` : '⚠️ Scenario count unknown'}
+Diagnostics Capture: ${diagnosticsCompleteness >= 100 ? '✅' : diagnosticsCompleteness >= 75 ? '⚠️' : '❌'} ${diagnosticsCompleteness}% complete (${hasValidDiagnostics}/${lastTestResults.length} tests)
+Reason Codes:        ${hasReasonCodes > 0 ? `✅ ${hasReasonCodes} tests analyzed` : '⚠️ No root cause analysis'}
+Normalization:       ${diagnosticsCompleteness >= 100 ? '✅ Active (lowercase, punctuation stripped)' : '⚠️ Incomplete data'}
+Speed P95:           ${health.avgSpeed}ms ${health.avgSpeed < 50 ? '✅' : health.avgSpeed < 100 ? '⚠️' : '❌'} (target: ≤50ms)
+
+${diagnosticsCompleteness < 100 ? `⚠️  WARNING: ${100 - diagnosticsCompleteness}% of tests have incomplete diagnostics. This indicates:\n   - Async timing issue (diagnostics logged before capture completes)\n   - Scenario cache miss (data not loaded from database)\n   - Fix: Ensure scenario data loads before test calls begin\n` : ''}
 
 ╔═══════════════════════════════════════════════════════════════════════════════╗
 ║                           📊 HEALTH SUMMARY                                    ║
@@ -7724,11 +7745,11 @@ ${'='.repeat(80)}
                 // Diagnostics
                 if (result.diagnostics) {
                     report += `🔬 DIAGNOSTICS:
-    Original Phrase: "${result.diagnostics.phrase}"
-    Normalized: "${result.diagnostics.normalizedPhrase}"
-    Total Scenarios: ${result.diagnostics.totalScenarios}
-    Evaluated: ${result.diagnostics.eligibleScenarios || result.diagnostics.totalScenarios}
-    Blocked: ${result.diagnostics.blockedScenarios || 0}
+    Original Phrase: "${result.diagnostics.input?.raw || result.diagnostics.phrase || result.phrase}"
+    Normalized: "${result.diagnostics.input?.normalized || result.diagnostics.normalizedPhrase || 'N/A'}"
+    Total Scenarios: ${result.diagnostics.candidates?.totalScenarios || result.diagnostics.totalScenarios || 'N/A'}
+    Evaluated: ${result.diagnostics.candidates?.eligible || result.diagnostics.eligibleScenarios || 'N/A'}
+    Blocked: ${result.diagnostics.candidates?.blocked || result.diagnostics.blockedScenarios || 0}
 
 `;
                     
@@ -7742,7 +7763,24 @@ ${'='.repeat(80)}
 `;
                     }
                     
-                    if (result.diagnostics.failureReason && result.diagnostics.failureReason.length > 0) {
+                    // NEW: Use reason codes if available
+                    if (result.diagnostics.reasonCodes && result.diagnostics.reasonCodes.length > 0) {
+                        report += `⚠️  ROOT CAUSE ANALYSIS:\n`;
+                        result.diagnostics.reasonCodes.forEach(reason => {
+                            const icon = reason.severity === 'critical' ? '🚨' : reason.severity === 'high' ? '⚠️' : reason.severity === 'medium' ? '⚠️' : reason.severity === 'success' ? '✅' : 'ℹ️';
+                            report += `    ${icon} [${reason.severity.toUpperCase()}] ${reason.code}\n`;
+                            report += `       Message: ${reason.message}\n`;
+                            if (reason.rootCause && reason.rootCause !== 'N/A') {
+                                report += `       Root Cause: ${reason.rootCause}\n`;
+                            }
+                            if (reason.fix && reason.fix !== 'N/A') {
+                                report += `       💡 Fix: ${reason.fix}\n`;
+                            }
+                        });
+                        report += '\n';
+                    }
+                    // FALLBACK: Old structure
+                    else if (result.diagnostics.failureReason && result.diagnostics.failureReason.length > 0) {
                         report += `⚠️  FAILURE REASONS:\n`;
                         result.diagnostics.failureReason.forEach(reason => {
                             const icon = reason.severity === 'critical' ? '🚨' : reason.severity === 'high' ? '⚠️' : reason.severity === 'medium' ? '⚠️' : 'ℹ️';
