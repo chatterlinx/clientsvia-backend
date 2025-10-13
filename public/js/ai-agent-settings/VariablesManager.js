@@ -251,36 +251,169 @@ class VariablesManager {
     }
     
     /**
-     * Validate input
+     * Validate input with inline error messages
+     * CRITICAL: Client-side validation matching backend validators
      */
     validateInput(input) {
         const key = input.dataset.key;
         const varDef = this.variableDefinitions.find(v => v.key === key);
         
-        if (!varDef) return;
+        if (!varDef) {
+            this.clearValidationError(input);
+            return true;
+        }
         
         const value = input.value.trim();
         const isEmpty = value === '';
         const isRequired = varDef.required || false;
+        const type = varDef.type || 'text';
         
         // Check required
         if (isRequired && isEmpty) {
-            input.classList.add('error');
+            this.showValidationError(input, `${varDef.label} is required`);
             return false;
         }
         
-        // Check pattern
-        if (varDef.pattern && value !== '') {
-            const regex = new RegExp(varDef.pattern);
-            if (!regex.test(value)) {
-                input.classList.add('error');
-                return false;
-            }
+        // Skip further validation if empty and not required
+        if (isEmpty && !isRequired) {
+            this.clearValidationError(input);
+            return true;
+        }
+        
+        // Type-specific validation
+        let error = null;
+        
+        switch (type) {
+            case 'email':
+                if (!this.validateEmail(value)) {
+                    error = 'Invalid email format (e.g. contact@company.com)';
+                }
+                break;
+                
+            case 'phone':
+                if (!this.validatePhone(value)) {
+                    error = 'Invalid phone format (e.g. +1-239-555-0100)';
+                }
+                break;
+                
+            case 'url':
+                if (!this.validateUrl(value)) {
+                    error = 'Invalid URL format (must start with http:// or https://)';
+                }
+                break;
+                
+            case 'currency':
+                if (!this.validateCurrency(value)) {
+                    error = 'Invalid currency format (e.g. 125.99 or $125.99)';
+                }
+                break;
+                
+            case 'enum':
+                if (varDef.enumValues && !varDef.enumValues.includes(value)) {
+                    error = `Must be one of: ${varDef.enumValues.join(', ')}`;
+                }
+                break;
+                
+            case 'text':
+            case 'multiline':
+                // Check pattern if specified
+                if (varDef.validation?.pattern) {
+                    const regex = new RegExp(varDef.validation.pattern);
+                    if (!regex.test(value)) {
+                        error = varDef.validation.message || 'Invalid format';
+                    }
+                }
+                
+                // Check min/max length
+                if (varDef.validation?.minLength && value.length < varDef.validation.minLength) {
+                    error = `Must be at least ${varDef.validation.minLength} characters`;
+                }
+                if (varDef.validation?.maxLength && value.length > varDef.validation.maxLength) {
+                    error = `Must be no more than ${varDef.validation.maxLength} characters`;
+                }
+                break;
+        }
+        
+        if (error) {
+            this.showValidationError(input, error);
+            return false;
         }
         
         // Valid
-        input.classList.remove('error');
+        this.clearValidationError(input);
         return true;
+    }
+    
+    /**
+     * Show validation error message below input
+     */
+    showValidationError(input, message) {
+        input.classList.add('error');
+        
+        // Remove existing error message
+        const existingError = input.parentElement.querySelector('.validation-error');
+        if (existingError) {
+            existingError.remove();
+        }
+        
+        // Add new error message
+        const errorEl = document.createElement('div');
+        errorEl.className = 'validation-error';
+        errorEl.textContent = message;
+        input.parentElement.appendChild(errorEl);
+    }
+    
+    /**
+     * Clear validation error
+     */
+    clearValidationError(input) {
+        input.classList.remove('error');
+        
+        const errorEl = input.parentElement.querySelector('.validation-error');
+        if (errorEl) {
+            errorEl.remove();
+        }
+    }
+    
+    /**
+     * Validate email format
+     */
+    validateEmail(email) {
+        const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return regex.test(email);
+    }
+    
+    /**
+     * Validate phone format (basic check)
+     */
+    validatePhone(phone) {
+        // Remove all non-digit characters
+        const digits = phone.replace(/\D/g, '');
+        // Must have at least 10 digits
+        return digits.length >= 10;
+    }
+    
+    /**
+     * Validate URL format
+     */
+    validateUrl(url) {
+        try {
+            const parsed = new URL(url);
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch {
+            return false;
+        }
+    }
+    
+    /**
+     * Validate currency format
+     */
+    validateCurrency(value) {
+        // Remove $, commas, and spaces
+        const cleaned = value.replace(/[$,\s]/g, '');
+        // Must be a valid number
+        const num = parseFloat(cleaned);
+        return !isNaN(num) && num >= 0;
     }
     
     /**
