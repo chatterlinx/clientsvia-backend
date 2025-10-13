@@ -145,6 +145,76 @@ function analyzeTestResult(result, allScenarios) {
   return analysis;
 }
 
+// ============================================
+// 🔬 FAILURE REASON ANALYZER
+// ============================================
+
+function determineFailureReason(result, allScenarios) {
+  const reasons = [];
+  
+  // 1. Check if confidence was close
+  if (result.confidence >= 0.35 && result.confidence < 0.45) {
+    reasons.push({
+      type: 'near_miss',
+      severity: 'medium',
+      message: `Close call! Only ${((0.45 - result.confidence) * 100).toFixed(0)}% below threshold`,
+      fix: 'Add 1-2 more keywords or lower threshold slightly'
+    });
+  }
+  
+  // 2. Check if confidence was very low
+  if (result.confidence < 0.20) {
+    reasons.push({
+      type: 'poor_match',
+      severity: 'high',
+      message: 'Very low confidence - phrase may be too vague or scenario missing',
+      fix: 'Phrase needs more specific keywords or new scenario needed'
+    });
+  }
+  
+  // 3. Check if no scenarios at all
+  if (allScenarios.length === 0) {
+    reasons.push({
+      type: 'no_scenarios',
+      severity: 'critical',
+      message: 'No scenarios configured in template!',
+      fix: 'Add scenarios to this template'
+    });
+  }
+  
+  // 4. Check if too many scenarios (performance issue)
+  if (allScenarios.length > 50) {
+    reasons.push({
+      type: 'too_many_scenarios',
+      severity: 'low',
+      message: `${allScenarios.length} scenarios may slow matching`,
+      fix: 'Consider splitting into multiple templates'
+    });
+  }
+  
+  // 5. Check trace data for blocked scenarios
+  if (result.trace?.scenariosBlocked > 0) {
+    reasons.push({
+      type: 'negative_trigger_block',
+      severity: 'medium',
+      message: `${result.trace.scenariosBlocked} scenarios blocked by negative triggers`,
+      fix: 'Check if negative triggers are too aggressive'
+    });
+  }
+  
+  // 6. Default fuzzy matching explanation
+  if (result.confidence > 0 && result.confidence < 0.45) {
+    reasons.push({
+      type: 'fuzzy_match_partial',
+      severity: 'info',
+      message: 'Fuzzy matching found partial keyword overlap but not enough',
+      fix: 'Caller words exist in triggers but need more overlap'
+    });
+  }
+  
+  return reasons;
+}
+
 // 🚨 GLOBAL CHECKPOINT: Log ALL requests to ANY Twilio endpoint
 router.use((req, res, next) => {
   console.log('🔍 TWILIO ENDPOINT HIT:', {
@@ -1580,16 +1650,34 @@ router.post('/test-respond/:templateId', async (req, res) => {
       callSid: req.body.CallSid
     };
     
-    // 🤖 Run AI analysis
+    // 🤖 Run AI analysis with detailed diagnostics
     const aiAnalysis = analyzeTestResult(testResult, allScenarios);
     testResult.analysis = aiAnalysis;
+    
+    // 🔬 Add detailed match diagnostics
+    testResult.diagnostics = {
+      phrase: speechText,
+      normalizedPhrase: result.trace?.normalizedPhrase || speechText.toLowerCase(),
+      phraseTerms: result.trace?.phraseTerms || [],
+      totalScenarios: allScenarios.length,
+      eligibleScenarios: result.trace?.scenariosEvaluated || 0,
+      blockedScenarios: result.trace?.scenariosBlocked || 0,
+      matchBreakdown: result.match ? {
+        bm25Score: result.score || 0,
+        semanticScore: 0, // Not yet implemented
+        regexScore: 0, // Not yet implemented
+        contextScore: 0, // Not yet implemented
+        totalScore: result.score || 0
+      } : null,
+      failureReason: !result.match ? determineFailureReason(result, allScenarios) : null
+    };
     
     if (aiAnalysis.suggestions.length > 0 || aiAnalysis.issues.length > 0) {
       console.log(`🤖 [AI ANALYSIS] Found ${aiAnalysis.suggestions.length} suggestions, ${aiAnalysis.issues.length} issues`);
     }
     
     saveTestResult(templateId, testResult);
-    console.log(`🧪 [CHECKPOINT 11.5] Test result saved to memory with AI analysis`);
+    console.log(`🧪 [CHECKPOINT 11.5] Test result saved to memory with AI analysis + diagnostics`);
     
     console.log(`🧠 [CHECKPOINT 12] Sending TwiML response to Twilio...`);
     res.type('text/xml').status(200).send(twiml.toString());

@@ -7076,17 +7076,52 @@ Continue?`;
                                 </div>
                                 ` : ''}
                                 
-                                ${!result.matched && result.topCandidates && result.topCandidates.length > 0 ? `
-                                <div class="bg-white rounded-lg p-3 border border-yellow-300">
-                                    <div class="text-xs text-gray-600 mb-2">🎯 Close matches:</div>
-                                    ${result.topCandidates.slice(0, 3).map(cand => `
-                                        <div class="text-sm">
-                                            <span class="font-medium">${escapeHtml(cand.scenarioName || cand.scenarioId || 'Unknown')}</span>
-                                            <span class="text-gray-600">(${Math.round((cand.confidence || 0) * 100)}%)</span>
-                                        </div>
-                                    `).join('')}
+                            ${!result.matched && result.diagnostics?.failureReason && result.diagnostics.failureReason.length > 0 ? `
+                            <div class="bg-purple-50 rounded-lg p-4 border-2 border-purple-300 mt-3">
+                                <div class="font-bold text-purple-900 mb-2 flex items-center gap-2">
+                                    <i class="fas fa-microscope"></i>
+                                    🔬 Failure Diagnostics
                                 </div>
-                                ` : ''}
+                                ${result.diagnostics.failureReason.map(reason => `
+                                    <div class="mb-3 p-3 rounded ${
+                                        reason.severity === 'critical' ? 'bg-red-100 border-l-4 border-red-500' :
+                                        reason.severity === 'high' ? 'bg-orange-100 border-l-4 border-orange-500' :
+                                        reason.severity === 'medium' ? 'bg-yellow-100 border-l-4 border-yellow-500' :
+                                        'bg-blue-100 border-l-4 border-blue-500'
+                                    }">
+                                        <div class="text-sm font-semibold mb-1 ${
+                                            reason.severity === 'critical' ? 'text-red-800' :
+                                            reason.severity === 'high' ? 'text-orange-800' :
+                                            reason.severity === 'medium' ? 'text-yellow-800' :
+                                            'text-blue-800'
+                                        }">
+                                            ${reason.severity === 'critical' ? '🚨' : reason.severity === 'high' ? '⚠️' : reason.severity === 'medium' ? '⚠️' : 'ℹ️'}
+                                            ${escapeHtml(reason.message)}
+                                        </div>
+                                        <div class="text-xs ${
+                                            reason.severity === 'critical' ? 'text-red-700' :
+                                            reason.severity === 'high' ? 'text-orange-700' :
+                                            reason.severity === 'medium' ? 'text-yellow-700' :
+                                            'text-blue-700'
+                                        }">
+                                            💡 <strong>Fix:</strong> ${escapeHtml(reason.fix)}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            ` : ''}
+                            
+                            ${!result.matched && result.topCandidates && result.topCandidates.length > 0 ? `
+                            <div class="bg-white rounded-lg p-3 border border-yellow-300 mt-3">
+                                <div class="text-xs text-gray-600 mb-2">🎯 Close matches:</div>
+                                ${result.topCandidates.slice(0, 3).map(cand => `
+                                    <div class="text-sm">
+                                        <span class="font-medium">${escapeHtml(cand.scenarioName || cand.scenarioId || 'Unknown')}</span>
+                                        <span class="text-gray-600">(${Math.round((cand.confidence || 0) * 100)}%)</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            ` : ''}
                                 
                                 ${result.analysis && (result.analysis.suggestions.length > 0 || result.analysis.insights.length > 0) ? `
                                 <div class="mt-3 space-y-2">
@@ -7132,21 +7167,85 @@ Continue?`;
                             </div>
                         </div>
                         
-                        <div id="test-details-${index}" class="hidden mt-4 pt-4 border-t border-${statusColor}-200">
-                            <div class="text-sm space-y-2">
-                                <div><strong>Call SID:</strong> ${result.callSid || 'N/A'}</div>
-                                ${result.timing ? `
-                                <div><strong>Performance Breakdown:</strong></div>
-                                <ul class="ml-4 text-xs space-y-1">
-                                    ${result.timing.normalize ? `<li>Normalize: ${result.timing.normalize}ms</li>` : ''}
-                                    ${result.timing.filter ? `<li>Filter: ${result.timing.filter}ms</li>` : ''}
-                                    ${result.timing.scoring ? `<li>Scoring: ${result.timing.scoring}ms</li>` : ''}
-                                    ${result.timing.selection ? `<li>Selection: ${result.timing.selection}ms</li>` : ''}
-                                    <li class="font-bold">Total: ${result.timing.total}ms ${result.timing.total < 50 ? '⚡ EXCELLENT' : result.timing.total < 100 ? '✅ GOOD' : '⚠️ SLOW'}</li>
-                                </ul>
-                                ` : ''}
+                    <div id="test-details-${index}" class="hidden mt-4 pt-4 border-t border-${statusColor}-200">
+                        <div class="text-sm space-y-4">
+                            <div><strong>Call SID:</strong> <code class="bg-gray-100 px-2 py-1 rounded text-xs">${result.callSid || 'N/A'}</code></div>
+                            
+                            ${result.diagnostics ? `
+                            <div class="bg-gray-50 rounded-lg p-4 border-2 border-gray-300">
+                                <div class="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                    <i class="fas fa-chart-bar"></i>
+                                    📊 Match Breakdown
+                                </div>
+                                <div class="grid grid-cols-2 gap-4 text-xs">
+                                    <div>
+                                        <div class="text-gray-600">Original Phrase:</div>
+                                        <div class="font-mono bg-white p-2 rounded border">"${escapeHtml(result.diagnostics.phrase)}"</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-gray-600">Normalized (for matching):</div>
+                                        <div class="font-mono bg-white p-2 rounded border">"${escapeHtml(result.diagnostics.normalizedPhrase)}"</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-gray-600">Total Scenarios:</div>
+                                        <div class="font-bold text-lg">${result.diagnostics.totalScenarios}</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-gray-600">Scenarios Evaluated:</div>
+                                        <div class="font-bold text-lg">${result.diagnostics.eligibleScenarios || result.diagnostics.totalScenarios}</div>
+                                    </div>
+                                    ${result.diagnostics.blockedScenarios > 0 ? `
+                                    <div class="col-span-2">
+                                        <div class="text-red-600 font-semibold">⚠️ ${result.diagnostics.blockedScenarios} scenarios blocked by negative triggers</div>
+                                    </div>
+                                    ` : ''}
+                                    ${result.diagnostics.matchBreakdown ? `
+                                    <div class="col-span-2">
+                                        <div class="text-gray-600 mb-2">Score Breakdown:</div>
+                                        <div class="space-y-1">
+                                            <div class="flex justify-between items-center bg-white p-2 rounded">
+                                                <span>BM25 (Keyword):</span>
+                                                <span class="font-bold">${(result.diagnostics.matchBreakdown.bm25Score * 100).toFixed(1)}%</span>
+                                            </div>
+                                            <div class="flex justify-between items-center bg-white p-2 rounded">
+                                                <span>Semantic (Meaning):</span>
+                                                <span class="font-bold text-gray-400">${(result.diagnostics.matchBreakdown.semanticScore * 100).toFixed(1)}% (not yet impl.)</span>
+                                            </div>
+                                            <div class="flex justify-between items-center bg-white p-2 rounded">
+                                                <span>Regex (Pattern):</span>
+                                                <span class="font-bold text-gray-400">${(result.diagnostics.matchBreakdown.regexScore * 100).toFixed(1)}% (not yet impl.)</span>
+                                            </div>
+                                            <div class="flex justify-between items-center bg-green-100 p-2 rounded border-2 border-green-500">
+                                                <span class="font-bold">TOTAL SCORE:</span>
+                                                <span class="font-bold text-green-700">${(result.diagnostics.matchBreakdown.totalScore * 100).toFixed(1)}%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    ` : ''}
+                                </div>
                             </div>
+                            ` : ''}
+                            
+                            ${result.timing ? `
+                            <div class="bg-blue-50 rounded-lg p-4 border-2 border-blue-300">
+                                <div class="font-bold text-blue-900 mb-3 flex items-center gap-2">
+                                    <i class="fas fa-stopwatch"></i>
+                                    ⏱️ Performance Breakdown
+                                </div>
+                                <ul class="space-y-1 text-xs">
+                                    ${result.timing.normalize ? `<li class="flex justify-between"><span>Normalize:</span><span class="font-mono">${result.timing.normalize}ms</span></li>` : ''}
+                                    ${result.timing.filter ? `<li class="flex justify-between"><span>Filter:</span><span class="font-mono">${result.timing.filter}ms</span></li>` : ''}
+                                    ${result.timing.scoring ? `<li class="flex justify-between"><span>Scoring:</span><span class="font-mono">${result.timing.scoring}ms</span></li>` : ''}
+                                    ${result.timing.selection ? `<li class="flex justify-between"><span>Selection:</span><span class="font-mono">${result.timing.selection}ms</span></li>` : ''}
+                                    <li class="flex justify-between font-bold text-base pt-2 border-t-2 border-blue-300">
+                                        <span>Total:</span>
+                                        <span class="font-mono">${result.timing.total}ms ${result.timing.total < 50 ? '⚡ EXCELLENT' : result.timing.total < 100 ? '✅ GOOD' : '⚠️ SLOW'}</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            ` : ''}
                         </div>
+                    </div>
                     </div>
                 `;
             });
