@@ -197,7 +197,28 @@ class AIAgentSettingsManager {
      */
     async loadVariables() {
         console.log('📝 [AI AGENT SETTINGS] Loading variables...');
-        // Will be implemented by VariablesManager
+        
+        if (!this.variablesManager) {
+            this.variablesManager = new VariablesManager(this);
+        }
+        
+        await this.variablesManager.load();
+    }
+    
+    /**
+     * Save variables (called from UI)
+     */
+    async saveVariables() {
+        if (this.variablesManager) {
+            await this.variablesManager.save();
+        }
+    }
+    
+    /**
+     * Preview variables (called from UI)
+     */
+    async previewVariables() {
+        alert('Preview feature coming soon!');
     }
     
     /**

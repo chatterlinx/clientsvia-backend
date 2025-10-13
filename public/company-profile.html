@@ -890,6 +890,12 @@
                             <button class="tab-button tab-button-inactive" id="tab-ai-voice" data-tab="ai-voice">
                                 <i class="fas fa-microphone-alt mr-1"></i>AI Voice Settings
                             </button>
+                            
+                            <!-- 🆕 AI AGENT SETTINGS - MODERN, ISOLATED, WORLD-CLASS -->
+                            <button class="tab-button tab-button-inactive" id="tab-ai-agent-settings" data-tab="ai-agent-settings">
+                                <i class="fas fa-robot mr-1"></i>🤖 AI Agent Settings
+                            </button>
+                            
                             <!-- Legacy personality responses tab removed - using modern AI Agent Logic system -->
                             <!-- ✅ PRODUCTION: Knowledge Sources integrated into AI Agent Logic Tab 2 -->
                             <!-- 🗑️ DELETED: AI Response System tab - replaced by Knowledge Management system -->
@@ -1944,6 +1950,331 @@
                         </div>
                     </div>
                     <!-- Legacy personality responses section completely removed -->
+
+                    <!-- ============================================================================== -->
+                    <!-- ===== TAB SECTION START: AI AGENT SETTINGS (NEW, MODERN, ISOLATED) ===== -->
+                    <!-- ============================================================================== -->
+                    <!-- 🆕 PURPOSE: Modern AI configuration system (Variables, Filler Words, Scenarios)
+                         🎯 ARCHITECTURE: 100% isolated, zero dependencies on legacy code
+                         💎 DESIGN: World-class UI, enterprise-grade UX
+                         🚀 SCALABLE: Template marketplace ready, version control ready
+                         🔥 MIGRATION: When ready, delete AI Agent Logic tab, keep this
+                    -->
+                    <!-- ============================================================================== -->
+                    <div id="ai-agent-settings-content" class="tab-content-item hidden">
+                        
+                        <!-- Link isolated CSS -->
+                        <link rel="stylesheet" href="/css/ai-agent-settings.css">
+                        
+                        <div class="ai-settings-container">
+                            
+                            <!-- ========================================== -->
+                            <!-- STATUS BANNER -->
+                            <!-- ========================================== -->
+                            <div id="ai-settings-status-banner" class="ai-settings-status-banner">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="flex items-center gap-3">
+                                        <i class="fas fa-info-circle text-2xl"></i>
+                                        <div>
+                                            <div class="font-bold text-lg ai-settings-status-text">
+                                                Loading configuration...
+                                            </div>
+                                            <div class="text-sm opacity-75 mt-1">
+                                                <span id="ai-settings-config-count">0/0</span> configured
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-2xl font-bold" id="ai-settings-percentage">0%</div>
+                                        <div class="text-xs opacity-75">Complete</div>
+                                    </div>
+                                </div>
+                                <div id="ai-settings-progress-bar" class="ai-settings-progress-bar">
+                                    <div class="ai-settings-progress-fill" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- ========================================== -->
+                            <!-- SUB-TABS NAVIGATION -->
+                            <!-- ========================================== -->
+                            <nav class="ai-settings-subtabs">
+                                <button class="ai-settings-subtab-btn active" data-subtab="variables">
+                                    <i class="fas fa-sliders-h mr-2"></i>
+                                    💼 Variables
+                                </button>
+                                <button class="ai-settings-subtab-btn" data-subtab="filler-words">
+                                    <i class="fas fa-filter mr-2"></i>
+                                    🔇 Filler Words
+                                </button>
+                                <button class="ai-settings-subtab-btn" data-subtab="scenarios">
+                                    <i class="fas fa-comments mr-2"></i>
+                                    💬 Scenarios
+                                </button>
+                                <button class="ai-settings-subtab-btn" data-subtab="template-info">
+                                    <i class="fas fa-box mr-2"></i>
+                                    📦 Template Info
+                                </button>
+                                <button class="ai-settings-subtab-btn" data-subtab="analytics">
+                                    <i class="fas fa-chart-line mr-2"></i>
+                                    📊 Analytics
+                                </button>
+                            </nav>
+                            
+                            <!-- ========================================== -->
+                            <!-- SUB-TAB 1: VARIABLES -->
+                            <!-- ========================================== -->
+                            <div id="ai-settings-variables-content" class="ai-settings-subtab-content active">
+                                
+                                <div class="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4">
+                                    <div class="flex items-start gap-3">
+                                        <i class="fas fa-lightbulb text-blue-600 text-xl mt-1"></i>
+                                        <div>
+                                            <h4 class="font-bold text-blue-900 mb-1">What are Variables?</h4>
+                                            <p class="text-sm text-blue-800">
+                                                Variables like <code class="bg-blue-200 px-2 py-0.5 rounded">{companyName}</code> and 
+                                                <code class="bg-blue-200 px-2 py-0.5 rounded">{hvacServiceCall}</code> are 
+                                                automatically replaced in your AI's responses. Fill them out once, and they'll be used 
+                                                across ALL 500+ scenarios!
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Variables will be dynamically loaded here -->
+                                <div id="variables-container">
+                                    <div class="text-center py-12 text-gray-400">
+                                        <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
+                                        <p>Loading variables...</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Action Buttons -->
+                                <div class="flex gap-3 mt-6 justify-end">
+                                    <button class="ai-settings-btn ai-settings-btn-secondary" onclick="aiAgentSettings.previewVariables()">
+                                        <i class="fas fa-eye"></i>
+                                        Preview Changes
+                                    </button>
+                                    <button class="ai-settings-btn ai-settings-btn-primary" onclick="aiAgentSettings.saveVariables()">
+                                        <i class="fas fa-save"></i>
+                                        Save Variables
+                                    </button>
+                                </div>
+                                
+                            </div>
+                            
+                            <!-- ========================================== -->
+                            <!-- SUB-TAB 2: FILLER WORDS -->
+                            <!-- ========================================== -->
+                            <div id="ai-settings-filler-words-content" class="ai-settings-subtab-content">
+                                
+                                <div class="mb-6 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg p-4">
+                                    <div class="flex items-start gap-3">
+                                        <i class="fas fa-magic text-purple-600 text-xl mt-1"></i>
+                                        <div>
+                                            <h4 class="font-bold text-purple-900 mb-1">How Filler Words Work</h4>
+                                            <p class="text-sm text-purple-800">
+                                                Filler words like "um", "uh", "like" are automatically removed from caller speech 
+                                                before AI matching. This makes your AI smarter and more accurate! You inherit 
+                                                words from your template and can add custom ones.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Search Bar -->
+                                <div class="mb-6 flex gap-3">
+                                    <div class="flex-1 relative">
+                                        <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                        <input 
+                                            type="text" 
+                                            id="filler-search" 
+                                            placeholder="Search filler words..." 
+                                            class="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                                        />
+                                    </div>
+                                    <button class="ai-settings-btn ai-settings-btn-success" onclick="aiAgentSettings.showAddFillerWordModal()">
+                                        <i class="fas fa-plus"></i>
+                                        Add Word
+                                    </button>
+                                </div>
+                                
+                                <!-- Stats -->
+                                <div class="grid grid-cols-3 gap-4 mb-6">
+                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-4 text-center">
+                                        <div class="text-3xl font-bold text-blue-600" id="filler-inherited-count">0</div>
+                                        <div class="text-sm text-gray-600 mt-1">Inherited from Template</div>
+                                    </div>
+                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-4 text-center">
+                                        <div class="text-3xl font-bold text-green-600" id="filler-custom-count">0</div>
+                                        <div class="text-sm text-gray-600 mt-1">Custom Added</div>
+                                    </div>
+                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-4 text-center">
+                                        <div class="text-3xl font-bold text-purple-600" id="filler-total-count">0</div>
+                                        <div class="text-sm text-gray-600 mt-1">Total Active</div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Filler Words Display -->
+                                <div id="filler-words-container">
+                                    <div class="text-center py-12 text-gray-400">
+                                        <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
+                                        <p>Loading filler words...</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Action Buttons -->
+                                <div class="flex gap-3 mt-6 justify-end">
+                                    <button class="ai-settings-btn ai-settings-btn-secondary" onclick="aiAgentSettings.exportFillerWords()">
+                                        <i class="fas fa-download"></i>
+                                        Export
+                                    </button>
+                                    <button class="ai-settings-btn ai-settings-btn-danger" onclick="aiAgentSettings.resetFillerWords()">
+                                        <i class="fas fa-undo"></i>
+                                        Reset to Defaults
+                                    </button>
+                                </div>
+                                
+                            </div>
+                            
+                            <!-- ========================================== -->
+                            <!-- SUB-TAB 3: SCENARIOS -->
+                            <!-- ========================================== -->
+                            <div id="ai-settings-scenarios-content" class="ai-settings-subtab-content">
+                                
+                                <div class="mb-6 bg-gradient-to-r from-green-50 to-teal-50 border-2 border-green-200 rounded-lg p-4">
+                                    <div class="flex items-start gap-3">
+                                        <i class="fas fa-robot text-green-600 text-xl mt-1"></i>
+                                        <div>
+                                            <h4 class="font-bold text-green-900 mb-1">Your AI's Conversation Library</h4>
+                                            <p class="text-sm text-green-800">
+                                                These scenarios define how your AI responds in different situations. 
+                                                Each scenario has triggers (what caller says), replies (AI's response), 
+                                                and actions (what happens next).
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Search & Filters -->
+                                <div class="ai-settings-scenarios-search">
+                                    <input 
+                                        type="text" 
+                                        placeholder="🔍 Search 500+ scenarios..." 
+                                        id="scenarios-search"
+                                    />
+                                    <select id="scenarios-category-filter">
+                                        <option value="all">All Categories</option>
+                                        <option value="universal">Universal (103)</option>
+                                        <option value="hvac">HVAC (215)</option>
+                                        <option value="plumbing">Plumbing (206)</option>
+                                    </select>
+                                    <select id="scenarios-status-filter">
+                                        <option value="active">Active</option>
+                                        <option value="draft">Draft</option>
+                                        <option value="disabled">Disabled</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- Scenarios will be dynamically loaded here -->
+                                <div id="scenarios-container">
+                                    <div class="text-center py-12 text-gray-400">
+                                        <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
+                                        <p>Loading scenarios...</p>
+                                    </div>
+                                </div>
+                                
+                            </div>
+                            
+                            <!-- ========================================== -->
+                            <!-- SUB-TAB 4: TEMPLATE INFO -->
+                            <!-- ========================================== -->
+                            <div id="ai-settings-template-info-content" class="ai-settings-subtab-content">
+                                
+                                <div class="ai-settings-section">
+                                    <div class="ai-settings-section-header">
+                                        <h3>
+                                            <i class="fas fa-box text-blue-600"></i>
+                                            Template Details
+                                        </h3>
+                                    </div>
+                                    <div class="ai-settings-section-content expanded">
+                                        <div id="template-info-container">
+                                            <div class="text-center py-12 text-gray-400">
+                                                <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
+                                                <p>Loading template information...</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                            </div>
+                            
+                            <!-- ========================================== -->
+                            <!-- SUB-TAB 5: ANALYTICS -->
+                            <!-- ========================================== -->
+                            <div id="ai-settings-analytics-content" class="ai-settings-subtab-content">
+                                
+                                <div class="grid grid-cols-4 gap-6 mb-6">
+                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-6 text-center">
+                                        <i class="fas fa-bullseye text-4xl text-blue-600 mb-3"></i>
+                                        <div class="text-3xl font-bold text-gray-900" id="analytics-match-rate">--</div>
+                                        <div class="text-sm text-gray-600 mt-1">Match Rate</div>
+                                    </div>
+                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-6 text-center">
+                                        <i class="fas fa-gauge-high text-4xl text-green-600 mb-3"></i>
+                                        <div class="text-3xl font-bold text-gray-900" id="analytics-avg-confidence">--</div>
+                                        <div class="text-sm text-gray-600 mt-1">Avg Confidence</div>
+                                    </div>
+                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-6 text-center">
+                                        <i class="fas fa-bolt text-4xl text-yellow-600 mb-3"></i>
+                                        <div class="text-3xl font-bold text-gray-900" id="analytics-avg-speed">--</div>
+                                        <div class="text-sm text-gray-600 mt-1">Avg Speed</div>
+                                    </div>
+                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-6 text-center">
+                                        <i class="fas fa-fire text-4xl text-red-600 mb-3"></i>
+                                        <div class="text-3xl font-bold text-gray-900" id="analytics-total-calls">--</div>
+                                        <div class="text-sm text-gray-600 mt-1">Total Calls</div>
+                                    </div>
+                                </div>
+                                
+                                <div id="analytics-container">
+                                    <div class="text-center py-12 text-gray-400">
+                                        <i class="fas fa-chart-line text-6xl mb-4 opacity-30"></i>
+                                        <p class="text-lg font-semibold">Analytics Coming Soon</p>
+                                        <p class="text-sm mt-2">We're building beautiful performance dashboards!</p>
+                                    </div>
+                                </div>
+                                
+                            </div>
+                            
+                        </div>
+                        
+                        <!-- Load AI Agent Settings Managers -->
+                        <script src="/js/ai-agent-settings/VariablesManager.js"></script>
+                        <script src="/js/ai-agent-settings/AIAgentSettingsManager.js"></script>
+                        <script>
+                            // Initialize when tab is activated
+                            let aiAgentSettings = null;
+                            
+                            // Initialize on tab switch
+                            document.getElementById('tab-ai-agent-settings')?.addEventListener('click', function() {
+                                if (!aiAgentSettings) {
+                                    const companyId = window.currentCompanyId || document.getElementById('company-id')?.value;
+                                    if (companyId) {
+                                        console.log('🤖 [AI AGENT SETTINGS] Initializing for company:', companyId);
+                                        aiAgentSettings = new AIAgentSettingsManager(companyId);
+                                        aiAgentSettings.initialize();
+                                    } else {
+                                        console.error('❌ [AI AGENT SETTINGS] No company ID found');
+                                    }
+                                }
+                            });
+                        </script>
+                        
+                    </div>
+                    <!-- ============================================================================== -->
+                    <!-- ===== TAB SECTION END: AI AGENT SETTINGS ===== -->
+                    <!-- ============================================================================== -->
 
                     <!-- ===== TAB SECTION START: AI AGENT LOGIC ===== -->
                     <div id="ai-agent-logic-content" class="tab-content-item hidden">
