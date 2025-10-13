@@ -667,6 +667,107 @@ const globalInstantResponseTemplateSchema = new Schema({
         changes: { type: String, trim: true },
         changedBy: { type: String, trim: true },
         date: { type: Date, default: Date.now }
+    }],
+    
+    // ============================================
+    // 📝 VARIABLE DEFINITIONS (TYPE SYSTEM)
+    // ============================================
+    // Structured definitions for company-specific variables
+    // Replaces simple string array with typed, validated fields
+    variableDefinitions: [{
+        key: {
+            type: String,
+            required: true,
+            trim: true
+            // Variable key for replacement (e.g., 'companyName')
+        },
+        label: {
+            type: String,
+            required: true,
+            trim: true
+            // Human-readable label for UI (e.g., 'Company Name')
+        },
+        description: {
+            type: String,
+            trim: true
+            // Help text explaining what this variable is for
+        },
+        type: {
+            type: String,
+            enum: ['text', 'email', 'phone', 'url', 'currency', 'enum', 'multiline'],
+            default: 'text'
+            // Data type determines validation and formatting
+        },
+        required: {
+            type: Boolean,
+            default: false
+            // If true, company must fill this before going live
+        },
+        enumValues: [{
+            type: String,
+            trim: true
+        }],
+        // For enum type: allowed values
+        validation: {
+            type: Schema.Types.Mixed,
+            default: {}
+            // Optional regex, min/max, custom rules
+        },
+        example: {
+            type: String,
+            trim: true
+            // Example value to guide users
+        },
+        category: {
+            type: String,
+            trim: true,
+            default: 'General'
+            // Group related variables (e.g., 'Pricing', 'Contact Info')
+        },
+        usageCount: {
+            type: Number,
+            default: 0
+            // Auto-calculated: how many scenarios use this variable
+        },
+        placeholder: {
+            type: String,
+            trim: true
+            // Default value if company hasn't filled it yet
+        }
+    }],
+    
+    // ============================================
+    // 🚨 URGENCY KEYWORDS (EMERGENCY DETECTION)
+    // ============================================
+    // Database-driven keywords for emergency scenario detection
+    // Boosts priority when detected in caller phrases
+    urgencyKeywords: [{
+        word: {
+            type: String,
+            required: true,
+            trim: true,
+            lowercase: true
+            // Keyword to detect (e.g., 'emergency', 'urgent', 'leak')
+        },
+        weight: {
+            type: Number,
+            required: true,
+            default: 0.2,
+            min: 0.1,
+            max: 0.5
+            // Score boost when detected (0.1 = low urgency, 0.5 = critical)
+        },
+        category: {
+            type: String,
+            trim: true,
+            default: 'General Emergency'
+            // Group related keywords (e.g., 'Water Emergency', 'Safety Hazard')
+        },
+        examples: [{
+            type: String,
+            trim: true
+        }]
+        // Example phrases containing this keyword
     }]
     
 }, { 

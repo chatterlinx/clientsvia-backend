@@ -2835,5 +2835,274 @@ router.put('/:id/filler-words', async (req, res) => {
     }
 });
 
+// ============================================================================
+// URGENCY KEYWORDS CRUD - EMERGENCY DETECTION SYSTEM
+// ============================================================================
+
+/**
+ * GET /:id/urgency-keywords
+ * Get all urgency keywords for a template
+ */
+router.get('/:id/urgency-keywords', async (req, res) => {
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        const keywords = template.urgencyKeywords || [];
+        
+        // Group by category
+        const byCategory = {};
+        keywords.forEach(kw => {
+            const cat = kw.category || 'Uncategorized';
+            if (!byCategory[cat]) {
+                byCategory[cat] = [];
+            }
+            byCategory[cat].push(kw);
+        });
+        
+        res.json({
+            keywords,
+            byCategory,
+            totalCount: keywords.length,
+            categories: Object.keys(byCategory)
+        });
+        
+    } catch (error) {
+        logger.error('Error fetching urgency keywords', { error: error.message });
+        res.status(500).json({ error: 'Failed to fetch urgency keywords' });
+    }
+});
+
+/**
+ * POST /:id/urgency-keywords
+ * Add new urgency keyword
+ */
+router.post('/:id/urgency-keywords', async (req, res) => {
+    try {
+        const { word, weight, category, examples } = req.body;
+        
+        if (!word || typeof word !== 'string') {
+            return res.status(400).json({ error: 'Keyword word is required' });
+        }
+        
+        if (!weight || typeof weight !== 'number' || weight < 0.1 || weight > 0.5) {
+            return res.status(400).json({ error: 'Weight must be between 0.1 and 0.5' });
+        }
+        
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        // Normalize word
+        const normalized = word.trim().toLowerCase();
+        
+        // Check for duplicates
+        const existing = template.urgencyKeywords?.find(kw => kw.word === normalized);
+        if (existing) {
+            return res.status(400).json({ error: 'Keyword already exists' });
+        }
+        
+        // Add new keyword
+        if (!template.urgencyKeywords) {
+            template.urgencyKeywords = [];
+        }
+        
+        template.urgencyKeywords.push({
+            word: normalized,
+            weight,
+            category: category || 'General Emergency',
+            examples: examples || []
+        });
+        
+        await template.save();
+        
+        logger.info('Urgency keyword added', {
+            templateId: req.params.id,
+            word: normalized,
+            weight,
+            by: req.user?.username
+        });
+        
+        res.json({
+            success: true,
+            message: 'Urgency keyword added',
+            keyword: template.urgencyKeywords[template.urgencyKeywords.length - 1]
+        });
+        
+    } catch (error) {
+        logger.error('Error adding urgency keyword', { error: error.message });
+        res.status(500).json({ error: 'Failed to add urgency keyword' });
+    }
+});
+
+/**
+ * PATCH /:id/urgency-keywords/:keywordId
+ * Update urgency keyword
+ */
+router.patch('/:id/urgency-keywords/:keywordId', async (req, res) => {
+    try {
+        const { word, weight, category, examples } = req.body;
+        
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        const keyword = template.urgencyKeywords?.id(req.params.keywordId);
+        
+        if (!keyword) {
+            return res.status(404).json({ error: 'Keyword not found' });
+        }
+        
+        // Update fields
+        if (word && typeof word === 'string') {
+            keyword.word = word.trim().toLowerCase();
+        }
+        
+        if (weight !== undefined) {
+            if (typeof weight !== 'number' || weight < 0.1 || weight > 0.5) {
+                return res.status(400).json({ error: 'Weight must be between 0.1 and 0.5' });
+            }
+            keyword.weight = weight;
+        }
+        
+        if (category) {
+            keyword.category = category;
+        }
+        
+        if (examples) {
+            keyword.examples = examples;
+        }
+        
+        await template.save();
+        
+        logger.info('Urgency keyword updated', {
+            templateId: req.params.id,
+            keywordId: req.params.keywordId,
+            by: req.user?.username
+        });
+        
+        res.json({
+            success: true,
+            message: 'Urgency keyword updated',
+            keyword
+        });
+        
+    } catch (error) {
+        logger.error('Error updating urgency keyword', { error: error.message });
+        res.status(500).json({ error: 'Failed to update urgency keyword' });
+    }
+});
+
+/**
+ * DELETE /:id/urgency-keywords/:keywordId
+ * Delete urgency keyword
+ */
+router.delete('/:id/urgency-keywords/:keywordId', async (req, res) => {
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        const keyword = template.urgencyKeywords?.id(req.params.keywordId);
+        
+        if (!keyword) {
+            return res.status(404).json({ error: 'Keyword not found' });
+        }
+        
+        // Remove keyword
+        template.urgencyKeywords.pull(req.params.keywordId);
+        
+        await template.save();
+        
+        logger.info('Urgency keyword deleted', {
+            templateId: req.params.id,
+            keywordId: req.params.keywordId,
+            by: req.user?.username
+        });
+        
+        res.json({
+            success: true,
+            message: 'Urgency keyword deleted'
+        });
+        
+    } catch (error) {
+        logger.error('Error deleting urgency keyword', { error: error.message });
+        res.status(500).json({ error: 'Failed to delete urgency keyword' });
+    }
+});
+
+/**
+ * POST /:id/urgency-keywords/seed-defaults
+ * Seed default urgency keywords
+ */
+router.post('/:id/urgency-keywords/seed-defaults', async (req, res) => {
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        // Default urgency keywords
+        const defaults = [
+            // Critical urgency (0.5 weight)
+            { word: 'emergency', weight: 0.5, category: 'Critical', examples: ['This is an emergency!', 'Emergency situation here'] },
+            { word: 'urgent', weight: 0.5, category: 'Critical', examples: ['This is urgent', 'I need urgent help'] },
+            { word: 'immediately', weight: 0.4, category: 'Critical', examples: ['I need help immediately', 'Come immediately'] },
+            
+            // Water/plumbing emergencies (0.4 weight)
+            { word: 'flooding', weight: 0.4, category: 'Water Emergency', examples: ['My basement is flooding', 'Flooding in the house'] },
+            { word: 'leak', weight: 0.3, category: 'Water Emergency', examples: ['There\'s a leak', 'Water leak in bathroom'] },
+            { word: 'burst', weight: 0.4, category: 'Water Emergency', examples: ['Pipe burst', 'Burst water line'] },
+            { word: 'overflowing', weight: 0.3, category: 'Water Emergency', examples: ['Toilet overflowing', 'Sink overflowing'] },
+            
+            // Electrical emergencies (0.5 weight)
+            { word: 'sparking', weight: 0.5, category: 'Electrical Emergency', examples: ['Outlet sparking', 'Sparks from panel'] },
+            { word: 'smoke', weight: 0.5, category: 'Safety Hazard', examples: ['I smell smoke', 'Smoke from outlet'] },
+            { word: 'burning', weight: 0.5, category: 'Safety Hazard', examples: ['Burning smell', 'Something burning'] },
+            
+            // HVAC emergencies (0.3 weight)
+            { word: 'gas', weight: 0.4, category: 'Safety Hazard', examples: ['I smell gas', 'Gas leak'] },
+            { word: 'carbon', weight: 0.5, category: 'Safety Hazard', examples: ['Carbon monoxide alarm', 'CO detector going off'] },
+            
+            // General urgency (0.2-0.3 weight)
+            { word: 'asap', weight: 0.3, category: 'High Priority', examples: ['I need someone ASAP', 'Can you come ASAP'] },
+            { word: 'today', weight: 0.2, category: 'High Priority', examples: ['I need it done today', 'Can you come today'] },
+            { word: 'now', weight: 0.2, category: 'High Priority', examples: ['I need help now', 'Can someone come now'] },
+            { word: 'help', weight: 0.2, category: 'General', examples: ['I need help', 'Please help'] }
+        ];
+        
+        // Clear existing and add defaults
+        template.urgencyKeywords = defaults;
+        
+        await template.save();
+        
+        logger.info('Default urgency keywords seeded', {
+            templateId: req.params.id,
+            count: defaults.length,
+            by: req.user?.username
+        });
+        
+        res.json({
+            success: true,
+            message: `Seeded ${defaults.length} default urgency keywords`,
+            keywords: template.urgencyKeywords
+        });
+        
+    } catch (error) {
+        logger.error('Error seeding urgency keywords', { error: error.message });
+        res.status(500).json({ error: 'Failed to seed urgency keywords' });
+    }
+});
+
 module.exports = router;
 
