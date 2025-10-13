@@ -1673,6 +1673,67 @@ router.post('/test-respond/:templateId', async (req, res) => {
       console.log(`🤖 [AI ANALYSIS] Found ${aiAnalysis.suggestions.length} suggestions, ${aiAnalysis.issues.length} issues`);
     }
     
+    // ============================================
+    // 🛡️ DECISION-CONTRACT SAFETY RAIL
+    // ============================================
+    // CRITICAL: If confidence ≥ threshold but NO scenario, this is an ENGINE BUG
+    const threshold = testResult.threshold || 0.45;
+    const confidence = testResult.confidence || 0;
+    const hasScenario = !!result.scenario;
+    
+    if (confidence >= threshold && !hasScenario) {
+      // 🚨 RED ALERT: Decision contract violation
+      const violation = {
+        type: 'DECISION_CONTRACT_VIOLATION',
+        severity: 'CRITICAL',
+        message: `Confidence ${(confidence * 100).toFixed(0)}% ≥ threshold ${(threshold * 100).toFixed(0)}% but NO scenario returned`,
+        confidence,
+        threshold,
+        gap: confidence - threshold,
+        possibleCauses: [
+          'Precondition failed after confidence check',
+          'Scenario filtering bug (channel/language mismatch)',
+          'Cooldown triggered after scoring',
+          'Cache corruption or stale data',
+          'Race condition in selector logic'
+        ],
+        debugInfo: {
+          resultKeys: Object.keys(result),
+          hasScenario: hasScenario,
+          hasTrace: !!result.trace,
+          topCandidates: result.trace?.topCandidates || []
+        }
+      };
+      
+      console.error(`\n${'🚨'.repeat(40)}`);
+      console.error(`🚨 DECISION-CONTRACT VIOLATION DETECTED!`);
+      console.error(`🚨 Confidence: ${(confidence * 100).toFixed(1)}% (threshold: ${(threshold * 100).toFixed(1)}%)`);
+      console.error(`🚨 Scenario returned: ${hasScenario}`);
+      console.error(`🚨 This should NEVER happen - engine logic bug!`);
+      console.error(JSON.stringify(violation, null, 2));
+      console.error(`${'🚨'.repeat(40)}\n`);
+      
+      // Add to test result for debugging
+      testResult.contractViolation = violation;
+      
+      // Override reason code to E01: EngineBug
+      if (testResult.diagnostics && testResult.diagnostics.reasonCodes) {
+        testResult.diagnostics.primaryReasonCode = 'E01';
+        testResult.diagnostics.reasonCodes.unshift({
+          code: 'E01',
+          name: 'EngineBug',
+          type: 'error',
+          severity: 'critical',
+          message: 'DECISION CONTRACT VIOLATION: Confidence above threshold but no scenario returned',
+          impact: 'Engine logic error - requires immediate investigation',
+          rootCause: violation.possibleCauses.join(', '),
+          fix: 'Review selector logic and add defensive checks',
+          primaryMetric: 'confidenceGap',
+          primaryMetricValue: ((confidence - threshold) * 100).toFixed(1)
+        });
+      }
+    }
+    
     saveTestResult(templateId, testResult);
     console.log(`🧪 [CHECKPOINT 11.5] Test result saved to memory with AI analysis + diagnostics`);
     
