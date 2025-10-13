@@ -771,6 +771,5 @@ class ConnectionMessagesManager {
     }
 }
 
-// Global instance
-let connectionMessagesManager = null;
+// Note: Global instance is declared in company-profile.html initialization script
 

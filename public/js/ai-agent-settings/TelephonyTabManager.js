@@ -100,6 +100,5 @@ class TelephonyTabManager {
     }
 }
 
-// Global instance
-let telephonyTabManager = null;
+// Note: Global instance is declared in company-profile.html initialization script
 
