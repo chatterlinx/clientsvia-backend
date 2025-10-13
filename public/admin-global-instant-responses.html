@@ -1053,6 +1053,88 @@
                     </div>
                 </div>
 
+                <!-- 🔇 FILLER WORDS MANAGEMENT -->
+                <div class="bg-white rounded-xl shadow-lg border-2 border-gray-200 overflow-hidden">
+                    <div class="bg-gradient-to-r from-gray-50 to-slate-50 px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+                            <i class="fas fa-filter text-gray-600"></i>
+                            Filler Words (Noise Filter)
+                        </h3>
+                        <p class="text-sm text-gray-600 mt-1">
+                            Global filter applied to ALL scenarios in this template • Removes conversational fluff before matching
+                        </p>
+                    </div>
+                    
+                    <div class="p-6">
+                        <!-- Info Box -->
+                        <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
+                            <div class="flex items-start gap-3">
+                                <i class="fas fa-info-circle text-blue-600 text-xl mt-0.5"></i>
+                                <div class="flex-1 text-sm text-gray-700">
+                                    <p class="font-semibold text-gray-900 mb-2">What are Filler Words?</p>
+                                    <p class="mb-2">Words that add no meaning to caller intent. Examples: "um", "uh", "hi", "hey", "please", "you guys", "today"</p>
+                                    <p class="text-blue-700 font-medium">
+                                        <i class="fas fa-check-circle mr-1"></i>
+                                        Inherited by companies when they clone this template • Complete package ready to deploy
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Search & Add Bar -->
+                        <div class="flex gap-3 mb-6">
+                            <div class="flex-1 relative">
+                                <input 
+                                    type="text" 
+                                    id="filler-search" 
+                                    placeholder="Search filler words..." 
+                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pl-10"
+                                    onkeyup="searchFillerWords()"
+                                />
+                                <i class="fas fa-search absolute left-3 top-4 text-gray-400"></i>
+                            </div>
+                            <button 
+                                onclick="showAddFillerWordModal()" 
+                                class="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                                <i class="fas fa-plus"></i>
+                                Add Word
+                            </button>
+                        </div>
+                        
+                        <!-- Stats Bar -->
+                        <div class="flex items-center justify-between mb-4 px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">
+                            <div class="flex items-center gap-4">
+                                <div class="text-sm">
+                                    <span class="font-semibold text-gray-900">Total Words:</span>
+                                    <span id="filler-count" class="ml-2 text-blue-600 font-bold">0</span>
+                                </div>
+                                <div class="text-sm">
+                                    <span class="font-semibold text-gray-900">Filtered:</span>
+                                    <span id="filler-filtered-count" class="ml-2 text-gray-600 font-bold">0</span>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="resetFillerWordsToDefaults()" class="px-4 py-2 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded-lg text-sm font-semibold transition-all flex items-center gap-2">
+                                    <i class="fas fa-undo"></i>
+                                    Reset to Defaults
+                                </button>
+                                <button onclick="exportFillerWords()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-sm font-semibold transition-all flex items-center gap-2">
+                                    <i class="fas fa-download"></i>
+                                    Export
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Filler Words Grid -->
+                        <div id="filler-words-container" class="flex flex-wrap gap-2 max-h-96 overflow-y-auto p-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                            <div class="text-center w-full text-gray-500 py-8">
+                                <i class="fas fa-spinner fa-spin text-3xl mb-3"></i>
+                                <p>Loading filler words...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Export/Import Section -->
                 <div class="bg-white rounded-xl shadow-lg border-2 border-gray-200 overflow-hidden">
                     <div class="bg-gradient-to-r from-cyan-50 to-blue-50 px-6 py-4 border-b border-gray-200">
