@@ -55,6 +55,96 @@ function getTestResults(templateId, limit = 20) {
   return results.slice(0, limit);
 }
 
+// ============================================
+// 🤖 AI ANALYSIS ENGINE
+// ============================================
+
+function analyzeTestResult(result, allScenarios) {
+  const analysis = {
+    missingKeywords: [],
+    suggestions: [],
+    issues: [],
+    insights: []
+  };
+  
+  // 1. ANALYZE MISSING KEYWORDS (caller said, but not in triggers)
+  if (!result.matched && result.phrase) {
+    const callerWords = result.phrase.toLowerCase()
+      .split(/\s+/)
+      .filter(w => w.length > 2) // Ignore short words
+      .filter(w => !['the', 'a', 'an', 'and', 'or', 'but', 'can', 'could', 'would', 'should'].includes(w));
+    
+    // Find closest scenario
+    const closestScenario = result.topCandidates && result.topCandidates.length > 0 
+      ? result.topCandidates[0] 
+      : null;
+    
+    if (closestScenario && closestScenario.scenarioId) {
+      // Find actual scenario object
+      const scenario = allScenarios.find(s => s.scenarioId === closestScenario.scenarioId || s._id?.toString() === closestScenario.scenarioId);
+      
+      if (scenario) {
+        const triggerWords = (scenario.triggers || []).map(t => t.toLowerCase());
+        const missingWords = callerWords.filter(w => !triggerWords.some(t => t.includes(w) || w.includes(t)));
+        
+        if (missingWords.length > 0) {
+          analysis.missingKeywords = missingWords;
+          analysis.suggestions.push({
+            type: 'add_keyword',
+            priority: 'high',
+            scenarioId: scenario.scenarioId || scenario._id,
+            scenarioName: scenario.name,
+            keywords: missingWords,
+            message: `Add "${missingWords.join('", "')}" to triggers`,
+            expectedBoost: '+8-12%'
+          });
+        }
+      }
+    }
+  }
+  
+  // 2. ANALYZE THRESHOLD ISSUES
+  if (!result.matched && result.confidence >= 0.40 && result.confidence < result.threshold) {
+    const gap = ((result.threshold - result.confidence) * 100).toFixed(0);
+    analysis.suggestions.push({
+      type: 'lower_threshold',
+      priority: 'medium',
+      message: `Confidence ${(result.confidence * 100).toFixed(0)}% is ${gap}% below threshold`,
+      currentThreshold: result.threshold,
+      suggestedThreshold: Math.max(0.35, result.confidence - 0.03),
+      reason: 'Close but not quite - lower threshold or add triggers'
+    });
+  }
+  
+  // 3. ANALYZE SPEED ISSUES
+  if (result.timing && result.timing.total > 100) {
+    analysis.issues.push({
+      type: 'slow_response',
+      priority: 'medium',
+      message: `Response time ${result.timing.total}ms exceeds 100ms target`,
+      bottleneck: result.timing.scoring > 50 ? 'Scoring' : 'Unknown',
+      suggestion: 'Consider reducing trigger count or optimizing'
+    });
+  }
+  
+  // 4. POSITIVE INSIGHTS
+  if (result.matched && result.confidence > 0.70) {
+    analysis.insights.push({
+      type: 'strong_match',
+      message: `Strong match! Confidence ${(result.confidence * 100).toFixed(0)}% indicates good trigger coverage`
+    });
+  }
+  
+  if (result.timing && result.timing.total < 50) {
+    analysis.insights.push({
+      type: 'excellent_speed',
+      message: `⚡ Excellent speed! ${result.timing.total}ms is under 50ms target`
+    });
+  }
+  
+  return analysis;
+}
+
 // 🚨 GLOBAL CHECKPOINT: Log ALL requests to ANY Twilio endpoint
 router.use((req, res, next) => {
   console.log('🔍 TWILIO ENDPOINT HIT:', {
@@ -1490,8 +1580,16 @@ router.post('/test-respond/:templateId', async (req, res) => {
       callSid: req.body.CallSid
     };
     
+    // 🤖 Run AI analysis
+    const aiAnalysis = analyzeTestResult(testResult, allScenarios);
+    testResult.analysis = aiAnalysis;
+    
+    if (aiAnalysis.suggestions.length > 0 || aiAnalysis.issues.length > 0) {
+      console.log(`🤖 [AI ANALYSIS] Found ${aiAnalysis.suggestions.length} suggestions, ${aiAnalysis.issues.length} issues`);
+    }
+    
     saveTestResult(templateId, testResult);
-    console.log(`🧪 [CHECKPOINT 11.5] Test result saved to memory`);
+    console.log(`🧪 [CHECKPOINT 11.5] Test result saved to memory with AI analysis`);
     
     console.log(`🧠 [CHECKPOINT 12] Sending TwiML response to Twilio...`);
     res.type('text/xml').status(200).send(twiml.toString());

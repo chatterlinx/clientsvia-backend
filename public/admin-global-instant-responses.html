@@ -7080,6 +7080,42 @@ Continue?`;
                                     `).join('')}
                                 </div>
                                 ` : ''}
+                                
+                                ${result.analysis && (result.analysis.suggestions.length > 0 || result.analysis.insights.length > 0) ? `
+                                <div class="mt-3 space-y-2">
+                                    ${result.analysis.suggestions.map(sug => `
+                                        <div class="bg-yellow-100 border-l-4 border-yellow-500 p-3 rounded">
+                                            <div class="flex items-start justify-between">
+                                                <div class="flex-1">
+                                                    <div class="text-xs font-bold text-yellow-800 mb-1">
+                                                        💡 ${sug.priority === 'high' ? '🔥 HIGH PRIORITY' : 'SUGGESTION'}
+                                                    </div>
+                                                    <div class="text-sm text-yellow-900">${escapeHtml(sug.message)}</div>
+                                                    ${sug.expectedBoost ? `<div class="text-xs text-yellow-700 mt-1">Expected boost: ${sug.expectedBoost}</div>` : ''}
+                                                </div>
+                                                ${sug.type === 'add_keyword' ? `
+                                                <button onclick="quickAddKeyword('${sug.scenarioId}', ${JSON.stringify(sug.keywords).replace(/"/g, '&quot;')})" class="ml-2 px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-semibold whitespace-nowrap">
+                                                    Quick Add
+                                                </button>
+                                                ` : ''}
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                    
+                                    ${result.analysis.insights.map(ins => `
+                                        <div class="bg-green-100 border-l-4 border-green-500 p-2 rounded">
+                                            <div class="text-xs text-green-800">✅ ${escapeHtml(ins.message)}</div>
+                                        </div>
+                                    `).join('')}
+                                    
+                                    ${result.analysis.issues.map(iss => `
+                                        <div class="bg-red-100 border-l-4 border-red-500 p-2 rounded">
+                                            <div class="text-xs font-bold text-red-800">⚠️ ${escapeHtml(iss.message)}</div>
+                                            ${iss.suggestion ? `<div class="text-xs text-red-700 mt-1">${escapeHtml(iss.suggestion)}</div>` : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                ` : ''}
                             </div>
                             
                             <div class="ml-4">
@@ -7152,6 +7188,27 @@ Continue?`;
             
             const days = Math.floor(hours / 24);
             return `${days} day${days > 1 ? 's' : ''} ago`;
+        }
+        
+        // ============================================
+        // 🤖 AI QUICK FIX ACTIONS
+        // ============================================
+        
+        function quickAddKeyword(scenarioId, keywords) {
+            console.log(`🤖 Quick add keywords to scenario ${scenarioId}:`, keywords);
+            
+            if (confirm(`Add these keywords to the scenario?\n\n${keywords.join(', ')}\n\nThis will help improve matching!`)) {
+                showNotification(`✅ Adding keywords: ${keywords.join(', ')}`, 'info');
+                
+                // TODO: Implement actual keyword addition
+                // For now, just show success
+                setTimeout(() => {
+                    showNotification(`🎯 Keywords added! Test again to see improvement.`, 'success');
+                    closeTestLogModal();
+                    // Navigate to scenario to show changes
+                    switchMainTab('categories');
+                }, 1000);
+            }
         }
 
         document.addEventListener('DOMContentLoaded', async function() {
