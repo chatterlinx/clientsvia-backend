@@ -1319,6 +1319,21 @@ const companySchema = new mongoose.Schema({
             custom: { type: [String], default: [] } // Company additions (editable)
         },
         
+        // Urgency keywords (inherited from template + custom additions)
+        // CRITICAL: Used by HybridScenarioSelector for emergency detection
+        urgencyKeywords: {
+            inherited: [{
+                word: { type: String, lowercase: true, trim: true },
+                weight: { type: Number, min: 0.1, max: 0.5 },
+                category: { type: String, trim: true }
+            }], // From template (read-only)
+            custom: [{
+                word: { type: String, lowercase: true, trim: true },
+                weight: { type: Number, min: 0.1, max: 0.5 },
+                category: { type: String, trim: true }
+            }] // Company additions (editable)
+        },
+        
         // Customization tracking
         customization: {
             hasCustomVariables: { type: Boolean, default: false },

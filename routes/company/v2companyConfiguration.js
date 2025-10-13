@@ -728,6 +728,104 @@ router.post('/:companyId/configuration/filler-words/reset', async (req, res) => 
 
 /**
  * ============================================================================
+ * GET /api/company/:companyId/configuration/urgency-keywords
+ * Load urgency keywords (inherited + custom)
+ * CRITICAL: Used by HybridScenarioSelector for emergency detection
+ * ============================================================================
+ */
+router.get('/:companyId/configuration/urgency-keywords', async (req, res) => {
+    console.log(`[COMPANY CONFIG] GET /configuration/urgency-keywords for company: ${req.params.companyId}`);
+    
+    try {
+        const company = await Company.findById(req.params.companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Get inherited keywords from company (copied from template at clone time)
+        const inherited = company.configuration?.urgencyKeywords?.inherited || [];
+        
+        // Get custom keywords (added by company)
+        const custom = company.configuration?.urgencyKeywords?.custom || [];
+        
+        // Combine all keywords
+        const all = [...inherited, ...custom];
+        
+        res.json({
+            inherited,
+            custom,
+            all,
+            totalCount: all.length,
+            totalWeight: all.reduce((sum, kw) => sum + (kw.weight || 0), 0).toFixed(2)
+        });
+        
+    } catch (error) {
+        console.error('[COMPANY CONFIG] Error loading urgency keywords:', error);
+        res.status(500).json({ error: 'Failed to load urgency keywords' });
+    }
+});
+
+/**
+ * ============================================================================
+ * POST /api/company/:companyId/configuration/urgency-keywords/sync
+ * Sync urgency keywords from template (updates inherited keywords)
+ * CRITICAL: Call this when template urgency keywords are updated
+ * ============================================================================
+ */
+router.post('/:companyId/configuration/urgency-keywords/sync', async (req, res) => {
+    console.log(`[COMPANY CONFIG] POST /configuration/urgency-keywords/sync for company: ${req.params.companyId}`);
+    
+    try {
+        const company = await Company.findById(req.params.companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        if (!company.configuration?.clonedFrom) {
+            return res.status(400).json({ error: 'Company has not cloned a template' });
+        }
+        
+        const template = await GlobalInstantResponseTemplate.findById(company.configuration.clonedFrom);
+        
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        // Initialize urgency keywords if needed
+        if (!company.configuration.urgencyKeywords) {
+            company.configuration.urgencyKeywords = { inherited: [], custom: [] };
+        }
+        
+        // Update inherited urgency keywords from template
+        company.configuration.urgencyKeywords.inherited = template.urgencyKeywords?.map(kw => ({
+            word: kw.word,
+            weight: kw.weight,
+            category: kw.category
+        })) || [];
+        
+        company.configuration.lastUpdatedAt = new Date();
+        
+        await company.save();
+        
+        console.log(`[COMPANY CONFIG] ✅ Synced ${company.configuration.urgencyKeywords.inherited.length} urgency keywords from template`);
+        
+        res.json({
+            success: true,
+            inherited: company.configuration.urgencyKeywords.inherited,
+            syncedCount: company.configuration.urgencyKeywords.inherited.length,
+            message: `Synced ${company.configuration.urgencyKeywords.inherited.length} urgency keywords from template`
+        });
+        
+    } catch (error) {
+        console.error('[COMPANY CONFIG] Error syncing urgency keywords:', error);
+        res.status(500).json({ error: 'Failed to sync urgency keywords' });
+    }
+});
+
+/**
+ * ============================================================================
  * GET /api/company/:companyId/configuration/scenarios
  * Load scenarios from cloned template
  * ============================================================================
