@@ -33,6 +33,7 @@ const AuditLog = require('../../models/AuditLog');
 const { authMiddleware } = require('../../middleware/auth');
 const ConfigurationReadinessService = require('../../services/ConfigurationReadinessService');
 const { generatePreviewToken, verifyPreviewToken } = require('../../utils/previewToken');
+const { validate } = require('../../utils/variableValidators');
 const { redisClient } = require('../../db');
 
 // Apply authentication to all routes
@@ -187,25 +188,83 @@ router.post('/:companyId/configuration/variables/preview', async (req, res) => {
             return res.status(404).json({ error: 'Company not found' });
         }
         
-        // Load template to get scenario usage
+        // ============================================
+        // STEP 1: Load template and variable definitions
+        // ============================================
         let scenariosAffected = [];
         let template = null;
+        let variableDefinitions = {};
         
         if (company.configuration?.clonedFrom) {
             template = await GlobalInstantResponseTemplate.findById(company.configuration.clonedFrom);
+            
+            // Build variable definitions lookup map
+            if (template && template.variableDefinitions) {
+                template.variableDefinitions.forEach(def => {
+                    variableDefinitions[def.key] = def;
+                });
+            }
         }
         
-        // Build before/after comparisons
+        // ============================================
+        // STEP 2: Validate all variables
+        // ============================================
+        const validationErrors = [];
+        const validatedVariables = {};
+        
+        for (const [key, value] of Object.entries(variables)) {
+            const definition = variableDefinitions[key];
+            
+            // If no definition, allow any value (backward compatibility)
+            if (!definition) {
+                validatedVariables[key] = value;
+                continue;
+            }
+            
+            // Validate using type-specific validator
+            const validationResult = validate(value, definition);
+            
+            if (!validationResult.isValid) {
+                validationErrors.push({
+                    key,
+                    label: definition.label || key,
+                    error: validationResult.errorMessage,
+                    value
+                });
+            } else {
+                // Use formatted value (e.g., phone normalized to E.164)
+                validatedVariables[key] = validationResult.formatted || value;
+            }
+        }
+        
+        // Return validation errors if any
+        if (validationErrors.length > 0) {
+            console.log(`[COMPANY CONFIG] ❌ Validation failed: ${validationErrors.length} errors`);
+            return res.status(400).json({
+                error: 'Validation failed',
+                validationErrors,
+                message: `${validationErrors.length} variable(s) failed validation`
+            });
+        }
+        
+        console.log(`[COMPANY CONFIG] ✅ All variables validated successfully`);
+        
+        // ============================================
+        // STEP 3: Build before/after comparisons
+        // ============================================
         const currentVariables = company.configuration?.variables || {};
         const changes = [];
         const examples = [];
         
-        for (const [key, newValue] of Object.entries(variables)) {
+        for (const [key, newValue] of Object.entries(validatedVariables)) {
             const oldValue = currentVariables.get ? currentVariables.get(key) : currentVariables[key];
             
             if (oldValue !== newValue) {
+                const definition = variableDefinitions[key];
                 changes.push({
                     key,
+                    label: definition?.label || key,
+                    type: definition?.type || 'text',
                     oldValue: oldValue || '[empty]',
                     newValue: newValue || '[empty]',
                     status: !oldValue ? 'added' : !newValue ? 'removed' : 'modified'
@@ -246,11 +305,15 @@ router.post('/:companyId/configuration/variables/preview', async (req, res) => {
             }
         }
         
-        // Generate preview token
+        // ============================================
+        // STEP 4: Generate preview token
+        // ============================================
+        // CRITICAL: Token is generated from VALIDATED variables
+        // This ensures apply endpoint will accept the same values
         const previewToken = generatePreviewToken(
             req.params.companyId,
             req.user?.userId || 'anonymous',
-            variables
+            validatedVariables
         );
         
         console.log(`[COMPANY CONFIG] ✅ Preview generated: ${changes.length} changes, ${scenariosAffected.length} scenarios affected`);
@@ -260,11 +323,13 @@ router.post('/:companyId/configuration/variables/preview', async (req, res) => {
             expiresIn: 600, // 10 minutes in seconds
             summary: {
                 variablesChanging: changes.length,
-                scenariosAffected: scenariosAffected.length
+                scenariosAffected: scenariosAffected.length,
+                validationsPassed: Object.keys(validatedVariables).length
             },
             changes,
             examples,
-            scenariosAffected: scenariosAffected.slice(0, 20) // Limit to 20 for display
+            scenariosAffected: scenariosAffected.slice(0, 20), // Limit to 20 for display
+            validatedVariables // Return validated (formatted) values for frontend
         });
         
     } catch (error) {
