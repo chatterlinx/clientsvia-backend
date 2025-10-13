@@ -6935,6 +6935,7 @@ Continue?`;
         // ============================================
         
         let autoRefreshInterval = null;
+        let lastTestResults = []; // Store for export
         
         function openTestLogModal() {
             console.log('🧪 Opening test log page...');
@@ -7006,6 +7007,9 @@ Continue?`;
         function renderTestLog(results) {
             const container = document.getElementById('test-log-content');
             
+            // Store for export
+            lastTestResults = results;
+            
             if (results.length === 0) {
                 container.innerHTML = `
                     <div class="text-center py-12 text-gray-400">
@@ -7015,6 +7019,7 @@ Continue?`;
                     </div>
                 `;
                 document.getElementById('template-health-summary').classList.add('hidden');
+                lastTestResults = [];
                 return;
             }
             
@@ -7454,6 +7459,193 @@ Continue?`;
                     switchMainTab('categories');
                 }, 1000);
             }
+        }
+        
+        // ============================================
+        // 📤 EXPORT FULL REPORT
+        // ============================================
+        
+        function exportFullReport() {
+            if (!lastTestResults || lastTestResults.length === 0) {
+                showNotification('No test results to export', 'warning');
+                return;
+            }
+            
+            console.log('📤 Exporting full diagnostic report...');
+            
+            const template = activeTemplate;
+            const timestamp = new Date().toISOString();
+            const health = calculateTemplateHealth(lastTestResults);
+            
+            let report = `
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                    🧪 GLOBAL AI BRAIN TEST REPORT                              ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+📋 TEMPLATE: ${template?.name || 'Unknown'}
+🔢 VERSION: ${template?.version || 'N/A'}
+📅 GENERATED: ${new Date(timestamp).toLocaleString()}
+🧪 TOTAL TESTS: ${lastTestResults.length}
+
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                           📊 HEALTH SUMMARY                                    ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+Overall Health Score: ${health.totalTests > 0 ? calculateHealthScore(health).toFixed(1) : 'N/A'}/10
+Match Rate: ${Math.round(health.matchRate)}%
+Avg Confidence: ${Math.round(health.avgConfidence)}%
+Avg Speed: ${health.avgSpeed}ms ${health.avgSpeed < 50 ? '⚡ EXCELLENT' : health.avgSpeed < 100 ? '✅ GOOD' : '⚠️ SLOW'}
+High Priority Issues: ${health.highPrioritySuggestions}
+Total Suggestions: ${health.totalSuggestions}
+
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                         🧪 DETAILED TEST RESULTS                               ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+`;
+            
+            lastTestResults.forEach((result, index) => {
+                const timeAgo = getTimeAgo(new Date(result.timestamp));
+                const confidencePercent = Math.round(result.confidence * 100);
+                const thresholdPercent = Math.round(result.threshold * 100);
+                
+                report += `
+${'='.repeat(80)}
+TEST #${index + 1} - ${result.matched ? '✅ MATCHED' : '❌ NO MATCH'} (${timeAgo})
+${'='.repeat(80)}
+
+🗣️  CALLER PHRASE:
+    "${result.phrase}"
+
+📊 METRICS:
+    Confidence: ${confidencePercent}% ${result.confidence >= result.threshold ? '✅' : '⚠️'} (threshold: ${thresholdPercent}%)
+    Response Time: ${result.timing?.total || 'N/A'}ms ${result.timing?.total < 50 ? '⚡' : result.timing?.total < 100 ? '✅' : '⚠️'}
+    Call SID: ${result.callSid || 'N/A'}
+
+`;
+                
+                // Matched scenario info
+                if (result.matched && result.scenario) {
+                    report += `✅ MATCHED SCENARIO:
+    Name: ${result.scenario.name}
+    Category: ${result.scenario.category || 'N/A'}
+    Scenario ID: ${result.scenario.scenarioId || 'N/A'}
+
+`;
+                }
+                
+                // Diagnostics
+                if (result.diagnostics) {
+                    report += `🔬 DIAGNOSTICS:
+    Original Phrase: "${result.diagnostics.phrase}"
+    Normalized: "${result.diagnostics.normalizedPhrase}"
+    Total Scenarios: ${result.diagnostics.totalScenarios}
+    Evaluated: ${result.diagnostics.eligibleScenarios || result.diagnostics.totalScenarios}
+    Blocked: ${result.diagnostics.blockedScenarios || 0}
+
+`;
+                    
+                    if (result.diagnostics.matchBreakdown) {
+                        report += `📈 SCORE BREAKDOWN:
+    BM25 (Keyword): ${(result.diagnostics.matchBreakdown.bm25Score * 100).toFixed(1)}%
+    Semantic (Meaning): ${(result.diagnostics.matchBreakdown.semanticScore * 100).toFixed(1)}% (not impl.)
+    Regex (Pattern): ${(result.diagnostics.matchBreakdown.regexScore * 100).toFixed(1)}% (not impl.)
+    TOTAL: ${(result.diagnostics.matchBreakdown.totalScore * 100).toFixed(1)}%
+
+`;
+                    }
+                    
+                    if (result.diagnostics.failureReason && result.diagnostics.failureReason.length > 0) {
+                        report += `⚠️  FAILURE REASONS:\n`;
+                        result.diagnostics.failureReason.forEach(reason => {
+                            const icon = reason.severity === 'critical' ? '🚨' : reason.severity === 'high' ? '⚠️' : reason.severity === 'medium' ? '⚠️' : 'ℹ️';
+                            report += `    ${icon} [${reason.severity.toUpperCase()}] ${reason.message}\n`;
+                            report += `       💡 Fix: ${reason.fix}\n`;
+                        });
+                        report += '\n';
+                    }
+                }
+                
+                // AI Analysis
+                if (result.analysis) {
+                    if (result.analysis.suggestions && result.analysis.suggestions.length > 0) {
+                        report += `💡 AI SUGGESTIONS:\n`;
+                        result.analysis.suggestions.forEach(sug => {
+                            const priority = sug.priority === 'high' ? '🔥 HIGH PRIORITY' : 'SUGGESTION';
+                            report += `    [${priority}] ${sug.message}\n`;
+                            if (sug.expectedBoost) report += `       Expected boost: ${sug.expectedBoost}\n`;
+                        });
+                        report += '\n';
+                    }
+                    
+                    if (result.analysis.insights && result.analysis.insights.length > 0) {
+                        report += `✅ POSITIVE INSIGHTS:\n`;
+                        result.analysis.insights.forEach(ins => {
+                            report += `    ${ins.message}\n`;
+                        });
+                        report += '\n';
+                    }
+                    
+                    if (result.analysis.issues && result.analysis.issues.length > 0) {
+                        report += `🚨 ISSUES:\n`;
+                        result.analysis.issues.forEach(iss => {
+                            report += `    ${iss.message}\n`;
+                            if (iss.suggestion) report += `       → ${iss.suggestion}\n`;
+                        });
+                        report += '\n';
+                    }
+                }
+                
+                // Close matches
+                if (!result.matched && result.topCandidates && result.topCandidates.length > 0) {
+                    report += `🎯 CLOSE MATCHES:\n`;
+                    result.topCandidates.slice(0, 5).forEach(cand => {
+                        report += `    ${Math.round((cand.confidence || 0) * 100)}% - ${cand.scenarioName || cand.scenarioId || 'Unknown'}\n`;
+                    });
+                    report += '\n';
+                }
+                
+                // Performance breakdown
+                if (result.timing) {
+                    report += `⏱️  PERFORMANCE:\n`;
+                    if (result.timing.normalize) report += `    Normalize: ${result.timing.normalize}ms\n`;
+                    if (result.timing.filter) report += `    Filter: ${result.timing.filter}ms\n`;
+                    if (result.timing.scoring) report += `    Scoring: ${result.timing.scoring}ms\n`;
+                    if (result.timing.selection) report += `    Selection: ${result.timing.selection}ms\n`;
+                    report += `    TOTAL: ${result.timing.total}ms\n\n`;
+                }
+            });
+            
+            report += `
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                              END OF REPORT                                     ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+Generated by ClientVia.ai Global AI Brain Testing System
+Template: ${template?.name || 'Unknown'} (v${template?.version || 'N/A'})
+Timestamp: ${new Date(timestamp).toISOString()}
+`;
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(report).then(() => {
+                showNotification('📋 Full report copied to clipboard!', 'success');
+                document.getElementById('export-status').textContent = '✅ Copied!';
+                setTimeout(() => {
+                    document.getElementById('export-status').textContent = '';
+                }, 3000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                showNotification('Failed to copy report', 'error');
+            });
+        }
+        
+        function calculateHealthScore(health) {
+            let score = 0;
+            score += (health.matchRate / 100) * 4; // 40%
+            score += (health.avgConfidence / 100) * 3; // 30%
+            score += (health.avgSpeed < 50 ? 2 : health.avgSpeed < 100 ? 1 : 0); // 20%
+            score += (health.highPrioritySuggestions === 0 ? 1 : 0); // 10%
+            return score;
         }
 
         document.addEventListener('DOMContentLoaded', async function() {
@@ -8798,14 +8990,20 @@ Continue?`;
                 <input type="checkbox" id="auto-refresh-toggle" onchange="toggleAutoRefresh()" class="w-4 h-4">
                 <span class="text-sm font-medium text-gray-700">Auto-refresh (5s)</span>
             </label>
-            <button onclick="refreshTestLog()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors">
-                <i class="fas fa-sync mr-1"></i>
-                Refresh Now
-            </button>
-        </div>
-        <div class="text-sm text-gray-600">
-            <span id="test-log-count">0</span> tests recorded
-        </div>
+                <button onclick="refreshTestLog()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors">
+                    <i class="fas fa-sync mr-1"></i>
+                    Refresh Now
+                </button>
+                <button onclick="exportFullReport()" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-colors">
+                    <i class="fas fa-file-export mr-1"></i>
+                    Export Full Report
+                </button>
+            </div>
+            <div class="text-sm text-gray-600 flex items-center gap-3">
+                <span><span id="test-log-count">0</span> tests recorded</span>
+                <span class="text-xs text-gray-400">|</span>
+                <span class="text-xs" id="export-status"></span>
+            </div>
     </div>
     
     <!-- Template Health Summary -->
