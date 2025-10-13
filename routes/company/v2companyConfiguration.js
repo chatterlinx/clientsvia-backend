@@ -29,6 +29,8 @@ const mongoose = require('mongoose');
 const Company = require('../../models/v2Company');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 const { authMiddleware } = require('../../middleware/auth');
+const ConfigurationReadinessService = require('../../services/ConfigurationReadinessService');
+const { redisClient } = require('../../db');
 
 // Apply authentication to all routes
 router.use(authMiddleware);
@@ -549,6 +551,140 @@ router.post('/:companyId/configuration/sync', async (req, res) => {
     } catch (error) {
         console.error('[COMPANY CONFIG] Error syncing template:', error);
         res.status(500).json({ error: 'Failed to sync template' });
+    }
+});
+
+/**
+ * ============================================================================
+ * GET /api/company/:companyId/configuration/readiness
+ * Calculate readiness score with Redis caching
+ * ============================================================================
+ */
+router.get('/:companyId/configuration/readiness', async (req, res) => {
+    console.log(`[COMPANY CONFIG] GET /configuration/readiness for company: ${req.params.companyId}`);
+    
+    try {
+        const companyId = req.params.companyId;
+        const cacheKey = `readiness:${companyId}`;
+        
+        // Check cache first (30 second TTL)
+        try {
+            const cached = await redisClient.get(cacheKey);
+            if (cached) {
+                console.log(`[COMPANY CONFIG] ✅ Returning cached readiness for ${companyId}`);
+                return res.json(JSON.parse(cached));
+            }
+        } catch (cacheError) {
+            console.warn('[COMPANY CONFIG] Redis cache miss or error:', cacheError.message);
+            // Continue without cache
+        }
+        
+        // Load company
+        const company = await Company.findById(companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Calculate readiness
+        const report = await ConfigurationReadinessService.calculateReadiness(company);
+        
+        // Update company readiness in DB (fire and forget)
+        Company.findByIdAndUpdate(companyId, {
+            'configuration.readiness': {
+                lastCalculatedAt: report.calculatedAt,
+                score: report.score,
+                canGoLive: report.canGoLive,
+                isLive: company.configuration?.readiness?.isLive || false,
+                goLiveAt: company.configuration?.readiness?.goLiveAt || null,
+                goLiveBy: company.configuration?.readiness?.goLiveBy || null,
+                components: report.components
+            }
+        }).catch(err => {
+            console.error('[COMPANY CONFIG] Error updating readiness in DB:', err);
+        });
+        
+        // Cache for 30 seconds
+        try {
+            await redisClient.setex(cacheKey, 30, JSON.stringify(report));
+        } catch (cacheError) {
+            console.warn('[COMPANY CONFIG] Failed to cache readiness:', cacheError.message);
+        }
+        
+        console.log(`[COMPANY CONFIG] ✅ Readiness calculated: ${report.score}/100, Can Go Live: ${report.canGoLive}`);
+        
+        res.json(report);
+        
+    } catch (error) {
+        console.error('[COMPANY CONFIG] Error calculating readiness:', error);
+        res.status(500).json({ error: 'Failed to calculate readiness' });
+    }
+});
+
+/**
+ * ============================================================================
+ * POST /api/company/:companyId/configuration/go-live
+ * Mark company as live (requires readiness check)
+ * ============================================================================
+ */
+router.post('/:companyId/configuration/go-live', async (req, res) => {
+    console.log(`[COMPANY CONFIG] POST /configuration/go-live for company: ${req.params.companyId}`);
+    
+    try {
+        const companyId = req.params.companyId;
+        
+        // Load company
+        const company = await Company.findById(companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Calculate readiness first
+        const report = await ConfigurationReadinessService.calculateReadiness(company);
+        
+        // Check if can go live
+        if (!report.canGoLive) {
+            return res.status(400).json({
+                error: 'Company is not ready to go live',
+                score: report.score,
+                blockers: report.blockers,
+                canGoLive: false
+            });
+        }
+        
+        // Mark as live
+        company.configuration.readiness = {
+            lastCalculatedAt: report.calculatedAt,
+            score: report.score,
+            canGoLive: report.canGoLive,
+            isLive: true,
+            goLiveAt: new Date(),
+            goLiveBy: req.user?.userId || 'system',
+            components: report.components
+        };
+        
+        await company.save();
+        
+        // Invalidate cache
+        try {
+            await redisClient.del(`readiness:${companyId}`);
+        } catch (err) {
+            console.warn('[COMPANY CONFIG] Failed to invalidate cache:', err);
+        }
+        
+        console.log(`[COMPANY CONFIG] 🚀 Company ${companyId} is now LIVE!`);
+        
+        res.json({
+            success: true,
+            isLive: true,
+            goLiveAt: company.configuration.readiness.goLiveAt,
+            score: report.score
+        });
+        
+    } catch (error) {
+        console.error('[COMPANY CONFIG] Error going live:', error);
+        res.status(500).json({ error: 'Failed to go live' });
     }
 });
 

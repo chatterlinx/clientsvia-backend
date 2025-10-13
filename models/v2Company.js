@@ -1324,7 +1324,27 @@ const companySchema = new mongoose.Schema({
             hasCustomVariables: { type: Boolean, default: false },
             hasCustomFillerWords: { type: Boolean, default: false },
             lastCustomizedAt: { type: Date, default: null }
-        }
+        },
+        
+        // Readiness tracking (for Go Live feature)
+        readiness: {
+            lastCalculatedAt: { type: Date, default: null },
+            score: { type: Number, default: 0, min: 0, max: 100 },
+            canGoLive: { type: Boolean, default: false },
+            isLive: { type: Boolean, default: false },
+            goLiveAt: { type: Date, default: null },
+            goLiveBy: { type: String, default: null }, // userId who triggered go-live
+            components: {
+                variables: { type: mongoose.Schema.Types.Mixed, default: {} },
+                fillerWords: { type: mongoose.Schema.Types.Mixed, default: {} },
+                scenarios: { type: mongoose.Schema.Types.Mixed, default: {} },
+                voice: { type: mongoose.Schema.Types.Mixed, default: {} },
+                testCalls: { type: mongoose.Schema.Types.Mixed, default: {} }
+            }
+        },
+        
+        // Test calls tracking
+        testCallsMade: { type: Number, default: 0 }
     }
 }, { timestamps: true });
 
