@@ -28,8 +28,11 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const Company = require('../../models/v2Company');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+const IdempotencyLog = require('../../models/IdempotencyLog');
+const AuditLog = require('../../models/AuditLog');
 const { authMiddleware } = require('../../middleware/auth');
 const ConfigurationReadinessService = require('../../services/ConfigurationReadinessService');
+const { generatePreviewToken, verifyPreviewToken } = require('../../utils/previewToken');
 const { redisClient } = require('../../db');
 
 // Apply authentication to all routes
@@ -159,6 +162,277 @@ router.patch('/:companyId/configuration/variables', async (req, res) => {
     } catch (error) {
         console.error('[COMPANY CONFIG] Error updating variables:', error);
         res.status(500).json({ error: 'Failed to update variables' });
+    }
+});
+
+/**
+ * ============================================================================
+ * POST /api/company/:companyId/configuration/variables/preview
+ * Preview variable changes before applying
+ * ============================================================================
+ */
+router.post('/:companyId/configuration/variables/preview', async (req, res) => {
+    console.log(`[COMPANY CONFIG] POST /configuration/variables/preview for company: ${req.params.companyId}`);
+    
+    try {
+        const { variables } = req.body;
+        
+        if (!variables || typeof variables !== 'object') {
+            return res.status(400).json({ error: 'Invalid variables data' });
+        }
+        
+        const company = await Company.findById(req.params.companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Load template to get scenario usage
+        let scenariosAffected = [];
+        let template = null;
+        
+        if (company.configuration?.clonedFrom) {
+            template = await GlobalInstantResponseTemplate.findById(company.configuration.clonedFrom);
+        }
+        
+        // Build before/after comparisons
+        const currentVariables = company.configuration?.variables || {};
+        const changes = [];
+        const examples = [];
+        
+        for (const [key, newValue] of Object.entries(variables)) {
+            const oldValue = currentVariables.get ? currentVariables.get(key) : currentVariables[key];
+            
+            if (oldValue !== newValue) {
+                changes.push({
+                    key,
+                    oldValue: oldValue || '[empty]',
+                    newValue: newValue || '[empty]',
+                    status: !oldValue ? 'added' : !newValue ? 'removed' : 'modified'
+                });
+                
+                // Find scenarios using this variable
+                if (template) {
+                    const variablePattern = `{${key}}`;
+                    
+                    template.categories.forEach(category => {
+                        category.scenarios.forEach(scenario => {
+                            const usedInQuick = scenario.quickReplies?.some(r => r.includes(variablePattern));
+                            const usedInFull = scenario.fullReplies?.some(r => r.includes(variablePattern));
+                            
+                            if (usedInQuick || usedInFull) {
+                                const exampleReply = scenario.quickReplies?.[0] || scenario.fullReplies?.[0] || '';
+                                
+                                // Generate before/after example
+                                const beforeText = exampleReply.replace(variablePattern, oldValue || '[empty]');
+                                const afterText = exampleReply.replace(variablePattern, newValue || '[empty]');
+                                
+                                if (examples.length < 10) {
+                                    examples.push({
+                                        scenario: scenario.name,
+                                        category: category.name,
+                                        before: beforeText,
+                                        after: afterText
+                                    });
+                                }
+                                
+                                if (!scenariosAffected.includes(scenario.name)) {
+                                    scenariosAffected.push(scenario.name);
+                                }
+                            }
+                        });
+                    });
+                }
+            }
+        }
+        
+        // Generate preview token
+        const previewToken = generatePreviewToken(
+            req.params.companyId,
+            req.user?.userId || 'anonymous',
+            variables
+        );
+        
+        console.log(`[COMPANY CONFIG] ✅ Preview generated: ${changes.length} changes, ${scenariosAffected.length} scenarios affected`);
+        
+        res.json({
+            previewToken,
+            expiresIn: 600, // 10 minutes in seconds
+            summary: {
+                variablesChanging: changes.length,
+                scenariosAffected: scenariosAffected.length
+            },
+            changes,
+            examples,
+            scenariosAffected: scenariosAffected.slice(0, 20) // Limit to 20 for display
+        });
+        
+    } catch (error) {
+        console.error('[COMPANY CONFIG] Error generating preview:', error);
+        res.status(500).json({ error: 'Failed to generate preview' });
+    }
+});
+
+/**
+ * ============================================================================
+ * POST /api/company/:companyId/configuration/variables/apply
+ * Apply variable changes (requires preview token + idempotency key)
+ * ============================================================================
+ */
+router.post('/:companyId/configuration/variables/apply', async (req, res) => {
+    console.log(`[COMPANY CONFIG] POST /configuration/variables/apply for company: ${req.params.companyId}`);
+    
+    try {
+        const { variables, previewToken } = req.body;
+        const idempotencyKey = req.headers['idempotency-key'];
+        
+        // Validate inputs
+        if (!variables || typeof variables !== 'object') {
+            return res.status(400).json({ error: 'Invalid variables data' });
+        }
+        
+        if (!previewToken) {
+            return res.status(400).json({ error: 'Preview token required. Please preview changes first.' });
+        }
+        
+        if (!idempotencyKey) {
+            return res.status(400).json({ error: 'Idempotency-Key header required' });
+        }
+        
+        // Check idempotency
+        const idempotencyCheck = await IdempotencyLog.checkOrStore(
+            idempotencyKey,
+            req.params.companyId,
+            req.user?.userId || 'anonymous',
+            'apply_variables',
+            { variables },
+            null, // Will be set after processing
+            {
+                ip: req.auditInfo?.ip || req.ip,
+                userAgent: req.auditInfo?.userAgent || req.headers['user-agent']
+            }
+        );
+        
+        if (idempotencyCheck.isDuplicate) {
+            console.log(`[COMPANY CONFIG] ⚠️ Duplicate apply request (idempotency)`);
+            return res.status(idempotencyCheck.response.statusCode).json(idempotencyCheck.response.body);
+        }
+        
+        // Verify preview token
+        const tokenVerification = verifyPreviewToken(previewToken, variables);
+        
+        if (!tokenVerification.valid) {
+            return res.status(400).json({ error: tokenVerification.error });
+        }
+        
+        // Verify company ID matches
+        if (tokenVerification.payload.companyId !== req.params.companyId) {
+            return res.status(400).json({ error: 'Preview token is for a different company' });
+        }
+        
+        // Load company
+        const company = await Company.findById(req.params.companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Start transaction (MongoDB session)
+        const session = await mongoose.startSession();
+        session.startTransaction();
+        
+        try {
+            // Save old variables for audit
+            const oldVariables = company.configuration?.variables || {};
+            
+            // Update variables
+            if (!company.configuration) {
+                company.configuration = {};
+            }
+            
+            company.configuration.variables = variables;
+            company.configuration.lastUpdatedAt = new Date();
+            company.configuration.customization.hasCustomVariables = true;
+            company.configuration.customization.lastCustomizedAt = new Date();
+            
+            await company.save({ session });
+            
+            // Create audit log
+            const changedKeys = [];
+            for (const key of Object.keys(variables)) {
+                const oldVal = oldVariables.get ? oldVariables.get(key) : oldVariables[key];
+                const newVal = variables[key];
+                if (oldVal !== newVal) {
+                    changedKeys.push(key);
+                }
+            }
+            
+            await AuditLog.createLog({
+                companyId: company._id,
+                userId: req.user?.userId || 'anonymous',
+                action: 'update_variables',
+                changes: {
+                    before: oldVariables,
+                    after: variables,
+                    diff: {
+                        modified: changedKeys
+                    }
+                },
+                impact: {
+                    variablesChanged: changedKeys,
+                    severity: changedKeys.length > 10 ? 'high' : changedKeys.length > 5 ? 'medium' : 'low',
+                    description: `${changedKeys.length} variable(s) updated`
+                },
+                metadata: {
+                    previewToken,
+                    idempotencyKey,
+                    ip: req.auditInfo?.ip || req.ip,
+                    userAgent: req.auditInfo?.userAgent || req.headers['user-agent']
+                }
+            });
+            
+            // Commit transaction
+            await session.commitTransaction();
+            
+            console.log(`[COMPANY CONFIG] ✅ Variables applied: ${changedKeys.length} changes`);
+            
+            // Invalidate readiness cache
+            try {
+                await redisClient.del(`readiness:${req.params.companyId}`);
+            } catch (err) {
+                console.warn('[COMPANY CONFIG] Failed to invalidate cache:', err);
+            }
+            
+            const successResponse = {
+                success: true,
+                variablesUpdated: changedKeys.length,
+                variables: company.configuration.variables
+            };
+            
+            // Update idempotency log with success response
+            await IdempotencyLog.findOneAndUpdate(
+                { key: idempotencyKey, companyId: req.params.companyId },
+                {
+                    response: {
+                        statusCode: 200,
+                        body: successResponse
+                    }
+                }
+            );
+            
+            res.json(successResponse);
+            
+        } catch (error) {
+            // Rollback transaction
+            await session.abortTransaction();
+            throw error;
+        } finally {
+            session.endSession();
+        }
+        
+    } catch (error) {
+        console.error('[COMPANY CONFIG] Error applying variables:', error);
+        res.status(500).json({ error: 'Failed to apply variables' });
     }
 });
 
