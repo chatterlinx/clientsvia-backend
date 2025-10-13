@@ -133,6 +133,27 @@ class MatchDiagnostics {
                 shortUtterance: (result.trace?.phraseTerms || []).length <= 3,
                 punctuationPresent: rawPhrase !== result.trace?.normalizedPhrase,
                 stopWordsPresent: this.detectStopWords(rawPhrase)
+            },
+            
+            // ============================================
+            // 📋 NORMALIZATION CONTRACT
+            // ============================================
+            // CRITICAL: Show EXACTLY what transforms were applied
+            // This kills "add visit?" suggestions forever
+            normalization: {
+                applied: true,
+                transforms: [
+                    { name: 'toLowerCase', applied: true, example: 'Hello → hello' },
+                    { name: 'stripPunctuation', applied: true, example: 'visit? → visit' },
+                    { name: 'collapseWhitespace', applied: true, example: 'a  b → a b' },
+                    { name: 'removeStopWords', applied: true, example: 'I can go → go' },
+                    { name: 'lemmatization', applied: false, example: 'running → run (not yet)' }
+                ],
+                before: rawPhrase,
+                after: result.trace?.normalizedPhrase || '',
+                removed: this.calculateRemoved(rawPhrase, result.trace?.normalizedPhrase || ''),
+                contentTerms: result.trace?.phraseTerms || [],
+                stopWordsFiltered: this.getStopWordsFiltered(rawPhrase, result.trace?.phraseTerms || [])
             }
         };
         
@@ -440,6 +461,39 @@ class MatchDiagnostics {
         const stopWords = ['i', 'a', 'the', 'to', 'is', 'am', 'can', 'please', 'thanks'];
         const words = phrase.toLowerCase().split(/\s+/);
         return words.some(w => stopWords.includes(w));
+    }
+    
+    /**
+     * Calculate what was removed during normalization
+     * @param {String} before - Original phrase
+     * @param {String} after - Normalized phrase
+     * @returns {Object} - Removed characters breakdown
+     */
+    calculateRemoved(before, after) {
+        const punctuation = before.replace(/[a-zA-Z0-9\s]/g, '');
+        const caseChanged = before !== before.toLowerCase();
+        const whitespaceDiff = (before.match(/\s+/g) || []).length - (after.match(/\s+/g) || []).length;
+        
+        return {
+            punctuation: punctuation.length > 0 ? punctuation : 'none',
+            caseChanged: caseChanged,
+            extraWhitespace: whitespaceDiff > 0 ? whitespaceDiff : 0,
+            totalCharsRemoved: before.length - after.length
+        };
+    }
+    
+    /**
+     * Get list of stop words that were filtered out
+     * @param {String} rawPhrase - Original phrase
+     * @param {Array} contentTerms - Final content terms
+     * @returns {Array} - Stop words that were filtered
+     */
+    getStopWordsFiltered(rawPhrase, contentTerms) {
+        const stopWords = ['i', 'a', 'the', 'to', 'is', 'am', 'can', 'please', 'thanks', 'you', 'know', 'like', 'well', 'so'];
+        const rawWords = rawPhrase.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(w => w.length > 0);
+        const contentSet = new Set(contentTerms);
+        
+        return rawWords.filter(w => stopWords.includes(w) && !contentSet.has(w));
     }
     
     /**
