@@ -4633,6 +4633,11 @@ Continue?`;
                 // Default to "hooks" sub-tab when entering Action Hooks
                 switchActionHooksSubTab('hooks');
             }
+            
+            // Load filler words if switching to settings tab
+            if (tabName === 'settings') {
+                loadFillerWords();
+            }
         }
 
         // ============================================================================
@@ -8963,6 +8968,281 @@ Timestamp: ${new Date(timestamp).toISOString()}
         // END TEST & PREVIEW FUNCTIONS
         // =============================================
 
+        // =============================================
+        // 🔇 FILLER WORDS MANAGEMENT
+        // =============================================
+        
+        let fillerWords = [];
+        let filteredFillerWords = [];
+        
+        /**
+         * Load filler words for active template
+         */
+        async function loadFillerWords() {
+            if (!activeTemplateId) {
+                console.warn('No active template - cannot load filler words');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplateId}/filler-words`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load filler words');
+                
+                const data = await response.json();
+                fillerWords = data.fillerWords || [];
+                filteredFillerWords = [...fillerWords];
+                
+                renderFillerWords();
+                updateFillerStats();
+            } catch (error) {
+                console.error('Error loading filler words:', error);
+                showNotification('Failed to load filler words', 'error');
+            }
+        }
+        
+        /**
+         * Render filler words as tag chips
+         */
+        function renderFillerWords() {
+            const container = document.getElementById('filler-words-container');
+            
+            if (filteredFillerWords.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center w-full text-gray-500 py-8">
+                        <i class="fas fa-filter text-4xl mb-3 opacity-30"></i>
+                        <p class="text-lg font-semibold">No filler words found</p>
+                        <p class="text-sm mt-2">Add your first filler word using the button above</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = filteredFillerWords
+                .sort((a, b) => a.localeCompare(b))
+                .map(word => `
+                    <div class="inline-flex items-center gap-2 px-3 py-1.5 bg-white border-2 border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:border-red-400 hover:bg-red-50 transition-all group">
+                        <span>${escapeHtml(word)}</span>
+                        <button 
+                            onclick="deleteFillerWord('${escapeHtml(word)}')" 
+                            class="text-gray-400 hover:text-red-600 transition-colors"
+                            title="Remove '${escapeHtml(word)}'"
+                        >
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `).join('');
+        }
+        
+        /**
+         * Update stats display
+         */
+        function updateFillerStats() {
+            document.getElementById('filler-count').textContent = fillerWords.length;
+            document.getElementById('filler-filtered-count').textContent = filteredFillerWords.length;
+        }
+        
+        /**
+         * Search/filter filler words
+         */
+        function searchFillerWords() {
+            const searchTerm = document.getElementById('filler-search').value.toLowerCase().trim();
+            
+            if (!searchTerm) {
+                filteredFillerWords = [...fillerWords];
+            } else {
+                filteredFillerWords = fillerWords.filter(word => word.toLowerCase().includes(searchTerm));
+            }
+            
+            renderFillerWords();
+            updateFillerStats();
+        }
+        
+        /**
+         * Show add filler word modal
+         */
+        function showAddFillerWordModal() {
+            const modal = document.getElementById('add-filler-word-modal');
+            modal.style.display = 'flex';
+            document.getElementById('new-filler-words').value = '';
+            document.getElementById('new-filler-words').focus();
+        }
+        
+        /**
+         * Close add filler word modal
+         */
+        function closeAddFillerWordModal() {
+            const modal = document.getElementById('add-filler-word-modal');
+            modal.style.display = 'none';
+        }
+        
+        /**
+         * Add filler word(s)
+         */
+        async function addFillerWords(event) {
+            event.preventDefault();
+            
+            if (!activeTemplateId) {
+                showNotification('No active template selected', 'error');
+                return;
+            }
+            
+            const textarea = document.getElementById('new-filler-words');
+            const input = textarea.value.trim();
+            
+            if (!input) {
+                showNotification('Please enter at least one word', 'error');
+                return;
+            }
+            
+            // Split by newlines and commas, trim, lowercase, dedupe
+            const words = [...new Set(
+                input.split(/[\\n,]+/)
+                    .map(w => w.trim().toLowerCase())
+                    .filter(w => w.length > 0)
+            )];
+            
+            if (words.length === 0) {
+                showNotification('No valid words found', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplateId}/filler-words`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ words })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to add filler words');
+                }
+                
+                showNotification(data.message || `Added ${data.addedWords.length} word(s)`, 'success');
+                closeAddFillerWordModal();
+                await loadFillerWords();
+            } catch (error) {
+                console.error('Error adding filler words:', error);
+                showNotification(error.message, 'error');
+            }
+        }
+        
+        /**
+         * Delete a filler word
+         */
+        async function deleteFillerWord(word) {
+            if (!confirm(`Remove filler word "${word}"?`)) return;
+            
+            if (!activeTemplateId) {
+                showNotification('No active template selected', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplateId}/filler-words/${encodeURIComponent(word)}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to remove filler word');
+                }
+                
+                showNotification(data.message, 'success');
+                await loadFillerWords();
+            } catch (error) {
+                console.error('Error deleting filler word:', error);
+                showNotification(error.message, 'error');
+            }
+        }
+        
+        /**
+         * Reset filler words to defaults (75+ words)
+         */
+        async function resetFillerWordsToDefaults() {
+            if (!confirm('Reset filler words to default 75+ words? This will replace ALL current words.')) return;
+            
+            if (!activeTemplateId) {
+                showNotification('No active template selected', 'error');
+                return;
+            }
+            
+            const defaultWords = [
+                'um', 'uh', 'like', 'you', 'know', 'i', 'mean', 'basically',
+                'actually', 'so', 'well', 'okay', 'alright', 'right', 'the',
+                'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were',
+                'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does',
+                'did', 'will', 'would', 'should', 'could', 'can', 'may',
+                'might', 'must', 'what', 'when', 'where', 'who', 'how', 'why',
+                'please', 'thanks', 'thank', 'yes', 'no', 'yeah', 'yep', 'nope',
+                'hi', 'hey', 'hello', 'you guys', 'today', 'there'
+            ];
+            
+            try {
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplateId}/filler-words`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ words: defaultWords })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to reset filler words');
+                }
+                
+                showNotification(`Reset to ${data.count} default filler words`, 'success');
+                await loadFillerWords();
+            } catch (error) {
+                console.error('Error resetting filler words:', error);
+                showNotification(error.message, 'error');
+            }
+        }
+        
+        /**
+         * Export filler words as JSON
+         */
+        function exportFillerWords() {
+            if (fillerWords.length === 0) {
+                showNotification('No filler words to export', 'error');
+                return;
+            }
+            
+            const data = {
+                templateId: activeTemplateId,
+                templateName: activeTemplate?.name || 'Unknown',
+                exportDate: new Date().toISOString(),
+                count: fillerWords.length,
+                fillerWords: fillerWords.sort()
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `filler-words-${activeTemplate?.name.replace(/\\s+/g, '-').toLowerCase()}-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showNotification(`Exported ${fillerWords.length} filler words`, 'success');
+        }
+        
+        // =============================================
+        // END FILLER WORDS MANAGEMENT
+        // =============================================
+
     </script>
 
     <!-- ============================================ -->
@@ -9679,6 +9959,59 @@ Timestamp: ${new Date(timestamp).toISOString()}
                 <p class="text-lg">Loading quality report...</p>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- ============================================ -->
+<!-- ADD FILLER WORD MODAL -->
+<!-- ============================================ -->
+<div id="add-filler-word-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
+    <div style="background: white; border-radius: 16px; max-width: 600px; width: 95%; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+            <h2 style="font-size: 28px; font-weight: 700; color: #2c3e50; margin: 0;">
+                <i class="fas fa-plus-circle text-green-600 mr-2"></i>
+                Add Filler Words
+            </h2>
+            <button onclick="closeAddFillerWordModal()" style="background: none; border: none; font-size: 32px; color: #95a5a6; cursor: pointer;">
+                &times;
+            </button>
+        </div>
+
+        <form id="add-filler-word-form" onsubmit="addFillerWords(event)">
+            <div class="mb-4">
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                    Filler Words *
+                </label>
+                <textarea 
+                    id="new-filler-words" 
+                    required 
+                    rows="8"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-mono text-sm"
+                    placeholder="Enter one or more words (one per line or comma-separated)&#10;Examples:&#10;um&#10;uh&#10;like&#10;you know&#10;technician&#10;guy, guys, you guys"
+                ></textarea>
+                <p class="text-xs text-gray-500 mt-2">
+                    <i class="fas fa-info-circle text-blue-500"></i>
+                    Words will be automatically normalized (lowercase, trimmed, deduplicated)
+                </p>
+            </div>
+
+            <div class="flex gap-3 justify-end">
+                <button 
+                    type="button" 
+                    onclick="closeAddFillerWordModal()" 
+                    class="px-6 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-lg font-semibold transition-colors"
+                >
+                    Cancel
+                </button>
+                <button 
+                    type="submit" 
+                    class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors"
+                >
+                    <i class="fas fa-plus mr-1"></i>
+                    Add Words
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
