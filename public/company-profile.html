@@ -2251,10 +2251,13 @@
                         
                         <!-- Load AI Agent Settings Managers -->
                         <script src="/js/ai-agent-settings/VariablesManager.js"></script>
+                        <script src="/js/ai-agent-settings/FillerWordsManager.js"></script>
                         <script src="/js/ai-agent-settings/AIAgentSettingsManager.js"></script>
                         <script>
                             // Initialize when tab is activated
                             let aiAgentSettings = null;
+                            let variablesManager = null;
+                            let fillerWordsManager = null;
                             
                             // Initialize on tab switch
                             document.getElementById('tab-ai-agent-settings')?.addEventListener('click', function() {
@@ -2264,6 +2267,11 @@
                                         console.log('🤖 [AI AGENT SETTINGS] Initializing for company:', companyId);
                                         aiAgentSettings = new AIAgentSettingsManager(companyId);
                                         aiAgentSettings.initialize();
+                                        
+                                        // Expose managers globally for onclick handlers
+                                        window.aiAgentSettings = aiAgentSettings;
+                                        window.variablesManager = aiAgentSettings.variablesManager;
+                                        window.fillerWordsManager = aiAgentSettings.fillerWordsManager;
                                     } else {
                                         console.error('❌ [AI AGENT SETTINGS] No company ID found');
                                     }

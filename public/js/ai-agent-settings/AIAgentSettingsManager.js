@@ -226,7 +226,39 @@ class AIAgentSettingsManager {
      */
     async loadFillerWords() {
         console.log('🔇 [AI AGENT SETTINGS] Loading filler words...');
-        // Will be implemented by FillerWordsManager
+        
+        if (!this.fillerWordsManager) {
+            this.fillerWordsManager = new FillerWordsManager(this);
+        }
+        
+        await this.fillerWordsManager.load();
+    }
+    
+    /**
+     * Show add filler word modal (called from UI)
+     */
+    showAddFillerWordModal() {
+        if (this.fillerWordsManager) {
+            this.fillerWordsManager.showAddModal();
+        }
+    }
+    
+    /**
+     * Export filler words (called from UI)
+     */
+    exportFillerWords() {
+        if (this.fillerWordsManager) {
+            this.fillerWordsManager.exportToJSON();
+        }
+    }
+    
+    /**
+     * Reset filler words (called from UI)
+     */
+    resetFillerWords() {
+        if (this.fillerWordsManager) {
+            this.fillerWordsManager.reset();
+        }
     }
     
     /**
