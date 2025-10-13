@@ -388,8 +388,12 @@ class VariablesManager {
     /**
      * Save variables to API
      */
+    /**
+     * Preview changes before applying
+     * CRITICAL: Shows before/after comparison and impact on scenarios
+     */
     async save() {
-        console.log('💼 [VARIABLES] Saving...');
+        console.log('💼 [VARIABLES] Initiating preview...');
         
         // Validate all inputs
         const inputs = document.querySelectorAll('.ai-settings-variable-input');
@@ -402,13 +406,16 @@ class VariablesManager {
         });
         
         if (!isValid) {
-            alert('⚠️ Please fix validation errors before saving.');
+            this.parent.showError('⚠️ Please fix validation errors before saving.');
             return;
         }
         
         try {
-            const response = await fetch(`/api/company/${this.companyId}/configuration/variables`, {
-                method: 'PATCH',
+            this.parent.showLoadingState();
+            
+            // Call preview API
+            const response = await fetch(`/api/company/${this.companyId}/configuration/variables/preview`, {
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -419,21 +426,236 @@ class VariablesManager {
             });
             
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                const error = await response.json();
+                throw new Error(error.message || `HTTP ${response.status}`);
+            }
+            
+            const previewData = await response.json();
+            
+            console.log('✅ [VARIABLES] Preview generated:', previewData);
+            
+            // Show preview modal
+            this.showPreviewModal(previewData);
+            
+        } catch (error) {
+            console.error('❌ [VARIABLES] Preview failed:', error);
+            this.parent.showError(`Preview failed: ${error.message}`);
+        } finally {
+            this.parent.hideLoadingState();
+        }
+    }
+    
+    /**
+     * Show preview modal with before/after comparison
+     */
+    showPreviewModal(previewData) {
+        const modal = document.createElement('div');
+        modal.id = 'variables-preview-modal';
+        modal.className = 'ai-settings-modal-overlay';
+        
+        // Countdown timer (10 minutes)
+        const expiresAt = Date.now() + (previewData.expiresIn * 1000);
+        
+        modal.innerHTML = `
+            <div class="ai-settings-modal">
+                <div class="ai-settings-modal-header">
+                    <h2>📝 Preview Changes</h2>
+                    <button class="ai-settings-modal-close" onclick="this.closest('.ai-settings-modal-overlay').remove()">×</button>
+                </div>
+                
+                <div class="ai-settings-modal-body">
+                    <!-- Summary -->
+                    <div class="preview-summary">
+                        <div class="preview-summary-card">
+                            <div class="preview-summary-icon">📊</div>
+                            <div>
+                                <div class="preview-summary-number">${previewData.summary.variablesChanging}</div>
+                                <div class="preview-summary-label">Variables Changing</div>
+                            </div>
+                        </div>
+                        <div class="preview-summary-card">
+                            <div class="preview-summary-icon">💬</div>
+                            <div>
+                                <div class="preview-summary-number">${previewData.summary.scenariosAffected}</div>
+                                <div class="preview-summary-label">Scenarios Affected</div>
+                            </div>
+                        </div>
+                        <div class="preview-summary-card">
+                            <div class="preview-summary-icon">⏰</div>
+                            <div>
+                                <div class="preview-summary-number" id="preview-countdown">10:00</div>
+                                <div class="preview-summary-label">Time Remaining</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Changes List -->
+                    <div class="preview-changes">
+                        <h3>🔄 Changes</h3>
+                        ${previewData.changes.map(change => `
+                            <div class="preview-change-item ${change.status}">
+                                <div class="preview-change-header">
+                                    <span class="preview-change-badge ${change.status}">
+                                        ${change.status === 'added' ? '➕ Added' : change.status === 'removed' ? '➖ Removed' : '✏️ Modified'}
+                                    </span>
+                                    <strong>${change.label || change.key}</strong>
+                                    ${change.type ? `<span class="preview-change-type">${change.type}</span>` : ''}
+                                </div>
+                                <div class="preview-change-comparison">
+                                    <div class="preview-change-old">
+                                        <span class="preview-label">Before:</span>
+                                        <code>${this.escapeHtml(change.oldValue)}</code>
+                                    </div>
+                                    <div class="preview-change-arrow">→</div>
+                                    <div class="preview-change-new">
+                                        <span class="preview-label">After:</span>
+                                        <code>${this.escapeHtml(change.newValue)}</code>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                    <!-- Examples (if any) -->
+                    ${previewData.examples && previewData.examples.length > 0 ? `
+                        <div class="preview-examples">
+                            <h3>📋 Example Impact</h3>
+                            <p class="preview-examples-desc">See how these changes will affect AI responses:</p>
+                            ${previewData.examples.slice(0, 3).map(ex => `
+                                <div class="preview-example-item">
+                                    <div class="preview-example-scenario">${this.escapeHtml(ex.scenarioName)}</div>
+                                    <div class="preview-example-comparison">
+                                        <div class="preview-example-before">
+                                            <span class="preview-label">Before:</span>
+                                            <div class="preview-example-text">${this.escapeHtml(ex.beforeText)}</div>
+                                        </div>
+                                        <div class="preview-example-after">
+                                            <span class="preview-label">After:</span>
+                                            <div class="preview-example-text">${this.escapeHtml(ex.afterText)}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+                
+                <div class="ai-settings-modal-footer">
+                    <button class="ai-settings-btn ai-settings-btn-secondary" onclick="this.closest('.ai-settings-modal-overlay').remove()">
+                        Cancel
+                    </button>
+                    <button class="ai-settings-btn ai-settings-btn-success" onclick="variablesManager.applyChanges('${previewData.previewToken}', ${expiresAt})">
+                        ✅ Apply Changes
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Start countdown timer
+        this.startCountdown(expiresAt);
+    }
+    
+    /**
+     * Start countdown timer for preview expiration
+     */
+    startCountdown(expiresAt) {
+        const countdownEl = document.getElementById('preview-countdown');
+        if (!countdownEl) return;
+        
+        const interval = setInterval(() => {
+            const remaining = Math.max(0, expiresAt - Date.now());
+            const minutes = Math.floor(remaining / 60000);
+            const seconds = Math.floor((remaining % 60000) / 1000);
+            
+            countdownEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            if (remaining <= 0) {
+                clearInterval(interval);
+                countdownEl.textContent = 'Expired';
+                countdownEl.style.color = '#ef4444';
+                
+                // Disable apply button
+                const applyBtn = document.querySelector('.ai-settings-modal-footer .ai-settings-btn-success');
+                if (applyBtn) {
+                    applyBtn.disabled = true;
+                    applyBtn.textContent = '⏰ Preview Expired';
+                }
+            }
+        }, 1000);
+    }
+    
+    /**
+     * Apply changes using preview token
+     * CRITICAL: Uses idempotency key to prevent double-apply
+     */
+    async applyChanges(previewToken, expiresAt) {
+        console.log('💼 [VARIABLES] Applying changes...');
+        
+        // Check if preview expired
+        if (Date.now() >= expiresAt) {
+            this.parent.showError('Preview expired. Please generate a new preview.');
+            return;
+        }
+        
+        // Generate idempotency key (UUID v4)
+        const idempotencyKey = this.generateIdempotencyKey();
+        
+        try {
+            this.parent.showLoadingState();
+            
+            // Call apply API
+            const response = await fetch(`/api/company/${this.companyId}/configuration/variables/apply`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'idempotency-key': idempotencyKey
+                },
+                body: JSON.stringify({
+                    variables: this.variables,
+                    previewToken: previewToken
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || `HTTP ${response.status}`);
             }
             
             const result = await response.json();
             
-            console.log('✅ [VARIABLES] Saved successfully');
+            console.log('✅ [VARIABLES] Applied successfully:', result);
             
+            // Close modal
+            const modal = document.getElementById('variables-preview-modal');
+            if (modal) modal.remove();
+            
+            // Show success
             this.isDirty = false;
-            this.parent.showSuccess('Variables saved successfully!');
-            this.parent.refresh();
+            this.parent.showSuccess('✅ Variables saved successfully!');
+            
+            // Refresh to show updated data
+            await this.parent.refresh();
             
         } catch (error) {
-            console.error('❌ [VARIABLES] Failed to save:', error);
-            this.parent.showError('Failed to save variables');
+            console.error('❌ [VARIABLES] Apply failed:', error);
+            this.parent.showError(`Failed to apply changes: ${error.message}`);
+        } finally {
+            this.parent.hideLoadingState();
         }
+    }
+    
+    /**
+     * Generate UUID v4 for idempotency key
+     */
+    generateIdempotencyKey() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
     }
     
     /**
