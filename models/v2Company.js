@@ -65,6 +65,57 @@ const smsSettingsSchema = new mongoose.Schema({
     appointmentReminders: { type: Boolean, default: false }
 }, { _id: false });
 
+// --- Sub-schema for Connection Messages (AI Agent Settings - Messages & Greetings tab) ---
+const connectionMessagesSchema = new mongoose.Schema({
+    // Voice Connection Message
+    voice: {
+        mode: { type: String, enum: ['prerecorded', 'realtime', 'disabled'], default: 'prerecorded' },
+        
+        // Pre-recorded audio file
+        prerecorded: {
+            activeFileUrl: { type: String, trim: true, default: null },
+            activeFileName: { type: String, trim: true, default: null },
+            activeDuration: { type: Number, default: null }, // seconds
+            activeFileSize: { type: Number, default: null }, // bytes
+            uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'v2User', default: null },
+            uploadedAt: { type: Date, default: null }
+        },
+        
+        // Real-time TTS
+        realtime: {
+            text: { type: String, trim: true, default: 'Thank you for calling. Please wait a moment while we connect you...' },
+            voiceId: { type: String, trim: true, default: null }
+        },
+        
+        // Fallback if audio fails
+        fallback: { type: String, enum: ['default', 'silent'], default: 'default' }
+    },
+    
+    // SMS Auto-Reply
+    sms: {
+        enabled: { type: Boolean, default: false },
+        text: { type: String, trim: true, default: 'Thanks for contacting us! Our AI assistant will respond shortly.' },
+        
+        // Business hours variants
+        businessHours: {
+            enabled: { type: Boolean, default: false },
+            duringHours: { type: String, trim: true, default: 'Thanks for texting! We\'ll respond right away...' },
+            afterHours: { type: String, trim: true, default: 'Thanks for texting! We\'re currently closed but will respond first thing...' }
+        }
+    },
+    
+    // Web Chat Auto-Reply (future)
+    webChat: {
+        enabled: { type: Boolean, default: false },
+        text: { type: String, trim: true, default: 'Thanks for reaching out! Our AI assistant will respond in a moment...' },
+        showTypingIndicator: { type: Boolean, default: true },
+        delaySeconds: { type: Number, default: 2 }
+    },
+    
+    // Metadata
+    lastUpdated: { type: Date, default: Date.now }
+}, { _id: false });
+
 // V2 DELETED: Legacy Google OAuth schema - using JWT-only authentication system
 
 // V2 DELETED: Legacy integrations schema - HighLevel and Google OAuth eliminated
@@ -341,6 +392,7 @@ const companySchema = new mongoose.Schema({
     },
     
     twilioConfig: { type: twilioConfigSchema, default: () => ({}) },
+    connectionMessages: { type: connectionMessagesSchema, default: () => ({}) },
     smsSettings: { type: smsSettingsSchema, default: () => ({}) },
     // V2 DELETED: Legacy integrations field - HighLevel and Google OAuth eliminated 
     // REMOVED: Legacy aiSettings field - replaced by aiAgentLogic system
