@@ -1992,7 +1992,23 @@
                                 <div id="ai-settings-progress-bar" class="ai-settings-progress-bar">
                                     <div class="ai-settings-progress-fill" style="width: 0%"></div>
                                 </div>
+                                
+                                <!-- Go Live Button Container -->
+                                <div class="ai-settings-go-live-container">
+                                    <button 
+                                        id="ai-settings-go-live-btn" 
+                                        class="ai-settings-btn ai-settings-btn-secondary" 
+                                        onclick="aiAgentSettings.goLive()"
+                                        disabled>
+                                        🔒 Cannot Go Live
+                                    </button>
+                                </div>
                             </div>
+                            
+                            <!-- ========================================== -->
+                            <!-- BLOCKERS LIST (shown when not ready) -->
+                            <!-- ========================================== -->
+                            <div id="ai-settings-blockers" style="display: none;"></div>
                             
                             <!-- ========================================== -->
                             <!-- SUB-TABS NAVIGATION -->

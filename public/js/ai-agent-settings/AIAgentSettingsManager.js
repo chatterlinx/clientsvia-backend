@@ -338,14 +338,44 @@ class AIAgentSettingsManager {
                 banner.classList.add('warning');
             }
             
-            // Update text
+            // Update text and Go Live button
             const textEl = banner.querySelector('.ai-settings-status-text');
+            const goLiveBtn = document.getElementById('ai-settings-go-live-btn');
+            
             if (textEl) {
                 if (readiness.canGoLive) {
-                    textEl.innerHTML = `✅ <strong>Ready to Go Live!</strong> Configuration score: ${readiness.score}/100`;
+                    if (readiness.components?.readiness?.isLive) {
+                        textEl.innerHTML = `🟢 <strong>Live!</strong> Your AI Agent is active and handling calls (Score: ${readiness.score}/100)`;
+                    } else {
+                        textEl.innerHTML = `✅ <strong>Ready to Go Live!</strong> Configuration score: ${readiness.score}/100 - All checks passed`;
+                    }
                 } else {
                     const blockerCount = readiness.blockers?.length || 0;
                     textEl.innerHTML = `⚠️ <strong>Not Ready</strong> - Score: ${readiness.score}/100 (${blockerCount} blocker${blockerCount !== 1 ? 's' : ''})`;
+                }
+            }
+            
+            // Update Go Live button state
+            if (goLiveBtn) {
+                if (readiness.components?.readiness?.isLive) {
+                    // Already live - show status
+                    goLiveBtn.textContent = '🟢 Live';
+                    goLiveBtn.disabled = true;
+                    goLiveBtn.classList.add('is-live');
+                    goLiveBtn.classList.remove('ai-settings-btn-success');
+                    goLiveBtn.classList.add('ai-settings-btn-secondary');
+                } else if (readiness.canGoLive) {
+                    // Ready to go live - enable button
+                    goLiveBtn.textContent = '🚀 Go Live Now';
+                    goLiveBtn.disabled = false;
+                    goLiveBtn.classList.remove('is-live', 'ai-settings-btn-secondary');
+                    goLiveBtn.classList.add('ai-settings-btn-success');
+                } else {
+                    // Not ready - disable button
+                    goLiveBtn.textContent = '🔒 Cannot Go Live';
+                    goLiveBtn.disabled = true;
+                    goLiveBtn.classList.remove('is-live', 'ai-settings-btn-success');
+                    goLiveBtn.classList.add('ai-settings-btn-secondary');
                 }
             }
             
@@ -577,6 +607,74 @@ class AIAgentSettingsManager {
             notification.style.animation = 'slideOut 0.3s ease';
             setTimeout(() => notification.remove(), 300);
         }, 3000);
+    }
+    
+    /**
+     * Go Live - Activate the AI Agent for production use
+     * CRITICAL: Only callable when readiness.canGoLive === true
+     */
+    async goLive() {
+        console.log('🚀 [AI AGENT SETTINGS] Initiating Go Live...');
+        
+        // Double-check readiness
+        if (!this.readiness || !this.readiness.canGoLive) {
+            this.showError('Cannot go live: Configuration is not ready. Please resolve all blockers first.');
+            return;
+        }
+        
+        // Show confirmation dialog
+        const confirmed = confirm(
+            `🚀 GO LIVE CONFIRMATION\n\n` +
+            `You are about to activate your AI Agent for production use.\n\n` +
+            `Current Status:\n` +
+            `✅ Configuration Score: ${this.readiness.score}/100\n` +
+            `✅ All blockers resolved\n` +
+            `✅ Ready to handle live calls\n\n` +
+            `Once activated, your AI Agent will:\n` +
+            `• Answer incoming calls automatically\n` +
+            `• Handle customer inquiries 24/7\n` +
+            `• Use the configured scenarios and variables\n\n` +
+            `Proceed with Go Live?`
+        );
+        
+        if (!confirmed) {
+            console.log('🚫 [AI AGENT SETTINGS] Go Live cancelled by user');
+            return;
+        }
+        
+        try {
+            this.showLoadingState();
+            
+            // Call Go Live API
+            const response = await fetch(`/api/company/${this.companyId}/configuration/go-live`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to go live');
+            }
+            
+            const result = await response.json();
+            
+            console.log('✅ [AI AGENT SETTINGS] Go Live successful!', result);
+            
+            // Show success message
+            this.showSuccess('🎉 Your AI Agent is now LIVE and handling calls!');
+            
+            // Refresh configuration to update UI
+            await this.refresh();
+            
+        } catch (error) {
+            console.error('❌ [AI AGENT SETTINGS] Go Live failed:', error);
+            this.showError(`Failed to go live: ${error.message}`);
+        } finally {
+            this.hideLoadingState();
+        }
     }
     
     /**

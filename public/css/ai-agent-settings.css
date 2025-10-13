@@ -559,6 +559,47 @@
     transform: translateY(-1px);
 }
 
+.ai-settings-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+.ai-settings-btn:disabled:hover {
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+.ai-settings-btn.is-live {
+    background: #10b981;
+    color: white;
+    font-weight: 700;
+    animation: pulse-live 2s infinite;
+}
+
+@keyframes pulse-live {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+}
+
+/* Go Live Button Container */
+.ai-settings-go-live-container {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 2px solid rgba(255,255,255,0.3);
+}
+
+#ai-settings-go-live-btn {
+    min-width: 180px;
+    font-size: 15px;
+    padding: 14px 28px;
+}
+
 /* ============================================================================
    UTILITIES
    ============================================================================ */
