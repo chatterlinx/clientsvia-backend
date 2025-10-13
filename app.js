@@ -134,6 +134,15 @@ try {
     app.use('/api/company', v2PlaceholdersRoutes);
     logger.info('✅ V2 Placeholders routes registered at /api/company - Dynamic placeholder system active');
 } catch (error) {
+    logger.error('❌ V2 Placeholders routes failed to load:', error.message);
+}
+
+// V2 Twilio Control Center (AI Agent Settings tab)
+try {
+    const v2TwilioControlRoutes = require('./routes/company/v2twilioControl');
+    app.use('/api/company', v2TwilioControlRoutes);
+    logger.info('✅ V2 Twilio Control Center routes registered at /api/company - Telephony management active');
+} catch (error) {
     logger.error('❌ Failed to load V2 Placeholders routes', { error: error.message });
 }
 
