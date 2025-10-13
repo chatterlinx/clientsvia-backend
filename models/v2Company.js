@@ -46,7 +46,16 @@ const twilioConfigSchema = new mongoose.Schema({
     apiKey: { type: String, trim: true, default: null },
     apiSecret: { type: String, trim: true, default: null },
     phoneNumber: { type: String, trim: true, default: null }, // Keep for backward compatibility
-    phoneNumbers: { type: [twilioPhoneNumberSchema], default: [] } // New multiple phone numbers
+    phoneNumbers: { type: [twilioPhoneNumberSchema], default: [] }, // New multiple phone numbers
+    
+    // Call Routing Settings (AI Agent Settings tab - Twilio Control Center)
+    callRoutingMode: { type: String, enum: ['ai-agent', 'voicemail', 'forward'], default: 'ai-agent' },
+    forwardNumber: { type: String, trim: true, default: null },
+    recordingEnabled: { type: Boolean, default: true },
+    whisperMessage: { type: String, trim: true, default: null },
+    
+    // Metadata
+    lastUpdated: { type: Date, default: Date.now }
 }, { _id: false });
 
 // --- Sub-schema for SMS Settings ---
