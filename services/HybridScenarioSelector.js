@@ -71,8 +71,90 @@ class HybridScenarioSelector {
             'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does',
             'did', 'will', 'would', 'should', 'could', 'can', 'may',
             'might', 'must', 'what', 'when', 'where', 'who', 'how', 'why',
-            'please', 'thanks', 'thank', 'yes', 'no', 'yeah', 'yep', 'nope'
+            'please', 'thanks', 'thank', 'yes', 'no', 'yeah', 'yep', 'nope',
+            'hi', 'hey', 'hello', 'you guys', 'today', 'there'
         ]);
+        
+        // ============================================
+        // 🎯 INTENT DETECTION KEYWORD SETS
+        // ============================================
+        // CRITICAL: Priority routing to handle dual-intent queries
+        // Example: "AC leaking water, can I schedule a visit?"
+        // → BOOK intent wins over QUESTION intent
+        
+        this.intentKeywords = {
+            // Priority 1: Emergency (always wins)
+            EMERGENCY: [
+                'water pouring', 'ceiling wet', 'flood', 'flooding', 'sparks', 'burning smell',
+                'no heat', 'no cooling', 'gas smell', 'co alarm', 'carbon monoxide',
+                'fire', 'smoke', 'electrical smell', 'shorting', 'water overflow',
+                'emergency', 'urgent', 'right now', 'immediately'
+            ],
+            
+            // Priority 2: Book/Visit/Send Tech (wins over Q&A)
+            BOOK: [
+                'schedule', 'book', 'appointment', 'come out', 'send a tech', 'send tech',
+                'visit', 'service call', 'estimate', 'set up a time', 'can you come',
+                'i need someone out', 'when can you come', 'i need an appointment',
+                'need appointment', 'make appointment', 'get appointment', 'set appointment',
+                'send someone', 'come over', 'come by', 'stop by', 'dispatch',
+                'need service', 'schedule service', 'book service'
+            ],
+            
+            // Priority 3: Reschedule/Cancel
+            RESCHEDULE: [
+                'reschedule', 'cancel', 'change appointment', 'move appointment',
+                'different time', 'different day', 'change time', 'change day'
+            ],
+            
+            // Priority 4: Status/Billing
+            STATUS: [
+                'where is', 'how much', 'cost', 'price', 'billing', 'invoice',
+                'payment', 'charge', 'hours', 'open', 'closed', 'business hours'
+            ],
+            
+            // Priority 5: Trade Q&A (only if no action intent)
+            QUESTION: [
+                'why', 'how come', 'what happening', 'what could be', 'do i need', 'should i',
+                'is it normal', 'how to', 'can i fix', 'explain', 'what does', 'what is',
+                'tell me', 'wondering', 'curious', 'question about'
+            ],
+            
+            // Problem topics (context for dispatcher)
+            PROBLEM_TOPICS: [
+                'leaking', 'leak', 'water', 'drip', 'dripping', 'freeze', 'frozen', 'ice', 
+                'no cool', 'not cooling', 'warm', 'hot', 'noise', 'noisy', 'loud', 
+                'smell', 'odor', 'short cycling', 'thermostat', 'drain', 'float switch',
+                'compressor', 'condenser', 'evaporator', 'coil', 'filter', 'fan',
+                'not working', 'broken', 'issue', 'problem', 'trouble'
+            ]
+        };
+        
+        // ============================================
+        // 🏆 PRIORITY LADDER (Highest Wins)
+        // ============================================
+        // Used for tie-breaking when multiple intents detected
+        this.intentPriority = {
+            EMERGENCY: 100,
+            BOOK: 80,
+            RESCHEDULE: 60,
+            STATUS: 40,
+            QUESTION: 20,
+            SMALLTALK: 10
+        };
+        
+        // ============================================
+        // 🎯 PRIORITY BONUS WEIGHTS
+        // ============================================
+        // Applied to confidence score based on detected intent
+        this.intentBonuses = {
+            EMERGENCY: 0.50,      // Emergency always fires
+            BOOK: 0.40,           // BOOK beats Q&A
+            RESCHEDULE: 0.25,
+            STATUS: 0.15,
+            QUESTION: 0.0,        // No bonus (base score only)
+            SMALLTALK: -0.10      // Slight penalty
+        };
     }
     
     // ============================================
@@ -200,6 +282,26 @@ class HybridScenarioSelector {
                 }
             }
             trace.timingMs.exactMatch = Date.now() - exactMatchStart;
+            
+            // ============================================
+            // STEP 1.75: INTENT DETECTION & PRIORITY ROUTING
+            // ============================================
+            // 🎯 CRITICAL: Detect caller intent (BOOK beats QUESTION)
+            // Example: "AC leaking, can I schedule?" → BOOK intent wins
+            const intentStart = Date.now();
+            const detectedIntents = this.detectIntents(normalizedPhrase, phraseTerms);
+            const problemTopics = this.extractProblemTopics(normalizedPhrase);
+            
+            trace.intents = {
+                detected: detectedIntents,
+                primaryIntent: detectedIntents[0] || null,
+                problemTopics: problemTopics,
+                hasEmergency: detectedIntents.includes('EMERGENCY'),
+                hasBookIntent: detectedIntents.includes('BOOK'),
+                hasQuestionIntent: detectedIntents.includes('QUESTION')
+            };
+            trace.timingMs.intentDetection = Date.now() - intentStart;
+            
             // ============================================
             // STEP 2: FILTER ELIGIBLE SCENARIOS
             // ============================================
@@ -256,7 +358,8 @@ class HybridScenarioSelector {
                     normalizedPhrase,
                     phraseTerms,
                     scenario,
-                    context
+                    context,
+                    detectedIntents // Pass intents for priority bonus
                 );
                 
                 // Check if blocked by negative triggers
@@ -381,12 +484,13 @@ class HybridScenarioSelector {
      * @param {Object} context - Conversation context
      * @returns {Object} - { totalScore, breakdown, confidence, blocked }
      */
-    scoreScenario(normalizedPhrase, phraseTerms, scenario, context) {
+    scoreScenario(normalizedPhrase, phraseTerms, scenario, context, detectedIntents = []) {
         const breakdown = {
             bm25: 0,
             semantic: 0,
             regex: 0,
-            context: 0
+            context: 0,
+            intentBonus: 0
         };
         let blocked = false;
         
@@ -485,7 +589,37 @@ class HybridScenarioSelector {
             (breakdown.context * this.config.weights.context);
         
         // 🛡️ SAFETY: NEVER allow NaN or Infinity
-        const safeScore = Number.isFinite(totalScore) ? totalScore : 0;
+        let safeScore = Number.isFinite(totalScore) ? totalScore : 0;
+        
+        // ============================================
+        // 🎯 APPLY INTENT PRIORITY BONUS
+        // ============================================
+        // CRITICAL: BOOK intent gets +0.40 bonus over QUESTION
+        // Example: "AC leaking, can I schedule?" → BOOK wins
+        if (detectedIntents && detectedIntents.length > 0) {
+            // Get primary intent (highest priority)
+            const primaryIntent = detectedIntents[0];
+            const intentBonus = this.getIntentBonus(primaryIntent);
+            
+            // Apply bonus only if scenario category matches intent
+            // (Prevents BOOK bonus from boosting Q&A scenarios)
+            const scenarioMatchesIntent = this.scenarioMatchesIntent(scenario, primaryIntent);
+            
+            if (scenarioMatchesIntent && intentBonus > 0) {
+                breakdown.intentBonus = intentBonus;
+                safeScore = Math.min(safeScore + intentBonus, 1.0);
+                
+                logger.debug('🎯 [INTENT BONUS] Applied', {
+                    scenarioId: scenario.scenarioId || scenario._id,
+                    name: scenario.name,
+                    intent: primaryIntent,
+                    bonus: intentBonus,
+                    originalScore: totalScore.toFixed(3),
+                    boostedScore: safeScore.toFixed(3)
+                });
+            }
+        }
+        
         const confidence = Math.min(Math.max(safeScore, 0), 1);
         
         // Final validation
@@ -688,6 +822,107 @@ class HybridScenarioSelector {
             !this.fillerWords.has(word) && 
             word.length > 2
         );
+    }
+    
+    // ============================================
+    // INTENT DETECTION & PRIORITY ROUTING
+    // ============================================
+    
+    /**
+     * Detect caller intents from phrase
+     * @param {String} normalizedPhrase - Normalized phrase
+     * @param {Array} phraseTerms - Extracted terms
+     * @returns {Array} - Detected intents (sorted by priority)
+     */
+    detectIntents(normalizedPhrase, phraseTerms) {
+        const intents = [];
+        
+        // Check each intent type
+        for (const [intentType, keywords] of Object.entries(this.intentKeywords)) {
+            if (intentType === 'PROBLEM_TOPICS') continue; // Skip problem topics
+            
+            for (const keyword of keywords) {
+                if (normalizedPhrase.includes(keyword)) {
+                    if (!intents.includes(intentType)) {
+                        intents.push(intentType);
+                    }
+                    break;
+                }
+            }
+        }
+        
+        // Sort by priority (highest first)
+        intents.sort((a, b) => {
+            const priorityA = this.intentPriority[a] || 0;
+            const priorityB = this.intentPriority[b] || 0;
+            return priorityB - priorityA;
+        });
+        
+        return intents;
+    }
+    
+    /**
+     * Extract problem topics for dispatcher context
+     * @param {String} normalizedPhrase - Normalized phrase
+     * @returns {Array} - Detected problem topics
+     */
+    extractProblemTopics(normalizedPhrase) {
+        const topics = [];
+        
+        for (const topic of this.intentKeywords.PROBLEM_TOPICS) {
+            if (normalizedPhrase.includes(topic)) {
+                topics.push(topic);
+            }
+        }
+        
+        return topics;
+    }
+    
+    /**
+     * Get intent bonus for confidence scoring
+     * @param {String} intentType - Detected intent type
+     * @returns {Number} - Bonus score (0.0 to 0.5)
+     */
+    getIntentBonus(intentType) {
+        return this.intentBonuses[intentType] || 0.0;
+    }
+    
+    /**
+     * Check if scenario category matches detected intent
+     * @param {Object} scenario - Scenario to check
+     * @param {String} intentType - Detected intent type
+     * @returns {Boolean} - True if scenario matches intent
+     */
+    scenarioMatchesIntent(scenario, intentType) {
+        const scenarioName = (scenario.name || '').toLowerCase();
+        const scenarioCategories = scenario.categories || [];
+        
+        // Map intent types to scenario keywords
+        const intentMappings = {
+            'EMERGENCY': ['emergency', 'urgent'],
+            'BOOK': ['appointment', 'schedule', 'visit', 'booking', 'request'],
+            'RESCHEDULE': ['reschedule', 'cancel', 'change'],
+            'STATUS': ['status', 'billing', 'hours', 'pricing', 'cost'],
+            'QUESTION': ['question', 'inquiry', 'q&a', 'qna', 'trade'],
+            'SMALLTALK': ['smalltalk', 'gratitude', 'goodbye', 'greeting']
+        };
+        
+        const keywords = intentMappings[intentType] || [];
+        
+        // Check if any keyword matches scenario name or categories
+        for (const keyword of keywords) {
+            if (scenarioName.includes(keyword)) {
+                return true;
+            }
+            
+            for (const category of scenarioCategories) {
+                if (category.toLowerCase().includes(keyword)) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
     }
     
     // ============================================
