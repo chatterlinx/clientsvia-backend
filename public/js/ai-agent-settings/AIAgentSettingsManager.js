@@ -301,9 +301,89 @@ class AIAgentSettingsManager {
     }
     
     /**
-     * Update status banner
+     * Update status banner with readiness score
+     * CRITICAL: Fetches real-time readiness score from backend
      */
-    updateStatusBanner() {
+    async updateStatusBanner() {
+        const banner = document.getElementById('ai-settings-status-banner');
+        const progressBar = document.getElementById('ai-settings-progress-bar');
+        const blockersContainer = document.getElementById('ai-settings-blockers');
+        
+        if (!banner) return;
+        
+        try {
+            // Fetch readiness score from API
+            const response = await fetch(`/api/company/${this.companyId}/configuration/readiness`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+            
+            if (!response.ok) {
+                console.warn('Failed to fetch readiness score, using fallback');
+                this.updateStatusBannerFallback();
+                return;
+            }
+            
+            const readiness = await response.json();
+            console.log('📊 [AI AGENT SETTINGS] Readiness score:', readiness);
+            
+            // Update banner class based on score
+            banner.className = 'ai-settings-status-banner';
+            if (readiness.canGoLive) {
+                banner.classList.add('success');
+            } else if (readiness.score < 30) {
+                banner.classList.add('error');
+            } else {
+                banner.classList.add('warning');
+            }
+            
+            // Update text
+            const textEl = banner.querySelector('.ai-settings-status-text');
+            if (textEl) {
+                if (readiness.canGoLive) {
+                    textEl.innerHTML = `✅ <strong>Ready to Go Live!</strong> Configuration score: ${readiness.score}/100`;
+                } else {
+                    const blockerCount = readiness.blockers?.length || 0;
+                    textEl.innerHTML = `⚠️ <strong>Not Ready</strong> - Score: ${readiness.score}/100 (${blockerCount} blocker${blockerCount !== 1 ? 's' : ''})`;
+                }
+            }
+            
+            // Update progress bar
+            if (progressBar) {
+                const fill = progressBar.querySelector('.ai-settings-progress-fill');
+                if (fill) {
+                    fill.style.width = `${readiness.score}%`;
+                    
+                    // Color based on score
+                    if (readiness.score >= 80) {
+                        fill.style.background = '#10b981'; // Green
+                    } else if (readiness.score >= 50) {
+                        fill.style.background = '#f59e0b'; // Orange
+                    } else {
+                        fill.style.background = '#ef4444'; // Red
+                    }
+                }
+            }
+            
+            // Update blockers list
+            if (blockersContainer) {
+                this.renderBlockers(readiness.blockers || [], blockersContainer);
+            }
+            
+            // Store readiness for other components
+            this.readiness = readiness;
+            
+        } catch (error) {
+            console.error('❌ [AI AGENT SETTINGS] Failed to fetch readiness:', error);
+            this.updateStatusBannerFallback();
+        }
+    }
+    
+    /**
+     * Fallback status banner (when readiness API fails)
+     */
+    updateStatusBannerFallback() {
         const banner = document.getElementById('ai-settings-status-banner');
         const progressBar = document.getElementById('ai-settings-progress-bar');
         
@@ -318,6 +398,8 @@ class AIAgentSettingsManager {
             banner.classList.add('success');
         } else if (status.configured === 0) {
             banner.classList.add('error');
+        } else {
+            banner.classList.add('warning');
         }
         
         // Update text
@@ -337,6 +419,78 @@ class AIAgentSettingsManager {
             if (fill) {
                 fill.style.width = `${percentage}%`;
             }
+        }
+    }
+    
+    /**
+     * Render blockers list
+     */
+    renderBlockers(blockers, container) {
+        if (!container) return;
+        
+        if (blockers.length === 0) {
+            container.innerHTML = '';
+            container.style.display = 'none';
+            return;
+        }
+        
+        container.style.display = 'block';
+        container.innerHTML = `
+            <div class="ai-settings-blockers-header">
+                <h4>⚠️ Issues to Fix (${blockers.length})</h4>
+                <p>Resolve these blockers to go live:</p>
+            </div>
+            <div class="ai-settings-blockers-list">
+                ${blockers.map(blocker => `
+                    <div class="ai-settings-blocker-item">
+                        <div class="blocker-icon">🚫</div>
+                        <div class="blocker-content">
+                            <div class="blocker-code">${blocker.code}</div>
+                            <div class="blocker-message">${blocker.message}</div>
+                        </div>
+                        ${blocker.target ? `
+                            <button class="blocker-fix-btn" onclick="aiAgentSettings.navigateToFix('${blocker.target}')">
+                                Fix Now →
+                            </button>
+                        ` : ''}
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+    
+    /**
+     * Navigate to fix location (called from blocker "Fix Now" button)
+     */
+    navigateToFix(target) {
+        console.log(`🎯 [AI AGENT SETTINGS] Navigating to fix: ${target}`);
+        
+        // Parse target like "/company/:companyId/ai-agent-settings/variables#phone"
+        const parts = target.split('/');
+        const lastPart = parts[parts.length - 1];
+        
+        if (lastPart.includes('#')) {
+            const [subTab, fieldId] = lastPart.split('#');
+            this.switchSubTab(subTab);
+            
+            // Scroll to field after a short delay
+            setTimeout(() => {
+                const field = document.getElementById(fieldId) || 
+                             document.querySelector(`[data-field="${fieldId}"]`);
+                if (field) {
+                    field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    field.focus();
+                    
+                    // Highlight field
+                    field.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.5)';
+                    setTimeout(() => {
+                        field.style.boxShadow = '';
+                    }, 2000);
+                }
+            }, 300);
+        } else {
+            // Just switch to sub-tab
+            this.switchSubTab(lastPart);
         }
     }
     

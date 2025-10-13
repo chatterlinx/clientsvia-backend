@@ -50,9 +50,20 @@
     border-left-color: #10b981;
 }
 
+.ai-settings-status-banner.warning {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border-left-color: #f59e0b;
+}
+
 .ai-settings-status-banner.error {
     background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
     border-left-color: #ef4444;
+}
+
+.ai-settings-status-text {
+    font-size: 15px;
+    color: #374151;
+    font-weight: 500;
 }
 
 .ai-settings-progress-bar {
@@ -67,8 +78,104 @@
 .ai-settings-progress-fill {
     height: 100%;
     background: linear-gradient(90deg, #10b981 0%, #059669 100%);
-    transition: width 0.3s ease;
+    transition: all 0.3s ease;
     border-radius: 4px;
+}
+
+/* ============================================================================
+   BLOCKERS LIST
+   ============================================================================ */
+
+.ai-settings-blockers {
+    margin-top: 20px;
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.ai-settings-blockers-header h4 {
+    margin: 0 0 8px 0;
+    color: #dc2626;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.ai-settings-blockers-header p {
+    margin: 0 0 16px 0;
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.ai-settings-blockers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ai-settings-blocker-item {
+    display: grid;
+    grid-template-columns: 40px 1fr auto;
+    gap: 16px;
+    align-items: center;
+    padding: 14px 16px;
+    background: #fef2f2;
+    border: 2px solid #fecaca;
+    border-radius: 10px;
+    transition: all 0.2s ease;
+}
+
+.ai-settings-blocker-item:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.1);
+}
+
+.blocker-icon {
+    font-size: 24px;
+    line-height: 1;
+}
+
+.blocker-content {
+    flex: 1;
+}
+
+.blocker-code {
+    font-size: 11px;
+    font-weight: 700;
+    color: #dc2626;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.blocker-message {
+    font-size: 14px;
+    color: #991b1b;
+    font-weight: 500;
+}
+
+.blocker-fix-btn {
+    padding: 8px 16px;
+    background: #dc2626;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.blocker-fix-btn:hover {
+    background: #b91c1c;
+    transform: translateX(3px);
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+}
+
+.blocker-fix-btn:active {
+    transform: translateX(1px);
 }
 
 /* ============================================================================
