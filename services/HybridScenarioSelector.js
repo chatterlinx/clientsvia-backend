@@ -31,7 +31,7 @@
 const logger = require('../utils/logger');
 
 class HybridScenarioSelector {
-    constructor(fillerWordsArray = null) {
+    constructor(fillerWordsArray = null, urgencyKeywordsArray = null) {
         // ============================================
         // CONFIGURATION
         // ============================================
@@ -62,6 +62,33 @@ class HybridScenarioSelector {
             maxScenarios: 1000,
             timeoutMs: 50
         };
+        
+        // ============================================
+        // 🚨 URGENCY KEYWORDS (DATABASE-DRIVEN)
+        // ============================================
+        // CRITICAL: Urgency keywords are now TEMPLATE-SPECIFIC and editable in UI
+        // These boost emergency detection with configurable weights
+        this.urgencyKeywords = new Map();
+        
+        if (Array.isArray(urgencyKeywordsArray) && urgencyKeywordsArray.length > 0) {
+            urgencyKeywordsArray.forEach(kw => {
+                if (kw.word && typeof kw.weight === 'number') {
+                    this.urgencyKeywords.set(kw.word.toLowerCase().trim(), {
+                        weight: kw.weight,
+                        category: kw.category || 'General'
+                    });
+                }
+            });
+            
+            logger.info('🚨 [HYBRID SELECTOR] Urgency keywords initialized', {
+                source: 'template',
+                count: this.urgencyKeywords.size,
+                totalWeight: Array.from(this.urgencyKeywords.values())
+                    .reduce((sum, kw) => sum + kw.weight, 0)
+            });
+        } else {
+            logger.info('🚨 [HYBRID SELECTOR] No urgency keywords provided (using intent keywords only)');
+        }
         
         // ============================================
         // 🔇 FILLER WORDS (DATABASE-DRIVEN)
@@ -739,6 +766,29 @@ class HybridScenarioSelector {
             }
         }
         
+        // ============================================
+        // 5. URGENCY KEYWORD BOOST 🚨
+        // ============================================
+        // CRITICAL: Database-driven emergency detection
+        // Scans phrase for urgency keywords with word boundaries
+        // Boosts score for emergency scenarios when urgency detected
+        if (this.urgencyKeywords.size > 0) {
+            const urgencyBoost = this.calculateUrgencyBoost(normalizedPhrase, scenario);
+            
+            if (urgencyBoost > 0) {
+                breakdown.urgencyBonus = urgencyBoost;
+                safeScore = Math.min(safeScore + urgencyBoost, 1.0);
+                
+                logger.debug('🚨 [URGENCY BOOST] Applied', {
+                    scenarioId: scenario.scenarioId || scenario._id,
+                    name: scenario.name,
+                    boost: urgencyBoost.toFixed(3),
+                    originalScore: totalScore.toFixed(3),
+                    boostedScore: safeScore.toFixed(3)
+                });
+            }
+        }
+        
         const confidence = Math.min(Math.max(safeScore, 0), 1);
         
         // Final validation
@@ -1251,6 +1301,55 @@ class HybridScenarioSelector {
         });
         
         return found.length > 0 ? found.slice(0, 3) : ['an issue'];  // Max 3 topics
+    }
+    
+    /**
+     * Calculate urgency boost from database-driven urgency keywords
+     * @param {String} normalizedPhrase - Normalized caller phrase
+     * @param {Object} scenario - Scenario being scored
+     * @returns {Number} - Urgency boost (0.0 to 0.5, capped)
+     */
+    calculateUrgencyBoost(normalizedPhrase, scenario) {
+        // Only boost emergency/urgent scenarios
+        // Prevents urgency keywords from boosting Q&A or small talk
+        if (!this.isEmergencyScenario(scenario)) {
+            return 0;
+        }
+        
+        let totalBoost = 0;
+        const detectedKeywords = [];
+        
+        // Scan phrase for urgency keywords with word boundaries
+        for (const [word, config] of this.urgencyKeywords.entries()) {
+            // Use word boundary regex for accurate detection
+            // Prevents "leak" from matching "please"
+            const wordBoundaryRegex = new RegExp(`\\b${word}\\b`, 'i');
+            
+            if (wordBoundaryRegex.test(normalizedPhrase)) {
+                totalBoost += config.weight;
+                detectedKeywords.push({
+                    word,
+                    weight: config.weight,
+                    category: config.category
+                });
+            }
+        }
+        
+        // Cap total boost at 0.5 (50%) to prevent over-boosting
+        const cappedBoost = Math.min(totalBoost, 0.5);
+        
+        if (detectedKeywords.length > 0) {
+            logger.info('🚨 [URGENCY DETECTED]', {
+                scenarioId: scenario.scenarioId || scenario._id,
+                scenarioName: scenario.name,
+                keywords: detectedKeywords.map(k => `${k.word}(${k.weight})`).join(', '),
+                totalBoost: totalBoost.toFixed(3),
+                cappedBoost: cappedBoost.toFixed(3),
+                phrase: normalizedPhrase.substring(0, 100) // First 100 chars
+            });
+        }
+        
+        return cappedBoost;
     }
 }
 

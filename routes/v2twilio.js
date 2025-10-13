@@ -1548,11 +1548,12 @@ router.post('/test-respond/:templateId', async (req, res) => {
     console.log(`🧠 [CHECKPOINT 4] Initializing HybridScenarioSelector...`);
     console.log(`🧠 [CHECKPOINT 4] Categories count: ${template.categories?.length || 0}`);
     
-    // Initialize selector with template's filler words
+    // Initialize selector with template's filler words and urgency keywords
     const fillerWords = template.fillerWords || [];
-    console.log(`🧠 [CHECKPOINT 4] Filler words count: ${fillerWords.length}`);
-    const selector = new HybridScenarioSelector(fillerWords);
-    console.log(`🧠 [CHECKPOINT 4] ✅ Selector initialized with ${fillerWords.length} filler words`);
+    const urgencyKeywords = template.urgencyKeywords || [];
+    console.log(`🧠 [CHECKPOINT 4] Filler words count: ${fillerWords.length}, Urgency keywords: ${urgencyKeywords.length}`);
+    const selector = new HybridScenarioSelector(fillerWords, urgencyKeywords);
+    console.log(`🧠 [CHECKPOINT 4] ✅ Selector initialized with ${fillerWords.length} filler words and ${urgencyKeywords.length} urgency keywords`);
     
     console.log(`🧠 [CHECKPOINT 5] Running scenario matching...`);
     console.log(`🧠 [CHECKPOINT 5] Extracting scenarios from ${template.categories.length} categories...`);
