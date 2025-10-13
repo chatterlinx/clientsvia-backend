@@ -23,30 +23,35 @@ const logger = require('../utils/logger');
 
 class MatchDiagnostics {
     constructor() {
-        // Reason code taxonomy
+        // ============================================
+        // 🎯 WORLD-CLASS REASON CODE TAXONOMY
+        // ============================================
+        // ONE and ONLY ONE reason per failed match decision.
+        // Single source of truth for all diagnostics.
         this.REASON_CODES = {
-            // Success reasons
-            MATCHED_HIGH_CONFIDENCE: 'matched_high_confidence',
-            MATCHED_EXACT: 'matched_exact',
+            // SUCCESS
+            S00: { code: 'S00', name: 'Success', type: 'success' },
+            S01: { code: 'S01', name: 'ExactMatchBypass', type: 'success' },
             
-            // Failure reasons (root causes)
-            BELOW_THRESHOLD: 'below_threshold',
-            BLOCKED_BY_NEGATIVE: 'blocked_by_negative',
-            FAILED_PRECONDITION: 'failed_precondition',
-            CHANNEL_MISMATCH: 'channel_mismatch',
-            LANGUAGE_MISMATCH: 'language_mismatch',
-            COOLDOWN_ACTIVE: 'cooldown_active',
-            NORMALIZATION_LEAK: 'normalization_leak',
-            PUNCTUATION_MISMATCH: 'punctuation_mismatch',
-            SHORT_UTTERANCE_PENALIZED: 'short_utterance_penalized',
-            NO_SCENARIOS: 'no_scenarios',
-            EMPTY_PHRASE: 'empty_phrase',
+            // FAILURE - MATCHING ISSUES (M-series)
+            M01: { code: 'M01', name: 'BelowThreshold', type: 'failure' },
+            M02: { code: 'M02', name: 'BlockedByNegative', type: 'failure' },
+            M03: { code: 'M03', name: 'FailedPrecondition', type: 'failure' },
+            M04: { code: 'M04', name: 'ChannelMismatch', type: 'failure' },
+            M05: { code: 'M05', name: 'LanguageMismatch', type: 'failure' },
+            M06: { code: 'M06', name: 'CooldownActive', type: 'failure' },
+            M07: { code: 'M07', name: 'CacheMiss', type: 'failure' },
+            M08: { code: 'M08', name: 'PolicyBlock', type: 'failure' },
+            M09: { code: 'M09', name: 'NoScenarios', type: 'failure' },
+            M10: { code: 'M10', name: 'EmptyPhrase', type: 'failure' },
             
-            // Quality issues
-            OVERBROAD_NEGATIVE: 'overbroad_negative',
-            THRESHOLD_TOO_HIGH: 'threshold_too_high',
-            MISSING_SEMANTIC_ANCHOR: 'missing_semantic_anchor',
-            REDUNDANT_TRIGGERS: 'redundant_triggers'
+            // QUALITY ISSUES (Q-series)
+            Q01: { code: 'Q01', name: 'ThresholdTooHigh', type: 'quality' },
+            Q02: { code: 'Q02', name: 'OverboadNegative', type: 'quality' },
+            Q03: { code: 'Q03', name: 'ShortUtterancePenalized', type: 'quality' },
+            Q04: { code: 'Q04', name: 'PunctuationMismatch', type: 'quality' },
+            Q05: { code: 'Q05', name: 'MissingSemanticAnchor', type: 'quality' },
+            Q06: { code: 'Q06', name: 'RedundantTriggers', type: 'quality' }
         };
         
         // Fix actions (one-click)
@@ -132,38 +137,57 @@ class MatchDiagnostics {
         };
         
         // ============================================
-        // REASON CODE DETERMINATION
+        // 🎯 PRIMARY REASON CODE DETERMINATION
         // ============================================
+        // ONE and ONLY ONE primary reason code per test.
+        // Waterfall logic: first match wins.
+        
+        let primaryReason = null;
+        let primaryReasonDetails = {};
         
         if (!result.scenario) {
-            // NO MATCH - determine root cause
+            // ======================================
+            // NO MATCH - Determine Root Cause
+            // ======================================
+            
             if (allScenarios.length === 0) {
-                debug.reasonCodes.push({
-                    code: this.REASON_CODES.NO_SCENARIOS,
+                // M09: NoScenarios
+                primaryReason = this.REASON_CODES.M09;
+                primaryReasonDetails = {
                     severity: 'critical',
                     message: 'No scenarios configured in template',
                     impact: 'System cannot match any phrase',
                     rootCause: 'Template has no scenarios',
-                    fix: 'Add scenarios to template'
-                });
+                    fix: 'Add scenarios to template',
+                    primaryMetric: 'scenarioCount',
+                    primaryMetricValue: 0
+                };
+                
             } else if (!rawPhrase || rawPhrase.trim().length === 0) {
-                debug.reasonCodes.push({
-                    code: this.REASON_CODES.EMPTY_PHRASE,
+                // M10: EmptyPhrase
+                primaryReason = this.REASON_CODES.M10;
+                primaryReasonDetails = {
                     severity: 'error',
                     message: 'Empty or null input phrase',
                     impact: 'Cannot perform matching on empty input',
                     rootCause: 'ASR returned empty string or silence detected',
-                    fix: 'Improve ASR configuration or add silence detection'
-                });
+                    fix: 'Improve ASR configuration or add silence detection',
+                    primaryMetric: 'phraseLength',
+                    primaryMetricValue: 0
+                };
+                
             } else if (result.trace?.scenariosBlocked > 0 && result.trace?.scenariosBlocked === allScenarios.length) {
-                debug.reasonCodes.push({
-                    code: this.REASON_CODES.BLOCKED_BY_NEGATIVE,
+                // M02: BlockedByNegative (ALL scenarios blocked)
+                primaryReason = this.REASON_CODES.M02;
+                primaryReasonDetails = {
                     severity: 'high',
-                    message: `ALL scenarios blocked by negative triggers`,
+                    message: `ALL ${allScenarios.length} scenarios blocked by negative triggers`,
                     impact: 'Zero candidates available for matching',
                     rootCause: 'Negative triggers are too broad or aggressive',
-                    fix: 'Add word boundaries to negative triggers (e.g., \\bdon\'t hold\\b instead of "don\'t")'
-                });
+                    fix: 'Add word boundaries to negative triggers (e.g., \\bdon\'t hold\\b instead of "don\'t")',
+                    primaryMetric: 'blockedCount',
+                    primaryMetricValue: result.trace.scenariosBlocked
+                };
                 
                 // Add specific fix
                 debug.fixes.push({
@@ -173,17 +197,20 @@ class MatchDiagnostics {
                     oneClick: true,
                     expectedImpact: 'Reduce false blocks by 70-90%'
                 });
+                
             } else if (result.confidence >= 0.35 && result.confidence < (result.trace?.threshold || 0.45)) {
-                // THRESHOLD ISSUE - near miss
+                // Q01: ThresholdTooHigh (near miss)
                 const gap = ((result.trace?.threshold || 0.45) - result.confidence) * 100;
-                debug.reasonCodes.push({
-                    code: this.REASON_CODES.THRESHOLD_TOO_HIGH,
+                primaryReason = this.REASON_CODES.Q01;
+                primaryReasonDetails = {
                     severity: 'medium',
                     message: `Confidence ${(result.confidence * 100).toFixed(0)}% is ${gap.toFixed(0)}% below threshold`,
                     impact: 'Good matches are being rejected',
                     rootCause: `Threshold ${((result.trace?.threshold || 0.45) * 100).toFixed(0)}% is calibrated too high for this category`,
-                    fix: `Lower threshold to ${Math.max(35, result.confidence * 100 - 2).toFixed(0)}% based on ROC curve`
-                });
+                    fix: `Lower threshold to ${Math.max(35, result.confidence * 100 - 2).toFixed(0)}% based on ROC curve`,
+                    primaryMetric: 'thresholdGap',
+                    primaryMetricValue: gap.toFixed(1)
+                };
                 
                 // Add specific fix
                 debug.fixes.push({
@@ -193,16 +220,19 @@ class MatchDiagnostics {
                     oneClick: true,
                     expectedImpact: `+${gap.toFixed(0)}% match rate for near-misses`
                 });
+                
             } else if (debug.quality.punctuationPresent && result.confidence < 0.45) {
-                // NORMALIZATION ISSUE
-                debug.reasonCodes.push({
-                    code: this.REASON_CODES.PUNCTUATION_MISMATCH,
+                // Q04: PunctuationMismatch
+                primaryReason = this.REASON_CODES.Q04;
+                primaryReasonDetails = {
                     severity: 'medium',
                     message: 'Punctuation differences preventing match',
                     impact: 'Exact phrases failing due to "?" or "," differences',
                     rootCause: 'Triggers include punctuation but input is normalized',
-                    fix: 'Enable full normalization (strip punctuation from triggers)'
-                });
+                    fix: 'Enable full normalization (strip punctuation from triggers)',
+                    primaryMetric: 'confidence',
+                    primaryMetricValue: (result.confidence * 100).toFixed(0)
+                };
                 
                 debug.fixes.push({
                     action: this.FIX_ACTIONS.ENABLE_NORMALIZATION,
@@ -211,16 +241,19 @@ class MatchDiagnostics {
                     oneClick: true,
                     expectedImpact: '+15-25% match rate for punctuation variations'
                 });
+                
             } else if (debug.quality.shortUtterance && result.confidence < 0.45) {
-                // SHORT UTTERANCE PENALTY
-                debug.reasonCodes.push({
-                    code: this.REASON_CODES.SHORT_UTTERANCE_PENALIZED,
+                // Q03: ShortUtterancePenalized
+                primaryReason = this.REASON_CODES.Q03;
+                primaryReasonDetails = {
                     severity: 'medium',
-                    message: 'Short utterance penalized by BM25 length normalization',
+                    message: `Short utterance (${debug.input.termCount} words) penalized by BM25`,
                     impact: 'Brief but valid phrases like "I want." score poorly',
                     rootCause: 'BM25 algorithm penalizes short inputs (< 4 words)',
-                    fix: 'Enable short-utterance boost (increase weight for 1-3 word phrases)'
-                });
+                    fix: 'Enable short-utterance boost (increase weight for 1-3 word phrases)',
+                    primaryMetric: 'termCount',
+                    primaryMetricValue: debug.input.termCount
+                };
                 
                 debug.fixes.push({
                     action: this.FIX_ACTIONS.ENABLE_SHORT_UTTERANCE_BOOST,
@@ -229,16 +262,19 @@ class MatchDiagnostics {
                     oneClick: true,
                     expectedImpact: '+20-30% match rate for brief but valid phrases'
                 });
+                
             } else {
-                // GENERIC LOW CONFIDENCE
-                debug.reasonCodes.push({
-                    code: this.REASON_CODES.BELOW_THRESHOLD,
+                // M01: BelowThreshold (generic low confidence)
+                primaryReason = this.REASON_CODES.M01;
+                primaryReasonDetails = {
                     severity: 'medium',
-                    message: `Confidence ${(result.confidence * 100).toFixed(0)}% is significantly below threshold`,
+                    message: `Confidence ${(result.confidence * 100).toFixed(0)}% is significantly below threshold ${((result.trace?.threshold || 0.45) * 100).toFixed(0)}%`,
                     impact: 'No semantic or keyword overlap detected',
                     rootCause: 'Caller phrase uses different vocabulary than triggers',
-                    fix: 'Add semantic anchors (synonyms) to category, not more literal triggers'
-                });
+                    fix: 'Add semantic anchors (synonyms) to category, not more literal triggers',
+                    primaryMetric: 'confidence',
+                    primaryMetricValue: (result.confidence * 100).toFixed(0)
+                };
                 
                 debug.fixes.push({
                     action: this.FIX_ACTIONS.ADD_SEMANTIC_ANCHOR,
@@ -248,30 +284,73 @@ class MatchDiagnostics {
                     expectedImpact: '+10-20% recall for vocabulary variations'
                 });
             }
+            
         } else {
-            // MATCHED - success analysis
-            if (result.confidence >= 0.85) {
-                debug.reasonCodes.push({
-                    code: this.REASON_CODES.MATCHED_HIGH_CONFIDENCE,
+            // ======================================
+            // MATCHED - Success Analysis
+            // ======================================
+            
+            // Check if this was an EXACT MATCH BYPASS (new feature)
+            if (result.confidence >= 1.0 || result.trace?.selectionReason?.includes('EXACT MATCH')) {
+                // S01: ExactMatchBypass
+                primaryReason = this.REASON_CODES.S01;
+                primaryReasonDetails = {
+                    severity: 'success',
+                    message: 'Exact match bypass (100% confidence)',
+                    impact: 'Perfect match - normalized phrase = normalized trigger',
+                    rootCause: 'N/A',
+                    fix: 'N/A',
+                    primaryMetric: 'confidence',
+                    primaryMetricValue: 100
+                };
+                debug.quality.exactMatch = true;
+                
+            } else if (result.confidence >= 0.85) {
+                // S00: Success (high confidence)
+                primaryReason = this.REASON_CODES.S00;
+                primaryReasonDetails = {
                     severity: 'success',
                     message: `High confidence match: ${(result.confidence * 100).toFixed(0)}%`,
                     impact: 'Strong match, very likely correct',
                     rootCause: 'N/A',
-                    fix: 'N/A'
-                });
+                    fix: 'N/A',
+                    primaryMetric: 'confidence',
+                    primaryMetricValue: (result.confidence * 100).toFixed(0)
+                };
                 debug.quality.exactMatch = true;
+                
             } else {
-                debug.reasonCodes.push({
-                    code: this.REASON_CODES.MATCHED_HIGH_CONFIDENCE,
+                // S00: Success (fuzzy match)
+                primaryReason = this.REASON_CODES.S00;
+                primaryReasonDetails = {
                     severity: 'success',
                     message: `Fuzzy match: ${(result.confidence * 100).toFixed(0)}%`,
                     impact: 'Match found but with moderate confidence',
                     rootCause: 'N/A',
-                    fix: 'Consider adding more trigger variations to improve confidence'
-                });
+                    fix: 'Consider adding more trigger variations to improve confidence',
+                    primaryMetric: 'confidence',
+                    primaryMetricValue: (result.confidence * 100).toFixed(0)
+                };
                 debug.quality.fuzzyMatch = true;
             }
         }
+        
+        // ============================================
+        // 🎯 SET PRIMARY REASON CODE (only one)
+        // ============================================
+        debug.primaryReasonCode = primaryReason?.code || 'UNKNOWN';
+        debug.reasonCodes = [{
+            code: primaryReason?.code || 'UNKNOWN',
+            name: primaryReason?.name || 'Unknown',
+            type: primaryReason?.type || 'unknown',
+            severity: primaryReasonDetails.severity || 'unknown',
+            message: primaryReasonDetails.message || 'Unknown failure reason',
+            impact: primaryReasonDetails.impact || 'Unknown impact',
+            rootCause: primaryReasonDetails.rootCause || 'Unknown root cause',
+            fix: primaryReasonDetails.fix || 'No fix available',
+            primaryMetric: primaryReasonDetails.primaryMetric || null,
+            primaryMetricValue: primaryReasonDetails.primaryMetricValue || null
+        }];
         
         // ============================================
         // TOKEN MAPPING (Critical for debugging)
@@ -430,39 +509,58 @@ class MatchDiagnostics {
         topReasons.forEach(([code, count]) => {
             const percent = (count / testResults.length) * 100;
             
-            if (code === this.REASON_CODES.THRESHOLD_TOO_HIGH && percent > 20) {
+            // Q01: ThresholdTooHigh
+            if (code === 'Q01' && percent > 20) {
                 report.recommendations.push({
                     priority: 'high',
                     issue: `${percent.toFixed(0)}% of failures due to threshold too high`,
                     action: 'Lower confidence threshold by 5-10 points',
-                    expectedImpact: `+${(percent * 0.8).toFixed(0)}% match rate`
+                    expectedImpact: `+${(percent * 0.8).toFixed(0)}% match rate`,
+                    category: 'Q01 - ThresholdTooHigh'
                 });
             }
             
-            if (code === this.REASON_CODES.BLOCKED_BY_NEGATIVE && percent > 10) {
+            // M02: BlockedByNegative
+            if (code === 'M02' && percent > 10) {
                 report.recommendations.push({
                     priority: 'high',
                     issue: `${percent.toFixed(0)}% of failures due to negative trigger blocks`,
                     action: 'Audit and narrow negative triggers with word boundaries',
-                    expectedImpact: `+${(percent * 0.7).toFixed(0)}% match rate`
+                    expectedImpact: `+${(percent * 0.7).toFixed(0)}% match rate`,
+                    category: 'M02 - BlockedByNegative'
                 });
             }
             
-            if (code === this.REASON_CODES.PUNCTUATION_MISMATCH && percent > 15) {
+            // Q04: PunctuationMismatch
+            if (code === 'Q04' && percent > 15) {
                 report.recommendations.push({
                     priority: 'medium',
                     issue: `${percent.toFixed(0)}% of failures due to punctuation differences`,
                     action: 'Enable full normalization (strip punctuation from triggers)',
-                    expectedImpact: `+${percent.toFixed(0)}% match rate`
+                    expectedImpact: `+${percent.toFixed(0)}% match rate`,
+                    category: 'Q04 - PunctuationMismatch'
                 });
             }
             
-            if (code === this.REASON_CODES.SHORT_UTTERANCE_PENALIZED && percent > 15) {
+            // Q03: ShortUtterancePenalized
+            if (code === 'Q03' && percent > 15) {
                 report.recommendations.push({
                     priority: 'medium',
                     issue: `${percent.toFixed(0)}% of failures due to short utterance penalty`,
                     action: 'Enable short-utterance boost (1-3 word phrases)',
-                    expectedImpact: `+${(percent * 0.8).toFixed(0)}% match rate`
+                    expectedImpact: `+${(percent * 0.8).toFixed(0)}% match rate`,
+                    category: 'Q03 - ShortUtterancePenalized'
+                });
+            }
+            
+            // M01: BelowThreshold
+            if (code === 'M01' && percent > 25) {
+                report.recommendations.push({
+                    priority: 'medium',
+                    issue: `${percent.toFixed(0)}% of failures due to low confidence (semantic gap)`,
+                    action: 'Add semantic anchors (synonyms) at category level',
+                    expectedImpact: `+${(percent * 0.5).toFixed(0)}% match rate`,
+                    category: 'M01 - BelowThreshold'
                 });
             }
         });

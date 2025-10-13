@@ -145,6 +145,62 @@ class HybridScenarioSelector {
             }
             
             // ============================================
+            // STEP 1.5: EXACT-MATCH BYPASS (100% CONFIDENCE)
+            // ============================================
+            // 🎯 CRITICAL: If normalized input exactly matches any normalized trigger,
+            // fire immediately with 100% confidence, bypassing all thresholds.
+            // This prevents "60% = NO MATCH" nonsense when caller says the exact phrase.
+            const exactMatchStart = Date.now();
+            for (const scenario of safeScenarios) {
+                if (!scenario || typeof scenario !== 'object') continue;
+                if (scenario.status !== 'live' || scenario.isActive === false) continue;
+                
+                const triggers = this.toArr(scenario.triggers);
+                for (const trigger of triggers) {
+                    const normalizedTrigger = this.normalizePhrase(trigger);
+                    if (normalizedPhrase === normalizedTrigger) {
+                        trace.timingMs.exactMatch = Date.now() - exactMatchStart;
+                        trace.selectionReason = `EXACT MATCH BYPASS (normalized phrase = normalized trigger)`;
+                        trace.selectedScenario = {
+                            scenarioId: scenario.scenarioId,
+                            name: scenario.name,
+                            score: 1.0,
+                            confidence: 1.0,
+                            priority: scenario.priority || 0,
+                            exactMatchTrigger: trigger
+                        };
+                        trace.topCandidates = [{
+                            scenarioId: scenario.scenarioId,
+                            name: scenario.name,
+                            score: '1.000',
+                            confidence: '1.000',
+                            priority: scenario.priority || 0,
+                            breakdown: { exactMatch: 1.0 }
+                        }];
+                        trace.timingMs.total = Date.now() - startTime;
+                        
+                        logger.info('🎯 [SCENARIO SELECTOR] EXACT MATCH BYPASS', {
+                            phrase,
+                            normalizedPhrase,
+                            trigger,
+                            normalizedTrigger,
+                            scenarioId: scenario.scenarioId,
+                            name: scenario.name,
+                            timeMs: trace.timingMs.total
+                        });
+                        
+                        return {
+                            scenario,
+                            score: 1.0,
+                            confidence: 1.0,
+                            breakdown: { exactMatch: 1.0 },
+                            trace
+                        };
+                    }
+                }
+            }
+            trace.timingMs.exactMatch = Date.now() - exactMatchStart;
+            // ============================================
             // STEP 2: FILTER ELIGIBLE SCENARIOS
             // ============================================
             const filterStart = Date.now();
