@@ -1,19 +1,27 @@
 /**
  * ============================================================================
- * TWILIO CONTROL CENTER - AI AGENT SETTINGS TAB
+ * TWILIO CONTROL CENTER - DIAGNOSTIC DASHBOARD
  * ============================================================================
  * 
- * PURPOSE: Frontend management for Twilio telephony integration
- * LOCATION: Top of AI Agent Settings tab
- * ISOLATION: 100% separate from legacy AI Agent Logic (to be deleted)
+ * PURPOSE: Mission Control diagnostic dashboard for Twilio integration
+ * PHILOSOPHY: DIAGNOSTIC ONLY - No editing, pure status reporting
  * 
- * FEATURES:
- * - Real-time connection status
- * - Health score (0-100)
- * - Phone number management
- * - Call routing settings
- * - Activity timeline
- * - Test call functionality
+ * THIS IS NOT AN EDITOR - IT'S A HEALTH MONITOR
+ * 
+ * What it does:
+ * - Shows real-time system health checks
+ * - Reports exactly what's working and what's broken
+ * - Provides clear guidance on how to fix issues
+ * - Gives "Copy Diagnostics for AI" button for debugging
+ * - Links to Configuration tab when editing is needed
+ * 
+ * What it does NOT do:
+ * - ❌ No edit fields (those are in Configuration tab)
+ * - ❌ No "Change Number" buttons
+ * - ❌ No inline editing
+ * 
+ * When customers are calling and something breaks, this dashboard
+ * tells you INSTANTLY what's wrong and where to fix it.
  * 
  * ============================================================================
  */
@@ -156,60 +164,212 @@ class TwilioControlCenter {
     }
 
     /**
-     * Render status cards (Connection, Phone, Credentials)
+     * Render diagnostic status cards - PURE DIAGNOSTIC, NO EDITING
      */
     renderStatusCards() {
-        const healthColor = this.health.healthScore >= 80 ? 'green' : this.health.healthScore >= 60 ? 'yellow' : 'red';
+        const allGood = this.status.connected && this.status.configured;
+        const diagnostics = this.status.diagnostics || {};
+        
+        // Build overall status message
+        let overallStatus = '';
+        let overallIcon = '';
+        let overallColor = '';
+        
+        if (allGood) {
+            overallStatus = 'ALL SYSTEMS OPERATIONAL';
+            overallIcon = '✅';
+            overallColor = 'green';
+        } else if (this.status.configured && !this.status.connected) {
+            overallStatus = 'CONFIGURATION ERROR';
+            overallIcon = '⚠️';
+            overallColor = 'red';
+        } else {
+            overallStatus = 'NOT CONFIGURED';
+            overallIcon = '❌';
+            overallColor = 'gray';
+        }
 
         return `
-            <div class="twilio-cards-grid">
-                <!-- Connection Status -->
-                <div class="twilio-card">
-                    <div class="card-icon ${this.status.connected ? 'connected' : 'disconnected'}">
-                        ${this.status.connected ? '🟢' : '🔴'}
+            <!-- Overall System Status Banner -->
+            <div class="diagnostic-banner ${overallColor}">
+                <div class="banner-icon">${overallIcon}</div>
+                <div class="banner-content">
+                    <h2>${overallStatus}</h2>
+                    <p>${allGood ? 'Your AI receptionist is ready to receive calls!' : 'Action required before going live with customers'}</p>
+                </div>
+                ${!allGood ? `
+                    <button class="btn-fix" onclick="twilioControl.goToConfigurationTab()">
+                        <i class="fas fa-wrench"></i> Fix in Configuration Tab
+                    </button>
+                ` : ''}
+            </div>
+
+            <!-- Diagnostic Checkpoints Grid -->
+            <div class="diagnostic-grid">
+                <!-- Checkpoint 1: Twilio Credentials -->
+                <div class="diagnostic-card">
+                    <div class="checkpoint-header">
+                        <span class="checkpoint-icon">${diagnostics.accountSid === '✅ Configured' && diagnostics.authToken === '✅ Configured' ? '✅' : '❌'}</span>
+                        <h3>Twilio Credentials</h3>
                     </div>
-                    <h3>Connection Status</h3>
-                    <div class="card-value">${this.status.connected ? 'Connected' : 'Disconnected'}</div>
-                    <div class="card-meta">
-                        <span class="health-score ${healthColor}">${this.health.healthScore}/100 Health</span>
-                        ${this.status.lastChecked ? `<span>Last: ${this.getTimeAgo(this.status.lastChecked)}</span>` : ''}
+                    <div class="checkpoint-details">
+                        <div class="detail-row">
+                            <span>Account SID:</span>
+                            <strong>${diagnostics.accountSid || '❌ Missing'}</strong>
+                        </div>
+                        <div class="detail-row">
+                            <span>Auth Token:</span>
+                            <strong>${diagnostics.authToken || '❌ Missing'}</strong>
+                        </div>
+                        ${this.status.accountSid ? `
+                            <div class="detail-row">
+                                <span>SID Value:</span>
+                                <code>${this.status.accountSid}</code>
+                            </div>
+                        ` : ''}
                     </div>
-                    ${!this.status.connected && this.status.errorMessage ? `
-                        <div class="card-error">${this.status.errorMessage}</div>
+                    ${diagnostics.accountSid !== '✅ Configured' || diagnostics.authToken !== '✅ Configured' ? `
+                        <div class="checkpoint-action">
+                            <p class="action-guidance">→ Add credentials in Configuration tab</p>
+                        </div>
                     ` : ''}
                 </div>
 
-                <!-- Phone Number -->
-                <div class="twilio-card">
-                    <div class="card-icon">📱</div>
-                    <h3>Phone Number</h3>
-                    <div class="card-value">${this.config.phoneNumber || 'Not configured'}</div>
-                    <div class="card-meta">
-                        ${this.config.phoneNumbers.length > 1 ? `<span>+${this.config.phoneNumbers.length - 1} more</span>` : ''}
+                <!-- Checkpoint 2: Phone Number -->
+                <div class="diagnostic-card">
+                    <div class="checkpoint-header">
+                        <span class="checkpoint-icon">${diagnostics.phoneNumber === '✅ Configured' ? '✅' : '❌'}</span>
+                        <h3>Phone Number</h3>
                     </div>
-                    <button class="card-action" onclick="twilioControl.showChangeNumberModal()">
-                        Change Number
-                    </button>
+                    <div class="checkpoint-details">
+                        <div class="detail-row">
+                            <span>Status:</span>
+                            <strong>${diagnostics.phoneNumber || '❌ Missing'}</strong>
+                        </div>
+                        ${this.status.phoneNumber ? `
+                            <div class="detail-row">
+                                <span>Number:</span>
+                                <strong class="phone-display">${this.status.phoneNumber}</strong>
+                            </div>
+                            ${this.status.phoneNumbersCount > 1 ? `
+                                <div class="detail-row">
+                                    <span>Additional:</span>
+                                    <span>+${this.status.phoneNumbersCount - 1} more numbers</span>
+                                </div>
+                            ` : ''}
+                        ` : `
+                            <div class="detail-row">
+                                <span>Number:</span>
+                                <strong>Not set</strong>
+                            </div>
+                        `}
+                    </div>
+                    ${diagnostics.phoneNumber !== '✅ Configured' ? `
+                        <div class="checkpoint-action">
+                            <p class="action-guidance">→ Add phone number in Configuration tab</p>
+                        </div>
+                    ` : ''}
                 </div>
 
-                <!-- Credentials -->
-                <div class="twilio-card">
-                    <div class="card-icon">🔑</div>
-                    <h3>Credentials</h3>
-                    <div class="card-value credentials">
-                        <div class="credential-row">
-                            <span>SID:</span>
-                            <span>${this.status.accountSid || 'Not set'}</span>
-                        </div>
-                        <div class="credential-row">
-                            <span>Token:</span>
-                            <span>${this.config.authTokenMasked || '••••••••'}</span>
-                        </div>
+                <!-- Checkpoint 3: Twilio API Connection -->
+                <div class="diagnostic-card">
+                    <div class="checkpoint-header">
+                        <span class="checkpoint-icon">${this.status.connected ? '✅' : '❌'}</span>
+                        <h3>Twilio API Connection</h3>
                     </div>
-                    <button class="card-action" onclick="twilioControl.goToProfileConfig()">
-                        Edit in Profile
-                    </button>
+                    <div class="checkpoint-details">
+                        <div class="detail-row">
+                            <span>Connection:</span>
+                            <strong class="${this.status.connected ? 'text-green' : 'text-red'}">
+                                ${this.status.connected ? '✅ Connected' : '❌ Failed'}
+                            </strong>
+                        </div>
+                        ${this.status.connected && this.status.connectionDetails ? `
+                            <div class="detail-row">
+                                <span>Account Status:</span>
+                                <strong>${this.status.connectionDetails.accountStatus}</strong>
+                            </div>
+                            <div class="detail-row">
+                                <span>Account Type:</span>
+                                <strong>${this.status.connectionDetails.accountType}</strong>
+                            </div>
+                        ` : ''}
+                        ${this.status.lastChecked ? `
+                            <div class="detail-row">
+                                <span>Last Checked:</span>
+                                <span>${this.getTimeAgo(this.status.lastChecked)}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                    ${!this.status.connected && this.status.errorMessage ? `
+                        <div class="checkpoint-error">
+                            <strong>Error:</strong> ${this.status.errorMessage}
+                        </div>
+                        <div class="checkpoint-action">
+                            <p class="action-guidance">→ Verify credentials in Configuration tab</p>
+                        </div>
+                    ` : ''}
                 </div>
+
+                <!-- Checkpoint 4: Voice Settings -->
+                <div class="diagnostic-card">
+                    <div class="checkpoint-header">
+                        <span class="checkpoint-icon">${diagnostics.voice === '✅ Configured' ? '✅' : '⚠️'}</span>
+                        <h3>AI Voice</h3>
+                    </div>
+                    <div class="checkpoint-details">
+                        <div class="detail-row">
+                            <span>Status:</span>
+                            <strong>${diagnostics.voice || '⚠️ Not configured'}</strong>
+                        </div>
+                        ${this.config.voiceSettings?.selectedVoice ? `
+                            <div class="detail-row">
+                                <span>Voice:</span>
+                                <strong>${this.config.voiceSettings.selectedVoice}</strong>
+                            </div>
+                            <div class="detail-row">
+                                <span>Model:</span>
+                                <span>${this.config.voiceSettings.aiModel || 'eleven_turbo_v2_5'}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                    ${diagnostics.voice !== '✅ Configured' ? `
+                        <div class="checkpoint-action">
+                            <p class="action-guidance">→ Configure voice in AI Voice Settings tab (optional but recommended)</p>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="diagnostic-actions">
+                <button class="btn-diagnostic" onclick="twilioControl.copyDiagnostics()">
+                    <i class="fas fa-copy"></i> Copy Full Diagnostics for AI
+                </button>
+                <button class="btn-refresh" onclick="twilioControl.refreshStatus()">
+                    <i class="fas fa-sync"></i> Refresh Status
+                </button>
+                ${!allGood ? `
+                    <button class="btn-primary" onclick="twilioControl.goToConfigurationTab()">
+                        <i class="fas fa-wrench"></i> Go to Configuration Tab
+                    </button>
+                ` : ''}
+            </div>
+
+            <!-- Health Score Explanation -->
+            <div class="health-explanation">
+                <h4>What does ${this.health.healthScore}/100 Health Score mean?</h4>
+                <ul>
+                    ${this.health.healthScore === 100 ? `
+                        <li>✅ Perfect! All systems operational and ready for customer calls</li>
+                    ` : `
+                        ${this.health.healthScore >= 80 ? `
+                            <li>⚠️ Mostly configured, but ${this.getHealthIssues()}</li>
+                        ` : `
+                            <li>❌ Critical issues detected: ${this.getHealthIssues()}</li>
+                        `}
+                    `}
+                </ul>
             </div>
         `;
     }
@@ -539,6 +699,137 @@ class TwilioControlCenter {
         if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
         if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
         return `${Math.floor(seconds / 86400)}d ago`;
+    }
+
+    /**
+     * Navigate to Configuration tab
+     */
+    goToConfigurationTab() {
+        const configTab = document.getElementById('tab-config');
+        if (configTab) {
+            configTab.click();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            alert('Configuration tab not found');
+        }
+    }
+
+    /**
+     * Refresh status manually
+     */
+    async refreshStatus() {
+        console.log('🔄 [TWILIO CONTROL] Manual refresh requested');
+        try {
+            await this.loadAllData();
+            this.render();
+            console.log('✅ [TWILIO CONTROL] Status refreshed');
+        } catch (error) {
+            console.error('❌ [TWILIO CONTROL] Refresh failed:', error);
+            alert('Failed to refresh status: ' + error.message);
+        }
+    }
+
+    /**
+     * Copy full diagnostics to clipboard
+     */
+    async copyDiagnostics() {
+        const report = this.generateDiagnosticReport();
+        
+        try {
+            await navigator.clipboard.writeText(report);
+            alert('✅ Diagnostics copied!\n\nPaste this to AI for debugging help.');
+        } catch (error) {
+            const textarea = document.createElement('textarea');
+            textarea.value = report;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            alert('✅ Diagnostics copied!\n\nPaste this to AI for debugging help.');
+        }
+    }
+
+    /**
+     * Generate diagnostic report
+     */
+    generateDiagnosticReport() {
+        const diagnostics = this.status.diagnostics || {};
+        return `
+═══════════════════════════════════════════════════
+TWILIO DIAGNOSTIC REPORT
+═══════════════════════════════════════════════════
+
+Generated: ${new Date().toISOString()}
+Company ID: ${this.companyId}
+
+OVERALL STATUS:
+- Configured: ${this.status.configured ? 'YES' : 'NO'}
+- Connected: ${this.status.connected ? 'YES' : 'NO'}
+- Health Score: ${this.health.healthScore}/100
+
+CHECKPOINT 1: TWILIO CREDENTIALS
+- Account SID: ${diagnostics.accountSid || '❌ Missing'}
+- Auth Token: ${diagnostics.authToken || '❌ Missing'}
+${this.status.accountSid ? `- SID Value: ${this.status.accountSid}` : ''}
+
+CHECKPOINT 2: PHONE NUMBER
+- Status: ${diagnostics.phoneNumber || '❌ Missing'}
+${this.status.phoneNumber ? `- Number: ${this.status.phoneNumber}` : ''}
+
+CHECKPOINT 3: TWILIO API CONNECTION
+- Connection: ${this.status.connected ? '✅ Connected' : '❌ Failed'}
+${this.status.errorMessage ? `- Error: ${this.status.errorMessage}` : ''}
+
+CHECKPOINT 4: AI VOICE
+- Status: ${diagnostics.voice || '⚠️ Not configured'}
+${this.config.voiceSettings?.selectedVoice ? `- Voice: ${this.config.voiceSettings.selectedVoice}` : ''}
+
+RECOMMENDATIONS:
+${this.getDetailedRecommendations()}
+
+═══════════════════════════════════════════════════
+        `.trim();
+    }
+
+    /**
+     * Get health issues
+     */
+    getHealthIssues() {
+        const issues = [];
+        const d = this.status.diagnostics || {};
+        
+        if (d.accountSID !== '✅ Configured') issues.push('Account SID missing');
+        if (d.authToken !== '✅ Configured') issues.push('Auth Token missing');
+        if (d.phoneNumber !== '✅ Configured') issues.push('Phone number missing');
+        if (!this.status.connected && this.status.configured) issues.push('Connection failed');
+        
+        return issues.length > 0 ? issues.join(', ') : 'Unknown';
+    }
+
+    /**
+     * Get detailed recommendations
+     */
+    getDetailedRecommendations() {
+        const recs = [];
+        const d = this.status.diagnostics || {};
+        
+        if (!this.status.configured) {
+            recs.push('1. Go to Configuration tab');
+            if (d.accountSid !== '✅ Configured') recs.push('   - Add Account SID');
+            if (d.authToken !== '✅ Configured') recs.push('   - Add Auth Token');
+            if (d.phoneNumber !== '✅ Configured') recs.push('   - Add Phone Number');
+            recs.push('2. Save and return here');
+        } else if (!this.status.connected) {
+            recs.push('1. Verify credentials in Configuration tab');
+            recs.push('2. Check Twilio account at console.twilio.com');
+            if (this.status.errorMessage) recs.push(`3. Error: ${this.status.errorMessage}`);
+        } else {
+            recs.push('✅ All systems operational!');
+        }
+        
+        return recs.join('\n');
     }
 
     /**
