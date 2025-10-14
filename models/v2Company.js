@@ -168,13 +168,8 @@ const aiAgentLogicSchema = new mongoose.Schema({
     version: { type: Number, default: 1 },
     lastUpdated: { type: Date, default: Date.now },
     
-    // 🎤 INITIAL GREETING (PRIORITY -1: Plays FIRST when call connects)
-    initialGreeting: { 
-        type: String, 
-        default: 'Thank you for calling [Company Name]. How can I help you today?',
-        trim: true,
-        maxlength: 500
-    },
+    // ☢️ DEPRECATED: initialGreeting - REMOVED - Use connectionMessages.voice.text instead
+    // Located in: AI Agent Settings > Messages & Greetings tab
     
     // 🎯 IN-HOUSE ONLY: Knowledge Source Thresholds
     thresholds: {
@@ -467,13 +462,8 @@ const companySchema = new mongoose.Schema({
         version: { type: Number, default: 1 },
         lastUpdated: { type: Date, default: Date.now },
         
-        // 🎤 INITIAL GREETING (PRIORITY -1: Plays FIRST when call connects)
-        initialGreeting: { 
-            type: String, 
-            default: 'Thank you for calling [Company Name]. How can I help you today?',
-            trim: true,
-            maxlength: 500
-        },
+        // ☢️ DEPRECATED: initialGreeting - REMOVED - Use connectionMessages.voice.text instead
+        // Located in: AI Agent Settings > Messages & Greetings tab
         
         // 🎯 IN-HOUSE ONLY: Knowledge Source Thresholds
                 thresholds: {
