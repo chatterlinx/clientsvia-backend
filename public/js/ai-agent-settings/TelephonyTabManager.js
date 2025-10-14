@@ -37,8 +37,9 @@ class TelephonyTabManager {
             // Skip disabled tabs
             if (button.disabled) return;
 
-            button.addEventListener('click', () => {
-                const tabName = button.dataset.tab;
+            button.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent event bubbling to main tab system
+                const tabName = button.dataset.telephonyTab; // Changed from dataset.tab
                 this.switchTab(tabName);
             });
         });
@@ -57,7 +58,7 @@ class TelephonyTabManager {
 
         // Update tab button states
         document.querySelectorAll('.telephony-tab').forEach(button => {
-            if (button.dataset.tab === tabName) {
+            if (button.dataset.telephonyTab === tabName) {
                 button.classList.add('active');
             } else {
                 button.classList.remove('active');
