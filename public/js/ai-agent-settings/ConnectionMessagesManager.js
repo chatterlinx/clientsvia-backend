@@ -19,7 +19,7 @@ class ConnectionMessagesManager {
         this.initialized = false;
         this.config = null;
         this.currentChannel = 'voice'; // voice | sms | webchat
-        this.voices = []; // ElevenLabs voices cache
+        this.voiceSettings = null; // Voice settings from AI Voice Settings tab
     }
 
     /**
@@ -33,7 +33,7 @@ class ConnectionMessagesManager {
         try {
             await Promise.all([
                 this.loadConfig(),
-                this.loadVoices()
+                this.loadVoiceSettings()
             ]);
             this.render();
             this.initialized = true;
@@ -63,44 +63,28 @@ class ConnectionMessagesManager {
     }
 
     /**
-     * Load ElevenLabs voices
+     * Load voice settings from AI Voice Settings tab
      */
-    async loadVoices() {
+    async loadVoiceSettings() {
         try {
             const token = localStorage.getItem('adminToken');
-            const response = await fetch(`/api/company/${this.companyId}/v2-voice-settings/voices`, {
+            const response = await fetch(`/api/company/${this.companyId}/v2-voice-settings`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
             if (response.ok) {
                 const data = await response.json();
-                this.voices = data.voices || [];
-                console.log('📞 [CONNECTION MESSAGES] Loaded', this.voices.length, 'voices');
+                this.voiceSettings = data;
+                console.log('📞 [CONNECTION MESSAGES] Loaded voice settings from AI Voice Settings tab');
+                console.log('📞 Selected voice:', data.selectedVoice || 'Not configured');
             } else {
-                console.warn('📞 [CONNECTION MESSAGES] Could not load voices, using defaults');
-                this.voices = this.getDefaultVoices();
+                console.warn('📞 [CONNECTION MESSAGES] Could not load voice settings');
+                this.voiceSettings = null;
             }
         } catch (error) {
-            console.warn('📞 [CONNECTION MESSAGES] Error loading voices, using defaults:', error);
-            this.voices = this.getDefaultVoices();
+            console.warn('📞 [CONNECTION MESSAGES] Error loading voice settings:', error);
+            this.voiceSettings = null;
         }
-    }
-
-    /**
-     * Get default/fallback voices
-     */
-    getDefaultVoices() {
-        return [
-            { voice_id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel' },
-            { voice_id: 'AZnzlk1XvdvUeBnXmlld', name: 'Domi' },
-            { voice_id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella' },
-            { voice_id: 'ErXwobaYiN019PkySvjV', name: 'Antoni' },
-            { voice_id: 'MF3mGyEYCl7XYWbV9V6O', name: 'Elli' },
-            { voice_id: 'TxGEqnHWrfWFTfGW9XjX', name: 'Josh' },
-            { voice_id: 'VR6AewLTigWG4xSOukaG', name: 'Arnold' },
-            { voice_id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam' },
-            { voice_id: 'yoZ06aMxZJJ28mfd3POQ', name: 'Sam' }
-        ];
     }
 
     /**
@@ -355,14 +339,7 @@ class ConnectionMessagesManager {
                 </label>
                 <textarea id="elevenlabs-text" placeholder="Thank you for calling {companyname}. Please wait a moment while we connect you..." style="font-family: inherit;">Thank you for calling. Please wait a moment while we connect you...</textarea>
 
-                <label style="font-size: 13px; font-weight: 600; color: #495057; display: block; margin-bottom: 6px;">
-                    Voice:
-                </label>
-                <select id="elevenlabs-voice">
-                    ${this.voices.map(voice => `
-                        <option value="${voice.voice_id}">${voice.name}</option>
-                    `).join('')}
-                </select>
+                ${this.renderVoiceInfo()}
 
                 <button class="btn-generate" onclick="connectionMessagesManager.generateWithElevenLabs()">
                     <i class="fas fa-wand-magic-sparkles"></i>
@@ -372,6 +349,35 @@ class ConnectionMessagesManager {
                 <p style="font-size: 11px; color: #6c757d; margin: 12px 0 0 0;">
                     💡 <strong>Tip:</strong> After generating, the audio will download to your computer. 
                     Then upload it using the "Upload Audio File" button above.
+                </p>
+            </div>
+        `;
+    }
+
+    /**
+     * Render voice info (from AI Voice Settings)
+     */
+    renderVoiceInfo() {
+        if (!this.voiceSettings || !this.voiceSettings.selectedVoice) {
+            return `
+                <div style="padding: 16px; background: #fff3cd; border-radius: 8px; margin: 12px 0;">
+                    <strong>⚠️ Voice Not Configured</strong>
+                    <p style="margin: 8px 0 0 0; font-size: 13px;">
+                        Please configure your ElevenLabs voice in the <strong>AI Voice Settings</strong> tab first.
+                    </p>
+                </div>
+            `;
+        }
+
+        return `
+            <div style="padding: 12px; background: #e7f5ff; border: 2px solid #339af0; border-radius: 8px; margin: 12px 0;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <i class="fas fa-microphone" style="color: #339af0;"></i>
+                    <strong style="color: #1971c2;">Voice:</strong>
+                    <span style="color: #495057;">${this.voiceSettings.selectedVoice}</span>
+                </div>
+                <p style="margin: 4px 0 0 0; font-size: 12px; color: #495057;">
+                    <i class="fas fa-info-circle"></i> Using voice configured in AI Voice Settings tab
                 </p>
             </div>
         `;
@@ -646,21 +652,23 @@ class ConnectionMessagesManager {
      */
     async generateWithElevenLabs() {
         const text = document.getElementById('elevenlabs-text')?.value;
-        const voiceId = document.getElementById('elevenlabs-voice')?.value;
 
         if (!text) {
             alert('⚠️ Please enter greeting text');
             return;
         }
 
-        if (!voiceId) {
-            alert('⚠️ Please select a voice');
+        // Get voice ID from AI Voice Settings
+        if (!this.voiceSettings || !this.voiceSettings.selectedVoiceId) {
+            alert('⚠️ Please configure your ElevenLabs voice in the AI Voice Settings tab first.');
             return;
         }
 
+        const voiceId = this.voiceSettings.selectedVoiceId;
+
         console.log('🎵 [CONNECTION MESSAGES] Generating with ElevenLabs...');
         console.log('🎵 Text:', text.substring(0, 50) + (text.length > 50 ? '...' : ''));
-        console.log('🎵 Voice ID:', voiceId);
+        console.log('🎵 Voice ID from AI Voice Settings:', voiceId);
 
         try {
             const response = await fetch(`/api/company/${this.companyId}/connection-messages/voice/generate`, {
