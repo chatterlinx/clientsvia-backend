@@ -137,8 +137,7 @@
             margin-left: 4px !important;
         }
         
-        /* 🔧 SPECIFIC FIX: Ensure right-side tabs are not hidden */
-        #tab-ai-agent-logic,
+        /* 🗑️ DELETED: CSS fix for AI Agent Logic tab (removed) */
 
         #tab-ai-response-system {
             display: inline-flex !important;
@@ -896,12 +895,7 @@
                                 <i class="fas fa-robot mr-1"></i>🤖 AI Agent Settings
                             </button>
                             
-                            <!-- Legacy personality responses tab removed - using modern AI Agent Logic system -->
-                            <!-- ✅ PRODUCTION: Knowledge Sources integrated into AI Agent Logic Tab 2 -->
-                            <!-- 🗑️ DELETED: AI Response System tab - replaced by Knowledge Management system -->
-                            <button class="tab-button tab-button-inactive" id="tab-ai-agent-logic" data-tab="ai-agent-logic">
-                                <i class="fas fa-brain mr-1"></i>AI Agent Logic
-                            </button>
+                            <!-- 🗑️ DELETED: AI Agent Logic tab - replaced by AI Agent Settings tab -->
                             <!-- REMOVED: Legacy CRM & Contacts tab - will build V2 version in future -->
 
                         </nav>
@@ -14636,27 +14630,7 @@ Key Metrics:
                 }
             });
 
-            // Load AI Agent data when tab is accessed
-            const aiAgentTab = document.getElementById('tab-ai-agent-logic');
-            if (aiAgentTab) {
-                aiAgentTab.addEventListener('click', function() {
-                    // First, properly switch the tab using the CompanyProfileManager
-                    if (window.companyProfileManager && typeof window.companyProfileManager.switchTab === 'function') {
-                        window.companyProfileManager.switchTab('ai-agent-logic');
-                    }
-                    
-                    // Then load the data with a small delay to ensure tab content is visible
-                    setTimeout(() => {
-                        loadAgentTradeCategories(); // Load checkboxes system
-                        loadAgentSettings();
-                        loadAgentPersonalitySettings(); // 🎭 V2 AGENT PERSONALITY: Load personality settings
-                        // loadResponseTemplates_LEGACY_REMOVED(); // V2 DELETED: Legacy response templates - V2 uses aiAgentLogic
-                        // 🔥 LEGACY ELIMINATED: initKnowledgeSources() - integrated into aiAgentLogic
-                        // 🔥 LEGACY ELIMINATED: loadKnowledgeSettings() - integrated into aiAgentLogic
-                        // 🔥 LEGACY ELIMINATED: loadAgentAnalytics() - integrated into aiAgentLogic
-                    }, 100);
-                });
-            }
+            // 🗑️ DELETED: AI Agent Logic tab event listener (tab removed)
         });
 
         // Toggle transfer configuration UI visibility
