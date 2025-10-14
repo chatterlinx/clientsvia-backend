@@ -51,24 +51,46 @@ router.get('/:companyId/twilio-control/status', async (req, res) => {
 
     try {
         const company = await Company.findById(req.params.companyId)
-            .select('twilioConfig companyName');
+            .select('twilioConfig companyName aiAgentLogic.voiceSettings');
 
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });
         }
 
         const twilioConfig = company.twilioConfig || {};
+        const voiceSettings = company.aiAgentLogic?.voiceSettings || {};
 
-        // Check if Twilio is configured
-        const isConfigured = !!(
-            twilioConfig.accountSid && 
-            twilioConfig.authToken && 
-            twilioConfig.phoneNumber
+        // DIAGNOSTIC: Log what we're seeing
+        console.log(`[TWILIO CONTROL] 🔍 DIAGNOSTIC for ${company.companyName}:`);
+        console.log(`   - twilioConfig exists:`, !!twilioConfig);
+        console.log(`   - accountSid exists:`, !!twilioConfig.accountSid);
+        console.log(`   - authToken exists:`, !!twilioConfig.authToken);
+        console.log(`   - phoneNumber (legacy):`, twilioConfig.phoneNumber || 'NOT SET');
+        console.log(`   - phoneNumbers (modern):`, twilioConfig.phoneNumbers?.length || 0, 'numbers');
+        console.log(`   - voiceSettings.voiceId:`, voiceSettings.voiceId || 'NOT SET');
+
+        // Check if Twilio is configured (support both legacy and modern phone number structure)
+        const hasAccountSid = !!(twilioConfig.accountSid && twilioConfig.accountSid.trim());
+        const hasAuthToken = !!(twilioConfig.authToken && twilioConfig.authToken.trim());
+        const hasPhoneNumber = !!(
+            twilioConfig.phoneNumber || 
+            (twilioConfig.phoneNumbers && twilioConfig.phoneNumbers.length > 0)
         );
+
+        const isConfigured = hasAccountSid && hasAuthToken && hasPhoneNumber;
+
+        // Build diagnostic details
+        const diagnostics = {
+            accountSid: hasAccountSid ? '✅ Configured' : '❌ Missing',
+            authToken: hasAuthToken ? '✅ Configured' : '❌ Missing',
+            phoneNumber: hasPhoneNumber ? '✅ Configured' : '❌ Missing',
+            voice: voiceSettings.voiceId ? '✅ Configured' : '❌ Not configured'
+        };
 
         let isConnected = false;
         let lastChecked = null;
         let errorMessage = null;
+        let connectionDetails = null;
 
         if (isConfigured) {
             try {
@@ -76,33 +98,67 @@ router.get('/:companyId/twilio-control/status', async (req, res) => {
                 const client = twilio(twilioConfig.accountSid, twilioConfig.authToken);
                 
                 // Verify account (quick API call)
-                await client.api.accounts(twilioConfig.accountSid).fetch();
+                const account = await client.api.accounts(twilioConfig.accountSid).fetch();
                 
                 isConnected = true;
                 lastChecked = new Date();
+                connectionDetails = {
+                    accountStatus: account.status,
+                    accountFriendlyName: account.friendlyName,
+                    accountType: account.type
+                };
 
                 console.log(`[TWILIO CONTROL] ✅ Connection verified for company: ${req.params.companyId}`);
 
             } catch (twilioError) {
                 console.error(`[TWILIO CONTROL] ❌ Connection failed:`, twilioError.message);
                 errorMessage = twilioError.message;
+                
+                // Add helpful diagnostic info
+                if (twilioError.code === 20003) {
+                    errorMessage = 'Authentication failed - Invalid Account SID or Auth Token';
+                } else if (twilioError.code === 20404) {
+                    errorMessage = 'Account not found - Please verify Account SID';
+                } else if (twilioError.message.includes('ENOTFOUND')) {
+                    errorMessage = 'Network error - Cannot reach Twilio API';
+                }
             }
+        } else {
+            // Provide specific guidance on what's missing
+            const missing = [];
+            if (!hasAccountSid) missing.push('Account SID');
+            if (!hasAuthToken) missing.push('Auth Token');
+            if (!hasPhoneNumber) missing.push('Phone Number');
+            errorMessage = `Missing required fields: ${missing.join(', ')}. Please configure in the Configuration tab.`;
         }
+
+        // Get phone number (support both structures)
+        const phoneNumber = twilioConfig.phoneNumber || 
+                          twilioConfig.phoneNumbers?.find(p => p.isPrimary)?.phoneNumber ||
+                          twilioConfig.phoneNumbers?.[0]?.phoneNumber ||
+                          null;
 
         res.json({
             configured: isConfigured,
             connected: isConnected,
             lastChecked,
             errorMessage,
+            diagnostics,
+            connectionDetails,
             accountSid: twilioConfig.accountSid ? 
                 `${twilioConfig.accountSid.substring(0, 8)}••••${twilioConfig.accountSid.slice(-4)}` : 
                 null,
-            phoneNumber: twilioConfig.phoneNumber || null
+            phoneNumber: phoneNumber,
+            phoneNumbersCount: twilioConfig.phoneNumbers?.length || 0
         });
 
     } catch (error) {
         console.error('[TWILIO CONTROL] Error getting status:', error);
-        res.status(500).json({ error: 'Failed to get Twilio status' });
+        res.status(500).json({ 
+            error: 'Failed to get Twilio status',
+            message: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 });
 
