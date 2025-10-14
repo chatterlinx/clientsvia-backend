@@ -376,9 +376,15 @@
     background: white;
     border: 2px solid #e9ecef;
     border-radius: 8px;
-    padding: 16px;
+    padding: 12px 16px; /* Reduced from 16px to 12px 16px */
     cursor: pointer;
     transition: all 0.2s;
+    margin-bottom: 12px; /* Add spacing between cards */
+}
+
+/* Hide body content in unselected cards to save space */
+.radio-option-card:not(.selected) .radio-option-body {
+    display: none;
 }
 
 .radio-option-card:hover {
@@ -393,18 +399,19 @@
 .radio-option-header {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 12px;
+    gap: 10px; /* Reduced from 12px */
+    margin-bottom: 0; /* Remove bottom margin - content will have its own spacing */
 }
 
 .radio-option-header input[type="radio"] {
-    width: 20px;
-    height: 20px;
+    width: 18px; /* Reduced from 20px */
+    height: 18px;
     cursor: pointer;
+    flex-shrink: 0; /* Prevent shrinking */
 }
 
 .radio-option-header label {
-    font-size: 16px;
+    font-size: 15px; /* Reduced from 16px */
     font-weight: 700;
     color: #1a1a1a;
     cursor: pointer;
@@ -412,13 +419,15 @@
 }
 
 .radio-option-body {
-    padding-left: 32px;
+    padding-left: 28px; /* Reduced from 32px */
+    padding-top: 8px; /* Add small top padding */
 }
 
 .radio-option-description {
-    font-size: 14px;
+    font-size: 13px; /* Reduced from 14px */
     color: #6c757d;
-    margin-bottom: 12px;
+    margin-bottom: 10px; /* Reduced from 12px */
+    line-height: 1.5;
 }
 
 /* Badge */

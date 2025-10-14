@@ -756,12 +756,15 @@ class ConnectionMessagesManager {
 
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-            alert('✅ Connection messages saved successfully!');
-
             console.log('✅ [CONNECTION MESSAGES] Saved successfully');
 
             // Reload config
             await this.loadConfig();
+            
+            // Re-render UI to show updated mode
+            this.render();
+            
+            alert('✅ Connection messages saved successfully!');
 
         } catch (error) {
             console.error('❌ [CONNECTION MESSAGES] Save failed:', error);
