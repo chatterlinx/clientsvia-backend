@@ -1560,74 +1560,6 @@
                                     </button>
                                 </div>
                             </div>
-
-                            <!-- Voice Loading JavaScript -->
-                            <script>
-                                (function() {
-                                    let allVoices = [];
-                                    const voiceSelector = document.getElementById('voice-selector');
-                                    const refreshButton = document.getElementById('refresh-voices');
-                                    
-                                    // Load voices on page load
-                                    async function loadVoices() {
-                                        try {
-                                            const token = localStorage.getItem('adminToken');
-                                            const companyId = window.companyId || window.currentCompanyId;
-                                            
-                                            if (!companyId) {
-                                                console.warn('No company ID available for loading voices');
-                                                return;
-                                            }
-                                            
-                                            console.log('🎤 Loading ElevenLabs voices for company:', companyId);
-                                            
-                                            const response = await fetch(`/api/company/${companyId}/v2-voice-settings/voices`, {
-                                                headers: { 'Authorization': `Bearer ${token}` }
-                                            });
-                                            
-                                            if (!response.ok) {
-                                                throw new Error(`HTTP ${response.status}`);
-                                            }
-                                            
-                                            const data = await response.json();
-                                            allVoices = data.voices || [];
-                                            
-                                            console.log(`✅ Loaded ${allVoices.length} voices from ElevenLabs`);
-                                            
-                                            // Populate dropdown
-                                            voiceSelector.innerHTML = '<option value="">Choose a voice...</option>';
-                                            allVoices.forEach(voice => {
-                                                const option = document.createElement('option');
-                                                option.value = voice.voice_id;
-                                                option.textContent = voice.name;
-                                                voiceSelector.appendChild(option);
-                                            });
-                                            
-                                        } catch (error) {
-                                            console.error('❌ Failed to load voices:', error);
-                                            voiceSelector.innerHTML = '<option value="">Error loading voices - please refresh</option>';
-                                        }
-                                    }
-                                    
-                                    // Refresh button handler
-                                    if (refreshButton) {
-                                        refreshButton.addEventListener('click', () => {
-                                            console.log('🔄 Refreshing voices...');
-                                            loadVoices();
-                                        });
-                                    }
-                                    
-                                    // Load voices when AI Voice Settings tab is clicked
-                                    const voiceTab = document.getElementById('tab-ai-voice');
-                                    if (voiceTab) {
-                                        voiceTab.addEventListener('click', () => {
-                                            if (allVoices.length === 0) {
-                                                setTimeout(loadVoices, 300); // Small delay to ensure company ID is set
-                                            }
-                                        });
-                                    }
-                                })();
-                            </script>
                         </section>
                     </div>
                     <!-- ===== TAB SECTION END: AI VOICE ===== -->
@@ -2393,6 +2325,10 @@
                         <script src="/js/ai-agent-settings/TemplateInfoManager.js?v=4.0"></script>
                         <script src="/js/ai-agent-settings/AnalyticsManager.js?v=4.0"></script>
                         <script src="/js/ai-agent-settings/AIAgentSettingsManager.js?v=4.0"></script>
+                        
+                        <!-- Load Voice Settings Manager -->
+                        <script src="/js/ai-voice-settings/VoiceSettingsManager.js?v=1.0"></script>
+                        
                         <script>
                             // Initialize when tab is activated
                             let aiAgentSettings = null;
@@ -2404,6 +2340,7 @@
                             let scenariosManager = null;
                             let templateInfoManager = null;
                             let analyticsManager = null;
+                            let voiceSettingsManager = null;
                             
                             // Initialize on tab switch
                             document.getElementById('tab-ai-agent-settings')?.addEventListener('click', function() {
@@ -2443,6 +2380,25 @@
                                     }
                                 }
                             });
+                            
+                            // Initialize Voice Settings Manager when AI Voice Settings tab is clicked
+                            document.getElementById('tab-ai-voice')?.addEventListener('click', function() {
+                                if (!voiceSettingsManager) {
+                                    const companyId = window.currentCompanyId || document.getElementById('company-id')?.value;
+                                    
+                                    if (companyId) {
+                                        console.log('🎤 [VOICE TAB] Initializing Voice Settings Manager for company:', companyId);
+                                        
+                                        voiceSettingsManager = new VoiceSettingsManager(companyId);
+                                        voiceSettingsManager.initialize();
+                                        
+                                        // Make globally accessible for debugging
+                                        window.voiceSettingsManager = voiceSettingsManager;
+                                    } else {
+                                        console.error('❌ [VOICE TAB] No company ID found');
+                                    }
+                                }
+                            });
                         </script>
                         
                     </div>
@@ -2462,6 +2418,14 @@
         const yearSpan = document.getElementById('current-year');
         if (yearSpan) {
             yearSpan.textContent = new Date().getFullYear();
+        }
+        
+        // Global helper function for slider value updates (used by inline HTML oninput attributes)
+        function updateSliderValue(name, value) {
+            const displayElement = document.getElementById(`${name}-value`);
+            if (displayElement) {
+                displayElement.textContent = parseFloat(value).toFixed(1);
+            }
         }
     </script>
     
