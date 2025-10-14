@@ -251,6 +251,54 @@ router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
 });
 
 /**
+ * @route   GET /api/company/:companyId/v2-voice-settings/voices
+ * @desc    Get available ElevenLabs voices
+ * @access  Private
+ */
+router.get('/:companyId/v2-voice-settings/voices', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        if (!ObjectId.isValid(companyId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid company ID format'
+            });
+        }
+
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found'
+            });
+        }
+
+        console.log(`🎤 [VOICES] Loading ElevenLabs voices for ${company.companyName}`);
+
+        // Get voices from ElevenLabs API
+        // Uses company's own API key if configured, otherwise uses global ClientsVia key
+        const voices = await getAvailableVoices({ company });
+
+        console.log(`✅ [VOICES] Loaded ${voices.length} voices`);
+
+        res.json({
+            success: true,
+            voices: voices,
+            count: voices.length
+        });
+
+    } catch (error) {
+        console.error('❌ [VOICES] Error loading voices:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to load voices',
+            error: error.message
+        });
+    }
+});
+
+/**
  * @route   GET /api/company/:companyId/v2-voice-settings
  * @desc    Get V2 voice settings from aiAgentLogic.voiceSettings
  * @access  Private
