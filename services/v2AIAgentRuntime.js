@@ -92,12 +92,18 @@ class V2AIAgentRuntime {
         const aiLogic = company.aiAgentLogic;
         let greeting = null;
 
-        // 🎤 PRIORITY 0: INITIAL GREETING (NEW SYSTEM - Highest Priority!)
-        if (aiLogic.initialGreeting && aiLogic.initialGreeting.trim()) {
-            greeting = aiLogic.initialGreeting;
-            console.log(`✅ V2 GREETING: Using Initial Greeting (Priority -1): "${greeting}"`);
+        // 🎤 PRIORITY 0: CONNECTION MESSAGES (AI AGENT SETTINGS TAB - Highest Priority!)
+        // This is the NEW system from Messages & Greetings tab
+        if (aiLogic.connectionMessages?.voice?.text && aiLogic.connectionMessages.voice.text.trim()) {
+            greeting = aiLogic.connectionMessages.voice.text;
+            console.log(`✅ V2 GREETING: Using Connection Message from AI Agent Settings tab: "${greeting}"`);
         }
-        // V2 PRIORITY ORDER - AGENT PERSONALITY SYSTEM (Fallback 1)
+        // 🎤 LEGACY FALLBACK: Old initialGreeting field (for backwards compatibility)
+        else if (aiLogic.initialGreeting && aiLogic.initialGreeting.trim()) {
+            greeting = aiLogic.initialGreeting;
+            console.log(`⚠️ V2 GREETING: Using LEGACY initialGreeting (should migrate to Connection Messages): "${greeting}"`);
+        }
+        // V2 PRIORITY ORDER - AGENT PERSONALITY SYSTEM (Fallback 2)
         // 1. Check V2 Agent Personality opening phrases
         else if (aiLogic.agentPersonality?.conversationPatterns?.openingPhrases?.length > 0) {
             const phrases = aiLogic.agentPersonality.conversationPatterns.openingPhrases;
