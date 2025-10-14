@@ -96,6 +96,11 @@ body {
   @apply p-0 pt-6; 
 } 
 
+/* Remove top padding for AI Agent Settings tab (has its own sub-tabs) */
+#ai-agent-settings-content.tab-content-item {
+  @apply p-0;
+}
+
 .tab-content-item.hidden { 
   display: none; 
 }
