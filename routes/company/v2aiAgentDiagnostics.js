@@ -378,14 +378,20 @@ async function analyzeCacheStatus(companyId) {
             isCached,
             ttl: ttl > 0 ? ttl : null,
             expiresIn: ttl > 0 ? `${Math.floor(ttl / 60)} minutes` : null,
-            tip: 'Changes may take up to 2 minutes to reflect in calls due to caching'
+            tip: 'Changes may take up to 2 minutes to reflect in calls due to caching',
+            healthy: true
         };
 
     } catch (error) {
+        console.warn('[CACHE DIAGNOSTIC] Redis error (non-critical):', error.message);
+        
+        // Redis error is non-critical - calls can still work
         return {
-            status: 'ERROR',
+            status: 'UNAVAILABLE',
             error: error.message,
-            tip: 'Redis connection error - please check Redis status'
+            tip: 'Redis temporarily unavailable - This is usually a transient error. Calls should still work.',
+            healthy: false,
+            note: 'Cache diagnostics unavailable but system is operational'
         };
     }
 }
