@@ -384,7 +384,8 @@ async function analyzeCacheStatus(companyId) {
     } catch (error) {
         return {
             status: 'ERROR',
-            error: error.message
+            error: error.message,
+            tip: 'Redis connection error - please check Redis status'
         };
     }
 }
