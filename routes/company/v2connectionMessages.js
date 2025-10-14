@@ -84,19 +84,22 @@ router.get('/:companyId/connection-messages/config', async (req, res) => {
 
     try {
         const company = await Company.findById(req.params.companyId)
-            .select('connectionMessages companyName');
+            .select('aiAgentLogic companyName');
 
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });
         }
 
         // Initialize if doesn't exist
-        if (!company.connectionMessages) {
-            company.connectionMessages = getDefaultConfig();
+        if (!company.aiAgentLogic) {
+            company.aiAgentLogic = {};
+        }
+        if (!company.aiAgentLogic.connectionMessages) {
+            company.aiAgentLogic.connectionMessages = getDefaultConfig();
             await company.save();
         }
 
-        res.json(company.connectionMessages);
+        res.json(company.aiAgentLogic.connectionMessages);
 
     } catch (error) {
         console.error('[CONNECTION MESSAGES] Error getting config:', error);
@@ -123,43 +126,54 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
         }
 
         // Initialize if doesn't exist
-        if (!company.connectionMessages) {
-            company.connectionMessages = getDefaultConfig();
+        if (!company.aiAgentLogic) {
+            company.aiAgentLogic = {};
+        }
+        if (!company.aiAgentLogic.connectionMessages) {
+            company.aiAgentLogic.connectionMessages = getDefaultConfig();
         }
 
         // Update voice settings
         if (voice) {
-            if (voice.mode) company.connectionMessages.voice.mode = voice.mode;
-            if (voice.fallback) company.connectionMessages.voice.fallback = voice.fallback;
+            if (voice.mode) company.aiAgentLogic.connectionMessages.voice.mode = voice.mode;
+            if (voice.fallback) company.aiAgentLogic.connectionMessages.voice.fallback = voice.fallback;
+            if (voice.text !== undefined) {
+                // CRITICAL: Save to voice.text (NOT voice.realtime.text!)
+                company.aiAgentLogic.connectionMessages.voice.text = voice.text;
+            }
             if (voice.realtime) {
-                company.connectionMessages.voice.realtime.text = voice.realtime.text;
+                // Keep realtime for TTS generation settings
+                if (!company.aiAgentLogic.connectionMessages.voice.realtime) {
+                    company.aiAgentLogic.connectionMessages.voice.realtime = {};
+                }
+                company.aiAgentLogic.connectionMessages.voice.realtime.text = voice.realtime.text;
             }
         }
 
         // Update SMS settings
         if (sms) {
-            if (sms.enabled !== undefined) company.connectionMessages.sms.enabled = sms.enabled;
-            if (sms.text) company.connectionMessages.sms.text = sms.text;
+            if (sms.enabled !== undefined) company.aiAgentLogic.connectionMessages.sms.enabled = sms.enabled;
+            if (sms.text) company.aiAgentLogic.connectionMessages.sms.text = sms.text;
             if (sms.businessHours) {
                 if (sms.businessHours.enabled !== undefined) {
-                    company.connectionMessages.sms.businessHours.enabled = sms.businessHours.enabled;
+                    company.aiAgentLogic.connectionMessages.sms.businessHours.enabled = sms.businessHours.enabled;
                 }
                 if (sms.businessHours.duringHours) {
-                    company.connectionMessages.sms.businessHours.duringHours = sms.businessHours.duringHours;
+                    company.aiAgentLogic.connectionMessages.sms.businessHours.duringHours = sms.businessHours.duringHours;
                 }
                 if (sms.businessHours.afterHours) {
-                    company.connectionMessages.sms.businessHours.afterHours = sms.businessHours.afterHours;
+                    company.aiAgentLogic.connectionMessages.sms.businessHours.afterHours = sms.businessHours.afterHours;
                 }
             }
         }
 
         // Update Web Chat settings (future)
         if (webChat) {
-            if (webChat.enabled !== undefined) company.connectionMessages.webChat.enabled = webChat.enabled;
-            if (webChat.text) company.connectionMessages.webChat.text = webChat.text;
+            if (webChat.enabled !== undefined) company.aiAgentLogic.connectionMessages.webChat.enabled = webChat.enabled;
+            if (webChat.text) company.aiAgentLogic.connectionMessages.webChat.text = webChat.text;
         }
 
-        company.connectionMessages.lastUpdated = new Date();
+        company.aiAgentLogic.connectionMessages.lastUpdated = new Date();
 
         await company.save();
 
@@ -176,7 +190,7 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
         res.json({
             success: true,
             message: 'Connection messages updated successfully',
-            config: company.connectionMessages
+            config: company.aiAgentLogic.connectionMessages
         });
 
     } catch (error) {
@@ -206,8 +220,11 @@ router.post('/:companyId/connection-messages/voice/upload', upload.single('audio
         }
 
         // Initialize if doesn't exist
-        if (!company.connectionMessages) {
-            company.connectionMessages = getDefaultConfig();
+        if (!company.aiAgentLogic) {
+            company.aiAgentLogic = {};
+        }
+        if (!company.aiAgentLogic.connectionMessages) {
+            company.aiAgentLogic.connectionMessages = getDefaultConfig();
         }
 
         // Get file details
@@ -220,8 +237,8 @@ router.post('/:companyId/connection-messages/voice/upload', upload.single('audio
         const estimatedDuration = Math.round(fileSize / 16000); // Rough estimate for MP3
 
         // Remove old file if exists
-        if (company.connectionMessages.voice.prerecorded.activeFileUrl) {
-            const oldFilePath = path.join(__dirname, '../../public', company.connectionMessages.voice.prerecorded.activeFileUrl);
+        if (company.aiAgentLogic.connectionMessages.voice.prerecorded.activeFileUrl) {
+            const oldFilePath = path.join(__dirname, '../../public', company.aiAgentLogic.connectionMessages.voice.prerecorded.activeFileUrl);
             if (fs.existsSync(oldFilePath)) {
                 fs.unlinkSync(oldFilePath);
                 console.log(`[CONNECTION MESSAGES] Deleted old file: ${oldFilePath}`);
@@ -229,14 +246,14 @@ router.post('/:companyId/connection-messages/voice/upload', upload.single('audio
         }
 
         // Update active file
-        company.connectionMessages.voice.prerecorded.activeFileUrl = fileUrl;
-        company.connectionMessages.voice.prerecorded.activeFileName = fileName;
-        company.connectionMessages.voice.prerecorded.activeDuration = estimatedDuration;
-        company.connectionMessages.voice.prerecorded.activeFileSize = fileSize;
-        company.connectionMessages.voice.prerecorded.uploadedBy = req.user.userId;
-        company.connectionMessages.voice.prerecorded.uploadedAt = new Date();
+        company.aiAgentLogic.connectionMessages.voice.prerecorded.activeFileUrl = fileUrl;
+        company.aiAgentLogic.connectionMessages.voice.prerecorded.activeFileName = fileName;
+        company.aiAgentLogic.connectionMessages.voice.prerecorded.activeDuration = estimatedDuration;
+        company.aiAgentLogic.connectionMessages.voice.prerecorded.activeFileSize = fileSize;
+        company.aiAgentLogic.connectionMessages.voice.prerecorded.uploadedBy = req.user.userId;
+        company.aiAgentLogic.connectionMessages.voice.prerecorded.uploadedAt = new Date();
 
-        company.connectionMessages.lastUpdated = new Date();
+        company.aiAgentLogic.connectionMessages.lastUpdated = new Date();
 
         await company.save();
 
@@ -282,19 +299,19 @@ router.delete('/:companyId/connection-messages/voice/remove', async (req, res) =
             return res.status(404).json({ error: 'Company not found' });
         }
 
-        if (!company.connectionMessages?.voice?.prerecorded?.activeFileUrl) {
+        if (!company.aiAgentLogic?.connectionMessages?.voice?.prerecorded?.activeFileUrl) {
             return res.status(404).json({ error: 'No audio file to remove' });
         }
 
         // Delete file from disk
-        const filePath = path.join(__dirname, '../../public', company.connectionMessages.voice.prerecorded.activeFileUrl);
+        const filePath = path.join(__dirname, '../../public', company.aiAgentLogic.connectionMessages.voice.prerecorded.activeFileUrl);
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
             console.log(`[CONNECTION MESSAGES] Deleted file: ${filePath}`);
         }
 
         // Clear prerecorded settings
-        company.connectionMessages.voice.prerecorded = {
+        company.aiAgentLogic.connectionMessages.voice.prerecorded = {
             activeFileUrl: null,
             activeFileName: null,
             activeDuration: null,
@@ -303,7 +320,7 @@ router.delete('/:companyId/connection-messages/voice/remove', async (req, res) =
             uploadedAt: null
         };
 
-        company.connectionMessages.lastUpdated = new Date();
+        company.aiAgentLogic.connectionMessages.lastUpdated = new Date();
 
         await company.save();
 
@@ -409,8 +426,8 @@ router.post('/:companyId/connection-messages/reset', async (req, res) => {
         }
 
         // Remove audio file if exists
-        if (company.connectionMessages?.voice?.prerecorded?.activeFileUrl) {
-            const filePath = path.join(__dirname, '../../public', company.connectionMessages.voice.prerecorded.activeFileUrl);
+        if (company.aiAgentLogic?.connectionMessages?.voice?.prerecorded?.activeFileUrl) {
+            const filePath = path.join(__dirname, '../../public', company.aiAgentLogic.connectionMessages.voice.prerecorded.activeFileUrl);
             if (fs.existsSync(filePath)) {
                 fs.unlinkSync(filePath);
                 console.log(`[CONNECTION MESSAGES] Deleted file: ${filePath}`);
@@ -418,7 +435,10 @@ router.post('/:companyId/connection-messages/reset', async (req, res) => {
         }
 
         // Reset to defaults
-        company.connectionMessages = getDefaultConfig();
+        if (!company.aiAgentLogic) {
+            company.aiAgentLogic = {};
+        }
+        company.aiAgentLogic.connectionMessages = getDefaultConfig();
 
         await company.save();
 
@@ -434,7 +454,7 @@ router.post('/:companyId/connection-messages/reset', async (req, res) => {
         res.json({
             success: true,
             message: 'Reset to defaults successfully',
-            config: company.connectionMessages
+            config: company.aiAgentLogic.connectionMessages
         });
 
     } catch (error) {
