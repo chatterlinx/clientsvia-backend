@@ -2397,6 +2397,50 @@
         }
     </script>
     
+    <!-- Load Company Profile Modern JavaScript -->
+    <script src="/js/company-profile-modern.js?v=2.21"></script>
+    
+    <!-- Main Page Initialization Script -->
+    <script>
+        // Main initialization when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Company Profile page DOMContentLoaded - Starting initialization...');
+            
+            // Get company ID from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const companyId = urlParams.get('id');
+            
+            if (companyId) {
+                console.log('✅ Company ID found in URL:', companyId);
+                
+                // Set global company ID
+                window.companyId = companyId;
+                window.currentCompanyId = companyId;
+                
+                // Store in localStorage for persistence
+                localStorage.setItem('currentCompanyId', companyId);
+                
+                // Start fetching company data immediately
+                console.log('📡 Calling proven fetchCompanyData pattern...');
+                
+                // Wait a moment for all scripts to load
+                setTimeout(() => {
+                    if (typeof fetchCompanyData === 'function') {
+                        fetchCompanyData();
+                    } else if (window.companyProfileManager && typeof window.companyProfileManager.loadCompanyData === 'function') {
+                        window.companyProfileManager.loadCompanyData();
+                    } else {
+                        console.error('❌ No data loading function found');
+                    }
+                }, 100);
+            } else {
+                console.error('❌ No company ID found in URL');
+                document.querySelector('.profile-container')?.innerHTML = 
+                    '<div class="p-8 text-center"><h1 class="text-2xl font-bold text-red-600">Error: No company ID provided</h1><p class="text-gray-600 mt-2">Please access this page with a valid company ID.</p></div>';
+            }
+        });
+    </script>
+    
 </body>
 
 
