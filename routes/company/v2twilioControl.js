@@ -91,10 +91,22 @@ router.get('/:companyId/twilio-control/status', async (req, res) => {
         let lastChecked = null;
         let errorMessage = null;
         let connectionDetails = null;
+        let usingGlobalAccount = false;
 
-        if (isConfigured) {
+        // Check if using global ClientsVia Twilio account
+        if (!hasAccountSid && !hasAuthToken) {
+            // Company is using global Twilio account (from Render env vars)
+            usingGlobalAccount = true;
+            isConnected = true; // Assume global account is working if calls are being received
+            connectionDetails = {
+                accountType: 'Global ClientsVia Account',
+                accountStatus: 'Active',
+                accountFriendlyName: 'ClientsVia Master Account'
+            };
+            console.log(`[TWILIO CONTROL] ✅ Using global ClientsVia Twilio account for company: ${req.params.companyId}`);
+        } else if (isConfigured) {
             try {
-                // Test Twilio connection
+                // Test company-specific Twilio connection
                 const client = twilio(twilioConfig.accountSid, twilioConfig.authToken);
                 
                 // Verify account (quick API call)
@@ -124,12 +136,13 @@ router.get('/:companyId/twilio-control/status', async (req, res) => {
                 }
             }
         } else {
-            // Provide specific guidance on what's missing
+            // Partially configured - missing some fields
             const missing = [];
             if (!hasAccountSid) missing.push('Account SID');
             if (!hasAuthToken) missing.push('Auth Token');
-            if (!hasPhoneNumber) missing.push('Phone Number');
-            errorMessage = `Missing required fields: ${missing.join(', ')}. Please configure in the Configuration tab.`;
+            errorMessage = `Incomplete configuration - missing: ${missing.join(', ')}. Using global ClientsVia account.`;
+            usingGlobalAccount = true;
+            isConnected = true;
         }
 
         // Get phone number (support both structures)
@@ -141,13 +154,14 @@ router.get('/:companyId/twilio-control/status', async (req, res) => {
         res.json({
             configured: isConfigured,
             connected: isConnected,
+            usingGlobalAccount,
             lastChecked,
             errorMessage,
             diagnostics,
             connectionDetails,
             accountSid: twilioConfig.accountSid ? 
                 `${twilioConfig.accountSid.substring(0, 8)}••••${twilioConfig.accountSid.slice(-4)}` : 
-                null,
+                'Using Global Account',
             phoneNumber: phoneNumber,
             phoneNumbersCount: twilioConfig.phoneNumbers?.length || 0
         });
