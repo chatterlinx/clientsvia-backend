@@ -121,23 +121,8 @@ mongoose.connect(process.env.MONGODB_URI, {
 // 🗑️ DELETED: V2 Knowledge Management routes (AI Agent Logic tab removed)
 // 🗑️ DELETED: V2 Placeholders routes (AI Agent Logic tab removed)
 
-// V2 Twilio Control Center (AI Agent Settings tab)
-try {
-    const v2TwilioControlRoutes = require('./routes/company/v2twilioControl');
-    app.use('/api/company', v2TwilioControlRoutes);
-    logger.info('✅ V2 Twilio Control Center routes registered at /api/company - Telephony management active');
-} catch (error) {
-    logger.error('❌ Failed to load V2 Twilio Control Center routes', { error: error.message });
-}
-
-// V2 Connection Messages (AI Agent Settings - Messages & Greetings tab)
-try {
-    const v2ConnectionMessagesRoutes = require('./routes/company/v2connectionMessages');
-    app.use('/api/company', v2ConnectionMessagesRoutes);
-    logger.info('✅ V2 Connection Messages routes registered at /api/company - Multi-channel connection messages active');
-} catch (error) {
-    logger.error('❌ Failed to load V2 Connection Messages routes', { error: error.message });
-}
+// 🗑️ DELETED: V2 Twilio Control Center routes (moved to index.js for consistency)
+// 🗑️ DELETED: V2 Connection Messages routes (moved to index.js for consistency)
 
 // 🗑️ DELETED: V2 Instant Responses routes - replaced by InstantResponseCategories system in Knowledge Management
 

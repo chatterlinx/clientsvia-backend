@@ -110,6 +110,10 @@ async function loadAllRoutes() {
         // 🗑️ DELETED: AI Agent Logic routes (tab removed)
         // 🗑️ DELETED: Instant Response Categories routes (tab removed)
         
+        // V2 Twilio Control Center & Connection Messages (AI Agent Settings tab)
+        routes.v2TwilioControlRoutes = await loadRouteWithTimeout('./routes/company/v2twilioControl', 'v2TwilioControlRoutes');
+        routes.v2ConnectionMessagesRoutes = await loadRouteWithTimeout('./routes/company/v2connectionMessages', 'v2ConnectionMessagesRoutes');
+        
         // REMOVED: Legacy V2 AI Intelligence routes - archived to prevent external LLM dependencies
         
         // DELETED: Legacy V2 Trade Categories - replaced by V2 Global Trade Categories system
@@ -218,6 +222,8 @@ function registerRoutes(routes) {
     // V2 DELETED: Legacy backup routes - v2 backup system eliminated
     // 🗑️ DELETED: All AI Agent Logic route registrations (tab removed)
     app.use('/api/company', routes.v2CompanyConfigurationRoutes); // V2: AI Agent Settings (Variables, Filler Words, Scenarios) - 100% ISOLATED
+    app.use('/api/company', routes.v2TwilioControlRoutes); // V2: Twilio Control Center (AI Agent Settings - Dashboard tab)
+    app.use('/api/company', routes.v2ConnectionMessagesRoutes); // V2: Connection Messages (AI Agent Settings - Messages & Greetings tab)
     // app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     // V2 DELETED: Legacy enhancedAgentSettings route mount - used external LLMs, violates in-house AI system
 
