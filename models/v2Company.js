@@ -71,6 +71,9 @@ const connectionMessagesSchema = new mongoose.Schema({
     voice: {
         mode: { type: String, enum: ['prerecorded', 'realtime', 'disabled'], default: 'prerecorded' },
         
+        // PRIMARY GREETING TEXT (used by AI Agent Runtime)
+        text: { type: String, trim: true, default: null },
+        
         // Pre-recorded audio file
         prerecorded: {
             activeFileUrl: { type: String, trim: true, default: null },
@@ -81,7 +84,7 @@ const connectionMessagesSchema = new mongoose.Schema({
             uploadedAt: { type: Date, default: null }
         },
         
-        // Real-time TTS
+        // Real-time TTS (for TTS generation settings)
         realtime: {
             text: { type: String, trim: true, default: 'Thank you for calling. Please wait a moment while we connect you...' },
             voiceId: { type: String, trim: true, default: null }
