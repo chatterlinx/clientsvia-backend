@@ -1960,6 +1960,7 @@
                         <link rel="stylesheet" href="/css/ai-agent-settings.css">
                         <link rel="stylesheet" href="/css/twilio-control-center.css">
                         <link rel="stylesheet" href="/css/telephony-control-panel.css">
+                        <link rel="stylesheet" href="/css/system-diagnostics.css">
                         
                         <div class="ai-settings-container">
                             
@@ -1987,6 +1988,11 @@
                                 
                                 <!-- Tab 1: Dashboard (Twilio Control Center) -->
                                 <div class="telephony-tab-content active" id="tab-dashboard">
+                                    <!-- System Diagnostics Panel -->
+                                    <div id="system-diagnostics-panel">
+                                        <!-- System Diagnostics will be loaded here by JavaScript -->
+                                    </div>
+
                                     <div id="twilio-control-center">
                                         <!-- Twilio Control Center will be loaded here by JavaScript -->
                                         <div class="telephony-loading">
@@ -2316,6 +2322,7 @@
                         </div>
                         
                         <!-- Load AI Agent Settings Managers -->
+                        <script src="/js/ai-agent-settings/SystemDiagnostics.js?v=1.0"></script>
                         <script src="/js/ai-agent-settings/TelephonyTabManager.js?v=5.0"></script>
                         <script src="/js/ai-agent-settings/TwilioControlCenter.js?v=5.0"></script>
                         <script src="/js/ai-agent-settings/ConnectionMessagesManager.js?v=8.0"></script>
@@ -2352,6 +2359,10 @@
                                         // Initialize Telephony Tab Manager (handles tab switching)
                                         telephonyTabManager = new TelephonyTabManager();
                                         telephonyTabManager.initialize();
+                                        
+                                        // Initialize System Diagnostics (Dashboard tab - top panel)
+                                        systemDiagnostics = new SystemDiagnostics(companyId);
+                                        document.getElementById('system-diagnostics-panel').innerHTML = systemDiagnostics.render();
                                         
                                         // Initialize Twilio Control Center (Dashboard tab)
                                         twilioControl = new TwilioControlCenter(companyId);
