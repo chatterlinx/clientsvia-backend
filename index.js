@@ -216,16 +216,8 @@ function registerRoutes(routes) {
     app.use('/api/v2global/addcompany', routes.v2GlobalAddCompanyRoutes); // V2 Global Add Company
     app.use('/api/v2global/trade-categories', routes.v2GlobalTradeCategoriesRoutes); // V2 Global Trade Categories
     // V2 DELETED: Legacy backup routes - v2 backup system eliminated
-    // 🚀 V2 PURE SYSTEM: Only V2 Knowledge Management - ALL LEGACY ELIMINATED
-    app.use('/api/company', routes.v2KnowledgeManagementRoutes); // V2: Pure V2 Knowledge Management System (Company Q&A, Trade Q&A, Templates)
-    app.use('/api/company', routes.v2KnowledgeSourcePrioritiesRoutes); // V2: Knowledge Source Priorities Management
+    // 🗑️ DELETED: All AI Agent Logic route registrations (tab removed)
     app.use('/api/company', routes.v2CompanyConfigurationRoutes); // V2: AI Agent Settings (Variables, Filler Words, Scenarios) - 100% ISOLATED
-    app.use('/api/company', routes.v2PlaceholdersRoutes); // V2: Placeholders system with enterprise-grade checkpoint logging
-    // 🧠 GLOBAL AI BRAIN SYNC SYSTEM - Sync company instant responses with platform-wide template
-    app.use('/api/company/:companyId/sync-global-brain', routes.v2GlobalAIBrainSyncRoutes); // V2: Compare & import from Global AI Brain
-    // 🗑️ DELETED: v2InstantResponses routes - replaced by v2InstantResponseCategories system
-    // ⚡ V2 INSTANT RESPONSE CATEGORIES SYSTEM - Priority 0 Knowledge Tier (Category-based organization with Q&As)
-    app.use('/api/company', routes.v2InstantResponseCategoriesRoutes); // V2: Category CRUD, Q&A management, AI generation
     // app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     // V2 DELETED: Legacy enhancedAgentSettings route mount - used external LLMs, violates in-house AI system
 
