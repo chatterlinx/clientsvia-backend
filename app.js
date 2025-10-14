@@ -118,24 +118,8 @@ mongoose.connect(process.env.MONGODB_URI, {
 
 // app.use('/api/auth', authRoutes); // MISSING FILE
 
-// 🚀 V2 KNOWLEDGE MANAGEMENT ROUTES - V2 Multi-Tenant Platform
-// CRITICAL: Must be mounted BEFORE main company routes to avoid route conflicts
-try {
-    const v2KnowledgeManagementRoutes = require('./routes/company/v2knowledgeManagement');
-    app.use('/api/company', v2KnowledgeManagementRoutes);
-    logger.info('✅ V2 Knowledge Management routes registered at /api/company - Trade Q&A system active');
-} catch (error) {
-    logger.error('❌ Failed to load V2 Knowledge Management routes', { error: error.message });
-}
-
-// 🎯 V2 PLACEHOLDERS ROUTES - Enterprise Grade with Checkpoint Logging
-try {
-    const v2PlaceholdersRoutes = require('./routes/company/v2placeholders');
-    app.use('/api/company', v2PlaceholdersRoutes);
-    logger.info('✅ V2 Placeholders routes registered at /api/company - Dynamic placeholder system active');
-} catch (error) {
-    logger.error('❌ V2 Placeholders routes failed to load:', error.message);
-}
+// 🗑️ DELETED: V2 Knowledge Management routes (AI Agent Logic tab removed)
+// 🗑️ DELETED: V2 Placeholders routes (AI Agent Logic tab removed)
 
 // V2 Twilio Control Center (AI Agent Settings tab)
 try {
@@ -209,13 +193,7 @@ logger.info('✅ V2 PURE SYSTEM: Legacy knowledge routes eliminated - V2 Knowled
 // app.use('/api', seedCompanyQnARoutes);
 // console.log('✅ Company Q&A seeding routes registered at /api/seed-company-qna and /api/test-company-qna');
 
-// V2 DELETED: Contact Lookup and CRM routes - using V2 AI Agent Logic system instead
-
-// RESTORED - Full AI Agent Logic routes (issue was in Twilio routes, not here)
-const aiAgentLogicRoutes = require('./routes/company/v2profile-aiagentlogic');
-
-app.use('/api/ai-agent-logic', aiAgentLogicRoutes); // ClientsVia Intelligence Platform
-app.use('/api', aiAgentLogicRoutes); // Also mount for direct API access (includes /api/tradeqa)
+// 🗑️ DELETED: AI Agent Logic routes (tab removed)
 
 // Admin routes for system management
 // try {
