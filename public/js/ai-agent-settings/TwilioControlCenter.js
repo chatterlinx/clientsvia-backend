@@ -517,6 +517,5 @@ class TwilioControlCenter {
     }
 }
 
-// Global instance
-let twilioControl = null;
+// Note: Global instance is declared in company-profile.html initialization script
 
