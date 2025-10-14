@@ -294,9 +294,7 @@ app.use((req, res, next) => {
     
     // REMOVED: Legacy CRM Management routes - will build V2 version in future
     
-    // AI Agent Logic routes for v2 features (Analytics, A/B Testing, etc.)
-    app.use('/api/ai-agent-logic', routes.v2AIAgentLogicRoutes);
-    app.use('/api', routes.v2AIAgentLogicRoutes); // V2 AI Agent Logic - Also mount for direct API access
+    // 🗑️ DELETED: AI Agent Logic routes (tab removed)
     
     console.log('[INIT] ✅ All API routes registered successfully');
 }
