@@ -15,11 +15,12 @@
 
 /* Container */
 .telephony-control-panel {
-    background: white;
-    border-radius: 16px;
+    background: transparent; /* Blend with page background */
+    border-radius: 0; /* No rounded corners - flush with page */
     margin-bottom: 32px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    overflow: hidden;
+    margin-top: 0; /* Ensure no top margin */
+    box-shadow: none; /* No shadow - seamless integration */
+    overflow: visible; /* Allow content to flow naturally */
 }
 
 /* Header (optional - for panel title) */
