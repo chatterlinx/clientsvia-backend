@@ -72,17 +72,7 @@ async function loadAllRoutes() {
         routes.v2TwilioRoutes = await loadRouteWithTimeout('./routes/v2twilio', 'v2TwilioRoutes');
         // V2 DELETED: Legacy external AI routes - violates 100% in-house AI system
         routes.v2ElevenLabsRoutes = await loadRouteWithTimeout('./routes/v2elevenLabs', 'v2ElevenLabsRoutes');
-        // V2 DELETED: Legacy upload routes - file upload functionality eliminated
-        // V2 DELETED: Legacy agentSettings route - using V2 AI Agent Logic system
-        // routes.companyAgentSettingsRoutes = await loadRouteWithTimeout('./routes/company/agentSettings', 'companyAgentSettingsRoutes');
-        // Legacy personality routes removed - using modern AI Agent Logic system
-        // 🚀 V2 PURE SYSTEM: Only V2 Knowledge Management - ALL LEGACY ELIMINATED
-        routes.v2KnowledgeManagementRoutes = await loadRouteWithTimeout('./routes/company/v2knowledgeManagement', 'v2KnowledgeManagementRoutes');
-        routes.v2KnowledgeSourcePrioritiesRoutes = await loadRouteWithTimeout('./routes/company/v2knowledgeSourcePriorities', 'v2KnowledgeSourcePrioritiesRoutes');
-        // 🎯 V2 PLACEHOLDERS ROUTES - Enterprise Grade with Checkpoint Logging
-        routes.v2PlaceholdersRoutes = await loadRouteWithTimeout('./routes/company/v2placeholders', 'v2PlaceholdersRoutes');
-        // 🧠 GLOBAL AI BRAIN SYNC ROUTES - Sync company instant responses with global template
-        routes.v2GlobalAIBrainSyncRoutes = await loadRouteWithTimeout('./routes/company/v2globalAIBrainSync', 'v2GlobalAIBrainSyncRoutes');
+        // 🗑️ DELETED: All AI Agent Logic routes (tab removed)
         // 🤖 COMPANY CONFIGURATION ROUTES - AI Agent Settings (Variables, Filler Words, Scenarios) - 100% ISOLATED
         routes.v2CompanyConfigurationRoutes = await loadRouteWithTimeout('./routes/company/v2companyConfiguration', 'v2CompanyConfigurationRoutes');
         // 🗑️ DELETED: v2InstantResponses - replaced by v2InstantResponseCategories system
@@ -117,11 +107,8 @@ async function loadAllRoutes() {
         // V2 DELETED: Legacy backup routes - v2 backup system eliminated
         // REMOVED: Legacy CRM Management routes - will build V2 version in future
         
-        // Load AI Agent Logic routes for v2 features
-        routes.v2AIAgentLogicRoutes = await loadRouteWithTimeout('./routes/company/v2profile-aiagentlogic', 'v2AIAgentLogicRoutes');
-        
-        // ⚡ V2 INSTANT RESPONSE CATEGORIES SYSTEM - Priority 0 Knowledge Tier (Category-based organization)
-        routes.v2InstantResponseCategoriesRoutes = await loadRouteWithTimeout('./routes/company/v2instantResponseCategories', 'v2InstantResponseCategoriesRoutes');
+        // 🗑️ DELETED: AI Agent Logic routes (tab removed)
+        // 🗑️ DELETED: Instant Response Categories routes (tab removed)
         
         // REMOVED: Legacy V2 AI Intelligence routes - archived to prevent external LLM dependencies
         
