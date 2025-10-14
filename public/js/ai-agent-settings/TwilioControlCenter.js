@@ -33,17 +33,24 @@ class TwilioControlCenter {
      * Initialize and render the Twilio Control Center
      */
     async initialize() {
-        console.log('📞 [TWILIO CONTROL] Initializing...');
+        console.log('📞 [TWILIO CONTROL] CHECKPOINT 1: Starting initialization...');
+        console.log('📞 [TWILIO CONTROL] CHECKPOINT 2: Company ID:', this.companyId);
 
         try {
+            console.log('📞 [TWILIO CONTROL] CHECKPOINT 3: Loading all data...');
             await this.loadAllData();
+            
+            console.log('📞 [TWILIO CONTROL] CHECKPOINT 4: Data loaded, rendering UI...');
             this.render();
+            
+            console.log('📞 [TWILIO CONTROL] CHECKPOINT 5: Starting auto-refresh...');
             this.startAutoRefresh();
 
-            console.log('✅ [TWILIO CONTROL] Initialized successfully');
+            console.log('✅ [TWILIO CONTROL] CHECKPOINT 6: Initialized successfully');
         } catch (error) {
-            console.error('❌ [TWILIO CONTROL] Initialization failed:', error);
-            this.renderError('Failed to load Twilio Control Center');
+            console.error('❌ [TWILIO CONTROL] INITIALIZATION FAILED AT CHECKPOINT:', error);
+            console.error('❌ [TWILIO CONTROL] Error stack:', error.stack);
+            this.renderError('Failed to load Twilio Control Center: ' + error.message);
         }
     }
 
@@ -52,6 +59,13 @@ class TwilioControlCenter {
      */
     async loadAllData() {
         const token = localStorage.getItem('token');
+        console.log('📞 [TWILIO CONTROL] LOAD CHECKPOINT 1: Token exists?', !!token);
+
+        console.log('📞 [TWILIO CONTROL] LOAD CHECKPOINT 2: Fetching 4 endpoints in parallel...');
+        console.log('   - Status:   /api/company/' + this.companyId + '/twilio-control/status');
+        console.log('   - Config:   /api/company/' + this.companyId + '/twilio-control/config');
+        console.log('   - Health:   /api/company/' + this.companyId + '/twilio-control/health');
+        console.log('   - Activity: /api/company/' + this.companyId + '/twilio-control/activity');
 
         const [statusRes, configRes, healthRes, activityRes] = await Promise.all([
             fetch(`/api/company/${this.companyId}/twilio-control/status`, {
@@ -68,10 +82,29 @@ class TwilioControlCenter {
             })
         ]);
 
+        console.log('📞 [TWILIO CONTROL] LOAD CHECKPOINT 3: All responses received');
+        console.log('   - Status HTTP:   ', statusRes.status, statusRes.ok ? '✅' : '❌');
+        console.log('   - Config HTTP:   ', configRes.status, configRes.ok ? '✅' : '❌');
+        console.log('   - Health HTTP:   ', healthRes.status, healthRes.ok ? '✅' : '❌');
+        console.log('   - Activity HTTP: ', activityRes.status, activityRes.ok ? '✅' : '❌');
+
+        // Check for errors BEFORE parsing JSON
+        if (!statusRes.ok) throw new Error(`Status endpoint failed: ${statusRes.status}`);
+        if (!configRes.ok) throw new Error(`Config endpoint failed: ${configRes.status}`);
+        if (!healthRes.ok) throw new Error(`Health endpoint failed: ${healthRes.status}`);
+        if (!activityRes.ok) throw new Error(`Activity endpoint failed: ${activityRes.status}`);
+
+        console.log('📞 [TWILIO CONTROL] LOAD CHECKPOINT 4: Parsing JSON responses...');
         this.status = await statusRes.json();
         this.config = await configRes.json();
         this.health = await healthRes.json();
         this.activity = (await activityRes.json()).activity;
+
+        console.log('📞 [TWILIO CONTROL] LOAD CHECKPOINT 5: Data successfully loaded');
+        console.log('   - Status:', this.status);
+        console.log('   - Config:', this.config);
+        console.log('   - Health:', this.health);
+        console.log('   - Activity count:', this.activity?.length || 0);
     }
 
     /**
