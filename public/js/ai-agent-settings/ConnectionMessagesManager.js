@@ -19,6 +19,7 @@ class ConnectionMessagesManager {
         this.initialized = false;
         this.config = null;
         this.currentChannel = 'voice'; // voice | sms | webchat
+        this.voices = []; // ElevenLabs voices cache
     }
 
     /**
@@ -30,7 +31,10 @@ class ConnectionMessagesManager {
         console.log('📞 [CONNECTION MESSAGES] Initializing...');
 
         try {
-            await this.loadConfig();
+            await Promise.all([
+                this.loadConfig(),
+                this.loadVoices()
+            ]);
             this.render();
             this.initialized = true;
 
@@ -56,6 +60,47 @@ class ConnectionMessagesManager {
         this.config = await response.json();
 
         console.log('📞 [CONNECTION MESSAGES] Config loaded:', this.config);
+    }
+
+    /**
+     * Load ElevenLabs voices
+     */
+    async loadVoices() {
+        try {
+            const token = localStorage.getItem('adminToken');
+            const response = await fetch(`/api/company/${this.companyId}/v2-voice-settings/voices`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                this.voices = data.voices || [];
+                console.log('📞 [CONNECTION MESSAGES] Loaded', this.voices.length, 'voices');
+            } else {
+                console.warn('📞 [CONNECTION MESSAGES] Could not load voices, using defaults');
+                this.voices = this.getDefaultVoices();
+            }
+        } catch (error) {
+            console.warn('📞 [CONNECTION MESSAGES] Error loading voices, using defaults:', error);
+            this.voices = this.getDefaultVoices();
+        }
+    }
+
+    /**
+     * Get default/fallback voices
+     */
+    getDefaultVoices() {
+        return [
+            { voice_id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel' },
+            { voice_id: 'AZnzlk1XvdvUeBnXmlld', name: 'Domi' },
+            { voice_id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella' },
+            { voice_id: 'ErXwobaYiN019PkySvjV', name: 'Antoni' },
+            { voice_id: 'MF3mGyEYCl7XYWbV9V6O', name: 'Elli' },
+            { voice_id: 'TxGEqnHWrfWFTfGW9XjX', name: 'Josh' },
+            { voice_id: 'VR6AewLTigWG4xSOukaG', name: 'Arnold' },
+            { voice_id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam' },
+            { voice_id: 'yoZ06aMxZJJ28mfd3POQ', name: 'Sam' }
+        ];
     }
 
     /**
@@ -314,9 +359,9 @@ class ConnectionMessagesManager {
                     Voice:
                 </label>
                 <select id="elevenlabs-voice">
-                    <option value="default">Mark - Natural Conversations</option>
-                    <option value="rachel">Rachel - Professional</option>
-                    <option value="domi">Domi - Warm & Friendly</option>
+                    ${this.voices.map(voice => `
+                        <option value="${voice.voice_id}">${voice.name}</option>
+                    `).join('')}
                 </select>
 
                 <button class="btn-generate" onclick="connectionMessagesManager.generateWithElevenLabs()">
