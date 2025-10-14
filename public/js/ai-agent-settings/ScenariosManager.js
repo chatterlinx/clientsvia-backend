@@ -46,7 +46,7 @@ class ScenariosManager {
         try {
             const response = await fetch(`/api/company/${this.companyId}/configuration/scenarios`, {
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 }
             });
             

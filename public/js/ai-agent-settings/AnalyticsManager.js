@@ -36,7 +36,7 @@ class AnalyticsManager {
         try {
             const response = await fetch(`/api/company/${this.companyId}/configuration/analytics`, {
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 }
             });
             

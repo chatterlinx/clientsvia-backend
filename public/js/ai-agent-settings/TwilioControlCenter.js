@@ -58,7 +58,7 @@ class TwilioControlCenter {
      * Load all data in parallel
      */
     async loadAllData() {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('adminToken');
         console.log('📞 [TWILIO CONTROL] LOAD CHECKPOINT 1: Token exists?', !!token);
 
         console.log('📞 [TWILIO CONTROL] LOAD CHECKPOINT 2: Fetching 4 endpoints in parallel...');
@@ -388,7 +388,7 @@ class TwilioControlCenter {
             const response = await fetch(`/api/company/${this.companyId}/twilio-control/routing`, {
                 method: 'PATCH',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -424,7 +424,7 @@ class TwilioControlCenter {
             const response = await fetch(`/api/company/${this.companyId}/twilio-control/test-call`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ testPhoneNumber: testNumber })

@@ -33,7 +33,7 @@ class TemplateInfoManager {
         try {
             const response = await fetch(`/api/company/${this.companyId}/configuration/template-info`, {
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 }
             });
             
@@ -218,7 +218,7 @@ class TemplateInfoManager {
             const response = await fetch(`/api/company/${this.companyId}/configuration/sync`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 }
             });
             

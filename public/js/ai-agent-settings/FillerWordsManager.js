@@ -45,7 +45,7 @@ class FillerWordsManager {
         try {
             const response = await fetch(`/api/company/${this.companyId}/configuration/filler-words`, {
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 }
             });
             
@@ -261,7 +261,7 @@ class FillerWordsManager {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 },
                 body: JSON.stringify({ words })
             });
@@ -305,7 +305,7 @@ class FillerWordsManager {
             const response = await fetch(`/api/company/${this.companyId}/configuration/filler-words/${encodeURIComponent(word)}`, {
                 method: 'DELETE',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 }
             });
             
@@ -346,7 +346,7 @@ class FillerWordsManager {
             const response = await fetch(`/api/company/${this.companyId}/configuration/filler-words/reset`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 }
             });
             

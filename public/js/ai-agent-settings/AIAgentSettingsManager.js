@@ -69,7 +69,7 @@ class AIAgentSettingsManager {
         try {
             const response = await fetch(`/api/company/${this.companyId}/configuration`, {
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 }
             });
             
@@ -315,7 +315,7 @@ class AIAgentSettingsManager {
             // Fetch readiness score from API
             const response = await fetch(`/api/company/${this.companyId}/configuration/readiness`, {
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 }
             });
             
@@ -649,7 +649,7 @@ class AIAgentSettingsManager {
             const response = await fetch(`/api/company/${this.companyId}/configuration/go-live`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
                     'Content-Type': 'application/json'
                 }
             });

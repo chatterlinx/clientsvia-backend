@@ -36,7 +36,7 @@ class VariablesManager {
         try {
             const response = await fetch(`/api/company/${this.companyId}/configuration/variables`, {
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 }
             });
             
@@ -445,7 +445,7 @@ class VariablesManager {
         try {
             const response = await fetch(`/api/company/${this.companyId}/configuration/variables/${key}/usage`, {
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 }
             });
             
@@ -551,7 +551,7 @@ class VariablesManager {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 },
                 body: JSON.stringify({
                     variables: this.variables
@@ -743,7 +743,7 @@ class VariablesManager {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
                     'idempotency-key': idempotencyKey
                 },
                 body: JSON.stringify({

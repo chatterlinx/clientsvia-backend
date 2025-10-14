@@ -45,7 +45,7 @@ class ConnectionMessagesManager {
      * Load configuration from backend
      */
     async loadConfig() {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('adminToken');
 
         const response = await fetch(`/api/company/${this.companyId}/connection-messages/config`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -524,7 +524,7 @@ class ConnectionMessagesManager {
             const response = await fetch(`/api/company/${this.companyId}/connection-messages/voice/upload`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 },
                 body: formData
             });
@@ -578,7 +578,7 @@ class ConnectionMessagesManager {
             const response = await fetch(`/api/company/${this.companyId}/connection-messages/voice/remove`, {
                 method: 'DELETE',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 }
             });
 
@@ -614,7 +614,7 @@ class ConnectionMessagesManager {
             const response = await fetch(`/api/company/${this.companyId}/connection-messages/voice/generate`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ text, voice })
@@ -681,7 +681,7 @@ class ConnectionMessagesManager {
             const response = await fetch(`/api/company/${this.companyId}/connection-messages/config`, {
                 method: 'PATCH',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(data)
@@ -714,7 +714,7 @@ class ConnectionMessagesManager {
             const response = await fetch(`/api/company/${this.companyId}/connection-messages/reset`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 }
             });
 
