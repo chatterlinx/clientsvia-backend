@@ -724,7 +724,8 @@ class ConnectionMessagesManager {
                 data.voice = {
                     mode,
                     fallback,
-                    realtime: { text: realtimeText }
+                    text: realtimeText,  // CRITICAL: Send as voice.text (primary field)
+                    realtime: { text: realtimeText }  // Keep for backwards compatibility
                 };
             } else if (this.currentChannel === 'sms') {
                 const enabled = document.getElementById('sms-enabled')?.checked;
