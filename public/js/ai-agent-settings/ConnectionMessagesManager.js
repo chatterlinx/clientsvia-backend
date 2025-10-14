@@ -601,14 +601,21 @@ class ConnectionMessagesManager {
      */
     async generateWithElevenLabs() {
         const text = document.getElementById('elevenlabs-text')?.value;
-        const voice = document.getElementById('elevenlabs-voice')?.value;
+        const voiceId = document.getElementById('elevenlabs-voice')?.value;
 
         if (!text) {
             alert('⚠️ Please enter greeting text');
             return;
         }
 
+        if (!voiceId) {
+            alert('⚠️ Please select a voice');
+            return;
+        }
+
         console.log('🎵 [CONNECTION MESSAGES] Generating with ElevenLabs...');
+        console.log('🎵 Text:', text.substring(0, 50) + (text.length > 50 ? '...' : ''));
+        console.log('🎵 Voice ID:', voiceId);
 
         try {
             const response = await fetch(`/api/company/${this.companyId}/connection-messages/voice/generate`, {
@@ -617,18 +624,24 @@ class ConnectionMessagesManager {
                     'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ text, voice })
+                body: JSON.stringify({ text, voiceId })
             });
 
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.details || errorData.message || `HTTP ${response.status}`);
+            }
 
             // Download the generated audio
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = 'generated_greeting.mp3';
+            link.download = `greeting_${Date.now()}.mp3`;
+            document.body.appendChild(link);
             link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
 
             alert('✅ Audio generated successfully! File downloaded.\n\nNow upload it using the "Upload Audio File" button above.');
 

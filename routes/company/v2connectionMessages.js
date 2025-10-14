@@ -337,27 +337,58 @@ router.post('/:companyId/connection-messages/voice/generate', async (req, res) =
     console.log(`[CONNECTION MESSAGES] POST /voice/generate for company: ${req.params.companyId}`);
 
     try {
-        const { text, voice } = req.body;
+        const { text, voiceId } = req.body;
 
         if (!text) {
             return res.status(400).json({ error: 'Text is required' });
         }
 
-        // TODO: Implement ElevenLabs API integration
-        // For now, return error
-        return res.status(501).json({
-            error: 'ElevenLabs generation not yet implemented',
-            message: 'This feature will be available soon. For now, please use a TTS service to generate audio, then upload the file.'
+        if (!voiceId) {
+            return res.status(400).json({ error: 'Voice ID is required' });
+        }
+
+        // Get company for ElevenLabs API key
+        const company = await Company.findById(req.params.companyId).select('aiAgentLogic companyName');
+
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        console.log(`[CONNECTION MESSAGES] Generating audio with ElevenLabs for company: ${company.companyName}`);
+        console.log(`[CONNECTION MESSAGES] Text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
+        console.log(`[CONNECTION MESSAGES] Voice ID: ${voiceId}`);
+
+        // Import ElevenLabs service
+        const { synthesizeSpeech } = require('../../services/v2elevenLabsService');
+
+        // Generate audio using ElevenLabs
+        const audioBuffer = await synthesizeSpeech({
+            text,
+            voiceId,
+            company,
+            model_id: 'eleven_turbo_v2_5',
+            output_format: 'mp3_44100_128'
         });
 
-        // Future implementation:
-        // 1. Get company's ElevenLabs API key from company.aiAgentLogic.voiceSettings
-        // 2. Call ElevenLabs API to generate audio
-        // 3. Return audio blob for download
+        console.log(`[CONNECTION MESSAGES] ✅ Audio generated successfully (${audioBuffer.length} bytes)`);
+
+        // Set headers for audio download
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.setHeader('Content-Disposition', `attachment; filename="greeting_${Date.now()}.mp3"`);
+        res.setHeader('Content-Length', audioBuffer.length);
+
+        // Send audio buffer
+        res.send(audioBuffer);
 
     } catch (error) {
         console.error('[CONNECTION MESSAGES] Error generating audio:', error);
-        res.status(500).json({ error: 'Failed to generate audio' });
+        res.status(500).json({ 
+            error: 'Failed to generate audio',
+            message: error.message,
+            details: error.message.includes('API key') 
+                ? 'Please configure your ElevenLabs API key in AI Voice Settings'
+                : 'An error occurred while generating audio'
+        });
     }
 });
 
