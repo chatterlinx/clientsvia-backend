@@ -229,8 +229,18 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[CONNECTION MESSAGES] Error updating config:', error);
-        res.status(500).json({ error: 'Failed to update configuration' });
+        console.error('[CONNECTION MESSAGES] ❌ Error updating config:', error);
+        console.error('[CONNECTION MESSAGES] ❌ Error stack:', error.stack);
+        console.error('[CONNECTION MESSAGES] ❌ Error name:', error.name);
+        console.error('[CONNECTION MESSAGES] ❌ Error message:', error.message);
+        if (error.errors) {
+            console.error('[CONNECTION MESSAGES] ❌ Validation errors:', JSON.stringify(error.errors, null, 2));
+        }
+        res.status(500).json({ 
+            error: 'Failed to update configuration',
+            details: error.message,
+            validationErrors: error.errors ? Object.keys(error.errors) : null
+        });
     }
 });
 
