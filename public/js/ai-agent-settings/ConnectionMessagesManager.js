@@ -954,6 +954,8 @@ class ConnectionMessagesManager {
                 };
             }
 
+            console.log('📤 [CONNECTION MESSAGES] Sending data:', JSON.stringify(data, null, 2));
+
             const response = await fetch(`/api/company/${this.companyId}/connection-messages/config`, {
                 method: 'PATCH',
                 headers: {
@@ -963,7 +965,13 @@ class ConnectionMessagesManager {
                 body: JSON.stringify(data)
             });
 
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            console.log('📥 [CONNECTION MESSAGES] Response status:', response.status);
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                console.error('❌ [CONNECTION MESSAGES] Error response:', errorData);
+                throw new Error(`HTTP ${response.status}: ${errorData.details || errorData.error || 'Unknown error'}`);
+            }
 
             console.log('✅ [CONNECTION MESSAGES] Saved successfully');
 
