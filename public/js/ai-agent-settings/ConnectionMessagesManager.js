@@ -899,18 +899,22 @@ class ConnectionMessagesManager {
 
             if (this.currentChannel === 'voice') {
                 const mode = document.querySelector('input[name="voice-mode"]:checked')?.value;
-                const realtimeText = document.getElementById('realtime-text')?.value;
+                const realtimeText = document.getElementById('realtime-text')?.value || this.config?.voice?.realtime?.text || '';
+
+                console.log('🔍 [SAVE DEBUG] Mode:', mode);
+                console.log('🔍 [SAVE DEBUG] Realtime text field value:', document.getElementById('realtime-text')?.value);
+                console.log('🔍 [SAVE DEBUG] Final realtime text:', realtimeText);
 
                 // Collect intelligent fallback settings
-                const fallbackEnabled = document.getElementById('fallback-enabled')?.checked;
-                const fallbackVoiceMessage = document.getElementById('fallback-voice-message')?.value;
-                const fallbackSmsEnabled = document.getElementById('fallback-sms-enabled')?.checked;
-                const fallbackSmsMessage = document.getElementById('fallback-sms-message')?.value;
-                const fallbackNotifyAdmin = document.getElementById('fallback-notify-admin')?.checked;
-                const fallbackAdminMethod = document.querySelector('input[name="admin-method"]:checked')?.value;
-                const fallbackAdminPhone = document.getElementById('fallback-admin-phone')?.value;
-                const fallbackAdminEmail = document.getElementById('fallback-admin-email')?.value;
-                const fallbackAdminSmsMessage = document.getElementById('fallback-admin-sms-message')?.value;
+                const fallbackEnabled = document.getElementById('fallback-enabled')?.checked ?? true;
+                const fallbackVoiceMessage = document.getElementById('fallback-voice-message')?.value || this.config?.voice?.fallback?.voiceMessage || '';
+                const fallbackSmsEnabled = document.getElementById('fallback-sms-enabled')?.checked ?? true;
+                const fallbackSmsMessage = document.getElementById('fallback-sms-message')?.value || this.config?.voice?.fallback?.smsMessage || '';
+                const fallbackNotifyAdmin = document.getElementById('fallback-notify-admin')?.checked ?? true;
+                const fallbackAdminMethod = document.querySelector('input[name="admin-method"]:checked')?.value || 'sms';
+                const fallbackAdminPhone = document.getElementById('fallback-admin-phone')?.value || '';
+                const fallbackAdminEmail = document.getElementById('fallback-admin-email')?.value || '';
+                const fallbackAdminSmsMessage = document.getElementById('fallback-admin-sms-message')?.value || this.config?.voice?.fallback?.adminSmsMessage || '';
 
                 data.voice = {
                     mode,
