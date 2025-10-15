@@ -271,9 +271,9 @@
 /* Voice Upload Section */
 .voice-upload-section {
     background: #f8f9fa;
-    border-radius: 8px;
-    padding: 20px;
-    margin-bottom: 16px;
+    border-radius: 6px;
+    padding: 12px 14px; /* Reduced from 20px */
+    margin-bottom: 10px; /* Reduced from 16px */
 }
 
 .audio-preview-card {
@@ -494,19 +494,19 @@
 .elevenlabs-generator {
     background: white;
     border: 2px solid #6366f1;
-    border-radius: 8px;
-    padding: 16px;
-    margin-top: 12px;
+    border-radius: 6px;
+    padding: 12px 14px; /* Reduced from 16px */
+    margin-top: 10px; /* Reduced from 12px */
 }
 
 .elevenlabs-generator h5 {
-    margin: 0 0 12px 0;
-    font-size: 14px;
+    margin: 0 0 8px 0; /* Reduced from 12px */
+    font-size: 13px; /* Reduced from 14px */
     font-weight: 700;
     color: #1a1a1a;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px; /* Reduced from 8px */
 }
 
 .elevenlabs-generator textarea {
@@ -517,7 +517,7 @@
     font-size: 14px;
     resize: vertical;
     min-height: 80px;
-    margin-bottom: 12px;
+    margin-bottom: 8px; /* Reduced from 12px */
 }
 
 .elevenlabs-generator textarea:focus {

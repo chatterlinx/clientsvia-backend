@@ -257,7 +257,7 @@ class ConnectionMessagesManager {
         if (hasActiveFile) {
             return `
                 <div class="voice-upload-section">
-                    <h5 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 700;">🎵 Current Audio File</h5>
+                    <h5 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 700;">🎵 Current Audio File</h5>
                     
                     <div class="audio-preview-card">
                         <div class="audio-icon">🎵</div>
@@ -287,7 +287,7 @@ class ConnectionMessagesManager {
                 </div>
 
                 <div class="voice-upload-section">
-                    <h5 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 700;">📤 Upload New Audio</h5>
+                    <h5 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 700;">📤 Upload New Audio</h5>
                     <div class="file-upload-wrapper">
                         <input type="file" id="audio-upload-input" class="file-upload-input" accept=".mp3,.wav,.m4a" onchange="connectionMessagesManager.handleFileUpload(event)">
                         <button class="file-upload-btn" onclick="document.getElementById('audio-upload-input').click()">
@@ -302,8 +302,8 @@ class ConnectionMessagesManager {
         } else {
             return `
                 <div class="voice-upload-section">
-                    <h5 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 700;">📤 Upload Audio File</h5>
-                    <p style="font-size: 13px; color: #6c757d; margin-bottom: 12px;">
+                    <h5 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 700;">📤 Upload Audio File</h5>
+                    <p style="font-size: 12px; color: #6c757d; margin-bottom: 8px;">
                         Upload a pre-recorded greeting (MP3, WAV, or M4A format, max 5MB)
                     </p>
                     <div class="file-upload-wrapper">
@@ -326,18 +326,18 @@ class ConnectionMessagesManager {
     renderElevenLabsGenerator() {
         return `
             <div class="elevenlabs-generator">
-                <h5>
+                <h5 style="margin: 0 0 4px 0; font-size: 13px; font-weight: 700;">
                     <i class="fas fa-magic" style="color: #6366f1;"></i>
                     Generate with ElevenLabs
                 </h5>
-                <p style="font-size: 13px; color: #6c757d; margin: 0 0 12px 0;">
+                <p style="font-size: 12px; color: #6c757d; margin: 0 0 8px 0;">
                     Generate audio from text, then download and upload it as a pre-recorded file
                 </p>
 
-                <label style="font-size: 13px; font-weight: 600; color: #495057; display: block; margin-bottom: 6px;">
+                <label style="font-size: 12px; font-weight: 600; color: #495057; display: block; margin-bottom: 4px;">
                     Greeting Text:
                 </label>
-                <textarea id="elevenlabs-text" placeholder="Thank you for calling {companyname}. Please wait a moment while we connect you..." style="font-family: inherit;">Thank you for calling. Please wait a moment while we connect you...</textarea>
+                <textarea id="elevenlabs-text" placeholder="Thank you for calling {companyname}. Please wait a moment while we connect you..." style="font-family: inherit; min-height: 80px;">Thank you for calling. Please wait a moment while we connect you...</textarea>
 
                 ${this.renderVoiceInfo()}
 
@@ -346,9 +346,8 @@ class ConnectionMessagesManager {
                     Generate & Download Audio
                 </button>
 
-                <p style="font-size: 11px; color: #6c757d; margin: 12px 0 0 0;">
-                    💡 <strong>Tip:</strong> After generating, the audio will download to your computer. 
-                    Then upload it using the "Upload Audio File" button above.
+                <p style="font-size: 11px; color: #6c757d; margin: 8px 0 0 0;">
+                    💡 <strong>Tip:</strong> After generating, the audio will download to your computer. Then upload it using the button above.
                 </p>
             </div>
         `;
@@ -360,9 +359,9 @@ class ConnectionMessagesManager {
     renderVoiceInfo() {
         if (!this.voiceSettings || !this.voiceSettings.selectedVoice) {
             return `
-                <div style="padding: 16px; background: #fff3cd; border-radius: 8px; margin: 12px 0;">
-                    <strong>⚠️ Voice Not Configured</strong>
-                    <p style="margin: 8px 0 0 0; font-size: 13px;">
+                <div style="padding: 10px; background: #fff3cd; border-radius: 6px; margin: 8px 0;">
+                    <strong style="font-size: 12px;">⚠️ Voice Not Configured</strong>
+                    <p style="margin: 4px 0 0 0; font-size: 11px;">
                         Please configure your ElevenLabs voice in the <strong>AI Voice Settings</strong> tab first.
                     </p>
                 </div>
@@ -370,15 +369,12 @@ class ConnectionMessagesManager {
         }
 
         return `
-            <div style="padding: 12px; background: #e7f5ff; border: 2px solid #339af0; border-radius: 8px; margin: 12px 0;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <div style="padding: 8px 10px; background: #e7f5ff; border: 2px solid #339af0; border-radius: 6px; margin: 8px 0;">
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 12px;">
                     <i class="fas fa-microphone" style="color: #339af0;"></i>
                     <strong style="color: #1971c2;">Voice:</strong>
                     <span style="color: #495057;">${this.voiceSettings.selectedVoice}</span>
                 </div>
-                <p style="margin: 4px 0 0 0; font-size: 12px; color: #495057;">
-                    <i class="fas fa-info-circle"></i> Using voice configured in AI Voice Settings tab
-                </p>
             </div>
         `;
     }
@@ -389,18 +385,18 @@ class ConnectionMessagesManager {
     renderRealtimeSection(realtime) {
         return `
             <div class="voice-upload-section">
-                <label style="font-size: 14px; font-weight: 600; color: #495057; display: block; margin-bottom: 8px;">
+                <label style="font-size: 12px; font-weight: 600; color: #495057; display: block; margin-bottom: 4px;">
                     Greeting Text:
                 </label>
                 <textarea id="realtime-text" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 14px; min-height: 100px; resize: vertical;" placeholder="Thank you for calling {companyname}. Please wait a moment...">${realtime?.text || 'Thank you for calling. Please wait a moment while we connect you...'}</textarea>
 
-                <p style="font-size: 12px; color: #6c757d; margin: 12px 0;">
+                <p style="font-size: 11px; color: #6c757d; margin: 6px 0;">
                     Available variables: <code>{companyname}</code>
                 </p>
 
-                <div style="padding: 12px; background: #fff3cd; border-radius: 8px; margin-top: 16px;">
-                    <strong>⚠️ Cost Warning:</strong> This will generate audio for every call using ElevenLabs API.
-                    Estimated cost: ~$0.03 per call (300 characters × $0.0001 per character).
+                <div style="padding: 10px; background: #fff3cd; border-radius: 6px; margin-top: 10px;">
+                    <strong style="font-size: 12px;">⚠️ Cost Warning:</strong> 
+                    <span style="font-size: 11px;">This will generate audio for every call using ElevenLabs API. Estimated cost: ~$0.03 per call.</span>
                 </div>
             </div>
         `;
