@@ -90,8 +90,26 @@ const connectionMessagesSchema = new mongoose.Schema({
             voiceId: { type: String, trim: true, default: null }
         },
         
-        // Fallback if audio fails
-        fallback: { type: String, enum: ['default', 'silent'], default: 'default' }
+        // Intelligent Fallback System
+        fallback: {
+            enabled: { type: Boolean, default: true },
+            // Voice fallback (ElevenLabs TTS)
+            voiceMessage: { 
+                type: String, 
+                trim: true, 
+                default: "We're experiencing technical difficulties. Please hold while we connect you to our team." 
+            },
+            // SMS fallback (text customer)
+            smsEnabled: { type: Boolean, default: true },
+            smsMessage: { 
+                type: String, 
+                trim: true, 
+                default: "Sorry, our voice system missed your call. How can we help you?" 
+            },
+            // Admin notification
+            notifyAdmin: { type: Boolean, default: true },
+            adminNotificationMethod: { type: String, enum: ['sms', 'email', 'both'], default: 'sms' }
+        }
     },
     
     // SMS Auto-Reply

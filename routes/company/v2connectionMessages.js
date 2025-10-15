@@ -136,17 +136,43 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
         // Update voice settings
         if (voice) {
             if (voice.mode) company.aiAgentLogic.connectionMessages.voice.mode = voice.mode;
-            if (voice.fallback) company.aiAgentLogic.connectionMessages.voice.fallback = voice.fallback;
+            
             if (voice.text !== undefined) {
-                // CRITICAL: Save to voice.text (NOT voice.realtime.text!)
+                // CRITICAL: Save to voice.text (PRIMARY FIELD for runtime)
                 company.aiAgentLogic.connectionMessages.voice.text = voice.text;
             }
+            
             if (voice.realtime) {
                 // Keep realtime for TTS generation settings
                 if (!company.aiAgentLogic.connectionMessages.voice.realtime) {
                     company.aiAgentLogic.connectionMessages.voice.realtime = {};
                 }
                 company.aiAgentLogic.connectionMessages.voice.realtime.text = voice.realtime.text;
+            }
+            
+            // Update intelligent fallback settings
+            if (voice.fallback) {
+                if (!company.aiAgentLogic.connectionMessages.voice.fallback) {
+                    company.aiAgentLogic.connectionMessages.voice.fallback = {};
+                }
+                if (voice.fallback.enabled !== undefined) {
+                    company.aiAgentLogic.connectionMessages.voice.fallback.enabled = voice.fallback.enabled;
+                }
+                if (voice.fallback.voiceMessage !== undefined) {
+                    company.aiAgentLogic.connectionMessages.voice.fallback.voiceMessage = voice.fallback.voiceMessage;
+                }
+                if (voice.fallback.smsEnabled !== undefined) {
+                    company.aiAgentLogic.connectionMessages.voice.fallback.smsEnabled = voice.fallback.smsEnabled;
+                }
+                if (voice.fallback.smsMessage !== undefined) {
+                    company.aiAgentLogic.connectionMessages.voice.fallback.smsMessage = voice.fallback.smsMessage;
+                }
+                if (voice.fallback.notifyAdmin !== undefined) {
+                    company.aiAgentLogic.connectionMessages.voice.fallback.notifyAdmin = voice.fallback.notifyAdmin;
+                }
+                if (voice.fallback.adminNotificationMethod) {
+                    company.aiAgentLogic.connectionMessages.voice.fallback.adminNotificationMethod = voice.fallback.adminNotificationMethod;
+                }
             }
         }
 
@@ -476,6 +502,7 @@ function getDefaultConfig() {
     return {
         voice: {
             mode: 'prerecorded', // prerecorded | realtime | disabled
+            text: null, // PRIMARY FIELD for runtime
             prerecorded: {
                 activeFileUrl: null,
                 activeFileName: null,
@@ -488,7 +515,15 @@ function getDefaultConfig() {
                 text: 'Thank you for calling. Please wait a moment while we connect you...',
                 voiceId: null
             },
-            fallback: 'default' // default | silent
+            // Intelligent Fallback System
+            fallback: {
+                enabled: true,
+                voiceMessage: "We're experiencing technical difficulties. Please hold while we connect you to our team.",
+                smsEnabled: true,
+                smsMessage: "Sorry, our voice system missed your call. How can we help you?",
+                notifyAdmin: true,
+                adminNotificationMethod: 'sms' // sms | email | both
+            }
         },
         sms: {
             enabled: false,

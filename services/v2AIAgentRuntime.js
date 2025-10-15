@@ -52,13 +52,14 @@ class V2AIAgentRuntime {
             console.log(`🔍 V2 VOICE DEBUG: Voice ID: ${company.aiAgentLogic?.voiceSettings?.voiceId || 'NOT SET'}`);
             console.log(`🔍 V2 VOICE DEBUG: API Source: ${company.aiAgentLogic?.voiceSettings?.apiSource || 'NOT SET'}`);
 
-            // Generate V2 greeting from Agent Personality system
-            const greeting = this.generateV2Greeting(company);
+            // Generate V2 greeting from Agent Personality system (4-MODE SYSTEM)
+            const greetingConfig = this.generateV2Greeting(company);
             
-            console.log(`🎤 V2 AGENT: Generated greeting: "${greeting}"`);
+            console.log(`🎤 V2 AGENT: Generated greeting config:`, JSON.stringify(greetingConfig, null, 2));
 
             return {
-                greeting,
+                greetingConfig, // NEW: Full greeting configuration with mode
+                greeting: greetingConfig.text || greetingConfig.audioUrl || '', // LEGACY: For backwards compatibility
                 callState: {
                     callId,
                     from,
@@ -66,7 +67,8 @@ class V2AIAgentRuntime {
                     companyId: companyID,
                     startTime: new Date(),
                     stage: 'greeting',
-                    v2System: true
+                    v2System: true,
+                    greetingMode: greetingConfig.mode
                 },
                 voiceSettings: company.aiAgentLogic.voiceSettings || null,
                 personality: company.aiAgentLogic.agentPersonality || null
@@ -82,34 +84,137 @@ class V2AIAgentRuntime {
     }
 
     /**
-     * 🎭 Generate greeting from V2 Agent Personality system
+     * 🎭 Generate greeting from V2 Agent Personality system with 4-MODE SYSTEM
      * @param {Object} company - Company document with V2 configuration
-     * @returns {string} Personalized greeting
+     * @returns {Object} Greeting configuration with mode and content
      */
     static generateV2Greeting(company) {
         console.log(`[V2 GREETING] 🎭 Generating greeting for ${company.businessName || company.companyName}`);
         
         const aiLogic = company.aiAgentLogic;
-        let greeting = null;
+        const connectionMessages = aiLogic?.connectionMessages;
+        const voiceConfig = connectionMessages?.voice;
 
-        // 🎤 ONLY GREETING SOURCE: CONNECTION MESSAGES (AI Agent Settings > Messages & Greetings tab)
-        // ☢️ NO FALLBACKS - NO LEGACY - FAIL LOUDLY IF NOT CONFIGURED
-        if (aiLogic.connectionMessages?.voice?.text && aiLogic.connectionMessages.voice.text.trim()) {
-            greeting = aiLogic.connectionMessages.voice.text;
-            console.log(`✅ V2 GREETING: Using Connection Message from AI Agent Settings tab: "${greeting}"`);
-            
-            // Replace placeholders
-            greeting = this.buildPureResponse(greeting, company);
-            return greeting;
+        // Check if connection messages are configured
+        if (!voiceConfig) {
+            console.error(`❌ CRITICAL: No connection messages configured for company ${company._id}`);
+            return {
+                mode: 'error',
+                text: "CONFIGURATION ERROR: No greeting has been set. Please configure a greeting in the AI Agent Settings tab."
+            };
         }
+
+        const mode = voiceConfig.mode || 'disabled';
+        console.log(`🎯 V2 GREETING: Mode selected: ${mode}`);
+
+        // MODE 1: PRE-RECORDED AUDIO
+        if (mode === 'prerecorded') {
+            if (voiceConfig.prerecorded?.activeFileUrl) {
+                console.log(`✅ V2 GREETING: Using pre-recorded audio: ${voiceConfig.prerecorded.activeFileUrl}`);
+                return {
+                    mode: 'prerecorded',
+                    audioUrl: voiceConfig.prerecorded.activeFileUrl,
+                    fileName: voiceConfig.prerecorded.activeFileName,
+                    duration: voiceConfig.prerecorded.activeDuration
+                };
+            } else {
+                console.warn(`⚠️ V2 GREETING: Pre-recorded mode selected but no file uploaded`);
+                // Trigger fallback
+                return this.triggerFallback(company, 'Pre-recorded audio file missing');
+            }
+        }
+
+        // MODE 2: REAL-TIME TTS (ELEVENLABS)
+        if (mode === 'realtime') {
+            const greetingText = voiceConfig.text || voiceConfig.realtime?.text;
+            
+            if (greetingText && greetingText.trim()) {
+                const processedText = this.buildPureResponse(greetingText, company);
+                console.log(`✅ V2 GREETING: Using real-time TTS: "${processedText}"`);
+                return {
+                    mode: 'realtime',
+                    text: processedText,
+                    voiceId: voiceConfig.realtime?.voiceId || company.voiceSettings?.selectedVoiceId
+                };
+            } else {
+                console.warn(`⚠️ V2 GREETING: Real-time mode selected but no text configured`);
+                // Trigger fallback
+                return this.triggerFallback(company, 'Real-time TTS text missing');
+            }
+        }
+
+        // MODE 3: DISABLED (SKIP GREETING - GO STRAIGHT TO AI)
+        if (mode === 'disabled') {
+            console.log(`✅ V2 GREETING: Greeting disabled - going straight to AI`);
+            return {
+                mode: 'disabled',
+                text: null
+            };
+        }
+
+        // MODE 4: FALLBACK (EMERGENCY BACKUP)
+        console.warn(`⚠️ V2 GREETING: Invalid or missing mode - triggering fallback`);
+        return this.triggerFallback(company, 'Invalid greeting mode');
+    }
+
+    /**
+     * 🆘 Trigger intelligent fallback system
+     * @param {Object} company - Company document
+     * @param {String} reason - Reason for fallback
+     * @returns {Object} Fallback greeting configuration
+     */
+    static triggerFallback(company, reason) {
+        console.log(`🆘 V2 FALLBACK: Triggered for ${company.companyName} - Reason: ${reason}`);
         
-        // ☢️ CRITICAL ERROR: No greeting configured - FAIL LOUDLY
-        console.error(`❌ CRITICAL: No greeting configured for company ${company._id}`);
-        console.error(`❌ Company must configure greeting in: AI Agent Settings > Messages & Greetings tab`);
-        console.error(`❌ Field required: aiAgentLogic.connectionMessages.voice.text`);
+        const fallbackConfig = company.aiAgentLogic?.connectionMessages?.voice?.fallback;
         
-        // Return error message that makes it OBVIOUS something is wrong
-        return "CONFIGURATION ERROR: No greeting has been set. Please configure a greeting in the AI Agent Settings tab.";
+        if (!fallbackConfig || !fallbackConfig.enabled) {
+            console.error(`❌ FALLBACK: Fallback system is disabled or not configured`);
+            return {
+                mode: 'error',
+                text: "We're experiencing technical difficulties. Please try again later."
+            };
+        }
+
+        const fallbackText = fallbackConfig.voiceMessage || "We're experiencing technical difficulties. Please hold while we connect you to our team.";
+        const processedText = this.buildPureResponse(fallbackText, company);
+
+        console.log(`✅ V2 FALLBACK: Using fallback message: "${processedText}"`);
+
+        // Queue async fallback actions (SMS + Admin notifications)
+        this.executeFallbackActions(company, reason, fallbackConfig).catch(error => {
+            console.error(`❌ FALLBACK: Error executing fallback actions:`, error);
+        });
+
+        return {
+            mode: 'fallback',
+            text: processedText,
+            reason: reason,
+            voiceId: company.voiceSettings?.selectedVoiceId
+        };
+    }
+
+    /**
+     * 📱 Execute fallback actions (SMS + Admin notifications)
+     * @param {Object} company - Company document
+     * @param {String} reason - Fallback reason
+     * @param {Object} fallbackConfig - Fallback configuration
+     */
+    static async executeFallbackActions(company, reason, fallbackConfig) {
+        try {
+            const intelligentFallbackHandler = require('./intelligentFallbackHandler');
+            
+            await intelligentFallbackHandler.executeFallback({
+                company: company,
+                companyId: company._id,
+                companyName: company.companyName || company.businessName,
+                callerPhone: null, // Will be set by Twilio handler
+                failureReason: reason,
+                fallbackConfig: fallbackConfig
+            });
+        } catch (error) {
+            console.error(`❌ FALLBACK ACTIONS: Error:`, error);
+        }
     }
 
     /**
