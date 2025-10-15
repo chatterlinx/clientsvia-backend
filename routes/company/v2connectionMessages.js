@@ -99,33 +99,6 @@ router.get('/:companyId/connection-messages/config', async (req, res) => {
             await company.save();
         }
 
-        // ⚠️ MIGRATION: Convert old fallback string format to new object format
-        let needsSave = false;
-        if (company.aiAgentLogic.connectionMessages.voice && 
-            typeof company.aiAgentLogic.connectionMessages.voice.fallback === 'string') {
-            console.log(`[CONNECTION MESSAGES] 🔄 Migrating old fallback format from string to object (GET endpoint)`);
-            const oldFallback = company.aiAgentLogic.connectionMessages.voice.fallback;
-            company.aiAgentLogic.connectionMessages.voice.fallback = {
-                enabled: true,
-                voiceMessage: "We're experiencing technical difficulties. Please hold while we connect you to our team.",
-                smsEnabled: true,
-                smsMessage: "Sorry, our voice system missed your call. How can we help you?",
-                notifyAdmin: true,
-                adminNotificationMethod: 'sms',
-                adminPhone: null,
-                adminEmail: null,
-                adminSmsMessage: "⚠️ FALLBACK ALERT: Greeting fallback occurred in {companyname} ({companyid}). Please check the Messages & Greetings settings immediately."
-            };
-            console.log(`[CONNECTION MESSAGES] ✅ Migrated fallback from "${oldFallback}" to object structure`);
-            needsSave = true;
-        }
-
-        // Save migration if needed
-        if (needsSave) {
-            await company.save();
-            console.log(`[CONNECTION MESSAGES] 💾 Saved migrated fallback structure`);
-        }
-
         res.json(company.aiAgentLogic.connectionMessages);
 
     } catch (error) {
@@ -146,6 +119,7 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
     try {
         const { voice, sms, webChat } = req.body;
 
+        // Load company (all legacy data has been NUKED)
         const company = await Company.findById(req.params.companyId);
 
         if (!company) {
@@ -158,25 +132,6 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
         }
         if (!company.aiAgentLogic.connectionMessages) {
             company.aiAgentLogic.connectionMessages = getDefaultConfig();
-        }
-
-        // ⚠️ MIGRATION: Convert old fallback string format to new object format
-        if (company.aiAgentLogic.connectionMessages.voice && 
-            typeof company.aiAgentLogic.connectionMessages.voice.fallback === 'string') {
-            console.log(`[CONNECTION MESSAGES] 🔄 Migrating old fallback format from string to object`);
-            const oldFallback = company.aiAgentLogic.connectionMessages.voice.fallback;
-            company.aiAgentLogic.connectionMessages.voice.fallback = {
-                enabled: true,
-                voiceMessage: "We're experiencing technical difficulties. Please hold while we connect you to our team.",
-                smsEnabled: true,
-                smsMessage: "Sorry, our voice system missed your call. How can we help you?",
-                notifyAdmin: true,
-                adminNotificationMethod: 'sms',
-                adminPhone: null,
-                adminEmail: null,
-                adminSmsMessage: "⚠️ FALLBACK ALERT: Greeting fallback occurred in {companyname} ({companyid}). Please check the Messages & Greetings settings immediately."
-            };
-            console.log(`[CONNECTION MESSAGES] ✅ Migrated fallback from "${oldFallback}" to object structure`);
         }
 
         // Update voice settings
