@@ -108,7 +108,14 @@ const connectionMessagesSchema = new mongoose.Schema({
             },
             // Admin notification
             notifyAdmin: { type: Boolean, default: true },
-            adminNotificationMethod: { type: String, enum: ['sms', 'email', 'both'], default: 'sms' }
+            adminNotificationMethod: { type: String, enum: ['sms', 'email', 'both'], default: 'sms' },
+            adminPhone: { type: String, trim: true, default: null }, // Custom admin phone for notifications
+            adminEmail: { type: String, trim: true, default: null }, // Custom admin email for notifications
+            adminSmsMessage: {
+                type: String,
+                trim: true,
+                default: "⚠️ FALLBACK ALERT: Greeting fallback occurred in {companyname} ({companyid}). Please check the Messages & Greetings settings immediately."
+            }
         }
     },
     

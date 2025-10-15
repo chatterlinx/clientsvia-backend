@@ -173,6 +173,15 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
                 if (voice.fallback.adminNotificationMethod) {
                     company.aiAgentLogic.connectionMessages.voice.fallback.adminNotificationMethod = voice.fallback.adminNotificationMethod;
                 }
+                if (voice.fallback.adminPhone !== undefined) {
+                    company.aiAgentLogic.connectionMessages.voice.fallback.adminPhone = voice.fallback.adminPhone;
+                }
+                if (voice.fallback.adminEmail !== undefined) {
+                    company.aiAgentLogic.connectionMessages.voice.fallback.adminEmail = voice.fallback.adminEmail;
+                }
+                if (voice.fallback.adminSmsMessage !== undefined) {
+                    company.aiAgentLogic.connectionMessages.voice.fallback.adminSmsMessage = voice.fallback.adminSmsMessage;
+                }
             }
         }
 
@@ -522,7 +531,10 @@ function getDefaultConfig() {
                 smsEnabled: true,
                 smsMessage: "Sorry, our voice system missed your call. How can we help you?",
                 notifyAdmin: true,
-                adminNotificationMethod: 'sms' // sms | email | both
+                adminNotificationMethod: 'sms', // sms | email | both
+                adminPhone: null, // Custom admin phone for notifications
+                adminEmail: null, // Custom admin email for notifications
+                adminSmsMessage: "⚠️ FALLBACK ALERT: Greeting fallback occurred in {companyname} ({companyid}). Please check the Messages & Greetings settings immediately."
             }
         },
         sms: {

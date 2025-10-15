@@ -482,10 +482,34 @@ class ConnectionMessagesManager {
                             </label>
                         </div>
                         <div id="fallback-admin-config" style="${notifyAdmin ? '' : 'opacity: 0.5; pointer-events: none;'}">
-                            <p style="margin: 0 0 10px 0; font-size: 12px; color: #6c757d;">
-                                Notify admin when fallback is triggered:
+                            
+                            <!-- Admin Contact Information -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                                <div>
+                                    <label style="font-size: 12px; font-weight: 600; color: #495057; display: block; margin-bottom: 4px;">
+                                        📱 Admin Phone:
+                                    </label>
+                                    <input type="tel" id="fallback-admin-phone" 
+                                        style="width: 100%; padding: 8px 10px; border: 2px solid #e9ecef; border-radius: 6px; font-size: 13px; font-family: inherit;"
+                                        placeholder="+1234567890"
+                                        value="${fallbackConfig.adminPhone || ''}">
+                                </div>
+                                <div>
+                                    <label style="font-size: 12px; font-weight: 600; color: #495057; display: block; margin-bottom: 4px;">
+                                        📧 Admin Email:
+                                    </label>
+                                    <input type="email" id="fallback-admin-email" 
+                                        style="width: 100%; padding: 8px 10px; border: 2px solid #e9ecef; border-radius: 6px; font-size: 13px; font-family: inherit;"
+                                        placeholder="admin@company.com"
+                                        value="${fallbackConfig.adminEmail || ''}">
+                                </div>
+                            </div>
+
+                            <!-- Notification Method -->
+                            <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: 600; color: #495057;">
+                                Notification Method:
                             </p>
-                            <div style="display: flex; gap: 10px;">
+                            <div style="display: flex; gap: 10px; margin-bottom: 12px;">
                                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 8px 14px; border: 2px solid #e9ecef; border-radius: 6px; flex: 1; background: ${adminMethod === 'sms' ? '#e7f5ff' : 'white'};">
                                     <input type="radio" name="admin-method" value="sms" ${adminMethod === 'sms' ? 'checked' : ''}>
                                     <span style="font-size: 12px; font-weight: 600;">📱 SMS</span>
@@ -499,8 +523,16 @@ class ConnectionMessagesManager {
                                     <span style="font-size: 12px; font-weight: 600;">📱📧 Both</span>
                                 </label>
                             </div>
-                            <p style="margin: 10px 0 0 0; font-size: 11px; color: #6c757d;">
-                                🚨 Admin will receive company ID, company name, and failure reason
+
+                            <!-- Admin SMS Message (Customizable) -->
+                            <label style="font-size: 12px; font-weight: 600; color: #495057; display: block; margin-bottom: 4px;">
+                                Admin Alert Message:
+                            </label>
+                            <textarea id="fallback-admin-sms-message" 
+                                style="width: 100%; padding: 10px 12px; border: 2px solid #e9ecef; border-radius: 6px; font-size: 12px; min-height: 70px; resize: vertical; font-family: inherit;"
+                                placeholder="⚠️ FALLBACK ALERT: Greeting fallback occurred in {companyname} ({companyid}). Please check settings.">${fallbackConfig.adminSmsMessage || "⚠️ FALLBACK ALERT: Greeting fallback occurred in {companyname} ({companyid}). Please check the Messages & Greetings settings immediately."}</textarea>
+                            <p style="margin: 6px 0 0 0; font-size: 11px; color: #6c757d;">
+                                💡 Available variables: <code>{companyname}</code>, <code>{companyid}</code>, and all Variables from the Variables tab
                             </p>
                         </div>
                     </div>
@@ -876,6 +908,9 @@ class ConnectionMessagesManager {
                 const fallbackSmsMessage = document.getElementById('fallback-sms-message')?.value;
                 const fallbackNotifyAdmin = document.getElementById('fallback-notify-admin')?.checked;
                 const fallbackAdminMethod = document.querySelector('input[name="admin-method"]:checked')?.value;
+                const fallbackAdminPhone = document.getElementById('fallback-admin-phone')?.value;
+                const fallbackAdminEmail = document.getElementById('fallback-admin-email')?.value;
+                const fallbackAdminSmsMessage = document.getElementById('fallback-admin-sms-message')?.value;
 
                 data.voice = {
                     mode,
@@ -887,7 +922,10 @@ class ConnectionMessagesManager {
                         smsEnabled: fallbackSmsEnabled,
                         smsMessage: fallbackSmsMessage,
                         notifyAdmin: fallbackNotifyAdmin,
-                        adminNotificationMethod: fallbackAdminMethod
+                        adminNotificationMethod: fallbackAdminMethod,
+                        adminPhone: fallbackAdminPhone,
+                        adminEmail: fallbackAdminEmail,
+                        adminSmsMessage: fallbackAdminSmsMessage
                     }
                 };
             } else if (this.currentChannel === 'sms') {

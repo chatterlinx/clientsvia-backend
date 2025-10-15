@@ -73,7 +73,8 @@ class IntelligentFallbackHandler {
                 result.smsSent = await this.notifyCustomerViaSMS(
                     callerPhone,
                     companyName,
-                    fallbackConfig.smsMessage
+                    fallbackConfig.smsMessage,
+                    company
                 );
             }
 
@@ -83,7 +84,9 @@ class IntelligentFallbackHandler {
                     companyId,
                     companyName,
                     failureReason,
-                    fallbackConfig.adminNotificationMethod
+                    fallbackConfig.adminNotificationMethod,
+                    fallbackConfig,
+                    company
                 );
             }
 
@@ -146,23 +149,29 @@ class IntelligentFallbackHandler {
     }
 
     /**
-     * Notify customer via SMS
+     * Notify customer via SMS with variable replacement
      * @param {String} phoneNumber - Customer's phone number
      * @param {String} companyName - Company name
-     * @param {String} message - SMS message
+     * @param {String} message - SMS message (supports variables)
+     * @param {Object} company - Company document (for variable replacement)
      * @returns {Boolean} - Success status
      */
-    async notifyCustomerViaSMS(phoneNumber, companyName, message) {
+    async notifyCustomerViaSMS(phoneNumber, companyName, message, company) {
         try {
             console.log(`📱 [FALLBACK] Sending SMS to customer: ${phoneNumber}`);
 
+            // Process variables in message using company's Variables system
+            const processedMessage = this.replaceVariables(message, company);
+
             await smsClient.send({
                 to: phoneNumber,
-                body: message,
+                body: processedMessage,
                 from: companyName
             });
 
             console.log(`✅ [FALLBACK] SMS sent to customer: ${phoneNumber}`);
+            console.log(`📝 [FALLBACK] Original message: ${message}`);
+            console.log(`📝 [FALLBACK] Processed message: ${processedMessage}`);
             return true;
 
         } catch (error) {
@@ -172,44 +181,86 @@ class IntelligentFallbackHandler {
     }
 
     /**
-     * Notify admin of fallback event
+     * Replace variables in text using company's Variables system
+     * @param {String} text - Text with variables like {companyname}, {companyid}
+     * @param {Object} company - Company document
+     * @returns {String} - Text with variables replaced
+     */
+    replaceVariables(text, company) {
+        if (!text) return text;
+
+        let processedText = text;
+
+        // Always replace built-in variables
+        processedText = processedText.replace(/\{companyname\}/gi, company.companyName || company.businessName || 'Unknown');
+        processedText = processedText.replace(/\{companyid\}/gi, company._id || 'Unknown');
+
+        // Replace custom variables from company.aiAgentLogic.variables
+        if (company.aiAgentLogic?.variables && Array.isArray(company.aiAgentLogic.variables)) {
+            company.aiAgentLogic.variables.forEach(variable => {
+                const regex = new RegExp(`\\{${variable.name}\\}`, 'gi');
+                processedText = processedText.replace(regex, variable.value);
+            });
+        }
+
+        return processedText;
+    }
+
+    /**
+     * Notify admin of fallback event with custom contacts and variable replacement
      * @param {String} companyId - Company ID
      * @param {String} companyName - Company name
      * @param {String} failureReason - Why fallback was triggered
      * @param {String} method - Notification method (sms | email | both)
+     * @param {Object} fallbackConfig - Fallback configuration
+     * @param {Object} company - Company document (for variable replacement)
      * @returns {Boolean} - Success status
      */
-    async notifyAdmin(companyId, companyName, failureReason, method) {
+    async notifyAdmin(companyId, companyName, failureReason, method, fallbackConfig, company) {
         try {
             console.log(`🚨 [FALLBACK] Notifying admin via: ${method}`);
 
-            const message = `🆘 FALLBACK ALERT\n\nCompany: ${companyName}\nID: ${companyId}\n\nReason: ${failureReason}\n\nAction required: Check Messages & Greetings settings.`;
+            // Use custom admin SMS message with variable replacement
+            const smsMessage = fallbackConfig.adminSmsMessage || 
+                `⚠️ FALLBACK ALERT: Greeting fallback occurred in {companyname} ({companyid}). Please check the Messages & Greetings settings immediately.`;
+            
+            const processedSmsMessage = this.replaceVariables(smsMessage, company);
+
+            // Email message (more detailed)
+            const emailMessage = `🆘 FALLBACK ALERT\n\nCompany: ${companyName}\nID: ${companyId}\n\nReason: ${failureReason}\n\nAction required: Check Messages & Greetings settings.`;
 
             let smsSent = false;
             let emailSent = false;
 
+            // Get admin contact info (custom from fallback config OR fallback to env vars)
+            const adminPhone = fallbackConfig.adminPhone || this.adminPhone;
+            const adminEmail = fallbackConfig.adminEmail || this.adminEmail;
+
             // Send SMS
-            if ((method === 'sms' || method === 'both') && this.adminPhone) {
+            if ((method === 'sms' || method === 'both') && adminPhone) {
                 try {
                     await smsClient.send({
-                        to: this.adminPhone,
-                        body: message,
+                        to: adminPhone,
+                        body: processedSmsMessage,
                         from: 'ClientsVia Alert'
                     });
                     smsSent = true;
-                    console.log(`✅ [FALLBACK] Admin SMS sent to: ${this.adminPhone}`);
+                    console.log(`✅ [FALLBACK] Admin SMS sent to: ${adminPhone}`);
+                    console.log(`📝 [FALLBACK] SMS message: ${processedSmsMessage}`);
                 } catch (smsError) {
                     console.error(`❌ [FALLBACK] Admin SMS failed:`, smsError);
                 }
+            } else if ((method === 'sms' || method === 'both') && !adminPhone) {
+                console.warn(`⚠️ [FALLBACK] Admin SMS notification requested but no phone number configured`);
             }
 
             // Send Email
-            if ((method === 'email' || method === 'both') && this.adminEmail) {
+            if ((method === 'email' || method === 'both') && adminEmail) {
                 try {
                     await emailClient.send({
-                        to: this.adminEmail,
+                        to: adminEmail,
                         subject: `🆘 Fallback Alert: ${companyName} (${companyId})`,
-                        text: message,
+                        text: emailMessage,
                         html: `
                             <div style="font-family: Arial, sans-serif; padding: 20px; background: #fff3cd; border-left: 4px solid #ffc107;">
                                 <h2 style="color: #856404; margin: 0 0 15px 0;">🆘 Fallback Alert</h2>
@@ -223,10 +274,12 @@ class IntelligentFallbackHandler {
                         `
                     });
                     emailSent = true;
-                    console.log(`✅ [FALLBACK] Admin email sent to: ${this.adminEmail}`);
+                    console.log(`✅ [FALLBACK] Admin email sent to: ${adminEmail}`);
                 } catch (emailError) {
                     console.error(`❌ [FALLBACK] Admin email failed:`, emailError);
                 }
+            } else if ((method === 'email' || method === 'both') && !adminEmail) {
+                console.warn(`⚠️ [FALLBACK] Admin email notification requested but no email configured`);
             }
 
             return smsSent || emailSent;
