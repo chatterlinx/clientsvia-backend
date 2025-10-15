@@ -92,39 +92,24 @@ class V2AIAgentRuntime {
         const aiLogic = company.aiAgentLogic;
         let greeting = null;
 
-        // 🎤 PRIMARY GREETING SOURCE: CONNECTION MESSAGES (AI Agent Settings > Messages & Greetings tab)
+        // 🎤 ONLY GREETING SOURCE: CONNECTION MESSAGES (AI Agent Settings > Messages & Greetings tab)
+        // ☢️ NO FALLBACKS - NO LEGACY - FAIL LOUDLY IF NOT CONFIGURED
         if (aiLogic.connectionMessages?.voice?.text && aiLogic.connectionMessages.voice.text.trim()) {
             greeting = aiLogic.connectionMessages.voice.text;
             console.log(`✅ V2 GREETING: Using Connection Message from AI Agent Settings tab: "${greeting}"`);
-        }
-        
-        // 2. V2 PURE SYSTEM: Pre-configured greetings with NO dynamic insertion (Fallback 2)
-        else {
-            const personality = aiLogic.agentPersonality || {};
-            const tone = personality.corePersonality?.voiceTone || 'friendly';
             
-            // V2 PURE SYSTEM: Static greetings with no company name insertion
-            // Companies should configure their own greetings in Agent Personality settings
-            switch (tone) {
-                case 'professional':
-                    greeting = "Thank you for calling. How may I assist you today?";
-                    break;
-                case 'authoritative':
-                    greeting = "How can I help you?";
-                    break;
-                case 'empathetic':
-                    greeting = "Hi there! I'm here to help you with whatever you need.";
-                    break;
-                default: // friendly
-                    greeting = "Thanks for calling! How can I help you today?";
-            }
-            console.log(`✅ V2 PURE: Using static greeting with ${tone} tone (no dynamic insertion)`);
+            // Replace placeholders
+            greeting = this.buildPureResponse(greeting, company);
+            return greeting;
         }
-
-        // V2 PURE SYSTEM: No placeholder contamination - greeting is pre-built
-        greeting = this.buildPureResponse(greeting, company);
         
-        return greeting;
+        // ☢️ CRITICAL ERROR: No greeting configured - FAIL LOUDLY
+        console.error(`❌ CRITICAL: No greeting configured for company ${company._id}`);
+        console.error(`❌ Company must configure greeting in: AI Agent Settings > Messages & Greetings tab`);
+        console.error(`❌ Field required: aiAgentLogic.connectionMessages.voice.text`);
+        
+        // Return error message that makes it OBVIOUS something is wrong
+        return "CONFIGURATION ERROR: No greeting has been set. Please configure a greeting in the AI Agent Settings tab.";
     }
 
     /**
