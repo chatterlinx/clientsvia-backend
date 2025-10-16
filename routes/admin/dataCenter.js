@@ -48,7 +48,9 @@ router.get('/companies', async (req, res) => {
         // 🔍 SEARCH EVERYWHERE: Query MongoDB directly via native driver to bypass ALL middleware
         // This ensures we get EVERY company regardless of Mongoose middleware filters
         const db = mongoose.connection.db;
-        const companiesCollection = db.collection('companies');
+        // IMPORTANT: Our Mongoose model maps to the 'companiesCollection' collection
+        // Use the same native collection here to avoid mismatches
+        const companiesCollection = db.collection('companiesCollection');
 
         // First, let's see what's in the database
         const totalInDB = await companiesCollection.countDocuments({});
