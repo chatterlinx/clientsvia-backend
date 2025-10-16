@@ -73,19 +73,19 @@ router.get('/companies', async (req, res) => {
         const match = {};
 
         // State filter with legacy compatibility
-        // Deleted if any of the following is true: isDeleted=true, deleted=true, deletedAt exists (date), accountStatus.status='deleted'
+        // Deleted if any of the following is true: isDeleted=true/'true', deleted=true/'true', deletedAt exists (date), accountStatus.status='deleted'
         const deletedOr = [
             { isDeleted: true },
+            { isDeleted: 'true' },
             { deleted: true },
+            { deleted: 'true' },
             { deletedAt: { $type: 'date' } },
             { 'accountStatus.status': 'deleted' }
         ];
 
         if (state === 'live') {
             match.$and = [
-                { $or: [ { isDeleted: { $ne: true } }, { isDeleted: { $exists: false } } ] },
-                { $or: [ { deleted: { $ne: true } }, { deleted: { $exists: false } } ] },
-                { $or: [ { 'accountStatus.status': { $ne: 'deleted' } }, { 'accountStatus.status': { $exists: false } } ] },
+                { $nor: deletedOr },
                 { $or: [ { isActive: { $ne: false } }, { isActive: { $exists: false } } ] }
             ];
         } else if (state === 'deleted') {
@@ -233,6 +233,15 @@ router.get('/companies', async (req, res) => {
         ];
 
         // Execute aggregation using NATIVE MongoDB driver across BOTH possible collections
+        // Diagnostics: when filtering deleted, log chosen collections and filter
+        if (state === 'deleted') {
+            console.log('[DATA CENTER] 🔎 Deleted filter (finalMatch):', JSON.stringify(finalMatch));
+            console.log('[DATA CENTER] 🔎 Using company collections:', {
+                primary: companiesCollection.namespace.collection,
+                legacy: legacyCollection ? legacyCollection.namespace.collection : null
+            });
+        }
+
         const [primaryResults, legacyResults] = await Promise.all([
             companiesCollection.aggregate(basePipeline).toArray(),
             legacyCollection ? legacyCollection.aggregate(basePipeline).toArray() : Promise.resolve([])
@@ -326,6 +335,10 @@ router.get('/companies', async (req, res) => {
         ]);
         const total = (primaryCount || 0) + (legacyCount || 0);
         console.log('[DATA CENTER] 📊 Total count from native MongoDB (merged):', total);
+
+        if (state === 'deleted') {
+            console.log('[DATA CENTER] 🔎 Pre-pagination deleted counts:', { primaryCount, legacyCount, total });
+        }
 
         const response = {
             results,
@@ -421,6 +434,13 @@ router.get('/companies/:id/inventory', async (req, res) => {
             db.collection(notificationsName).countDocuments({ companyId: raw._id })
         ]);
 
+        // Diagnostics: include chosen collection names
+        console.log('[DATA CENTER] Inventory collection map:', {
+            calls: callLogsName,
+            contacts: contactsName,
+            notifications: notificationsName
+        });
+
         // Count scenarios
         const scenariosCount = raw.aiAgentLogic?.instantResponses?.length || 0;
 
@@ -453,6 +473,12 @@ router.get('/companies/:id/inventory', async (req, res) => {
                 contacts: contactsCount,
                 notifications: notificationsCount,
                 scenarios: scenariosCount
+            },
+            collectionsMap: {
+                companies: primaryName,
+                calls: callLogsName,
+                contacts: contactsName,
+                notifications: notificationsName
             },
             externals,
             redisKeys: redisKeysCount,
@@ -702,15 +728,20 @@ router.get('/companies/:id/customers', async (req, res) => {
             ];
         }
 
-        // Fetch contacts
-        const contacts = await mongoose.connection.db.collection('v2contacts')
+        // Fetch contacts from legacy-aware collection name
+        const db = mongoose.connection.db;
+        const collections = await db.listCollections().toArray();
+        const names = new Set(collections.map(c => c.name));
+        const contactsName = names.has('v2contacts') ? 'v2contacts' : (names.has('contacts') ? 'contacts' : 'v2contacts');
+
+        const contacts = await db.collection(contactsName)
             .find(query)
             .sort({ lastContacted: -1 })
             .skip(skip)
             .limit(limit)
             .toArray();
 
-        const total = await mongoose.connection.db.collection('v2contacts')
+        const total = await db.collection(contactsName)
             .countDocuments(query);
 
         res.json({
@@ -755,15 +786,20 @@ router.get('/companies/:id/transcripts', async (req, res) => {
             if (endDate) query.timestamp.$lte = new Date(endDate);
         }
 
-        // Fetch calls
-        const calls = await mongoose.connection.db.collection('v2aiagentcalllogs')
+        // Legacy-aware call logs collection
+        const db = mongoose.connection.db;
+        const collections = await db.listCollections().toArray();
+        const names = new Set(collections.map(c => c.name));
+        const callLogsName = names.has('v2aiagentcalllogs') ? 'v2aiagentcalllogs' : (names.has('aiagentcalllogs') ? 'aiagentcalllogs' : 'v2aiagentcalllogs');
+
+        const calls = await db.collection(callLogsName)
             .find(query)
             .sort({ timestamp: -1 })
             .skip(skip)
             .limit(limit)
             .toArray();
 
-        const total = await mongoose.connection.db.collection('v2aiagentcalllogs')
+        const total = await db.collection(callLogsName)
             .countDocuments(query);
 
         res.json({
@@ -933,6 +969,13 @@ router.get('/scan', async (req, res) => {
             v2notificationlogs: await safeCount(names.has('v2notificationlogs') ? 'v2notificationlogs' : (names.has('notificationlogs') ? 'notificationlogs' : 'v2notificationlogs'))
         };
 
+        const collectionsMap = {
+            companies: names.has('companiesCollection') ? 'companiesCollection' : 'companies',
+            calls: names.has('v2aiagentcalllogs') ? 'v2aiagentcalllogs' : (names.has('aiagentcalllogs') ? 'aiagentcalllogs' : null),
+            contacts: names.has('v2contacts') ? 'v2contacts' : (names.has('contacts') ? 'contacts' : null),
+            notifications: names.has('v2notificationlogs') ? 'v2notificationlogs' : (names.has('notificationlogs') ? 'notificationlogs' : null)
+        };
+
         // Redis scan (approx) for company-related keys
         const scanPatternCounts = async (patterns) => {
             const result = {};
@@ -962,6 +1005,7 @@ router.get('/scan', async (req, res) => {
             },
             mongo: {
                 collections: colNames,
+                collectionsMap,
                 companies: {
                     primary: { total: totalPrimary, live: livePrimary, deleted: deletedPrimary },
                     legacy: { total: totalLegacy, live: liveLegacy, deleted: deletedLegacy },
@@ -1026,7 +1070,7 @@ router.get('/summary', async (req, res) => {
             const pipeline = [
                 {
                     $lookup: {
-                        from: 'v2aiagentcalllogs',
+                        from: names.has('v2aiagentcalllogs') ? 'v2aiagentcalllogs' : (names.has('aiagentcalllogs') ? 'aiagentcalllogs' : 'v2aiagentcalllogs'),
                         let: { cid: '$_id' },
                         pipeline: [
                             { $match: { $expr: { $eq: ['$companyId', '$$cid'] } } },
