@@ -16,11 +16,14 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const Company = require('../../models/v2Company');
 const CompanyHealthService = require('../../services/CompanyHealthService');
-const { authenticateJWT } = require('../../middleware/auth');
+const { authenticateJWT, requireRole } = require('../../middleware/auth');
+const DataCenterAuditLog = require('../../models/DataCenterAuditLog');
 const { redisClient } = require('../../db');
 
 // Apply authentication to all routes
 router.use(authenticateJWT);
+// Enforce admin-only access for all Data Center operations
+router.use(requireRole('admin'));
 
 /**
  * ============================================================================
@@ -469,47 +472,55 @@ router.patch('/companies/:id/soft-delete', async (req, res) => {
         const { id } = req.params;
         const { reason, notes } = req.body;
         const userId = req.user?._id || req.user?.id;
+        const userEmail = req.user?.email || null;
 
         console.log('[DATA CENTER] PATCH /companies/:id/soft-delete', id);
 
         // Fetch company (include deleted to check if already deleted)
         // Use native driver to bypass Mongoose middleware and .option()
-        const rawRestore = await mongoose.connection.db.collection('companiesCollection').findOne({ _id: new mongoose.Types.ObjectId(id) })
+        const rawCompany = await mongoose.connection.db.collection('companiesCollection').findOne({ _id: new mongoose.Types.ObjectId(id) })
             || await mongoose.connection.db.collection('companies').findOne({ _id: new mongoose.Types.ObjectId(id) });
-        if (!rawRestore) {
-            return res.status(404).json({ error: 'Company not found' });
-        }
-        if (!company) {
+        if (!rawCompany) {
             return res.status(404).json({ error: 'Company not found' });
         }
 
-        if (rawRestore.isDeleted) {
+        if (rawCompany.isDeleted) {
             return res.status(400).json({ error: 'Company is already deleted' });
         }
 
         // Mark as deleted
-        await mongoose.connection.db.collection('companiesCollection').updateOne(
-            { _id: new mongoose.Types.ObjectId(id) },
-            { $set: {
+        const autoPurgeDate = new Date();
+        autoPurgeDate.setDate(autoPurgeDate.getDate() + 30);
+
+        const softDeleteUpdate = {
+            $set: {
                 isDeleted: true,
                 deletedAt: new Date(),
                 deletedBy: userId || null,
                 deleteReason: reason || 'No reason provided',
-                deleteNotes: notes || ''
-            }}
-        );
-        
-        // Set auto-purge date (30 days from now)
-        const autoPurgeDate = new Date();
-        autoPurgeDate.setDate(autoPurgeDate.getDate() + 30);
-        company.autoPurgeAt = autoPurgeDate;
+                deleteNotes: notes || '',
+                autoPurgeAt: autoPurgeDate
+            }
+        };
 
-        // no-op for native update
+        // Update both primary and legacy collections; only one will match
+        await Promise.all([
+            mongoose.connection.db.collection('companiesCollection').updateOne(
+                { _id: new mongoose.Types.ObjectId(id) },
+                softDeleteUpdate
+            ),
+            mongoose.connection.db.collection('companies').updateOne(
+                { _id: new mongoose.Types.ObjectId(id) },
+                softDeleteUpdate
+            )
+        ]);
 
         // Clear cache (best-effort)
         try {
             if (redisClient && typeof redisClient.del === 'function') {
                 await redisClient.del(`company:${id}`);
+                await redisClient.del(`datacenter:inventory:${id}`);
+                await redisClient.del(`readiness:${id}`);
                 console.log('[DATA CENTER] Cache cleared for deleted company');
             }
         } catch (cacheError) {
@@ -517,6 +528,22 @@ router.patch('/companies/:id/soft-delete', async (req, res) => {
         }
 
         console.log('[DATA CENTER] ✅ Company soft deleted:', id);
+
+        // Audit log - Soft delete
+        try {
+            await DataCenterAuditLog.create({
+                action: 'SOFT_DELETE',
+                targetType: 'COMPANY',
+                targetId: id,
+                targetName: rawCompany.companyName || rawCompany.businessName || null,
+                userId: userId || null,
+                userEmail: userEmail,
+                metadata: { reason: reason || null, notes: notes || null },
+                success: true
+            });
+        } catch (auditErr) {
+            console.warn('[DATA CENTER] Audit log failed (SOFT_DELETE):', auditErr.message);
+        }
 
         res.json({
             success: true,
@@ -543,6 +570,8 @@ router.patch('/companies/:id/soft-delete', async (req, res) => {
 router.post('/companies/:id/restore', async (req, res) => {
     try {
         const { id } = req.params;
+        const userId = req.user?._id || req.user?.id;
+        const userEmail = req.user?.email || null;
 
         console.log('[DATA CENTER] POST /companies/:id/restore', id);
 
@@ -558,23 +587,35 @@ router.post('/companies/:id/restore', async (req, res) => {
             return res.status(400).json({ error: 'Company is not deleted' });
         }
 
-        // Restore company
-        await mongoose.connection.db.collection('companiesCollection').updateOne(
-            { _id: new mongoose.Types.ObjectId(id) },
-            { $set: {
+        // Restore company (primary + legacy)
+        const restoreUpdate = {
+            $set: {
                 isDeleted: false,
                 deletedAt: null,
                 deletedBy: null,
                 deleteReason: null,
                 deleteNotes: null,
                 autoPurgeAt: null
-            }}
-        );
+            }
+        };
+
+        await Promise.all([
+            mongoose.connection.db.collection('companiesCollection').updateOne(
+                { _id: new mongoose.Types.ObjectId(id) },
+                restoreUpdate
+            ),
+            mongoose.connection.db.collection('companies').updateOne(
+                { _id: new mongoose.Types.ObjectId(id) },
+                restoreUpdate
+            )
+        ]);
 
         // Clear cache (best-effort)
         try {
             if (redisClient && typeof redisClient.del === 'function') {
                 await redisClient.del(`company:${id}`);
+                await redisClient.del(`datacenter:inventory:${id}`);
+                await redisClient.del(`readiness:${id}`);
                 console.log('[DATA CENTER] Cache cleared for restored company');
             }
         } catch (cacheError) {
@@ -582,6 +623,21 @@ router.post('/companies/:id/restore', async (req, res) => {
         }
 
         console.log('[DATA CENTER] ✅ Company restored:', id);
+
+        // Audit log - Restore
+        try {
+            await DataCenterAuditLog.create({
+                action: 'RESTORE',
+                targetType: 'COMPANY',
+                targetId: id,
+                targetName: rawRestore2.companyName || rawRestore2.businessName || null,
+                userId: userId || null,
+                userEmail: userEmail,
+                success: true
+            });
+        } catch (auditErr) {
+            console.warn('[DATA CENTER] Audit log failed (RESTORE):', auditErr.message);
+        }
 
         res.json({
             success: true,
