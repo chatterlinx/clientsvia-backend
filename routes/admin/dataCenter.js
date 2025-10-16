@@ -91,8 +91,17 @@ router.get('/companies', async (req, res) => {
         const staleCutoff = new Date(Date.now() - (parseInt(staleDays) * 24 * 60 * 60 * 1000));
 
         // Build aggregation pipeline
+        // Note: We need to handle isDeleted manually since aggregation bypasses middleware
+        const finalMatch = { ...match };
+        
+        // For 'all' state, we still need to check if we should include deleted
+        if (state === 'all') {
+            // Include both deleted and non-deleted
+            // No additional filter needed
+        }
+        
         const pipeline = [
-            { $match: match },
+            { $match: finalMatch },
 
             // Lookup call logs for activity metrics
             {
@@ -179,7 +188,7 @@ router.get('/companies', async (req, res) => {
             },
 
             // Sort
-            { $sort: this.buildSortObject(sort) },
+            { $sort: buildSortObject(sort) },
 
             // Pagination
             { $skip: skip },
@@ -187,7 +196,7 @@ router.get('/companies', async (req, res) => {
         ];
 
         // Execute aggregation
-        const companies = await Company.aggregate(pipeline).option({ includeDeleted: true });
+        const companies = await Company.aggregate(pipeline);
 
         // Calculate health metrics for each company
         const results = companies.map(company => {
@@ -245,10 +254,10 @@ router.get('/companies', async (req, res) => {
 
         // Get total count (without pagination)
         const countPipeline = [
-            { $match: match },
+            { $match: finalMatch },
             { $count: 'total' }
         ];
-        const countResult = await Company.aggregate(countPipeline).option({ includeDeleted: true });
+        const countResult = await Company.aggregate(countPipeline);
         const total = countResult.length > 0 ? countResult[0].total : 0;
 
         res.json({
@@ -287,9 +296,6 @@ function buildSortObject(sortStr) {
 
     return sortMap[sortStr] || { lastActivity: -1 }; // Default: newest activity first
 }
-
-// Attach helper to router for use in aggregation
-router.buildSortObject = buildSortObject;
 
 /**
  * ============================================================================
