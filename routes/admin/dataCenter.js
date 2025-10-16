@@ -250,10 +250,10 @@ router.get('/companies', async (req, res) => {
         // Execute aggregation using NATIVE MongoDB driver across BOTH possible collections
         // Diagnostics: when filtering deleted, log chosen collections and filter
         if (state === 'deleted' || state === 'live' || state === 'all') {
-            console.log('[DATA CENTER] 🔎 Deleted filter (finalMatch):', JSON.stringify(finalMatch));
+            console.log('[DATA CENTER] 🔎 Companies list final $match:', JSON.stringify(finalMatch));
             console.log('[DATA CENTER] 🔎 Using company collections:', {
-                primary: companiesCollection.namespace.collection,
-                legacy: legacyCollection ? legacyCollection.namespace.collection : null
+                primary: collectionsMap.companies || '(none)',
+                legacy: (collectionsMap.companies === 'companiesCollection' && names.has('companies')) ? 'companies' : null
             });
         }
 
@@ -1077,7 +1077,7 @@ router.get('/summary', async (req, res) => {
             ]
         };
 
-        console.log('[SUMMARY] Using companies collection:', collectionsMap.companies);
+        console.log('[SUMMARY] Using companies collection:', collectionsMap.companies || '(none)');
         console.log('[SUMMARY] deletedMatch =', JSON.stringify(deletedMatch));
         console.log('[SUMMARY] liveMatch    =', JSON.stringify(liveMatch));
 
