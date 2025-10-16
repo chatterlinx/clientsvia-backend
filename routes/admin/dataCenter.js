@@ -220,6 +220,17 @@ router.get('/companies', async (req, res) => {
         // Execute aggregation using NATIVE MongoDB driver (bypasses all Mongoose middleware)
         const companies = await companiesCollection.aggregate(pipeline).toArray();
         console.log('[DATA CENTER] ✅ Native MongoDB aggregation returned', companies.length, 'companies');
+        
+        // DEBUG: Log first company to see structure
+        if (companies.length > 0) {
+            console.log('[DATA CENTER] 🔍 First company sample:', {
+                _id: companies[0]._id,
+                companyName: companies[0].companyName,
+                businessName: companies[0].businessName,
+                calls: companies[0].calls,
+                hasCallsAgg: !!companies[0].callsAgg
+            });
+        }
 
         // Calculate health metrics for each company
         const results = companies.map(company => {
@@ -284,13 +295,21 @@ router.get('/companies', async (req, res) => {
         const total = countResult.length > 0 ? countResult[0].total : 0;
         console.log('[DATA CENTER] 📊 Total count from native MongoDB:', total);
 
-        res.json({
+        const response = {
             results,
             total,
             page: pageNum,
             pageSize: limit,
             totalPages: Math.ceil(total / limit)
+        };
+        
+        console.log('[DATA CENTER] 📤 Sending response:', {
+            resultsCount: results.length,
+            total: response.total,
+            page: response.page
         });
+        
+        res.json(response);
 
     } catch (error) {
         console.error('[DATA CENTER] Error listing companies:', error);
