@@ -753,5 +753,94 @@ router.get('/duplicates', async (req, res) => {
     }
 });
 
+/**
+ * ============================================================================
+ * GET /api/admin/data-center/scan
+ * Environment + DB scan: enumerate collections, merged company totals, Redis
+ * ============================================================================
+ */
+router.get('/scan', async (req, res) => {
+    try {
+        const db = mongoose.connection.db;
+
+        // List collections
+        const collections = await db.listCollections().toArray();
+        const colNames = collections.map(c => c.name);
+
+        // Company collections (primary + legacy)
+        const primaryCompanies = db.collection('companiesCollection');
+        const legacyCompanies = db.collection('companies');
+
+        const [
+            totalPrimary, livePrimary, deletedPrimary,
+            totalLegacy, liveLegacy, deletedLegacy
+        ] = await Promise.all([
+            primaryCompanies.countDocuments({}),
+            primaryCompanies.countDocuments({ isDeleted: { $ne: true } }),
+            primaryCompanies.countDocuments({ isDeleted: true }),
+            legacyCompanies.countDocuments({}),
+            legacyCompanies.countDocuments({ isDeleted: { $ne: true } }),
+            legacyCompanies.countDocuments({ isDeleted: true })
+        ]);
+
+        // Other key collections (safe counts)
+        const safeCount = async (name, query = {}) => {
+            try { return await db.collection(name).countDocuments(query); } catch { return 0; }
+        };
+
+        const counts = {
+            v2aiagentcalllogs: await safeCount('v2aiagentcalllogs'),
+            v2contacts: await safeCount('v2contacts'),
+            v2notificationlogs: await safeCount('v2notificationlogs')
+        };
+
+        // Redis scan (approx) for company-related keys
+        const scanPatternCounts = async (patterns) => {
+            const result = {};
+            for (const pattern of patterns) {
+                let cursor = '0';
+                let total = 0;
+                try {
+                    do {
+                        const reply = await redisClient.scan(cursor, 'MATCH', pattern, 'COUNT', 1000);
+                        cursor = reply[0];
+                        total += reply[1]?.length || 0;
+                    } while (cursor !== '0');
+                } catch (e) {
+                    // ignore redis errors in scan
+                }
+                result[pattern] = total;
+            }
+            return result;
+        };
+
+        const redis = await scanPatternCounts(['company:*', 'datacenter:*', 'ai:*']);
+
+        res.json({
+            env: {
+                nodeEnv: process.env.NODE_ENV || 'development',
+                dbName: db.databaseName
+            },
+            mongo: {
+                collections: colNames,
+                companies: {
+                    primary: { total: totalPrimary, live: livePrimary, deleted: deletedPrimary },
+                    legacy: { total: totalLegacy, live: liveLegacy, deleted: deletedLegacy },
+                    merged: {
+                        total: (totalPrimary || 0) + (totalLegacy || 0),
+                        live: (livePrimary || 0) + (liveLegacy || 0),
+                        deleted: (deletedPrimary || 0) + (deletedLegacy || 0)
+                    }
+                },
+                counts
+            },
+            redis
+        });
+    } catch (error) {
+        console.error('[DATA CENTER] Error scanning environment:', error);
+        res.status(500).json({ error: 'Scan failed', details: error.message });
+    }
+});
+
 module.exports = router;
 

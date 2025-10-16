@@ -597,11 +597,11 @@
 
         <!-- Tab Content: Reports -->
         <div id="reports-tab" class="tab-content" style="display: none;">
-            <div class="empty-state">
-                <i class="fas fa-chart-bar"></i>
-                <h3>Reports Coming Soon</h3>
-                <p>Analytics and insights will be available here</p>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                <h3 style="font-weight:700;">Environment Scan</h3>
+                <button class="btn btn-primary" onclick="runScan()"><i class="fas fa-sync"></i> Scan Now</button>
             </div>
+            <pre id="scan-output" style="background:#0b1020;color:#e6edf3;padding:1rem;border-radius:6px;overflow:auto;max-height:420px;">Click "Scan Now" to inspect MongoDB and Redis…</pre>
         </div>
     </div>
 
@@ -764,6 +764,12 @@
             if (tabName === 'trash') {
                 loadTrash();
             }
+            if (tabName === 'reports') {
+                const out = document.getElementById('scan-output');
+                if (out && out.textContent.includes('Click "Scan Now"')) {
+                    runScan();
+                }
+            }
         }
 
         async function loadCompanies(query = '', state = 'all') {
@@ -907,6 +913,24 @@
         // ============================================================================
         // COMPANY DRAWER MANAGEMENT
         // ============================================================================
+        async function runScan() {
+            const out = document.getElementById('scan-output');
+            if (!out) return;
+            out.textContent = 'Scanning…';
+            try {
+                const token = localStorage.getItem('adminToken');
+                const res = await fetch('/api/admin/data-center/scan', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                out.textContent = JSON.stringify(data, null, 2);
+            } catch (e) {
+                out.textContent = 'Scan failed: ' + e.message;
+                console.error('[DATA CENTER] Scan error', e);
+            }
+        }
+
         async function viewCompany(companyId) {
             currentCompany = companies.find(c => c.companyId === companyId);
             if (!currentCompany) {
