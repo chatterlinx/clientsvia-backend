@@ -380,12 +380,12 @@
             border-bottom: 1px solid #e2e8f0;
         }
 
-        tbody tr {
+        tbody tr[data-company-id] {
             cursor: pointer;
             transition: all 0.2s;
         }
 
-        tbody tr:hover {
+        tbody tr[data-company-id]:hover {
             background: #f7fafc;
         }
 
@@ -729,7 +729,7 @@
         async function loadCompanies(query = '', state = 'all') {
             try {
                 const token = localStorage.getItem('adminToken');
-                const params = new URLSearchParams({ query, state, page: 1, pageSize: 50 });
+                const params = new URLSearchParams({ query, state, page: 1, pageSize: 100 });
                 
                 const response = await fetch(`/api/admin/data-center/companies?${params}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -766,7 +766,7 @@
             }
 
             tbody.innerHTML = companies.map(company => `
-                <tr onclick="viewCompany('${company.companyId}')">
+                <tr style="cursor: pointer;" data-company-id="${company.companyId}">
                     <td>
                         <strong>${company.companyName}</strong>
                         <br>
@@ -784,6 +784,14 @@
                     <td>${new Date(company.createdAt).toLocaleDateString()}</td>
                 </tr>
             `).join('');
+            
+            // Add event listeners to rows
+            document.querySelectorAll('#companies-table-body tr[data-company-id]').forEach(row => {
+                row.addEventListener('click', () => {
+                    const companyId = row.dataset.companyId;
+                    viewCompany(companyId);
+                });
+            });
         }
 
         function updateCounts(total) {
