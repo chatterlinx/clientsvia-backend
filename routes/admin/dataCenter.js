@@ -382,7 +382,12 @@ router.get('/companies/:id/inventory', async (req, res) => {
         }
 
         // Fetch company
-        const company = await Company.findById(id).option({ includeDeleted: true });
+        // Use native driver to bypass Mongoose middleware and .option()
+        const raw = await mongoose.connection.db.collection('companiesCollection').findOne({ _id: new mongoose.Types.ObjectId(id) })
+            || await mongoose.connection.db.collection('companies').findOne({ _id: new mongoose.Types.ObjectId(id) });
+        if (!raw) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });
         }
@@ -395,15 +400,15 @@ router.get('/companies/:id/inventory', async (req, res) => {
         ]);
 
         // Count scenarios
-        const scenariosCount = company.aiAgentLogic?.instantResponses?.length || 0;
+        const scenariosCount = raw.aiAgentLogic?.instantResponses?.length || 0;
 
         // Count Redis keys (expensive - skip for now, or implement later)
         const redisKeysCount = 0; // TODO: Implement Redis SCAN if needed
 
         // External assets
         const externals = {
-            twilioNumbers: company.twilioConfig?.phoneNumbers?.map(p => p.number) || 
-                          (company.twilioConfig?.phoneNumber ? [company.twilioConfig.phoneNumber] : []),
+            twilioNumbers: raw.twilioConfig?.phoneNumbers?.map(p => p.number) || 
+                          (raw.twilioConfig?.phoneNumber ? [raw.twilioConfig.phoneNumber] : []),
             webhooks: 0 // TODO: Count webhooks if stored
         };
 
@@ -420,7 +425,7 @@ router.get('/companies/:id/inventory', async (req, res) => {
 
         const inventory = {
             companyId: id,
-            companyName: company.companyName || company.businessName,
+            companyName: raw.companyName || raw.businessName,
             collections: {
                 calls: callsCount,
                 contacts: contactsCount,
@@ -471,28 +476,38 @@ router.patch('/companies/:id/soft-delete', async (req, res) => {
         console.log('[DATA CENTER] PATCH /companies/:id/soft-delete', id);
 
         // Fetch company (include deleted to check if already deleted)
-        const company = await Company.findById(id).option({ includeDeleted: true });
+        // Use native driver to bypass Mongoose middleware and .option()
+        const rawRestore = await mongoose.connection.db.collection('companiesCollection').findOne({ _id: new mongoose.Types.ObjectId(id) })
+            || await mongoose.connection.db.collection('companies').findOne({ _id: new mongoose.Types.ObjectId(id) });
+        if (!rawRestore) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });
         }
 
-        if (company.isDeleted) {
+        if (rawRestore.isDeleted) {
             return res.status(400).json({ error: 'Company is already deleted' });
         }
 
         // Mark as deleted
-        company.isDeleted = true;
-        company.deletedAt = new Date();
-        company.deletedBy = userId;
-        company.deleteReason = reason || 'No reason provided';
-        company.deleteNotes = notes || '';
+        await mongoose.connection.db.collection('companiesCollection').updateOne(
+            { _id: new mongoose.Types.ObjectId(id) },
+            { $set: {
+                isDeleted: true,
+                deletedAt: new Date(),
+                deletedBy: userId || null,
+                deleteReason: reason || 'No reason provided',
+                deleteNotes: notes || ''
+            }}
+        );
         
         // Set auto-purge date (30 days from now)
         const autoPurgeDate = new Date();
         autoPurgeDate.setDate(autoPurgeDate.getDate() + 30);
         company.autoPurgeAt = autoPurgeDate;
 
-        await company.save();
+        // no-op for native update
 
         // Clear cache (best-effort)
         try {
@@ -535,24 +550,29 @@ router.post('/companies/:id/restore', async (req, res) => {
         console.log('[DATA CENTER] POST /companies/:id/restore', id);
 
         // Fetch company (include deleted)
-        const company = await Company.findById(id).option({ includeDeleted: true });
-        if (!company) {
+        // Use native driver to bypass Mongoose middleware and .option()
+        const rawRestore2 = await mongoose.connection.db.collection('companiesCollection').findOne({ _id: new mongoose.Types.ObjectId(id) })
+            || await mongoose.connection.db.collection('companies').findOne({ _id: new mongoose.Types.ObjectId(id) });
+        if (!rawRestore2) {
             return res.status(404).json({ error: 'Company not found' });
         }
 
-        if (!company.isDeleted) {
+        if (!rawRestore2.isDeleted) {
             return res.status(400).json({ error: 'Company is not deleted' });
         }
 
         // Restore company
-        company.isDeleted = false;
-        company.deletedAt = null;
-        company.deletedBy = null;
-        company.deleteReason = null;
-        company.deleteNotes = null;
-        company.autoPurgeAt = null;
-
-        await company.save();
+        await mongoose.connection.db.collection('companiesCollection').updateOne(
+            { _id: new mongoose.Types.ObjectId(id) },
+            { $set: {
+                isDeleted: false,
+                deletedAt: null,
+                deletedBy: null,
+                deleteReason: null,
+                deleteNotes: null,
+                autoPurgeAt: null
+            }}
+        );
 
         // Clear cache (best-effort)
         try {
@@ -753,7 +773,8 @@ router.get('/duplicates', async (req, res) => {
             }
         ];
 
-        const duplicates = await Company.aggregate(pipeline).option({ includeDeleted: false });
+        // Use native driver aggregation to avoid middleware
+        const duplicates = await mongoose.connection.db.collection('companiesCollection').aggregate(pipeline).toArray();
 
         res.json({
             clusters: duplicates,
