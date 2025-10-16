@@ -455,16 +455,34 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             company.aiAgentLogic = {};
         }
         
-        // FIX: Check if voiceSettings is a string (legacy migration issue)
-        if (typeof company.aiAgentLogic.voiceSettings === 'string') {
-            console.log(`🔧 [SAVE-12A] MIGRATION: voiceSettings is a string, converting to object`);
-            company.aiAgentLogic.voiceSettings = {};
-        }
+        // 🔧 ROBUST MIGRATION FIX: Handle ALL possible voiceSettings corruption scenarios
+        const voiceSettingsType = typeof company.aiAgentLogic.voiceSettings;
+        const isValidObject = company.aiAgentLogic.voiceSettings 
+            && voiceSettingsType === 'object' 
+            && !Array.isArray(company.aiAgentLogic.voiceSettings);
         
-        // Ensure voiceSettings is an object
-        if (!company.aiAgentLogic.voiceSettings || typeof company.aiAgentLogic.voiceSettings !== 'object') {
-            console.log(`🔧 [SAVE-12B] Initializing voiceSettings object`);
+        if (!isValidObject) {
+            console.log(`🔧 [SAVE-12A] MIGRATION: voiceSettings is invalid (type: ${voiceSettingsType}, array: ${Array.isArray(company.aiAgentLogic.voiceSettings)})`);
+            console.log(`🔧 [SAVE-12A] MIGRATION: Current value:`, company.aiAgentLogic.voiceSettings);
+            
+            // Force clear the entire aiAgentLogic and recreate it to avoid schema validation issues
+            console.log(`🔧 [SAVE-12A] MIGRATION: Clearing aiAgentLogic and rebuilding...`);
+            const oldAiAgentLogic = company.aiAgentLogic;
+            
+            // Mark the entire aiAgentLogic as modified to force Mongoose to recalculate
+            company.markModified('aiAgentLogic');
+            
+            // Set voiceSettings to undefined first to clear any invalid data
+            company.aiAgentLogic.voiceSettings = undefined;
+            company.markModified('aiAgentLogic.voiceSettings');
+            
+            // Now set it to an empty object
             company.aiAgentLogic.voiceSettings = {};
+            company.markModified('aiAgentLogic.voiceSettings');
+            
+            console.log(`🔧 [SAVE-12A] MIGRATION: voiceSettings reset to empty object`);
+        } else {
+            console.log(`✅ [SAVE-12B] voiceSettings is already a valid object`);
         }
 
         // V2 Voice Settings Structure
@@ -493,8 +511,12 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
         console.log(`🔍 [SAVE-13] New voice settings to save:`, JSON.stringify(newVoiceSettings, null, 2));
         
         company.aiAgentLogic.voiceSettings = newVoiceSettings;
+        
+        // 🔧 CRITICAL: Explicitly mark as modified to ensure Mongoose saves nested changes
+        company.markModified('aiAgentLogic');
+        company.markModified('aiAgentLogic.voiceSettings');
 
-        console.log(`🔍 [SAVE-14] Voice settings assigned to company object`);
+        console.log(`🔍 [SAVE-14] Voice settings assigned to company object (and marked modified)`);
         console.log(`🔍 [SAVE-15] company.aiAgentLogic.voiceSettings is now:`, JSON.stringify(company.aiAgentLogic.voiceSettings, null, 2));
 
         // Save to database
