@@ -503,6 +503,9 @@
             <button class="tab" data-tab="reports">
                 Reports
             </button>
+            <button class="tab" data-tab="settings">
+                Settings
+            </button>
         </div>
 
         <!-- Tab Content: Companies -->
@@ -622,6 +625,19 @@
                 <button class="btn btn-primary" onclick="runScan()"><i class="fas fa-sync"></i> Scan Now</button>
             </div>
             <pre id="scan-output" style="background:#0b1020;color:#e6edf3;padding:1rem;border-radius:6px;overflow:auto;max-height:420px;">Click "Scan Now" to inspect MongoDB and Redis…</pre>
+        </div>
+
+        <!-- Tab Content: Settings -->
+        <div id="settings-tab" class="tab-content" style="display: none;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                <h3 style="font-weight:700;">E2E Fixtures</h3>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-success" onclick="seedE2E()"><i class="fas fa-seedling"></i> Seed Fixtures</button>
+                    <button class="btn btn-danger" onclick="wipeE2E()"><i class="fas fa-eraser"></i> Wipe Fixtures</button>
+                </div>
+            </div>
+            <div id="settings-banner" style="display:none;margin-bottom:8px;padding:10px;border-radius:6px;"></div>
+            <pre id="settings-output" style="background:#0b1020;color:#e6edf3;padding:1rem;border-radius:6px;overflow:auto;max-height:360px;">Use the buttons above to seed or wipe fixtures.</pre>
         </div>
     </div>
 
@@ -807,6 +823,9 @@
                 if (out && out.textContent.includes('Click "Scan Now"')) {
                     runScan();
                 }
+            }
+            if (tabName === 'settings') {
+                // No-op; settings actions are manual
             }
         }
 
@@ -1354,6 +1373,65 @@
         // ============================================================================
         // UTILITY FUNCTIONS
         // ============================================================================
+        async function seedE2E() {
+            const token = localStorage.getItem('adminToken');
+            const out = document.getElementById('settings-output');
+            const banner = document.getElementById('settings-banner');
+            try {
+                out.textContent = 'Seeding…';
+                const res = await fetch('/api/admin/data-center/seed/e2e', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.ok === false) {
+                    throw new Error(data.error || `HTTP ${res.status}`);
+                }
+                out.textContent = JSON.stringify(data, null, 2);
+                showSettingsBanner('✅ Seeded fixtures successfully. Refreshing summary and companies…', 'success');
+                await refreshSummary();
+                await loadCompanies('', 'all');
+                // Switch to Deleted to show the seeded deleted company
+                applyFilter('deleted');
+            } catch (e) {
+                out.textContent = `Seed failed: ${e.message}`;
+                showSettingsBanner('❌ Seed failed: ' + e.message, 'error');
+            }
+        }
+
+        async function wipeE2E() {
+            const token = localStorage.getItem('adminToken');
+            const out = document.getElementById('settings-output');
+            try {
+                out.textContent = 'Wiping…';
+                const res = await fetch('/api/admin/data-center/seed/e2e/wipe', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.ok === false) {
+                    throw new Error(data.error || `HTTP ${res.status}`);
+                }
+                out.textContent = JSON.stringify(data, null, 2);
+                showSettingsBanner('✅ Wiped fixtures successfully. Refreshing summary and companies…', 'success');
+                await refreshSummary();
+                await loadCompanies('', 'all');
+                applyFilter('all');
+            } catch (e) {
+                out.textContent = `Wipe failed: ${e.message}`;
+                showSettingsBanner('❌ Wipe failed: ' + e.message, 'error');
+            }
+        }
+
+        function showSettingsBanner(message, type) {
+            const banner = document.getElementById('settings-banner');
+            if (!banner) return;
+            banner.style.display = 'block';
+            banner.textContent = message;
+            banner.style.background = type === 'success' ? '#ecfdf5' : '#fef2f2';
+            banner.style.border = '1px solid ' + (type === 'success' ? '#10b981' : '#ef4444');
+            banner.style.color = type === 'success' ? '#065f46' : '#7f1d1d';
+        }
         function showError(message) {
             alert(message);
         }
