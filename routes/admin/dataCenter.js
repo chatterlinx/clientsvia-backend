@@ -51,9 +51,11 @@ router.get('/companies', async (req, res) => {
         // 🔍 SEARCH EVERYWHERE: Query MongoDB directly via native driver to bypass ALL middleware
         // This ensures we get EVERY company regardless of Mongoose middleware filters
         const db = mongoose.connection.db;
-        // IMPORTANT: Our Mongoose model maps to the 'companiesCollection' collection
-        // Use the same native collection here to avoid mismatches
-        const companiesCollection = db.collection('companiesCollection');
+        const collections = await db.listCollections().toArray();
+        const names = new Set(collections.map(c => c.name));
+        // Pick primary and legacy company collections
+        const companiesCollection = db.collection(names.has('companiesCollection') ? 'companiesCollection' : 'companies');
+        const legacyCollection = names.has('companies') ? db.collection('companies') : null;
 
         // First, let's see what's in the database
         const totalInDB = await companiesCollection.countDocuments({});
@@ -70,12 +72,24 @@ router.get('/companies', async (req, res) => {
         // Build match filter
         const match = {};
 
-        // State filter
+        // State filter with legacy compatibility
+        // Deleted if any of the following is true: isDeleted=true, deleted=true, deletedAt exists (date), accountStatus.status='deleted'
+        const deletedOr = [
+            { isDeleted: true },
+            { deleted: true },
+            { deletedAt: { $type: 'date' } },
+            { 'accountStatus.status': 'deleted' }
+        ];
+
         if (state === 'live') {
-            match.isDeleted = { $ne: true };
-            match.isActive = { $ne: false }; // Changed to catch undefined and true
+            match.$and = [
+                { $or: [ { isDeleted: { $ne: true } }, { isDeleted: { $exists: false } } ] },
+                { $or: [ { deleted: { $ne: true } }, { deleted: { $exists: false } } ] },
+                { $or: [ { 'accountStatus.status': { $ne: 'deleted' } }, { 'accountStatus.status': { $exists: false } } ] },
+                { $or: [ { isActive: { $ne: false } }, { isActive: { $exists: false } } ] }
+            ];
         } else if (state === 'deleted') {
-            match.isDeleted = true;
+            match.$or = deletedOr;
         } else {
             // 'all' - explicitly include both deleted and non-deleted
             console.log('[DATA CENTER] 📋 Fetching ALL companies (deleted + live)');
@@ -219,12 +233,11 @@ router.get('/companies', async (req, res) => {
         ];
 
         // Execute aggregation using NATIVE MongoDB driver across BOTH possible collections
-        const legacyCollection = db.collection('companies');
         const [primaryResults, legacyResults] = await Promise.all([
             companiesCollection.aggregate(basePipeline).toArray(),
-            legacyCollection.aggregate(basePipeline).toArray()
+            legacyCollection ? legacyCollection.aggregate(basePipeline).toArray() : Promise.resolve([])
         ]);
-        const mergedCompanies = [...primaryResults, ...legacyResults];
+        const mergedCompanies = [...primaryResults, ...(legacyResults || [])];
         console.log('[DATA CENTER] ✅ Native MongoDB aggregation returned', mergedCompanies.length, 'companies (merged)');
         
         // DEBUG: Log first company to see structure
@@ -309,7 +322,7 @@ router.get('/companies', async (req, res) => {
         // Get total count across both collections
         const [primaryCount, legacyCount] = await Promise.all([
             companiesCollection.countDocuments(finalMatch),
-            legacyCollection.countDocuments(finalMatch)
+            legacyCollection ? legacyCollection.countDocuments(finalMatch) : Promise.resolve(0)
         ]);
         const total = (primaryCount || 0) + (legacyCount || 0);
         console.log('[DATA CENTER] 📊 Total count from native MongoDB (merged):', total);
@@ -384,19 +397,28 @@ router.get('/companies/:id/inventory', async (req, res) => {
             console.warn('[DATA CENTER] Redis cache get failed:', cacheErr.message);
         }
 
-        // Fetch company
+        // Fetch company with legacy fallback
         // Use native driver to bypass Mongoose middleware and .option()
-        const raw = await mongoose.connection.db.collection('companiesCollection').findOne({ _id: new mongoose.Types.ObjectId(id) })
-            || await mongoose.connection.db.collection('companies').findOne({ _id: new mongoose.Types.ObjectId(id) });
+        const db = mongoose.connection.db;
+        const collections = await db.listCollections().toArray();
+        const names = new Set(collections.map(c => c.name));
+        const primaryName = names.has('companiesCollection') ? 'companiesCollection' : 'companies';
+        const raw = await db.collection(primaryName).findOne({ _id: new mongoose.Types.ObjectId(id) })
+            || (names.has('companies') ? await db.collection('companies').findOne({ _id: new mongoose.Types.ObjectId(id) }) : null);
         if (!raw) {
             return res.status(404).json({ error: 'Company not found' });
         }
 
         // Count documents in each collection
+        // Support legacy collection names as well
+        const callLogsName = names.has('v2aiagentcalllogs') ? 'v2aiagentcalllogs' : (names.has('aiagentcalllogs') ? 'aiagentcalllogs' : 'v2aiagentcalllogs');
+        const contactsName = names.has('v2contacts') ? 'v2contacts' : (names.has('contacts') ? 'contacts' : 'v2contacts');
+        const notificationsName = names.has('v2notificationlogs') ? 'v2notificationlogs' : (names.has('notificationlogs') ? 'notificationlogs' : 'v2notificationlogs');
+
         const [callsCount, contactsCount, notificationsCount] = await Promise.all([
-            mongoose.connection.db.collection('v2aiagentcalllogs').countDocuments({ companyId: raw._id }),
-            mongoose.connection.db.collection('v2contacts').countDocuments({ companyId: raw._id }),
-            mongoose.connection.db.collection('v2notificationlogs').countDocuments({ companyId: raw._id })
+            db.collection(callLogsName).countDocuments({ companyId: raw._id }),
+            db.collection(contactsName).countDocuments({ companyId: raw._id }),
+            db.collection(notificationsName).countDocuments({ companyId: raw._id })
         ]);
 
         // Count scenarios
@@ -770,10 +792,21 @@ router.get('/companies/:id/transcripts', async (req, res) => {
 router.get('/duplicates', async (req, res) => {
     try {
         console.log('[DATA CENTER] GET /duplicates');
+        const db = mongoose.connection.db;
+        const collections = await db.listCollections().toArray();
+        const names = new Set(collections.map(c => c.name));
+        const companiesName = names.has('companiesCollection') ? 'companiesCollection' : 'companies';
 
         const pipeline = [
             {
-                $match: { isDeleted: { $ne: true } }
+                // Exclude deleted across legacy flags
+                $match: {
+                    $and: [
+                        { $or: [ { isDeleted: { $ne: true } }, { isDeleted: { $exists: false } } ] },
+                        { $or: [ { deleted: { $ne: true } }, { deleted: { $exists: false } } ] },
+                        { $or: [ { 'accountStatus.status': { $ne: 'deleted' } }, { 'accountStatus.status': { $exists: false } } ] }
+                    ]
+                }
             },
             {
                 $project: {
@@ -827,7 +860,7 @@ router.get('/duplicates', async (req, res) => {
         ];
 
         // Use native driver aggregation to avoid middleware
-        const duplicates = await mongoose.connection.db.collection('companiesCollection').aggregate(pipeline).toArray();
+        const duplicates = await db.collection(companiesName).aggregate(pipeline).toArray();
 
         res.json({
             clusters: duplicates,
@@ -852,25 +885,41 @@ router.get('/duplicates', async (req, res) => {
 router.get('/scan', async (req, res) => {
     try {
         const db = mongoose.connection.db;
+        const collections = await db.listCollections().toArray();
+        const names = new Set(collections.map(c => c.name));
 
         // List collections
         const collections = await db.listCollections().toArray();
         const colNames = collections.map(c => c.name);
 
         // Company collections (primary + legacy)
-        const primaryCompanies = db.collection('companiesCollection');
-        const legacyCompanies = db.collection('companies');
+        const primaryCompanies = db.collection(names.has('companiesCollection') ? 'companiesCollection' : 'companies');
+        const legacyCompanies = names.has('companies') ? db.collection('companies') : null;
 
         const [
             totalPrimary, livePrimary, deletedPrimary,
             totalLegacy, liveLegacy, deletedLegacy
         ] = await Promise.all([
             primaryCompanies.countDocuments({}),
-            primaryCompanies.countDocuments({ isDeleted: { $ne: true } }),
-            primaryCompanies.countDocuments({ isDeleted: true }),
-            legacyCompanies.countDocuments({}),
-            legacyCompanies.countDocuments({ isDeleted: { $ne: true } }),
-            legacyCompanies.countDocuments({ isDeleted: true })
+            // live = NOT deleted by any legacy flag
+            primaryCompanies.countDocuments({
+                $and: [
+                    { $or: [ { isDeleted: { $ne: true } }, { isDeleted: { $exists: false } } ] },
+                    { $or: [ { deleted: { $ne: true } }, { deleted: { $exists: false } } ] },
+                    { $or: [ { 'accountStatus.status': { $ne: 'deleted' } }, { 'accountStatus.status': { $exists: false } } ] }
+                ]
+            }),
+            // deleted = any legacy flag
+            primaryCompanies.countDocuments({ $or: [ { isDeleted: true }, { deleted: true }, { deletedAt: { $type: 'date' } }, { 'accountStatus.status': 'deleted' } ] }),
+            legacyCompanies ? legacyCompanies.countDocuments({}) : 0,
+            legacyCompanies ? legacyCompanies.countDocuments({
+                $and: [
+                    { $or: [ { isDeleted: { $ne: true } }, { isDeleted: { $exists: false } } ] },
+                    { $or: [ { deleted: { $ne: true } }, { deleted: { $exists: false } } ] },
+                    { $or: [ { 'accountStatus.status': { $ne: 'deleted' } }, { 'accountStatus.status': { $exists: false } } ] }
+                ]
+            }) : 0,
+            legacyCompanies ? legacyCompanies.countDocuments({ $or: [ { isDeleted: true }, { deleted: true }, { deletedAt: { $type: 'date' } }, { 'accountStatus.status': 'deleted' } ] }) : 0
         ]);
 
         // Other key collections (safe counts)
@@ -879,9 +928,9 @@ router.get('/scan', async (req, res) => {
         };
 
         const counts = {
-            v2aiagentcalllogs: await safeCount('v2aiagentcalllogs'),
-            v2contacts: await safeCount('v2contacts'),
-            v2notificationlogs: await safeCount('v2notificationlogs')
+            v2aiagentcalllogs: await safeCount(names.has('v2aiagentcalllogs') ? 'v2aiagentcalllogs' : (names.has('aiagentcalllogs') ? 'aiagentcalllogs' : 'v2aiagentcalllogs')),
+            v2contacts: await safeCount(names.has('v2contacts') ? 'v2contacts' : (names.has('contacts') ? 'contacts' : 'v2contacts')),
+            v2notificationlogs: await safeCount(names.has('v2notificationlogs') ? 'v2notificationlogs' : (names.has('notificationlogs') ? 'notificationlogs' : 'v2notificationlogs'))
         };
 
         // Redis scan (approx) for company-related keys
@@ -942,8 +991,10 @@ router.get('/scan', async (req, res) => {
 router.get('/summary', async (req, res) => {
     try {
         const db = mongoose.connection.db;
-        const primary = db.collection('companiesCollection');
-        const legacy = db.collection('companies');
+        const collections = await db.listCollections().toArray();
+        const names = new Set(collections.map(c => c.name));
+        const primary = db.collection(names.has('companiesCollection') ? 'companiesCollection' : 'companies');
+        const legacy = names.has('companies') ? db.collection('companies') : null;
 
         // Basic counts
         const [
@@ -951,11 +1002,23 @@ router.get('/summary', async (req, res) => {
             totalL, liveL, delL
         ] = await Promise.all([
             primary.countDocuments({}),
-            primary.countDocuments({ isDeleted: { $ne: true } }),
-            primary.countDocuments({ isDeleted: true }),
-            legacy.countDocuments({}),
-            legacy.countDocuments({ isDeleted: { $ne: true } }),
-            legacy.countDocuments({ isDeleted: true })
+            primary.countDocuments({
+                $and: [
+                    { $or: [ { isDeleted: { $ne: true } }, { isDeleted: { $exists: false } } ] },
+                    { $or: [ { deleted: { $ne: true } }, { deleted: { $exists: false } } ] },
+                    { $or: [ { 'accountStatus.status': { $ne: 'deleted' } }, { 'accountStatus.status': { $exists: false } } ] }
+                ]
+            }),
+            primary.countDocuments({ $or: [ { isDeleted: true }, { deleted: true }, { deletedAt: { $type: 'date' } }, { 'accountStatus.status': 'deleted' } ] }),
+            legacy ? legacy.countDocuments({}) : 0,
+            legacy ? legacy.countDocuments({
+                $and: [
+                    { $or: [ { isDeleted: { $ne: true } }, { isDeleted: { $exists: false } } ] },
+                    { $or: [ { deleted: { $ne: true } }, { deleted: { $exists: false } } ] },
+                    { $or: [ { 'accountStatus.status': { $ne: 'deleted' } }, { 'accountStatus.status': { $exists: false } } ] }
+                ]
+            }) : 0,
+            legacy ? legacy.countDocuments({ $or: [ { isDeleted: true }, { deleted: true }, { deletedAt: { $type: 'date' } }, { 'accountStatus.status': 'deleted' } ] }) : 0
         ]);
 
         // Never live counter (0 calls AND no scenarios AND no phone configured)
