@@ -171,6 +171,153 @@
             background: #2c5282;
         }
 
+        /* Action Buttons - SOLID VIBRANT COLORS */
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: #3182ce;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2c5282;
+        }
+
+        .btn-success {
+            background: #16a34a;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #15803d;
+        }
+
+        .btn-danger {
+            background: #dc2626;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+
+        .btn-warning {
+            background: #ea580c;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #c2410c;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        /* Company Drawer */
+        .drawer {
+            position: fixed;
+            top: 0;
+            right: -600px;
+            width: 600px;
+            height: 100vh;
+            background: white;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.2);
+            transition: right 0.3s;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .drawer.open {
+            right: 0;
+        }
+
+        .drawer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            z-index: 999;
+        }
+
+        .drawer-overlay.open {
+            display: block;
+        }
+
+        .drawer-header {
+            padding: 1.5rem;
+            background: #f7fafc;
+            border-bottom: 2px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .drawer-close {
+            background: #ef4444;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            font-size: 1.25rem;
+            transition: all 0.2s;
+        }
+
+        .drawer-close:hover {
+            background: #dc2626;
+        }
+
+        .drawer-body {
+            padding: 1.5rem;
+        }
+
+        .drawer-tabs {
+            display: flex;
+            gap: 0.5rem;
+            border-bottom: 2px solid #e2e8f0;
+            margin-bottom: 1.5rem;
+        }
+
+        .drawer-tab {
+            padding: 0.75rem 1rem;
+            background: none;
+            border: none;
+            color: #6b7280;
+            font-weight: 500;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .drawer-tab:hover {
+            color: #3182ce;
+        }
+
+        .drawer-tab.active {
+            color: #3182ce;
+            border-bottom-color: #3182ce;
+        }
+
         /* Filter Chips */
         .filter-chips {
             display: flex;
@@ -421,10 +568,27 @@
 
         <!-- Tab Content: Trash -->
         <div id="trash-tab" class="tab-content" style="display: none;">
-            <div class="empty-state">
-                <i class="fas fa-trash"></i>
-                <h3>Trash is Empty</h3>
-                <p>Soft-deleted companies will appear here</p>
+            <!-- Trash will be loaded dynamically -->
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Company</th>
+                            <th>Deleted Date</th>
+                            <th>Reason</th>
+                            <th>Auto-Purge In</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trash-table-body">
+                        <tr>
+                            <td colspan="5" class="loading">
+                                <div class="spinner"></div>
+                                <p>Loading deleted companies...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -438,12 +602,92 @@
         </div>
     </div>
 
+    <!-- Company Details Drawer -->
+    <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+    <div class="drawer" id="company-drawer">
+        <div class="drawer-header">
+            <div>
+                <h2 id="drawer-company-name" style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem;">Company Name</h2>
+                <p id="drawer-company-email" style="color: #6b7280;">email@example.com</p>
+            </div>
+            <button class="drawer-close" onclick="closeDrawer()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="drawer-body">
+            <!-- Drawer Tabs -->
+            <div class="drawer-tabs">
+                <button class="drawer-tab active" data-drawer-tab="overview" onclick="switchDrawerTab('overview')">
+                    <i class="fas fa-info-circle"></i> Overview
+                </button>
+                <button class="drawer-tab" data-drawer-tab="inventory" onclick="switchDrawerTab('inventory')">
+                    <i class="fas fa-database"></i> Inventory
+                </button>
+                <button class="drawer-tab" data-drawer-tab="customers" onclick="switchDrawerTab('customers')">
+                    <i class="fas fa-users"></i> Customers
+                </button>
+                <button class="drawer-tab" data-drawer-tab="actions" onclick="switchDrawerTab('actions')">
+                    <i class="fas fa-cog"></i> Actions
+                </button>
+            </div>
+
+            <!-- Drawer Tab Content: Overview -->
+            <div id="drawer-overview" class="drawer-tab-content">
+                <div id="drawer-overview-content">
+                    <p style="color: #6b7280;">Loading...</p>
+                </div>
+            </div>
+
+            <!-- Drawer Tab Content: Inventory -->
+            <div id="drawer-inventory" class="drawer-tab-content" style="display: none;">
+                <div id="drawer-inventory-content">
+                    <p style="color: #6b7280;">Loading...</p>
+                </div>
+            </div>
+
+            <!-- Drawer Tab Content: Customers -->
+            <div id="drawer-customers" class="drawer-tab-content" style="display: none;">
+                <div id="drawer-customers-content">
+                    <p style="color: #6b7280;">Loading...</p>
+                </div>
+            </div>
+
+            <!-- Drawer Tab Content: Actions -->
+            <div id="drawer-actions" class="drawer-tab-content" style="display: none;">
+                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    <button class="btn btn-primary" onclick="exportCustomers()">
+                        <i class="fas fa-download"></i> Export Customers CSV
+                    </button>
+                    <button class="btn btn-primary" onclick="exportTranscripts()">
+                        <i class="fas fa-download"></i> Export Transcripts CSV
+                    </button>
+                    <button class="btn btn-warning" onclick="viewCompanyProfile()">
+                        <i class="fas fa-external-link-alt"></i> Open Company Profile
+                    </button>
+                    <hr style="border-color: #e2e8f0;">
+                    <button class="btn btn-danger" id="drawer-soft-delete-btn" onclick="confirmSoftDelete()">
+                        <i class="fas fa-trash"></i> Soft Delete Company
+                    </button>
+                    <button class="btn btn-success" id="drawer-restore-btn" onclick="confirmRestore()" style="display: none;">
+                        <i class="fas fa-undo"></i> Restore Company
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Global state
+        // ============================================================================
+        // GLOBAL STATE
+        // ============================================================================
         let currentFilter = 'all';
         let companies = [];
+        let currentCompany = null; // Company currently open in drawer
 
-        // Initialize
+        // ============================================================================
+        // INITIALIZATION
+        // ============================================================================
         document.addEventListener('DOMContentLoaded', () => {
             loadCompanies();
             setupEventListeners();
@@ -464,6 +708,9 @@
             });
         }
 
+        // ============================================================================
+        // TAB MANAGEMENT
+        // ============================================================================
         function switchTab(tabName) {
             // Update tab buttons
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -472,6 +719,11 @@
             // Update tab content
             document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
             document.getElementById(`${tabName}-tab`).style.display = 'block';
+
+            // Load data for specific tabs
+            if (tabName === 'trash') {
+                loadTrash();
+            }
         }
 
         async function loadCompanies(query = '', state = 'all') {
@@ -560,12 +812,375 @@
             loadCompanies(query, state);
         }
 
-        function viewCompany(companyId) {
-            // TODO: Open company drawer
-            console.log('View company:', companyId);
-            window.location.href = `/company-profile.html?id=${companyId}`;
+        // ============================================================================
+        // COMPANY DRAWER MANAGEMENT
+        // ============================================================================
+        async function viewCompany(companyId) {
+            currentCompany = companies.find(c => c.companyId === companyId);
+            if (!currentCompany) {
+                console.error('Company not found:', companyId);
+                return;
+            }
+
+            // Update drawer header
+            document.getElementById('drawer-company-name').textContent = currentCompany.companyName;
+            document.getElementById('drawer-company-email').textContent = currentCompany.ownerEmail || '';
+
+            // Show/hide restore/delete buttons based on status
+            if (currentCompany.isDeleted) {
+                document.getElementById('drawer-soft-delete-btn').style.display = 'none';
+                document.getElementById('drawer-restore-btn').style.display = 'block';
+            } else {
+                document.getElementById('drawer-soft-delete-btn').style.display = 'block';
+                document.getElementById('drawer-restore-btn').style.display = 'none';
+            }
+
+            // Open drawer
+            document.getElementById('drawer-overlay').classList.add('open');
+            document.getElementById('company-drawer').classList.add('open');
+
+            // Load overview tab
+            await loadDrawerOverview();
         }
 
+        function closeDrawer() {
+            document.getElementById('drawer-overlay').classList.remove('open');
+            document.getElementById('company-drawer').classList.remove('open');
+            currentCompany = null;
+        }
+
+        function switchDrawerTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.drawer-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[data-drawer-tab="${tabName}"]`).classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.drawer-tab-content').forEach(c => c.style.display = 'none');
+            document.getElementById(`drawer-${tabName}`).style.display = 'block';
+
+            // Load data for specific tabs
+            if (tabName === 'inventory' && currentCompany) {
+                loadDrawerInventory();
+            } else if (tabName === 'customers' && currentCompany) {
+                loadDrawerCustomers();
+            }
+        }
+
+        async function loadDrawerOverview() {
+            const content = document.getElementById('drawer-overview-content');
+            content.innerHTML = `
+                <div style="display: grid; gap: 1rem;">
+                    <div style="background: #f7fafc; padding: 1rem; border-radius: 6px;">
+                        <h3 style="font-weight: 600; margin-bottom: 0.5rem;">Status</h3>
+                        <span class="health-badge ${currentCompany.healthBadge.color}">
+                            ${currentCompany.healthBadge.icon} ${currentCompany.healthBadge.label}
+                        </span>
+                    </div>
+                    <div style="background: #f7fafc; padding: 1rem; border-radius: 6px;">
+                        <h3 style="font-weight: 600; margin-bottom: 0.5rem;">Health Score</h3>
+                        <p style="font-size: 2rem; font-weight: 700; color: #3182ce;">${currentCompany.healthScore}/100</p>
+                    </div>
+                    <div style="background: #f7fafc; padding: 1rem; border-radius: 6px;">
+                        <h3 style="font-weight: 600; margin-bottom: 0.5rem;">Metrics</h3>
+                        <ul style="list-style: none; padding: 0;">
+                            <li style="margin-bottom: 0.5rem;"><strong>Calls:</strong> ${currentCompany.calls.toLocaleString()}</li>
+                            <li style="margin-bottom: 0.5rem;"><strong>Scenarios:</strong> ${currentCompany.scenarios}</li>
+                            <li style="margin-bottom: 0.5rem;"><strong>Customers:</strong> ${currentCompany.customers}</li>
+                            <li style="margin-bottom: 0.5rem;"><strong>Last Activity:</strong> ${currentCompany.lastActivityFormatted}</li>
+                            <li style="margin-bottom: 0.5rem;"><strong>Created:</strong> ${new Date(currentCompany.createdAt).toLocaleDateString()}</li>
+                        </ul>
+                    </div>
+                    ${currentCompany.flags.length > 0 ? `
+                        <div style="background: #fef5e7; padding: 1rem; border-radius: 6px; border-left: 4px solid #ea580c;">
+                            <h3 style="font-weight: 600; margin-bottom: 0.5rem; color: #ea580c;">⚠️ Flags</h3>
+                            <ul style="list-style: none; padding: 0;">
+                                ${currentCompany.flags.map(flag => `<li style="margin-bottom: 0.25rem;">• ${flag}</li>`).join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        async function loadDrawerInventory() {
+            const content = document.getElementById('drawer-inventory-content');
+            content.innerHTML = '<p style="color: #6b7280;">Loading inventory...</p>';
+
+            try {
+                const token = localStorage.getItem('adminToken');
+                const response = await fetch(`/api/admin/data-center/companies/${currentCompany.companyId}/inventory`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to load inventory');
+
+                const inventory = await response.json();
+
+                content.innerHTML = `
+                    <div style="display: grid; gap: 1rem;">
+                        <div style="background: #f7fafc; padding: 1rem; border-radius: 6px;">
+                            <h3 style="font-weight: 600; margin-bottom: 0.5rem;">Collections</h3>
+                            <ul style="list-style: none; padding: 0;">
+                                <li style="margin-bottom: 0.5rem;"><strong>Calls:</strong> ${inventory.collections.calls.toLocaleString()}</li>
+                                <li style="margin-bottom: 0.5rem;"><strong>Contacts:</strong> ${inventory.collections.contacts.toLocaleString()}</li>
+                                <li style="margin-bottom: 0.5rem;"><strong>Notifications:</strong> ${inventory.collections.notifications.toLocaleString()}</li>
+                                <li style="margin-bottom: 0.5rem;"><strong>Scenarios:</strong> ${inventory.collections.scenarios.toLocaleString()}</li>
+                            </ul>
+                        </div>
+                        <div style="background: #f7fafc; padding: 1rem; border-radius: 6px;">
+                            <h3 style="font-weight: 600; margin-bottom: 0.5rem;">Estimated Storage</h3>
+                            <p style="font-size: 1.5rem; font-weight: 700; color: #3182ce;">${inventory.estimates.totalFormatted}</p>
+                        </div>
+                        ${inventory.externals.twilioNumbers.length > 0 ? `
+                            <div style="background: #f7fafc; padding: 1rem; border-radius: 6px;">
+                                <h3 style="font-weight: 600; margin-bottom: 0.5rem;">Twilio Numbers</h3>
+                                <ul style="list-style: none; padding: 0;">
+                                    ${inventory.externals.twilioNumbers.map(num => `<li style="margin-bottom: 0.25rem;">${num}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading inventory:', error);
+                content.innerHTML = '<p style="color: #ef4444;">Failed to load inventory</p>';
+            }
+        }
+
+        async function loadDrawerCustomers() {
+            const content = document.getElementById('drawer-customers-content');
+            content.innerHTML = '<p style="color: #6b7280;">Loading customers...</p>';
+
+            try {
+                const token = localStorage.getItem('adminToken');
+                const response = await fetch(`/api/admin/data-center/companies/${currentCompany.companyId}/customers?pageSize=10`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to load customers');
+
+                const data = await response.json();
+
+                if (data.results.length === 0) {
+                    content.innerHTML = '<p style="color: #6b7280;">No customers found</p>';
+                    return;
+                }
+
+                content.innerHTML = `
+                    <p style="margin-bottom: 1rem; color: #6b7280;">Showing ${data.results.length} of ${data.total} customers</p>
+                    <div style="display: grid; gap: 0.75rem;">
+                        ${data.results.map(customer => `
+                            <div style="background: #f7fafc; padding: 1rem; border-radius: 6px;">
+                                <p style="font-weight: 600;">${customer.phoneNumber || customer.name || 'Unknown'}</p>
+                                ${customer.email ? `<p style="font-size: 0.875rem; color: #6b7280;">${customer.email}</p>` : ''}
+                                ${customer.lastContacted ? `<p style="font-size: 0.875rem; color: #6b7280;">Last contacted: ${new Date(customer.lastContacted).toLocaleDateString()}</p>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading customers:', error);
+                content.innerHTML = '<p style="color: #ef4444;">Failed to load customers</p>';
+            }
+        }
+
+        // ============================================================================
+        // TRASH TAB MANAGEMENT
+        // ============================================================================
+        async function loadTrash() {
+            const tbody = document.getElementById('trash-table-body');
+            tbody.innerHTML = '<tr><td colspan="5" class="loading"><div class="spinner"></div><p>Loading deleted companies...</p></td></tr>';
+
+            try {
+                const token = localStorage.getItem('adminToken');
+                const response = await fetch('/api/admin/data-center/companies?state=deleted&pageSize=50', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to load trash');
+
+                const data = await response.json();
+
+                if (data.results.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><i class="fas fa-trash"></i><h3>Trash is Empty</h3><p>No deleted companies found</p></td></tr>';
+                    document.getElementById('trash-count').textContent = '(0)';
+                    return;
+                }
+
+                tbody.innerHTML = data.results.map(company => `
+                    <tr>
+                        <td>
+                            <strong>${company.companyName}</strong><br>
+                            <small style="color: #718096;">${company.ownerEmail || ''}</small>
+                        </td>
+                        <td>${company.deletedAt ? new Date(company.deletedAt).toLocaleDateString() : 'N/A'}</td>
+                        <td>${company.deleteReason || 'No reason'}</td>
+                        <td>
+                            ${company.daysUntilPurge !== null ? 
+                                `<strong style="color: ${company.daysUntilPurge <= 7 ? '#ef4444' : '#ea580c'};">${company.daysUntilPurge} days</strong>` : 
+                                'N/A'}
+                        </td>
+                        <td>
+                            <button class="btn btn-success" onclick="restoreCompany('${company.companyId}')">
+                                <i class="fas fa-undo"></i> Restore
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+
+                document.getElementById('trash-count').textContent = `(${data.results.length})`;
+
+            } catch (error) {
+                console.error('Error loading trash:', error);
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #ef4444;">Failed to load deleted companies</td></tr>';
+            }
+        }
+
+        // ============================================================================
+        // COMPANY ACTIONS
+        // ============================================================================
+        async function confirmSoftDelete() {
+            if (!currentCompany) return;
+
+            const reason = prompt(`Are you sure you want to soft delete "${currentCompany.companyName}"?\n\nThe company will be auto-purged in 30 days.\n\nEnter reason for deletion:`);
+            if (!reason) return;
+
+            try {
+                const token = localStorage.getItem('adminToken');
+                const response = await fetch(`/api/admin/data-center/companies/${currentCompany.companyId}/soft-delete`, {
+                    method: 'PATCH',
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ reason })
+                });
+
+                if (!response.ok) throw new Error('Failed to delete company');
+
+                alert('Company soft deleted successfully!');
+                closeDrawer();
+                loadCompanies(document.getElementById('search-input').value, currentFilter);
+
+            } catch (error) {
+                console.error('Error deleting company:', error);
+                alert('Failed to delete company');
+            }
+        }
+
+        async function confirmRestore() {
+            if (!currentCompany) return;
+
+            if (!confirm(`Are you sure you want to restore "${currentCompany.companyName}"?`)) return;
+
+            await restoreCompany(currentCompany.companyId);
+            closeDrawer();
+        }
+
+        async function restoreCompany(companyId) {
+            try {
+                const token = localStorage.getItem('adminToken');
+                const response = await fetch(`/api/admin/data-center/companies/${companyId}/restore`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to restore company');
+
+                alert('Company restored successfully!');
+                loadCompanies(document.getElementById('search-input').value, currentFilter);
+                loadTrash(); // Refresh trash if open
+
+            } catch (error) {
+                console.error('Error restoring company:', error);
+                alert('Failed to restore company');
+            }
+        }
+
+        function viewCompanyProfile() {
+            if (!currentCompany) return;
+            window.open(`/company-profile.html?id=${currentCompany.companyId}`, '_blank');
+        }
+
+        // ============================================================================
+        // CSV EXPORT FUNCTIONS
+        // ============================================================================
+        async function exportCustomers() {
+            if (!currentCompany) return;
+
+            try {
+                const token = localStorage.getItem('adminToken');
+                const response = await fetch(`/api/admin/data-center/companies/${currentCompany.companyId}/customers?pageSize=10000`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch customers');
+
+                const data = await response.json();
+                
+                // Convert to CSV
+                const csv = convertToCSV(data.results, ['phoneNumber', 'name', 'email', 'lastContacted']);
+                downloadCSV(csv, `${currentCompany.companyName}-customers.csv`);
+
+            } catch (error) {
+                console.error('Error exporting customers:', error);
+                alert('Failed to export customers');
+            }
+        }
+
+        async function exportTranscripts() {
+            if (!currentCompany) return;
+
+            try {
+                const token = localStorage.getItem('adminToken');
+                const response = await fetch(`/api/admin/data-center/companies/${currentCompany.companyId}/transcripts?pageSize=10000`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch transcripts');
+
+                const data = await response.json();
+                
+                // Convert to CSV
+                const csv = convertToCSV(data.results, ['timestamp', 'callerNumber', 'duration', 'status']);
+                downloadCSV(csv, `${currentCompany.companyName}-transcripts.csv`);
+
+            } catch (error) {
+                console.error('Error exporting transcripts:', error);
+                alert('Failed to export transcripts');
+            }
+        }
+
+        function convertToCSV(data, fields) {
+            if (data.length === 0) return '';
+
+            const headers = fields.join(',');
+            const rows = data.map(item => {
+                return fields.map(field => {
+                    const value = item[field] || '';
+                    // Escape quotes and wrap in quotes if contains comma
+                    return typeof value === 'string' && value.includes(',') ? `"${value.replace(/"/g, '""')}"` : value;
+                }).join(',');
+            });
+
+            return [headers, ...rows].join('\n');
+        }
+
+        function downloadCSV(csv, filename) {
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+
+        // ============================================================================
+        // UTILITY FUNCTIONS
+        // ============================================================================
         function showError(message) {
             alert(message);
         }
