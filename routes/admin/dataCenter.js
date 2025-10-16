@@ -81,9 +81,13 @@ router.get('/companies', async (req, res) => {
                     { ownerEmail: new RegExp(q, 'i') }
                 ];
             }
-            // Text search
+            // Text search - use regex for company/business name
             else {
-                match.$text = { $search: q };
+                match.$or = [
+                    { companyName: new RegExp(q, 'i') },
+                    { businessName: new RegExp(q, 'i') },
+                    { domain: new RegExp(q, 'i') }
+                ];
             }
         }
 
