@@ -379,5 +379,314 @@ router.get('/companies/:id/inventory', async (req, res) => {
     }
 });
 
+/**
+ * ============================================================================
+ * PATCH /api/admin/data-center/companies/:id/soft-delete
+ * Soft delete a company (mark as deleted with grace period)
+ * ============================================================================
+ */
+router.patch('/companies/:id/soft-delete', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason, notes } = req.body;
+        const userId = req.user?._id || req.user?.id;
+
+        console.log('[DATA CENTER] PATCH /companies/:id/soft-delete', id);
+
+        // Fetch company (include deleted to check if already deleted)
+        const company = await Company.findById(id).option({ includeDeleted: true });
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        if (company.isDeleted) {
+            return res.status(400).json({ error: 'Company is already deleted' });
+        }
+
+        // Mark as deleted
+        company.isDeleted = true;
+        company.deletedAt = new Date();
+        company.deletedBy = userId;
+        company.deleteReason = reason || 'No reason provided';
+        company.deleteNotes = notes || '';
+        
+        // Set auto-purge date (30 days from now)
+        const autoPurgeDate = new Date();
+        autoPurgeDate.setDate(autoPurgeDate.getDate() + 30);
+        company.autoPurgeAt = autoPurgeDate;
+
+        await company.save();
+
+        // Clear cache
+        try {
+            await redisClient.del(`company:${id}`);
+            console.log('[DATA CENTER] Cache cleared for deleted company');
+        } catch (cacheError) {
+            console.warn('[DATA CENTER] Cache clear failed:', cacheError.message);
+        }
+
+        console.log('[DATA CENTER] ✅ Company soft deleted:', id);
+
+        res.json({
+            success: true,
+            message: 'Company soft deleted successfully',
+            autoPurgeAt: autoPurgeDate,
+            daysUntilPurge: 30
+        });
+
+    } catch (error) {
+        console.error('[DATA CENTER] Error soft deleting company:', error);
+        res.status(500).json({ 
+            error: 'Failed to soft delete company',
+            details: error.message 
+        });
+    }
+});
+
+/**
+ * ============================================================================
+ * POST /api/admin/data-center/companies/:id/restore
+ * Restore a soft-deleted company
+ * ============================================================================
+ */
+router.post('/companies/:id/restore', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        console.log('[DATA CENTER] POST /companies/:id/restore', id);
+
+        // Fetch company (include deleted)
+        const company = await Company.findById(id).option({ includeDeleted: true });
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        if (!company.isDeleted) {
+            return res.status(400).json({ error: 'Company is not deleted' });
+        }
+
+        // Restore company
+        company.isDeleted = false;
+        company.deletedAt = null;
+        company.deletedBy = null;
+        company.deleteReason = null;
+        company.deleteNotes = null;
+        company.autoPurgeAt = null;
+
+        await company.save();
+
+        // Clear cache
+        try {
+            await redisClient.del(`company:${id}`);
+            console.log('[DATA CENTER] Cache cleared for restored company');
+        } catch (cacheError) {
+            console.warn('[DATA CENTER] Cache clear failed:', cacheError.message);
+        }
+
+        console.log('[DATA CENTER] ✅ Company restored:', id);
+
+        res.json({
+            success: true,
+            message: 'Company restored successfully'
+        });
+
+    } catch (error) {
+        console.error('[DATA CENTER] Error restoring company:', error);
+        res.status(500).json({ 
+            error: 'Failed to restore company',
+            details: error.message 
+        });
+    }
+});
+
+/**
+ * ============================================================================
+ * GET /api/admin/data-center/companies/:id/customers
+ * Get customer list for a company (from contacts/memories)
+ * ============================================================================
+ */
+router.get('/companies/:id/customers', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { search = '', page = 1, pageSize = 50 } = req.query;
+
+        console.log('[DATA CENTER] GET /companies/:id/customers', id);
+
+        const pageNum = parseInt(page);
+        const limit = parseInt(pageSize);
+        const skip = (pageNum - 1) * limit;
+
+        // Build query
+        const query = { companyId: new mongoose.Types.ObjectId(id) };
+        if (search) {
+            query.$or = [
+                { phoneNumber: new RegExp(search, 'i') },
+                { name: new RegExp(search, 'i') },
+                { email: new RegExp(search, 'i') }
+            ];
+        }
+
+        // Fetch contacts
+        const contacts = await mongoose.connection.db.collection('v2contacts')
+            .find(query)
+            .sort({ lastContacted: -1 })
+            .skip(skip)
+            .limit(limit)
+            .toArray();
+
+        const total = await mongoose.connection.db.collection('v2contacts')
+            .countDocuments(query);
+
+        res.json({
+            results: contacts,
+            total,
+            page: pageNum,
+            pageSize: limit,
+            totalPages: Math.ceil(total / limit)
+        });
+
+    } catch (error) {
+        console.error('[DATA CENTER] Error fetching customers:', error);
+        res.status(500).json({ 
+            error: 'Failed to fetch customers',
+            details: error.message 
+        });
+    }
+});
+
+/**
+ * ============================================================================
+ * GET /api/admin/data-center/companies/:id/transcripts
+ * Get call transcripts for a company (date range)
+ * ============================================================================
+ */
+router.get('/companies/:id/transcripts', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { startDate, endDate, page = 1, pageSize = 50 } = req.query;
+
+        console.log('[DATA CENTER] GET /companies/:id/transcripts', id);
+
+        const pageNum = parseInt(page);
+        const limit = parseInt(pageSize);
+        const skip = (pageNum - 1) * limit;
+
+        // Build query
+        const query = { companyId: new mongoose.Types.ObjectId(id) };
+        if (startDate || endDate) {
+            query.timestamp = {};
+            if (startDate) query.timestamp.$gte = new Date(startDate);
+            if (endDate) query.timestamp.$lte = new Date(endDate);
+        }
+
+        // Fetch calls
+        const calls = await mongoose.connection.db.collection('v2aiagentcalllogs')
+            .find(query)
+            .sort({ timestamp: -1 })
+            .skip(skip)
+            .limit(limit)
+            .toArray();
+
+        const total = await mongoose.connection.db.collection('v2aiagentcalllogs')
+            .countDocuments(query);
+
+        res.json({
+            results: calls,
+            total,
+            page: pageNum,
+            pageSize: limit,
+            totalPages: Math.ceil(total / limit)
+        });
+
+    } catch (error) {
+        console.error('[DATA CENTER] Error fetching transcripts:', error);
+        res.status(500).json({ 
+            error: 'Failed to fetch transcripts',
+            details: error.message 
+        });
+    }
+});
+
+/**
+ * ============================================================================
+ * GET /api/admin/data-center/duplicates
+ * Find duplicate companies (by normalized name/domain)
+ * ============================================================================
+ */
+router.get('/duplicates', async (req, res) => {
+    try {
+        console.log('[DATA CENTER] GET /duplicates');
+
+        const pipeline = [
+            {
+                $match: { isDeleted: { $ne: true } }
+            },
+            {
+                $project: {
+                    companyName: 1,
+                    businessName: 1,
+                    domain: 1,
+                    email: 1,
+                    normalizedName: {
+                        $toLower: {
+                            $trim: {
+                                input: { $ifNull: ['$companyName', '$businessName'] }
+                            }
+                        }
+                    },
+                    normalizedDomain: {
+                        $toLower: {
+                            $trim: {
+                                input: { $ifNull: ['$domain', ''] }
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $group: {
+                    _id: { 
+                        name: '$normalizedName',
+                        domain: '$normalizedDomain'
+                    },
+                    count: { $sum: 1 },
+                    companies: {
+                        $push: {
+                            id: '$_id',
+                            companyName: '$companyName',
+                            businessName: '$businessName',
+                            domain: '$domain',
+                            email: '$email'
+                        }
+                    }
+                }
+            },
+            {
+                $match: { count: { $gt: 1 } }
+            },
+            {
+                $sort: { count: -1 }
+            },
+            {
+                $limit: 50
+            }
+        ];
+
+        const duplicates = await Company.aggregate(pipeline).option({ includeDeleted: false });
+
+        res.json({
+            clusters: duplicates,
+            total: duplicates.length
+        });
+
+    } catch (error) {
+        console.error('[DATA CENTER] Error finding duplicates:', error);
+        res.status(500).json({ 
+            error: 'Failed to find duplicates',
+            details: error.message 
+        });
+    }
+});
+
 module.exports = router;
 
