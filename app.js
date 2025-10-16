@@ -19,7 +19,7 @@ const redis = require('redis');
 // const passport = require('./config/passport');
 
 const logger = require('./utils/logger');
-const { secureHeaders } = require('./middleware/helmet');
+const { secureHeaders, additionalSecurityHeaders, addRateLimitHeaders } = require('./middleware/helmet');
 const { apiLimiter } = require('./middleware/rateLimit');
 
 // V2 DELETED: Legacy AI agent routes - using V2 AI Agent Logic system
@@ -40,11 +40,13 @@ const { apiLimiter } = require('./middleware/rateLimit');
 const app = express();
 
 // Parse cookies before any middleware that relies on them
-app.use(cookieParser());          // For JWT in cookies
-app.use(secureHeaders);           // Helmet/CSP
-app.use(cors({ origin: false })); // Restrict origins
-app.use(apiLimiter);              // Rate limiting
-app.use(express.json());          // Body parsing
+app.use(cookieParser());                // For JWT in cookies
+app.use(secureHeaders);                 // Helmet/CSP
+app.use(additionalSecurityHeaders);     // Additional production security headers
+app.use(addRateLimitHeaders);           // Rate limit headers
+app.use(cors({ origin: false }));       // Restrict origins
+app.use(apiLimiter);                    // Rate limiting
+app.use(express.json());                // Body parsing
 
 // Serve static files from public directory with no-cache for HTML files
 app.use(express.static(path.join(__dirname, 'public'), {

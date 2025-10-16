@@ -1,7 +1,8 @@
-# 📚 API DOCUMENTATION - AI Agent Settings Phase 2
+# 📚 API DOCUMENTATION - ClientsVia Production Platform
 
-**Version:** 2.0  
-**Last Updated:** October 13, 2025
+**Version:** 2.1  
+**Last Updated:** October 16, 2025  
+**Status:** Production Ready
 
 ---
 
@@ -547,9 +548,205 @@ curl -X POST \
 
 ---
 
+---
+
+## 📊 **PRODUCTION MONITORING ENDPOINTS**
+
+### **1. GET /api/metrics**
+
+Get comprehensive application metrics (admin only).
+
+**Authentication:** JWT Bearer Token (admin role required)
+
+**Response:**
+```json
+{
+  "success": true,
+  "timestamp": "2025-10-16T12:00:00.000Z",
+  "metrics": {
+    "requests": {
+      "total": 12543,
+      "byMethod": { "GET": 8234, "POST": 3421, "PATCH": 888 },
+      "topRoutes": { "/health": 5000, "/api/company/:id": 2000 },
+      "successRate": 98,
+      "errorRate": 2
+    },
+    "performance": {
+      "avgResponseTime": 45,
+      "minResponseTime": 3,
+      "maxResponseTime": 234,
+      "p50": 38,
+      "p95": 120,
+      "p99": 200
+    },
+    "errors": {
+      "total": 23,
+      "byType": { "ValidationError": 15, "NotFoundError": 8 }
+    },
+    "health": {
+      "status": "healthy",
+      "requestsPerSecond": 5,
+      "errorRate": 2
+    }
+  }
+}
+```
+
+---
+
+### **2. GET /api/metrics/health**
+
+Quick health status check (public).
+
+**Response:**
+```json
+{
+  "success": true,
+  "timestamp": "2025-10-16T12:00:00.000Z",
+  "health": {
+    "status": "healthy",
+    "requestsPerSecond": 5,
+    "errorRate": 2
+  },
+  "uptime": {
+    "seconds": 86400,
+    "formatted": "1d 0h 0m 0s"
+  },
+  "performance": {
+    "avgResponseTime": 45,
+    "p95": 120
+  }
+}
+```
+
+---
+
+### **3. GET /api/metrics/performance**
+
+Performance metrics only (admin only).
+
+**Authentication:** JWT Bearer Token (admin role required)
+
+**Response:**
+```json
+{
+  "success": true,
+  "performance": {
+    "avgResponseTime": 45,
+    "p50": 38,
+    "p95": 120,
+    "p99": 200
+  },
+  "requests": {
+    "total": 12543,
+    "successRate": 98,
+    "errorRate": 2
+  }
+}
+```
+
+---
+
+### **4. GET /api/metrics/errors**
+
+Recent errors (admin only).
+
+**Authentication:** JWT Bearer Token (admin role required)
+
+**Response:**
+```json
+{
+  "success": true,
+  "errors": {
+    "total": 23,
+    "byType": { "ValidationError": 15, "NotFoundError": 8 },
+    "recent": [
+      {
+        "type": "ValidationError",
+        "message": "Invalid company ID format",
+        "path": "/api/company/invalid-id",
+        "method": "GET",
+        "timestamp": "2025-10-16T12:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### **5. POST /api/metrics/reset**
+
+Reset all metrics (admin only).
+
+**Authentication:** JWT Bearer Token (admin role required)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Metrics reset successfully",
+  "timestamp": "2025-10-16T12:00:00.000Z"
+}
+```
+
+---
+
+## 🏥 **HEALTH CHECK ENDPOINTS**
+
+### **GET /health**
+
+Comprehensive health check with service status.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "environment": "production",
+  "timestamp": "2025-10-16T12:00:00.000Z",
+  "services": {
+    "mongodb": {
+      "status": "connected",
+      "responseTime": 3
+    },
+    "redis": {
+      "status": "connected",
+      "responseTime": 1
+    }
+  },
+  "system": {
+    "memory": {
+      "heapUsed": 125,
+      "heapTotal": 256,
+      "rss": 450
+    },
+    "uptime": 86400,
+    "nodeVersion": "v20.10.0"
+  }
+}
+```
+
+---
+
+### **GET /healthz**
+
+Simple health check for load balancers.
+
+**Response:**
+```json
+{
+  "ok": true
+}
+```
+
+---
+
 ## 📖 **FURTHER READING**
 
 - **Multi-Tenant Architecture:** See `MULTI-TENANT-ARCHITECTURE.md`
 - **User Guide:** See `USER-GUIDE.md`
 - **Audit Report:** See `FINAL-AUDIT-REPORT.md`
+- **Production Setup:** See `PRODUCTION-ENVIRONMENT-SETUP.md`
+- **Production Readiness:** See `PRODUCTION-READINESS-AUDIT.md`
+- **Deployment Checklist:** See `PRODUCTION-DEPLOYMENT-CHECKLIST.md`
 
