@@ -39,11 +39,28 @@ router.get('/companies', async (req, res) => {
             sort = '-lastActivity'
         } = req.query;
 
-        console.log('[DATA CENTER] GET /companies', { query, state, page });
+        console.log('[DATA CENTER] 📊 GET /companies', { query, state, page, pageSize });
 
         const pageNum = parseInt(page);
         const limit = parseInt(pageSize);
         const skip = (pageNum - 1) * limit;
+
+        // 🔍 SEARCH EVERYWHERE: Query MongoDB directly via native driver to bypass ALL middleware
+        // This ensures we get EVERY company regardless of Mongoose middleware filters
+        const db = mongoose.connection.db;
+        const companiesCollection = db.collection('companies');
+
+        // First, let's see what's in the database
+        const totalInDB = await companiesCollection.countDocuments({});
+        const liveInDB = await companiesCollection.countDocuments({ isDeleted: { $ne: true } });
+        const deletedInDB = await companiesCollection.countDocuments({ isDeleted: true });
+        
+        console.log('[DATA CENTER] 🔍 MongoDB Stats:', {
+            total: totalInDB,
+            live: liveInDB,
+            deleted: deletedInDB
+        });
+        console.log('[DATA CENTER] 🔍 Querying MongoDB native driver with state:', state);
 
         // Build match filter
         const match = {};
@@ -51,11 +68,12 @@ router.get('/companies', async (req, res) => {
         // State filter
         if (state === 'live') {
             match.isDeleted = { $ne: true };
-            match.isActive = true;
+            match.isActive = { $ne: false }; // Changed to catch undefined and true
         } else if (state === 'deleted') {
             match.isDeleted = true;
         } else {
-            // 'all' - no filter, include everything
+            // 'all' - explicitly include both deleted and non-deleted
+            console.log('[DATA CENTER] 📋 Fetching ALL companies (deleted + live)');
         }
 
         // Search filter
@@ -199,8 +217,9 @@ router.get('/companies', async (req, res) => {
             { $limit: limit }
         ];
 
-        // Execute aggregation
-        const companies = await Company.aggregate(pipeline);
+        // Execute aggregation using NATIVE MongoDB driver (bypasses all Mongoose middleware)
+        const companies = await companiesCollection.aggregate(pipeline).toArray();
+        console.log('[DATA CENTER] ✅ Native MongoDB aggregation returned', companies.length, 'companies');
 
         // Calculate health metrics for each company
         const results = companies.map(company => {
@@ -256,13 +275,14 @@ router.get('/companies', async (req, res) => {
             };
         });
 
-        // Get total count (without pagination)
+        // Get total count (without pagination) using NATIVE MongoDB driver
         const countPipeline = [
             { $match: finalMatch },
             { $count: 'total' }
         ];
-        const countResult = await Company.aggregate(countPipeline);
+        const countResult = await companiesCollection.aggregate(countPipeline).toArray();
         const total = countResult.length > 0 ? countResult[0].total : 0;
+        console.log('[DATA CENTER] 📊 Total count from native MongoDB:', total);
 
         res.json({
             results,
