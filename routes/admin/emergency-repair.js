@@ -3,12 +3,72 @@
  * 
  * ADMIN ONLY - Fixes corrupt voice settings data
  * 
- * Usage: POST /api/admin/emergency/repair-voice-settings
+ * Usage: 
+ * - GET /api/admin/emergency/inspect-company/:companyId - Inspect specific company
+ * - POST /api/admin/emergency/repair-voice-settings - Fix all corrupt voice settings
  */
 
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+
+/**
+ * @route   GET /api/admin/emergency/inspect-company/:companyId
+ * @desc    Inspect a specific company's voice settings structure
+ * @access  ADMIN ONLY
+ */
+router.get('/inspect-company/:companyId', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        console.log('\n🔍 INSPECTING COMPANY:', companyId);
+        
+        // Get direct MongoDB access
+        const db = mongoose.connection.db;
+        const companiesCollection = db.collection('v2companies');
+        
+        // Find the company
+        const company = await companiesCollection.findOne({ _id: new mongoose.Types.ObjectId(companyId) });
+        
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found'
+            });
+        }
+        
+        // Analyze the voiceSettings structure
+        const analysis = {
+            companyId: company._id.toString(),
+            companyName: company.companyName,
+            hasAiAgentLogic: !!company.aiAgentLogic,
+            aiAgentLogicType: typeof company.aiAgentLogic,
+            hasVoiceSettings: !!company.aiAgentLogic?.voiceSettings,
+            voiceSettingsType: typeof company.aiAgentLogic?.voiceSettings,
+            voiceSettingsIsArray: Array.isArray(company.aiAgentLogic?.voiceSettings),
+            voiceSettingsIsNull: company.aiAgentLogic?.voiceSettings === null,
+            voiceSettingsValue: company.aiAgentLogic?.voiceSettings,
+            rawDocument: {
+                aiAgentLogic: company.aiAgentLogic
+            }
+        };
+        
+        console.log('📊 Analysis:', JSON.stringify(analysis, null, 2));
+        
+        res.json({
+            success: true,
+            analysis
+        });
+        
+    } catch (error) {
+        console.error('❌ INSPECTION ERROR:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Inspection failed',
+            error: error.message
+        });
+    }
+});
 
 /**
  * @route   POST /api/admin/emergency/repair-voice-settings
