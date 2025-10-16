@@ -989,18 +989,29 @@
         }
 
         async function loadDrawerInventory() {
+            console.log('[DATA CENTER] 📦 Loading inventory for:', currentCompany.companyId);
             const content = document.getElementById('drawer-inventory-content');
             content.innerHTML = '<p style="color: #6b7280;">Loading inventory...</p>';
 
             try {
                 const token = localStorage.getItem('adminToken');
-                const response = await fetch(`/api/admin/data-center/companies/${currentCompany.companyId}/inventory`, {
+                const url = `/api/admin/data-center/companies/${currentCompany.companyId}/inventory`;
+                console.log('[DATA CENTER] 🌐 Fetching inventory:', url);
+                
+                const response = await fetch(url, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
-                if (!response.ok) throw new Error('Failed to load inventory');
+                console.log('[DATA CENTER] 📦 Inventory response status:', response.status);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('[DATA CENTER] ❌ Inventory error response:', errorText);
+                    throw new Error(`Failed to load inventory: ${response.status}`);
+                }
 
                 const inventory = await response.json();
+                console.log('[DATA CENTER] ✅ Inventory loaded:', inventory);
 
                 content.innerHTML = `
                     <div style="display: grid; gap: 1rem;">
@@ -1028,8 +1039,16 @@
                     </div>
                 `;
             } catch (error) {
-                console.error('Error loading inventory:', error);
-                content.innerHTML = '<p style="color: #ef4444;">Failed to load inventory</p>';
+                console.error('[DATA CENTER] ❌ Error loading inventory:', error);
+                content.innerHTML = `
+                    <div style="background: #fee; padding: 1rem; border-radius: 6px; border-left: 4px solid #ef4444;">
+                        <h3 style="color: #ef4444; font-weight: 600; margin-bottom: 0.5rem;">❌ Failed to Load Inventory</h3>
+                        <p style="color: #6b7280; margin-bottom: 0.5rem;">${error.message}</p>
+                        <button onclick="loadDrawerInventory()" style="background: #3b82f6; color: white; padding: 0.5rem 1rem; border: none; border-radius: 4px; cursor: pointer;">
+                            🔄 Retry
+                        </button>
+                    </div>
+                `;
             }
         }
 
