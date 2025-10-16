@@ -1057,76 +1057,96 @@ router.get('/summary', async (req, res) => {
         const primary = db.collection(collectionsMap.companies);
         const legacy = collectionsMap.companies === 'companiesCollection' && names.has('companies') ? db.collection('companies') : null;
 
-        // Basic counts
-        const [
-            totalP, liveP, delP,
-            totalL, liveL, delL
-        ] = await Promise.all([
-            primary.countDocuments({}),
-            primary.countDocuments({
-                $and: [
-                    { $or: [ { isDeleted: { $ne: true } }, { isDeleted: { $exists: false } } ] },
-                    { $or: [ { deleted: { $ne: true } }, { deleted: { $exists: false } } ] },
-                    { $or: [ { 'accountStatus.status': { $ne: 'deleted' } }, { 'accountStatus.status': { $exists: false } } ] }
-                ]
-            }),
-            primary.countDocuments({ $or: [ { isDeleted: true }, { deleted: true }, { deletedAt: { $type: 'date' } }, { 'accountStatus.status': 'deleted' } ] }),
-            legacy ? legacy.countDocuments({}) : 0,
-            legacy ? legacy.countDocuments({
-                $and: [
-                    { $or: [ { isDeleted: { $ne: true } }, { isDeleted: { $exists: false } } ] },
-                    { $or: [ { deleted: { $ne: true } }, { deleted: { $exists: false } } ] },
-                    { $or: [ { 'accountStatus.status': { $ne: 'deleted' } }, { 'accountStatus.status': { $exists: false } } ] }
-                ]
-            }) : 0,
-            legacy ? legacy.countDocuments({ $or: [ { isDeleted: true }, { deleted: true }, { deletedAt: { $type: 'date' } }, { 'accountStatus.status': 'deleted' } ] }) : 0
-        ]);
-
-        // Never live counter (0 calls AND no scenarios AND no phone configured)
-        const neverLiveCount = async (col) => {
-            const pipeline = [
-                {
-                    $lookup: {
-                        from: names.has('v2aiagentcalllogs') ? 'v2aiagentcalllogs' : (names.has('aiagentcalllogs') ? 'aiagentcalllogs' : 'v2aiagentcalllogs'),
-                        let: { cid: '$_id' },
-                        pipeline: [
-                            { $match: { $expr: { $eq: ['$companyId', '$$cid'] } } },
-                            { $limit: 1 }
-                        ],
-                        as: 'callsAgg'
-                    }
-                },
-                {
-                    $project: {
-                        zeroCalls: { $eq: [{ $size: '$callsAgg' }, 0] },
-                        scenariosSize: { $size: { $ifNull: ['$aiAgentLogic.instantResponses', []] } },
-                        phoneCount: { $size: { $ifNull: ['$twilioConfig.phoneNumbers', []] } },
-                        legacyPhone: { $ifNull: ['$twilioConfig.phoneNumber', null] }
-                    }
-                },
-                {
-                    $project: {
-                        isNeverLive: {
-                            $and: [
-                                '$zeroCalls',
-                                { $eq: ['$scenariosSize', 0] },
-                                { $eq: ['$phoneCount', 0] },
-                                { $eq: ['$legacyPhone', null] }
-                            ]
-                        }
-                    }
-                },
-                { $match: { isNeverLive: true } },
-                { $count: 'count' }
-            ];
-            const r = await col.aggregate(pipeline).toArray();
-            return r.length ? r[0].count : 0;
+        // Unified deleted/live filters (legacy-aware)
+        const deletedMatch = {
+            $or: [
+                { isDeleted: true },
+                { isDeleted: 'true' },
+                { deleted: true },
+                { deleted: 'true' },
+                { deletedAt: { $type: 'date' } },
+                { 'accountStatus.status': 'deleted' }
+            ]
+        };
+        const liveMatch = {
+            $and: [
+                { $or: [ { isDeleted: { $exists: false } }, { isDeleted: false }, { isDeleted: 'false' } ] },
+                { $or: [ { deleted: { $exists: false } }, { deleted: false }, { deleted: 'false' } ] },
+                { $or: [ { deletedAt: { $exists: false } }, { deletedAt: null } ] },
+                { $or: [ { 'accountStatus.status': { $exists: false } }, { 'accountStatus.status': { $ne: 'deleted' } } ] }
+            ]
         };
 
-        const [neverP, neverL] = await Promise.all([
-            neverLiveCount(primary),
-            neverLiveCount(legacy)
+        console.log('[SUMMARY] Using companies collection:', collectionsMap.companies);
+        console.log('[SUMMARY] deletedMatch =', JSON.stringify(deletedMatch));
+        console.log('[SUMMARY] liveMatch    =', JSON.stringify(liveMatch));
+
+        // Basic counts for primary and legacy, then merge
+        const [totalP, delP, liveP] = await Promise.all([
+            primary.countDocuments({}),
+            primary.countDocuments(deletedMatch),
+            primary.countDocuments(liveMatch)
         ]);
+
+        let totalL = 0, delL = 0, liveL = 0;
+        if (legacy) {
+            [totalL, delL, liveL] = await Promise.all([
+                legacy.countDocuments({}),
+                legacy.countDocuments(deletedMatch),
+                legacy.countDocuments(liveMatch)
+            ]);
+        }
+
+        // Never-live is optional; compute safely with try/catch and default 0
+        let neverP = 0, neverL = 0;
+        try {
+            const callLogsName = collectionsMap.calls || null;
+            if (callLogsName) {
+                const pipeline = [
+                    {
+                        $lookup: {
+                            from: callLogsName,
+                            let: { cid: '$_id' },
+                            pipeline: [
+                                { $match: { $expr: { $eq: ['$companyId', '$$cid'] } } },
+                                { $limit: 1 }
+                            ],
+                            as: 'callsAgg'
+                        }
+                    },
+                    {
+                        $project: {
+                            zeroCalls: { $eq: [{ $size: '$callsAgg' }, 0] },
+                            scenariosSize: { $size: { $ifNull: ['$aiAgentLogic.instantResponses', []] } },
+                            phoneCount: { $size: { $ifNull: ['$twilioConfig.phoneNumbers', []] } },
+                            legacyPhone: { $ifNull: ['$twilioConfig.phoneNumber', null] }
+                        }
+                    },
+                    {
+                        $project: {
+                            isNeverLive: {
+                                $and: [
+                                    '$zeroCalls',
+                                    { $eq: ['$scenariosSize', 0] },
+                                    { $eq: ['$phoneCount', 0] },
+                                    { $eq: ['$legacyPhone', null] }
+                                ]
+                            }
+                        }
+                    },
+                    { $match: { isNeverLive: true } },
+                    { $count: 'count' }
+                ];
+                const rP = await primary.aggregate(pipeline).toArray();
+                neverP = rP.length ? rP[0].count : 0;
+                if (legacy) {
+                    const rL = await legacy.aggregate(pipeline).toArray();
+                    neverL = rL.length ? rL[0].count : 0;
+                }
+            }
+        } catch (e) {
+            console.warn('[SUMMARY] neverLive computation skipped:', e.message);
+        }
 
         const summary = {
             total: (totalP || 0) + (totalL || 0),
