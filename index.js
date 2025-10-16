@@ -133,6 +133,28 @@ async function loadAllRoutes() {
 const routesPromise = loadAllRoutes();
 
 // Initialize Express app
+// --- Boot-time allow-list to prevent env drift ---
+(function assertMongoUriSafe() {
+    try {
+        const uri = process.env.MONGODB_URI || process.env.MONGO_URI || '';
+        const env = process.env.NODE_ENV || 'development';
+        const ALLOW = {
+            production: [/^mongodb(\+srv)?:\/\/(prod-|cluster-prod)/i],
+            staging: [/^mongodb(\+srv)?:\/\/(staging-|cluster-stg)/i],
+            development: [/^mongodb(\+srv)?:\/\/(dev-|localhost|127\.0\.0\.1)/i]
+        };
+        if ((ALLOW[env] || []).length) {
+            const ok = (ALLOW[env] || []).some(rx => rx.test(uri));
+            if (!ok) {
+                console.error(`[BOOT BLOCKED] Unexpected MONGO_URI for env=${env}`);
+                console.error('Provided URI (redacted):', uri.replace(/\/\/([^@]+)@/, '//***@'));
+                process.exit(1);
+            }
+        }
+    } catch (e) {
+        console.warn('[BOOT] Allow-list check skipped:', e.message);
+    }
+})();
 console.log('[INIT] Initializing Express app...');
 const app = express();
 console.log('[INIT] ✅ Express app initialized');
@@ -219,6 +241,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/global-action-hook-directories', routes.globalActionHookDirectoriesRoutes); // Global Action Hook Directories
     app.use('/api/admin/global-industry-types', routes.globalIndustryTypesRoutes); // Global Industry Types
     app.use('/api/admin/data-center', routes.dataCenterRoutes); // Data Center - Admin Operations
+    app.use('/api/admin/diag', require('./routes/admin/diag')); // Diagnostics - DB/Redis fingerprint
     app.use('/api/v2global/admin', routes.v2GlobalAdminRoutes); // V2 Global Admin Dashboard
     app.use('/api/v2global/directory', routes.v2GlobalDirectoryRoutes); // V2 Global Company Directory
     app.use('/api/v2global/addcompany', routes.v2GlobalAddCompanyRoutes); // V2 Global Add Company
