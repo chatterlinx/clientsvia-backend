@@ -50,15 +50,8 @@ async function authenticateJWT(req, res, next) {
       return res.status(401).json({ message: 'User not found or inactive' });
     }
 
-    // Verify user has valid company association
-    if (!user.companyId) {
-      console.error('❌ AUTH CHECKPOINT: User has no company association', { userId: user._id });
-      return res.status(403).json({ 
-        message: 'User account is not properly configured. Please contact support.',
-        code: 'MISSING_COMPANY_ASSOCIATION'
-      });
-    }
-
+    // Attach user to request - companyId validation moved to specific endpoints that need it
+    // This allows flexibility for endpoints that don't require company association
     req.user = user;
     console.log('✅ AUTH CHECKPOINT: Authentication successful, user attached to request');
     next();
