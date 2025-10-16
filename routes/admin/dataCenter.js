@@ -25,6 +25,18 @@ router.use(authenticateJWT);
 // Enforce admin-only access for all Data Center operations
 router.use(requireRole('admin'));
 
+// Helper: Build a collections map based on existing collection names
+function buildCollectionsMap(names) {
+    return {
+        companies: names.has('companiesCollection') ? 'companiesCollection' : 'companies',
+        calls: names.has('v2aiagentcalllogs') ? 'v2aiagentcalllogs' : (names.has('aiagentcalllogs') ? 'aiagentcalllogs' : null),
+        contacts: names.has('v2contacts') ? 'v2contacts' : (names.has('contacts') ? 'contacts' : null),
+        notifications: names.has('v2notificationlogs') ? 'v2notificationlogs' : (names.has('notificationlogs') ? 'notificationlogs' : null),
+        transcripts: names.has('conversationlogs') ? 'conversationlogs' : null,
+        customers: names.has('customers') ? 'customers' : null
+    };
+}
+
 /**
  * ============================================================================
  * GET /api/admin/data-center/companies
@@ -53,9 +65,12 @@ router.get('/companies', async (req, res) => {
         const db = mongoose.connection.db;
         const collections = await db.listCollections().toArray();
         const names = new Set(collections.map(c => c.name));
+        const collectionsMap = buildCollectionsMap(names);
         // Pick primary and legacy company collections
-        const companiesCollection = db.collection(names.has('companiesCollection') ? 'companiesCollection' : 'companies');
-        const legacyCollection = names.has('companies') ? db.collection('companies') : null;
+        const companiesCollection = db.collection(collectionsMap.companies);
+        const legacyCollection = collectionsMap.companies === 'companiesCollection' && names.has('companies')
+            ? db.collection('companies')
+            : null;
 
         // First, let's see what's in the database
         const totalInDB = await companiesCollection.countDocuments({});
@@ -234,7 +249,7 @@ router.get('/companies', async (req, res) => {
 
         // Execute aggregation using NATIVE MongoDB driver across BOTH possible collections
         // Diagnostics: when filtering deleted, log chosen collections and filter
-        if (state === 'deleted') {
+        if (state === 'deleted' || state === 'live' || state === 'all') {
             console.log('[DATA CENTER] 🔎 Deleted filter (finalMatch):', JSON.stringify(finalMatch));
             console.log('[DATA CENTER] 🔎 Using company collections:', {
                 primary: companiesCollection.namespace.collection,
@@ -345,7 +360,8 @@ router.get('/companies', async (req, res) => {
             total,
             page: pageNum,
             pageSize: limit,
-            totalPages: Math.ceil(total / limit)
+            totalPages: Math.ceil(total / limit),
+            collectionsMap
         };
         
         console.log('[DATA CENTER] 📤 Sending response:', {
@@ -415,7 +431,8 @@ router.get('/companies/:id/inventory', async (req, res) => {
         const db = mongoose.connection.db;
         const collections = await db.listCollections().toArray();
         const names = new Set(collections.map(c => c.name));
-        const primaryName = names.has('companiesCollection') ? 'companiesCollection' : 'companies';
+        const collectionsMap = buildCollectionsMap(names);
+        const primaryName = collectionsMap.companies;
         const raw = await db.collection(primaryName).findOne({ _id: new mongoose.Types.ObjectId(id) })
             || (names.has('companies') ? await db.collection('companies').findOne({ _id: new mongoose.Types.ObjectId(id) }) : null);
         if (!raw) {
@@ -424,9 +441,9 @@ router.get('/companies/:id/inventory', async (req, res) => {
 
         // Count documents in each collection
         // Support legacy collection names as well
-        const callLogsName = names.has('v2aiagentcalllogs') ? 'v2aiagentcalllogs' : (names.has('aiagentcalllogs') ? 'aiagentcalllogs' : 'v2aiagentcalllogs');
-        const contactsName = names.has('v2contacts') ? 'v2contacts' : (names.has('contacts') ? 'contacts' : 'v2contacts');
-        const notificationsName = names.has('v2notificationlogs') ? 'v2notificationlogs' : (names.has('notificationlogs') ? 'notificationlogs' : 'v2notificationlogs');
+        const callLogsName = collectionsMap.calls || 'v2aiagentcalllogs';
+        const contactsName = collectionsMap.contacts || 'v2contacts';
+        const notificationsName = collectionsMap.notifications || 'v2notificationlogs';
 
         const [callsCount, contactsCount, notificationsCount] = await Promise.all([
             db.collection(callLogsName).countDocuments({ companyId: raw._id }),
@@ -475,6 +492,7 @@ router.get('/companies/:id/inventory', async (req, res) => {
                 scenarios: scenariosCount
             },
             collectionsMap: {
+                ...collectionsMap,
                 companies: primaryName,
                 calls: callLogsName,
                 contacts: contactsName,
@@ -732,7 +750,8 @@ router.get('/companies/:id/customers', async (req, res) => {
         const db = mongoose.connection.db;
         const collections = await db.listCollections().toArray();
         const names = new Set(collections.map(c => c.name));
-        const contactsName = names.has('v2contacts') ? 'v2contacts' : (names.has('contacts') ? 'contacts' : 'v2contacts');
+        const collectionsMap = buildCollectionsMap(names);
+        const contactsName = collectionsMap.contacts || 'v2contacts';
 
         const contacts = await db.collection(contactsName)
             .find(query)
@@ -749,7 +768,8 @@ router.get('/companies/:id/customers', async (req, res) => {
             total,
             page: pageNum,
             pageSize: limit,
-            totalPages: Math.ceil(total / limit)
+            totalPages: Math.ceil(total / limit),
+            collectionsMap
         });
 
     } catch (error) {
@@ -790,7 +810,8 @@ router.get('/companies/:id/transcripts', async (req, res) => {
         const db = mongoose.connection.db;
         const collections = await db.listCollections().toArray();
         const names = new Set(collections.map(c => c.name));
-        const callLogsName = names.has('v2aiagentcalllogs') ? 'v2aiagentcalllogs' : (names.has('aiagentcalllogs') ? 'aiagentcalllogs' : 'v2aiagentcalllogs');
+        const collectionsMap = buildCollectionsMap(names);
+        const callLogsName = collectionsMap.calls || 'v2aiagentcalllogs';
 
         const calls = await db.collection(callLogsName)
             .find(query)
@@ -807,7 +828,8 @@ router.get('/companies/:id/transcripts', async (req, res) => {
             total,
             page: pageNum,
             pageSize: limit,
-            totalPages: Math.ceil(total / limit)
+            totalPages: Math.ceil(total / limit),
+            collectionsMap
         });
 
     } catch (error) {
@@ -968,12 +990,7 @@ router.get('/scan', async (req, res) => {
             v2notificationlogs: await safeCount(names.has('v2notificationlogs') ? 'v2notificationlogs' : (names.has('notificationlogs') ? 'notificationlogs' : 'v2notificationlogs'))
         };
 
-        const collectionsMap = {
-            companies: names.has('companiesCollection') ? 'companiesCollection' : 'companies',
-            calls: names.has('v2aiagentcalllogs') ? 'v2aiagentcalllogs' : (names.has('aiagentcalllogs') ? 'aiagentcalllogs' : null),
-            contacts: names.has('v2contacts') ? 'v2contacts' : (names.has('contacts') ? 'contacts' : null),
-            notifications: names.has('v2notificationlogs') ? 'v2notificationlogs' : (names.has('notificationlogs') ? 'notificationlogs' : null)
-        };
+        const collectionsMap = buildCollectionsMap(names);
 
         // Redis scan (approx) for company-related keys
         const scanPatternCounts = async (patterns) => {
@@ -1036,8 +1053,9 @@ router.get('/summary', async (req, res) => {
         const db = mongoose.connection.db;
         const collections = await db.listCollections().toArray();
         const names = new Set(collections.map(c => c.name));
-        const primary = db.collection(names.has('companiesCollection') ? 'companiesCollection' : 'companies');
-        const legacy = names.has('companies') ? db.collection('companies') : null;
+        const collectionsMap = buildCollectionsMap(names);
+        const primary = db.collection(collectionsMap.companies);
+        const legacy = collectionsMap.companies === 'companiesCollection' && names.has('companies') ? db.collection('companies') : null;
 
         // Basic counts
         const [
@@ -1117,10 +1135,103 @@ router.get('/summary', async (req, res) => {
             neverLive: (neverP || 0) + (neverL || 0)
         };
 
-        res.json(summary);
+        res.json({ ...summary, collectionsMap });
     } catch (error) {
         console.error('[DATA CENTER] Error getting summary:', error);
         res.status(500).json({ error: 'Failed to get summary', details: error.message });
+    }
+});
+
+/**
+ * ==========================================================================
+ * GET /api/admin/data-center/companies/:id/deletion-debug
+ * Explain why a company is considered deleted and which collection was used
+ * ==========================================================================
+ */
+router.get('/companies/:id/deletion-debug', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const db = mongoose.connection.db;
+        const collections = await db.listCollections().toArray();
+        const names = new Set(collections.map(c => c.name));
+        const collectionsMap = buildCollectionsMap(names);
+
+        const objectId = new mongoose.Types.ObjectId(id);
+        let usedCollection = collectionsMap.companies;
+        let doc = await db.collection(usedCollection).findOne(
+            { _id: objectId },
+            { projection: { companyName: 1, businessName: 1, isDeleted: 1, deleted: 1, deletedAt: 1, accountStatus: 1 } }
+        );
+
+        if (!doc && usedCollection === 'companiesCollection' && names.has('companies')) {
+            usedCollection = 'companies';
+            doc = await db.collection('companies').findOne(
+                { _id: objectId },
+                { projection: { companyName: 1, businessName: 1, isDeleted: 1, deleted: 1, deletedAt: 1, accountStatus: 1 } }
+            );
+        }
+
+        if (!doc) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        const flags = {
+            isDeleted: doc.isDeleted === true,
+            deleted: doc.deleted === true,
+            deletedAtIsDate: doc.deletedAt instanceof Date,
+            accountStatusDeleted: doc.accountStatus?.status === 'deleted',
+            stringBooleans: {
+                isDeleted: doc.isDeleted === 'true',
+                deleted: doc.deleted === 'true'
+            }
+        };
+
+        const evaluatedAsDeleted = Boolean(
+            doc.isDeleted === true ||
+            doc.deleted === true ||
+            doc.isDeleted === 'true' ||
+            doc.deleted === 'true' ||
+            (doc.deletedAt instanceof Date) ||
+            (doc.accountStatus && doc.accountStatus.status === 'deleted')
+        );
+
+        const raw = {
+            companyName: doc.companyName || doc.businessName || null,
+            isDeleted: doc.isDeleted ?? null,
+            deleted: doc.deleted ?? null,
+            deletedAt: doc.deletedAt ?? null,
+            accountStatus: doc.accountStatus ?? null
+        };
+
+        res.json({
+            companyId: id,
+            collection: usedCollection,
+            flags,
+            evaluatedAsDeleted,
+            raw
+        });
+    } catch (error) {
+        console.error('[DATA CENTER] Error in deletion-debug:', error);
+        res.status(500).json({ error: 'Failed to debug deletion status', details: error.message });
+    }
+});
+
+/**
+ * ==========================================================================
+ * GET /api/admin/data-center/collections-map
+ * Return selected collection names for this environment
+ * ==========================================================================
+ */
+router.get('/collections-map', async (req, res) => {
+    try {
+        const db = mongoose.connection.db;
+        const collections = await db.listCollections().toArray();
+        const names = new Set(collections.map(c => c.name));
+        const collectionsMap = buildCollectionsMap(names);
+        res.json(collectionsMap);
+    } catch (error) {
+        console.error('[DATA CENTER] Error in collections-map:', error);
+        res.status(500).json({ error: 'Failed to get collections map', details: error.message });
     }
 });
 
