@@ -522,19 +522,19 @@
                 </div>
 
                 <div class="filter-chips">
-                    <div class="chip" data-filter="all" onclick="applyFilter('all')">
+                    <div class="chip" data-filter="all">
                         All Companies
                     </div>
-                    <div class="chip" data-filter="live" onclick="applyFilter('live')">
+                    <div class="chip" data-filter="live">
                         Live Only
                     </div>
-                    <div class="chip" data-filter="never-live" onclick="applyFilter('never-live')">
+                    <div class="chip" data-filter="never-live">
                         Never Live
                     </div>
-                    <div class="chip" data-filter="stale" onclick="applyFilter('stale')">
+                    <div class="chip" data-filter="stale">
                         Stale >60d
                     </div>
-                    <div class="chip" data-filter="test" onclick="applyFilter('test')">
+                    <div class="chip" data-filter="test">
                         Test Accounts
                     </div>
                 </div>
@@ -689,23 +689,60 @@
         // INITIALIZATION
         // ============================================================================
         document.addEventListener('DOMContentLoaded', () => {
+            console.log('[DATA CENTER] 🚀 Initializing Data Center...');
+            
+            // Activate default filter chip
+            const allChip = document.querySelector('[data-filter="all"]');
+            if (allChip) {
+                allChip.classList.add('active');
+                console.log('[DATA CENTER] ✅ Default "All Companies" chip activated');
+            }
+            
             loadCompanies();
             setupEventListeners();
+            
+            console.log('[DATA CENTER] ✅ Initialization complete');
         });
 
         function setupEventListeners() {
+            console.log('[DATA CENTER] 🎧 Setting up event listeners...');
+            
             // Tab switching
-            document.querySelectorAll('.tab').forEach(tab => {
+            const tabs = document.querySelectorAll('.tab');
+            console.log('[DATA CENTER] 📑 Found', tabs.length, 'tabs');
+            tabs.forEach(tab => {
                 tab.addEventListener('click', () => {
                     const tabName = tab.dataset.tab;
+                    console.log('[DATA CENTER] 📑 Tab clicked:', tabName);
                     switchTab(tabName);
                 });
             });
 
             // Search on Enter key
-            document.getElementById('search-input').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') search();
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) {
+                searchInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        console.log('[DATA CENTER] 🔍 Enter key pressed, searching...');
+                        search();
+                    }
+                });
+                console.log('[DATA CENTER] ✅ Search input listener attached');
+            }
+            
+            // Filter chips - attach click listeners
+            const chips = document.querySelectorAll('.chip');
+            console.log('[DATA CENTER] 🏷️ Found', chips.length, 'filter chips');
+            chips.forEach(chip => {
+                const filter = chip.dataset.filter;
+                console.log('[DATA CENTER] 🏷️ Chip:', filter);
+                chip.addEventListener('click', () => {
+                    console.log('[DATA CENTER] 🏷️ Chip clicked via listener:', filter);
+                    applyFilter(filter);
+                });
             });
+            
+            console.log('[DATA CENTER] ✅ Event listeners setup complete');
         }
 
         // ============================================================================
@@ -727,32 +764,47 @@
         }
 
         async function loadCompanies(query = '', state = 'all') {
+            console.log('[DATA CENTER] 📡 Loading companies:', { query, state });
+            
             try {
                 const token = localStorage.getItem('adminToken');
                 const params = new URLSearchParams({ query, state, page: 1, pageSize: 100 });
+                
+                console.log('[DATA CENTER] 🌐 Fetching:', `/api/admin/data-center/companies?${params}`);
                 
                 const response = await fetch(`/api/admin/data-center/companies?${params}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                if (!response.ok) {
+                    console.error('[DATA CENTER] ❌ HTTP Error:', response.status);
+                    throw new Error(`HTTP ${response.status}`);
+                }
 
                 const data = await response.json();
+                console.log('[DATA CENTER] ✅ Received data:', {
+                    total: data.total,
+                    resultsCount: data.results.length,
+                    page: data.page
+                });
+                
                 companies = data.results;
                 
                 renderCompanies(companies);
                 updateCounts(data.total);
 
             } catch (error) {
-                console.error('Error loading companies:', error);
+                console.error('[DATA CENTER] ❌ Error loading companies:', error);
                 showError('Failed to load companies');
             }
         }
 
         function renderCompanies(companies) {
+            console.log('[DATA CENTER] 🎨 Rendering companies:', companies.length);
             const tbody = document.getElementById('companies-table-body');
             
             if (companies.length === 0) {
+                console.log('[DATA CENTER] ⚠️ No companies to display');
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="7" class="empty-state">
@@ -786,12 +838,18 @@
             `).join('');
             
             // Add event listeners to rows
-            document.querySelectorAll('#companies-table-body tr[data-company-id]').forEach(row => {
+            const rows = document.querySelectorAll('#companies-table-body tr[data-company-id]');
+            console.log('[DATA CENTER] 🖱️ Attaching click listeners to', rows.length, 'rows');
+            
+            rows.forEach(row => {
                 row.addEventListener('click', () => {
                     const companyId = row.dataset.companyId;
+                    console.log('[DATA CENTER] 👆 Row clicked, companyId:', companyId);
                     viewCompany(companyId);
                 });
             });
+            
+            console.log('[DATA CENTER] ✅ Render complete');
         }
 
         function updateCounts(total) {
@@ -804,18 +862,38 @@
         }
 
         function applyFilter(filter) {
+            console.log('[DATA CENTER] 🔍 Filter clicked:', filter);
             currentFilter = filter;
             
             // Update chip UI
             document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-            document.querySelector(`[data-filter="${filter}"]`).classList.add('active');
+            const selectedChip = document.querySelector(`[data-filter="${filter}"]`);
+            if (selectedChip) {
+                selectedChip.classList.add('active');
+                console.log('[DATA CENTER] ✅ Chip activated:', filter);
+            } else {
+                console.error('[DATA CENTER] ❌ Chip not found for filter:', filter);
+            }
 
             // Apply filter
             const query = document.getElementById('search-input').value;
             let state = 'all';
             
-            if (filter === 'live') state = 'live';
-            else if (filter === 'never-live') state = 'all'; // Will filter client-side
+            if (filter === 'live') {
+                state = 'live';
+                console.log('[DATA CENTER] 📊 Filtering for LIVE companies only');
+            } else if (filter === 'never-live') {
+                state = 'all';
+                console.log('[DATA CENTER] 📊 Filtering for NEVER LIVE companies');
+            } else if (filter === 'stale') {
+                state = 'all';
+                console.log('[DATA CENTER] 📊 Filtering for STALE companies');
+            } else if (filter === 'test') {
+                state = 'all';
+                console.log('[DATA CENTER] 📊 Filtering for TEST accounts');
+            } else {
+                console.log('[DATA CENTER] 📊 Showing ALL companies');
+            }
             
             loadCompanies(query, state);
         }
