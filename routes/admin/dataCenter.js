@@ -367,12 +367,18 @@ router.get('/companies/:id/inventory', async (req, res) => {
         const { id } = req.params;
         console.log('[DATA CENTER] GET /companies/:id/inventory', id);
 
-        // Check cache first
+        // Check cache first (guard if redis is unavailable)
         const cacheKey = `datacenter:inventory:${id}`;
-        const cached = await redisClient.get(cacheKey);
-        if (cached) {
-            console.log('[DATA CENTER] Returning cached inventory');
-            return res.json(JSON.parse(cached));
+        try {
+            if (redisClient && typeof redisClient.get === 'function') {
+                const cached = await redisClient.get(cacheKey);
+                if (cached) {
+                    console.log('[DATA CENTER] Returning cached inventory');
+                    return res.json(JSON.parse(cached));
+                }
+            }
+        } catch (cacheErr) {
+            console.warn('[DATA CENTER] Redis cache get failed:', cacheErr.message);
         }
 
         // Fetch company
@@ -430,8 +436,14 @@ router.get('/companies/:id/inventory', async (req, res) => {
             cachedAt: new Date()
         };
 
-        // Cache for 30 seconds
-        await redisClient.setex(cacheKey, 30, JSON.stringify(inventory));
+        // Cache for 30 seconds (best-effort)
+        try {
+            if (redisClient && typeof redisClient.setex === 'function') {
+                await redisClient.setex(cacheKey, 30, JSON.stringify(inventory));
+            }
+        } catch (cacheErr) {
+            console.warn('[DATA CENTER] Redis cache set failed:', cacheErr.message);
+        }
 
         res.json(inventory);
 
@@ -482,10 +494,12 @@ router.patch('/companies/:id/soft-delete', async (req, res) => {
 
         await company.save();
 
-        // Clear cache
+        // Clear cache (best-effort)
         try {
-            await redisClient.del(`company:${id}`);
-            console.log('[DATA CENTER] Cache cleared for deleted company');
+            if (redisClient && typeof redisClient.del === 'function') {
+                await redisClient.del(`company:${id}`);
+                console.log('[DATA CENTER] Cache cleared for deleted company');
+            }
         } catch (cacheError) {
             console.warn('[DATA CENTER] Cache clear failed:', cacheError.message);
         }
@@ -540,10 +554,12 @@ router.post('/companies/:id/restore', async (req, res) => {
 
         await company.save();
 
-        // Clear cache
+        // Clear cache (best-effort)
         try {
-            await redisClient.del(`company:${id}`);
-            console.log('[DATA CENTER] Cache cleared for restored company');
+            if (redisClient && typeof redisClient.del === 'function') {
+                await redisClient.del(`company:${id}`);
+                console.log('[DATA CENTER] Cache cleared for restored company');
+            }
         } catch (cacheError) {
             console.warn('[DATA CENTER] Cache clear failed:', cacheError.message);
         }
