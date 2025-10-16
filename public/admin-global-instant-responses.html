@@ -9111,7 +9111,7 @@ Timestamp: ${new Date(timestamp).toISOString()}
             
             try {
                 const response = await fetch(`/api/admin/global-instant-responses/${activeTemplateId}/filler-words`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
                 if (!response.ok) throw new Error('Failed to load filler words');
@@ -10268,7 +10268,7 @@ async function loadUrgencyKeywords() {
         
         const response = await fetch(`/api/admin/global-instant-responses/${activeTemplateId}/urgency-keywords`, {
             headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${getAuthToken()}`
             }
         });
         
