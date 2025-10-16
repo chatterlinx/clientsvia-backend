@@ -247,6 +247,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/global-industry-types', routes.globalIndustryTypesRoutes); // Global Industry Types
     app.use('/api/admin/data-center', routes.dataCenterRoutes); // Data Center - Admin Operations
     app.use('/api/admin/diag', require('./routes/admin/diag')); // Diagnostics - DB/Redis fingerprint
+    app.use('/api/admin/emergency', require('./routes/admin/emergency-repair')); // 🚨 Emergency database repair endpoints
     app.use('/api/v2global/admin', routes.v2GlobalAdminRoutes); // V2 Global Admin Dashboard
     app.use('/api/v2global/directory', routes.v2GlobalDirectoryRoutes); // V2 Global Company Directory
     app.use('/api/v2global/addcompany', routes.v2GlobalAddCompanyRoutes); // V2 Global Add Company
