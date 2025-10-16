@@ -487,31 +487,54 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
 
         // Save to database
         console.log(`🔍 [SAVE-16] Calling company.save()...`);
-        const saveResult = await company.save();
-        console.log(`🔍 [SAVE-17] Save completed successfully`);
-        console.log(`🔍 [SAVE-18] Saved document _id:`, saveResult._id);
+        let saveResult;
+        try {
+            saveResult = await company.save();
+            console.log(`🔍 [SAVE-17] Save completed successfully`);
+            console.log(`🔍 [SAVE-18] Saved document _id:`, saveResult._id);
+        } catch (saveError) {
+            console.error(`❌ [SAVE-17-ERROR] Failed to save company:`, saveError.message);
+            console.error(`❌ [SAVE-17-ERROR] Error name:`, saveError.name);
+            console.error(`❌ [SAVE-17-ERROR] Stack:`, saveError.stack);
+            throw saveError; // Re-throw to be caught by outer catch
+        }
 
         // Verify save by reloading from DB
         console.log(`🔍 [SAVE-19] Verifying save by reloading from database...`);
-        const verifyCompany = await Company.findById(companyId);
-        console.log(`🔍 [SAVE-20] Verification - voiceSettings from DB:`, JSON.stringify(verifyCompany.aiAgentLogic?.voiceSettings, null, 2));
+        let verifyCompany;
+        try {
+            verifyCompany = await Company.findById(companyId);
+            console.log(`🔍 [SAVE-20] Verification - voiceSettings from DB:`, JSON.stringify(verifyCompany.aiAgentLogic?.voiceSettings, null, 2));
+        } catch (verifyError) {
+            console.error(`❌ [SAVE-20-ERROR] Failed to verify save:`, verifyError.message);
+            console.error(`❌ [SAVE-20-ERROR] Stack:`, verifyError.stack);
+            // Don't throw - verification failure isn't critical if save succeeded
+        }
 
         // Clear Redis cache for immediate effect
         if (redisClient) {
-            console.log(`🔍 [SAVE-21] Clearing Redis cache...`);
-            const cacheKeys = [
-                `company:${companyId}`,
-                `voice:company:${companyId}`,
-                `ai-agent:${companyId}`
-            ];
-            
-            // Also clear phone-based cache for Twilio integration
-            if (company.twilioConfig?.phoneNumber) {
-                cacheKeys.push(`company-phone:${company.twilioConfig.phoneNumber}`);
+            try {
+                console.log(`🔍 [SAVE-21] Clearing Redis cache...`);
+                const cacheKeys = [
+                    `company:${companyId}`,
+                    `voice:company:${companyId}`,
+                    `ai-agent:${companyId}`
+                ];
+                
+                // Also clear phone-based cache for Twilio integration
+                if (company.twilioConfig?.phoneNumber) {
+                    cacheKeys.push(`company-phone:${company.twilioConfig.phoneNumber}`);
+                }
+                
+                await Promise.all(cacheKeys.map(key => redisClient.del(key).catch(err => {
+                    console.warn(`⚠️ Failed to delete cache key ${key}:`, err.message);
+                    return null; // Continue even if one fails
+                })));
+                console.log(`🗑️ [SAVE-22] V2 Voice cache cleared for company ${companyId}: ${cacheKeys.join(', ')}`);
+            } catch (cacheError) {
+                console.warn(`⚠️ [SAVE-22-ERROR] Redis cache clear failed (non-fatal):`, cacheError.message);
+                // Continue anyway - cache clear failure shouldn't block save
             }
-            
-            await Promise.all(cacheKeys.map(key => redisClient.del(key)));
-            console.log(`🗑️ [SAVE-22] V2 Voice cache cleared for company ${companyId}: ${cacheKeys.join(', ')}`);
         } else {
             console.log(`⚠️ [SAVE-23] Redis client not available - skipping cache clear`);
         }
