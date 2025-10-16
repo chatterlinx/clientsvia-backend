@@ -448,6 +448,24 @@ async function startServer() {
         console.log('[Server] Environment:', process.env.NODE_ENV || 'development');
         console.log('[Server] Port target:', process.env.PORT || 3000);
         
+        // 🔒 PRODUCTION SECURITY: Validate environment variables before starting
+        console.log('[Server] Step 0/7: Validating environment configuration...');
+        const { validateEnvironment, getEnvironmentSummary } = require('./utils/validateEnvironment');
+        try {
+            const validationResult = validateEnvironment();
+            console.log(`[Server] ✅ Step 0 COMPLETE: Environment validated (${validationResult.warnings.length} warnings)`);
+            
+            // Log environment summary for debugging
+            const envSummary = getEnvironmentSummary();
+            console.log('[Server] Environment Summary:', JSON.stringify(envSummary, null, 2));
+        } catch (validationError) {
+            console.error('[Server] ❌ FATAL: Environment validation failed!');
+            console.error('[Server] Error:', validationError.message);
+            console.error('[Server] Please check your .env file and ensure all required variables are set.');
+            console.error('[Server] See env.example for configuration details.');
+            throw validationError;
+        }
+        
         console.log('[Server] Step 1/7: Loading routes with timeout protection...');
         const routeStart = Date.now();
         const routes = await routesPromise; // Wait for routes to load
