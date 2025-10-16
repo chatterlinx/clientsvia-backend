@@ -486,15 +486,32 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
         console.log(`🔍 [SAVE-13] Voice settings to save:`, JSON.stringify(newVoiceSettings, null, 2));
         
         // Save using Mongoose (normal approach)
-        console.log(`🔍 [SAVE-14] Assigning voiceSettings to company.aiAgentLogic.voiceSettings`);
-        company.aiAgentLogic.voiceSettings = newVoiceSettings;
+        console.log(`🔍 [SAVE-14] Using targeted update to avoid full document validation`);
         
-        console.log(`🔍 [SAVE-15] Calling company.save()...`);
         try {
-            await company.save();
-            console.log(`✅ [SAVE-16] Mongoose save completed successfully`);
+            // Use findByIdAndUpdate with $set to update ONLY voiceSettings field
+            // This avoids Mongoose validating corrupt data in OTHER fields
+            const updatedCompany = await Company.findByIdAndUpdate(
+                companyId,
+                {
+                    $set: {
+                        'aiAgentLogic.voiceSettings': newVoiceSettings
+                    }
+                },
+                { new: true, runValidators: false } // Skip full validation, only validate the field we're updating
+            );
+            
+            if (!updatedCompany) {
+                console.error(`❌ [SAVE-16-ERROR] Company not found during update`);
+                return res.status(404).json({
+                    success: false,
+                    message: 'Company not found'
+                });
+            }
+            
+            console.log(`✅ [SAVE-16] Voice settings updated successfully via targeted update`);
         } catch (saveError) {
-            console.error(`❌ [SAVE-16-ERROR] Mongoose save failed!`);
+            console.error(`❌ [SAVE-16-ERROR] Mongoose update failed!`);
             console.error(`❌ [SAVE-16-ERROR] Error name: ${saveError.name}`);
             console.error(`❌ [SAVE-16-ERROR] Error message: ${saveError.message}`);
             console.error(`❌ [SAVE-16-ERROR] Full error:`, saveError);
@@ -502,7 +519,7 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             // Return specific validation error
             return res.status(400).json({
                 success: false,
-                message: `Database validation error: ${saveError.message}`,
+                message: `Database update error: ${saveError.message}`,
                 error: saveError.name,
                 details: saveError.errors || saveError.message
             });
