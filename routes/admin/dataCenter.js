@@ -124,7 +124,8 @@ router.get('/companies', async (req, res) => {
             // No additional filter needed
         }
         
-        const pipeline = [
+        // Build base pipeline (no sort/pagination yet)
+        const basePipeline = [
             { $match: finalMatch },
 
             // Lookup call logs for activity metrics
@@ -211,31 +212,45 @@ router.get('/companies', async (req, res) => {
                 }
             },
 
-            // Sort
-            { $sort: buildSortObject(sort) },
-
-            // Pagination
-            { $skip: skip },
-            { $limit: limit }
+            // Note: We will merge results from multiple collections and then sort/paginate in JS
         ];
 
-        // Execute aggregation using NATIVE MongoDB driver (bypasses all Mongoose middleware)
-        const companies = await companiesCollection.aggregate(pipeline).toArray();
-        console.log('[DATA CENTER] ✅ Native MongoDB aggregation returned', companies.length, 'companies');
+        // Execute aggregation using NATIVE MongoDB driver across BOTH possible collections
+        const legacyCollection = db.collection('companies');
+        const [primaryResults, legacyResults] = await Promise.all([
+            companiesCollection.aggregate(basePipeline).toArray(),
+            legacyCollection.aggregate(basePipeline).toArray()
+        ]);
+        const mergedCompanies = [...primaryResults, ...legacyResults];
+        console.log('[DATA CENTER] ✅ Native MongoDB aggregation returned', mergedCompanies.length, 'companies (merged)');
         
         // DEBUG: Log first company to see structure
-        if (companies.length > 0) {
+        if (mergedCompanies.length > 0) {
             console.log('[DATA CENTER] 🔍 First company sample:', {
-                _id: companies[0]._id,
-                companyName: companies[0].companyName,
-                businessName: companies[0].businessName,
-                calls: companies[0].calls,
-                hasCallsAgg: !!companies[0].callsAgg
+                _id: mergedCompanies[0]._id,
+                companyName: mergedCompanies[0].companyName,
+                businessName: mergedCompanies[0].businessName,
+                calls: mergedCompanies[0].calls,
+                hasCallsAgg: !!mergedCompanies[0].callsAgg
             });
         }
 
+        // Sort merged results in JS based on requested sort
+        const sortSpec = buildSortObject(sort);
+        const [[sortKey, sortDir]] = Object.entries(sortSpec);
+        mergedCompanies.sort((a, b) => {
+            const av = a[sortKey] ?? null;
+            const bv = b[sortKey] ?? null;
+            const aVal = av instanceof Date ? av.getTime() : (typeof av === 'number' ? av : (av ? 1 : 0));
+            const bVal = bv instanceof Date ? bv.getTime() : (typeof bv === 'number' ? bv : (bv ? 1 : 0));
+            return sortDir === -1 ? bVal - aVal : aVal - bVal;
+        });
+
+        // Pagination in JS after merge
+        const pageSlice = mergedCompanies.slice(skip, skip + limit);
+
         // Calculate health metrics for each company
-        const results = companies.map(company => {
+        const results = pageSlice.map(company => {
             const health = CompanyHealthService.calculateHealth(company, {
                 calls: company.calls,
                 lastActivity: company.lastActivity,
@@ -288,14 +303,13 @@ router.get('/companies', async (req, res) => {
             };
         });
 
-        // Get total count (without pagination) using NATIVE MongoDB driver
-        const countPipeline = [
-            { $match: finalMatch },
-            { $count: 'total' }
-        ];
-        const countResult = await companiesCollection.aggregate(countPipeline).toArray();
-        const total = countResult.length > 0 ? countResult[0].total : 0;
-        console.log('[DATA CENTER] 📊 Total count from native MongoDB:', total);
+        // Get total count across both collections
+        const [primaryCount, legacyCount] = await Promise.all([
+            companiesCollection.countDocuments(finalMatch),
+            legacyCollection.countDocuments(finalMatch)
+        ]);
+        const total = (primaryCount || 0) + (legacyCount || 0);
+        console.log('[DATA CENTER] 📊 Total count from native MongoDB (merged):', total);
 
         const response = {
             results,
