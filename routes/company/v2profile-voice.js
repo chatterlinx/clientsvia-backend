@@ -454,6 +454,18 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             console.log(`🔍 [SAVE-12] Initializing new aiAgentLogic object`);
             company.aiAgentLogic = {};
         }
+        
+        // FIX: Check if voiceSettings is a string (legacy migration issue)
+        if (typeof company.aiAgentLogic.voiceSettings === 'string') {
+            console.log(`🔧 [SAVE-12A] MIGRATION: voiceSettings is a string, converting to object`);
+            company.aiAgentLogic.voiceSettings = {};
+        }
+        
+        // Ensure voiceSettings is an object
+        if (!company.aiAgentLogic.voiceSettings || typeof company.aiAgentLogic.voiceSettings !== 'object') {
+            console.log(`🔧 [SAVE-12B] Initializing voiceSettings object`);
+            company.aiAgentLogic.voiceSettings = {};
+        }
 
         // V2 Voice Settings Structure
         const newVoiceSettings = {
