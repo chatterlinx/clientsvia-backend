@@ -483,6 +483,11 @@ async function startServer() {
         console.log('[Server] Step 6/6: Starting HTTP server...');
         const serverStart = Date.now();
         
+        // Initialize Data Center Auto-Purge Cron
+        console.log('[Server] Initializing Data Center auto-purge cron...');
+        const { initializeAutoPurgeCron } = require('./services/autoPurgeCron');
+        initializeAutoPurgeCron();
+        
         return app.listen(PORT, '0.0.0.0', () => {
             console.log(`[Server] ✅ Step 6 COMPLETE: HTTP server bound in ${Date.now() - serverStart}ms`);
             console.log(`🎉 SERVER FULLY OPERATIONAL!`);
