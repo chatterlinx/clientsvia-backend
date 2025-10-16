@@ -925,7 +925,6 @@ router.get('/scan', async (req, res) => {
         const names = new Set(collections.map(c => c.name));
 
         // List collections
-        const collections = await db.listCollections().toArray();
         const colNames = collections.map(c => c.name);
 
         // Company collections (primary + legacy)
