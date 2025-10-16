@@ -388,15 +388,12 @@ router.get('/companies/:id/inventory', async (req, res) => {
         if (!raw) {
             return res.status(404).json({ error: 'Company not found' });
         }
-        if (!company) {
-            return res.status(404).json({ error: 'Company not found' });
-        }
 
         // Count documents in each collection
         const [callsCount, contactsCount, notificationsCount] = await Promise.all([
-            mongoose.connection.db.collection('v2aiagentcalllogs').countDocuments({ companyId: company._id }),
-            mongoose.connection.db.collection('v2contacts').countDocuments({ companyId: company._id }),
-            mongoose.connection.db.collection('v2notificationlogs').countDocuments({ companyId: company._id })
+            mongoose.connection.db.collection('v2aiagentcalllogs').countDocuments({ companyId: raw._id }),
+            mongoose.connection.db.collection('v2contacts').countDocuments({ companyId: raw._id }),
+            mongoose.connection.db.collection('v2notificationlogs').countDocuments({ companyId: raw._id })
         ]);
 
         // Count scenarios
