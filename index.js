@@ -138,6 +138,11 @@ const routesPromise = loadAllRoutes();
     try {
         const uri = process.env.MONGODB_URI || process.env.MONGO_URI || '';
         const env = process.env.NODE_ENV || 'development';
+        const enforce = String(process.env.ENFORCE_MONGO_ALLOWLIST || 'false').toLowerCase() === 'true';
+        if (!enforce) {
+            console.warn('[BOOT] Mongo allow-list enforcement disabled (set ENFORCE_MONGO_ALLOWLIST=true to enable)');
+            return; // do not enforce in environments where not explicitly enabled
+        }
         const ALLOW = {
             production: [/^mongodb(\+srv)?:\/\/(prod-|cluster-prod)/i],
             staging: [/^mongodb(\+srv)?:\/\/(staging-|cluster-stg)/i],
