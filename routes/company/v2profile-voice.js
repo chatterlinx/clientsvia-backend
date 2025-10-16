@@ -424,19 +424,27 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
         });
 
         // Validate required fields
+        console.log(`🔍 [SAVE-4] VALIDATION CHECK: voiceId = "${voiceId}" (type: ${typeof voiceId})`);
         if (!voiceId) {
+            console.log(`❌ [SAVE-4-FAIL] Voice ID is missing!`);
             return res.status(400).json({
                 success: false,
-                message: 'Voice ID is required'
+                message: 'Voice ID is required',
+                debug: { voiceId, receivedBody: b }
             });
         }
+        console.log(`✅ [SAVE-4-PASS] Voice ID validation passed`);
 
+        console.log(`🔍 [SAVE-5] VALIDATION CHECK: apiSource = "${apiSource}", apiKey = ${apiKey ? '(present)' : '(null)'}`);
         if (apiSource === 'own' && !apiKey) {
+            console.log(`❌ [SAVE-5-FAIL] API key required for own source!`);
             return res.status(400).json({
                 success: false,
-                message: 'API key is required when using own ElevenLabs account'
+                message: 'API key is required when using own ElevenLabs account',
+                debug: { apiSource, hasApiKey: !!apiKey }
             });
         }
+        console.log(`✅ [SAVE-5-PASS] API source validation passed`);
 
         // Fetch company
         console.log(`🔍 [SAVE-7] Fetching company from database...`);
@@ -478,8 +486,27 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
         console.log(`🔍 [SAVE-13] Voice settings to save:`, JSON.stringify(newVoiceSettings, null, 2));
         
         // Save using Mongoose (normal approach)
+        console.log(`🔍 [SAVE-14] Assigning voiceSettings to company.aiAgentLogic.voiceSettings`);
         company.aiAgentLogic.voiceSettings = newVoiceSettings;
-        await company.save();
+        
+        console.log(`🔍 [SAVE-15] Calling company.save()...`);
+        try {
+            await company.save();
+            console.log(`✅ [SAVE-16] Mongoose save completed successfully`);
+        } catch (saveError) {
+            console.error(`❌ [SAVE-16-ERROR] Mongoose save failed!`);
+            console.error(`❌ [SAVE-16-ERROR] Error name: ${saveError.name}`);
+            console.error(`❌ [SAVE-16-ERROR] Error message: ${saveError.message}`);
+            console.error(`❌ [SAVE-16-ERROR] Full error:`, saveError);
+            
+            // Return specific validation error
+            return res.status(400).json({
+                success: false,
+                message: `Database validation error: ${saveError.message}`,
+                error: saveError.name,
+                details: saveError.errors || saveError.message
+            });
+        }
 
         console.log(`✅ [SAVE-17] Voice settings saved successfully via Mongoose`);
 
