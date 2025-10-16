@@ -1255,5 +1255,129 @@ router.get('/collections-map', async (req, res) => {
     }
 });
 
+/**
+ * ==========================================================================
+ * POST /api/admin/data-center/seed/e2e
+ * Seed minimal E2E fixtures (guarded by ALLOW_SEEDING=true)
+ * ==========================================================================
+ */
+router.post('/seed/e2e', async (req, res) => {
+    try {
+        if (process.env.ALLOW_SEEDING !== 'true') {
+            return res.status(403).json({ ok: false, error: 'SEEDING_DISABLED' });
+        }
+
+        const db = mongoose.connection.db;
+        const list = await db.listCollections().toArray();
+        const names = new Set(list.map(c => c.name));
+        const cmap = buildCollectionsMap(names);
+
+        const companies = db.collection(cmap.companies);
+        const calls = cmap.calls ? db.collection(cmap.calls) : null;
+        const transcripts = cmap.transcripts ? db.collection(cmap.transcripts) : null;
+        const contacts = cmap.contacts ? db.collection(cmap.contacts) : null;
+
+        const seedTag = 'DATA_CENTER_E2E';
+        const now = new Date();
+
+        const liveName = 'SEED – Live Demo Co';
+        const neverName = 'SEED – Never Live Co';
+        const delName = 'SEED – Deleted Legacy Co';
+
+        const liveRes = await companies.findOneAndUpdate(
+            { seedTag, companyName: liveName },
+            { $set: { seedTag, companyName: liveName, status: 'active', accountStatus: { status: 'active' }, createdAt: now } },
+            { upsert: true, returnDocument: 'after' }
+        );
+        const liveCo = liveRes.value || await companies.findOne({ seedTag, companyName: liveName });
+
+        const neverRes = await companies.findOneAndUpdate(
+            { seedTag, companyName: neverName },
+            { $set: { seedTag, companyName: neverName, status: 'inactive', accountStatus: { status: 'inactive' }, createdAt: now } },
+            { upsert: true, returnDocument: 'after' }
+        );
+        const neverCo = neverRes.value || await companies.findOne({ seedTag, companyName: neverName });
+
+        const delRes = await companies.findOneAndUpdate(
+            { seedTag, companyName: delName },
+            { $set: { seedTag, companyName: delName, isDeleted: true, deleted: true, deletedAt: now, accountStatus: { status: 'deleted' }, createdAt: now } },
+            { upsert: true, returnDocument: 'after' }
+        );
+        const deletedCo = delRes.value || await companies.findOne({ seedTag, companyName: delName });
+
+        // Minimal activity for Live Co
+        if (contacts) {
+            await contacts.updateOne(
+                { seedTag, companyId: liveCo._id, phone: '+12345550100' },
+                { $set: { seedTag, companyId: liveCo._id, name: 'Seed Customer', phone: '+12345550100', createdAt: now } },
+                { upsert: true }
+            );
+        }
+        if (calls) {
+            await calls.updateOne(
+                { seedTag, companyId: liveCo._id, callId: 'SEEDCALL-1' },
+                { $set: { seedTag, companyId: liveCo._id, callId: 'SEEDCALL-1', startedAt: now, durationSec: 60 } },
+                { upsert: true }
+            );
+        }
+        if (transcripts) {
+            await transcripts.updateOne(
+                { seedTag, companyId: liveCo._id, callId: 'SEEDCALL-1' },
+                { $set: { seedTag, companyId: liveCo._id, callId: 'SEEDCALL-1', text: 'Hello this is a seed transcript.' } },
+                { upsert: true }
+            );
+        }
+
+        return res.json({
+            ok: true,
+            collectionsMap: cmap,
+            companies: {
+                liveCoId: liveCo?._id,
+                neverLiveCoId: neverCo?._id,
+                deletedCoId: deletedCo?._id
+            }
+        });
+    } catch (error) {
+        console.error('[DATA CENTER] Seed E2E error:', error);
+        return res.status(500).json({ ok: false, error: 'SEED_FAILED', message: error.message });
+    }
+});
+
+/**
+ * ==========================================================================
+ * POST /api/admin/data-center/seed/e2e/wipe
+ * Remove E2E fixtures by seedTag (guarded by ALLOW_SEEDING=true)
+ * ==========================================================================
+ */
+router.post('/seed/e2e/wipe', async (req, res) => {
+    try {
+        if (process.env.ALLOW_SEEDING !== 'true') {
+            return res.status(403).json({ ok: false, error: 'SEEDING_DISABLED' });
+        }
+        const db = mongoose.connection.db;
+        const list = await db.listCollections().toArray();
+        const names = new Set(list.map(c => c.name));
+        const cmap = buildCollectionsMap(names);
+        const seedTag = 'DATA_CENTER_E2E';
+
+        const collectionsToClean = [
+            cmap.companies,
+            cmap.calls,
+            cmap.transcripts,
+            cmap.contacts,
+            cmap.notifications
+        ].filter(Boolean);
+
+        for (const colName of collectionsToClean) {
+            await db.collection(colName).deleteMany({ seedTag });
+        }
+
+        return res.json({ ok: true, collectionsMap: cmap });
+    } catch (error) {
+        console.error('[DATA CENTER] Wipe E2E error:', error);
+        return res.status(500).json({ ok: false, error: 'WIPE_FAILED', message: error.message });
+    }
+});
+
 module.exports = router;
 
