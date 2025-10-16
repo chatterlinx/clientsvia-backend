@@ -55,6 +55,16 @@ router.get('/:companyId/configuration', async (req, res) => {
             return res.status(404).json({ error: 'Company not found' });
         }
         
+        console.log(`[COMPANY CONFIG] Company found: ${company.companyName}`);
+        console.log(`[COMPANY CONFIG] Has configuration:`, !!company.configuration);
+        console.log(`[COMPANY CONFIG] Configuration type:`, typeof company.configuration);
+        
+        // FIX: Ensure configuration is an object (migration fix)
+        if (!company.configuration || typeof company.configuration !== 'object' || Array.isArray(company.configuration)) {
+            console.log(`[COMPANY CONFIG] MIGRATION: Initializing configuration object`);
+            company.configuration = {};
+        }
+        
         // Return configuration overview
         const config = {
             variables: company.configuration?.variables || {},
@@ -71,11 +81,16 @@ router.get('/:companyId/configuration', async (req, res) => {
             lastSyncedAt: company.configuration?.lastSyncedAt || null
         };
         
+        console.log(`[COMPANY CONFIG] Configuration loaded successfully`);
         res.json(config);
         
     } catch (error) {
         console.error('[COMPANY CONFIG] Error loading configuration:', error);
-        res.status(500).json({ error: 'Failed to load configuration' });
+        console.error('[COMPANY CONFIG] Error stack:', error.stack);
+        res.status(500).json({ 
+            error: 'Failed to load configuration',
+            message: error.message
+        });
     }
 });
 
