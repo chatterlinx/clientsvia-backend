@@ -528,6 +528,9 @@
                     <div class="chip" data-filter="live">
                         Live Only
                     </div>
+                    <div class="chip" data-filter="deleted">
+                        Deleted Only
+                    </div>
                     <div class="chip" data-filter="never-live">
                         Never Live
                     </div>
@@ -877,25 +880,28 @@
 
             // Apply filter
             const query = document.getElementById('search-input').value;
-            let state = 'all';
-            
-            if (filter === 'live') {
-                state = 'live';
-                console.log('[DATA CENTER] 📊 Filtering for LIVE companies only');
-            } else if (filter === 'never-live') {
-                state = 'all';
-                console.log('[DATA CENTER] 📊 Filtering for NEVER LIVE companies');
-            } else if (filter === 'stale') {
-                state = 'all';
-                console.log('[DATA CENTER] 📊 Filtering for STALE companies');
-            } else if (filter === 'test') {
-                state = 'all';
-                console.log('[DATA CENTER] 📊 Filtering for TEST accounts');
-            } else {
-                console.log('[DATA CENTER] 📊 Showing ALL companies');
+
+            // Server-side filters
+            if (filter === 'live' || filter === 'all' || filter === 'deleted') {
+                const state = filter === 'deleted' ? 'deleted' : (filter === 'live' ? 'live' : 'all');
+                console.log('[DATA CENTER] 🌐 Reloading from server with state:', state);
+                return loadCompanies(query, state);
             }
-            
-            loadCompanies(query, state);
+
+            // Client-side filters on already loaded data
+            let filtered = [...companies];
+            if (filter === 'never-live') {
+                filtered = filtered.filter(c => (c.calls || 0) === 0 && (c.scenarios || 0) === 0 && (!c.lastActivity || c.lastActivityFormatted === 'Never'));
+                console.log('[DATA CENTER] 📊 Applied client-side NEVER LIVE filter:', filtered.length);
+            } else if (filter === 'stale') {
+                filtered = filtered.filter(c => c.lastActivityFormatted === 'Never' || /\b(\d+\s*days|Never)\b/i.test(c.lastActivityFormatted || 'Never'));
+                console.log('[DATA CENTER] 📊 Applied client-side STALE filter:', filtered.length);
+            } else if (filter === 'test') {
+                filtered = filtered.filter(c => /test|demo|sample|qa/i.test(c.companyName || '') || /test|demo|sample|qa/i.test(c.ownerEmail || ''));
+                console.log('[DATA CENTER] 📊 Applied client-side TEST filter:', filtered.length);
+            }
+
+            renderCompanies(filtered);
         }
 
         // ============================================================================
