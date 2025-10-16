@@ -1331,6 +1331,14 @@ const companySchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
     
+    // 🗑️ SOFT DELETE SYSTEM - Admin Cleanup Center
+    isDeleted: { type: Boolean, default: false, index: true },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'v2User', default: null },
+    deleteReason: { type: String, trim: true, default: null },
+    deleteNotes: { type: String, trim: true, default: null },
+    autoPurgeAt: { type: Date, default: null, index: true }, // Auto-purge 30 days after soft delete
+    
     // Agent Settings for AI Agent Logic Tab
     agentSettings: {
         useLLM: { type: Boolean, default: true },
