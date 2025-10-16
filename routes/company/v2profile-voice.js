@@ -23,6 +23,7 @@
 
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const { ObjectId } = require('mongodb');
 const Company = require('../../models/v2Company');
 const { redisClient } = require('../../clients');
@@ -437,13 +438,27 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             });
         }
 
-        // 🔧 USE DIRECT MONGODB UPDATE (bypasses Mongoose validation for corrupt docs)
-        const db = mongoose.connection.db;
-        const companiesCollection = db.collection('v2companies');
+        // Fetch company
+        console.log(`🔍 [SAVE-7] Fetching company from database...`);
+        const company = await Company.findById(companyId);
         
-        console.log(`🔍 [SAVE-7] Using direct MongoDB update to bypass validation...`);
+        if (!company) {
+            console.log(`❌ [SAVE-8] Company not found: ${companyId}`);
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found'
+            });
+        }
+
+        console.log(`🔍 [SAVE-9] Company found: ${company.companyName}`);
         
-        // Build the update object
+        // Initialize aiAgentLogic if not exists
+        if (!company.aiAgentLogic) {
+            console.log(`🔍 [SAVE-10] Initializing aiAgentLogic`);
+            company.aiAgentLogic = {};
+        }
+        
+        // Build voice settings object (flat structure matching architecture doc)
         const newVoiceSettings = {
             apiSource,
             apiKey: apiSource === 'own' ? apiKey : null,
@@ -462,25 +477,11 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
 
         console.log(`🔍 [SAVE-13] Voice settings to save:`, JSON.stringify(newVoiceSettings, null, 2));
         
-        // Direct MongoDB update (bypasses Mongoose validation)
-        const result = await companiesCollection.updateOne(
-            { _id: new mongoose.Types.ObjectId(companyId) },
-            {
-                $set: {
-                    'aiAgentLogic.voiceSettings': newVoiceSettings
-                }
-            }
-        );
+        // Save using Mongoose (normal approach)
+        company.aiAgentLogic.voiceSettings = newVoiceSettings;
+        await company.save();
 
-        if (result.matchedCount === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Company not found'
-            });
-        }
-
-        console.log(`✅ [SAVE-17] Direct MongoDB update successful (matched: ${result.matchedCount}, modified: ${result.modifiedCount})`);
-        console.log(`🔍 [SAVE-18] Company ${companyId} voice settings updated`);
+        console.log(`✅ [SAVE-17] Voice settings saved successfully via Mongoose`);
 
         // Clear Redis cache for immediate effect
         if (redisClient) {
