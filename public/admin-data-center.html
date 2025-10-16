@@ -507,6 +507,26 @@
 
         <!-- Tab Content: Companies -->
         <div id="companies-tab" class="tab-content">
+            <!-- Live Summary Counters -->
+            <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px;">
+                <div style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;">
+                    <div style="font-size:12px;color:#6b7280;">Total Companies</div>
+                    <div id="count-total" style="font-size:22px;font-weight:700;">0</div>
+                </div>
+                <div style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;">
+                    <div style="font-size:12px;color:#6b7280;">Live</div>
+                    <div id="count-live" style="font-size:22px;font-weight:700;">0</div>
+                </div>
+                <div style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;">
+                    <div style="font-size:12px;color:#6b7280;">Deleted</div>
+                    <div id="count-deleted" style="font-size:22px;font-weight:700;">0</div>
+                </div>
+                <div style="background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;">
+                    <div style="font-size:12px;color:#6b7280;">Never Live</div>
+                    <div id="count-never-live" style="font-size:22px;font-weight:700;">0</div>
+                </div>
+            </div>
+
             <!-- Search & Filters -->
             <div class="search-section">
                 <div class="search-bar">
@@ -701,6 +721,7 @@
                 console.log('[DATA CENTER] ✅ Default "All Companies" chip activated');
             }
             
+            refreshSummary();
             loadCompanies();
             setupEventListeners();
             
@@ -746,6 +767,23 @@
             });
             
             console.log('[DATA CENTER] ✅ Event listeners setup complete');
+        }
+
+        async function refreshSummary() {
+            try {
+                const token = localStorage.getItem('adminToken');
+                const res = await fetch('/api/admin/data-center/summary', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const s = await res.json();
+                document.getElementById('count-total').textContent = s.total.toLocaleString();
+                document.getElementById('count-live').textContent = s.live.toLocaleString();
+                document.getElementById('count-deleted').textContent = s.deleted.toLocaleString();
+                document.getElementById('count-never-live').textContent = s.neverLive.toLocaleString();
+            } catch (e) {
+                console.error('[DATA CENTER] Summary error', e);
+            }
         }
 
         // ============================================================================

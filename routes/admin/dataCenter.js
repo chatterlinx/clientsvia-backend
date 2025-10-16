@@ -842,5 +842,91 @@ router.get('/scan', async (req, res) => {
     }
 });
 
+/**
+ * ============================================================================
+ * GET /api/admin/data-center/summary
+ * Returns global counters: total, live, deleted, neverLive (merged across
+ * primary 'companiesCollection' and legacy 'companies')
+ * ============================================================================
+ */
+router.get('/summary', async (req, res) => {
+    try {
+        const db = mongoose.connection.db;
+        const primary = db.collection('companiesCollection');
+        const legacy = db.collection('companies');
+
+        // Basic counts
+        const [
+            totalP, liveP, delP,
+            totalL, liveL, delL
+        ] = await Promise.all([
+            primary.countDocuments({}),
+            primary.countDocuments({ isDeleted: { $ne: true } }),
+            primary.countDocuments({ isDeleted: true }),
+            legacy.countDocuments({}),
+            legacy.countDocuments({ isDeleted: { $ne: true } }),
+            legacy.countDocuments({ isDeleted: true })
+        ]);
+
+        // Never live counter (0 calls AND no scenarios AND no phone configured)
+        const neverLiveCount = async (col) => {
+            const pipeline = [
+                {
+                    $lookup: {
+                        from: 'v2aiagentcalllogs',
+                        let: { cid: '$_id' },
+                        pipeline: [
+                            { $match: { $expr: { $eq: ['$companyId', '$$cid'] } } },
+                            { $limit: 1 }
+                        ],
+                        as: 'callsAgg'
+                    }
+                },
+                {
+                    $project: {
+                        zeroCalls: { $eq: [{ $size: '$callsAgg' }, 0] },
+                        scenariosSize: { $size: { $ifNull: ['$aiAgentLogic.instantResponses', []] } },
+                        phoneCount: { $size: { $ifNull: ['$twilioConfig.phoneNumbers', []] } },
+                        legacyPhone: { $ifNull: ['$twilioConfig.phoneNumber', null] }
+                    }
+                },
+                {
+                    $project: {
+                        isNeverLive: {
+                            $and: [
+                                '$zeroCalls',
+                                { $eq: ['$scenariosSize', 0] },
+                                { $eq: ['$phoneCount', 0] },
+                                { $eq: ['$legacyPhone', null] }
+                            ]
+                        }
+                    }
+                },
+                { $match: { isNeverLive: true } },
+                { $count: 'count' }
+            ];
+            const r = await col.aggregate(pipeline).toArray();
+            return r.length ? r[0].count : 0;
+        };
+
+        const [neverP, neverL] = await Promise.all([
+            neverLiveCount(primary),
+            neverLiveCount(legacy)
+        ]);
+
+        const summary = {
+            total: (totalP || 0) + (totalL || 0),
+            live: (liveP || 0) + (liveL || 0),
+            deleted: (delP || 0) + (delL || 0),
+            neverLive: (neverP || 0) + (neverL || 0)
+        };
+
+        res.json(summary);
+    } catch (error) {
+        console.error('[DATA CENTER] Error getting summary:', error);
+        res.status(500).json({ error: 'Failed to get summary', details: error.message });
+    }
+});
+
 module.exports = router;
 
