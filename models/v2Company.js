@@ -1474,6 +1474,23 @@ companySchema.pre('findOneAndUpdate', function(next) {
     next();
 });
 
+// --- Soft Delete Middleware ---
+// Auto-exclude deleted companies from queries unless explicitly requested
+companySchema.pre(/^find/, function(next) {
+    // Skip if this is a special query that wants deleted companies
+    if (this.getOptions().includeDeleted) {
+        return next();
+    }
+    
+    // Auto-add isDeleted filter to exclude deleted companies
+    const filter = this.getFilter();
+    if (filter.isDeleted === undefined) {
+        this.where({ isDeleted: { $ne: true } });
+    }
+    
+    next();
+});
+
 // --- Instance Methods ---
 companySchema.methods.migrateTwilioPhoneNumbers = function() {
     if (this.twilioConfig && this.twilioConfig.phoneNumber && this.twilioConfig.phoneNumbers.length === 0) {

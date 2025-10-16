@@ -1,0 +1,383 @@
+/**
+ * ============================================================================
+ * DATA CENTER API - Admin Operations
+ * ============================================================================
+ * Comprehensive admin tool for:
+ * - Universal search across all company data
+ * - Health metrics and junk detection
+ * - Safe cleanup (soft delete, purge)
+ * - Customer and transcript exports
+ * - Duplicate detection
+ * ============================================================================
+ */
+
+const express = require('express');
+const router = express.Router();
+const mongoose = require('mongoose');
+const Company = require('../../models/v2Company');
+const CompanyHealthService = require('../../services/CompanyHealthService');
+const { authenticateJWT } = require('../../middleware/auth');
+const { redisClient } = require('../../db');
+
+// Apply authentication to all routes
+router.use(authenticateJWT);
+
+/**
+ * ============================================================================
+ * GET /api/admin/data-center/companies
+ * List all companies with health metrics, search, and filters
+ * ============================================================================
+ */
+router.get('/companies', async (req, res) => {
+    try {
+        const {
+            query = '',
+            state = 'all', // all | live | deleted
+            staleDays = 60,
+            page = 1,
+            pageSize = 25,
+            sort = '-lastActivity'
+        } = req.query;
+
+        console.log('[DATA CENTER] GET /companies', { query, state, page });
+
+        const pageNum = parseInt(page);
+        const limit = parseInt(pageSize);
+        const skip = (pageNum - 1) * limit;
+
+        // Build match filter
+        const match = {};
+
+        // State filter
+        if (state === 'live') {
+            match.isDeleted = { $ne: true };
+            match.isActive = true;
+        } else if (state === 'deleted') {
+            match.isDeleted = true;
+        } else {
+            // 'all' - no filter, include everything
+        }
+
+        // Search filter
+        if (query && query.trim()) {
+            const q = query.trim();
+            
+            // Check if it's a Mongo ID
+            if (/^[a-f0-9]{24}$/i.test(q)) {
+                match._id = new mongoose.Types.ObjectId(q);
+            }
+            // Check if it's a phone number
+            else if (/^\+?\d[\d\s\-\(\)]+$/.test(q)) {
+                const phoneDigits = q.replace(/[\s\-\(\)]/g, '');
+                match.$or = [
+                    { 'twilioConfig.phoneNumbers.number': new RegExp(phoneDigits, 'i') },
+                    { primaryPhone: new RegExp(phoneDigits, 'i') }
+                ];
+            }
+            // Check if it's an email
+            else if (/@/.test(q)) {
+                match.$or = [
+                    { email: new RegExp(q, 'i') },
+                    { ownerEmail: new RegExp(q, 'i') }
+                ];
+            }
+            // Text search
+            else {
+                match.$text = { $search: q };
+            }
+        }
+
+        // Calculate stale cutoff date
+        const staleCutoff = new Date(Date.now() - (parseInt(staleDays) * 24 * 60 * 60 * 1000));
+
+        // Build aggregation pipeline
+        const pipeline = [
+            { $match: match },
+
+            // Lookup call logs for activity metrics
+            {
+                $lookup: {
+                    from: 'v2aiagentcalllogs',
+                    let: { companyId: '$_id' },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ['$companyId', '$$companyId'] } } },
+                        {
+                            $group: {
+                                _id: null,
+                                calls: { $sum: 1 },
+                                lastActivity: { $max: '$timestamp' }
+                            }
+                        }
+                    ],
+                    as: 'callsAgg'
+                }
+            },
+
+            // Lookup contacts for customer count
+            {
+                $lookup: {
+                    from: 'v2contacts',
+                    let: { companyId: '$_id' },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ['$companyId', '$$companyId'] } } },
+                        { $count: 'count' }
+                    ],
+                    as: 'contactsAgg'
+                }
+            },
+
+            // Lookup notification logs for activity
+            {
+                $lookup: {
+                    from: 'v2notificationlogs',
+                    let: { companyId: '$_id' },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ['$companyId', '$$companyId'] } } },
+                        { $count: 'count' }
+                    ],
+                    as: 'notificationsAgg'
+                }
+            },
+
+            // Project fields
+            {
+                $project: {
+                    _id: 1,
+                    companyName: 1,
+                    businessName: 1,
+                    email: 1,
+                    ownerEmail: 1,
+                    domain: 1,
+                    createdAt: 1,
+                    updatedAt: 1,
+                    isActive: 1,
+                    isDeleted: 1,
+                    deletedAt: 1,
+                    deletedBy: 1,
+                    deleteReason: 1,
+                    autoPurgeAt: 1,
+                    tradeCategories: 1,
+                    twilioConfig: 1,
+                    aiAgentLogic: 1,
+                    accountStatus: 1,
+                    
+                    // Aggregated data
+                    calls: { $ifNull: [{ $arrayElemAt: ['$callsAgg.calls', 0] }, 0] },
+                    lastActivity: { $arrayElemAt: ['$callsAgg.lastActivity', 0] },
+                    customers: { $ifNull: [{ $arrayElemAt: ['$contactsAgg.count', 0] }, 0] },
+                    notifications: { $ifNull: [{ $arrayElemAt: ['$notificationsAgg.count', 0] }, 0] },
+                    
+                    // Calculate stale flag
+                    stale: {
+                        $cond: [
+                            { $lte: [{ $ifNull: [{ $arrayElemAt: ['$callsAgg.lastActivity', 0] }, new Date(0)] }, staleCutoff] },
+                            true,
+                            false
+                        ]
+                    }
+                }
+            },
+
+            // Sort
+            { $sort: this.buildSortObject(sort) },
+
+            // Pagination
+            { $skip: skip },
+            { $limit: limit }
+        ];
+
+        // Execute aggregation
+        const companies = await Company.aggregate(pipeline).option({ includeDeleted: true });
+
+        // Calculate health metrics for each company
+        const results = companies.map(company => {
+            const health = CompanyHealthService.calculateHealth(company, {
+                calls: company.calls,
+                lastActivity: company.lastActivity,
+                approxStorageBytes: 0 // Will be calculated in inventory endpoint
+            });
+
+            const badge = CompanyHealthService.getHealthBadge(health);
+
+            return {
+                companyId: company._id,
+                companyName: company.companyName || company.businessName,
+                ownerEmail: company.email || company.ownerEmail,
+                domain: company.domain,
+                createdAt: company.createdAt,
+                
+                // Status
+                isLive: health.isLive,
+                isDeleted: company.isDeleted || false,
+                isActive: company.isActive !== false,
+                accountStatus: company.accountStatus?.status || 'active',
+                
+                // Health
+                healthScore: health.score,
+                healthBadge: badge,
+                flags: health.flags,
+                
+                // Metrics
+                calls: company.calls,
+                scenarios: company.aiAgentLogic?.instantResponses?.length || 0,
+                customers: company.customers,
+                lastActivity: company.lastActivity,
+                lastActivityFormatted: CompanyHealthService.formatLastActivity(company.lastActivity),
+                readinessScore: company.aiAgentLogic?.readiness?.score || 0,
+                
+                // Phone
+                phoneNumbers: company.twilioConfig?.phoneNumbers || [],
+                primaryPhone: company.twilioConfig?.phoneNumber || null,
+                
+                // Soft delete info
+                deletedAt: company.deletedAt,
+                deletedBy: company.deletedBy,
+                deleteReason: company.deleteReason,
+                autoPurgeAt: company.autoPurgeAt,
+                daysUntilPurge: company.autoPurgeAt 
+                    ? Math.ceil((new Date(company.autoPurgeAt) - new Date()) / (1000 * 60 * 60 * 24))
+                    : null,
+                
+                // Trade
+                tradeCategories: company.tradeCategories || []
+            };
+        });
+
+        // Get total count (without pagination)
+        const countPipeline = [
+            { $match: match },
+            { $count: 'total' }
+        ];
+        const countResult = await Company.aggregate(countPipeline).option({ includeDeleted: true });
+        const total = countResult.length > 0 ? countResult[0].total : 0;
+
+        res.json({
+            results,
+            total,
+            page: pageNum,
+            pageSize: limit,
+            totalPages: Math.ceil(total / limit)
+        });
+
+    } catch (error) {
+        console.error('[DATA CENTER] Error listing companies:', error);
+        res.status(500).json({ 
+            error: 'Failed to list companies',
+            details: error.message 
+        });
+    }
+});
+
+/**
+ * Helper: Build sort object from sort string
+ */
+function buildSortObject(sortStr) {
+    const sortMap = {
+        'name': { companyName: 1 },
+        '-name': { companyName: -1 },
+        'created': { createdAt: 1 },
+        '-created': { createdAt: -1 },
+        'calls': { calls: 1 },
+        '-calls': { calls: -1 },
+        'lastActivity': { lastActivity: 1 },
+        '-lastActivity': { lastActivity: -1 },
+        'health': { healthScore: 1 },
+        '-health': { healthScore: -1 }
+    };
+
+    return sortMap[sortStr] || { lastActivity: -1 }; // Default: newest activity first
+}
+
+// Attach helper to router for use in aggregation
+router.buildSortObject = buildSortObject;
+
+/**
+ * ============================================================================
+ * GET /api/admin/data-center/companies/:id/inventory
+ * Get deep inventory for a company (cached for 30s)
+ * ============================================================================
+ */
+router.get('/companies/:id/inventory', async (req, res) => {
+    try {
+        const { id } = req.params;
+        console.log('[DATA CENTER] GET /companies/:id/inventory', id);
+
+        // Check cache first
+        const cacheKey = `datacenter:inventory:${id}`;
+        const cached = await redisClient.get(cacheKey);
+        if (cached) {
+            console.log('[DATA CENTER] Returning cached inventory');
+            return res.json(JSON.parse(cached));
+        }
+
+        // Fetch company
+        const company = await Company.findById(id).option({ includeDeleted: true });
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        // Count documents in each collection
+        const [callsCount, contactsCount, notificationsCount] = await Promise.all([
+            mongoose.connection.db.collection('v2aiagentcalllogs').countDocuments({ companyId: company._id }),
+            mongoose.connection.db.collection('v2contacts').countDocuments({ companyId: company._id }),
+            mongoose.connection.db.collection('v2notificationlogs').countDocuments({ companyId: company._id })
+        ]);
+
+        // Count scenarios
+        const scenariosCount = company.aiAgentLogic?.instantResponses?.length || 0;
+
+        // Count Redis keys (expensive - skip for now, or implement later)
+        const redisKeysCount = 0; // TODO: Implement Redis SCAN if needed
+
+        // External assets
+        const externals = {
+            twilioNumbers: company.twilioConfig?.phoneNumbers?.map(p => p.number) || 
+                          (company.twilioConfig?.phoneNumber ? [company.twilioConfig.phoneNumber] : []),
+            webhooks: 0 // TODO: Count webhooks if stored
+        };
+
+        // Estimate storage (rough calculation)
+        const estimates = {
+            callsBytes: callsCount * 5000, // Rough estimate: 5KB per call
+            contactsBytes: contactsCount * 1000, // 1KB per contact
+            notificationsBytes: notificationsCount * 500, // 500B per notification
+            scenariosBytes: scenariosCount * 2000, // 2KB per scenario
+            totalBytes: 0
+        };
+        estimates.totalBytes = estimates.callsBytes + estimates.contactsBytes + 
+                              estimates.notificationsBytes + estimates.scenariosBytes;
+
+        const inventory = {
+            companyId: id,
+            companyName: company.companyName || company.businessName,
+            collections: {
+                calls: callsCount,
+                contacts: contactsCount,
+                notifications: notificationsCount,
+                scenarios: scenariosCount
+            },
+            externals,
+            redisKeys: redisKeysCount,
+            estimates: {
+                ...estimates,
+                totalFormatted: CompanyHealthService.formatDataSize(estimates.totalBytes)
+            },
+            cachedAt: new Date()
+        };
+
+        // Cache for 30 seconds
+        await redisClient.setex(cacheKey, 30, JSON.stringify(inventory));
+
+        res.json(inventory);
+
+    } catch (error) {
+        console.error('[DATA CENTER] Error getting inventory:', error);
+        res.status(500).json({ 
+            error: 'Failed to get inventory',
+            details: error.message 
+        });
+    }
+});
+
+module.exports = router;
+
