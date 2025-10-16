@@ -250,12 +250,12 @@ router.post('/companies', async (req, res) => {
     }
 });
 
-// ADMIN ENDPOINT: Get all companies (requires admin authentication)
-// Previously disabled for security - now restored with proper authentication
-// Security Fix: July 27, 2025 - Added JWT authentication and admin role requirement
-router.get('/companies', authenticateJWT, requireRole('admin'), async (req, res) => {
+// AUTHENTICATED ENDPOINT: Get all companies (requires authentication)
+// Accessible to all authenticated users (admins, users, etc.)
+// Security: Requires valid JWT but not admin role (changed Oct 16, 2025)
+router.get('/companies', authenticateJWT, async (req, res) => {
     try {
-        console.log('[ADMIN API GET /api/companies] Admin user requesting all companies:', req.user.email);
+        console.log('[API GET /api/companies] Authenticated user requesting all companies:', req.user.email);
         
         // 📊 PRODUCTION-GRADE: Fetch companies with optimized field projection
         // Uses lean() for performance (returns plain JavaScript objects)
@@ -293,18 +293,18 @@ router.get('/companies', authenticateJWT, requireRole('admin'), async (req, res)
             // 🔒 SECURITY: Sensitive fields excluded (API keys, tokens, passwords, etc.)
         }).lean();
         
-        console.log(`[ADMIN API GET /api/companies] Found ${companies.length} companies in database`);
-        console.log(`[ADMIN API GET /api/companies] Returning ${companies.length} companies to admin`);
+        console.log(`[API GET /api/companies] Found ${companies.length} companies in database`);
+        console.log(`[API GET /api/companies] Returning ${companies.length} companies to user: ${req.user.email}`);
         
         res.json({
             success: true,
             data: companies,
             count: companies.length,
-            message: 'Admin access granted to company directory'
+            message: 'Company directory loaded successfully'
         });
         
     } catch (err) {
-        console.error('[ADMIN API GET /api/companies] Error:', err);
+        console.error('[API GET /api/companies] Error:', err);
         res.status(500).json({ 
             message: 'Server error retrieving companies',
             error: err.message 
