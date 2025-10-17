@@ -60,6 +60,8 @@ class ConnectionMessagesManager {
         this.config = await response.json();
 
         console.log('📞 [CONNECTION MESSAGES] Config loaded:', this.config);
+        console.log('📞 [CONNECTION MESSAGES] Voice mode from backend:', this.config?.voice?.mode);
+        console.log('📞 [CONNECTION MESSAGES] Voice object:', this.config?.voice);
     }
 
     /**
@@ -173,6 +175,9 @@ class ConnectionMessagesManager {
     renderVoiceContent() {
         const voice = this.config?.voice || {};
         const mode = voice.mode || 'prerecorded';
+        
+        console.log('🎨 [CONNECTION MESSAGES] Rendering voice content with mode:', mode);
+        console.log('🎨 [CONNECTION MESSAGES] Voice object at render:', voice);
 
         return `
             <div class="telephony-section">
