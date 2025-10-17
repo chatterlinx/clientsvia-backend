@@ -233,21 +233,7 @@ try {
     logger.error('❌ Failed to load V2 Global Trade Categories routes', { error: error.message });
 }
 
-try {
-    const v2GlobalDirectory = require('./routes/v2global/v2global-directory');
-    app.use('/api/v2global/directory', v2GlobalDirectory);
-    logger.info('✅ V2 Global Directory routes registered at /api/v2global/directory');
-} catch (error) {
-    logger.error('❌ Failed to load V2 Global Directory routes', { error: error.message });
-}
-
-try {
-    const v2GlobalAddCompany = require('./routes/v2global/v2global-addcompany');
-    app.use('/api/v2global/add-company', v2GlobalAddCompany);
-    logger.info('✅ V2 Global Add Company routes registered at /api/v2global/add-company');
-} catch (error) {
-    logger.error('❌ Failed to load V2 Global Add Company routes', { error: error.message });
-}
+// REMOVED: Legacy v2global-directory and v2global-addcompany routes - replaced with new streamlined versions
 
 // 🚀 V2 PURE SYSTEM: All legacy development routes ELIMINATED
 // Legacy services deleted: calendarService, actionService, serviceIssueHandler, selfCheckLogger, agentMessageProcessor

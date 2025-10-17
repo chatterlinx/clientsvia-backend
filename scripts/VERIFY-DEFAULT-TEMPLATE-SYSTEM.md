@@ -53,7 +53,7 @@ node scripts/test-default-template-clone.js
 
 ### **Step 3: Create a Real Company (UI Test)**
 
-1. Go to: `https://clientsvia-backend.onrender.com/v2global-addcompany.html`
+1. Go to: `https://clientsvia-backend.onrender.com/add-company.html`
 2. Fill in:
    - Company Name: "Test Auto Shop"
    - Phone: "+15551234567"

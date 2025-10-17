@@ -101,8 +101,7 @@ async function loadAllRoutes() {
         routes.dataCenterRoutes = await loadRouteWithTimeout('./routes/admin/dataCenter', 'dataCenterRoutes');
         routes.globalIndustryTypesRoutes = await loadRouteWithTimeout('./routes/admin/globalIndustryTypes', 'globalIndustryTypesRoutes');
         routes.v2GlobalAdminRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-admin', 'v2GlobalAdminRoutes');
-        routes.v2GlobalDirectoryRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-directory', 'v2GlobalDirectoryRoutes');
-        routes.v2GlobalAddCompanyRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-addcompany', 'v2GlobalAddCompanyRoutes');
+        // REMOVED: Legacy v2global-directory and v2global-addcompany routes - replaced with new versions
         routes.v2GlobalTradeCategoriesRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-tradecategories', 'v2GlobalTradeCategoriesRoutes');
         routes.v2AuthRoutes = await loadRouteWithTimeout('./routes/v2auth', 'v2AuthRoutes');
         // V2 DELETED: Legacy backup routes - v2 backup system eliminated
@@ -249,8 +248,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/diag', require('./routes/admin/diag')); // Diagnostics - DB/Redis fingerprint
     app.use('/api/admin/emergency', require('./routes/admin/emergency-repair')); // 🚨 Emergency database repair endpoints
     app.use('/api/v2global/admin', routes.v2GlobalAdminRoutes); // V2 Global Admin Dashboard
-    app.use('/api/v2global/directory', routes.v2GlobalDirectoryRoutes); // V2 Global Company Directory
-    app.use('/api/v2global/addcompany', routes.v2GlobalAddCompanyRoutes); // V2 Global Add Company
+    // REMOVED: Legacy v2global/directory and v2global/addcompany routes - replaced with new versions
     app.use('/api/v2global/trade-categories', routes.v2GlobalTradeCategoriesRoutes); // V2 Global Trade Categories
     // V2 DELETED: Legacy backup routes - v2 backup system eliminated
     // 🗑️ DELETED: All AI Agent Logic route registrations (tab removed)
