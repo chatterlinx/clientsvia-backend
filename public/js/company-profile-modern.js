@@ -30,7 +30,8 @@ class CompanyProfileManager {
         this.saveButton = null;
         this.initialized = false;
         
-        // Notes event listener flag (to prevent duplicate setups)
+        // Notes setup flags (to prevent duplicate setups and destroyed event listeners)
+        this.notesInterfaceSetup = false;
         this.noteEventListenersSetup = false;
         
         // Authentication token
@@ -2101,18 +2102,27 @@ class CompanyProfileManager {
      * GOLD STANDARD: Setup v2 notes interface with advanced controls
      */
     setupV2NotesInterface() {
+        // Only set up interface once (prevents destroying event listeners)
+        if (this.notesInterfaceSetup) {
+            console.log('⚠️ [NOTES] Interface already set up, skipping');
+            return;
+        }
+        
         // Transform the basic notes HTML into v2-grade interface
         const notesContent = document.getElementById('notes-content');
         if (!notesContent) {
             return;
         }
 
+        console.log('✅ [NOTES] Setting up v2 notes interface for the first time');
+        
         // Replace with v2 notes interface
         notesContent.innerHTML = this.generateV2NotesHTML();
         
         // Setup event listeners for advanced features
         this.setupNotesEventListeners();
         
+        this.notesInterfaceSetup = true;
     }
 
     /**
