@@ -38,6 +38,93 @@ const logger = {
     }
 };
 
+// DOM Query Helpers - Shorthand for cleaner code
+const qs = (selector, context = document) => context.querySelector(selector);
+const qsa = (selector, context = document) => Array.from(context.querySelectorAll(selector));
+
+// Event Delegation Helper - Single event listener at document level
+const on = (event, selector, handler, context = document) => {
+    context.addEventListener(event, (e) => {
+        const target = e.target.closest(selector);
+        if (target) {
+            handler.call(target, e, target);
+        }
+    });
+};
+
+// Debounce - Limit function execution frequency
+const debounce = (fn, delay = 300) => {
+    let timeoutId;
+    return function (...args) {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => fn.apply(this, args), delay);
+    };
+};
+
+// Throttle - Execute function at most once per interval
+const throttle = (fn, limit = 300) => {
+    let inThrottle;
+    return function (...args) {
+        if (!inThrottle) {
+            fn.apply(this, args);
+            inThrottle = true;
+            setTimeout(() => (inThrottle = false), limit);
+        }
+    };
+};
+
+// Unified Fetch - Consistent API calls with error handling
+const fetchJson = async (url, options = {}) => {
+    try {
+        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+        const defaultOptions = {
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { Authorization: `Bearer ${token}` })
+            }
+        };
+
+        const response = await fetch(url, { ...defaultOptions, ...options });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        logger.error('Fetch error:', error);
+        throw error;
+    }
+};
+
+// Notification System - User feedback (success/error/info)
+const notify = (message, type = 'info') => {
+    // Remove existing notification if present
+    const existing = qs('.notification-toast');
+    if (existing) existing.remove();
+
+    // Create notification element
+    const colors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        info: 'bg-blue-500',
+        warning: 'bg-yellow-500'
+    };
+
+    const notification = document.createElement('div');
+    notification.className = `notification-toast fixed top-4 right-4 ${colors[type] || colors.info} text-white px-6 py-3 rounded-lg shadow-lg z-50 transition-opacity duration-300`;
+    notification.textContent = message;
+
+    document.body.appendChild(notification);
+
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+};
+
 /* ============================================================================
    MAIN CLASS
    ============================================================================ */
