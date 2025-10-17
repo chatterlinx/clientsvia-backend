@@ -237,6 +237,14 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
         console.log(`[CONNECTION MESSAGES] 💾 About to save with mode:`, company.aiAgentLogic.connectionMessages?.voice?.mode);
         console.log(`[CONNECTION MESSAGES] 💾 Full connectionMessages object:`, JSON.stringify(company.aiAgentLogic.connectionMessages || {}, null, 2));
 
+        // 🔧 FIX: Convert Mongoose subdocument to plain object before saving
+        // Mongoose subdocuments have special properties that don't work with $set
+        const plainConnectionMessages = company.aiAgentLogic.connectionMessages.toObject ? 
+            company.aiAgentLogic.connectionMessages.toObject() : 
+            JSON.parse(JSON.stringify(company.aiAgentLogic.connectionMessages));
+        
+        console.log(`[CONNECTION MESSAGES] 🔧 Converted to plain object, mode:`, plainConnectionMessages?.voice?.mode);
+
         // 🔧 FIX: Use targeted update to avoid full document validation
         // This bypasses validation of corrupt data in OTHER fields
         console.log(`[CONNECTION MESSAGES] 🔧 Using targeted update to bypass full validation`);
@@ -245,7 +253,7 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
             req.params.companyId,
             {
                 $set: {
-                    'aiAgentLogic.connectionMessages': company.aiAgentLogic.connectionMessages
+                    'aiAgentLogic.connectionMessages': plainConnectionMessages
                 }
             },
             { new: true, runValidators: false } // Skip full validation
