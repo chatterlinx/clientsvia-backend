@@ -933,17 +933,26 @@ class CompanyProfileManager {
      * Perform auto-save of form data
      */
     async performAutoSave() {
+        console.log('🔄 [AUTO-SAVE] Starting auto-save...');
+        
         const formData = this.collectOverviewFormData();
         if (!formData) {
+            console.error('❌ [AUTO-SAVE] Failed to collect form data');
             throw new Error('Failed to collect form data');
         }
+        console.log('✅ [AUTO-SAVE] Form data collected:', formData);
 
         const token = localStorage.getItem('adminToken');
         if (!token) {
+            console.error('❌ [AUTO-SAVE] No authentication token found');
             throw new Error('No authentication token');
         }
+        console.log('✅ [AUTO-SAVE] Token found');
 
-        const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}`, {
+        const url = `${this.apiBaseUrl}/api/company/${this.companyId}`;
+        console.log('📡 [AUTO-SAVE] Sending PATCH to:', url);
+        
+        const response = await fetch(url, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json',
@@ -952,12 +961,19 @@ class CompanyProfileManager {
             body: JSON.stringify(formData)
         });
 
+        console.log('📥 [AUTO-SAVE] Response status:', response.status);
+
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            const errorText = await response.text();
+            console.error('❌ [AUTO-SAVE] Server error:', errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
 
         const result = await response.json();
+        console.log('✅ [AUTO-SAVE] Saved successfully:', result);
+        
         this.setUnsavedChanges(false);
+        this.showNotification('Changes saved successfully', 'success');
         return result;
     }
 
@@ -1158,24 +1174,33 @@ class CompanyProfileManager {
      * Setup v2 contacts event handlers
      */
     setupV2ContactsHandlers() {
+        console.log('📞 [CONTACTS] Setting up contact handlers...');
         
         const addContactBtn = document.getElementById('add-contact-btn');
+        console.log('📞 [CONTACTS] Add contact button:', addContactBtn ? '✅ Found' : '❌ Not found');
+        
         if (addContactBtn) {
             addContactBtn.addEventListener('click', () => {
+                console.log('📞 [CONTACTS] Add contact button clicked');
                 this.showContactModal();
             });
+            console.log('📞 [CONTACTS] Event listener attached');
         } else {
+            console.error('❌ [CONTACTS] Add contact button not found in DOM');
         }
-        
     }
     
     /**
      * Show contact modal for add/edit
      */
     showContactModal(contactData = null) {
+        console.log('📞 [CONTACTS] showContactModal called', { contactData, isEdit: !!contactData });
+        
         const isEdit = !!contactData;
         const modalTitle = isEdit ? 'Edit Contact' : 'Add New Contact';
         const submitText = isEdit ? 'Update Contact' : 'Add Contact';
+        
+        console.log('📞 [CONTACTS] Creating modal:', { modalTitle, submitText });
         
         // Create modal HTML
         const modalHTML = `
@@ -1257,33 +1282,48 @@ class CompanyProfileManager {
         // Remove existing modal if any
         const existingModal = document.getElementById('contact-modal');
         if (existingModal) {
+            console.log('📞 [CONTACTS] Removing existing modal');
             existingModal.remove();
         }
         
         // Add modal to DOM
+        console.log('📞 [CONTACTS] Adding modal to DOM');
         document.body.insertAdjacentHTML('beforeend', modalHTML);
         
         // Setup form submission handler
         const form = document.getElementById('contact-form');
+        if (!form) {
+            console.error('❌ [CONTACTS] Contact form not found after adding to DOM');
+            return;
+        }
+        
+        console.log('📞 [CONTACTS] Form found, attaching submit handler');
         form.addEventListener('submit', (e) => {
             e.preventDefault();
+            console.log('📞 [CONTACTS] Form submitted');
             this.saveContact(isEdit);
         });
         
+        console.log('✅ [CONTACTS] Modal setup complete');
     }
     
     /**
      * Save contact data
      */
     async saveContact(isEdit = false) {
+        console.log('📞 [CONTACTS] saveContact called', { isEdit });
+        
         const form = document.getElementById('contact-form');
         const contactType = document.getElementById('contact-type').value;
         const name = document.getElementById('contact-name').value.trim();
         const email = document.getElementById('contact-email').value.trim();
         const phone = document.getElementById('contact-phone').value.trim();
         
+        console.log('📞 [CONTACTS] Form data:', { contactType, name, email, phone });
+        
         // Validation
         if (!contactType || !name || !email || !phone) {
+            console.warn('⚠️ [CONTACTS] Validation failed: missing fields');
             this.showNotification('Please fill in all required fields', 'error');
             return;
         }
@@ -1291,10 +1331,12 @@ class CompanyProfileManager {
         // Email validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
+            console.warn('⚠️ [CONTACTS] Validation failed: invalid email');
             this.showNotification('Please enter a valid email address', 'error');
             return;
         }
         
+        console.log('✅ [CONTACTS] Validation passed');
         
         try {
             // Prepare update data based on contact type
@@ -1309,8 +1351,13 @@ class CompanyProfileManager {
                 updateData.contactPhone = phone;
             }
             
+            console.log('📞 [CONTACTS] Update data prepared:', updateData);
+            
+            const url = `${this.apiBaseUrl}/api/company/${this.companyId}`;
+            console.log('📡 [CONTACTS] Sending PATCH to:', url);
+            
             // Save to API
-            const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}`, {
+            const response = await fetch(url, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1319,19 +1366,26 @@ class CompanyProfileManager {
                 body: JSON.stringify(updateData)
             });
             
+            console.log('📥 [CONTACTS] Response status:', response.status);
+            
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                const errorText = await response.text();
+                console.error('❌ [CONTACTS] Server error:', errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
             }
             
             const result = await response.json();
+            console.log('✅ [CONTACTS] Contact saved successfully:', result);
             
             // Update local data
             Object.assign(this.currentData, updateData);
             
             // Close modal
+            console.log('📞 [CONTACTS] Closing modal');
             document.getElementById('contact-modal').remove();
             
             // Re-render contacts section
+            console.log('📞 [CONTACTS] Re-rendering contacts section');
             this.renderV2ContactsSection();
             
             // Show success notification
@@ -1341,7 +1395,8 @@ class CompanyProfileManager {
             );
             
         } catch (error) {
-            this.showNotification('Failed to save contact. Please try again.', 'error');
+            console.error('❌ [CONTACTS] Error saving contact:', error);
+            this.showNotification(`Failed to save contact: ${error.message}`, 'error');
         }
     }
 
