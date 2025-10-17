@@ -24,17 +24,17 @@ const DEBUG_MODE = false;
 // Structured Logger - Single source of truth for all logging
 const logger = {
     info: (...args) => {
-        if (DEBUG_MODE) logger.info('[CompanyProfile]', ...args);
+        if (DEBUG_MODE) console.log('[CompanyProfile]', ...args);
     },
     warn: (...args) => {
-        if (DEBUG_MODE) logger.warn('[CompanyProfile]', ...args);
+        if (DEBUG_MODE) console.warn('[CompanyProfile]', ...args);
     },
     error: (...args) => {
         // Always log errors
-        logger.error('[CompanyProfile]', ...args);
+        console.error('[CompanyProfile]', ...args);
     },
     debug: (...args) => {
-        if (DEBUG_MODE) logger.info('[CompanyProfile:DEBUG]', ...args);
+        if (DEBUG_MODE) console.log('[CompanyProfile:DEBUG]', ...args);
     }
 };
 
@@ -203,7 +203,7 @@ class CompanyProfileManager {
         if (this.domElements.editButton) {
             this.domElements.editButton.addEventListener('click', () => {
                 // No longer needed - form is always editable
-                logger.info('Edit button clicked - form is already editable');
+                console.log('Edit button clicked - form is already editable');
             });
         }
     }
@@ -281,18 +281,18 @@ class CompanyProfileManager {
     async loadCompanyData(force = false) {
         try {
             if (this.companyDataLoaded && !force) {
-                logger.info('📥 [LOAD] Using cached company data');
+                console.log('📥 [LOAD] Using cached company data');
                 return this.companyData;
             }
             
-            logger.info('📥 [LOAD] Loading company data...', { companyId: this.companyId, force });
+            console.log('📥 [LOAD] Loading company data...', { companyId: this.companyId, force });
             this.showLoading(true);
 
             // Add cache-busting parameter to force fresh data
             const timestamp = new Date().getTime();
             const apiUrl = `${this.apiBaseUrl}/api/company/${this.companyId}?_=${timestamp}`;
             
-            logger.info('📡 [LOAD] Fetching from:', apiUrl);
+            console.log('📡 [LOAD] Fetching from:', apiUrl);
             
             // Get auth token
             const token = this.authToken || localStorage.getItem('adminToken');
@@ -302,9 +302,9 @@ class CompanyProfileManager {
             
             if (token) {
                 headers['Authorization'] = `Bearer ${token}`;
-                logger.info('✅ [LOAD] Auth token included');
+                console.log('✅ [LOAD] Auth token included');
             } else {
-                logger.warn('⚠️ [LOAD] No auth token found');
+                console.warn('⚠️ [LOAD] No auth token found');
             }
             
             const response = await fetch(apiUrl, {
@@ -312,7 +312,7 @@ class CompanyProfileManager {
                 cache: 'no-cache' // Prevent browser caching
             });
             
-            logger.info('📥 [LOAD] Response status:', response.status);
+            console.log('📥 [LOAD] Response status:', response.status);
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -322,8 +322,8 @@ class CompanyProfileManager {
             this.companyData = this.currentData; // Store for guard check
             this.companyDataLoaded = true;
             
-            logger.info('✅ [LOAD] Company data loaded:', this.currentData);
-            logger.info('📝 [LOAD] Notes in loaded data:', this.currentData.notes?.length || 0, 'notes');
+            console.log('✅ [LOAD] Company data loaded:', this.currentData);
+            console.log('📝 [LOAD] Notes in loaded data:', this.currentData.notes?.length || 0, 'notes');
 
             // Populate all tabs with data
             this.populateOverviewTab();
@@ -335,8 +335,8 @@ class CompanyProfileManager {
             this.populateAgentLogicTab();
 
         } catch (error) {
-            logger.error('❌ [LOAD] Error loading company data:', error);
-            logger.error('Error details:', {
+            console.error('❌ [LOAD] Error loading company data:', error);
+            console.error('Error details:', {
                 message: error.message,
                 companyId: this.companyId,
                 apiBaseUrl: this.apiBaseUrl,
@@ -954,7 +954,7 @@ class CompanyProfileManager {
             }
         });
 
-        logger.info('♿ Accessibility features initialized');
+        console.log('♿ Accessibility features initialized');
     }
 
     /**
@@ -979,7 +979,7 @@ class CompanyProfileManager {
                         this.setFormStatus('saved', 'All changes saved');
                     } catch (error) {
                         this.setFormStatus('error', 'Auto-save failed');
-                        logger.error('Auto-save failed:', error);
+                        console.error('Auto-save failed:', error);
                     }
                 }, 2000);
             });
@@ -991,24 +991,24 @@ class CompanyProfileManager {
      * Perform auto-save of form data
      */
     async performAutoSave() {
-        logger.info('🔄 [AUTO-SAVE] Starting auto-save...');
+        console.log('🔄 [AUTO-SAVE] Starting auto-save...');
         
         const formData = this.collectOverviewFormData();
         if (!formData) {
-            logger.error('❌ [AUTO-SAVE] Failed to collect form data');
+            console.error('❌ [AUTO-SAVE] Failed to collect form data');
             throw new Error('Failed to collect form data');
         }
-        logger.info('✅ [AUTO-SAVE] Form data collected:', formData);
+        console.log('✅ [AUTO-SAVE] Form data collected:', formData);
 
         const token = localStorage.getItem('adminToken');
         if (!token) {
-            logger.error('❌ [AUTO-SAVE] No authentication token found');
+            console.error('❌ [AUTO-SAVE] No authentication token found');
             throw new Error('No authentication token');
         }
-        logger.info('✅ [AUTO-SAVE] Token found');
+        console.log('✅ [AUTO-SAVE] Token found');
 
         const url = `${this.apiBaseUrl}/api/company/${this.companyId}`;
-        logger.info('📡 [AUTO-SAVE] Sending PATCH to:', url);
+        console.log('📡 [AUTO-SAVE] Sending PATCH to:', url);
         
         const response = await fetch(url, {
             method: 'PATCH',
@@ -1019,16 +1019,16 @@ class CompanyProfileManager {
             body: JSON.stringify(formData)
         });
 
-        logger.info('📥 [AUTO-SAVE] Response status:', response.status);
+        console.log('📥 [AUTO-SAVE] Response status:', response.status);
 
         if (!response.ok) {
             const errorText = await response.text();
-            logger.error('❌ [AUTO-SAVE] Server error:', errorText);
+            console.error('❌ [AUTO-SAVE] Server error:', errorText);
             throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
 
         const result = await response.json();
-        logger.info('✅ [AUTO-SAVE] Saved successfully:', result);
+        console.log('✅ [AUTO-SAVE] Saved successfully:', result);
         
         this.setUnsavedChanges(false);
         this.showNotification('Changes saved successfully', 'success');
@@ -1063,7 +1063,7 @@ class CompanyProfileManager {
             }
         };
 
-        logger.info('📋 [FORM] Collected data - saving to BOTH fields:', {
+        console.log('📋 [FORM] Collected data - saving to BOTH fields:', {
             businessPhone: data.businessPhone,
             companyPhone: data.companyPhone
         });
@@ -1107,7 +1107,7 @@ class CompanyProfileManager {
         try {
             this.renderV2ContactsSection();
             this.setupV2ContactsHandlers();
-            logger.info('� V2 contacts management initialized');
+            console.log('� V2 contacts management initialized');
         } catch (error) {
             this.showNotification('Failed to initialize contacts section', 'error');
         }
@@ -1241,19 +1241,19 @@ class CompanyProfileManager {
      * Setup v2 contacts event handlers
      */
     setupV2ContactsHandlers() {
-        logger.info('📞 [CONTACTS] Setting up contact handlers...');
+        console.log('📞 [CONTACTS] Setting up contact handlers...');
         
         const addContactBtn = document.getElementById('add-contact-btn');
-        logger.info('📞 [CONTACTS] Add contact button:', addContactBtn ? '✅ Found' : '❌ Not found');
+        console.log('📞 [CONTACTS] Add contact button:', addContactBtn ? '✅ Found' : '❌ Not found');
         
         if (addContactBtn) {
             addContactBtn.addEventListener('click', () => {
-                logger.info('📞 [CONTACTS] Add contact button clicked');
+                console.log('📞 [CONTACTS] Add contact button clicked');
                 this.showContactModal();
             });
-            logger.info('📞 [CONTACTS] Event listener attached');
+            console.log('📞 [CONTACTS] Event listener attached');
         } else {
-            logger.error('❌ [CONTACTS] Add contact button not found in DOM');
+            console.error('❌ [CONTACTS] Add contact button not found in DOM');
         }
     }
     
@@ -1261,13 +1261,13 @@ class CompanyProfileManager {
      * Show contact modal for add/edit
      */
     showContactModal(contactData = null) {
-        logger.info('📞 [CONTACTS] showContactModal called', { contactData, isEdit: !!contactData });
+        console.log('📞 [CONTACTS] showContactModal called', { contactData, isEdit: !!contactData });
         
         const isEdit = !!contactData;
         const modalTitle = isEdit ? 'Edit Contact' : 'Add New Contact';
         const submitText = isEdit ? 'Update Contact' : 'Add Contact';
         
-        logger.info('📞 [CONTACTS] Creating modal:', { modalTitle, submitText });
+        console.log('📞 [CONTACTS] Creating modal:', { modalTitle, submitText });
         
         // Create modal HTML
         const modalHTML = `
@@ -1349,36 +1349,36 @@ class CompanyProfileManager {
         // Remove existing modal if any
         const existingModal = document.getElementById('contact-modal');
         if (existingModal) {
-            logger.info('📞 [CONTACTS] Removing existing modal');
+            console.log('📞 [CONTACTS] Removing existing modal');
             existingModal.remove();
         }
         
         // Add modal to DOM
-        logger.info('📞 [CONTACTS] Adding modal to DOM');
+        console.log('📞 [CONTACTS] Adding modal to DOM');
         document.body.insertAdjacentHTML('beforeend', modalHTML);
         
         // Setup form submission handler
         const form = document.getElementById('contact-form');
         if (!form) {
-            logger.error('❌ [CONTACTS] Contact form not found after adding to DOM');
+            console.error('❌ [CONTACTS] Contact form not found after adding to DOM');
             return;
         }
         
-        logger.info('📞 [CONTACTS] Form found, attaching submit handler');
+        console.log('📞 [CONTACTS] Form found, attaching submit handler');
         form.addEventListener('submit', (e) => {
             e.preventDefault();
-            logger.info('📞 [CONTACTS] Form submitted');
+            console.log('📞 [CONTACTS] Form submitted');
             this.saveContact(isEdit);
         });
         
-        logger.info('✅ [CONTACTS] Modal setup complete');
+        console.log('✅ [CONTACTS] Modal setup complete');
     }
     
     /**
      * Save contact data
      */
     async saveContact(isEdit = false) {
-        logger.info('📞 [CONTACTS] saveContact called', { isEdit });
+        console.log('📞 [CONTACTS] saveContact called', { isEdit });
         
         const form = document.getElementById('contact-form');
         const contactType = document.getElementById('contact-type').value;
@@ -1386,11 +1386,11 @@ class CompanyProfileManager {
         const email = document.getElementById('contact-email').value.trim();
         const phone = document.getElementById('contact-phone').value.trim();
         
-        logger.info('📞 [CONTACTS] Form data:', { contactType, name, email, phone });
+        console.log('📞 [CONTACTS] Form data:', { contactType, name, email, phone });
         
         // Validation
         if (!contactType || !name || !email || !phone) {
-            logger.warn('⚠️ [CONTACTS] Validation failed: missing fields');
+            console.warn('⚠️ [CONTACTS] Validation failed: missing fields');
             this.showNotification('Please fill in all required fields', 'error');
             return;
         }
@@ -1398,12 +1398,12 @@ class CompanyProfileManager {
         // Email validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-            logger.warn('⚠️ [CONTACTS] Validation failed: invalid email');
+            console.warn('⚠️ [CONTACTS] Validation failed: invalid email');
             this.showNotification('Please enter a valid email address', 'error');
             return;
         }
         
-        logger.info('✅ [CONTACTS] Validation passed');
+        console.log('✅ [CONTACTS] Validation passed');
         
         try {
             // Prepare update data based on contact type
@@ -1418,10 +1418,10 @@ class CompanyProfileManager {
                 updateData.contactPhone = phone;
             }
             
-            logger.info('📞 [CONTACTS] Update data prepared:', updateData);
+            console.log('📞 [CONTACTS] Update data prepared:', updateData);
             
             const url = `${this.apiBaseUrl}/api/company/${this.companyId}`;
-            logger.info('📡 [CONTACTS] Sending PATCH to:', url);
+            console.log('📡 [CONTACTS] Sending PATCH to:', url);
             
             // Save to API
             const response = await fetch(url, {
@@ -1433,26 +1433,26 @@ class CompanyProfileManager {
                 body: JSON.stringify(updateData)
             });
             
-            logger.info('📥 [CONTACTS] Response status:', response.status);
+            console.log('📥 [CONTACTS] Response status:', response.status);
             
             if (!response.ok) {
                 const errorText = await response.text();
-                logger.error('❌ [CONTACTS] Server error:', errorText);
+                console.error('❌ [CONTACTS] Server error:', errorText);
                 throw new Error(`HTTP ${response.status}: ${errorText}`);
             }
             
             const result = await response.json();
-            logger.info('✅ [CONTACTS] Contact saved successfully:', result);
+            console.log('✅ [CONTACTS] Contact saved successfully:', result);
             
             // Update local data
             Object.assign(this.currentData, updateData);
             
             // Close modal
-            logger.info('📞 [CONTACTS] Closing modal');
+            console.log('📞 [CONTACTS] Closing modal');
             document.getElementById('contact-modal').remove();
             
             // Re-render contacts section
-            logger.info('📞 [CONTACTS] Re-rendering contacts section');
+            console.log('📞 [CONTACTS] Re-rendering contacts section');
             this.renderV2ContactsSection();
             
             // Show success notification
@@ -1462,7 +1462,7 @@ class CompanyProfileManager {
             );
             
         } catch (error) {
-            logger.error('❌ [CONTACTS] Error saving contact:', error);
+            console.error('❌ [CONTACTS] Error saving contact:', error);
             this.showNotification(`Failed to save contact: ${error.message}`, 'error');
         }
     }
@@ -1515,7 +1515,7 @@ class CompanyProfileManager {
     createConfigurationInterface() {
         const configContent = document.getElementById('config-content');
         if (!configContent) {
-            logger.warn('Config content container not found');
+            console.warn('Config content container not found');
             return;
         }
 
@@ -2125,7 +2125,7 @@ class CompanyProfileManager {
     setupV2NotesInterface() {
         // Only set up interface once (prevents destroying event listeners)
         if (this.notesInterfaceSetup) {
-            logger.info('⚠️ [NOTES] Interface already set up, skipping');
+            console.log('⚠️ [NOTES] Interface already set up, skipping');
             return;
         }
         
@@ -2135,7 +2135,7 @@ class CompanyProfileManager {
             return;
         }
 
-        logger.info('✅ [NOTES] Setting up v2 notes interface for the first time');
+        console.log('✅ [NOTES] Setting up v2 notes interface for the first time');
         
         // Replace with v2 notes interface
         notesContent.innerHTML = this.generateV2NotesHTML();
@@ -2450,16 +2450,16 @@ class CompanyProfileManager {
 
         container.innerHTML = html;
         
-        logger.info('📝 [NOTES RENDER] Rendered', sortedNotes.length, 'notes to container');
-        logger.info('📝 [NOTES RENDER] Container element:', container);
-        logger.info('📝 [NOTES RENDER] Note cards with data-note-id:', container.querySelectorAll('[data-note-id]').length);
+        console.log('📝 [NOTES RENDER] Rendered', sortedNotes.length, 'notes to container');
+        console.log('📝 [NOTES RENDER] Container element:', container);
+        console.log('📝 [NOTES RENDER] Note cards with data-note-id:', container.querySelectorAll('[data-note-id]').length);
         
         // Setup individual note event listeners (only once)
         if (!this.noteEventListenersSetup) {
             this.setupNoteCardEventListeners();
             this.noteEventListenersSetup = true;
         } else {
-            logger.info('⚠️ [NOTES] Event listeners already set up, skipping');
+            console.log('⚠️ [NOTES] Event listeners already set up, skipping');
         }
     }
 
@@ -2625,46 +2625,46 @@ class CompanyProfileManager {
     setupNoteCardEventListeners() {
         const container = document.getElementById('v2-notes-container');
         if (!container) {
-            logger.warn('⚠️ [NOTES] v2-notes-container not found for event listeners');
+            console.warn('⚠️ [NOTES] v2-notes-container not found for event listeners');
             return;
         }
 
-        logger.info('✅ [NOTES] Setting up note card event listeners on container:', container);
-        logger.info('✅ [NOTES] Container has', container.querySelectorAll('[data-note-id]').length, 'elements with data-note-id');
+        console.log('✅ [NOTES] Setting up note card event listeners on container:', container);
+        console.log('✅ [NOTES] Container has', container.querySelectorAll('[data-note-id]').length, 'elements with data-note-id');
 
         // Use event delegation for better performance
         container.addEventListener('click', (e) => {
-            logger.info('🖱️ [NOTES] Click detected on:', e.target);
-            logger.info('🖱️ [NOTES] Target classList:', e.target.classList);
-            logger.info('🖱️ [NOTES] Target closest [data-note-id]:', e.target.closest('[data-note-id]'));
+            console.log('🖱️ [NOTES] Click detected on:', e.target);
+            console.log('🖱️ [NOTES] Target classList:', e.target.classList);
+            console.log('🖱️ [NOTES] Target closest [data-note-id]:', e.target.closest('[data-note-id]'));
             
             const noteId = e.target.closest('[data-note-id]')?.dataset.noteId;
-            logger.info('🆔 [NOTES] Note ID from click:', noteId);
+            console.log('🆔 [NOTES] Note ID from click:', noteId);
             
             if (!noteId) {
-                logger.info('⚠️ [NOTES] No note ID found, ignoring click');
+                console.log('⚠️ [NOTES] No note ID found, ignoring click');
                 return;
             }
 
             if (e.target.closest('.pin-note-btn')) {
-                logger.info('📌 [NOTES] Pin button clicked for note:', noteId);
+                console.log('📌 [NOTES] Pin button clicked for note:', noteId);
                 this.togglePinNote(noteId);
             } else if (e.target.closest('.edit-note-btn')) {
-                logger.info('✏️ [NOTES] Edit button clicked for note:', noteId);
+                console.log('✏️ [NOTES] Edit button clicked for note:', noteId);
                 this.startEditNote(noteId);
             } else if (e.target.closest('.delete-note-btn')) {
-                logger.info('🗑️ [NOTES] Delete button clicked for note:', noteId);
+                console.log('🗑️ [NOTES] Delete button clicked for note:', noteId);
                 this.deleteV2Note(noteId);
             } else if (e.target.closest('.save-edit-btn')) {
-                logger.info('💾 [NOTES] Save edit button clicked for note:', noteId);
+                console.log('💾 [NOTES] Save edit button clicked for note:', noteId);
                 this.saveEditNote(noteId);
             } else if (e.target.closest('.cancel-edit-btn')) {
-                logger.info('❌ [NOTES] Cancel edit button clicked for note:', noteId);
+                console.log('❌ [NOTES] Cancel edit button clicked for note:', noteId);
                 this.cancelEditNote(noteId);
             }
         });
         
-        logger.info('✅ [NOTES] Event listener attached successfully');
+        console.log('✅ [NOTES] Event listener attached successfully');
     }
 
     /**
@@ -2690,7 +2690,7 @@ class CompanyProfileManager {
         const action = note.isPinned ? 'pinned' : 'unpinned';
         this.showNotification(`Note ${action} successfully!`, 'success');
         
-        logger.info(`📌 Note ${action}:`, note.title);
+        console.log(`📌 Note ${action}:`, note.title);
         
         // Save to backend immediately
         await this.saveNotesToBackend();
@@ -2802,12 +2802,12 @@ class CompanyProfileManager {
      * Save notes to backend immediately
      */
     async saveNotesToBackend() {
-        logger.info('📝 [NOTES SAVE] Saving notes to backend...', this.notes.length, 'notes');
+        console.log('📝 [NOTES SAVE] Saving notes to backend...', this.notes.length, 'notes');
         
         try {
             const token = this.authToken || localStorage.getItem('adminToken');
             if (!token) {
-                logger.error('❌ [NOTES SAVE] No auth token found');
+                console.error('❌ [NOTES SAVE] No auth token found');
                 return;
             }
 
@@ -2822,19 +2822,19 @@ class CompanyProfileManager {
                 })
             });
 
-            logger.info('📝 [NOTES SAVE] Response status:', response.status);
+            console.log('📝 [NOTES SAVE] Response status:', response.status);
 
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
             const result = await response.json();
-            logger.info('✅ [NOTES SAVE] Notes saved successfully:', result.notes?.length, 'notes in DB');
+            console.log('✅ [NOTES SAVE] Notes saved successfully:', result.notes?.length, 'notes in DB');
             
             this.setUnsavedChanges(false);
             return result;
         } catch (error) {
-            logger.error('❌ [NOTES SAVE] Error saving notes:', error);
+            console.error('❌ [NOTES SAVE] Error saving notes:', error);
             this.showNotification('Failed to save note', 'error');
             throw error;
         }
