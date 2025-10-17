@@ -447,6 +447,12 @@
                     console.log(`[Directory] Filtering - Search: "${searchTerm}", Trade: "${tradeFilter}", ShowInactive: ${showInactive}`);
                     
                     this.filteredCompanies = this.companies.filter(company => {
+                        // CRITICAL: Never show deleted companies in directory
+                        if (company.isDeleted === true) {
+                            console.log(`[Directory] Excluding deleted company: ${company.companyName}`);
+                            return false;
+                        }
+                        
                         // Search filter (company name, phone, email, address)
                         const matchesSearch = !searchTerm || 
                             company.companyName?.toLowerCase().includes(searchTerm) ||
@@ -462,6 +468,8 @@
                         // Status filter (based on accountStatus from Configuration tab)
                         const accountStatus = company.accountStatus?.status || 'active';
                         const matchesStatus = showInactive || accountStatus !== 'suspended';
+                        
+                        console.log(`[Directory] Company: ${company.companyName}, Search: ${matchesSearch}, Trade: ${matchesTrade}, Status: ${matchesStatus}`);
                         
                         return matchesSearch && matchesTrade && matchesStatus;
                     });
