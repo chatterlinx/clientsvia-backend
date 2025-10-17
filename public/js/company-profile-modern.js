@@ -2062,10 +2062,6 @@ class CompanyProfileManager {
         
         // Render notes with advanced features
         this.renderV2Notes();
-        
-        // Setup search and filtering
-        this.setupNotesSearch();
-        
     }
 
     /**
@@ -2271,24 +2267,6 @@ class CompanyProfileManager {
             addButton.addEventListener('click', () => this.addV2Note());
         }
 
-        // Search functionality
-        const searchInput = document.getElementById('notes-search');
-        if (searchInput) {
-            searchInput.addEventListener('input', this.debounce(() => this.filterNotes(), 300));
-        }
-
-        // Category filter
-        const categoryFilter = document.getElementById('notes-category-filter');
-        if (categoryFilter) {
-            categoryFilter.addEventListener('change', () => this.filterNotes());
-        }
-
-        // Sort options
-        const sortSelect = document.getElementById('notes-sort');
-        if (sortSelect) {
-            sortSelect.addEventListener('change', () => this.renderV2Notes());
-        }
-
         // Quick title auto-generation
         const contentTextarea = document.getElementById('quick-note-content');
         const titleInput = document.getElementById('quick-note-title');
@@ -2303,8 +2281,6 @@ class CompanyProfileManager {
                 }
             });
         }
-
-        // Event listeners setup complete
     }
 
     /**
@@ -2851,133 +2827,6 @@ class CompanyProfileManager {
             if (a.isPinned && !b.isPinned) return -1;
             if (!a.isPinned && b.isPinned) return 1;
             return new Date(b.updatedAt) - new Date(a.updatedAt);
-        });
-    }
-
-    /**
-     * GOLD STANDARD: Setup notes search and filtering functionality
-     */
-    setupNotesSearch() {
-        
-        // Initialize search input if it exists
-        const searchInput = document.getElementById('notes-search');
-        if (searchInput) {
-            // Clear any existing value
-            searchInput.value = '';
-            
-            // Set placeholder
-            searchInput.placeholder = 'Search notes by title or content...';
-            
-        }
-
-        // Initialize category filter if it exists
-        const categoryFilter = document.getElementById('notes-category-filter');
-        if (categoryFilter) {
-            // Set default to 'all'
-            categoryFilter.value = 'all';
-        }
-
-        // Initialize sort selector if it exists
-        const sortSelect = document.getElementById('notes-sort');
-        if (sortSelect) {
-            // Set default sort
-            sortSelect.value = 'updated-desc';
-        }
-
-    }
-
-    /**
-     * GOLD STANDARD: Filter notes based on search criteria
-     */
-    filterNotes() {
-        const searchInput = document.getElementById('notes-search');
-        const categoryFilter = document.getElementById('notes-category-filter');
-        
-        const searchTerm = searchInput?.value.toLowerCase().trim() || '';
-        const selectedCategory = categoryFilter?.value || 'all';
-
-        // Filter notes based on criteria
-        let filteredNotes = this.notes;
-
-        // Apply search filter
-        if (searchTerm) {
-            filteredNotes = filteredNotes.filter(note => {
-                const title = (note.title || '').toLowerCase();
-                const content = (note.content || note.text || '').toLowerCase();
-                return title.includes(searchTerm) || content.includes(searchTerm);
-            });
-        }
-
-        // Apply category filter
-        if (selectedCategory && selectedCategory !== 'all') {
-            filteredNotes = filteredNotes.filter(note => 
-                note.category === selectedCategory
-            );
-        }
-
-        // Sort the filtered notes
-        const sortedNotes = this.sortNotes(filteredNotes);
-
-        // Re-render with filtered notes
-        this.renderFilteredNotes(sortedNotes);
-
-    }
-
-    /**
-     * GOLD STANDARD: Render filtered notes (separate from main render to avoid recursion)
-     */
-    renderFilteredNotes(filteredNotes) {
-        const notesContainer = document.getElementById('notes-list');
-        if (!notesContainer) {
-            console.warn('Notes container not found for filtering');
-            return;
-        }
-
-        if (filteredNotes.length === 0) {
-            notesContainer.innerHTML = `
-                <div class="text-center py-8 text-gray-500">
-                    <i class="fas fa-search text-4xl mb-4 text-gray-300"></i>
-                    <p class="text-lg font-medium">No notes found</p>
-                    <p class="text-sm">Try adjusting your search criteria</p>
-                </div>
-            `;
-            return;
-        }
-
-        // Render the filtered notes
-        const notesHTML = filteredNotes.map(note => this.generateNoteHTML(note)).join('');
-        notesContainer.innerHTML = notesHTML;
-
-        // Re-attach event listeners for the rendered notes
-        this.attachNoteEventListeners();
-    }
-
-    /**
-     * GOLD STANDARD: Attach event listeners to note elements
-     */
-    attachNoteEventListeners() {
-        // Pin/unpin functionality
-        document.querySelectorAll('.pin-note').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const noteId = e.target.closest('.note-item').dataset.noteId;
-                this.togglePinNote(noteId);
-            });
-        });
-
-        // Delete functionality
-        document.querySelectorAll('.delete-note').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const noteId = e.target.closest('.note-item').dataset.noteId;
-                this.deleteV2Note(noteId);
-            });
-        });
-
-        // Edit functionality
-        document.querySelectorAll('.edit-note').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const noteId = e.target.closest('.note-item').dataset.noteId;
-                this.startEditNote(noteId);
-            });
         });
     }
 
