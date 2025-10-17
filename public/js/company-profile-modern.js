@@ -2454,47 +2454,6 @@ class CompanyProfileManager {
                     </div>
                 </div>
 
-                <!-- Search, Filter, and Add Controls -->
-                <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
-                    <div class="flex flex-col lg:flex-row lg:items-center lg:space-x-6 space-y-4 lg:space-y-0">
-                        <!-- Search Bar -->
-                        <div class="flex-1">
-                            <div class="relative">
-                                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                                <input 
-                                    type="text" 
-                                    id="notes-search" 
-                                    class="form-input pl-10 pr-4" 
-                                    placeholder="Search notes by title, content, or tags..."
-                                >
-                            </div>
-                        </div>
-                        
-                        <!-- Category Filter -->
-                        <div>
-                            <select id="notes-category-filter" class="form-select">
-                                <option value="">All Categories</option>
-                                <option value="general">General</option>
-                                <option value="bug">Bug Reports</option>
-                                <option value="feature">Feature Ideas</option>
-                                <option value="todo">To Do</option>
-                                <option value="meeting">Meeting Notes</option>
-                                <option value="documentation">Documentation</option>
-                            </select>
-                        </div>
-                        
-                        <!-- Sort Options -->
-                        <div>
-                            <select id="notes-sort" class="form-select">
-                                <option value="updated-desc">Recently Updated</option>
-                                <option value="created-desc">Recently Created</option>
-                                <option value="title-asc">Title A-Z</option>
-                                <option value="priority-desc">Priority High-Low</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Quick Add Note -->
                 <div class="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border-2 border-dashed border-purple-200 p-6 mb-6">
                     <div class="mb-4">
@@ -2544,6 +2503,67 @@ class CompanyProfileManager {
                     </div>
                 </div>
 
+                <!-- Quick TO-DO Button + Search, Filter Controls -->
+                <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
+                    <!-- TO-DO Quick Access Button -->
+                    <div class="mb-4">
+                        <button id="quick-todo-filter" class="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-3 text-lg">
+                            <i class="fas fa-check-square text-2xl"></i>
+                            <span>SHOW MY TO-DO LIST</span>
+                            <i class="fas fa-filter text-sm"></i>
+                        </button>
+                        <p class="text-center text-xs text-gray-500 mt-2">Click to quickly view only your To-Do notes</p>
+                    </div>
+
+                    <!-- Divider -->
+                    <div class="relative my-6">
+                        <div class="absolute inset-0 flex items-center">
+                            <div class="w-full border-t border-gray-200"></div>
+                        </div>
+                        <div class="relative flex justify-center text-sm">
+                            <span class="px-4 bg-white text-gray-500">or search/filter all notes</span>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col lg:flex-row lg:items-center lg:space-x-6 space-y-4 lg:space-y-0">
+                        <!-- Search Bar -->
+                        <div class="flex-1">
+                            <div class="relative">
+                                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                <input 
+                                    type="text" 
+                                    id="notes-search" 
+                                    class="form-input pl-10 pr-4" 
+                                    placeholder="Search notes by title, content, or tags..."
+                                >
+                            </div>
+                        </div>
+                        
+                        <!-- Category Filter -->
+                        <div>
+                            <select id="notes-category-filter" class="form-select">
+                                <option value="">All Categories</option>
+                                <option value="general">General</option>
+                                <option value="bug">Bug Reports</option>
+                                <option value="feature">Feature Ideas</option>
+                                <option value="todo">To Do</option>
+                                <option value="meeting">Meeting Notes</option>
+                                <option value="documentation">Documentation</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Sort Options -->
+                        <div>
+                            <select id="notes-sort" class="form-select">
+                                <option value="updated-desc">Recently Updated</option>
+                                <option value="created-desc">Recently Created</option>
+                                <option value="title-asc">Title A-Z</option>
+                                <option value="priority-desc">Priority High-Low</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Notes Display Area -->
                 <div id="v2-notes-container">
                     <!-- Notes will be rendered here -->
@@ -2584,6 +2604,26 @@ class CompanyProfileManager {
                     if (generatedTitle !== 'Untitled Note') {
                         titleInput.value = generatedTitle;
                     }
+                }
+            });
+        }
+
+        // Quick TO-DO button - ONE-CLICK ACCESS TO TO-DO LIST
+        const todoButton = document.getElementById('quick-todo-filter');
+        if (todoButton) {
+            todoButton.addEventListener('click', () => {
+                logger.info('✅ [NOTES] Quick TO-DO filter clicked');
+                // Set the dropdown to "todo"
+                const categoryFilter = document.getElementById('notes-category-filter');
+                if (categoryFilter) {
+                    categoryFilter.value = 'todo';
+                }
+                // Filter to show only To-Do notes
+                this.filterNotesByCategory('todo');
+                // Scroll to notes
+                const notesContainer = document.getElementById('v2-notes-container');
+                if (notesContainer) {
+                    notesContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             });
         }

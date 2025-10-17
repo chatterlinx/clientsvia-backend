@@ -8,48 +8,30 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         /* ============================================================================ */
-        /* 🎨 MODERN NAVIGATION TABS */
+        /* 🎨 DATA CENTER NAVIGATION - BLUE THEME */
         /* ============================================================================ */
         .nav-link {
-            position: relative;
-            padding: 0.75rem 1.25rem;
-            font-size: 0.9375rem;
+            text-decoration: none;
+            color: #4a5568;
             font-weight: 500;
-            color: #6B7280; /* gray-500 */
-            border-radius: 0.5rem;
-            transition: all 0.2s ease-in-out;
-            display: inline-flex;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+            display: flex;
             align-items: center;
             gap: 0.5rem;
         }
         
         .nav-link:hover {
-            color: #111827; /* gray-900 */
-            background-color: #F3F4F6; /* gray-100 */
-            transform: translateY(-1px);
+            background: #edf2f7;
+            color: #2b6cb0;
         }
         
+        /* BLUE ACTIVE STATE - Data Center Style */
+        .nav-link.active,
         .nav-link.active-tab {
-            color: #4F46E5; /* indigo-600 */
-            background-color: #EEF2FF; /* indigo-50 */
-            font-weight: 600;
-            box-shadow: 0 1px 3px 0 rgba(79, 70, 229, 0.1);
-        }
-        
-        .nav-link.active-tab::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 60%;
-            height: 3px;
-            background: linear-gradient(90deg, transparent, #4F46E5, transparent);
-            border-radius: 2px 2px 0 0;
-        }
-        
-        .nav-link i {
-            font-size: 1.125rem;
+            background: #3182ce; /* BLUE */
+            color: white;
         }
         
         /* Logout button special styling */

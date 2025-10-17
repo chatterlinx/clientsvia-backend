@@ -20,11 +20,26 @@
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* DATA CENTER NAVIGATION - BLUE THEME */
         .nav-link {
-            @apply px-4 py-2 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200 font-medium flex items-center gap-2;
+            text-decoration: none;
+            color: #4a5568;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
+        .nav-link:hover {
+            background: #edf2f7;
+            color: #2b6cb0;
+        }
+        .nav-link.active,
         .nav-link.active-tab {
-            @apply bg-blue-100 text-blue-700 font-semibold;
+            background: #3182ce; /* BLUE */
+            color: white;
         }
         .stat-card {
             @apply bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow;
