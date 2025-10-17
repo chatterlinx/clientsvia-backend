@@ -1,15 +1,44 @@
 
 /* ============================================================================
-   MODERN COMPANY PROFILE MANAGEMENT SYSTEM
+   COMPANY PROFILE MANAGEMENT SYSTEM
    ============================================================================
    
+   PURPOSE: World-class multi-tenant company profile management for ClientsVia
+   VERSION: 3.0 (Post-Refactor - Production Grade)
+   LAST UPDATED: October 17, 2025
    
-   Architecture:
-   - Class-based modular design
-   - Centralized state management  
-   - Robust error handling
-   - Modern ES6+ features
-   - Clean separation of concerns
+   ARCHITECTURE:
+   - Class-based modular design with clear boundaries
+   - Centralized state management and caching
+   - Structured logging with debug mode toggle
+   - Unified services layer for API communication
+   - SELECTORS map for consistent DOM queries
+   - Event delegation for optimal performance
+   
+   MAJOR SECTIONS:
+   1. Core Utilities (qs, qsa, on, debounce, throttle, fetchJson, notify)
+   2. SELECTORS Map (centralized DOM element references)
+   3. CompanyProfileManager Class:
+      - Initialization & Setup
+      - Overview Tab (company details & editing)
+      - Configuration Tab (Twilio & settings)
+      - Notes Tab (developer notes management)
+      - Voice Settings (ElevenLabs configuration)
+      - Contacts Management (V2 contact system)
+      - Utility Methods (validation, formatting, helpers)
+   
+   DEPENDENCIES:
+   - Tailwind CSS (styling)
+   - FontAwesome (icons)
+   - Backend API (JWT authentication required)
+   
+   CODING STANDARDS:
+   - No console.log in production (use logger.debug)
+   - Always use SELECTORS map for DOM queries
+   - Always use fetchJson for API calls
+   - Always use notify for user feedback
+   - Clear section headers for navigation
+   - Comprehensive error handling
    - Multi-tenant company isolation
    
    ============================================================================ */
@@ -198,6 +227,7 @@ class CompanyProfileManager {
     }
 
     /* ========================================================================
+       INITIALIZATION & SETUP
        ======================================================================== */
 
     /**
@@ -484,6 +514,10 @@ class CompanyProfileManager {
     }
 
     /* ========================================================================
+       ======================================================================== */
+
+    /* ========================================================================
+       OVERVIEW TAB - Company Details & Editing
        ======================================================================== */
 
     /**
@@ -1234,6 +1268,10 @@ class CompanyProfileManager {
     /* ========================================================================
        ======================================================================== */
 
+    /* ========================================================================
+       CONTACTS MANAGEMENT - V2 Contact System
+       ======================================================================== */
+
     /**
      * Initialize contacts management with v2 features
      */
@@ -1620,7 +1658,8 @@ class CompanyProfileManager {
        - No credentials logged to console
        - Secure HTTPS API communication
        - JWT authentication required
-       
+    /* ========================================================================
+       CONFIGURATION TAB - Twilio & Settings
        ======================================================================== */
 
     /**
@@ -2196,6 +2235,10 @@ class CompanyProfileManager {
     collectAgentLogicData(configData) {
         // Agent logic is handled separately
     }
+
+    /* ========================================================================
+       NOTES TAB - Developer Notes Management
+       ======================================================================== */
 
     /**
      * Populate Notes tab with v2-grade note management system
@@ -3873,6 +3916,10 @@ class CompanyProfileManager {
         } catch (error) {
         }
     }
+
+    /* ========================================================================
+       VOICE SETTINGS - ElevenLabs Configuration
+       ======================================================================== */
 
     /**
      * Populate Voice tab (AI Voice Settings)
