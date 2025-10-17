@@ -329,14 +329,12 @@ router.get('/companies', async (req, res) => {
                 phoneNumbers: company.twilioConfig?.phoneNumbers || [],
                 primaryPhone: company.twilioConfig?.phoneNumber || null,
                 
-                // Soft delete info
+                // Soft delete info (no auto-purge - indefinite retention)
                 deletedAt: company.deletedAt,
                 deletedBy: company.deletedBy,
                 deleteReason: company.deleteReason,
-                autoPurgeAt: company.autoPurgeAt,
-                daysUntilPurge: company.autoPurgeAt 
-                    ? Math.ceil((new Date(company.autoPurgeAt) - new Date()) / (1000 * 60 * 60 * 24))
-                    : null,
+                autoPurgeAt: null,  // Always null - no auto-purge
+                daysUntilPurge: null,  // Always null - manual hard delete only
                 
                 // Trade
                 tradeCategories: company.tradeCategories || []
@@ -554,10 +552,7 @@ router.patch('/companies/:id/soft-delete', async (req, res) => {
             return res.status(400).json({ error: 'Company is already deleted' });
         }
 
-        // Mark as deleted
-        const autoPurgeDate = new Date();
-        autoPurgeDate.setDate(autoPurgeDate.getDate() + 30);
-
+        // Mark as deleted (NO AUTO-PURGE - keep indefinitely until manual hard delete)
         const softDeleteUpdate = {
             $set: {
                 isDeleted: true,
@@ -565,7 +560,7 @@ router.patch('/companies/:id/soft-delete', async (req, res) => {
                 deletedBy: userId || null,
                 deleteReason: reason || 'No reason provided',
                 deleteNotes: notes || '',
-                autoPurgeAt: autoPurgeDate
+                autoPurgeAt: null  // NO expiration - soft delete is indefinite
             }
         };
 
@@ -613,9 +608,10 @@ router.patch('/companies/:id/soft-delete', async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Company soft deleted successfully',
-            autoPurgeAt: autoPurgeDate,
-            daysUntilPurge: 30
+            message: 'Company soft deleted successfully (retained indefinitely - no auto-purge)',
+            deletedAt: new Date(),
+            canRestore: true,
+            note: 'Company can be restored anytime or manually hard-deleted when certain customer is not returning'
         });
 
     } catch (error) {
@@ -714,6 +710,158 @@ router.post('/companies/:id/restore', async (req, res) => {
         console.error('[DATA CENTER] Error restoring company:', error);
         res.status(500).json({ 
             error: 'Failed to restore company',
+            details: error.message 
+        });
+    }
+});
+
+/**
+ * ============================================================================
+ * DELETE /api/admin/data-center/companies/:id/hard-delete
+ * PERMANENT deletion - removes company and ALL related data
+ * ⚠️  CANNOT BE UNDONE - Use only when certain customer is not returning
+ * ============================================================================
+ */
+router.delete('/companies/:id/hard-delete', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { confirmDelete } = req.body;  // Require explicit confirmation
+        const userId = req.user?._id || req.user?.id;
+        const userEmail = req.user?.email || null;
+
+        console.log('[DATA CENTER] ⚠️  HARD DELETE request for company:', id);
+
+        // Require confirmation
+        if (!confirmDelete || confirmDelete !== true) {
+            return res.status(400).json({ 
+                error: 'Confirmation required',
+                message: 'Please confirm permanent deletion by setting confirmDelete: true in request body'
+            });
+        }
+
+        // Fetch company before deletion (for audit log)
+        const db = mongoose.connection.db;
+        const rawCompany = await db.collection('companiesCollection').findOne({ _id: new mongoose.Types.ObjectId(id) })
+            || await db.collection('companies').findOne({ _id: new mongoose.Types.ObjectId(id) });
+
+        if (!rawCompany) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        const companyName = rawCompany.companyName || rawCompany.businessName || 'Unknown Company';
+        
+        console.log('[DATA CENTER] 💀 Permanently deleting company:', companyName);
+
+        // ========================================
+        // DELETE COMPANY DOCUMENT
+        // ========================================
+        const deleteResult = await Promise.all([
+            db.collection('companiesCollection').deleteOne({ _id: new mongoose.Types.ObjectId(id) }),
+            db.collection('companies').deleteOne({ _id: new mongoose.Types.ObjectId(id) })
+        ]);
+        
+        const deletedCount = deleteResult[0].deletedCount + deleteResult[1].deletedCount;
+        console.log('[DATA CENTER] 💀 Deleted company documents:', deletedCount);
+
+        // ========================================
+        // DELETE ALL RELATED DATA
+        // ========================================
+        const companyObjectId = new mongoose.Types.ObjectId(id);
+        
+        const deletionResults = await Promise.allSettled([
+            // Call logs
+            db.collection('v2aiagentcalllogs').deleteMany({ companyId: companyObjectId }),
+            db.collection('aiagentcalllogs').deleteMany({ companyId: companyObjectId }),
+            
+            // Contacts
+            db.collection('v2contacts').deleteMany({ companyId: companyObjectId }),
+            db.collection('contacts').deleteMany({ companyId: companyObjectId }),
+            
+            // Notifications
+            db.collection('v2notificationlogs').deleteMany({ companyId: companyObjectId }),
+            db.collection('notificationlogs').deleteMany({ companyId: companyObjectId }),
+            
+            // Conversation logs / transcripts
+            db.collection('conversationlogs').deleteMany({ companyId: companyObjectId }),
+            
+            // Company Q&A / Knowledge base
+            db.collection('companyqnas').deleteMany({ companyId: companyObjectId }),
+            db.collection('localcompanyqnas').deleteMany({ companyId: companyObjectId }),
+            
+            // Bookings
+            db.collection('bookings').deleteMany({ companyId: companyObjectId }),
+            
+            // Templates
+            db.collection('v2templates').deleteMany({ companyId: companyObjectId })
+        ]);
+
+        // Count successful deletions
+        let totalRecordsDeleted = 0;
+        deletionResults.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+                totalRecordsDeleted += result.value?.deletedCount || 0;
+            } else {
+                console.warn(`[DATA CENTER] Failed to delete from collection ${index}:`, result.reason?.message);
+            }
+        });
+
+        console.log('[DATA CENTER] 💀 Total related records deleted:', totalRecordsDeleted);
+
+        // ========================================
+        // CLEAR REDIS CACHE
+        // ========================================
+        try {
+            const cacheKeys = [
+                `company:${id}`,
+                `voice:company:${id}`,
+                `ai-agent:${id}`
+            ];
+            await Promise.all(cacheKeys.map(key => redisClient.del(key).catch(() => null)));
+            console.log('[DATA CENTER] 🗑️  Redis cache cleared for company:', id);
+        } catch (cacheError) {
+            console.warn('[DATA CENTER] Cache clear failed:', cacheError.message);
+        }
+
+        // ========================================
+        // AUDIT LOG
+        // ========================================
+        try {
+            await DataCenterAuditLog.create({
+                action: 'HARD_DELETE',
+                targetType: 'COMPANY',
+                targetId: id,
+                targetName: companyName,
+                userId: userId || null,
+                userEmail: userEmail,
+                metadata: {
+                    relatedRecordsDeleted: totalRecordsDeleted,
+                    warning: 'PERMANENT DELETION - CANNOT BE UNDONE'
+                },
+                success: true
+            });
+        } catch (auditErr) {
+            console.warn('[DATA CENTER] Audit log failed (HARD_DELETE):', auditErr.message);
+        }
+
+        console.log('[DATA CENTER] ✅ Hard delete complete for company:', companyName);
+
+        res.json({
+            success: true,
+            message: 'Company and all related data permanently deleted',
+            companyName: companyName,
+            companyId: id,
+            deletedRecords: {
+                company: deletedCount,
+                relatedData: totalRecordsDeleted,
+                total: deletedCount + totalRecordsDeleted
+            },
+            warning: 'This action cannot be undone'
+        });
+
+    } catch (error) {
+        console.error('[DATA CENTER] ❌ Error during hard delete:', error);
+        res.status(500).json({ 
+            error: 'Failed to permanently delete company',
             details: error.message 
         });
     }
