@@ -294,6 +294,7 @@ class CompanyProfileManager {
             this.companyDataLoaded = true;
             
             console.log('✅ [LOAD] Company data loaded:', this.currentData);
+            console.log('📝 [LOAD] Notes in loaded data:', this.currentData.notes?.length || 0, 'notes');
 
             // Populate all tabs with data
             this.populateOverviewTab();

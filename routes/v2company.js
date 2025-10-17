@@ -348,6 +348,7 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
         if (!company) return res.status(404).json({ message: 'Company not found' });
 
         console.log(`✅ [DB] Company loaded: ${company.companyName}, businessPhone: ${company.businessPhone}`);
+        console.log(`📝 [DB] Notes in company document:`, company.notes?.length || 0, 'notes');
 
         const cacheKey = `company:${companyId}`;
         await redisClient.setEx(cacheKey, 3600, JSON.stringify(company));
@@ -537,7 +538,8 @@ router.patch('/company/:id', async (req, res) => {
                     updateOperation[key] = updates[key];
                 } else if (key === 'notes' && Array.isArray(updates[key])) {
                     // GOLD STANDARD: Handle notes array properly
-                    console.log('📝 [NOTES DEBUG] Processing notes array for save:', updates[key]);
+                    console.log('📝 [NOTES DEBUG] Processing notes array for save:', updates[key].length, 'notes');
+                    console.log('📝 [NOTES DEBUG] First note:', updates[key][0]);
                     updateOperation[key] = updates[key];
                 }
                 else {
