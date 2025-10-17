@@ -126,6 +126,53 @@ const notify = (message, type = 'info') => {
 };
 
 /* ============================================================================
+   SELECTORS MAP - Single source of truth for all DOM elements
+   ============================================================================ */
+const SELECTORS = {
+    // Overview Tab
+    overview: {
+        editForm: '#company-details-edit-form',
+        editButton: '#edit-profile-button',
+        companyName: '#edit-company-name',
+        businessPhone: '#edit-business-phone',
+        businessEmail: '#edit-business-email',
+        description: '#edit-description'
+    },
+    
+    // Configuration Tab
+    config: {
+        content: '#config-content',
+        form: '#config-settings-form'
+    },
+    
+    // Notes Tab
+    notes: {
+        content: '#notes-content',
+        container: '#v2-notes-container',
+        emptyState: '#notes-empty-state',
+        addButton: '#add-v2-note',
+        titleInput: '#quick-note-title',
+        contentInput: '#quick-note-content',
+        categorySelect: '#quick-note-category',
+        prioritySelect: '#quick-note-priority',
+        pinCheckbox: '#quick-note-pin'
+    },
+    
+    // Contacts
+    contacts: {
+        addButton: '#add-contact-btn',
+        modal: '#contact-modal',
+        form: '#contact-form'
+    },
+    
+    // Common
+    common: {
+        loadingIndicator: '#loading-indicator',
+        profileContainer: '.profile-container'
+    }
+};
+
+/* ============================================================================
    MAIN CLASS
    ============================================================================ */
 
