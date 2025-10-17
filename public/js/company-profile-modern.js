@@ -2296,7 +2296,7 @@ class CompanyProfileManager {
     /**
      * PRODUCTION: Add v2 note with full feature set
      */
-    addV2Note() {        
+    async addV2Note() {        
         const titleInput = document.getElementById('quick-note-title');
         const contentTextarea = document.getElementById('quick-note-content');
         const categorySelect = document.getElementById('quick-note-category');
@@ -2350,6 +2350,9 @@ class CompanyProfileManager {
         this.renderV2Notes();
         this.setUnsavedChanges(true);
         this.showNotification('Note added successfully!', 'success');
+        
+        // Save to backend immediately
+        await this.saveNotesToBackend();
     }
 
     /**
@@ -2621,7 +2624,7 @@ class CompanyProfileManager {
     /**
      * PRODUCTION: Toggle pin status of note
      */
-    togglePinNote(noteId) {
+    async togglePinNote(noteId) {
         const note = this.notes.find(n => n.id == noteId);
         if (!note) return;
 
@@ -2641,7 +2644,10 @@ class CompanyProfileManager {
         const action = note.isPinned ? 'pinned' : 'unpinned';
         this.showNotification(`Note ${action} successfully!`, 'success');
         
-        console.log(`� Note ${action}:`, note.title);
+        console.log(`📌 Note ${action}:`, note.title);
+        
+        // Save to backend immediately
+        await this.saveNotesToBackend();
     }
 
     /**
@@ -2672,7 +2678,7 @@ class CompanyProfileManager {
     /**
      * PRODUCTION: Save edited note
      */
-    saveEditNote(noteId) {
+    async saveEditNote(noteId) {
         const note = this.notes.find(n => n.id == noteId);
         if (!note) return;
 
@@ -2699,6 +2705,8 @@ class CompanyProfileManager {
         this.setUnsavedChanges(true);
         this.showNotification('Note updated successfully!', 'success');
         
+        // Save to backend immediately
+        await this.saveNotesToBackend();
     }
 
     /**
@@ -2716,7 +2724,7 @@ class CompanyProfileManager {
     /**
      * GOLD STANDARD: Delete note with confirmation
      */
-    deleteV2Note(noteId) {
+    async deleteV2Note(noteId) {
         const note = this.notes.find(n => n.id == noteId);
         if (!note) return;
 
@@ -2728,6 +2736,9 @@ class CompanyProfileManager {
         this.renderV2Notes();
         this.setUnsavedChanges(true);
         this.showNotification('Note deleted successfully!', 'success');
+        
+        // Save to backend immediately
+        await this.saveNotesToBackend();
     }
 
     /**
@@ -2739,6 +2750,48 @@ class CompanyProfileManager {
         
         if (totalCount) totalCount.textContent = this.notes.length;
         if (pinnedCount) pinnedCount.textContent = this.notes.filter(n => n.isPinned).length;
+    }
+
+    /**
+     * PRODUCTION: Save notes to backend immediately
+     */
+    async saveNotesToBackend() {
+        console.log('📝 [NOTES SAVE] Saving notes to backend...', this.notes.length, 'notes');
+        
+        try {
+            const token = this.authToken || localStorage.getItem('adminToken');
+            if (!token) {
+                console.error('❌ [NOTES SAVE] No auth token found');
+                return;
+            }
+
+            const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    notes: this.notes
+                })
+            });
+
+            console.log('📝 [NOTES SAVE] Response status:', response.status);
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log('✅ [NOTES SAVE] Notes saved successfully:', result.notes?.length, 'notes in DB');
+            
+            this.setUnsavedChanges(false);
+            return result;
+        } catch (error) {
+            console.error('❌ [NOTES SAVE] Error saving notes:', error);
+            this.showNotification('Failed to save note', 'error');
+            throw error;
+        }
     }
 
     /**
