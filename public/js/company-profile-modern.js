@@ -30,6 +30,9 @@ class CompanyProfileManager {
         this.saveButton = null;
         this.initialized = false;
         
+        // Notes event listener flag (to prevent duplicate setups)
+        this.noteEventListenersSetup = false;
+        
         // Authentication token
         this.authToken = localStorage.getItem('adminToken') || localStorage.getItem('token');
     }
@@ -2436,8 +2439,11 @@ class CompanyProfileManager {
 
         container.innerHTML = html;
         
-        // Setup individual note event listeners
-        this.setupNoteCardEventListeners();
+        // Setup individual note event listeners (only once)
+        if (!this.noteEventListenersSetup) {
+            this.setupNoteCardEventListeners();
+            this.noteEventListenersSetup = true;
+        }
     }
 
     /**
@@ -2601,22 +2607,36 @@ class CompanyProfileManager {
      */
     setupNoteCardEventListeners() {
         const container = document.getElementById('v2-notes-container');
-        if (!container) return;
+        if (!container) {
+            console.warn('⚠️ [NOTES] v2-notes-container not found for event listeners');
+            return;
+        }
+
+        console.log('✅ [NOTES] Setting up note card event listeners');
 
         // Use event delegation for better performance
         container.addEventListener('click', (e) => {
+            console.log('🖱️ [NOTES] Click detected on:', e.target);
+            
             const noteId = e.target.closest('[data-note-id]')?.dataset.noteId;
+            console.log('🆔 [NOTES] Note ID from click:', noteId);
+            
             if (!noteId) return;
 
             if (e.target.closest('.pin-note-btn')) {
+                console.log('📌 [NOTES] Pin button clicked for note:', noteId);
                 this.togglePinNote(noteId);
             } else if (e.target.closest('.edit-note-btn')) {
+                console.log('✏️ [NOTES] Edit button clicked for note:', noteId);
                 this.startEditNote(noteId);
             } else if (e.target.closest('.delete-note-btn')) {
+                console.log('🗑️ [NOTES] Delete button clicked for note:', noteId);
                 this.deleteV2Note(noteId);
             } else if (e.target.closest('.save-edit-btn')) {
+                console.log('💾 [NOTES] Save edit button clicked for note:', noteId);
                 this.saveEditNote(noteId);
             } else if (e.target.closest('.cancel-edit-btn')) {
+                console.log('❌ [NOTES] Cancel edit button clicked for note:', noteId);
                 this.cancelEditNote(noteId);
             }
         });
