@@ -23,50 +23,34 @@
         body {
             font-family: 'Inter', sans-serif;
         }
+
+        /* WIDE CONTAINER - Full real estate like Data Center */
+        .container {
+            max-width: 1400px !important;
+        }
         
-        /* ============================================================================ */
-        /* 🎨 MODERN NAVIGATION TABS */
-        /* ============================================================================ */
+        /* DATA CENTER NAVIGATION - BLUE THEME */
         .nav-link {
-            position: relative;
-            padding: 0.75rem 1.25rem;
-            font-size: 0.9375rem;
+            text-decoration: none;
+            color: #4a5568;
             font-weight: 500;
-            color: #6B7280; /* gray-500 */
-            border-radius: 0.5rem;
-            transition: all 0.2s ease-in-out;
-            display: inline-flex;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+            display: flex;
             align-items: center;
             gap: 0.5rem;
         }
         
         .nav-link:hover {
-            color: #111827; /* gray-900 */
-            background-color: #F3F4F6; /* gray-100 */
-            transform: translateY(-1px);
+            background: #edf2f7;
+            color: #2b6cb0;
         }
         
+        .nav-link.active,
         .nav-link.active-tab {
-            color: #4F46E5; /* indigo-600 */
-            background-color: #EEF2FF; /* indigo-50 */
-            font-weight: 600;
-            box-shadow: 0 1px 3px 0 rgba(79, 70, 229, 0.1);
-        }
-        
-        .nav-link.active-tab::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 60%;
-            height: 3px;
-            background: linear-gradient(90deg, transparent, #4F46E5, transparent);
-            border-radius: 2px 2px 0 0;
-        }
-        
-        .nav-link i {
-            font-size: 1.125rem;
+            background: #3182ce;
+            color: white;
         }
         
         /* Logout button special styling */
@@ -92,12 +76,16 @@
                     </div>
                     <nav class="hidden md:flex items-center gap-2">
                         <a href="/directory.html" class="nav-link" id="nav-directory">
-                            <i class="fas fa-list-alt"></i>
+                            <i class="fas fa-list"></i>
                             <span>Directory</span>
                         </a>
                         <a href="/add-company.html" class="nav-link" id="nav-add-company">
-                            <i class="fas fa-plus-circle"></i>
+                            <i class="fas fa-plus"></i>
                             <span>Add Company</span>
+                        </a>
+                        <a href="/admin-data-center.html" class="nav-link" id="nav-data-center">
+                            <i class="fas fa-database"></i>
+                            <span>Data Center</span>
                         </a>
                         <a href="/v2global-trade-categories.html" class="nav-link" id="nav-trade-categories">
                             <i class="fas fa-tags"></i>
@@ -107,7 +95,6 @@
                             <i class="fas fa-brain"></i>
                             <span>Global AI Brain</span>
                         </a>
-                        <!-- 🗑️ DELETED: Monitoring tab - legacy alert system destroyed -->
                         <div class="h-6 w-px bg-gray-300 mx-2"></div>
                         <button onclick="logout()" class="nav-link text-red-600 hover:text-red-800" id="nav-logout">
                             <i class="fas fa-sign-out-alt"></i>
@@ -126,8 +113,9 @@
                 <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
                     <a href="/directory.html" class="block nav-link text-base" id="mobile-nav-directory">Directory</a>
                     <a href="/add-company.html" class="block nav-link text-base" id="mobile-nav-add-company">Add Company</a>
-                    <a href="/v2global-trade-categories.html" class="block nav-link text-base" id="mobile-nav-trade-categories">V2 Global Trade Categories</a>
-                    <!-- 🗑️ DELETED: Mobile monitoring tab - legacy alert system destroyed -->
+                    <a href="/admin-data-center.html" class="block nav-link text-base" id="mobile-nav-data-center">Data Center</a>
+                    <a href="/v2global-trade-categories.html" class="block nav-link text-base" id="mobile-nav-trade-categories">Global Trade Categories</a>
+                    <a href="/admin-global-instant-responses.html" class="block nav-link text-base" id="mobile-nav-global-ai-brain">Global AI Brain</a>
                     <button onclick="logout()" class="block nav-link text-base text-red-600 hover:text-red-800 text-left w-full" id="mobile-nav-logout">
                         <i class="fas fa-sign-out-alt mr-1"></i>Logout
                     </button>
