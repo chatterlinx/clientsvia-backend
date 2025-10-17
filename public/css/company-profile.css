@@ -1,0 +1,399 @@
+/**
+ * ============================================================================
+ * COMPANY PROFILE - STYLESHEET
+ * ============================================================================
+ * 
+ * This stylesheet controls all visual elements of the company profile page.
+ * 
+ * Structure:
+ * 1. Global Styles & Typography
+ * 2. Navigation & Layout
+ * 3. Tab System
+ * 4. Forms & Inputs
+ * 5. Buttons & Actions
+ * 6. Status & Badges
+ * 7. Cards & Containers
+ * 8. Account Status Control
+ * 9. Utility Classes
+ * 10. Responsive Design
+ * 
+ * ============================================================================
+ */
+
+
+/* ============================================================================
+   1. GLOBAL STYLES & TYPOGRAPHY
+   ============================================================================ */
+
+body {
+    font-family: 'Inter', sans-serif;
+    scroll-behavior: smooth;
+}
+
+
+/* ============================================================================
+   2. NAVIGATION & LAYOUT
+   ============================================================================ */
+
+.nav-link-global {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #6B7280;
+    text-decoration: none;
+    transition: all 0.2s ease-in-out;
+    border: 1px solid transparent;
+}
+
+.nav-link-global:hover {
+    color: #4F46E5;
+    background-color: #EEF2FF;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.nav-link-global.active {
+    background-color: #4F46E5;
+    color: white;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+}
+
+
+/* ============================================================================
+   3. TAB SYSTEM
+   ============================================================================ */
+
+.tab-button {
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    border-top-left-radius: 0.5rem;
+    border-top-right-radius: 0.5rem;
+    transition: all 0.15s ease;
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+}
+
+.tab-button:focus {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+}
+
+.tab-button-active {
+    background-color: #4F46E5;
+    color: white;
+}
+
+.tab-button-inactive {
+    background-color: #E5E7EB;
+    color: #374151;
+}
+
+.tab-button-inactive:hover {
+    background-color: #D1D5DB;
+}
+
+.tab-content-item {
+    padding-top: 1.5rem;
+}
+
+.tab-content-item.hidden {
+    display: none;
+}
+
+
+/* ============================================================================
+   4. FORMS & INPUTS
+   ============================================================================ */
+
+.form-input,
+.form-select,
+.form-textarea {
+    margin-top: 0.25rem;
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background-color: white;
+    border: 1px solid #D1D5DB;
+    border-radius: 0.375rem;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    transition: all 0.15s ease-in-out;
+    font-size: 0.875rem;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+    outline: none;
+    border-color: #6366F1;
+    ring: 2px;
+    ring-color: rgba(99, 102, 241, 0.5);
+}
+
+.form-checkbox {
+    width: auto;
+    height: 1rem;
+    color: #4F46E5;
+}
+
+.form-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+}
+
+.form-check-label {
+    margin-left: 0.5rem;
+    font-size: 0.875rem;
+    color: #374151;
+}
+
+.wider-textbox {
+    max-width: 800px;
+    width: 100%;
+}
+
+
+/* ============================================================================
+   5. BUTTONS & ACTIONS
+   ============================================================================ */
+
+.btn-primary {
+    background-color: #4F46E5;
+    color: white;
+    padding: 0.5rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: all 0.15s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-primary:hover {
+    background-color: #4338CA;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.btn-secondary {
+    background-color: #6B7280;
+    color: white;
+    padding: 0.5rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: all 0.15s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-secondary:hover {
+    background-color: #4B5563;
+}
+
+.btn-danger {
+    background-color: #EF4444;
+    color: white;
+    padding: 0.5rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: all 0.15s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-danger:hover {
+    background-color: #DC2626;
+}
+
+
+/* ============================================================================
+   6. STATUS & BADGES
+   ============================================================================ */
+
+.status-badge {
+    padding: 0.375rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.status-active {
+    background-color: #D1FAE5;
+    color: #065F46;
+}
+
+.status-inactive {
+    background-color: #FEE2E2;
+    color: #991B1B;
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+}
+
+
+/* ============================================================================
+   7. CARDS & CONTAINERS
+   ============================================================================ */
+
+.config-block {
+    margin-top: 0.75rem;
+    padding: 1rem;
+    border: 1px solid #E5E7EB;
+    border-radius: 0.5rem;
+    background-color: #F9FAFB;
+}
+
+.profile-section-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1F2937;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #E5E7EB;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem 0;
+}
+
+.detail-label {
+    font-weight: 500;
+    color: #6B7280;
+    margin-bottom: 0.25rem;
+}
+
+.detail-value {
+    color: #1F2937;
+}
+
+@media (min-width: 640px) {
+    .detail-item {
+        flex-direction: row;
+    }
+    
+    .detail-label {
+        width: 33.333333%;
+        margin-bottom: 0;
+    }
+    
+    .detail-value {
+        width: 66.666667%;
+    }
+}
+
+
+/* ============================================================================
+   8. ACCOUNT STATUS CONTROL
+   ============================================================================ */
+
+.status-option .status-card {
+    border-color: #D1D5DB;
+    background-color: #F9FAFB;
+    transition: all 0.15s ease;
+}
+
+.status-option .status-radio:checked ~ .status-card {
+    border-width: 3px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.status-option .status-radio:checked[value="active"] ~ .status-card {
+    border-color: #10B981;
+    background-color: #ECFDF5;
+}
+
+.status-option .status-radio:checked[value="call_forward"] ~ .status-card {
+    border-color: #F59E0B;
+    background-color: #FFFBEB;
+}
+
+.status-option .status-radio:checked[value="suspended"] ~ .status-card {
+    border-color: #EF4444;
+    background-color: #FEF2F2;
+}
+
+.status-option .status-radio:checked ~ .status-card .check-indicator {
+    display: inline-block;
+}
+
+
+/* ============================================================================
+   9. UTILITY CLASSES
+   ============================================================================ */
+
+.contact-block-view {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #E5E7EB;
+}
+
+.contact-block-view .detail-item:last-child {
+    padding-bottom: 0;
+}
+
+#toast-notification {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #333;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+}
+
+#toast-notification.show {
+    opacity: 1;
+}
+
+#toast-notification.success {
+    background-color: #10B981;
+}
+
+#toast-notification.error {
+    background-color: #EF4444;
+}
+
+
+/* ============================================================================
+   10. RESPONSIVE DESIGN
+   ============================================================================ */
+
+@media (min-width: 768px) {
+    .wider-textbox {
+        max-width: 800px;
+    }
+}
+
+@media (max-width: 767px) {
+    .wider-textbox {
+        max-width: 100%;
+    }
+    
+    .tab-button {
+        font-size: 0.75rem;
+        padding: 0.375rem 0.75rem;
+    }
+}
+
+
+/* ============================================================================
+   END OF STYLESHEET
+   ============================================================================ */
+
