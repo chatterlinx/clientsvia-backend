@@ -111,6 +111,9 @@ router.get('/:companyId/connection-messages/config', async (req, res) => {
             company.aiAgentLogic.connectionMessages = defaultConfig;
         }
 
+        console.log(`[CONNECTION MESSAGES] 📤 Returning mode:`, company.aiAgentLogic.connectionMessages.voice.mode);
+        console.log(`[CONNECTION MESSAGES] 📤 Voice config:`, JSON.stringify(company.aiAgentLogic.connectionMessages.voice, null, 2));
+
         res.json(company.aiAgentLogic.connectionMessages);
 
     } catch (error) {
@@ -127,6 +130,7 @@ router.get('/:companyId/connection-messages/config', async (req, res) => {
  */
 router.patch('/:companyId/connection-messages/config', async (req, res) => {
     console.log(`[CONNECTION MESSAGES] PATCH /config for company: ${req.params.companyId}`);
+    console.log(`[CONNECTION MESSAGES] 📥 Received body:`, JSON.stringify(req.body, null, 2));
 
     try {
         const { voice, sms, webChat } = req.body;
@@ -146,9 +150,16 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
             company.aiAgentLogic.connectionMessages = getDefaultConfig();
         }
 
+        console.log(`[CONNECTION MESSAGES] 📊 Current mode in DB:`, company.aiAgentLogic.connectionMessages.voice.mode);
+        console.log(`[CONNECTION MESSAGES] 📥 Incoming voice.mode:`, voice?.mode);
+
         // Update voice settings
         if (voice) {
-            if (voice.mode) company.aiAgentLogic.connectionMessages.voice.mode = voice.mode;
+            if (voice.mode) {
+                console.log(`[CONNECTION MESSAGES] ✏️ Updating mode from "${company.aiAgentLogic.connectionMessages.voice.mode}" to "${voice.mode}"`);
+                company.aiAgentLogic.connectionMessages.voice.mode = voice.mode;
+                console.log(`[CONNECTION MESSAGES] ✅ Mode updated in memory:`, company.aiAgentLogic.connectionMessages.voice.mode);
+            }
             
             if (voice.text !== undefined) {
                 // CRITICAL: Save to voice.text (PRIMARY FIELD for runtime)
@@ -223,6 +234,9 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
 
         company.aiAgentLogic.connectionMessages.lastUpdated = new Date();
 
+        console.log(`[CONNECTION MESSAGES] 💾 About to save with mode:`, company.aiAgentLogic.connectionMessages.voice.mode);
+        console.log(`[CONNECTION MESSAGES] 💾 Full connectionMessages object:`, JSON.stringify(company.aiAgentLogic.connectionMessages, null, 2));
+
         // 🔧 FIX: Use targeted update to avoid full document validation
         // This bypasses validation of corrupt data in OTHER fields
         console.log(`[CONNECTION MESSAGES] 🔧 Using targeted update to bypass full validation`);
@@ -243,6 +257,8 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
                 error: 'Company not found'
             });
         }
+        
+        console.log(`[CONNECTION MESSAGES] ✅ Saved! Mode in returned document:`, updatedCompany.aiAgentLogic.connectionMessages.voice.mode);
 
         // Clear cache
         try {
