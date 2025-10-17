@@ -29,6 +29,9 @@ class CompanyProfileManager {
         this.currentTab = 'overview';
         this.saveButton = null;
         this.initialized = false;
+        
+        // Authentication token
+        this.authToken = localStorage.getItem('adminToken') || localStorage.getItem('token');
     }
 
     /* ========================================================================
@@ -991,7 +994,26 @@ class CompanyProfileManager {
      * Set form status indicator
      */
     setFormStatus(status, message) {
-        // You can implement a status indicator UI here if needed
+        const statusElement = document.getElementById('form-status');
+        if (!statusElement) return;
+        
+        // Status colors and icons
+        const statusConfig = {
+            'ready': { color: 'green', icon: 'check-circle', text: 'Ready' },
+            'typing': { color: 'blue', icon: 'edit', text: 'Editing...' },
+            'pending': { color: 'yellow', icon: 'sync', text: 'Saving...' },
+            'saved': { color: 'green', icon: 'check', text: 'Saved!' },
+            'error': { color: 'red', icon: 'exclamation-circle', text: 'Error' }
+        };
+        
+        const config = statusConfig[status] || statusConfig['ready'];
+        const colorClass = `text-${config.color}-700`;
+        const bgClass = `bg-${config.color}-500`;
+        
+        statusElement.innerHTML = `
+            <div class="w-2 h-2 ${bgClass} rounded-full mr-2 ${status === 'pending' ? 'animate-pulse' : ''}"></div>
+            <span class="${colorClass} font-medium">${message || config.text}</span>
+        `;
     }
 
     /* ========================================================================
