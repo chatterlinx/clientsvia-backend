@@ -1360,17 +1360,17 @@ class CompanyProfileManager {
      */
     populateConfigTab() {
         try {
-            console.log('⚙️ Populating Config tab...');
+            console.log('⚙️ Populating Configuration tab...');
             
             if (!this.currentData) {
-                console.log('⚠️ No company data available for Config tab');
+                console.log('⚠️ No company data available for Configuration tab');
                 return;
             }
 
             // Create modern configuration interface
             this.createConfigurationInterface();
         } catch (error) {
-            console.error('❌ Error populating Config tab:', error);
+            console.error('❌ Error populating Configuration tab:', error);
             this.showNotification('Error loading configuration data', 'error');
         }
     }

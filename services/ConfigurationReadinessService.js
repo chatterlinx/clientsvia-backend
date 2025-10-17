@@ -3,498 +3,509 @@
  * CONFIGURATION READINESS SERVICE
  * ============================================================================
  * 
- * PURPOSE: Calculate if a company is ready to take live calls
+ * PURPOSE: Calculate if company is ready to go live with AI Agent
  * 
- * SCORING COMPONENTS (100 points total):
- * - Variables Complete: 45 points
- * - Filler Words Active: 10 points
- * - Scenarios Active: 25 points
- * - Voice Configured: 10 points
- * - Test Calls Made: 10 points
+ * SCORING ALGORITHM:
+ * - Variables (45%): Required variables configured
+ * - Filler Words (10%): Filler words active
+ * - Scenarios (25%): Template scenarios loaded
+ * - Voice (10%): Voice settings configured
+ * - Test Calls (10%): Test calls completed
  * 
- * OUTPUTS:
- * - Overall score (0-100)
- * - canGoLive (boolean)
- * - Blockers (critical issues preventing go-live)
- * - Warnings (non-critical issues)
- * - Component scores (detailed breakdown)
+ * GO LIVE CRITERIA:
+ * - Score >= 80/100
+ * - Zero critical blockers
+ * 
+ * BLOCKERS:
+ * - CRITICAL: Prevents Go Live (missing required config)
+ * - MAJOR: Strongly recommended to fix
+ * - WARNING: Should be addressed eventually
  * 
  * ============================================================================
  */
 
+const Company = require('../models/v2Company');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 
-/**
- * Calculate readiness score for a company
- * @param {Object} company - Company document from MongoDB
- * @returns {Object} Readiness report
- */
-async function calculateReadiness(company) {
-    console.log(`[READINESS] Calculating readiness for company: ${company._id}`);
+class ConfigurationReadinessService {
     
-    const report = {
-        companyId: company._id,
-        companyName: company.companyName,
-        calculatedAt: new Date(),
-        score: 0,
-        canGoLive: false,
-        components: {},
-        blockers: [],
-        warnings: [],
-        recommendations: []
-    };
+    /**
+     * Calculate comprehensive readiness score
+     * @param {Object} company - Company document (already loaded)
+     * @returns {Object} Readiness report
+     */
+    static async calculateReadiness(company) {
+        console.log(`[READINESS] 🎯 Calculating readiness for: ${company.companyName}`);
+        
+        const report = {
+            calculatedAt: new Date(),
+            companyId: company._id.toString(),
+            companyName: company.companyName,
+            score: 0,
+            canGoLive: false,
+            blockers: [],
+            warnings: [],
+            components: {
+                accountStatus: null,
+                variables: null,
+                fillerWords: null,
+                scenarios: null,
+                voice: null,
+                testCalls: null
+            }
+        };
+        
+        // 🚨 GATEKEEPER: Check account status FIRST (Configuration tab)
+        this.checkAccountStatus(company, report);
+        
+        // Calculate each component
+        await Promise.all([
+            this.calculateVariablesScore(company, report),
+            this.calculateFillerWordsScore(company, report),
+            this.calculateScenariosScore(company, report),
+            this.calculateVoiceScore(company, report),
+            this.calculateTestCallsScore(company, report)
+        ]);
+        
+        // Calculate total score (weighted sum)
+        const totalScore = 
+            (report.components.variables.score * 0.45) +
+            (report.components.fillerWords.score * 0.10) +
+            (report.components.scenarios.score * 0.25) +
+            (report.components.voice.score * 0.10) +
+            (report.components.testCalls.score * 0.10);
+        
+        report.score = Math.round(totalScore);
+        
+        // Determine if can go live
+        const hasCriticalBlockers = report.blockers.some(b => b.severity === 'critical');
+        report.canGoLive = report.score >= 80 && !hasCriticalBlockers;
+        
+        console.log(`[READINESS] ✅ Score: ${report.score}/100 | Can Go Live: ${report.canGoLive}`);
+        console.log(`[READINESS] 📊 Components:`);
+        console.log(`   - Variables: ${report.components.variables.score}/100 (${report.components.variables.configured}/${report.components.variables.required})`);
+        console.log(`   - Filler Words: ${report.components.fillerWords.score}/100 (${report.components.fillerWords.active} active)`);
+        console.log(`   - Scenarios: ${report.components.scenarios.score}/100 (${report.components.scenarios.active} active)`);
+        console.log(`   - Voice: ${report.components.voice.score}/100 (${report.components.voice.configured ? 'configured' : 'not configured'})`);
+        console.log(`   - Test Calls: ${report.components.testCalls.score}/100 (${report.components.testCalls.made}/${report.components.testCalls.required})`);
+        
+        if (report.blockers.length > 0) {
+            console.log(`[READINESS] 🚫 Blockers: ${report.blockers.length}`);
+            report.blockers.forEach(b => console.log(`   - ${b.code}: ${b.message}`));
+        }
+        
+        return report;
+    }
     
-    // Component 1: Variables Complete (45 points)
-    const variablesScore = await scoreVariables(company, report);
-    report.components.variables = variablesScore;
-    report.score += variablesScore.points;
-    
-    // Component 2: Filler Words Active (10 points)
-    const fillerWordsScore = scoreFillerWords(company, report);
-    report.components.fillerWords = fillerWordsScore;
-    report.score += fillerWordsScore.points;
-    
-    // Component 3: Scenarios Active (25 points)
-    const scenariosScore = scoreScenarios(company, report);
-    report.components.scenarios = scenariosScore;
-    report.score += scenariosScore.points;
-    
-    // Component 4: Voice Configured (10 points)
-    const voiceScore = scoreVoice(company, report);
-    report.components.voice = voiceScore;
-    report.score += voiceScore.points;
-    
-    // Component 5: Test Calls Made (10 points)
-    const testCallsScore = scoreTestCalls(company, report);
-    report.components.testCalls = testCallsScore;
-    report.score += testCallsScore.points;
-    
-    // Determine if company can go live
-    report.canGoLive = determineCanGoLive(report);
-    
-    // Add recommendations
-    report.recommendations = generateRecommendations(report);
-    
-    console.log(`[READINESS] ✅ Score: ${report.score}/100, Can Go Live: ${report.canGoLive}`);
-    
-    return report;
-}
-
-/**
- * Score: Variables Complete (45 points)
- */
-async function scoreVariables(company, report) {
-    const score = {
-        points: 0,
-        maxPoints: 45,
-        percentage: 0,
-        status: 'incomplete',
-        details: {}
-    };
-    
-    try {
-        // Load template to get required variables
-        if (!company.configuration?.clonedFrom) {
+    /**
+     * Calculate variables score (45% of total)
+     */
+    static async calculateVariablesScore(company, report) {
+        const component = {
+            name: 'Variables',
+            score: 0,
+            required: 0,
+            configured: 0,
+            missing: [],
+            weight: 45
+        };
+        
+        try {
+            // Load template to get variable definitions
+            if (!company.configuration?.clonedFrom) {
+                // No template cloned - critical blocker
+                component.score = 0;
+                component.required = 0;
+                component.configured = 0;
+                
+                report.blockers.push({
+                    code: 'NO_TEMPLATE',
+                    message: 'No Global AI Brain template cloned',
+                    severity: 'critical',
+                    target: '/company/:companyId/ai-agent-settings/template-info',
+                    component: 'template'
+                });
+                
+                report.components.variables = component;
+                return;
+            }
+            
+            const template = await GlobalInstantResponseTemplate.findById(company.configuration.clonedFrom);
+            
+            if (!template) {
+                component.score = 0;
+                report.blockers.push({
+                    code: 'TEMPLATE_NOT_FOUND',
+                    message: 'Cloned template no longer exists',
+                    severity: 'critical',
+                    target: '/company/:companyId/ai-agent-settings/template-info',
+                    component: 'template'
+                });
+                report.components.variables = component;
+                return;
+            }
+            
+            // Get variable definitions
+            const variableDefinitions = template.variableDefinitions || template.availableVariables || [];
+            const variables = company.configuration?.variables || {};
+            
+            // Convert Map to object if needed
+            const variablesObj = variables.toObject ? variables.toObject() : variables;
+            
+            // Count required vs configured
+            const requiredVars = variableDefinitions.filter(v => v.required);
+            component.required = requiredVars.length;
+            
+            requiredVars.forEach(varDef => {
+                const value = variablesObj[varDef.key];
+                if (value && value.trim() !== '') {
+                    component.configured++;
+                } else {
+                    component.missing.push({
+                        key: varDef.key,
+                        label: varDef.label || varDef.key,
+                        type: varDef.type || 'text'
+                    });
+                }
+            });
+            
+            // Calculate score
+            if (component.required === 0) {
+                component.score = 100; // No required variables
+            } else {
+                component.score = Math.round((component.configured / component.required) * 100);
+            }
+            
+            // Add blockers for missing required variables
+            if (component.missing.length > 0) {
+                report.blockers.push({
+                    code: 'MISSING_REQUIRED_VARIABLES',
+                    message: `${component.missing.length} required variable(s) not configured`,
+                    severity: 'critical',
+                    target: `/company/:companyId/ai-agent-settings/variables`,
+                    component: 'variables',
+                    details: component.missing.map(v => v.label).join(', ')
+                });
+            }
+            
+        } catch (error) {
+            console.error(`[READINESS] ❌ Variables calculation error:`, error);
+            component.score = 0;
             report.blockers.push({
+                code: 'VARIABLES_ERROR',
+                message: `Error calculating variables: ${error.message}`,
                 severity: 'critical',
-                category: 'variables',
-                title: 'No Template Cloned',
-                detail: 'Company must clone a Global AI Brain template first',
-                impact: 'Cannot configure AI without a template',
-                fixTarget: 'ai-agent-settings:template-info'
+                component: 'variables'
             });
-            return score;
         }
         
-        const template = await GlobalInstantResponseTemplate.findById(company.configuration.clonedFrom);
+        report.components.variables = component;
+    }
+    
+    /**
+     * Calculate filler words score (10% of total)
+     */
+    static async calculateFillerWordsScore(company, report) {
+        const component = {
+            name: 'Filler Words',
+            score: 100, // Default to 100 (not critical)
+            active: 0,
+            inherited: 0,
+            custom: 0,
+            weight: 10
+        };
         
-        if (!template) {
+        try {
+            const fillerWords = company.configuration?.fillerWords || {};
+            const inherited = fillerWords.inherited || [];
+            const custom = fillerWords.custom || [];
+            
+            component.inherited = inherited.length;
+            component.custom = custom.length;
+            component.active = inherited.length + custom.length;
+            
+            // Filler words are optional but recommended
+            if (component.active === 0) {
+                component.score = 50; // Half score if none configured
+                report.warnings.push({
+                    code: 'NO_FILLER_WORDS',
+                    message: 'No filler words configured - may affect speech recognition accuracy',
+                    severity: 'major',
+                    target: `/company/:companyId/ai-agent-settings/filler-words`,
+                    component: 'fillerWords'
+                });
+            } else if (component.active < 20) {
+                component.score = 75; // Low count warning
+                report.warnings.push({
+                    code: 'FEW_FILLER_WORDS',
+                    message: `Only ${component.active} filler words configured (recommended: 20+)`,
+                    severity: 'warning',
+                    target: `/company/:companyId/ai-agent-settings/filler-words`,
+                    component: 'fillerWords'
+                });
+            } else {
+                component.score = 100;
+            }
+            
+        } catch (error) {
+            console.error(`[READINESS] ❌ Filler words calculation error:`, error);
+            component.score = 50;
+        }
+        
+        report.components.fillerWords = component;
+    }
+    
+    /**
+     * Calculate scenarios score (25% of total)
+     */
+    static async calculateScenariosScore(company, report) {
+        const component = {
+            name: 'Scenarios',
+            score: 0,
+            active: 0,
+            total: 0,
+            categories: 0,
+            weight: 25
+        };
+        
+        try {
+            // Load template to get scenarios
+            if (!company.configuration?.clonedFrom) {
+                component.score = 0;
+                // Blocker already added in variables check
+                report.components.scenarios = component;
+                return;
+            }
+            
+            const template = await GlobalInstantResponseTemplate.findById(company.configuration.clonedFrom);
+            
+            if (!template) {
+                component.score = 0;
+                report.components.scenarios = component;
+                return;
+            }
+            
+            // Count scenarios
+            const categories = template.categories || [];
+            component.categories = categories.length;
+            
+            categories.forEach(category => {
+                const scenarios = category.scenarios || [];
+                component.total += scenarios.length;
+                component.active += scenarios.filter(s => s.status === 'active').length;
+            });
+            
+            // Calculate score
+            if (component.active === 0) {
+                component.score = 0;
+                report.blockers.push({
+                    code: 'NO_SCENARIOS',
+                    message: 'No active scenarios found in template',
+                    severity: 'critical',
+                    target: `/company/:companyId/ai-agent-settings/scenarios`,
+                    component: 'scenarios'
+                });
+            } else if (component.active < 10) {
+                component.score = 50;
+                report.warnings.push({
+                    code: 'FEW_SCENARIOS',
+                    message: `Only ${component.active} active scenarios (recommended: 50+)`,
+                    severity: 'major',
+                    target: `/company/:companyId/ai-agent-settings/scenarios`,
+                    component: 'scenarios'
+                });
+            } else {
+                component.score = 100;
+            }
+            
+        } catch (error) {
+            console.error(`[READINESS] ❌ Scenarios calculation error:`, error);
+            component.score = 0;
             report.blockers.push({
+                code: 'SCENARIOS_ERROR',
+                message: `Error loading scenarios: ${error.message}`,
                 severity: 'critical',
-                category: 'variables',
-                title: 'Template Not Found',
-                detail: `Template ${company.configuration.clonedFrom} no longer exists`,
-                impact: 'Cannot validate variables without template',
-                fixTarget: 'ai-agent-settings:template-info'
+                component: 'scenarios'
             });
-            return score;
         }
         
-        // Get variable definitions from template
-        const variableDefs = template.variableDefinitions || [];
-        const requiredVars = variableDefs.filter(v => v.required);
-        const optionalVars = variableDefs.filter(v => !v.required);
+        report.components.scenarios = component;
+    }
+    
+    /**
+     * Calculate voice score (10% of total)
+     */
+    static async calculateVoiceScore(company, report) {
+        const component = {
+            name: 'Voice Settings',
+            score: 0,
+            configured: false,
+            voiceId: null,
+            apiSource: null,
+            weight: 10
+        };
         
-        score.details.totalRequired = requiredVars.length;
-        score.details.totalOptional = optionalVars.length;
-        
-        // Check which variables are filled
-        const companyVars = company.configuration?.variables || new Map();
-        
-        const filledRequired = requiredVars.filter(v => {
-            const value = companyVars.get(v.key);
-            return value && value.trim() !== '';
-        });
-        
-        const filledOptional = optionalVars.filter(v => {
-            const value = companyVars.get(v.key);
-            return value && value.trim() !== '';
-        });
-        
-        score.details.filledRequired = filledRequired.length;
-        score.details.filledOptional = filledOptional.length;
-        
-        // Calculate points
-        // Required variables: 35 points
-        // Optional variables: 10 points
-        const requiredPercentage = requiredVars.length > 0 
-            ? filledRequired.length / requiredVars.length 
-            : 1;
-        const optionalPercentage = optionalVars.length > 0 
-            ? filledOptional.length / optionalVars.length 
-            : 1;
-        
-        score.points = Math.round(
-            (requiredPercentage * 35) + (optionalPercentage * 10)
-        );
-        score.percentage = Math.round((score.points / score.maxPoints) * 100);
-        
-        // Add blockers for missing required variables
-        const missingRequired = requiredVars.filter(v => {
-            const value = companyVars.get(v.key);
-            return !value || value.trim() === '';
-        });
-        
-        if (missingRequired.length > 0) {
+        try {
+            const voiceSettings = company.aiAgentLogic?.voiceSettings || {};
+            
+            component.voiceId = voiceSettings.voiceId || null;
+            component.apiSource = voiceSettings.apiSource || null;
+            component.configured = !!voiceSettings.voiceId;
+            
+            if (!component.configured) {
+                component.score = 0;
+                report.blockers.push({
+                    code: 'NO_VOICE',
+                    message: 'No voice selected for AI Agent',
+                    severity: 'critical',
+                    target: `/company/:companyId/ai-voice`,
+                    component: 'voice'
+                });
+            } else {
+                component.score = 100;
+            }
+            
+        } catch (error) {
+            console.error(`[READINESS] ❌ Voice calculation error:`, error);
+            component.score = 0;
             report.blockers.push({
+                code: 'VOICE_ERROR',
+                message: `Error checking voice settings: ${error.message}`,
                 severity: 'critical',
-                category: 'variables',
-                title: `${missingRequired.length} Required Variable${missingRequired.length > 1 ? 's' : ''} Missing`,
-                detail: `Missing: ${missingRequired.map(v => v.label).join(', ')}`,
-                impact: 'AI cannot personalize responses without these values',
-                fixTarget: 'ai-agent-settings:variables'
+                component: 'voice'
             });
         }
         
-        // Add warnings for missing optional variables
-        const missingOptional = optionalVars.filter(v => {
-            const value = companyVars.get(v.key);
-            return !value || value.trim() === '';
-        });
+        report.components.voice = component;
+    }
+    
+    /**
+     * Calculate test calls score (10% of total)
+     */
+    static async calculateTestCallsScore(company, report) {
+        const component = {
+            name: 'Test Calls',
+            score: 0,
+            made: 0,
+            required: 3, // Recommended minimum
+            weight: 10
+        };
         
-        if (missingOptional.length > 0) {
-            report.warnings.push({
-                severity: 'minor',
-                category: 'variables',
-                title: `${missingOptional.length} Optional Variable${missingOptional.length > 1 ? 's' : ''} Empty`,
-                detail: `Consider filling: ${missingOptional.slice(0, 3).map(v => v.label).join(', ')}`,
-                impact: 'AI will use placeholder text instead',
-                fixTarget: 'ai-agent-settings:variables'
+        try {
+            component.made = company.configuration?.testCallsMade || 0;
+            
+            // Calculate score based on test calls made
+            if (component.made === 0) {
+                component.score = 0;
+                report.warnings.push({
+                    code: 'NO_TEST_CALLS',
+                    message: 'No test calls made - strongly recommended before going live',
+                    severity: 'major',
+                    target: `/company/:companyId/ai-agent-settings/dashboard`,
+                    component: 'testCalls'
+                });
+            } else if (component.made < component.required) {
+                component.score = Math.round((component.made / component.required) * 100);
+                report.warnings.push({
+                    code: 'FEW_TEST_CALLS',
+                    message: `Only ${component.made} test call(s) made (recommended: ${component.required}+)`,
+                    severity: 'warning',
+                    target: `/company/:companyId/ai-agent-settings/dashboard`,
+                    component: 'testCalls'
+                });
+            } else {
+                component.score = 100;
+            }
+            
+        } catch (error) {
+            console.error(`[READINESS] ❌ Test calls calculation error:`, error);
+            component.score = 0;
+        }
+        
+        report.components.testCalls = component;
+    }
+    
+    /**
+     * 🚨 GATEKEEPER: Check account status (Configuration tab)
+     * This is checked FIRST before all other components
+     * SUSPENDED or CALL_FORWARD status prevents Go Live
+     */
+    static checkAccountStatus(company, report) {
+        const component = {
+            name: 'Account Status',
+            score: 0,
+            status: 'unknown',
+            isActive: false,
+            weight: 0 // Doesn't contribute to score, but blocks Go Live
+        };
+        
+        try {
+            const accountStatus = company.accountStatus || {};
+            const status = accountStatus.status || 'active';
+            
+            component.status = status;
+            component.isActive = (status === 'active');
+            
+            console.log(`[READINESS] 🚨 GATEKEEPER: Account status = ${status}`);
+            
+            // CRITICAL: Account must be ACTIVE to go live
+            if (status === 'suspended') {
+                component.score = 0;
+                report.blockers.push({
+                    code: 'ACCOUNT_SUSPENDED',
+                    message: 'Account is SUSPENDED - All incoming calls are blocked',
+                    severity: 'critical',
+                    target: '/company/:companyId/config#account-status',
+                    component: 'accountStatus',
+                    details: `Reason: ${accountStatus.reason || 'Not specified'}. Change status to ACTIVE in Configuration tab to go live.`
+                });
+                
+                console.log(`[READINESS] 🚫 BLOCKED: Account suspended`);
+                
+            } else if (status === 'call_forward') {
+                component.score = 0;
+                report.blockers.push({
+                    code: 'ACCOUNT_CALL_FORWARD',
+                    message: 'Account is set to CALL FORWARD - Calls are being forwarded, not handled by AI',
+                    severity: 'critical',
+                    target: '/company/:companyId/config#account-status',
+                    component: 'accountStatus',
+                    details: `Currently forwarding to: ${accountStatus.callForwardNumber || 'unknown'}. Change status to ACTIVE in Configuration tab to enable AI Agent.`
+                });
+                
+                console.log(`[READINESS] 🚫 BLOCKED: Account in call forward mode`);
+                
+            } else if (status === 'active') {
+                component.score = 100;
+                console.log(`[READINESS] ✅ GATEKEEPER PASSED: Account is active`);
+            } else {
+                // Unknown status - block as precaution
+                component.score = 0;
+                report.blockers.push({
+                    code: 'ACCOUNT_STATUS_UNKNOWN',
+                    message: `Unknown account status: "${status}"`,
+                    severity: 'critical',
+                    target: '/company/:companyId/config#account-status',
+                    component: 'accountStatus',
+                    details: 'Please set account status to ACTIVE in Configuration tab.'
+                });
+                
+                console.log(`[READINESS] 🚫 BLOCKED: Unknown account status`);
+            }
+            
+        } catch (error) {
+            console.error(`[READINESS] ❌ Account status check error:`, error);
+            component.score = 0;
+            report.blockers.push({
+                code: 'ACCOUNT_STATUS_ERROR',
+                message: `Error checking account status: ${error.message}`,
+                severity: 'critical',
+                component: 'accountStatus'
             });
         }
         
-        score.status = requiredPercentage === 1 ? 'complete' : 'incomplete';
-        
-    } catch (error) {
-        console.error('[READINESS] Error scoring variables:', error);
-        report.blockers.push({
-            severity: 'critical',
-            category: 'variables',
-            title: 'Variables Check Failed',
-            detail: error.message,
-            impact: 'Cannot verify variable configuration',
-            fixTarget: 'ai-agent-settings:variables'
-        });
+        report.components.accountStatus = component;
     }
-    
-    return score;
 }
 
-/**
- * Score: Filler Words Active (10 points)
- */
-function scoreFillerWords(company, report) {
-    const score = {
-        points: 0,
-        maxPoints: 10,
-        percentage: 0,
-        status: 'incomplete',
-        details: {}
-    };
-    
-    const fillerWords = company.configuration?.fillerWords || {};
-    const inherited = fillerWords.inherited || [];
-    const custom = fillerWords.custom || [];
-    const total = inherited.length + custom.length;
-    
-    score.details.inherited = inherited.length;
-    score.details.custom = custom.length;
-    score.details.total = total;
-    
-    if (total >= 10) {
-        score.points = 10;
-        score.percentage = 100;
-        score.status = 'complete';
-    } else if (total >= 5) {
-        score.points = 7;
-        score.percentage = 70;
-        score.status = 'partial';
-        report.warnings.push({
-            severity: 'minor',
-            category: 'fillerWords',
-            title: 'Limited Filler Words',
-            detail: `Only ${total} filler words configured (recommend 10+)`,
-            impact: 'AI may not ignore common conversational noise',
-            fixTarget: 'ai-agent-settings:filler-words'
-        });
-    } else {
-        score.points = 0;
-        score.percentage = 0;
-        score.status = 'incomplete';
-        report.blockers.push({
-            severity: 'major',
-            category: 'fillerWords',
-            title: 'No Filler Words Configured',
-            detail: 'Filler words help AI ignore "um", "uh", "like", etc.',
-            impact: 'AI may misinterpret conversational noise as intent',
-            fixTarget: 'ai-agent-settings:filler-words'
-        });
-    }
-    
-    return score;
-}
-
-/**
- * Score: Scenarios Active (25 points)
- */
-function scoreScenarios(company, report) {
-    const score = {
-        points: 0,
-        maxPoints: 25,
-        percentage: 0,
-        status: 'incomplete',
-        details: {}
-    };
-    
-    // Count active scenarios
-    // Scenarios are inherited from template and stored in instantResponses collection
-    // For now, we'll check if the company has cloned a template
-    
-    const hasTemplate = !!company.configuration?.clonedFrom;
-    const clonedAt = company.configuration?.clonedAt;
-    
-    if (!hasTemplate) {
-        score.points = 0;
-        score.status = 'incomplete';
-        report.blockers.push({
-            severity: 'critical',
-            category: 'scenarios',
-            title: 'No Scenarios Configured',
-            detail: 'Company must clone a Global AI Brain template to get scenarios',
-            impact: 'AI has no knowledge to respond to callers',
-            fixTarget: 'ai-agent-settings:scenarios'
-        });
-    } else {
-        // Company has cloned template, assume scenarios are active
-        score.points = 25;
-        score.percentage = 100;
-        score.status = 'complete';
-        score.details.clonedAt = clonedAt;
-        score.details.templateId = company.configuration.clonedFrom;
-        
-        // Check if template has been updated since cloning
-        const lastSyncedAt = company.configuration?.lastSyncedAt;
-        if (!lastSyncedAt || (clonedAt && lastSyncedAt < clonedAt)) {
-            report.warnings.push({
-                severity: 'minor',
-                category: 'scenarios',
-                title: 'Template May Have Updates',
-                detail: 'Your Global AI Brain template may have been updated since cloning',
-                impact: 'Missing latest improvements and fixes',
-                fixTarget: 'ai-agent-settings:scenarios'
-            });
-        }
-    }
-    
-    return score;
-}
-
-/**
- * Score: Voice Configured (10 points)
- */
-function scoreVoice(company, report) {
-    const score = {
-        points: 0,
-        maxPoints: 10,
-        percentage: 0,
-        status: 'incomplete',
-        details: {}
-    };
-    
-    const voice = company.voiceSettings || {};
-    
-    // Check if voice provider is configured
-    const hasProvider = !!voice.provider;
-    const hasVoiceId = !!voice.voiceId;
-    
-    score.details.provider = voice.provider || 'none';
-    score.details.voiceId = voice.voiceId || 'none';
-    
-    if (hasProvider && hasVoiceId) {
-        score.points = 10;
-        score.percentage = 100;
-        score.status = 'complete';
-    } else {
-        score.points = 0;
-        score.percentage = 0;
-        score.status = 'incomplete';
-        report.blockers.push({
-            severity: 'critical',
-            category: 'voice',
-            title: 'Voice Not Configured',
-            detail: 'AI needs a voice to speak with callers',
-            impact: 'AI cannot make or receive calls',
-            fixTarget: 'ai-voice-settings'
-        });
-    }
-    
-    return score;
-}
-
-/**
- * Score: Test Calls Made (10 points)
- */
-function scoreTestCalls(company, report) {
-    const score = {
-        points: 0,
-        maxPoints: 10,
-        percentage: 0,
-        status: 'incomplete',
-        details: {}
-    };
-    
-    // Check if company has made test calls
-    // This would ideally check v2AIAgentCallLog collection
-    // For now, we'll give partial credit if they've configured everything else
-    
-    const testCallsMade = company.configuration?.testCallsMade || 0;
-    
-    score.details.testCallsMade = testCallsMade;
-    
-    if (testCallsMade >= 3) {
-        score.points = 10;
-        score.percentage = 100;
-        score.status = 'complete';
-    } else if (testCallsMade >= 1) {
-        score.points = 5;
-        score.percentage = 50;
-        score.status = 'partial';
-        report.warnings.push({
-            severity: 'minor',
-            category: 'testCalls',
-            title: 'Limited Testing',
-            detail: `Only ${testCallsMade} test call${testCallsMade > 1 ? 's' : ''} made (recommend 3+)`,
-            impact: 'AI may have untested edge cases',
-            fixTarget: 'ai-agent-settings:template-info'
-        });
-    } else {
-        score.points = 0;
-        score.percentage = 0;
-        score.status = 'incomplete';
-        report.warnings.push({
-            severity: 'major',
-            category: 'testCalls',
-            title: 'No Test Calls Made',
-            detail: 'Recommend making 3+ test calls before going live',
-            impact: 'AI behavior has not been verified',
-            fixTarget: 'ai-agent-settings:template-info'
-        });
-    }
-    
-    return score;
-}
-
-/**
- * Determine if company can go live
- */
-function determineCanGoLive(report) {
-    // Must have 0 critical blockers
-    const criticalBlockers = report.blockers.filter(b => b.severity === 'critical');
-    
-    if (criticalBlockers.length > 0) {
-        return false;
-    }
-    
-    // Must have score >= 70
-    if (report.score < 70) {
-        return false;
-    }
-    
-    return true;
-}
-
-/**
- * Generate personalized recommendations
- */
-function generateRecommendations(report) {
-    const recommendations = [];
-    
-    // Based on score
-    if (report.score >= 90) {
-        recommendations.push({
-            priority: 'high',
-            action: 'Go Live',
-            description: 'Your AI agent is fully configured and ready for live calls!',
-            icon: '🚀'
-        });
-    } else if (report.score >= 70) {
-        recommendations.push({
-            priority: 'medium',
-            action: 'Make Test Calls',
-            description: 'Configuration is complete. Test your AI before going live.',
-            icon: '📞'
-        });
-    } else {
-        recommendations.push({
-            priority: 'high',
-            action: 'Complete Configuration',
-            description: 'Fill in missing variables and configure voice settings.',
-            icon: '⚙️'
-        });
-    }
-    
-    // Component-specific recommendations
-    if (report.components.variables?.percentage < 100) {
-        recommendations.push({
-            priority: 'high',
-            action: 'Fill Required Variables',
-            description: 'Complete pricing, contact info, and business details.',
-            icon: '📝'
-        });
-    }
-    
-    if (report.components.fillerWords?.percentage < 70) {
-        recommendations.push({
-            priority: 'medium',
-            action: 'Add Filler Words',
-            description: 'Help AI ignore "um", "uh", "like" in conversations.',
-            icon: '🔇'
-        });
-    }
-    
-    if (report.components.testCalls?.testCallsMade === 0) {
-        recommendations.push({
-            priority: 'high',
-            action: 'Test Your AI',
-            description: 'Make at least 3 test calls to verify AI behavior.',
-            icon: '🧪'
-        });
-    }
-    
-    return recommendations;
-}
-
-module.exports = {
-    calculateReadiness
-};
-
+module.exports = ConfigurationReadinessService;

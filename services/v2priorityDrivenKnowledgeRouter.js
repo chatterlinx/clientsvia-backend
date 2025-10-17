@@ -287,9 +287,9 @@ class PriorityDrivenKnowledgeRouter {
                 routingId: context.routingId
             });
 
-            // Get company to access template ID and placeholders
+            // Get company to access template ID, placeholders, filler words, and urgency keywords
             const company = await Company.findById(companyId)
-                .select('globalInstantResponseTemplate aiAgentLogic.placeholders')
+                .select('globalInstantResponseTemplate aiAgentLogic.placeholders configuration.fillerWords configuration.urgencyKeywords')
                 .lean();
 
             if (!company || !company.globalInstantResponseTemplate) {
@@ -352,6 +352,23 @@ class PriorityDrivenKnowledgeRouter {
 
             logger.info(`🧠 [V3 HYBRID BRAIN] Found ${allScenarios.length} scenarios across ${template.categories.length} categories`);
 
+            // 🔇 Load filler words (inherited + custom)
+            const fillerWords = [
+                ...(company.configuration?.fillerWords?.inherited || []),
+                ...(company.configuration?.fillerWords?.custom || [])
+            ];
+            
+            // 🚨 Load urgency keywords (inherited + custom)
+            const urgencyKeywords = [
+                ...(company.configuration?.urgencyKeywords?.inherited || []),
+                ...(company.configuration?.urgencyKeywords?.custom || [])
+            ];
+            
+            logger.info(`🔇 [V3 HYBRID BRAIN] Loaded ${fillerWords.length} filler words, ${urgencyKeywords.length} urgency keywords`);
+            
+            // ✅ Instantiate HybridScenarioSelector with keywords
+            const selector = new HybridScenarioSelector(fillerWords, urgencyKeywords);
+
             // Use HybridScenarioSelector for intelligent matching
             const matchContext = {
                 channel: context.channel || 'voice',
@@ -362,7 +379,7 @@ class PriorityDrivenKnowledgeRouter {
                 callerProfile: null // TODO: Load caller preferences from DB
             };
 
-            const result = await HybridScenarioSelector.selectScenario(
+            const result = await selector.selectScenario(
                 query,
                 allScenarios,
                 matchContext
