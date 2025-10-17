@@ -854,6 +854,36 @@ class CompanyProfileManager {
     }
 
     /**
+     * Helper: Validate email format
+     */
+    isValidEmail(email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+    }
+
+    /**
+     * Helper: Validate phone format (US and international)
+     */
+    isValidPhone(phone) {
+        // Remove all non-digit characters except +
+        const cleaned = phone.replace(/[^\d+]/g, '');
+        // Check if it's a valid length (10-15 digits, optional + prefix)
+        return /^\+?\d{10,15}$/.test(cleaned);
+    }
+
+    /**
+     * Helper: Validate URL format
+     */
+    isValidUrl(url) {
+        try {
+            const urlObj = new URL(url);
+            return urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
+        } catch {
+            return false;
+        }
+    }
+
+    /**
      * GOLD STANDARD: Initialize form accessibility features
      */
     initializeFormAccessibility() {
