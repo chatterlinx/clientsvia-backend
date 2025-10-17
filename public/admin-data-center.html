@@ -711,6 +711,12 @@
                     <button class="btn btn-success" id="drawer-restore-btn" onclick="confirmRestore()" style="display: none;">
                         <i class="fas fa-undo"></i> Restore Company
                     </button>
+                    <button class="btn btn-danger" id="drawer-hard-delete-btn" onclick="confirmHardDelete()" style="display: none; background: #7f1d1d; border-color: #7f1d1d;">
+                        <i class="fas fa-skull-crossbones"></i> Hard Delete (Permanent)
+                    </button>
+                    <button class="btn btn-primary" id="drawer-download-btn" onclick="downloadCompanyData()">
+                        <i class="fas fa-download"></i> Download Company Data
+                    </button>
                 </div>
             </div>
         </div>
@@ -1001,11 +1007,15 @@
 
             // Show/hide restore/delete buttons based on status
             if (currentCompany.isDeleted) {
+                // Soft deleted company - show restore and hard delete, hide soft delete
                 document.getElementById('drawer-soft-delete-btn').style.display = 'none';
                 document.getElementById('drawer-restore-btn').style.display = 'block';
+                document.getElementById('drawer-hard-delete-btn').style.display = 'block';
             } else {
+                // Active company - show soft delete, hide restore and hard delete
                 document.getElementById('drawer-soft-delete-btn').style.display = 'block';
                 document.getElementById('drawer-restore-btn').style.display = 'none';
+                document.getElementById('drawer-hard-delete-btn').style.display = 'none';
             }
 
             // Open drawer
@@ -1234,7 +1244,7 @@
         async function confirmSoftDelete() {
             if (!currentCompany) return;
 
-            const reason = prompt(`Are you sure you want to soft delete "${currentCompany.companyName}"?\n\nThe company will be auto-purged in 30 days.\n\nEnter reason for deletion:`);
+            const reason = prompt(`⚠️ SOFT DELETE: "${currentCompany.companyName}"\n\n✅ Data will be retained INDEFINITELY (no expiration)\n✅ Can be RESTORED anytime\n✅ Can download data for recordkeeping\n\nFor PERMANENT deletion, use "Hard Delete" after soft delete.\n\nEnter reason for deletion:`);
             if (!reason) return;
 
             try {
@@ -1245,18 +1255,20 @@
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ reason })
+                    body: JSON.stringify({ reason, notes: `Soft deleted from Data Center on ${new Date().toISOString()}` })
                 });
 
                 if (!response.ok) throw new Error('Failed to delete company');
 
-                alert('Company soft deleted successfully!');
+                const result = await response.json();
+                alert(`✅ SOFT DELETE SUCCESS!\n\nCompany "${currentCompany.companyName}" has been marked as deleted.\n\n✅ Data retained indefinitely\n✅ Can be restored anytime\n✅ Can download data for recordkeeping\n\nFor permanent deletion, use "Hard Delete" button.`);
                 closeDrawer();
                 loadCompanies(document.getElementById('search-input').value, currentFilter);
+                refreshSummary(); // Refresh counts
 
             } catch (error) {
                 console.error('Error deleting company:', error);
-                alert('Failed to delete company');
+                alert('❌ Failed to delete company: ' + error.message);
             }
         }
 
@@ -1279,19 +1291,173 @@
 
                 if (!response.ok) throw new Error('Failed to restore company');
 
-                alert('Company restored successfully!');
+                alert('✅ Company restored successfully!\n\nThe company is now active and visible in the directory.');
                 loadCompanies(document.getElementById('search-input').value, currentFilter);
                 loadTrash(); // Refresh trash if open
+                refreshSummary(); // Refresh counts
 
             } catch (error) {
                 console.error('Error restoring company:', error);
-                alert('Failed to restore company');
+                alert('❌ Failed to restore company: ' + error.message);
+            }
+        }
+
+        async function confirmHardDelete() {
+            if (!currentCompany) return;
+
+            // First confirmation
+            const confirmed1 = confirm(
+                `⚠️⚠️⚠️ PERMANENT DELETION WARNING ⚠️⚠️⚠️\n\n` +
+                `Company: ${currentCompany.companyName}\n` +
+                `ID: ${currentCompany.companyId}\n\n` +
+                `This will PERMANENTLY delete:\n` +
+                `• Company profile and settings\n` +
+                `• All call logs and transcripts\n` +
+                `• All contacts and customer data\n` +
+                `• All Q&A and knowledge base\n` +
+                `• All notifications and templates\n` +
+                `• All Redis cache data\n\n` +
+                `⚠️ THIS ACTION CANNOT BE UNDONE!\n` +
+                `⚠️ DATA WILL BE LOST FOREVER!\n\n` +
+                `Are you ABSOLUTELY SURE you want to proceed?`
+            );
+            
+            if (!confirmed1) return;
+
+            // Second confirmation - type company name
+            const typedName = prompt(
+                `⚠️ FINAL CONFIRMATION\n\n` +
+                `To confirm PERMANENT deletion, please type the company name EXACTLY:\n\n` +
+                `"${currentCompany.companyName}"\n\n` +
+                `This is your last chance to cancel!`
+            );
+            
+            if (typedName !== currentCompany.companyName) {
+                alert('❌ Company name does not match. Hard delete cancelled for safety.');
+                return;
+            }
+
+            try {
+                const token = localStorage.getItem('adminToken');
+                const response = await fetch(`/api/admin/data-center/companies/${currentCompany.companyId}/hard-delete`, {
+                    method: 'DELETE',
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ confirmDelete: true })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Failed to delete company');
+                }
+
+                const result = await response.json();
+                
+                alert(
+                    `💀 PERMANENT DELETION COMPLETE\n\n` +
+                    `Company: ${result.companyName}\n` +
+                    `Records Deleted: ${result.deletedRecords?.total || 'N/A'}\n\n` +
+                    `⚠️ This action cannot be undone!\n` +
+                    `All data has been permanently removed.`
+                );
+                
+                closeDrawer();
+                loadCompanies(document.getElementById('search-input').value, currentFilter);
+                loadTrash(); // Refresh trash if open
+                refreshSummary(); // Refresh counts
+
+            } catch (error) {
+                console.error('Error hard deleting company:', error);
+                alert('❌ Failed to permanently delete company: ' + error.message);
             }
         }
 
         function viewCompanyProfile() {
             if (!currentCompany) return;
             window.open(`/company-profile.html?id=${currentCompany.companyId}`, '_blank');
+        }
+
+        async function downloadCompanyData() {
+            if (!currentCompany) return;
+
+            try {
+                // Show loading state
+                const btn = document.getElementById('drawer-download-btn');
+                const originalText = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Downloading...';
+
+                const token = localStorage.getItem('adminToken');
+                
+                // Fetch company data
+                const response = await fetch(`/api/company/${currentCompany.companyId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch company data');
+
+                const companyData = await response.json();
+                
+                // Create comprehensive export
+                const exportData = {
+                    exportedAt: new Date().toISOString(),
+                    exportedBy: 'Data Center Admin',
+                    company: {
+                        id: companyData._id,
+                        name: companyData.companyName || companyData.businessName,
+                        email: companyData.ownerEmail,
+                        phone: companyData.businessPhone,
+                        status: companyData.accountStatus?.status,
+                        isDeleted: companyData.isDeleted,
+                        deletedAt: companyData.deletedAt,
+                        deletedBy: companyData.deletedBy,
+                        deleteReason: companyData.deleteReason,
+                        createdAt: companyData.createdAt,
+                        updatedAt: companyData.updatedAt
+                    },
+                    aiAgent: {
+                        voiceSettings: companyData.aiAgentLogic?.voiceSettings,
+                        connectionMessages: companyData.connectionMessages,
+                        placeholders: companyData.aiAgentLogic?.placeholders,
+                        instantResponses: companyData.aiAgentLogic?.instantResponses
+                    },
+                    configuration: companyData.configuration,
+                    twilioConfig: {
+                        phoneNumbers: companyData.twilioConfig?.phoneNumbers,
+                        primaryPhone: companyData.twilioConfig?.phoneNumber
+                    },
+                    tradeCategories: companyData.tradeCategories,
+                    notes: companyData.notes
+                };
+
+                // Download as JSON
+                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${companyData.companyName || 'company'}-data-export-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                alert(`✅ Company data downloaded successfully!\n\nFile: ${a.download}\n\nYou can use this file for recordkeeping or to restore data later.`);
+
+                // Reset button
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+
+            } catch (error) {
+                console.error('Error downloading company data:', error);
+                alert('❌ Failed to download company data: ' + error.message);
+                
+                // Reset button
+                const btn = document.getElementById('drawer-download-btn');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-download"></i> Download Company Data';
+            }
         }
 
         // ============================================================================
