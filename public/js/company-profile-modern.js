@@ -2439,10 +2439,16 @@ class CompanyProfileManager {
 
         container.innerHTML = html;
         
+        console.log('📝 [NOTES RENDER] Rendered', sortedNotes.length, 'notes to container');
+        console.log('📝 [NOTES RENDER] Container element:', container);
+        console.log('📝 [NOTES RENDER] Note cards with data-note-id:', container.querySelectorAll('[data-note-id]').length);
+        
         // Setup individual note event listeners (only once)
         if (!this.noteEventListenersSetup) {
             this.setupNoteCardEventListeners();
             this.noteEventListenersSetup = true;
+        } else {
+            console.log('⚠️ [NOTES] Event listeners already set up, skipping');
         }
     }
 
@@ -2612,16 +2618,22 @@ class CompanyProfileManager {
             return;
         }
 
-        console.log('✅ [NOTES] Setting up note card event listeners');
+        console.log('✅ [NOTES] Setting up note card event listeners on container:', container);
+        console.log('✅ [NOTES] Container has', container.querySelectorAll('[data-note-id]').length, 'elements with data-note-id');
 
         // Use event delegation for better performance
         container.addEventListener('click', (e) => {
             console.log('🖱️ [NOTES] Click detected on:', e.target);
+            console.log('🖱️ [NOTES] Target classList:', e.target.classList);
+            console.log('🖱️ [NOTES] Target closest [data-note-id]:', e.target.closest('[data-note-id]'));
             
             const noteId = e.target.closest('[data-note-id]')?.dataset.noteId;
             console.log('🆔 [NOTES] Note ID from click:', noteId);
             
-            if (!noteId) return;
+            if (!noteId) {
+                console.log('⚠️ [NOTES] No note ID found, ignoring click');
+                return;
+            }
 
             if (e.target.closest('.pin-note-btn')) {
                 console.log('📌 [NOTES] Pin button clicked for note:', noteId);
@@ -2640,6 +2652,8 @@ class CompanyProfileManager {
                 this.cancelEditNote(noteId);
             }
         });
+        
+        console.log('✅ [NOTES] Event listener attached successfully');
     }
 
     /**
