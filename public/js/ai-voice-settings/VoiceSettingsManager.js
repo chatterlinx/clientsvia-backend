@@ -177,6 +177,35 @@ class VoiceSettingsManager {
         if (speakerBoost) {
             speakerBoost.checked = this.currentSettings.speakerBoost || false;
         }
+        
+        // Update API source toggle and API key
+        const useOwnApiToggle = document.getElementById('useOwnApiKey');
+        const apiKeyInput = document.getElementById('elevenlabsApiKey');
+        
+        if (this.currentSettings.apiSource === 'own') {
+            // Enable "Use Own API" toggle
+            if (useOwnApiToggle) {
+                useOwnApiToggle.checked = true;
+            }
+            
+            // Load API key (will be masked by backend for security)
+            if (apiKeyInput && this.currentSettings.apiKey) {
+                apiKeyInput.value = this.currentSettings.apiKey;
+            }
+            
+            // Show API key section
+            this.toggleApiKeySection(true);
+            
+            console.log('🔑 [VOICE MANAGER] Loaded settings with custom API key');
+        } else {
+            // Ensure toggle is OFF and section is hidden
+            if (useOwnApiToggle) {
+                useOwnApiToggle.checked = false;
+            }
+            this.toggleApiKeySection(false);
+            
+            console.log('🌐 [VOICE MANAGER] Loaded settings with ClientsVia global API');
+        }
     }
 
     /**
@@ -240,6 +269,14 @@ class VoiceSettingsManager {
             });
         }
         
+        // Use Own API toggle
+        const useOwnApiToggle = document.getElementById('useOwnApiKey');
+        if (useOwnApiToggle) {
+            useOwnApiToggle.addEventListener('change', (e) => {
+                this.toggleApiKeySection(e.target.checked);
+            });
+        }
+        
         // Slider updates
         const sliders = ['stability', 'similarity', 'style'];
         sliders.forEach(name => {
@@ -250,6 +287,41 @@ class VoiceSettingsManager {
                 });
             }
         });
+    }
+
+    /**
+     * Toggle API key section visibility
+     */
+    toggleApiKeySection(useOwnApi) {
+        const apiKeySection = document.getElementById('api-key-section');
+        const apiKeyInput = document.getElementById('elevenlabsApiKey');
+        const globalApiInfo = document.getElementById('global-api-info');
+        const subscriptionInfo = document.getElementById('subscription-info');
+        
+        if (useOwnApi) {
+            // Show API key input
+            if (apiKeySection) apiKeySection.classList.remove('hidden');
+            if (apiKeyInput) apiKeyInput.disabled = false;
+            if (subscriptionInfo) subscriptionInfo.classList.remove('hidden');
+            
+            // Hide global API info
+            if (globalApiInfo) globalApiInfo.classList.add('hidden');
+            
+            console.log('🔑 [VOICE MANAGER] Switched to Own API mode');
+        } else {
+            // Hide API key input
+            if (apiKeySection) apiKeySection.classList.add('hidden');
+            if (apiKeyInput) {
+                apiKeyInput.disabled = true;
+                apiKeyInput.value = ''; // Clear API key when switching back
+            }
+            if (subscriptionInfo) subscriptionInfo.classList.add('hidden');
+            
+            // Show global API info
+            if (globalApiInfo) globalApiInfo.classList.remove('hidden');
+            
+            console.log('🌐 [VOICE MANAGER] Switched to ClientsVia Global API mode');
+        }
     }
 
     /**
@@ -520,6 +592,10 @@ class VoiceSettingsManager {
             
             console.log('💾 [VOICE MANAGER] Saving settings...');
             
+            // Check if using own API
+            const useOwnApiToggle = document.getElementById('useOwnApiKey');
+            const useOwnApi = useOwnApiToggle?.checked || false;
+            
             // Collect all form values
             const settings = {
                 voiceId: voiceSelector.value,
@@ -530,8 +606,26 @@ class VoiceSettingsManager {
                 aiModel: document.getElementById('voice-model')?.value || 'eleven_turbo_v2_5',
                 outputFormat: document.getElementById('voice-format')?.value || 'mp3_44100_128',
                 streamingLatency: parseInt(document.getElementById('voice-latency')?.value || 0),
-                apiSource: 'clientsvia' // Default to global API
+                apiSource: useOwnApi ? 'own' : 'clientsvia'
             };
+            
+            // If using own API, get and validate the API key
+            if (useOwnApi) {
+                const apiKeyInput = document.getElementById('elevenlabsApiKey');
+                const apiKey = apiKeyInput?.value?.trim();
+                
+                if (!apiKey) {
+                    alert('⚠️ Please enter your ElevenLabs API key');
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Voice Settings';
+                    return;
+                }
+                
+                settings.apiKey = apiKey;
+                console.log('🔑 [VOICE MANAGER] Using customer\'s own ElevenLabs API key');
+            } else {
+                console.log('🌐 [VOICE MANAGER] Using ClientsVia global API');
+            }
             
             const token = localStorage.getItem('adminToken');
             
