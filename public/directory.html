@@ -552,29 +552,31 @@
                 }
                 
                 /**
-                 * 🗑️ DELETE COMPANY - Complete database cleanup
+                 * 🗑️ SOFT DELETE COMPANY - Reversible deletion with indefinite retention
                  * 
-                 * CRITICAL: This permanently deletes:
-                 * - Company document from MongoDB
-                 * - All Redis cache keys
-                 * - All related data (Q&A, templates, history)
+                 * This marks the company as deleted (soft delete):
+                 * - Company hidden from directory
+                 * - Data retained INDEFINITELY (no auto-purge)
+                 * - Can be RESTORED anytime from Data Center
+                 * - Can download data for recordkeeping
                  * 
                  * SAFETY: Requires double confirmation
+                 * NOTE: For PERMANENT deletion, use Data Center hard delete
                  */
                 async deleteCompany(companyId, companyName) {
                     console.log(`🗑️ Delete request for company: ${companyName} (${companyId})`);
                     
                     // First confirmation
                     const confirmed1 = confirm(
-                        `⚠️ WARNING: DELETE COMPANY\n\n` +
+                        `⚠️ SOFT DELETE COMPANY\n\n` +
                         `Company: ${companyName}\n` +
                         `ID: ${companyId}\n\n` +
-                        `This will PERMANENTLY delete:\n` +
-                        `• Company profile and settings\n` +
-                        `• All Q&A and knowledge base\n` +
-                        `• Call history and logs\n` +
-                        `• Redis cache data\n\n` +
-                        `This action CANNOT be undone!\n\n` +
+                        `This will mark the company as deleted:\n` +
+                        `• Company will be hidden from directory\n` +
+                        `• Data retained INDEFINITELY\n` +
+                        `• Can be RESTORED anytime from Data Center\n` +
+                        `• Can download data for recordkeeping\n\n` +
+                        `This is NOT permanent - you can restore later!\n\n` +
                         `Are you sure you want to continue?`
                     );
                     
@@ -586,17 +588,18 @@
                     // Second confirmation - type company name
                     const typedName = prompt(
                         `⚠️ FINAL CONFIRMATION\n\n` +
-                        `To confirm deletion, please type the company name exactly:\n\n` +
-                        `"${companyName}"`
+                        `To confirm soft delete, please type the company name exactly:\n\n` +
+                        `"${companyName}"\n\n` +
+                        `(Remember: You can restore this company anytime from Data Center)`
                     );
                     
                     if (typedName !== companyName) {
-                        alert('❌ Company name does not match. Deletion cancelled for safety.');
-                        console.log('❌ Deletion cancelled - name mismatch');
+                        alert('❌ Company name does not match. Soft delete cancelled for safety.');
+                        console.log('❌ Soft delete cancelled - name mismatch');
                         return;
                     }
                     
-                    console.log('✅ Double confirmation passed - proceeding with deletion');
+                    console.log('✅ Double confirmation passed - proceeding with soft delete');
                     
                     try {
                         // Get auth token
@@ -616,9 +619,13 @@
                             }
                         });
                         
-                        // Call delete API
-                        const response = await fetch(`/api/company/${companyId}`, {
-                            method: 'DELETE',
+                        // Call SOFT DELETE API (indefinite retention - can be restored anytime)
+                        const response = await fetch(`/api/admin/data-center/companies/${companyId}/soft-delete`, {
+                            method: 'PATCH',
+                            body: JSON.stringify({
+                                reason: 'Deleted from directory',
+                                notes: `Deleted by admin on ${new Date().toISOString()}`
+                            }),
                             headers: {
                                 'Authorization': `Bearer ${token}`,
                                 'Content-Type': 'application/json'
@@ -631,10 +638,10 @@
                         }
                         
                         const result = await response.json();
-                        console.log('✅ Company deleted successfully:', result);
+                        console.log('✅ Company soft deleted successfully:', result);
                         
                         // Show success message
-                        alert(`✅ SUCCESS!\n\nCompany "${companyName}" has been permanently deleted.\n\nAll data has been removed from the database.`);
+                        alert(`✅ SOFT DELETE SUCCESS!\n\nCompany "${companyName}" has been marked as deleted.\n\n✅ Data retained indefinitely (no expiration)\n✅ Can be RESTORED anytime from Data Center\n✅ Can download data for recordkeeping\n\nFor PERMANENT deletion, use Data Center hard delete.`);
                         
                         // Reload companies list
                         await this.loadCompanies();
