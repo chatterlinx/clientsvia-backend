@@ -1329,20 +1329,8 @@ class CompanyProfileManager {
         const twilioApiKeyInput = document.getElementById('twilioApiKey');
         const twilioApiSecretInput = document.getElementById('twilioApiSecret');
         
-            twilioConfig: this.currentData.twilioConfig,
-            flatSid: this.currentData.twilioAccountSid,
-            flatToken: this.currentData.twilioAuthToken,
-            authTokenValue: this.currentData.twilioConfig?.authToken
-        });
-        
         // Check nested structure first, then flat structure for backward compatibility
         const twilioConfig = this.currentData.twilioConfig || {};
-        
-            twilioTokenInput: !!twilioTokenInput,
-            authToken: twilioConfig.authToken,
-            flatAuthToken: this.currentData.twilioAuthToken,
-            hasEither: !!(twilioConfig.authToken || this.currentData.twilioAuthToken)
-        });
         
         if (twilioSidInput && (twilioConfig.accountSid || this.currentData.twilioAccountSid)) {
             twilioSidInput.value = twilioConfig.accountSid || this.currentData.twilioAccountSid;
@@ -1706,15 +1694,7 @@ class CompanyProfileManager {
         const toggleWebhookBtn = document.getElementById('toggleWebhookInfo');
         const webhookPanel = document.getElementById('webhookInfoPanel');
         
-            toggleWebhookBtn: !!toggleWebhookBtn, 
-            webhookPanel: !!webhookPanel,
-            companyId: this.companyId 
-        });
-        
         if (!toggleWebhookBtn || !webhookPanel) {
-                toggleWebhookBtn: !!toggleWebhookBtn, 
-                webhookPanel: !!webhookPanel 
-            });
             return;
         }
 
