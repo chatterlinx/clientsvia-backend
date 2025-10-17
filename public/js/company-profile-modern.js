@@ -48,7 +48,7 @@
    ============================================================================ */
 
 // Logging Configuration (set to false in production)
-const DEBUG_MODE = false;
+const DEBUG_MODE = true; // ← DEVELOPMENT MODE: Full logging enabled
 
 // Structured Logger - Single source of truth for all logging
 const logger = {
