@@ -720,16 +720,14 @@ class CompanyProfileManager {
         // Mark as changed for auto-save
         this.setUnsavedChanges(true);
         
+        // Update form status immediately
+        this.setFormStatus('typing', 'Making changes...');
+        
         // Real-time validation (debounced)
         clearTimeout(this.validationTimeout);
         this.validationTimeout = setTimeout(() => {
             this.validateField(field);
-            this.updateFormStatus();
         }, 300);
-
-        // Update form status
-        this.setFormStatus('typing', 'Making changes...');
-        
     }
 
     /**
