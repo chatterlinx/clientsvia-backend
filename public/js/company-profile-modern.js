@@ -496,7 +496,7 @@ class CompanyProfileManager {
                                 id="edit-business-phone" 
                                 name="businessPhone"
                                 class="form-input v2-input" 
-                                value="${this.escapeHtml(data.companyPhone || data.businessPhone || '')}"
+                                value="${this.escapeHtml(data.businessPhone || data.companyPhone || '')}"
                                 placeholder="+1 (555) 123-4567"
                                 aria-describedby="business-phone-help"
                                 data-validate="phone"
@@ -1012,9 +1012,13 @@ class CompanyProfileManager {
         const form = this.domElements.editFormContainer;
         if (!form) return null;
 
+        const businessPhone = form.querySelector('#edit-business-phone')?.value || '';
+
         const data = {
             companyName: form.querySelector('#edit-company-name')?.value || '',
-            businessPhone: form.querySelector('#edit-business-phone')?.value || '',
+            // Save to BOTH v2 and legacy fields for compatibility
+            businessPhone: businessPhone,       // V2 field
+            companyPhone: businessPhone,         // Legacy field (for backward compatibility)
             businessEmail: form.querySelector('#edit-business-email')?.value || '',
             businessWebsite: form.querySelector('#edit-business-website')?.value || '',
             serviceArea: form.querySelector('#edit-service-area')?.value || '',
@@ -1028,6 +1032,11 @@ class CompanyProfileManager {
                 country: form.querySelector('#edit-address-country')?.value || 'USA'
             }
         };
+
+        console.log('📋 [FORM] Collected data - saving to BOTH fields:', {
+            businessPhone: data.businessPhone,
+            companyPhone: data.companyPhone
+        });
 
         return data;
     }
