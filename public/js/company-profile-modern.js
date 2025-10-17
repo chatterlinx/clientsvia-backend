@@ -252,14 +252,38 @@ class CompanyProfileManager {
     async loadCompanyData(force = false) {
         try {
             if (this.companyDataLoaded && !force) {
+                console.log('📥 [LOAD] Using cached company data');
                 return this.companyData;
             }
             
+            console.log('📥 [LOAD] Loading company data...', { companyId: this.companyId, force });
             this.showLoading(true);
 
-            const apiUrl = `${this.apiBaseUrl}/api/company/${this.companyId}`;
+            // Add cache-busting parameter to force fresh data
+            const timestamp = new Date().getTime();
+            const apiUrl = `${this.apiBaseUrl}/api/company/${this.companyId}?_=${timestamp}`;
             
-            const response = await fetch(apiUrl);
+            console.log('📡 [LOAD] Fetching from:', apiUrl);
+            
+            // Get auth token
+            const token = this.authToken || localStorage.getItem('adminToken');
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+                console.log('✅ [LOAD] Auth token included');
+            } else {
+                console.warn('⚠️ [LOAD] No auth token found');
+            }
+            
+            const response = await fetch(apiUrl, {
+                headers: headers,
+                cache: 'no-cache' // Prevent browser caching
+            });
+            
+            console.log('📥 [LOAD] Response status:', response.status);
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -267,6 +291,9 @@ class CompanyProfileManager {
 
             this.currentData = await response.json();
             this.companyData = this.currentData; // Store for guard check
+            this.companyDataLoaded = true;
+            
+            console.log('✅ [LOAD] Company data loaded:', this.currentData);
 
             // Populate all tabs with data
             this.populateOverviewTab();
@@ -278,6 +305,7 @@ class CompanyProfileManager {
             this.populateAgentLogicTab();
 
         } catch (error) {
+            console.error('❌ [LOAD] Error loading company data:', error);
             console.error('Error details:', {
                 message: error.message,
                 companyId: this.companyId,
