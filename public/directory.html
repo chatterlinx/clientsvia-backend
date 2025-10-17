@@ -469,7 +469,13 @@
                         const accountStatus = company.accountStatus?.status || 'active';
                         const matchesStatus = showInactive || accountStatus !== 'suspended';
                         
-                        console.log(`[Directory] Company: ${company.companyName}, Search: ${matchesSearch}, Trade: ${matchesTrade}, Status: ${matchesStatus}`);
+                        console.log(`[Directory] Company: ${company.companyName}`);
+                        console.log(`  - accountStatus object:`, company.accountStatus);
+                        console.log(`  - accountStatus.status:`, accountStatus);
+                        console.log(`  - showInactive:`, showInactive);
+                        console.log(`  - accountStatus !== 'suspended':`, accountStatus !== 'suspended');
+                        console.log(`  - Final Status Match:`, matchesStatus);
+                        console.log(`  - Search: ${matchesSearch}, Trade: ${matchesTrade}, Status: ${matchesStatus}`);
                         
                         return matchesSearch && matchesTrade && matchesStatus;
                     });

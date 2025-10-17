@@ -258,12 +258,14 @@ router.get('/companies', authenticateJWT, async (req, res) => {
         console.log('[API GET /api/companies] Authenticated user requesting all companies:', req.user.email);
         
         // 📊 PRODUCTION-GRADE: Fetch companies with optimized field projection
+        // 🔒 CRITICAL: Exclude deleted companies from directory (only Data Center shows deleted)
         // Uses lean() for performance (returns plain JavaScript objects)
-        const companies = await Company.find({}, {
+        const companies = await Company.find({ isDeleted: { $ne: true } }, {
             // Core company information
             companyName: 1,
             tradeCategories: 1,
             isActive: 1,
+            isDeleted: 1,  // Include for client-side filtering (should always be false)
             
             // Account status (Configuration tab integration)
             // NOTE: Nested fields require explicit projection in Mongoose
