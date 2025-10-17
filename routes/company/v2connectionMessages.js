@@ -84,17 +84,15 @@ router.get('/:companyId/connection-messages/config', async (req, res) => {
 
     try {
         const company = await Company.findById(req.params.companyId)
-            .select('aiAgentLogic companyName');
+            .select('connectionMessages companyName'); // 🔧 FIX: Select ROOT level connectionMessages
 
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });
         }
 
+        // 🔧 FIX: connectionMessages is at ROOT level, not in aiAgentLogic!
         // Initialize if doesn't exist
-        if (!company.aiAgentLogic) {
-            company.aiAgentLogic = {};
-        }
-        if (!company.aiAgentLogic.connectionMessages) {
+        if (!company.connectionMessages) {
             const defaultConfig = getDefaultConfig();
             
             // 🔧 FIX: Use targeted update to avoid full document validation
@@ -102,19 +100,19 @@ router.get('/:companyId/connection-messages/config', async (req, res) => {
                 req.params.companyId,
                 {
                     $set: {
-                        'aiAgentLogic.connectionMessages': defaultConfig
+                        'connectionMessages': defaultConfig  // 🔧 FIX: Save to ROOT level!
                     }
                 },
                 { runValidators: false }
             );
             
-            company.aiAgentLogic.connectionMessages = defaultConfig;
+            company.connectionMessages = defaultConfig;
         }
 
-        console.log(`[CONNECTION MESSAGES] 📤 Returning mode:`, company.aiAgentLogic.connectionMessages?.voice?.mode);
-        console.log(`[CONNECTION MESSAGES] 📤 Voice config:`, JSON.stringify(company.aiAgentLogic.connectionMessages?.voice || {}, null, 2));
+        console.log(`[CONNECTION MESSAGES] 📤 Returning mode:`, company.connectionMessages?.voice?.mode);
+        console.log(`[CONNECTION MESSAGES] 📤 Voice config:`, JSON.stringify(company.connectionMessages?.voice || {}, null, 2));
 
-        res.json(company.aiAgentLogic.connectionMessages);
+        res.json(company.connectionMessages);
 
     } catch (error) {
         console.error('[CONNECTION MESSAGES] Error getting config:', error);
@@ -135,113 +133,111 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
     try {
         const { voice, sms, webChat } = req.body;
 
-        // Load company (all legacy data has been NUKED)
+        // Load company
         const company = await Company.findById(req.params.companyId);
 
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });
         }
 
+        // 🔧 FIX: connectionMessages is at ROOT level, not in aiAgentLogic!
         // Initialize if doesn't exist
-        if (!company.aiAgentLogic) {
-            company.aiAgentLogic = {};
-        }
-        if (!company.aiAgentLogic.connectionMessages) {
-            company.aiAgentLogic.connectionMessages = getDefaultConfig();
+        if (!company.connectionMessages) {
+            company.connectionMessages = getDefaultConfig();
         }
 
-        console.log(`[CONNECTION MESSAGES] 📊 Current mode in DB:`, company.aiAgentLogic.connectionMessages?.voice?.mode);
+        console.log(`[CONNECTION MESSAGES] 📊 Current mode in DB:`, company.connectionMessages?.voice?.mode);
         console.log(`[CONNECTION MESSAGES] 📥 Incoming voice.mode:`, voice?.mode);
 
         // Update voice settings
         if (voice) {
             if (voice.mode) {
-                console.log(`[CONNECTION MESSAGES] ✏️ Updating mode from "${company.aiAgentLogic.connectionMessages?.voice?.mode}" to "${voice.mode}"`);
-                company.aiAgentLogic.connectionMessages.voice.mode = voice.mode;
-                console.log(`[CONNECTION MESSAGES] ✅ Mode updated in memory:`, company.aiAgentLogic.connectionMessages?.voice?.mode);
+                console.log(`[CONNECTION MESSAGES] ✏️ Updating mode from "${company.connectionMessages?.voice?.mode}" to "${voice.mode}"`);
+                company.connectionMessages.voice.mode = voice.mode;
+                console.log(`[CONNECTION MESSAGES] ✅ Mode updated in memory:`, company.connectionMessages?.voice?.mode);
             }
             
             if (voice.text !== undefined) {
                 // CRITICAL: Save to voice.text (PRIMARY FIELD for runtime)
-                company.aiAgentLogic.connectionMessages.voice.text = voice.text;
+                company.connectionMessages.voice.text = voice.text;
             }
             
             if (voice.realtime) {
                 // Keep realtime for TTS generation settings
-                if (!company.aiAgentLogic.connectionMessages.voice.realtime) {
-                    company.aiAgentLogic.connectionMessages.voice.realtime = {};
+                if (!company.connectionMessages.voice.realtime) {
+                    company.connectionMessages.voice.realtime = {};
                 }
-                company.aiAgentLogic.connectionMessages.voice.realtime.text = voice.realtime.text;
+                company.connectionMessages.voice.realtime.text = voice.realtime.text;
             }
             
             // Update intelligent fallback settings
             if (voice.fallback) {
-                if (!company.aiAgentLogic.connectionMessages.voice.fallback) {
-                    company.aiAgentLogic.connectionMessages.voice.fallback = {};
+                if (!company.connectionMessages.voice.fallback) {
+                    company.connectionMessages.voice.fallback = {};
                 }
                 if (voice.fallback.enabled !== undefined) {
-                    company.aiAgentLogic.connectionMessages.voice.fallback.enabled = voice.fallback.enabled;
+                    company.connectionMessages.voice.fallback.enabled = voice.fallback.enabled;
                 }
                 if (voice.fallback.voiceMessage !== undefined) {
-                    company.aiAgentLogic.connectionMessages.voice.fallback.voiceMessage = voice.fallback.voiceMessage;
+                    company.connectionMessages.voice.fallback.voiceMessage = voice.fallback.voiceMessage;
                 }
                 if (voice.fallback.smsEnabled !== undefined) {
-                    company.aiAgentLogic.connectionMessages.voice.fallback.smsEnabled = voice.fallback.smsEnabled;
+                    company.connectionMessages.voice.fallback.smsEnabled = voice.fallback.smsEnabled;
                 }
                 if (voice.fallback.smsMessage !== undefined) {
-                    company.aiAgentLogic.connectionMessages.voice.fallback.smsMessage = voice.fallback.smsMessage;
+                    company.connectionMessages.voice.fallback.smsMessage = voice.fallback.smsMessage;
                 }
                 if (voice.fallback.notifyAdmin !== undefined) {
-                    company.aiAgentLogic.connectionMessages.voice.fallback.notifyAdmin = voice.fallback.notifyAdmin;
+                    company.connectionMessages.voice.fallback.notifyAdmin = voice.fallback.notifyAdmin;
                 }
                 if (voice.fallback.adminNotificationMethod) {
-                    company.aiAgentLogic.connectionMessages.voice.fallback.adminNotificationMethod = voice.fallback.adminNotificationMethod;
+                    company.connectionMessages.voice.fallback.adminNotificationMethod = voice.fallback.adminNotificationMethod;
                 }
                 if (voice.fallback.adminPhone !== undefined) {
-                    company.aiAgentLogic.connectionMessages.voice.fallback.adminPhone = voice.fallback.adminPhone;
+                    company.connectionMessages.voice.fallback.adminPhone = voice.fallback.adminPhone;
                 }
                 if (voice.fallback.adminEmail !== undefined) {
-                    company.aiAgentLogic.connectionMessages.voice.fallback.adminEmail = voice.fallback.adminEmail;
+                    company.connectionMessages.voice.fallback.adminEmail = voice.fallback.adminEmail;
                 }
                 if (voice.fallback.adminSmsMessage !== undefined) {
-                    company.aiAgentLogic.connectionMessages.voice.fallback.adminSmsMessage = voice.fallback.adminSmsMessage;
+                    company.connectionMessages.voice.fallback.adminSmsMessage = voice.fallback.adminSmsMessage;
                 }
             }
         }
 
         // Update SMS settings
         if (sms) {
-            if (sms.enabled !== undefined) company.aiAgentLogic.connectionMessages.sms.enabled = sms.enabled;
-            if (sms.text) company.aiAgentLogic.connectionMessages.sms.text = sms.text;
+            if (sms.enabled !== undefined) company.connectionMessages.sms.enabled = sms.enabled;
+            if (sms.text) company.connectionMessages.sms.text = sms.text;
             if (sms.businessHours) {
                 if (sms.businessHours.enabled !== undefined) {
-                    company.aiAgentLogic.connectionMessages.sms.businessHours.enabled = sms.businessHours.enabled;
+                    company.connectionMessages.sms.businessHours.enabled = sms.businessHours.enabled;
                 }
                 if (sms.businessHours.duringHours) {
-                    company.aiAgentLogic.connectionMessages.sms.businessHours.duringHours = sms.businessHours.duringHours;
+                    company.connectionMessages.sms.businessHours.duringHours = sms.businessHours.duringHours;
                 }
                 if (sms.businessHours.afterHours) {
-                    company.aiAgentLogic.connectionMessages.sms.businessHours.afterHours = sms.businessHours.afterHours;
+                    company.connectionMessages.sms.businessHours.afterHours = sms.businessHours.afterHours;
                 }
             }
         }
 
         // Update Web Chat settings (future)
         if (webChat) {
-            if (webChat.enabled !== undefined) company.aiAgentLogic.connectionMessages.webChat.enabled = webChat.enabled;
-            if (webChat.text) company.aiAgentLogic.connectionMessages.webChat.text = webChat.text;
+            if (webChat.enabled !== undefined) company.connectionMessages.webChat.enabled = webChat.enabled;
+            if (webChat.text) company.connectionMessages.webChat.text = webChat.text;
         }
 
-        company.aiAgentLogic.connectionMessages.lastUpdated = new Date();
+        company.connectionMessages.lastUpdated = new Date();
 
-        console.log(`[CONNECTION MESSAGES] 💾 About to save with mode:`, company.aiAgentLogic.connectionMessages?.voice?.mode);
-        console.log(`[CONNECTION MESSAGES] 💾 Full connectionMessages object:`, JSON.stringify(company.aiAgentLogic.connectionMessages || {}, null, 2));
+        console.log(`[CONNECTION MESSAGES] 💾 About to save with mode:`, company.connectionMessages?.voice?.mode);
+        console.log(`[CONNECTION MESSAGES] 💾 Full connectionMessages object:`, JSON.stringify(company.connectionMessages || {}, null, 2));
 
         // 🔧 FIX: Convert Mongoose subdocument to plain object before saving
         // Mongoose subdocuments have special properties that don't work with $set
-        const plainConnectionMessages = company.aiAgentLogic.connectionMessages.toObject ? 
-            company.aiAgentLogic.connectionMessages.toObject() : 
-            JSON.parse(JSON.stringify(company.aiAgentLogic.connectionMessages));
+        const plainConnectionMessages = company.connectionMessages.toObject ? 
+            company.connectionMessages.toObject() : 
+            JSON.parse(JSON.stringify(company.connectionMessages));
         
         console.log(`[CONNECTION MESSAGES] 🔧 Converted to plain object, mode:`, plainConnectionMessages?.voice?.mode);
 
@@ -253,7 +249,7 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
             req.params.companyId,
             {
                 $set: {
-                    'aiAgentLogic.connectionMessages': plainConnectionMessages
+                    'connectionMessages': plainConnectionMessages  // 🔧 FIX: Save to ROOT level, not aiAgentLogic!
                 }
             },
             { new: true, runValidators: false } // Skip full validation
@@ -266,7 +262,7 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
             });
         }
         
-        console.log(`[CONNECTION MESSAGES] ✅ Saved! Mode in returned document:`, updatedCompany.aiAgentLogic?.connectionMessages?.voice?.mode);
+        console.log(`[CONNECTION MESSAGES] ✅ Saved! Mode in returned document:`, updatedCompany.connectionMessages?.voice?.mode);
 
         // Clear cache
         try {
@@ -281,7 +277,7 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
         res.json({
             success: true,
             message: 'Connection messages updated successfully',
-            config: updatedCompany.aiAgentLogic.connectionMessages
+            config: updatedCompany.connectionMessages
         });
 
     } catch (error) {
@@ -324,8 +320,8 @@ router.post('/:companyId/connection-messages/voice/upload', upload.single('audio
         if (!company.aiAgentLogic) {
             company.aiAgentLogic = {};
         }
-        if (!company.aiAgentLogic.connectionMessages) {
-            company.aiAgentLogic.connectionMessages = getDefaultConfig();
+        if (!company.connectionMessages) {
+            company.connectionMessages = getDefaultConfig();
         }
 
         // Get file details
@@ -338,8 +334,8 @@ router.post('/:companyId/connection-messages/voice/upload', upload.single('audio
         const estimatedDuration = Math.round(fileSize / 16000); // Rough estimate for MP3
 
         // Remove old file if exists
-        if (company.aiAgentLogic.connectionMessages.voice.prerecorded.activeFileUrl) {
-            const oldFilePath = path.join(__dirname, '../../public', company.aiAgentLogic.connectionMessages.voice.prerecorded.activeFileUrl);
+        if (company.connectionMessages.voice.prerecorded.activeFileUrl) {
+            const oldFilePath = path.join(__dirname, '../../public', company.connectionMessages.voice.prerecorded.activeFileUrl);
             if (fs.existsSync(oldFilePath)) {
                 fs.unlinkSync(oldFilePath);
                 console.log(`[CONNECTION MESSAGES] Deleted old file: ${oldFilePath}`);
@@ -347,14 +343,14 @@ router.post('/:companyId/connection-messages/voice/upload', upload.single('audio
         }
 
         // Update active file
-        company.aiAgentLogic.connectionMessages.voice.prerecorded.activeFileUrl = fileUrl;
-        company.aiAgentLogic.connectionMessages.voice.prerecorded.activeFileName = fileName;
-        company.aiAgentLogic.connectionMessages.voice.prerecorded.activeDuration = estimatedDuration;
-        company.aiAgentLogic.connectionMessages.voice.prerecorded.activeFileSize = fileSize;
-        company.aiAgentLogic.connectionMessages.voice.prerecorded.uploadedBy = req.user.userId;
-        company.aiAgentLogic.connectionMessages.voice.prerecorded.uploadedAt = new Date();
+        company.connectionMessages.voice.prerecorded.activeFileUrl = fileUrl;
+        company.connectionMessages.voice.prerecorded.activeFileName = fileName;
+        company.connectionMessages.voice.prerecorded.activeDuration = estimatedDuration;
+        company.connectionMessages.voice.prerecorded.activeFileSize = fileSize;
+        company.connectionMessages.voice.prerecorded.uploadedBy = req.user.userId;
+        company.connectionMessages.voice.prerecorded.uploadedAt = new Date();
 
-        company.aiAgentLogic.connectionMessages.lastUpdated = new Date();
+        company.connectionMessages.lastUpdated = new Date();
 
         await company.save();
 
@@ -405,14 +401,14 @@ router.delete('/:companyId/connection-messages/voice/remove', async (req, res) =
         }
 
         // Delete file from disk
-        const filePath = path.join(__dirname, '../../public', company.aiAgentLogic.connectionMessages.voice.prerecorded.activeFileUrl);
+        const filePath = path.join(__dirname, '../../public', company.connectionMessages.voice.prerecorded.activeFileUrl);
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
             console.log(`[CONNECTION MESSAGES] Deleted file: ${filePath}`);
         }
 
         // Clear prerecorded settings
-        company.aiAgentLogic.connectionMessages.voice.prerecorded = {
+        company.connectionMessages.voice.prerecorded = {
             activeFileUrl: null,
             activeFileName: null,
             activeDuration: null,
@@ -421,7 +417,7 @@ router.delete('/:companyId/connection-messages/voice/remove', async (req, res) =
             uploadedAt: null
         };
 
-        company.aiAgentLogic.connectionMessages.lastUpdated = new Date();
+        company.connectionMessages.lastUpdated = new Date();
 
         await company.save();
 
@@ -528,7 +524,7 @@ router.post('/:companyId/connection-messages/reset', async (req, res) => {
 
         // Remove audio file if exists
         if (company.aiAgentLogic?.connectionMessages?.voice?.prerecorded?.activeFileUrl) {
-            const filePath = path.join(__dirname, '../../public', company.aiAgentLogic.connectionMessages.voice.prerecorded.activeFileUrl);
+            const filePath = path.join(__dirname, '../../public', company.connectionMessages.voice.prerecorded.activeFileUrl);
             if (fs.existsSync(filePath)) {
                 fs.unlinkSync(filePath);
                 console.log(`[CONNECTION MESSAGES] Deleted file: ${filePath}`);
@@ -539,7 +535,7 @@ router.post('/:companyId/connection-messages/reset', async (req, res) => {
         if (!company.aiAgentLogic) {
             company.aiAgentLogic = {};
         }
-        company.aiAgentLogic.connectionMessages = getDefaultConfig();
+        company.connectionMessages = getDefaultConfig();
 
         await company.save();
 
@@ -555,7 +551,7 @@ router.post('/:companyId/connection-messages/reset', async (req, res) => {
         res.json({
             success: true,
             message: 'Reset to defaults successfully',
-            config: company.aiAgentLogic.connectionMessages
+            config: company.connectionMessages
         });
 
     } catch (error) {
