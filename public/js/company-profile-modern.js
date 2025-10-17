@@ -2587,6 +2587,144 @@ class CompanyProfileManager {
                 }
             });
         }
+
+        // Category filter - FILTER NOTES BY CATEGORY
+        const categoryFilter = document.getElementById('notes-category-filter');
+        if (categoryFilter) {
+            categoryFilter.addEventListener('change', (e) => {
+                logger.info('📁 [NOTES] Category filter changed to:', e.target.value || 'All Categories');
+                this.filterNotesByCategory(e.target.value);
+            });
+        }
+
+        // Search filter
+        const searchInput = document.getElementById('notes-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                logger.info('🔍 [NOTES] Search filter:', e.target.value);
+                this.filterNotesBySearch(e.target.value);
+            });
+        }
+
+        // Sort dropdown
+        const sortSelect = document.getElementById('notes-sort');
+        if (sortSelect) {
+            sortSelect.addEventListener('change', (e) => {
+                logger.info('🔄 [NOTES] Sort changed to:', e.target.value);
+                this.sortAndRenderNotes(e.target.value);
+            });
+        }
+    }
+
+    /**
+     * Filter notes by category
+     */
+    filterNotesByCategory(category) {
+        const allNoteCards = document.querySelectorAll('[data-note-id]');
+        let visibleCount = 0;
+
+        allNoteCards.forEach(card => {
+            const noteId = card.getAttribute('data-note-id');
+            const note = this.notes.find(n => n.id == noteId);
+            
+            if (!note) return;
+
+            // Show all if no category selected, otherwise filter by category
+            if (!category || note.category === category) {
+                card.style.display = '';
+                visibleCount++;
+            } else {
+                card.style.display = 'none';
+            }
+        });
+
+        // Update empty state
+        const emptyState = document.getElementById('notes-empty-state');
+        const notesContainer = document.getElementById('v2-notes-container');
+        
+        if (visibleCount === 0) {
+            if (emptyState) {
+                emptyState.style.display = 'flex';
+                emptyState.innerHTML = `
+                    <div class="text-center py-12">
+                        <i class="fas fa-filter text-4xl text-gray-300 mb-4"></i>
+                        <p class="text-gray-500 text-lg">No notes found in this category</p>
+                        <p class="text-gray-400 text-sm mt-2">Try selecting a different category or add a new note</p>
+                    </div>
+                `;
+            }
+        } else {
+            if (emptyState) {
+                emptyState.style.display = 'none';
+            }
+        }
+
+        logger.info(`✅ [NOTES] Filtered: ${visibleCount} notes visible`);
+    }
+
+    /**
+     * Filter notes by search term
+     */
+    filterNotesBySearch(searchTerm) {
+        const allNoteCards = document.querySelectorAll('[data-note-id]');
+        const term = searchTerm.toLowerCase().trim();
+        let visibleCount = 0;
+
+        if (!term) {
+            // Show all if search is empty
+            allNoteCards.forEach(card => {
+                card.style.display = '';
+                visibleCount++;
+            });
+        } else {
+            allNoteCards.forEach(card => {
+                const noteId = card.getAttribute('data-note-id');
+                const note = this.notes.find(n => n.id == noteId);
+                
+                if (!note) return;
+
+                // Search in title and content
+                const matchesSearch = 
+                    note.title.toLowerCase().includes(term) ||
+                    note.content.toLowerCase().includes(term);
+
+                if (matchesSearch) {
+                    card.style.display = '';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        // Update empty state
+        const emptyState = document.getElementById('notes-empty-state');
+        
+        if (visibleCount === 0 && term) {
+            if (emptyState) {
+                emptyState.style.display = 'flex';
+                emptyState.innerHTML = `
+                    <div class="text-center py-12">
+                        <i class="fas fa-search text-4xl text-gray-300 mb-4"></i>
+                        <p class="text-gray-500 text-lg">No notes found matching "${searchTerm}"</p>
+                        <p class="text-gray-400 text-sm mt-2">Try a different search term</p>
+                    </div>
+                `;
+            }
+        } else if (visibleCount > 0 && emptyState) {
+            emptyState.style.display = 'none';
+        }
+
+        logger.info(`✅ [NOTES] Search results: ${visibleCount} notes visible`);
+    }
+
+    /**
+     * Sort and re-render notes
+     */
+    sortAndRenderNotes(sortType) {
+        // Apply sorting and re-render
+        this.renderV2Notes();
+        logger.info('✅ [NOTES] Notes sorted and re-rendered');
     }
 
     /**
