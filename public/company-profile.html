@@ -8,812 +8,11 @@
     
     <!-- Tailwind CSS (Production Build) -->
     <link rel="stylesheet" href="/css/output.css">
+    <link rel="stylesheet" href="/css/company-profile.css">
     
-    <!-- 🗑️ DELETED: Knowledge Management CSS (AI Agent Logic tab removed) -->
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; scroll-behavior: smooth; }
-        
-        /* Global Navigation Styling */
-        .nav-link-global { 
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 500;
-            color: #6B7280;
-            text-decoration: none;
-            transition: all 0.2s ease-in-out;
-            border: 1px solid transparent;
-        }
-        .nav-link-global:hover {
-            color: #4F46E5;
-            background-color: #EEF2FF;
-            transform: translateY(-1px);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        .nav-link-global.active { 
-            background-color: #4F46E5;
-            color: white;
-            font-weight: 600;
-            box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
-        }
-        
-        /* Tab Navigation Styling */
-        .nav-link.active-tab { border-bottom-width: 2px; border-color: #4F46E5; color: #4F46E5; font-weight: 600; background-color: #EEF2FF; }
-        .nav-link { @apply px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900; }
-        
-        .profile-section-title { @apply text-xl font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200; }
-        .detail-item { @apply flex flex-col sm:flex-row py-2; }
-        .detail-label { @apply sm:w-1/3 font-medium text-gray-600 mb-1 sm:mb-0; }
-        .detail-value { @apply sm:w-2/3 text-gray-800; }
-        .config-block { @apply mt-3 p-4 border border-gray-200 rounded-md bg-gray-50; }
-        .form-input, .form-select, .form-textarea, .form-checkbox { @apply mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition duration-150 ease-in-out; }
-        .form-checkbox { @apply w-auto h-4 text-indigo-600; } 
-        .form-label { @apply block text-sm font-medium text-gray-700; }
-        .form-check-label { @apply ml-2 text-sm text-gray-700; }
-        .tab-button { padding: 0.5rem 1rem; font-weight: 500; font-size: 0.875rem; line-height: 1.25rem; border-top-left-radius: 0.5rem; border-top-right-radius: 0.5rem; transition-property: color, background-color, border-color, text-decoration-color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; cursor: pointer; }
-        .tab-button:focus { outline: 2px solid transparent; outline-offset: 2px; }
-        .tab-button-active { background-color: #4F46E5; color: white; }
-        .tab-button-inactive { background-color: #E5E7EB; color: #374151; }
-        .tab-button-inactive:hover { background-color: #D1D5DB; }
-        .tab-content-item { @apply p-0 pt-6; } 
-        .tab-content-item.hidden { display: none; }
-        
-        /* ✅ CLEAN: AI Response System working normally */
-        #ai-response-system-content.tab-content-item:not(.hidden) { 
-            display: block !important; 
-            visibility: visible !important; 
-            opacity: 1 !important; 
-            position: relative !important;
-            background: transparent !important;
-            border: none !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            width: 100% !important;
-            height: auto !important;
-            max-width: none !important;
-            max-height: none !important;
-            overflow-y: visible !important;
-            z-index: auto !important;
-        }
-        
-        /* 🔧 AGGRESSIVE FIX: Tab navigation container - ensure ALL tabs are visible and clickable */ 
-        .mb-6 {
-            width: 100% !important;
-            max-width: none !important;
-            overflow: visible !important;
-        }
-        
-        /* 🔧 FIX: Container must expand to accommodate wrapped tabs */
-        .mb-6 {
-            min-height: auto !important;
-            height: auto !important;
-            overflow: visible !important;
-        }
-        
-        .mb-6 > .border-b.border-gray-300 {
-            width: 100% !important;
-            max-width: none !important; 
-            overflow: visible !important;
-            position: relative !important;
-            min-height: 80px !important; /* Allow space for wrapped tabs */
-            padding-bottom: 10px !important;
-        }
-        
-        .mb-6 > .border-b.border-gray-300 > nav {
-            width: 100% !important;
-            max-width: none !important;
-            overflow: visible !important;
-            flex-wrap: wrap !important; /* ALLOW wrapping but keep in container */
-            display: flex !important;
-            position: relative !important;
-            z-index: 100 !important;
-            gap: 4px !important; /* Add gap between wrapped tabs */
-            align-items: flex-start !important;
-        }
-        
-        /* 🔧 COMPACT TAB BUTTONS: Make them smaller to fit better */
-        .tab-button {
-            white-space: nowrap !important;
-            flex-shrink: 0 !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            position: relative !important;
-            z-index: 101 !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            font-size: 12px !important; /* Smaller font */
-            padding: 6px 10px !important; /* Smaller padding */
-            margin: 2px !important; /* Small margin for spacing */
-        }
-        
-        /* 🔧 COMPACT TAB BADGES: Make badges smaller too */
-        .tab-button span {
-            font-size: 10px !important;
-            padding: 1px 4px !important;
-            margin-left: 4px !important;
-        }
-        
-        /* 🗑️ DELETED: CSS fix for AI Agent Logic tab (removed) */
-
-        #tab-ai-response-system {
-            display: inline-flex !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            position: relative !important;
-            z-index: 102 !important;
-        }
-        
-        /* 🧪 TEST TAB: Rainbow animation and super visible styling */
-        @keyframes rainbow {
-            0% { background: linear-gradient(45deg, #ff0000, #ff8000) !important; }
-            25% { background: linear-gradient(45deg, #ff8000, #ffff00) !important; }
-            50% { background: linear-gradient(45deg, #ffff00, #00ff00) !important; }
-            75% { background: linear-gradient(45deg, #00ff00, #0000ff) !important; }
-            100% { background: linear-gradient(45deg, #0000ff, #ff0000) !important; }
-        }
-        
-        /* 🔥 SCROLL FIX: Ensure tab content area is scrollable and positioned correctly */
-        #tab-content-area {
-            position: relative !important;
-            overflow-y: auto !important;
-            max-height: none !important;
-        }
-        
-        /* Clean toggle switch styling handled by Tailwind peer classes */
-        .wider-textbox { max-width: 800px; width: 100%; }
-        .status-badge { @apply px-2.5 py-0.5 rounded-full text-xs font-medium; }
-        .status-active { @apply bg-green-100 text-green-800; }
-        .status-inactive { @apply bg-red-100 text-red-800; }
-        
-        /* Account Status Control Styles */
-        .status-option .status-card {
-            border-color: #D1D5DB;
-            background-color: #F9FAFB;
-        }
-        .status-option .status-radio:checked ~ .status-card {
-            border-width: 3px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
-        .status-option .status-radio:checked[value="active"] ~ .status-card {
-            border-color: #10B981;
-            background-color: #ECFDF5;
-        }
-        .status-option .status-radio:checked[value="call_forward"] ~ .status-card {
-            border-color: #F59E0B;
-            background-color: #FFFBEB;
-        }
-        .status-option .status-radio:checked[value="suspended"] ~ .status-card {
-            border-color: #EF4444;
-            background-color: #FEF2F2;
-        }
-        .status-option .status-radio:checked ~ .status-card .check-indicator {
-            display: inline-block !important;
-        }
-
-        
-
-
-        .contact-block-view { @apply mt-3 pt-3 border-t border-gray-200; }
-        .contact-block-view .detail-item:last-child { padding-bottom: 0; }
-        .scheduling-rule-daily-hours-header { @apply grid grid-cols-4 gap-x-3 mb-1 px-2 text-xs font-medium text-gray-500; }
-        .scheduling-rule-daily-hours-row { @apply grid grid-cols-4 gap-x-3 items-center p-2 hover:bg-gray-100 rounded-md; }
-        #toast-notification { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background-color: #333; color: white; padding: 10px 20px; border-radius: 5px; z-index: 1000; opacity: 0; transition: opacity 0.5s ease-in-out; }
-        #toast-notification.show { opacity: 1; }
-        #toast-notification.success { background-color: #4CAF50; }
-        #toast-notification.error { background-color: #f44336; }
-        
-        /* 🔧 HOTFIX: Prevent priority items from floating outside containers */
-        .clientsvia-priority-item {
-            position: relative !important;
-            transform: none !important;
-            top: auto !important;
-            left: auto !important;
-            right: auto !important;
-            bottom: auto !important;
-            z-index: auto !important;
-        }
-        
-        /* Ensure priority flow container contains all elements */
-        #clientsvia-priority-flow-container {
-            position: relative;
-            overflow: visible;
-            contain: layout;
-        }
-        
-        /* Prevent any drag ghosts from becoming stuck */
-        .clientsvia-priority-item[style*="position"] {
-            position: relative !important;
-        }
-        
-        /* Knowledge Sources Sub-tabs */
-        .knowledge-sub-tab {
-            cursor: pointer;
-            transition: all 0.2s ease;
-            position: relative;
-            z-index: 1;
-        }
-        
-        .knowledge-subtab-panel {
-            min-height: 400px;
-            position: relative;
-            z-index: 1;
-        }
-        
-        .knowledge-subtab-panel.hidden {
-            display: none;
-        }
-        
-        /* 🔧 Flow Designer Canvas - Keep properly contained */
-        #flow-canvas {
-            position: relative;
-            overflow: visible;
-        }
-        
-        .flow-node {
-            position: absolute;
-            max-width: 200px;
-        }
-        
-        /* Ensure tab content containers don't overflow */
-        .clientsvia-tab-content {
-            position: relative;
-            overflow: visible;
-            width: 100%;
-            min-height: 200px;
-        }
-        
-        /* 🔧 TAB CONTAINER STRUCTURE FIX */
-        #clientsvia-tab-content {
-            position: relative;
-            overflow: visible;
-            contain: layout;
-            width: 100%;
-            min-height: 400px;
-        }
-        
-        /* Ensure all tab contents are properly contained */
-        .clientsvia-tab-content {
-            position: relative !important;
-            float: none !important;
-            clear: both;
-            width: 100%;
-            box-sizing: border-box;
-        }
-        
-        /* Fix any floating elements within tabs */
-        .clientsvia-tab-content * {
-            position: relative;
-            z-index: auto;
-        }
-        
-        /* Legacy intelligence section container removed - using modern implementation */
-        
-        /* 🔧 CRITICAL: Remove separation between tab nav and content */
-        #clientsvia-tab-content {
-            margin-top: 0 !important;
-            padding-top: 1.5rem !important;
-            border-top: none !important;
-        }
-        
-        /* Ensure seamless tab-to-content connection */
-        .clientsvia-tab-btn.active {
-            border-bottom: 2px solid #6366f1 !important;
-            margin-bottom: -2px !important;
-            z-index: 10 !important;
-            position: relative !important;
-        }
-        @media (min-width: 768px) { .wider-textbox { max-width: 800px; } }
-        @media (max-width: 767px) { .wider-textbox { max-width: 100%; } }
-        
-        /* 🧠 Agent ClientsVia Intelligence Styles */
-        /* 🔧 BULLETPROOF TAB SWITCHING STYLES */
-        .clientsvia-tab-btn {
-            position: relative;
-            z-index: 1;
-            transition: all 0.2s ease-in-out;
-            cursor: pointer;
-        }
-        
-        .clientsvia-tab-btn:hover {
-            background-color: #f8fafc;
-        }
-        
-        .clientsvia-tab-btn.active {
-            z-index: 2;
-            border-bottom-color: #6366f1 !important;
-            color: #6366f1 !important;
-            background-color: #eef2ff !important;
-            font-weight: 600;
-        }
-        
-        /* Force hide inactive tabs with multiple approaches */
-        .clientsvia-tab-content:not(.active) {
-            display: none !important;
-            visibility: hidden !important;
-            opacity: 0 !important;
-            height: 0 !important;
-            overflow: hidden !important;
-        }
-        
-        /* Force show active tabs */
-        .clientsvia-tab-content.active {
-            display: block !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            height: auto !important;
-            overflow: visible !important;
-        }
-        
-        /* 🚨 REMOVED: Problematic CSS that was forcing AI Agent Logic to show on all tabs */
-        /* This was causing the AI Agent Logic content to bleed into other tabs */
-        
-        /* 🎯 NEW AI AGENT MANAGEMENT SYSTEM STYLES */
-        .new-ai-tab-btn {
-            transition: all 0.2s ease-in-out;
-            cursor: pointer;
-        }
-        
-        .new-ai-tab-btn.active {
-            border-color: currentColor !important;
-            color: currentColor !important;
-        }
-        
-        .new-ai-tab-content {
-            display: none;
-        }
-        
-        .new-ai-tab-content.active {
-            display: block;
-        }
-
-        /* ============================================================================ */
-        /* KNOWLEDGE MANAGEMENT TAB STYLES - PHASE 3.2
-           📋 DESCRIPTION: CSS for Knowledge Management sub-tab navigation and content
-           🎯 PURPOSE: Handle 4-tab navigation within Knowledge Management (Company Q&A, Trade Q&A, Templates, Fallback)
-           🔧 FEATURES: Active state management, smooth transitions, responsive design
-           📝 FUTURE EXPANSION: Add animations, dark mode support, mobile optimizations
-           ⚠️  CRITICAL: .km-tab-btn and .km-tab-content classes control sub-tab visibility
-        */
-        /* ============================================================================ */
-        
-        /* Knowledge Management Tab Styles */
-        .km-tab-btn {
-            transition: all 0.2s ease-in-out;
-            cursor: pointer;
-        }
-
-        .km-tab-btn.active {
-            border-color: currentColor !important;
-            color: currentColor !important;
-        }
-
-        .km-tab-content {
-            display: none;
-        }
-
-        .km-tab-content.active {
-            display: block !important;
-        }
-        
-        /* Form styling for new system */
-        .new-ai-tab-content select,
-        .new-ai-tab-content input[type="text"],
-        .new-ai-tab-content input[type="number"],
-        .new-ai-tab-content textarea {
-            transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-        }
-        
-        .new-ai-tab-content select:focus,
-        .new-ai-tab-content input:focus,
-        .new-ai-tab-content textarea:focus {
-            outline: none;
-            border-color: #8b5cf6;
-            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
-        }
-        
-        /* Container stability */
-        #clientsvia-tab-content {
-            min-height: 500px;
-            position: relative;
-            overflow: visible;
-        }
-        .clientsvia-priority-item {
-            transition: all 0.3s ease;
-        }
-        .clientsvia-priority-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-        .clientsvia-source-item {
-            transition: all 0.3s ease;
-        }
-        .clientsvia-source-item:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-
-        /* 🚀 AI AGENT SETTINGS STYLES */
-        .clientsvia-tab-btn {
-            transition: all 0.2s ease-in-out;
-        }
-        .clientsvia-tab-btn.active {
-            border-color: #6366f1 !important;
-            color: #6366f1 !important;
-            background-color: #eef2ff;
-        }
-        .clientsvia-priority-item {
-            transition: all 0.3s ease;
-        }
-        .clientsvia-priority-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
-        
-        /* 📊 Analytics Dashboard Styles */
-        .analytics-metric-card {
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 1.5rem;
-            transition: all 0.3s ease;
-        }
-        .analytics-metric-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-        }
-        .analytics-chart-container {
-            background: white;
-            border-radius: 12px;
-            border: 1px solid #e5e7eb;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-        
-        /* 🎨 Flow Designer Styles */
-        .flow-canvas {
-            background: linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px),
-                        linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px);
-            background-size: 20px 20px;
-            border-radius: 8px;
-        }
-        .flow-node {
-            cursor: grab;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            transition: all 0.3s ease;
-            border-radius: 12px;
-        }
-        .flow-node:hover {
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
-            transform: scale(1.02);
-        }
-        .flow-node:active {
-            cursor: grabbing;
-        }
-        .flow-connection-line {
-            stroke: #6b7280;
-            stroke-width: 2;
-            marker-end: url(#arrowhead);
-        }
-        
-        /* 🧪 A/B Testing Styles */
-        .ab-test-card {
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            background: white;
-            transition: all 0.3s ease;
-        }
-        .ab-test-card:hover {
-            border-color: #d1d5db;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-        .test-status-badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        .test-status-running {
-            background-color: #d1fae5;
-            color: #065f46;
-        }
-        .test-status-analyzing {
-            background-color: #fef3c7;
-            color: #92400e;
-        }
-        
-        /* 👤 Personalization Engine Styles */
-        .segment-card {
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            background: white;
-            transition: all 0.3s ease;
-        }
-        .segment-card:hover {
-            border-color: #d1d5db;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            transform: translateY(-2px);
-        }
-        .personalization-rule {
-            background: white;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 1rem;
-            transition: all 0.3s ease;
-        }
-        .personalization-rule:hover {
-            border-color: #d1d5db;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-        }
-        .insight-card {
-            padding: 0.75rem;
-            border-radius: 8px;
-            border: 1px solid;
-            margin-bottom: 0.75rem;
-        }
-        .insight-emerging {
-            background-color: #fef3c7;
-            border-color: #f59e0b;
-            color: #92400e;
-        }
-        .insight-established {
-            background-color: #d1fae5;
-            border-color: #10b981;
-            color: #065f46;
-        }
-        
-        /* Toggle Switch Styles */
-        .toggle-switch {
-            appearance: none;
-            width: 2.75rem;
-            height: 1.5rem;
-            background-color: #d1d5db;
-            border-radius: 9999px;
-            position: relative;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-        }
-        .toggle-switch:checked {
-            background-color: #3b82f6;
-        }
-        .toggle-switch::before {
-            content: '';
-            position: absolute;
-            width: 1.25rem;
-            height: 1.25rem;
-            background-color: white;
-            border-radius: 50%;
-            top: 0.125rem;
-            left: 0.125rem;
-            transition: transform 0.2s ease;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-        .toggle-switch:checked::before {
-            transform: translateX(1.25rem);
-        }
-        
-        /* Progress Bars */
-        .knowledge-source-bar {
-            height: 0.5rem;
-            background-color: #e5e7eb;
-            border-radius: 0.25rem;
-            overflow: hidden;
-        }
-        .knowledge-source-bar-fill {
-            height: 100%;
-            border-radius: 0.25rem;
-            transition: width 0.8s ease;
-        }
-        
-        /* Drag and Drop Styles */
-        .drag-handle {
-            cursor: grab;
-        }
-        .drag-handle:active {
-            cursor: grabbing;
-        }
-        .priority-item-dragging {
-            opacity: 0.5;
-            transform: rotate(2deg);
-        }
-        
-        /* V2 Buttons */
-        .v2-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        .v2-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
-        
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .flow-node {
-                width: 180px !important;
-                font-size: 0.875rem;
-            }
-            .analytics-metric-card {
-                padding: 1rem;
-            }
-            .segment-card {
-                margin-bottom: 1rem;
-            }
-        }
-
-        /* V2 Features Styling */
-        .v2-badge {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 10px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .metric-card {
-            transition: all 0.3s ease-in-out;
-            border-radius: 12px;
-        }
-        
-        .metric-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-        }
-        
-        .analytics-metric {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 12px;
-            padding: 1.5rem;
-            color: white;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .analytics-metric::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, transparent 100%);
-            pointer-events: none;
-        }
-        
-        .flow-node {
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 12px;
-            background: white;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            cursor: move;
-            transition: all 0.2s ease;
-        }
-        
-        .flow-node:hover {
-            border-color: #4f46e5;
-            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15);
-        }
-        
-        .flow-canvas {
-            background-image: radial-gradient(circle, #e2e8f0 1px, transparent 1px);
-            background-size: 20px 20px;
-        }
-        
-        .ab-test-card {
-            border-left: 4px solid #10b981;
-            background: linear-gradient(135deg, #f0fff4 0%, #f0fdf4 100%);
-        }
-        
-        .ab-test-variant {
-            border-radius: 8px;
-            padding: 12px;
-            background: rgba(255, 255, 255, 0.8);
-            border: 1px solid #e2e8f0;
-        }
-        
-        .personalization-segment {
-            background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
-            border-left: 4px solid #ec4899;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 12px;
-        }
-        
-        .predictive-insight {
-            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-            border: 1px solid #93c5fd;
-            border-radius: 12px;
-            padding: 16px;
-        }
-        
-        .v2-save-button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            border-radius: 12px;
-            padding: 12px 24px;
-            color: white;
-            font-weight: 600;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-            transition: all 0.3s ease;
-        }
-        
-        .v2-save-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
-        }
-        
-        .tab-nav-v2 {
-            border-bottom: 3px solid #e2e8f0;
-            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-            border-radius: 12px 12px 0 0;
-            padding: 8px;
-        }
-        
-        .tab-nav-v2 .clientsvia-tab-btn {
-            position: relative;
-            margin: 0 4px;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-        }
-        
-        .tab-nav-v2 .clientsvia-tab-btn:hover {
-            background: rgba(79, 70, 229, 0.1);
-            transform: translateY(-1px);
-        }
-        
-        .tab-nav-v2 .clientsvia-tab-btn.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-color: transparent;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-        }
-        
-        .v2-card {
-            background: white;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-            transition: all 0.3s ease;
-        }
-        
-        .v2-card:hover {
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-        }
-        
-        .status-indicator {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 8px;
-        }
-        
-        .status-active { background-color: #10b981; }
-        .status-running { background-color: #3b82f6; }
-        .status-paused { background-color: #f59e0b; }
-        .status-completed { background-color: #6b7280; }
-        
-        @keyframes pulse-v2 {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        
-        .loading-v2 {
-            animation: pulse-v2 2s infinite;
-        }
-    </style>
 </head>
 <body class="bg-gray-100">
     <div id="app" class="flex flex-col min-h-screen">
@@ -883,19 +82,15 @@
                             <button class="tab-button tab-button-inactive" id="tab-notes" data-tab="notes">
                                 <i class="fas fa-sticky-note mr-1"></i>Notes
                             </button>
-                             <!-- 🗑️ DELETED: Calendar Settings tab - legacy system removed -->
-                            <!-- REMOVED: Legacy AI Settings tab - conflicts with 100% in-house AI Agent Logic system -->
+                            
                             <button class="tab-button tab-button-inactive" id="tab-ai-voice" data-tab="ai-voice">
                                 <i class="fas fa-microphone-alt mr-1"></i>AI Voice Settings
                             </button>
                             
-                            <!-- 🆕 AI AGENT SETTINGS - MODERN, ISOLATED, WORLD-CLASS -->
                             <button class="tab-button tab-button-inactive" id="tab-ai-agent-settings" data-tab="ai-agent-settings">
-                                <i class="fas fa-robot mr-1"></i>🤖 AI Agent Settings
                             </button>
                             
-                            <!-- 🗑️ DELETED: AI Agent Logic tab - replaced by AI Agent Settings tab -->
-                            <!-- REMOVED: Legacy CRM & Contacts tab - will build V2 version in future -->
+                            
 
                         </nav>
                     </div>
@@ -919,7 +114,6 @@
                                     <i class="fas fa-plus mr-1"></i>Add Contact
                                 </button>
                             </div>
-                            <!-- 🗑️ DELETED: Quick Variables section - replaced by Placeholders in AI Agent Logic tab -->
                         </section>
                     </div>
                     <!-- ===== TAB SECTION END: OVERVIEW ===== -->
@@ -944,7 +138,6 @@
                                     </div>
                                 </div>
                                 
-                                <!-- 🚨 Account Status Control -->
                                 <div class="config-block mt-6">
                                     <div class="flex justify-between items-center mb-3">
                                         <h3 class="font-semibold text-gray-700">Account Status Control</h3>
@@ -1074,7 +267,6 @@
                                             rows="2" 
                                             placeholder="e.g., Payment pending, Customer request, Maintenance"
                                             maxlength="200"></textarea>
-                                        <p class="text-xs text-gray-500 mt-1">⚠️ INTERNAL ONLY - This is NOT read to callers. Use the message fields above for caller-facing messages.</p>
                                     </div>
                                     
                                     <!-- Save Button -->
@@ -1231,7 +423,6 @@
                     </div>
                     <!-- ===== TAB SECTION END: NOTES ===== -->
                     
-                    <!-- 🗑️ DELETED: Calendar Settings tab content - legacy Google Calendar integration removed -->
 
                     <!-- ===== REMOVED: LEGACY AI SETTINGS TAB =====
                          This entire section was removed because it conflicts with the 
@@ -1652,7 +843,6 @@
                         <div style="background: white; border-radius: 16px; max-width: 900px; width: 100%; max-height: 95vh; overflow-y: auto; padding: 40px; box-shadow: 0 25px 80px rgba(0,0,0,0.4);">
                             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #f0f0f0;">
                                 <h3 id="qna-modal-title" style="font-size: 28px; font-weight: 800; color: #1a1a1a; margin: 0; display: flex; align-items: center; gap: 12px;">
-                                    <span style="font-size: 32px;">💬</span>
                                     <span>Add Q&A</span>
                                 </h3>
                                 <button onclick="instantResponseCategoriesManager.closeQnAModal()" style="background: none; border: none; font-size: 32px; color: #999; cursor: pointer; padding: 0; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: all 0.2s;">
@@ -1681,13 +871,11 @@
                                             </button>
                                         </div>
                                         <small style="color: #7f8c8d; font-size: 13px; display: block; margin-top: 5px;">
-                                            💡 Click "Generate Variations" to auto-create similar phrases
                                         </small>
                                     </div>
                                     
                                     <div id="variations-container" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 2px dashed #d0d0d0;">
                                         <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 12px; font-size: 14px;">
-                                            Variations (Click ✏️ to edit, ❌ to remove, or click "+ Add" to add more)
                                         </label>
                                         <div id="variations-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
                                             <!-- Variations will be inserted here -->
@@ -1720,7 +908,6 @@
                                     </button>
                                     
                                     <small style="color: #7f8c8d; font-size: 13px; display: block; margin-top: 8px;">
-                                        💡 AI will generate 3 response variations based on your trigger phrase and category
                                     </small>
                                 </div>
                                 
@@ -1829,8 +1016,6 @@
                                             Status
                                         </label>
                                         <select id="qna-enabled" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; cursor: pointer;">
-                                            <option value="true">✅ Enabled (Active)</option>
-                                            <option value="false">❌ Disabled (Inactive)</option>
                                         </select>
                                     </div>
                                     
@@ -1947,11 +1132,6 @@
                     <!-- ============================================================================== -->
                     <!-- ===== TAB SECTION START: AI AGENT SETTINGS (NEW, MODERN, ISOLATED) ===== -->
                     <!-- ============================================================================== -->
-                    <!-- 🆕 PURPOSE: Modern AI configuration system (Variables, Filler Words, Scenarios)
-                         🎯 ARCHITECTURE: 100% isolated, zero dependencies on legacy code
-                         💎 DESIGN: World-class UI, enterprise-grade UX
-                         🚀 SCALABLE: Template marketplace ready, version control ready
-                         🔥 MIGRATION: When ready, delete AI Agent Logic tab, keep this
                     -->
                     <!-- ============================================================================== -->
                     <div id="ai-agent-settings-content" class="tab-content-item hidden">
@@ -2056,7 +1236,6 @@
                                         class="ai-settings-btn ai-settings-btn-secondary" 
                                         onclick="aiAgentSettings.goLive()"
                                         disabled>
-                                        🔒 Cannot Go Live
                                     </button>
                                 </div>
                             </div>
@@ -2072,23 +1251,18 @@
                             <nav class="ai-settings-subtabs">
                                 <button class="ai-settings-subtab-btn active" data-subtab="variables">
                                     <i class="fas fa-sliders-h mr-2"></i>
-                                    💼 Variables
                                 </button>
                                 <button class="ai-settings-subtab-btn" data-subtab="filler-words">
                                     <i class="fas fa-filter mr-2"></i>
-                                    🔇 Filler Words
                                 </button>
                                 <button class="ai-settings-subtab-btn" data-subtab="scenarios">
                                     <i class="fas fa-comments mr-2"></i>
-                                    💬 Scenarios
                                 </button>
                                 <button class="ai-settings-subtab-btn" data-subtab="template-info">
                                     <i class="fas fa-box mr-2"></i>
-                                    📦 Template Info
                                 </button>
                                 <button class="ai-settings-subtab-btn" data-subtab="analytics">
                                     <i class="fas fa-chart-line mr-2"></i>
-                                    📊 Analytics
                                 </button>
                             </nav>
                             
@@ -2231,7 +1405,6 @@
                                 <div class="ai-settings-scenarios-search">
                                     <input 
                                         type="text" 
-                                        placeholder="🔍 Search 500+ scenarios..." 
                                         id="scenarios-search"
                                     />
                                     <select id="scenarios-category-filter">
@@ -2354,7 +1527,6 @@
                                 if (!aiAgentSettings) {
                                     const companyId = window.currentCompanyId || document.getElementById('company-id')?.value;
                                     if (companyId) {
-                                        console.log('🤖 [AI AGENT SETTINGS] Initializing for company:', companyId);
                                         
                                         // Initialize Telephony Tab Manager (handles tab switching)
                                         telephonyTabManager = new TelephonyTabManager();
@@ -2387,7 +1559,6 @@
                                         window.templateInfoManager = aiAgentSettings.templateInfoManager;
                                         window.analyticsManager = aiAgentSettings.analyticsManager;
                                     } else {
-                                        console.error('❌ [AI AGENT SETTINGS] No company ID found');
                                     }
                                 }
                             });
@@ -2398,7 +1569,6 @@
                                     const companyId = window.currentCompanyId || document.getElementById('company-id')?.value;
                                     
                                     if (companyId) {
-                                        console.log('🎤 [VOICE TAB] Initializing Voice Settings Manager for company:', companyId);
                                         
                                         voiceSettingsManager = new VoiceSettingsManager(companyId);
                                         voiceSettingsManager.initialize();
@@ -2406,7 +1576,6 @@
                                         // Make globally accessible for debugging
                                         window.voiceSettingsManager = voiceSettingsManager;
                                     } else {
-                                        console.error('❌ [VOICE TAB] No company ID found');
                                     }
                                 }
                             });
@@ -2447,14 +1616,12 @@
     <script>
         // Main initialization when page loads
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 Company Profile page DOMContentLoaded - Starting initialization...');
             
             // Get company ID from URL
             const urlParams = new URLSearchParams(window.location.search);
             const companyId = urlParams.get('id');
             
             if (companyId) {
-                console.log('✅ Company ID found in URL:', companyId);
                 
                 // Set global company ID
                 window.companyId = companyId;
@@ -2464,7 +1631,6 @@
                 localStorage.setItem('currentCompanyId', companyId);
                 
                 // Start fetching company data immediately
-                console.log('📡 Calling proven fetchCompanyData pattern...');
                 
                 // Wait a moment for all scripts to load
                 setTimeout(() => {
@@ -2473,11 +1639,9 @@
                     } else if (window.companyProfileManager && typeof window.companyProfileManager.loadCompanyData === 'function') {
                         window.companyProfileManager.loadCompanyData();
                     } else {
-                        console.error('❌ No data loading function found');
                     }
                 }, 100);
             } else {
-                console.error('❌ No company ID found in URL');
                 document.querySelector('.profile-container')?.innerHTML = 
                     '<div class="p-8 text-center"><h1 class="text-2xl font-bold text-red-600">Error: No company ID provided</h1><p class="text-gray-600 mt-2">Please access this page with a valid company ID.</p></div>';
             }
@@ -2485,6 +1649,5 @@
     </script>
     
 </body>
-
 
 

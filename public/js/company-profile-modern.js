@@ -1,24 +1,8 @@
-console.log('🚀 Loading company-profile-modern.js v2.20 - Fixed company ID display in header subheader');
 
 /* ============================================================================
    MODERN COMPANY PROFILE MANAGEMENT SYSTEM
    ============================================================================
    
-   📋 FILE ORGANIZATION:
-   ├── 🏗️  CLASS DEFINITION & CORE ARCHITECTURE
-   ├── 🚀  INITIALIZATION & SETUP METHODS  
-   ├── 🔍  COMPANY ID & URL MANAGEMENT
-   ├── 🎯  DOM MANAGEMENT & VALIDATION
-   ├── 📡  EVENT HANDLING SYSTEM
-   ├── 🗂️  TAB MANAGEMENT SYSTEM
-   ├── 💾  DATA LOADING & PROCESSING
-   ├── 📋  OVERVIEW TAB - COMPANY DETAILS
-   ├── 👥  CONTACTS TAB - CONTACT MANAGEMENT
-   ├── ⚙️  CONFIGURATION TAB - SETTINGS
-   ├── 📞  PHONE NUMBERS MANAGEMENT
-   ├── 🔧  UTILITY FUNCTIONS & HELPERS
-   ├── 🌐  GLOBAL FUNCTION EXPOSURE
-   └── 🚀  INITIALIZATION & EXPORTS
    
    Architecture:
    - Class-based modular design
@@ -31,7 +15,6 @@ console.log('🚀 Loading company-profile-modern.js v2.20 - Fixed company ID dis
    ============================================================================ */
 
 /* ============================================================================
-   🏗️ CLASS DEFINITION & CORE ARCHITECTURE
    ============================================================================ */
 
 class CompanyProfileManager {
@@ -49,7 +32,6 @@ class CompanyProfileManager {
     }
 
     /* ========================================================================
-       🚀 INITIALIZATION & SETUP METHODS
        ======================================================================== */
 
     /**
@@ -57,13 +39,10 @@ class CompanyProfileManager {
      */
     async init() {
         try {
-            // 🔧 [FIXED] - Initialization Guard (Micro-Surgery #2)
             if (this.initialized) {
-                console.log('🛡️ Company Profile Manager already initialized, skipping...');
                 return;
             }
             
-            console.log('🚀 Initializing Company Profile Manager...');
             this.initialized = true;
             
             // Extract company ID from URL
@@ -76,7 +55,6 @@ class CompanyProfileManager {
             // Initialize DOM elements and event listeners
             this.initializeDOM();
             this.setupEventListeners();
-            // 🗑️ REMOVED: this.createSaveButton(); - Using dedicated section-specific save buttons instead
             
             // Load company data
             await this.loadCompanyData();
@@ -85,16 +63,13 @@ class CompanyProfileManager {
             this.initializeTabs();
             
             this.initialized = true;
-            console.log('✅ Company Profile Manager initialized successfully');
             
         } catch (error) {
-            console.error('❌ Failed to initialize Company Profile Manager:', error);
             this.showNotification('Failed to initialize company profile', 'error');
         }
     }
 
     /* ========================================================================
-       🔍 COMPANY ID & URL MANAGEMENT
        ======================================================================== */
 
     /**
@@ -104,32 +79,24 @@ class CompanyProfileManager {
         // First check if company ID was already set by HTML initialization
         if (window.companyId) {
             this.companyId = window.companyId;
-            console.log('🔍 Using company ID from global window:', this.companyId);
         } else {
             // Fallback: extract from URL directly
             const urlParams = new URLSearchParams(window.location.search);
             this.companyId = urlParams.get('id');
-            console.log('🔍 Extracted company ID from URL:', this.companyId);
             
-            // 🛡️ SAFEGUARD: Store company ID in localStorage to prevent loss
             if (this.companyId) {
                 localStorage.setItem('lastCompanyId', this.companyId);
             }
         }
         
-        // 🔄 RECOVERY: Try to recover from localStorage if URL lost the ID
         if (!this.companyId) {
             const savedId = localStorage.getItem('lastCompanyId');
             if (savedId && savedId !== 'test123') {
                 this.companyId = savedId;
-                console.warn('⚠️ Company ID lost from URL, recovered from localStorage:', this.companyId);
-                // 🔧 FIX URL: Restore the ID parameter
                 const newUrl = `${window.location.pathname}?id=${this.companyId}`;
                 window.history.replaceState({}, '', newUrl);
-                console.log('✅ URL restored:', newUrl);
             } else {
                 this.companyId = 'test123';
-                console.warn('⚠️ No company ID found in URL or localStorage, using test ID:', this.companyId);
             }
         }
         
@@ -137,11 +104,9 @@ class CompanyProfileManager {
         window.currentCompanyId = this.companyId;
         window.companyId = this.companyId;
         
-        console.log('🔍 Final company ID set:', this.companyId);
     }
 
     /* ========================================================================
-       🎯 DOM MANAGEMENT & VALIDATION
        ======================================================================== */
 
     /**
@@ -177,16 +142,13 @@ class CompanyProfileManager {
         const missingOptional = optionalElements.filter(key => !this.domElements[key]);
         
         if (missing.length > 0) {
-            console.warn('⚠️ Missing required DOM elements:', missing);
         }
         
         if (missingOptional.length > 0) {
-            console.log('ℹ️ Optional DOM elements not found (this is normal):', missingOptional);
         }
     }
 
     /* ========================================================================
-       📡 EVENT HANDLING SYSTEM
        ======================================================================== */
 
     /**
@@ -219,14 +181,11 @@ class CompanyProfileManager {
      */
     handleFormChange(event) {
         if (event.target.matches('input, textarea, select')) {
-            // 🛡️ SAFEGUARD: Skip unsaved warning for elements marked with data-no-unsaved-warning
             if (event.target.hasAttribute('data-no-unsaved-warning') || 
                 event.target.closest('[data-no-unsaved-warning]')) {
-                console.log('📝 Change detected (no warning):', event.target.name || event.target.id);
                 return; // Don't trigger unsaved changes warning
             }
             
-            console.log('📝 Change detected:', event.target.name || event.target.id, event.target.value);
             this.setUnsavedChanges(true);
         }
     }
@@ -256,14 +215,12 @@ class CompanyProfileManager {
      */
     setUnsavedChanges(hasChanges) {
         this.hasUnsavedChanges = hasChanges;
-        console.log('📝 Unsaved changes state set to:', hasChanges);
     }
 
     /**
      * Create floating save button - DISABLED (using dedicated tab-specific save buttons instead)
      */
     createSaveButton() {
-        console.log('⚠️ Floating save button creation disabled - using dedicated tab-specific save buttons');
         // Floating save button removed to prevent UI state conflicts
         return;
     }
@@ -272,7 +229,6 @@ class CompanyProfileManager {
      * Show save button with animation - DISABLED
      */
     showSaveButton() {
-        console.log('⚠️ Floating save button disabled - use dedicated tab-specific save buttons');
         return;
     }
 
@@ -280,12 +236,10 @@ class CompanyProfileManager {
      * Hide save button with animation - DISABLED
      */
     hideSaveButton() {
-        console.log('⚠️ Floating save button disabled - use dedicated tab-specific save buttons');
         return;
     }
 
     /* ========================================================================
-       💾 DATA LOADING & PROCESSING
        ======================================================================== */
 
     /**
@@ -294,18 +248,13 @@ class CompanyProfileManager {
      */
     async loadCompanyData(force = false) {
         try {
-            // 🔧 [FIXED] - Data Loading Guard (Micro-Surgery #2)
             if (this.companyDataLoaded && !force) {
-                console.log('🛡️ Company data already loaded, skipping...');
                 return this.companyData;
             }
             
-            console.log('📥 Loading company data for ID:', this.companyId);
-            console.log('🌐 API Base URL:', this.apiBaseUrl);
             this.showLoading(true);
 
             const apiUrl = `${this.apiBaseUrl}/api/company/${this.companyId}`;
-            console.log('📞 Fetching from:', apiUrl);
             
             const response = await fetch(apiUrl);
             
@@ -315,21 +264,17 @@ class CompanyProfileManager {
 
             this.currentData = await response.json();
             this.companyData = this.currentData; // Store for guard check
-            this.companyDataLoaded = true; // 🔧 [FIXED] - Set loaded flag
-            console.log('✅ Company data loaded:', this.currentData);
 
             // Populate all tabs with data
             this.populateOverviewTab();
             this.populateConfigTab();
             this.populateNotesTab();
-            // 🗑️ DELETED: this.populateCalendarSettingsTab() - Calendar tab destroyed
             this.populateAISettingsTab();
             this.populateVoiceTab();
             this.populatePersonalityTab();
             this.populateAgentLogicTab();
 
         } catch (error) {
-            console.error('❌ Failed to load company data:', error);
             console.error('Error details:', {
                 message: error.message,
                 companyId: this.companyId,
@@ -344,7 +289,6 @@ class CompanyProfileManager {
     }
 
     /* ========================================================================
-       📋 OVERVIEW TAB - COMPANY DETAILS
        ======================================================================== */
 
     /**
@@ -357,7 +301,6 @@ class CompanyProfileManager {
             return;
         }
 
-        console.log('📄 Populating Overview tab with v2 features...');
 
         try {
             // Update header elements with current data
@@ -372,9 +315,7 @@ class CompanyProfileManager {
             // Setup comprehensive validation and auto-save
             this.setupV2FormValidation();
 
-            console.log('✅ Overview tab initialized with v2 features');
         } catch (error) {
-            console.error('❌ Error initializing Overview tab:', error);
             this.showNotification('Failed to initialize Overview tab', 'error');
         }
     }
@@ -385,7 +326,6 @@ class CompanyProfileManager {
      */
     createV2EditableForm() {
         if (!this.domElements.editFormContainer) {
-            console.error('❌ Edit form container not found');
             return;
         }
 
@@ -402,7 +342,6 @@ class CompanyProfileManager {
         this.initializeFormAccessibility();
         this.setupFormAutoSave();
         
-        console.log('🔧 V2 editable form created');
     }
 
     /**
@@ -579,7 +518,6 @@ class CompanyProfileManager {
 
                     <!-- Right Column - Additional Details -->
                     <div class="space-y-6">
-                        <!-- 🌍 INTERNATIONAL ADDRESS SYSTEM -->
                         <div class="form-group">
                             <label class="form-label flex items-center">
                                 <i class="fas fa-map-marker-alt mr-2 text-blue-600"></i>
@@ -768,7 +706,6 @@ class CompanyProfileManager {
             descriptionField.addEventListener('input', () => this.updateCharacterCounter());
         }
 
-        console.log('🔧 V2 validation setup complete');
     }
 
     /**
@@ -790,7 +727,6 @@ class CompanyProfileManager {
         // Update form status
         this.setFormStatus('typing', 'Making changes...');
         
-        console.log(`📝 V2 field changed: ${field.name} = ${field.value.substring(0, 50)}...`);
     }
 
     /**
@@ -936,7 +872,6 @@ class CompanyProfileManager {
             });
         });
 
-        console.log('💾 Auto-save enabled');
     }
 
     /**
@@ -967,7 +902,6 @@ class CompanyProfileManager {
         }
 
         const result = await response.json();
-        console.log('✅ Auto-save successful:', result);
         this.setUnsavedChanges(false);
         return result;
     }
@@ -987,7 +921,6 @@ class CompanyProfileManager {
             serviceArea: form.querySelector('#edit-service-area')?.value || '',
             businessHours: form.querySelector('#edit-business-hours')?.value || '',
             
-            // 🌍 INTERNATIONAL ADDRESS OBJECT
             address: {
                 street: form.querySelector('#edit-address-street')?.value || '',
                 city: form.querySelector('#edit-address-city')?.value || '',
@@ -997,7 +930,6 @@ class CompanyProfileManager {
             }
         };
 
-        console.log('📋 Collected form data:', data);
         return data;
     }
 
@@ -1006,11 +938,9 @@ class CompanyProfileManager {
      */
     setFormStatus(status, message) {
         // You can implement a status indicator UI here if needed
-        console.log(`📝 Form status: ${status} - ${message}`);
     }
 
     /* ========================================================================
-       👥 CONTACTS TAB - CONTACT MANAGEMENT
        ======================================================================== */
 
     /**
@@ -1022,7 +952,6 @@ class CompanyProfileManager {
             this.setupV2ContactsHandlers();
             console.log('� V2 contacts management initialized');
         } catch (error) {
-            console.error('❌ Error initializing contacts:', error);
             this.showNotification('Failed to initialize contacts section', 'error');
         }
     }
@@ -1031,12 +960,10 @@ class CompanyProfileManager {
      * Render v2 contacts section
      */
     renderV2ContactsSection() {
-        console.log('👥 Rendering v2 contacts section...');
         
         // Use contacts-list as per HTML structure
         const contactsList = document.getElementById('contacts-list');
         if (!contactsList) {
-            console.log('ℹ️ Contacts list not found - skipping contacts rendering');
             return;
         }
         
@@ -1136,14 +1063,12 @@ class CompanyProfileManager {
         }
         
         contactsList.innerHTML = contactsHTML;
-        console.log('✅ V2 contacts section rendered with', (hasOwner ? 1 : 0) + (hasContact ? 1 : 0), 'contact(s)');
     }
     
     /**
      * Edit existing contact
      */
     editContact(contactType) {
-        console.log(`📝 Editing ${contactType} contact`);
         
         const contactData = {
             type: contactType,
@@ -1159,20 +1084,15 @@ class CompanyProfileManager {
      * Setup v2 contacts event handlers
      */
     setupV2ContactsHandlers() {
-        console.log('👥 Setting up v2 contacts handlers...');
         
         const addContactBtn = document.getElementById('add-contact-btn');
         if (addContactBtn) {
             addContactBtn.addEventListener('click', () => {
-                console.log('📞 Add Contact button clicked');
                 this.showContactModal();
             });
-            console.log('✅ Add Contact button handler attached');
         } else {
-            console.warn('⚠️ Add Contact button not found in DOM');
         }
         
-        console.log('✅ V2 contacts handlers setup complete');
     }
     
     /**
@@ -1276,7 +1196,6 @@ class CompanyProfileManager {
             this.saveContact(isEdit);
         });
         
-        console.log(`✅ Contact modal displayed (${isEdit ? 'edit' : 'add'} mode)`);
     }
     
     /**
@@ -1302,7 +1221,6 @@ class CompanyProfileManager {
             return;
         }
         
-        console.log('💾 Saving contact...', { contactType, name, email, phone });
         
         try {
             // Prepare update data based on contact type
@@ -1332,7 +1250,6 @@ class CompanyProfileManager {
             }
             
             const result = await response.json();
-            console.log('✅ Contact saved successfully:', result);
             
             // Update local data
             Object.assign(this.currentData, updateData);
@@ -1350,22 +1267,16 @@ class CompanyProfileManager {
             );
             
         } catch (error) {
-            console.error('❌ Error saving contact:', error);
             this.showNotification('Failed to save contact. Please try again.', 'error');
         }
     }
 
     /* ========================================================================
-       ⚙️ CONFIGURATION TAB - SETTINGS
        ========================================================================
        
        WORLD-CLASS CONFIGURATION MANAGEMENT SYSTEM
        
        This section handles all company configuration settings including:
-       - 🔐 Twilio Credentials (Account SID, Auth Token, API Keys)
-       - 📞 Phone Numbers Management (Add, Remove, Set Primary)
-       - 🚨 Account Status Control (Active, Call Forward, Suspended)
-       - 🔗 Webhook URLs & Integration Settings
        
        ARCHITECTURE:
        - Modular function design for maintainability
@@ -1390,17 +1301,14 @@ class CompanyProfileManager {
      */
     populateConfigTab() {
         try {
-            console.log('⚙️ Populating Configuration tab...');
             
             if (!this.currentData) {
-                console.log('⚠️ No company data available for Configuration tab');
                 return;
             }
 
             // Create modern configuration interface
             this.createConfigurationInterface();
         } catch (error) {
-            console.error('❌ Error populating Configuration tab:', error);
             this.showNotification('Error loading configuration data', 'error');
         }
     }
@@ -1421,7 +1329,6 @@ class CompanyProfileManager {
         const twilioApiKeyInput = document.getElementById('twilioApiKey');
         const twilioApiSecretInput = document.getElementById('twilioApiSecret');
         
-        console.log('🔧 Loading Twilio config:', {
             twilioConfig: this.currentData.twilioConfig,
             flatSid: this.currentData.twilioAccountSid,
             flatToken: this.currentData.twilioAuthToken,
@@ -1431,7 +1338,6 @@ class CompanyProfileManager {
         // Check nested structure first, then flat structure for backward compatibility
         const twilioConfig = this.currentData.twilioConfig || {};
         
-        console.log('🔧 DEBUG: About to process Auth Token:', {
             twilioTokenInput: !!twilioTokenInput,
             authToken: twilioConfig.authToken,
             flatAuthToken: this.currentData.twilioAuthToken,
@@ -1440,7 +1346,6 @@ class CompanyProfileManager {
         
         if (twilioSidInput && (twilioConfig.accountSid || this.currentData.twilioAccountSid)) {
             twilioSidInput.value = twilioConfig.accountSid || this.currentData.twilioAccountSid;
-            console.log('🔧 Loaded Twilio SID:', twilioSidInput.value);
         }
         
         if (twilioTokenInput && (twilioConfig.authToken || this.currentData.twilioAuthToken)) {
@@ -1449,18 +1354,15 @@ class CompanyProfileManager {
             if (savedToken && savedToken.length > 4) {
                 twilioTokenInput.value = '••••••••••••' + savedToken.slice(-4);
                 twilioTokenInput.dataset.hasToken = 'true';
-                console.log('🔧 Loaded Twilio Auth Token (showing last 4):', '••••••••••••' + savedToken.slice(-4));
             } else {
                 twilioTokenInput.value = '••••••••••••••••';
                 twilioTokenInput.dataset.hasToken = 'true';
-                console.log('🔧 Loaded Twilio Auth Token (fully masked - short token)');
             }
         } else {
             if (twilioTokenInput) {
                 twilioTokenInput.value = '';
                 twilioTokenInput.placeholder = 'Enter Auth Token';
                 twilioTokenInput.dataset.hasToken = 'false';
-                console.log('🔧 No Twilio Auth Token found - field empty');
             }
         }
         
@@ -1470,18 +1372,15 @@ class CompanyProfileManager {
             if (savedApiKey && savedApiKey.length > 4) {
                 twilioApiKeyInput.value = '••••••••••••' + savedApiKey.slice(-4);
                 twilioApiKeyInput.dataset.hasApiKey = 'true';
-                console.log('🔧 Loaded Twilio API Key (showing last 4):', '••••••••••••' + savedApiKey.slice(-4));
             } else {
                 twilioApiKeyInput.value = '••••••••••••••••';
                 twilioApiKeyInput.dataset.hasApiKey = 'true';
-                console.log('🔧 Loaded Twilio API Key (fully masked - short key)');
             }
         } else {
             if (twilioApiKeyInput) {
                 twilioApiKeyInput.value = '';
                 twilioApiKeyInput.placeholder = 'Enter API Key';
                 twilioApiKeyInput.dataset.hasApiKey = 'false';
-                console.log('🔧 No Twilio API Key found - field empty');
             }
         }
         
@@ -1491,18 +1390,15 @@ class CompanyProfileManager {
             if (savedSecret && savedSecret.length > 4) {
                 twilioApiSecretInput.value = '••••••••••••' + savedSecret.slice(-4);
                 twilioApiSecretInput.dataset.hasSecret = 'true';
-                console.log('🔧 Loaded Twilio API Secret (showing last 4):', '••••••••••••' + savedSecret.slice(-4));
             } else {
                 twilioApiSecretInput.value = '••••••••••••••••';
                 twilioApiSecretInput.dataset.hasSecret = 'true';
-                console.log('🔧 Loaded Twilio API Secret (fully masked - short secret)');
             }
         } else {
             if (twilioApiSecretInput) {
                 twilioApiSecretInput.value = '';
                 twilioApiSecretInput.placeholder = 'Enter API Secret';
                 twilioApiSecretInput.dataset.hasSecret = 'false';
-                console.log('🔧 No Twilio API Secret found - field empty');
             }
         }
 
@@ -1515,11 +1411,9 @@ class CompanyProfileManager {
         // Setup configuration form listeners
         this.setupConfigFormListeners();
         
-        console.log('✅ Configuration interface ready');
     }
 
     /* ========================================================================
-       📞 PHONE NUMBERS MANAGEMENT
        ========================================================================
        
        Comprehensive phone number management system for Twilio integration.
@@ -1551,7 +1445,6 @@ class CompanyProfileManager {
      */
     setupPhoneNumbersManagement() {
         try {
-            console.log('📞 Setting up phone numbers management...');
             
             const addPhoneBtn = document.getElementById('addPhoneNumberBtn');
             if (addPhoneBtn) {
@@ -1562,9 +1455,7 @@ class CompanyProfileManager {
                 newAddPhoneBtn.addEventListener('click', () => {
                     this.addPhoneNumber();
                 });
-                console.log('📞 Add phone button listener attached');
             } else {
-                console.warn('📞 Add phone button not found');
             }
 
             // Load existing phone numbers or create default one
@@ -1573,9 +1464,7 @@ class CompanyProfileManager {
             // Setup event listeners for existing phone number items
             this.setupPhoneNumberEventListeners();
             
-            console.log('✅ Phone numbers management setup complete');
         } catch (error) {
-            console.error('❌ Error setting up phone numbers management:', error);
             // Continue execution but log the error
         }
     }
@@ -1585,7 +1474,6 @@ class CompanyProfileManager {
      */
     setupPhoneNumberEventListeners() {
         const phoneNumberItems = document.querySelectorAll('.phone-number-item');
-        console.log(`📞 Setting up event listeners for ${phoneNumberItems.length} phone number items`);
         
         phoneNumberItems.forEach((item, index) => {
             this.setupSinglePhoneNumberListeners(item);
@@ -1609,7 +1497,6 @@ class CompanyProfileManager {
     renderPhoneNumbers() {
         const phoneNumbersList = document.getElementById('phoneNumbersList');
         if (!phoneNumbersList) {
-            console.warn('📞 Phone numbers list element not found');
             return;
         }
 
@@ -1620,11 +1507,9 @@ class CompanyProfileManager {
                           this.currentData?.phoneNumbers || [];
         }
         
-        console.log('📞 Rendering phone numbers:', phoneNumbers);
 
         // If no phone numbers exist, add a default empty one
         if (phoneNumbers.length === 0) {
-            console.log('📞 No phone numbers found, adding default empty one');
             this.addPhoneNumber();
             return;
         }
@@ -1634,7 +1519,6 @@ class CompanyProfileManager {
 
         // Render each phone number
         phoneNumbers.forEach((phone, index) => {
-            console.log(`📞 Adding phone number ${index + 1}:`, phone);
             this.addPhoneNumberWithData(phone, index === 0);
         });
     }
@@ -1691,7 +1575,6 @@ class CompanyProfileManager {
             newDeleteBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('📞 Delete button clicked');
                 this.removePhoneNumber(item);
             });
         }
@@ -1705,7 +1588,6 @@ class CompanyProfileManager {
             newSetPrimaryBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('📞 Set primary button clicked');
                 this.setPrimaryNumber(item);
             });
         }
@@ -1739,7 +1621,6 @@ class CompanyProfileManager {
         this.setupSinglePhoneNumberListeners(addedItem);
         
         this.setUnsavedChanges(true);
-        console.log('📞 New phone number field added');
     }
 
     /**
@@ -1759,7 +1640,6 @@ class CompanyProfileManager {
         
         phoneItem.remove();
         this.setUnsavedChanges(true);
-        console.log('📞 Phone number field removed');
     }
 
     /**
@@ -1790,7 +1670,6 @@ class CompanyProfileManager {
         }
         
         this.setUnsavedChanges(true);
-        console.log('📞 Primary phone number updated');
     }
 
     /**
@@ -1799,7 +1678,6 @@ class CompanyProfileManager {
     setupConfigFormListeners() {
         const configForm = document.getElementById('config-settings-form');
         if (!configForm) {
-            console.warn('❌ Config form not found');
             return;
         }
 
@@ -1828,14 +1706,12 @@ class CompanyProfileManager {
         const toggleWebhookBtn = document.getElementById('toggleWebhookInfo');
         const webhookPanel = document.getElementById('webhookInfoPanel');
         
-        console.log('🔧 Setting up webhook toggle...', { 
             toggleWebhookBtn: !!toggleWebhookBtn, 
             webhookPanel: !!webhookPanel,
             companyId: this.companyId 
         });
         
         if (!toggleWebhookBtn || !webhookPanel) {
-            console.warn('❌ Webhook toggle elements not found:', { 
                 toggleWebhookBtn: !!toggleWebhookBtn, 
                 webhookPanel: !!webhookPanel 
             });
@@ -1843,13 +1719,11 @@ class CompanyProfileManager {
         }
 
         if (!this.companyId) {
-            console.warn('❌ Company ID not available for webhook setup');
             return;
         }
 
         // Check if already set up (avoid duplicate event listeners)
         if (toggleWebhookBtn.dataset.webhookSetup === 'true') {
-            console.log('✅ Webhook toggle already set up');
             return;
         }
 
@@ -1859,20 +1733,16 @@ class CompanyProfileManager {
         // Add the event listener
         toggleWebhookBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            console.log('🔘 Webhook toggle clicked for company:', this.companyId);
             
             const currentPanel = document.getElementById('webhookInfoPanel');
             if (!currentPanel) {
-                console.error('❌ Webhook panel disappeared');
                 return;
             }
             
             const isHidden = currentPanel.classList.contains('hidden');
-            console.log('📊 Panel hidden state:', isHidden);
             
             if (isHidden) {
                 // Generate dynamic webhook content with companyId
-                console.log('🔧 Generating webhook panel for company:', this.companyId);
                 this.generateWebhookPanel();
                 currentPanel.classList.remove('hidden');
                 toggleWebhookBtn.innerHTML = '<i class="fas fa-eye-slash mr-1"></i>Hide Webhook URLs';
@@ -1882,7 +1752,6 @@ class CompanyProfileManager {
             }
         });
         
-        console.log('✅ Webhook toggle setup complete');
     }
 
     /**
@@ -1890,7 +1759,6 @@ class CompanyProfileManager {
      */
     async saveConfigurationChanges() {
         try {
-            console.log('💾 Saving configuration changes...');
             
             // Show loading state
             this.showLoading(true);
@@ -1901,13 +1769,11 @@ class CompanyProfileManager {
             
             // Add other tabs' data if they exist
             this.collectNotesData(configData);
-            // 🗑️ DELETED: this.collectCalendarData(configData) - Calendar tab destroyed
             this.collectAISettingsData(configData);
             this.collectVoiceData(configData);
             this.collectPersonalityData(configData);
             this.collectAgentLogicData(configData);
             
-            console.log('📤 Sending configuration data:', configData);
             
             // Send PATCH request
             const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}`, {
@@ -1927,11 +1793,9 @@ class CompanyProfileManager {
             this.currentData = updatedCompany;
             this.setUnsavedChanges(false);
             
-            console.log('✅ Configuration saved successfully');
             this.showNotification('Configuration saved successfully!', 'success');
             
         } catch (error) {
-            console.error('❌ Error saving configuration:', error);
             this.showNotification('Failed to save configuration', 'error');
         } finally {
             this.showLoading(false);
@@ -2051,7 +1915,6 @@ class CompanyProfileManager {
         // Setup search and filtering
         this.setupNotesSearch();
         
-        console.log('✅ V2 notes system initialized with', this.notes.length, 'notes');
     }
 
     /**
@@ -2091,7 +1954,6 @@ class CompanyProfileManager {
         // Transform the basic notes HTML into v2-grade interface
         const notesContent = document.getElementById('notes-content');
         if (!notesContent) {
-            console.error('❌ Notes content container not found');
             return;
         }
 
@@ -2101,7 +1963,6 @@ class CompanyProfileManager {
         // Setup event listeners for advanced features
         this.setupNotesEventListeners();
         
-        console.log('✅ V2 notes interface created');
     }
 
     /**
@@ -2368,7 +2229,6 @@ class CompanyProfileManager {
         const emptyState = document.getElementById('notes-empty-state');
         
         if (!container) {
-            console.error('❌ V2 notes container not found');
             return;
         }
 
@@ -2693,7 +2553,6 @@ class CompanyProfileManager {
         this.setUnsavedChanges(true);
         this.showNotification('Note updated successfully!', 'success');
         
-        console.log('💾 Note saved:', note.title);
     }
 
     /**
@@ -2706,7 +2565,6 @@ class CompanyProfileManager {
         note.isEditing = false;
         this.renderV2Notes();
         
-        console.log('❌ Cancelled editing note:', note.title);
     }
 
     /**
@@ -2756,7 +2614,6 @@ class CompanyProfileManager {
      * GOLD STANDARD: Setup notes search and filtering functionality
      */
     setupNotesSearch() {
-        console.log('🔍 Setting up notes search functionality...');
         
         // Initialize search input if it exists
         const searchInput = document.getElementById('notes-search');
@@ -2767,7 +2624,6 @@ class CompanyProfileManager {
             // Set placeholder
             searchInput.placeholder = 'Search notes by title or content...';
             
-            console.log('✅ Notes search input initialized');
         }
 
         // Initialize category filter if it exists
@@ -2775,7 +2631,6 @@ class CompanyProfileManager {
         if (categoryFilter) {
             // Set default to 'all'
             categoryFilter.value = 'all';
-            console.log('✅ Notes category filter initialized');
         }
 
         // Initialize sort selector if it exists
@@ -2783,10 +2638,8 @@ class CompanyProfileManager {
         if (sortSelect) {
             // Set default sort
             sortSelect.value = 'updated-desc';
-            console.log('✅ Notes sort selector initialized');
         }
 
-        console.log('✅ Notes search setup complete');
     }
 
     /**
@@ -2824,7 +2677,6 @@ class CompanyProfileManager {
         // Re-render with filtered notes
         this.renderFilteredNotes(sortedNotes);
 
-        console.log(`🔍 Filtered notes: ${filteredNotes.length} of ${this.notes.length} notes shown`);
     }
 
     /**
@@ -2948,16 +2800,13 @@ class CompanyProfileManager {
                     saved.classList.remove('hidden');
                     setTimeout(() => saved.classList.add('hidden'), 3000);
                 }
-                console.log('✅ ClientsVia personality settings saved successfully');
                 this.showNotification('ClientsVia personality settings saved successfully', 'success');
             } else if (response.status === 404) {
-                console.warn('⚠️ ClientsVia personality settings endpoint not implemented yet');
                 this.showNotification('ClientsVia personality settings endpoint not implemented yet', 'warning');
             } else {
                 throw new Error(`HTTP ${response.status}: Failed to save personality settings`);
             }
         } catch (error) {
-            console.error('❌ Failed to save ClientsVia personality settings:', error);
             this.showNotification(`Failed to save ClientsVia personality settings: ${error.message}`, 'error');
         }
     }
@@ -2969,9 +2818,7 @@ class CompanyProfileManager {
         try {
             // Use existing personality save logic since templates are part of personality responses
             await this.savePersonalityResponses();
-            console.log('✅ Response templates saved via personality system');
         } catch (error) {
-            console.error('❌ Failed to save response templates:', error);
             this.showNotification(`Failed to save response templates: ${error.message}`, 'error');
         }
     }
@@ -2980,13 +2827,11 @@ class CompanyProfileManager {
      * Save learning settings (placeholder - function called from HTML but not implemented)
      */
     async saveLearningSettings() {
-        console.warn('⚠️ saveLearningSettings() called but not implemented - using general save');
         try {
             // Fall back to saving all changes
             await this.saveAllChanges();
             this.showNotification('Settings saved successfully', 'success');
         } catch (error) {
-            console.error('❌ Failed to save learning settings:', error);
             this.showNotification(`Failed to save settings: ${error.message}`, 'error');
         }
     }
@@ -3022,7 +2867,6 @@ class CompanyProfileManager {
             });
         }
 
-        console.log('✅ Legacy onclick handlers migrated to modern event listeners');
     }
 
     /**
@@ -3039,27 +2883,22 @@ class CompanyProfileManager {
     generateWebhookPanel() {
         const webhookPanel = document.getElementById('webhookInfoPanel');
         if (!webhookPanel) {
-            console.error('❌ Webhook panel not found');
             return;
         }
         
         if (!this.companyId) {
-            console.error('❌ Company ID not available');
             webhookPanel.innerHTML = `
                 <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p class="text-red-800 text-sm">⚠️ Company ID not found. Please refresh the page.</p>
                 </div>
             `;
             return;
         }
 
         const baseUrl = this.apiBaseUrl || 'https://clientsvia-backend.onrender.com';
-        console.log('🔧 Generating webhooks for company:', this.companyId, 'Base URL:', baseUrl);
         
         // Define webhooks - platform uses phone number lookup to find company
         const webhooks = [
             {
-                title: '🎤 Voice Webhook (Recommended)',
                 url: `${baseUrl}/api/twilio/voice`,
                 description: 'Automatically finds company by phone number - Use this URL in Twilio Console',
                 primary: true,
@@ -3067,7 +2906,6 @@ class CompanyProfileManager {
                 note: 'This endpoint looks up your company by the phone number that was called'
             },
             {
-                title: '🎤 Voice Webhook (Company-Specific)',
                 url: `${baseUrl}/api/twilio/voice/${this.companyId}`,
                 description: 'Alternative: Direct company ID routing (bypasses phone lookup)',
                 primary: false,
@@ -3075,21 +2913,18 @@ class CompanyProfileManager {
                 note: 'Only use if you need to bypass phone number lookup'
             },
             {
-                title: '🗣️ Speech Recognition',
                 url: `${baseUrl}/api/twilio/handle-speech?companyId=${this.companyId}`,
                 description: 'Used internally for AI speech processing',
                 primary: false,
                 internal: true
             },
             {
-                title: '📞 Partial Speech',
                 url: `${baseUrl}/api/twilio/partial-speech?companyId=${this.companyId}`,
                 description: 'For real-time speech processing',
                 primary: false,
                 internal: true
             },
             {
-                title: '⏱️ Speech Timing Test',
                 url: `${baseUrl}/api/twilio/speech-timing-test?companyId=${this.companyId}`,
                 description: 'For performance testing and optimization',
                 primary: false,
@@ -3173,7 +3008,6 @@ class CompanyProfileManager {
      */
     setupWebhookCopyButtons() {
         const copyButtons = document.querySelectorAll('.copy-webhook-btn');
-        console.log(`🔧 Setting up ${copyButtons.length} webhook copy buttons`);
         
         copyButtons.forEach(btn => {
             btn.addEventListener('click', async (e) => {
@@ -3195,31 +3029,23 @@ class CompanyProfileManager {
                             btn.className = originalClasses;
                         }, 2000);
                         
-                        console.log(`✅ Copied webhook URL: ${webhookUrl.substring(0, 50)}...`);
                     } catch (err) {
-                        console.error('❌ Failed to copy webhook URL:', err);
                         this.showNotification('Failed to copy webhook URL', 'error');
                     }
                 }
             });
         });
         
-        console.log('✅ Webhook copy buttons setup complete');
     }
 
     /* ========================================================================
-       🚨 ACCOUNT STATUS CONTROL - Critical for billing/service management
        ========================================================================
        
-       🚨 ACCOUNT STATUS CONTROL SYSTEM
        ========================================================================
        
        Enterprise-grade account status management for billing and service control.
        
        STATUS TYPES:
-       - 🟢 ACTIVE: AI agent handles all calls normally
-       - 🟡 CALL FORWARD: Calls forwarded to external number with custom message
-       - 🔴 SUSPENDED: All incoming calls blocked (billing/maintenance)
        
        FEATURES:
        - Real-time status updates with Redis cache clearing
@@ -3253,7 +3079,6 @@ class CompanyProfileManager {
      * and sets up event listeners for status changes and save actions.
      */
     setupAccountStatusControl() {
-        console.log('🚨 Setting up Account Status Control...');
         
         try {
             // Load current status
@@ -3275,9 +3100,7 @@ class CompanyProfileManager {
                 });
             }
             
-            console.log('✅ Account Status Control setup complete');
         } catch (error) {
-            console.error('❌ Error setting up Account Status Control:', error);
         }
     }
 
@@ -3285,12 +3108,10 @@ class CompanyProfileManager {
      * Load and display current account status
      */
     loadAccountStatus() {
-        console.log('📊 Loading account status...');
         
         const accountStatus = this.currentData?.accountStatus || {};
         const status = accountStatus.status || 'active';
         
-        console.log('📊 Current account status:', status);
         
         // Set radio button
         const radioBtn = document.querySelector(`input[name="accountStatus"][value="${status}"]`);
@@ -3344,7 +3165,6 @@ class CompanyProfileManager {
      * Handle status change (show/hide call forward and suspended sections)
      */
     handleStatusChange(status, skipSave = false) {
-        console.log(`🔄 Status changed to: ${status}`);
         
         const callForwardSection = document.getElementById('call-forward-section');
         const suspendedSection = document.getElementById('suspended-section');
@@ -3368,7 +3188,6 @@ class CompanyProfileManager {
      * Save account status
      */
     async saveAccountStatus() {
-        console.log('💾 Saving account status...');
         
         const selectedStatus = document.querySelector('input[name="accountStatus"]:checked');
         if (!selectedStatus) {
@@ -3397,7 +3216,6 @@ class CompanyProfileManager {
             changedBy: this.currentData?.ownerEmail || this.currentData?.contactEmail || 'Admin'
         };
         
-        console.log('📤 Sending account status update:', updateData);
         
         try {
             const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}/account-status`, {
@@ -3415,7 +3233,6 @@ class CompanyProfileManager {
             }
             
             const result = await response.json();
-            console.log('✅ Account status updated:', result);
             
             // Update current data
             if (!this.currentData.accountStatus) {
@@ -3439,7 +3256,6 @@ class CompanyProfileManager {
             this.showNotification(message, 'success');
             
         } catch (error) {
-            console.error('❌ Error saving account status:', error);
             this.showNotification(`Failed to update account status: ${error.message}`, 'error');
         }
     }
@@ -3453,15 +3269,12 @@ class CompanyProfileManager {
         
         const statusConfig = {
             active: {
-                text: '🟢 ACTIVE',
                 classes: 'bg-green-100 text-green-800 border-2 border-green-300'
             },
             call_forward: {
-                text: '🟡 CALL FORWARD',
                 classes: 'bg-yellow-100 text-yellow-800 border-2 border-yellow-300'
             },
             suspended: {
-                text: '🔴 SUSPENDED',
                 classes: 'bg-red-100 text-red-800 border-2 border-red-300'
             }
         };
@@ -3498,9 +3311,6 @@ class CompanyProfileManager {
             });
             
             const statusIcon = {
-                active: '🟢',
-                call_forward: '🟡',
-                suspended: '🔴'
             }[entry.status] || '⚪';
             
             const statusName = this.getStatusDisplayName(entry.status);
@@ -3565,7 +3375,6 @@ class CompanyProfileManager {
      * Delete a status history entry
      */
     async deleteStatusHistoryEntry(index) {
-        console.log('🗑️ Deleting status history entry at index:', index);
         
         if (!confirm('Are you sure you want to delete this status history entry? This action cannot be undone.')) {
             return;
@@ -3590,14 +3399,12 @@ class CompanyProfileManager {
             }
             
             const result = await response.json();
-            console.log('✅ History entry deleted:', result);
             
             // Force reload company data to refresh the history list
             await this.loadCompanyData(true);
             
             this.showNotification('Status history entry deleted successfully', 'success');
         } catch (error) {
-            console.error('❌ Error deleting history entry:', error);
             this.showNotification('Failed to delete history entry', 'error');
         }
     }
@@ -3607,14 +3414,12 @@ class CompanyProfileManager {
      */
     
     /* ========================================================================
-       🗂️ TAB MANAGEMENT SYSTEM
        ======================================================================== */
 
     /**
      * Initialize tab system
      */
     initializeTabs() {
-        console.log('📑 Initializing tabs system...');
         
         // Setup tab switching logic if not already handled by HTML
         const tabButtons = document.querySelectorAll('[data-tab]');
@@ -3630,7 +3435,6 @@ class CompanyProfileManager {
         // Set initial tab to overview
         this.switchTab('overview');
         
-        console.log('✅ Tabs system initialized');
     }
     
     /**
@@ -3671,31 +3475,21 @@ class CompanyProfileManager {
             }
         }
         
-        console.log(`📑 Switched to tab: ${tabName}`);
         
-        // ✅ PRODUCTION: Knowledge Sources integrated into AI Agent Logic Tab 2
-        // 🗑️ CLEAN SWEEP: Legacy knowledge-sources tab handling removed
     }
 
     /**
-     * ✅ PRODUCTION: V2 Company Q&A Manager Integration
-     * 🚀 PERFORMANCE: Embedded directly in AI Agent Logic Tab 2
-     * 🛡️ SECURITY: Multi-tenant isolation with companyId validation
      * ⚡ REAL-TIME: Live AI agent testing and confidence scoring
      */
     initializeEmbeddedCompanyQnAManager() {
-        console.log('🚀 PRODUCTION: Initializing embedded Company Q&A Manager in AI Agent Logic Tab 2');
         
         // Initialize the embedded interface
         this.loadCompanyQnAEntries();
         this.setupQnAEventListeners();
         this.initializeRealTimeTestingFeatures();
         
-        console.log('✅ V2 Company Q&A Manager ready - integrated with AI Agent Logic');
     }
 
-    // ✅ PRODUCTION: Legacy knowledge sub-tabs removed
-    // 🗑️ CLEAN SWEEP: setupKnowledgeSubTabs() eliminated - functionality integrated into AI Agent Logic Tab 2
 
     // Legacy sub-tab system completely removed - using modern AI Agent Logic 4-tab system
     // Old switchKnowledgeSubTab() function eliminated - functionality moved to new system
@@ -3705,12 +3499,10 @@ class CompanyProfileManager {
      */
     initializeCompanyQnAManager() {
         if (this.companyQnAManager) {
-            console.log('📚 Company Q&A Manager already initialized');
             return;
         }
 
         try {
-            console.log('🚀 Initializing Company Q&A Manager...');
             
             // Create a simple API client for the CompanyQnAManager
             const apiClient = {
@@ -3796,14 +3588,11 @@ class CompanyProfileManager {
                     this.companyQnAManager.setCompanyId(this.companyId);
                 }
                 
-                console.log('✅ Company Q&A Manager initialized successfully');
             } else {
-                console.error('❌ CompanyQnAManager class not found. Make sure the script is loaded.');
                 this.showNotification('Failed to load Company Q&A Manager', 'error');
             }
             
         } catch (error) {
-            console.error('❌ Failed to initialize Company Q&A Manager:', error);
             this.showNotification('Failed to initialize Company Q&A Manager', 'error');
         }
     }
@@ -3813,7 +3602,6 @@ class CompanyProfileManager {
      */
     updateHeaderElements() {
         if (!this.currentData) {
-            console.log('⚠️ No data available for header update');
             return;
         }
         
@@ -3835,23 +3623,18 @@ class CompanyProfileManager {
                 companyIdElement.textContent = `ID: ${this.companyId}`;
             }
             
-            console.log('✅ Header elements updated');
         } catch (error) {
-            console.error('❌ Error updating header elements:', error);
         }
     }
     
     // ============================================================================
-    // 🏗️ MISSING POPULATE FUNCTIONS - FIXING LOOSE HANGING CODES
     // ============================================================================
     
-    // 🗑️ DELETED: populateCalendarSettingsTab() - Calendar tab destroyed
 
     /**
      * Populate AI Settings tab
      */
     populateAISettingsTab() {
-        console.log('🤖 Populating AI Settings tab...');
         
         try {
             if (this.currentData) {
@@ -3865,9 +3648,7 @@ class CompanyProfileManager {
                 // Additional AI settings population can be added here
             }
             
-            console.log('✅ AI Settings tab populated');
         } catch (error) {
-            console.error('❌ Error populating AI Settings tab:', error);
         }
     }
 
@@ -3875,7 +3656,6 @@ class CompanyProfileManager {
      * Populate Voice tab (AI Voice Settings)
      */
     populateVoiceTab() {
-        console.log('🎤 Populating Voice tab...');
         
         try {
             if (this.currentData) {
@@ -3889,9 +3669,7 @@ class CompanyProfileManager {
                 // Voice loading and preview is handled by existing scripts
             }
             
-            console.log('✅ Voice tab populated');
         } catch (error) {
-            console.error('❌ Error populating Voice tab:', error);
         }
     }
 
@@ -3899,14 +3677,11 @@ class CompanyProfileManager {
      * Populate Personality tab (Agent Personality Responses)
      */
     populatePersonalityTab() {
-        console.log('🎭 Populating Personality tab...');
         
         try {
             // Personality responses are handled by embedded HTML forms
             // No specific population needed as forms are already in HTML
-            console.log('✅ Personality tab populated');
         } catch (error) {
-            console.error('❌ Error populating Personality tab:', error);
         }
     }
 
@@ -3914,20 +3689,16 @@ class CompanyProfileManager {
      * Populate Agent Logic tab (AI Agent Logic)
      */
     populateAgentLogicTab() {
-        console.log('🧠 Populating Agent Logic tab...');
         
         try {
             // AI Agent Logic settings are handled by embedded HTML forms and JavaScript
             // The tab contains complex intelligence and memory systems
             // No specific population needed as forms are already in HTML
-            console.log('✅ Agent Logic tab populated');
         } catch (error) {
-            console.error('❌ Error populating Agent Logic tab:', error);
         }
     }
     
     // ============================================================================
-    // 🔧 UTILITY FUNCTIONS
     // ============================================================================
 
     /**
@@ -3972,7 +3743,6 @@ class CompanyProfileManager {
             }
         });
         
-        console.log(`🔄 Loading indicator ${show ? 'shown' : 'hidden'}`);
     }
     
     /**
@@ -4002,10 +3772,6 @@ class CompanyProfileManager {
         notification.className = `${baseClasses} ${typeClasses[type] || typeClasses.info}`;
         
         const icons = {
-            success: '✅',
-            error: '❌', 
-            warning: '⚠️',
-            info: 'ℹ️'
         };
         
         notification.innerHTML = `
@@ -4028,11 +3794,9 @@ class CompanyProfileManager {
             }
         }, 5000);
         
-        console.log(`📢 Notification (${type}): ${message}`);
     }
 
     /* ========================================================================
-       🔧 UTILITY FUNCTIONS
        ======================================================================== */
 
     /**
@@ -4069,12 +3833,10 @@ class CompanyProfileManager {
 }
 
 /* ============================================================================
-   🌐 GLOBAL FUNCTION EXPOSURE FOR HTML SCRIPT COMPATIBILITY
    ============================================================================ */
 
 // Expose fetchCompanyData function globally for HTML script calls
 window.fetchCompanyData = async function() {
-    console.log('🌐 Global fetchCompanyData called');
     
     // Wait for CompanyProfileManager to be available
     const waitForManager = () => {
@@ -4093,14 +3855,11 @@ window.fetchCompanyData = async function() {
     try {
         await waitForManager();
         await window.companyProfileManager.loadCompanyData();
-        console.log('✅ Global fetchCompanyData completed');
     } catch (error) {
-        console.error('❌ Global fetchCompanyData failed:', error);
     }
 };
 
 /* ============================================================================
-   🚀 INITIALIZATION & EXPORTS
    ============================================================================ */
 
 // Global instance
@@ -4117,12 +3876,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         await companyProfileManager.init();
         
         // Initialize tab managers
-        console.log('🔧 Initializing tab managers...');
         // ... other inits like KnowledgePriorities if present
         
         // Debug functions...
     } catch (error) {
-        console.error('❌ Failed to initialize:', error);
     }
 });
 
