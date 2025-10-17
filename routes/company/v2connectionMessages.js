@@ -95,8 +95,20 @@ router.get('/:companyId/connection-messages/config', async (req, res) => {
             company.aiAgentLogic = {};
         }
         if (!company.aiAgentLogic.connectionMessages) {
-            company.aiAgentLogic.connectionMessages = getDefaultConfig();
-            await company.save();
+            const defaultConfig = getDefaultConfig();
+            
+            // 🔧 FIX: Use targeted update to avoid full document validation
+            await Company.findByIdAndUpdate(
+                req.params.companyId,
+                {
+                    $set: {
+                        'aiAgentLogic.connectionMessages': defaultConfig
+                    }
+                },
+                { runValidators: false }
+            );
+            
+            company.aiAgentLogic.connectionMessages = defaultConfig;
         }
 
         res.json(company.aiAgentLogic.connectionMessages);
@@ -211,7 +223,26 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
 
         company.aiAgentLogic.connectionMessages.lastUpdated = new Date();
 
-        await company.save();
+        // 🔧 FIX: Use targeted update to avoid full document validation
+        // This bypasses validation of corrupt data in OTHER fields
+        console.log(`[CONNECTION MESSAGES] 🔧 Using targeted update to bypass full validation`);
+        
+        const updatedCompany = await Company.findByIdAndUpdate(
+            req.params.companyId,
+            {
+                $set: {
+                    'aiAgentLogic.connectionMessages': company.aiAgentLogic.connectionMessages
+                }
+            },
+            { new: true, runValidators: false } // Skip full validation
+        );
+        
+        if (!updatedCompany) {
+            console.error(`[CONNECTION MESSAGES] ❌ Company not found during update`);
+            return res.status(404).json({
+                error: 'Company not found'
+            });
+        }
 
         // Clear cache
         try {
@@ -226,7 +257,7 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
         res.json({
             success: true,
             message: 'Connection messages updated successfully',
-            config: company.aiAgentLogic.connectionMessages
+            config: updatedCompany.aiAgentLogic.connectionMessages
         });
 
     } catch (error) {

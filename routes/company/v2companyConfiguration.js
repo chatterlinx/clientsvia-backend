@@ -49,7 +49,8 @@ router.get('/:companyId/configuration', async (req, res) => {
     console.log(`[COMPANY CONFIG] GET /configuration for company: ${req.params.companyId}`);
     
     try {
-        const company = await Company.findById(req.params.companyId);
+        // 🔧 FIX: Use .lean() to bypass Mongoose validation of corrupt data
+        const company = await Company.findById(req.params.companyId).lean();
         
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });
