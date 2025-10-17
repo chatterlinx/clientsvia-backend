@@ -318,17 +318,20 @@ router.get('/companies', authenticateJWT, async (req, res) => {
 async function checkCompanyCache(req, res, next) {
     const { id } = req.params;
     const cacheKey = `company:${id}`;
+    console.log(`🔍 [CACHE] Checking cache for: ${cacheKey}`);
     try {
         const cachedData = await redisClient.get(cacheKey);
         if (cachedData) {
-            console.log(`CACHE HIT for ${cacheKey}`);
-            return res.status(200).json(JSON.parse(cachedData));
+            console.log(`✅ [CACHE] CACHE HIT for ${cacheKey} - returning cached data`);
+            const data = JSON.parse(cachedData);
+            console.log(`📋 [CACHE] Cached data companyName: ${data.companyName}, businessPhone: ${data.businessPhone}`);
+            return res.status(200).json(data);
         } else {
-            console.log(`CACHE MISS for ${cacheKey}`);
+            console.log(`❌ [CACHE] CACHE MISS for ${cacheKey} - loading from DB`);
             next();
         }
     } catch (error) {
-        console.error('Redis error:', error);
+        console.error('❌ [CACHE] Redis error:', error);
         next();
     }
 }
@@ -339,13 +342,16 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
         return res.status(400).json({ message: 'Invalid company ID format' });
     }
     try {
+        console.log(`📊 [DB] Loading company from database: ${companyId}`);
         // Explicitly include aiAgentLogic field in the query
         const company = await Company.findById(companyId).lean();
         if (!company) return res.status(404).json({ message: 'Company not found' });
 
+        console.log(`✅ [DB] Company loaded: ${company.companyName}, businessPhone: ${company.businessPhone}`);
+
         const cacheKey = `company:${companyId}`;
         await redisClient.setEx(cacheKey, 3600, JSON.stringify(company));
-        console.log(`SAVED to cache: ${cacheKey}`);
+        console.log(`✅ [CACHE] SAVED to cache: ${cacheKey} (TTL: 3600s)`);
         
         // Debug: Log if aiAgentLogic exists
         console.log(`🔍 DEBUG: aiAgentLogic exists in response: ${!!company.aiAgentLogic}`);
@@ -563,8 +569,8 @@ router.patch('/company/:id', async (req, res) => {
 
         // 🚀 V2 OPTIMIZATION: Clear both company and AI config caches
         const cacheKey = `company:${companyId}`;
-        await redisClient.del(cacheKey);
-        console.log(`DELETED from cache: ${cacheKey}`);
+        const deletedCount = await redisClient.del(cacheKey);
+        console.log(`✅ [CACHE] DELETED from cache: ${cacheKey}, keys deleted: ${deletedCount}`);
         
         // Clear AI Agent Logic cache when aiAgentLogic is updated (includes keywords)
         if (req.body.aiAgentLogic) {
