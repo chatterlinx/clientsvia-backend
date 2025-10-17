@@ -518,11 +518,33 @@ class CompanyProfileManager {
 
     /* ========================================================================
        OVERVIEW TAB - Company Details & Editing
+       ========================================================================
+       
+       PURPOSE: Manage company profile editing with auto-save and validation
+       
+       PUBLIC METHODS:
+       - populateOverviewTab()       : Load company data into edit form
+       - collectOverviewFormData()   : Gather form data for save
+       - handleV2Input(event)        : Process input changes with validation
+       - performAutoSave()           : Auto-save form data to backend
+       
+       FEATURES:
+       - Real-time validation
+       - Auto-save with debounce (500ms)
+       - Visual feedback (typing/saving/error states)
+       - Phone/email/URL validation
+       - Character counters
+       - Accessibility support
+       
+       DATA FLOW:
+       1. User types → handleV2Input() → validation → state update
+       2. After 500ms idle → performAutoSave() → collectOverviewFormData()
+       3. Data sent to backend → visual feedback → state cleared
+       
        ======================================================================== */
 
     /**
-     * Populate Overview tab with v2-grade UX
-     * Features: Live validation, auto-save, accessibility, error recovery
+     * Populate Overview tab with company data
      */
     populateOverviewTab() {
         if (!this.currentData) {
@@ -1270,6 +1292,29 @@ class CompanyProfileManager {
 
     /* ========================================================================
        CONTACTS MANAGEMENT - V2 Contact System
+       ========================================================================
+       
+       PURPOSE: Manage company contacts with add/edit/delete capabilities
+       
+       PUBLIC METHODS:
+       - initializeContactsManagement()  : Setup contacts system
+       - renderV2ContactsSection()       : Render contacts list UI
+       - setupV2ContactsHandlers()       : Wire up event listeners
+       - showContactModal()              : Display add/edit modal
+       - saveContact()                   : Save contact to backend
+       
+       FEATURES:
+       - Add new contacts
+       - Edit existing contacts
+       - Delete contacts with confirmation
+       - Phone/email validation
+       - Real-time UI updates
+       
+       DATA FLOW:
+       1. Click "Add Contact" → showContactModal()
+       2. Fill form → saveContact() → backend API
+       3. Success → reload company data → renderV2ContactsSection()
+       
        ======================================================================== */
 
     /**
@@ -1660,13 +1705,39 @@ class CompanyProfileManager {
        - JWT authentication required
     /* ========================================================================
        CONFIGURATION TAB - Twilio & Settings
+       ========================================================================
+       
+       PURPOSE: Manage company configuration (Twilio, status, phone settings)
+       
+       PUBLIC METHODS:
+       - populateConfigTab()             : Load configuration data
+       - setupConfigEventListeners()     : Wire up config event handlers
+       - updateAccountStatus()           : Change account status (active/suspended/forward)
+       - saveTwilioCredentials()         : Save Twilio Account SID/Auth Token
+       - collectConfigData()             : Gather all config form data
+       
+       FEATURES:
+       - Twilio credential management (masked display)
+       - Account status control (Active/Call Forward/Suspended)
+       - Phone number validation
+       - Real-time status updates
+       - Secure credential handling
+       
+       SECURITY:
+       - Credentials masked in UI (last 4 chars only)
+       - No credentials logged to console
+       - HTTPS communication required
+       - JWT authentication
+       
+       DATA FLOW:
+       1. Load config → populateConfigTab() → display masked credentials
+       2. User changes → collectConfigData() → backend API
+       3. Success → reload data → visual feedback
+       
        ======================================================================== */
 
     /**
      * Populate Configuration tab with data
-     * 
-     * Entry point for loading all configuration settings when tab is activated.
-     * Orchestrates the initialization of all configuration subsystems.
      */
     populateConfigTab() {
         try {
@@ -2238,11 +2309,44 @@ class CompanyProfileManager {
 
     /* ========================================================================
        NOTES TAB - Developer Notes Management
+       ========================================================================
+       
+       PURPOSE: Manage internal developer notes with full CRUD operations
+       
+       PUBLIC METHODS:
+       - populateNotesTab()              : Initialize notes system
+       - initializeV2NotesSystem()       : Setup notes interface
+       - setupV2NotesInterface()         : Create notes UI (one-time)
+       - addV2Note()                     : Add new note
+       - editV2Note(noteId)              : Edit existing note
+       - deleteV2Note(noteId)            : Delete note with confirmation
+       - togglePinNote(noteId)           : Pin/unpin note
+       - renderV2Notes()                 : Render notes list
+       - saveNotesToBackend()            : Persist notes to backend
+       
+       FEATURES:
+       - Add/Edit/Delete notes
+       - Pin important notes (shown first)
+       - Categories (General, Technical, Business, Customer Service, Bug)
+       - Priority levels (Low, Medium, High, Urgent)
+       - Real-time timestamps
+       - Auto-save to backend
+       - Event delegation (no duplicate listeners)
+       
+       DATA FLOW:
+       1. User adds note → addV2Note() → saveNotesToBackend()
+       2. Backend saves → renderV2Notes() → UI updates
+       3. Edit/Delete → same flow with confirmation
+       
+       CRITICAL:
+       - setupV2NotesInterface() called ONCE (flag: notesInterfaceSetup)
+       - setupNoteCardEventListeners() called ONCE (flag: noteEventListenersSetup)
+       - Prevents interface destruction and duplicate listeners
+       
        ======================================================================== */
 
     /**
      * Populate Notes tab with v2-grade note management system
-     * Features: Pin/unpin, edit in-place, timestamps, search, categories, auto-save
      */
     populateNotesTab() {        
         // Initialize notes management system with advanced features
@@ -3919,6 +4023,41 @@ class CompanyProfileManager {
 
     /* ========================================================================
        VOICE SETTINGS - ElevenLabs Configuration
+       ========================================================================
+       
+       PURPOSE: Manage AI voice settings powered by ElevenLabs
+       
+       PUBLIC METHODS:
+       - populateVoiceTab()              : Load voice configuration
+       - saveVoiceSettings()             : Save voice settings to backend
+       - handleUseOwnApiToggle()         : Toggle between global/custom API key
+       - handleVoiceChange()             : Update selected voice
+       - handleVoiceModelChange()        : Update voice model
+       
+       FEATURES:
+       - Voice selection (from ElevenLabs library)
+       - Model selection (multilingual_v2, etc.)
+       - Stability & clarity sliders
+       - Style & speaker boost controls
+       - Use own ElevenLabs API key option
+       - Real-time preview
+       
+       API KEY LOGIC:
+       - Default: Use global ClientsVia ElevenLabs account
+       - Custom: Customer provides their own API key (bypasses global account)
+       - Toggle shows/hides custom API key input
+       
+       DATA FLOW:
+       1. Load settings → populateVoiceTab() → display controls
+       2. User adjusts → saveVoiceSettings() → backend API
+       3. Backend stores in company.aiAgentLogic.voiceSettings
+       4. AI Agent Runtime uses settings for TTS generation
+       
+       INTEGRATION:
+       - Connects to v2AIAgentRuntime.js
+       - Used by v2TwilioControl.js for call greetings
+       - Stored in MongoDB: company.aiAgentLogic.voiceSettings
+       
        ======================================================================== */
 
     /**
