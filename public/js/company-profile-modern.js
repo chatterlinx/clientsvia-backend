@@ -24,17 +24,17 @@ const DEBUG_MODE = false;
 // Structured Logger - Single source of truth for all logging
 const logger = {
     info: (...args) => {
-        if (DEBUG_MODE) logger.info('[CompanyProfile]', ...args);
+        if (DEBUG_MODE) console.log('[CompanyProfile]', ...args);
     },
     warn: (...args) => {
-        if (DEBUG_MODE) logger.warn('[CompanyProfile]', ...args);
+        if (DEBUG_MODE) console.warn('[CompanyProfile]', ...args);
     },
     error: (...args) => {
         // Always log errors
-        logger.error('[CompanyProfile]', ...args);
+        console.error('[CompanyProfile]', ...args);
     },
     debug: (...args) => {
-        if (DEBUG_MODE) logger.info('[CompanyProfile:DEBUG]', ...args);
+        if (DEBUG_MODE) console.log('[CompanyProfile:DEBUG]', ...args);
     }
 };
 
