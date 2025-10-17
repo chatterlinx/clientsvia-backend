@@ -2972,39 +2972,6 @@ class CompanyProfileManager {
     }
 
     /**
-     * GOLD STANDARD: Generate HTML for a single note
-     */
-    generateNoteHTML(note) {
-        const dateStr = new Date(note.updatedAt).toLocaleDateString();
-        const timeStr = new Date(note.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        
-        return `
-            <div class="note-item bg-white rounded-lg border border-gray-200 p-4 mb-4 hover:shadow-md transition-shadow ${note.isPinned ? 'ring-2 ring-yellow-200 bg-yellow-50' : ''}" data-note-id="${note.id}">
-                <div class="flex justify-between items-start mb-2">
-                    <h4 class="font-semibold text-gray-900 ${note.isPinned ? 'text-yellow-800' : ''}">${this.escapeHtml(note.title)}</h4>
-                    <div class="flex items-center space-x-2">
-                        ${note.isPinned ? '<i class="fas fa-thumbtack text-yellow-600" title="Pinned"></i>' : ''}
-                        <button class="pin-note text-gray-400 hover:text-yellow-600" title="${note.isPinned ? 'Unpin' : 'Pin'} note">
-                            <i class="fas fa-thumbtack"></i>
-                        </button>
-                        <button class="edit-note text-gray-400 hover:text-blue-600" title="Edit note">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="delete-note text-gray-400 hover:text-red-600" title="Delete note">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </div>
-                <p class="text-gray-700 text-sm mb-2">${this.escapeHtml(note.content || note.text || '')}</p>
-                <div class="flex justify-between items-center text-xs text-gray-500">
-                    <span class="bg-gray-100 px-2 py-1 rounded">${note.category || 'general'}</span>
-                    <span>${dateStr} at ${timeStr}</span>
-                </div>
-            </div>
-        `;
-    }
-
-    /**
      * GOLD STANDARD: Collect ClientsVia agent personality settings (migrated from HTML)
      */
     async saveClientsviaAgentPersonalitySettings() {
