@@ -3291,6 +3291,9 @@ class CompanyProfileManager {
             });
             
             const statusIcon = {
+                'active': '🟢',
+                'call_forward': '🟠',
+                'suspended': '🔴'
             }[entry.status] || '⚪';
             
             const statusName = this.getStatusDisplayName(entry.status);
