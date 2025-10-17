@@ -1608,6 +1608,12 @@
                 displayElement.textContent = parseFloat(value).toFixed(1);
             }
         }
+        
+        // Global helper function for checkbox value updates (used by inline HTML onchange attributes)
+        function updateCheckboxValue(name, checked) {
+            // This function can be used for any checkbox-related UI updates
+            console.log(`Checkbox ${name} changed to: ${checked}`);
+        }
     </script>
     
     <!-- Load Company Profile Modern JavaScript -->

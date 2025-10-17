@@ -790,6 +790,60 @@ class CompanyProfileManager {
     }
 
     /**
+     * Show field validation errors
+     */
+    showFieldErrors(field, errors) {
+        // Remove any existing success styling
+        field.classList.remove('border-green-500', 'bg-green-50');
+        
+        // Add error styling
+        field.classList.add('border-red-500', 'bg-red-50');
+        
+        // Find or create error message container
+        let errorDiv = field.parentElement.querySelector('.field-error');
+        if (!errorDiv) {
+            errorDiv = document.createElement('div');
+            errorDiv.className = 'field-error text-red-600 text-xs mt-1';
+            field.parentElement.appendChild(errorDiv);
+        }
+        
+        // Display errors
+        errorDiv.textContent = errors.join(', ');
+        errorDiv.classList.remove('hidden');
+    }
+
+    /**
+     * Show field validation success
+     */
+    showFieldSuccess(field) {
+        // Remove error styling
+        field.classList.remove('border-red-500', 'bg-red-50');
+        
+        // Add success styling (subtle)
+        field.classList.add('border-green-500');
+        
+        // Hide error message if exists
+        const errorDiv = field.parentElement.querySelector('.field-error');
+        if (errorDiv) {
+            errorDiv.classList.add('hidden');
+        }
+    }
+
+    /**
+     * Clear field errors on focus
+     */
+    clearFieldErrors(field) {
+        // Remove all validation styling
+        field.classList.remove('border-red-500', 'bg-red-50', 'border-green-500');
+        
+        // Hide error message
+        const errorDiv = field.parentElement.querySelector('.field-error');
+        if (errorDiv) {
+            errorDiv.classList.add('hidden');
+        }
+    }
+
+    /**
      * Helper: Validate email format
      */
     isValidEmail(email) {
