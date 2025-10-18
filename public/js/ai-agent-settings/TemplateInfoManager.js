@@ -164,11 +164,11 @@ class TemplateInfoManager {
         if (!container) return;
         
         container.innerHTML = `
-            <div class="text-center py-16">
+            <div class="text-center py-16 w-full">
                 <i class="fas fa-box-open text-6xl text-gray-300 mb-4"></i>
                 <h3 class="text-xl font-bold text-gray-700 mb-2">No Template Cloned</h3>
-                <p class="text-gray-500 mb-6">
-                    Clone a Global AI Brain template to get started.
+                <p class="text-gray-500 mb-6 max-w-2xl mx-auto">
+                    Clone a Global AI Brain template to get started. Your company will reference the template and receive automatic updates.
                 </p>
                 <button class="ai-settings-btn ai-settings-btn-primary" onclick="templateInfoManager.cloneTemplate()">
                     <i class="fas fa-copy"></i>
