@@ -1,15 +1,15 @@
 /**
  * ============================================================================
- * TELEPHONY TAB MANAGER
+ * VOICECORE TAB MANAGER
  * ============================================================================
  * 
- * Manages tab switching for the Telephony Control Panel
+ * Manages tab switching for the VoiceCore Panel (AI Voice & Greetings)
  * Tabs: Dashboard | Messages & Greetings | Call Logs
  * 
  * ============================================================================
  */
 
-class TelephonyTabManager {
+class VoiceCoreTabManager {
     constructor() {
         this.activeTab = 'dashboard';
         this.initialized = false;
@@ -19,19 +19,19 @@ class TelephonyTabManager {
      * Initialize tab switching
      */
     initialize() {
-        console.log('📞 [TELEPHONY TABS] Initializing...');
+        console.log('🎤 [VOICECORE TABS] Initializing...');
 
         this.attachEventListeners();
         this.initialized = true;
 
-        console.log('✅ [TELEPHONY TABS] Initialized');
+        console.log('✅ [VOICECORE TABS] Initialized');
     }
 
     /**
      * Attach event listeners to tab buttons
      */
     attachEventListeners() {
-        const tabButtons = document.querySelectorAll('.telephony-tab');
+        const tabButtons = document.querySelectorAll('.voicecore-tab');
 
         tabButtons.forEach(button => {
             // Skip disabled tabs
@@ -39,26 +39,26 @@ class TelephonyTabManager {
 
             button.addEventListener('click', (e) => {
                 e.stopPropagation(); // Prevent event bubbling to main tab system
-                const tabName = button.dataset.telephonyTab; // Changed from dataset.tab
+                const tabName = button.dataset.voicecoreTab;
                 this.switchTab(tabName);
             });
         });
 
-        console.log(`📞 [TELEPHONY TABS] Event listeners attached to ${tabButtons.length} tabs`);
+        console.log(`🎤 [VOICECORE TABS] Event listeners attached to ${tabButtons.length} tabs`);
     }
 
     /**
      * Switch to a specific tab
      */
     switchTab(tabName) {
-        console.log(`📞 [TELEPHONY TABS] Switching to tab: ${tabName}`);
+        console.log(`🎤 [VOICECORE TABS] Switching to tab: ${tabName}`);
 
         // Update active tab
         this.activeTab = tabName;
 
         // Update tab button states
-        document.querySelectorAll('.telephony-tab').forEach(button => {
-            if (button.dataset.telephonyTab === tabName) {
+        document.querySelectorAll('.voicecore-tab').forEach(button => {
+            if (button.dataset.voicecoreTab === tabName) {
                 button.classList.add('active');
             } else {
                 button.classList.remove('active');
@@ -66,7 +66,7 @@ class TelephonyTabManager {
         });
 
         // Update tab content visibility
-        document.querySelectorAll('.telephony-tab-content').forEach(content => {
+        document.querySelectorAll('.voicecore-tab-content').forEach(content => {
             const contentTabName = content.id.replace('tab-', '');
             if (contentTabName === tabName) {
                 content.classList.add('active');
@@ -78,7 +78,7 @@ class TelephonyTabManager {
         // Initialize tab content if needed
         this.initializeTabContent(tabName);
 
-        console.log(`✅ [TELEPHONY TABS] Switched to: ${tabName}`);
+        console.log(`✅ [VOICECORE TABS] Switched to: ${tabName}`);
     }
 
     /**

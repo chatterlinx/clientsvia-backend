@@ -1552,7 +1552,7 @@
                         
                         <!-- Load AI Agent Settings Managers -->
                         <script src="/js/ai-agent-settings/SystemDiagnostics.js?v=1.0"></script>
-                        <script src="/js/ai-agent-settings/TelephonyTabManager.js?v=5.0"></script>
+                        <script src="/js/ai-agent-settings/VoiceCoreTabManager.js?v=6.0"></script>
                         <script src="/js/ai-agent-settings/TwilioControlCenter.js?v=5.0"></script>
                         <script src="/js/ai-agent-settings/ConnectionMessagesManager.js?v=13.0"></script>
                         <script src="/js/ai-agent-settings/VariablesManager.js?v=4.0"></script>
@@ -1568,7 +1568,7 @@
                         <script>
                             // Initialize when tab is activated
                             let aiAgentSettings = null;
-                            let telephonyTabManager = null;
+                            let voiceCoreTabManager = null;
                             let twilioControl = null;
                             let connectionMessagesManager = null;
                             let variablesManager = null;
@@ -1584,9 +1584,9 @@
                                     const companyId = window.currentCompanyId || document.getElementById('company-id')?.value;
                                     if (companyId) {
                                         
-                                        // Initialize Telephony Tab Manager (handles tab switching)
-                                        telephonyTabManager = new TelephonyTabManager();
-                                        telephonyTabManager.initialize();
+                                        // Initialize VoiceCore Tab Manager (handles tab switching)
+                                        voiceCoreTabManager = new VoiceCoreTabManager();
+                                        voiceCoreTabManager.initialize();
                                         
                                         // Initialize System Diagnostics (Dashboard tab - top panel)
                                         systemDiagnostics = new SystemDiagnostics(companyId);
@@ -1606,7 +1606,7 @@
                                         
                                         // Expose managers globally for onclick handlers
                                         window.aiAgentSettings = aiAgentSettings;
-                                        window.telephonyTabManager = telephonyTabManager;
+                                        window.voiceCoreTabManager = voiceCoreTabManager;
                                         window.twilioControl = twilioControl;
                                         window.connectionMessagesManager = connectionMessagesManager;
                                         window.variablesManager = aiAgentSettings.variablesManager;
