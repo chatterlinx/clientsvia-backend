@@ -27,9 +27,11 @@
 }
 
 .ai-settings-container {
+    width: 100%;
     max-width: 1400px;
     margin: 0 auto;
     padding: 0 24px 24px 24px; /* Remove top padding to eliminate gap above sub-tabs */
+    box-sizing: border-box;
 }
 
 /* ============================================================================
@@ -294,10 +296,27 @@
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.3s ease;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .ai-settings-section-content.expanded {
     max-height: 3000px;
+    width: 100%;
+}
+
+/* ============================================================================
+   TEMPLATE & ANALYTICS CONTAINERS - FORCE FULL WIDTH
+   ============================================================================ */
+
+#template-info-container,
+#analytics-container,
+#scenarios-container,
+#filler-words-container,
+#variables-container {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 /* ============================================================================

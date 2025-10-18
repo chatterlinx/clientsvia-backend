@@ -72,7 +72,7 @@ class TemplateInfoManager {
         
         let html = `
             <!-- Template Name & Description -->
-            <div class="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-6">
+            <div class="mb-6 bg-blue-50 border-2 border-blue-400 rounded-lg p-6">
                 <div class="flex items-start gap-4">
                     <div class="w-16 h-16 bg-blue-600 rounded-lg flex items-center justify-center text-white text-3xl">
                         📦
