@@ -1171,27 +1171,27 @@
                         <!-- Link isolated CSS -->
                         <link rel="stylesheet" href="/css/ai-agent-settings.css">
                         <link rel="stylesheet" href="/css/twilio-control-center.css">
-                        <link rel="stylesheet" href="/css/telephony-control-panel.css">
+                        <link rel="stylesheet" href="/css/voicecore.css">
                         <link rel="stylesheet" href="/css/system-diagnostics.css">
                         
                         <div class="ai-settings-container">
                             
                             <!-- ========================================== -->
-                            <!-- TELEPHONY CONTROL PANEL (TABBED) -->
+                            <!-- VOICECORE - AI VOICE & GREETINGS -->
                             <!-- ========================================== -->
-                            <div class="telephony-control-panel">
+                            <div class="voicecore-panel">
                                 
                                 <!-- Tab Navigation -->
-                                <nav class="telephony-tabs">
-                                    <button class="telephony-tab active" data-telephony-tab="dashboard">
+                                <nav class="voicecore-tabs">
+                                    <button class="voicecore-tab active" data-voicecore-tab="dashboard">
                                         <i class="fas fa-tachometer-alt"></i>
                                         Dashboard
                                     </button>
-                                    <button class="telephony-tab" data-telephony-tab="messages">
+                                    <button class="voicecore-tab" data-voicecore-tab="messages">
                                         <i class="fas fa-comments"></i>
                                         Messages & Greetings
                                     </button>
-                                    <button class="telephony-tab" data-telephony-tab="logs" disabled style="opacity: 0.5; cursor: not-allowed;">
+                                    <button class="voicecore-tab" data-voicecore-tab="logs" disabled style="opacity: 0.5; cursor: not-allowed;">
                                         <i class="fas fa-list"></i>
                                         Call Logs
                                         <span style="font-size: 10px; background: #6c757d; color: white; padding: 2px 6px; border-radius: 8px; margin-left: 4px;">Soon</span>
@@ -1199,7 +1199,7 @@
                                 </nav>
                                 
                                 <!-- Tab 1: Dashboard (Twilio Control Center) -->
-                                <div class="telephony-tab-content active" id="tab-dashboard">
+                                <div class="voicecore-tab-content active" id="tab-dashboard">
                                     <!-- System Diagnostics Panel -->
                                     <div id="system-diagnostics-panel">
                                         <!-- System Diagnostics will be loaded here by JavaScript -->
@@ -1207,7 +1207,7 @@
 
                                     <div id="twilio-control-center">
                                         <!-- Twilio Control Center will be loaded here by JavaScript -->
-                                        <div class="telephony-loading">
+                                        <div class="voicecore-loading">
                                             <i class="fas fa-spinner fa-spin"></i>
                                             <p>Loading Twilio Control Center...</p>
                                         </div>
@@ -1215,10 +1215,10 @@
                                 </div>
                                 
                                 <!-- Tab 2: Messages & Greetings -->
-                                <div class="telephony-tab-content" id="tab-messages">
+                                <div class="voicecore-tab-content" id="tab-messages">
                                     <div id="connection-messages-container">
                                         <!-- Connection Messages UI will be loaded here by JavaScript -->
-                                        <div class="telephony-loading">
+                                        <div class="voicecore-loading">
                                             <i class="fas fa-spinner fa-spin"></i>
                                             <p>Loading Connection Messages...</p>
                                         </div>
@@ -1226,8 +1226,8 @@
                                 </div>
                                 
                                 <!-- Tab 3: Call Logs (Future) -->
-                                <div class="telephony-tab-content" id="tab-logs">
-                                    <div class="telephony-empty-state">
+                                <div class="voicecore-tab-content" id="tab-logs">
+                                    <div class="voicecore-empty-state">
                                         <i class="fas fa-list"></i>
                                         <h4>Call Logs Coming Soon</h4>
                                         <p>Detailed call history, transcripts, and analytics will be available here</p>
@@ -1280,16 +1280,16 @@
                             <!-- ========================================== -->
                             <!-- AICORE CONTROL CENTER TITLE -->
                             <!-- ========================================== -->
-                            <div class="my-8 p-6 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl shadow-lg">
+                            <div class="my-8 p-6 bg-blue-600 rounded-xl shadow-lg">
                                 <div class="flex items-center gap-4">
-                                    <div class="w-16 h-16 bg-white bg-opacity-20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-4xl">
+                                    <div class="w-16 h-16 bg-blue-700 rounded-2xl flex items-center justify-center text-4xl">
                                         🤖
                                     </div>
                                     <div class="flex-1">
                                         <h2 class="text-3xl font-bold text-white">
                                             AiCore Control Center
                                         </h2>
-                                        <p class="text-sm text-white text-opacity-90 mt-1 font-medium">
+                                        <p class="text-sm text-white mt-1 font-medium">
                                             Mission Control for Your AI Agent • Variables • Logic • Knowledge • Performance
                                         </p>
                                     </div>
@@ -1327,7 +1327,7 @@
                             <!-- ========================================== -->
                             <div id="ai-settings-variables-content" class="ai-settings-subtab-content active">
                                 
-                                <div class="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4">
+                                <div class="mb-6 bg-blue-50 border-2 border-blue-400 rounded-lg p-4">
                                     <div class="flex items-start gap-3">
                                         <i class="fas fa-lightbulb text-blue-600 text-xl mt-1"></i>
                                         <div>
@@ -1369,7 +1369,7 @@
                             <!-- ========================================== -->
                             <div id="ai-settings-filler-words-content" class="ai-settings-subtab-content">
                                 
-                                <div class="mb-6 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg p-4">
+                                <div class="mb-6 bg-blue-50 border-2 border-blue-400 rounded-lg p-4">
                                     <div class="flex items-start gap-3">
                                         <i class="fas fa-magic text-purple-600 text-xl mt-1"></i>
                                         <div>
@@ -1443,7 +1443,7 @@
                             <!-- ========================================== -->
                             <div id="ai-settings-scenarios-content" class="ai-settings-subtab-content">
                                 
-                                <div class="mb-6 bg-gradient-to-r from-green-50 to-teal-50 border-2 border-green-200 rounded-lg p-4">
+                                <div class="mb-6 bg-blue-50 border-2 border-blue-400 rounded-lg p-4">
                                     <div class="flex items-start gap-3">
                                         <i class="fas fa-robot text-green-600 text-xl mt-1"></i>
                                         <div>

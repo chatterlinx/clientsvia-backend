@@ -37,7 +37,7 @@
    ============================================================================ */
 
 .ai-settings-status-banner {
-    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    background: #fde68a; /* Solid amber - NO GRADIENT */
     border-left: 4px solid #f59e0b;
     border-radius: 8px;
     padding: 16px 20px;
@@ -46,17 +46,17 @@
 }
 
 .ai-settings-status-banner.success {
-    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    background: #a7f3d0; /* Solid green - NO GRADIENT */
     border-left-color: #10b981;
 }
 
 .ai-settings-status-banner.warning {
-    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    background: #fde68a; /* Solid amber - NO GRADIENT */
     border-left-color: #f59e0b;
 }
 
 .ai-settings-status-banner.error {
-    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    background: #fecaca; /* Solid red - NO GRADIENT */
     border-left-color: #ef4444;
 }
 
@@ -77,7 +77,7 @@
 
 .ai-settings-progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+    background: #10b981; /* Solid green - NO GRADIENT */
     transition: all 0.3s ease;
     border-radius: 4px;
 }
@@ -244,11 +244,12 @@
     margin-bottom: 24px;
     overflow: hidden;
     width: 100%;
+    max-width: 100%;
 }
 
 .ai-settings-section-header {
     padding: 20px 24px;
-    background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+    background: #f9fafb; /* Solid gray - NO GRADIENT */
     border-bottom: 2px solid #e5e7eb;
     cursor: pointer;
     user-select: none;
@@ -259,7 +260,7 @@
 }
 
 .ai-settings-section-header:hover {
-    background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+    background: #e5e7eb; /* Solid darker gray - NO GRADIENT */
 }
 
 .ai-settings-section-header h3 {
@@ -468,7 +469,7 @@
 
 .ai-settings-scenario-category-header {
     padding: 16px 20px;
-    background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+    background: #f9fafb; /* Solid gray - NO GRADIENT */
     cursor: pointer;
     user-select: none;
     display: flex;
@@ -478,7 +479,7 @@
 }
 
 .ai-settings-scenario-category-header:hover {
-    background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+    background: #e5e7eb; /* Solid darker gray - NO GRADIENT */
 }
 
 .ai-settings-scenario-item {
@@ -544,13 +545,13 @@
 }
 
 .ai-settings-btn-primary {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    background: #3b82f6; /* Solid blue - NO GRADIENT */
     color: white;
     box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
 }
 
 .ai-settings-btn-primary:hover {
-    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    background: #2563eb; /* Solid darker blue - NO GRADIENT */
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
     transform: translateY(-1px);
 }
@@ -565,25 +566,25 @@
 }
 
 .ai-settings-btn-success {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    background: #10b981; /* Solid green - NO GRADIENT */
     color: white;
     box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
 }
 
 .ai-settings-btn-success:hover {
-    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    background: #059669; /* Solid darker green - NO GRADIENT */
     box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
     transform: translateY(-1px);
 }
 
 .ai-settings-btn-danger {
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    background: #ef4444; /* Solid red - NO GRADIENT */
     color: white;
     box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
 }
 
 .ai-settings-btn-danger:hover {
-    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    background: #dc2626; /* Solid darker red - NO GRADIENT */
     box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
     transform: translateY(-1px);
 }
@@ -676,7 +677,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+    background: #f9fafb; /* Solid gray - NO GRADIENT */
 }
 
 .ai-settings-modal-header h2 {
@@ -732,7 +733,7 @@
 }
 
 .preview-summary-card {
-    background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+    background: #f9fafb; /* Solid gray - NO GRADIENT */
     border: 2px solid #e5e7eb;
     border-radius: 12px;
     padding: 20px;
