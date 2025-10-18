@@ -40,6 +40,8 @@ const GlobalInstantResponseTemplate = require('../../models/GlobalInstantRespons
 const { authenticateJWT } = require('../../middleware/auth');
 const { enhanceTemplate } = require('../../services/globalAIBrainEnhancer');
 const logger = require('../../utils/logger');
+const PlaceholderScanService = require('../../services/PlaceholderScanService');
+const CacheHelper = require('../../utils/cacheHelper');
 
 // ============================================================================
 // MIDDLEWARE
@@ -614,10 +616,38 @@ router.patch('/:id', async (req, res) => {
         
         console.log(`✅ Updated template ${template.version}: ${changes.join(', ')}`);
         
+        // ========================================================================
+        // 🔥 AUTO-SCAN & CACHE INVALIDATION
+        // ========================================================================
+        // Background job: Scan all companies using this template for placeholder updates
+        // Non-blocking: Fire and forget
+        // ========================================================================
+        setImmediate(async () => {
+            try {
+                console.log(`🔍 [AUTO-SCAN] Triggering background scan for template ${id}`);
+                
+                // 1. Clear template cache
+                await CacheHelper.clearTemplateCache(id);
+                console.log(`✅ [AUTO-SCAN] Cache cleared for template ${id}`);
+                
+                // 2. Scan all companies using this template
+                const scanResult = await PlaceholderScanService.scanAllCompaniesForTemplate(id);
+                console.log(`✅ [AUTO-SCAN] Background scan complete: ${scanResult.companiesScanned} companies scanned, ${scanResult.companiesWithAlerts} alerts generated`);
+                
+            } catch (scanError) {
+                console.error(`❌ [AUTO-SCAN] Background scan failed for template ${id}:`, scanError.message);
+                // Non-critical error - don't block response
+            }
+        });
+        
         res.json({
             success: true,
             message: 'Template updated successfully',
-            data: template
+            data: template,
+            backgroundScan: {
+                triggered: true,
+                note: 'Companies using this template will be scanned for placeholder updates in the background'
+            }
         });
     } catch (error) {
         console.error('❌ Error updating template:', error.message, error.stack);

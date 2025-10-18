@@ -1065,6 +1065,48 @@ router.post('/:companyId/configuration/clone-template', async (req, res) => {
             console.log(`[COMPANY CONFIG] Cleared Redis cache for company ${company._id}`);
         }
         
+        // ========================================================================
+        // 🔥 AUTO-SCAN FOR PLACEHOLDERS
+        // ========================================================================
+        // After cloning template, auto-scan for placeholders
+        // Background job: Non-blocking
+        // ========================================================================
+        setImmediate(async () => {
+            try {
+                console.log(`🔍 [AUTO-SCAN] Triggering placeholder scan for company ${req.params.companyId} after template clone`);
+                
+                // Add template reference to aiAgentSettings
+                if (!company.aiAgentSettings) {
+                    company.aiAgentSettings = {};
+                }
+                if (!company.aiAgentSettings.templateReferences) {
+                    company.aiAgentSettings.templateReferences = [];
+                }
+                
+                // Add reference if not already present
+                if (!company.aiAgentSettings.templateReferences.find(ref => ref.templateId === templateId)) {
+                    company.aiAgentSettings.templateReferences.push({
+                        templateId: templateId,
+                        enabled: true,
+                        priority: 1,
+                        clonedAt: new Date()
+                    });
+                    
+                    company.markModified('aiAgentSettings.templateReferences');
+                    await company.save();
+                    console.log(`✅ [AUTO-SCAN] Added template reference to aiAgentSettings`);
+                }
+                
+                // Scan company for placeholders
+                const scanResult = await PlaceholderScanService.scanCompany(req.params.companyId);
+                console.log(`✅ [AUTO-SCAN] Placeholder scan complete: ${scanResult.newCount} placeholders detected`);
+                
+            } catch (scanError) {
+                console.error(`❌ [AUTO-SCAN] Background scan failed for company ${req.params.companyId}:`, scanError.message);
+                // Non-critical error - don't block response
+            }
+        });
+        
         // Log to audit
         await AuditLog.create({
             userId: req.user?._id || null,
@@ -1097,7 +1139,11 @@ router.post('/:companyId/configuration/clone-template', async (req, res) => {
                 variables: template.availableVariables?.length || 0,
                 fillerWords: template.fillerWords?.length || 0
             },
-            clonedAt: company.configuration.clonedAt
+            clonedAt: company.configuration.clonedAt,
+            backgroundScan: {
+                triggered: true,
+                note: 'Placeholder scan running in background'
+            }
         });
         
     } catch (error) {
