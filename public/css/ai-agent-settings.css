@@ -243,6 +243,7 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     margin-bottom: 24px;
     overflow: hidden;
+    width: 100%;
 }
 
 .ai-settings-section-header {
