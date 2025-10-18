@@ -215,6 +215,15 @@ try {
     });
 }
 
+// Admin Notification Settings Routes
+try {
+    const adminNotificationRoutes = require('./routes/admin/adminNotifications');
+    app.use('/api/admin', adminNotificationRoutes);
+    logger.info('✅ Admin Notification Settings routes registered - Alert Center notifications active');
+} catch (error) {
+    logger.error('❌ Failed to load Admin Notification routes:', error);
+}
+
 // Add simplified AI Agent Logic routes as fallback (no auth required for basic functionality)
 // try {
 //     const aiAgentLogicSimpleRoutes = require('./routes/aiAgentLogicSimple'); // MISSING FILE

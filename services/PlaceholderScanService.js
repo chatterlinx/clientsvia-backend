@@ -39,6 +39,7 @@
 const Company = require('../models/v2Company');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const CacheHelper = require('../utils/cacheHelper');
+const AdminNotificationService = require('./AdminNotificationService');
 const { 
     extractPlaceholdersFromTemplate, 
     enrichPlaceholder 
@@ -225,6 +226,28 @@ class PlaceholderScanService {
             
             // 10. Clear cache
             await CacheHelper.clearCompanyCache(companyId);
+            
+            // 11. Send admin notification if alert was generated (non-blocking)
+            if (missingRequired.length > 0) {
+                const fixUrl = `${process.env.FRONTEND_URL || 'https://clientsvia-backend.onrender.com'}/company-profile.html?id=${companyId}&tab=ai-agent-settings&subtab=variables`;
+                
+                // Send notification asynchronously (don't block main flow)
+                setImmediate(async () => {
+                    try {
+                        await AdminNotificationService.sendAlert({
+                            companyId: companyId,
+                            companyName: company.companyName || 'Unknown Company',
+                            alertType: 'missing_variables',
+                            severity: 'warning',
+                            message: `${missingRequired.length} required variable${missingRequired.length > 1 ? 's' : ''} need${missingRequired.length === 1 ? 's' : ''} values`,
+                            fixUrl: fixUrl
+                        });
+                    } catch (notificationError) {
+                        // Never let notification errors block the main flow
+                        console.error('❌ [PLACEHOLDER SCAN] Notification failed (non-critical):', notificationError.message);
+                    }
+                });
+            }
             
             console.log(`✅ [PLACEHOLDER SCAN] Scan complete for company ${companyId}`);
             
