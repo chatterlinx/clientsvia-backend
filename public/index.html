@@ -147,6 +147,41 @@
                 </div>
 
                 <!-- ============================================================================ -->
+                <!-- ⚠️ CONFIGURATION TO-DO WIDGET -->
+                <!-- ============================================================================ -->
+                <div id="configuration-todos-container" class="mt-10 hidden">
+                    <div class="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-400 rounded-xl p-6 shadow-lg">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center">
+                                <div class="w-12 h-12 bg-yellow-400 rounded-lg flex items-center justify-center mr-4">
+                                    <i class="fas fa-exclamation-triangle text-white text-xl"></i>
+                                </div>
+                                <div>
+                                    <h2 class="text-2xl font-bold text-gray-900">
+                                        Configuration TO-DOs
+                                    </h2>
+                                    <p class="text-sm text-gray-700">
+                                        Companies needing variable configuration
+                                    </p>
+                                </div>
+                            </div>
+                            <button 
+                                onclick="refreshConfigurationTodos()" 
+                                class="px-4 py-2 bg-white border-2 border-yellow-400 text-yellow-700 rounded-lg hover:bg-yellow-50 transition-colors font-medium"
+                                title="Refresh alerts"
+                            >
+                                <i class="fas fa-sync-alt mr-2"></i>
+                                Refresh
+                            </button>
+                        </div>
+                        
+                        <div id="configuration-todos-list" class="space-y-3">
+                            <!-- TO-DO items will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================================ -->
                 <!-- 🎯 MODERN CARD-BASED NAVIGATION -->
                 <!-- ============================================================================ -->
                 <div class="mt-10">
@@ -369,7 +404,147 @@
             }
 
             fetchDashboardStats(); 
+            
+            // Load Configuration TO-DOs
+            loadConfigurationTodos();
         });
+
+        // ========================================================================
+        // CONFIGURATION TO-DO WIDGET
+        // ========================================================================
+        
+        /**
+         * Load configuration alerts from backend
+         */
+        async function loadConfigurationTodos() {
+            console.log('📋 [TODO WIDGET] Loading configuration alerts...');
+            
+            try {
+                const token = localStorage.getItem('adminToken');
+                if (!token) {
+                    console.log('📋 [TODO WIDGET] No token, skipping');
+                    return;
+                }
+                
+                const response = await fetch('/api/admin/configuration-todos', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                console.log(`✅ [TODO WIDGET] Loaded ${data.totalAlerts} alerts`);
+                
+                renderConfigurationTodos(data.alerts);
+                
+            } catch (error) {
+                console.error('❌ [TODO WIDGET] Failed to load:', error);
+                // Silently fail - widget is not critical
+            }
+        }
+        
+        /**
+         * Render configuration TO-DOs in the widget
+         */
+        function renderConfigurationTodos(alerts) {
+            const container = document.getElementById('configuration-todos-container');
+            const list = document.getElementById('configuration-todos-list');
+            
+            if (!container || !list) {
+                console.error('❌ [TODO WIDGET] Container not found');
+                return;
+            }
+            
+            // Hide widget if no alerts
+            if (!alerts || alerts.length === 0) {
+                container.classList.add('hidden');
+                console.log('✅ [TODO WIDGET] No alerts - widget hidden');
+                return;
+            }
+            
+            // Show widget
+            container.classList.remove('hidden');
+            
+            // Render alert items
+            list.innerHTML = alerts.map(alert => {
+                const severity = alert.alert?.severity || 'warning';
+                const severityColors = {
+                    'info': 'blue',
+                    'warning': 'yellow',
+                    'error': 'red'
+                };
+                const color = severityColors[severity] || 'yellow';
+                
+                return `
+                    <div class="bg-white border-2 border-${color}-300 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center flex-1">
+                                <div class="w-10 h-10 bg-${color}-100 rounded-lg flex items-center justify-center mr-3">
+                                    <i class="fas fa-building text-${color}-600"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="font-bold text-gray-900 text-lg">
+                                        ${escapeHtml(alert.companyName)}
+                                    </div>
+                                    <div class="text-sm text-gray-600 mt-1">
+                                        <i class="fas fa-exclamation-circle text-${color}-600 mr-1"></i>
+                                        ${alert.alert?.message || 'Configuration incomplete'}
+                                    </div>
+                                    ${alert.alert?.missingVariables && alert.alert.missingVariables.length > 0 ? `
+                                        <div class="text-xs text-gray-500 mt-2">
+                                            Missing: ${alert.alert.missingVariables.map(v => v.label || v.key).join(', ')}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <button 
+                                    onclick="fixNow('${alert.companyId}')"
+                                    class="px-4 py-2 bg-${color}-500 text-white rounded-lg hover:bg-${color}-600 transition-colors font-medium shadow-sm hover:shadow-md"
+                                >
+                                    <i class="fas fa-wrench mr-2"></i>
+                                    Fix Now
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            console.log(`✅ [TODO WIDGET] Rendered ${alerts.length} alert(s)`);
+        }
+        
+        /**
+         * Fix Now button - Navigate to company's Variables tab
+         */
+        function fixNow(companyId) {
+            console.log(`🔧 [TODO WIDGET] Fix Now clicked for company ${companyId}`);
+            
+            // Navigate to company profile, AI Agent Settings tab, Variables sub-tab
+            window.location.href = `/company-profile.html?id=${companyId}&tab=ai-agent-settings&subtab=variables`;
+        }
+        
+        /**
+         * Refresh configuration TO-DOs
+         */
+        function refreshConfigurationTodos() {
+            console.log('🔄 [TODO WIDGET] Refreshing alerts...');
+            loadConfigurationTodos();
+        }
+        
+        /**
+         * Escape HTML to prevent XSS
+         */
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
 
         // Logout function - Global scope so onclick can access it
         async function logout() {
