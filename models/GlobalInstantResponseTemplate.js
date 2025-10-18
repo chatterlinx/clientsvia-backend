@@ -956,6 +956,12 @@ globalInstantResponseTemplateSchema.statics.cloneTemplate = async function(sourc
     return newTemplate;
 };
 
+globalInstantResponseTemplateSchema.statics.getPublishedTemplates = async function() {
+    return await this.find({ isPublished: true })
+        .select('_id name version description templateType industryLabel stats createdAt updatedAt')
+        .sort({ createdAt: -1 });
+};
+
 // ============================================
 // INDEXES
 // ============================================
