@@ -155,7 +155,7 @@ body {
 }
 
 .wider-textbox {
-    max-width: 800px;
+    max-width: 100%;
     width: 100%;
 }
 
@@ -377,7 +377,7 @@ body {
 
 @media (min-width: 768px) {
     .wider-textbox {
-        max-width: 800px;
+        max-width: 100%;
     }
 }
 
