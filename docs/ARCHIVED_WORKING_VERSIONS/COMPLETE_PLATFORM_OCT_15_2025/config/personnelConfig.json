@@ -1,0 +1,49 @@
+[
+  {
+    "label": "Owner",
+    "name": "John",
+    "roles": [
+      "owner",
+      "executive",
+      "ceo"
+    ],
+    "email": "owner@company.com",
+    "allowDirectTransfer": false,
+    "preferSMS": true
+  },
+  {
+    "label": "Manager",
+    "name": "Steven Ferris",
+    "roles": [
+      "manager",
+      "billing",
+      "quotes"
+    ],
+    "phone": "+15556667777",
+    "email": "steven@company.com",
+    "allowDirectTransfer": true,
+    "preferSMS": true,
+    "hours": {
+      "mon": "0800-1800",
+      "tue": "0800-1800",
+      "wed": "0800-1800",
+      "thu": "0800-1800",
+      "fri": "0800-1800"
+    }
+  },
+  {
+    "label": "Dispatcher",
+    "name": "Dispatch Team",
+    "roles": [
+      "dispatcher",
+      "scheduling"
+    ],
+    "phone": "+15551112222",
+    "email": "dispatch@company.com",
+    "allowDirectTransfer": true,
+    "preferSMS": false,
+    "hours": {
+      "any": "0700-2200"
+    }
+  }
+]

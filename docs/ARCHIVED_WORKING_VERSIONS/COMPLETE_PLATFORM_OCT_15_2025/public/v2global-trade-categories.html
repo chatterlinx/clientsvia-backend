@@ -1,0 +1,1565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>V2 Global Trade Categories | ClientsVia</title>
+    <link href="/css/output.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* ============================================================================ */
+        /* 🎨 MODERN NAVIGATION TABS */
+        /* ============================================================================ */
+        .nav-link {
+            position: relative;
+            padding: 0.75rem 1.25rem;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            color: #6B7280; /* gray-500 */
+            border-radius: 0.5rem;
+            transition: all 0.2s ease-in-out;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .nav-link:hover {
+            color: #111827; /* gray-900 */
+            background-color: #F3F4F6; /* gray-100 */
+            transform: translateY(-1px);
+        }
+        
+        .nav-link.active-tab {
+            color: #4F46E5; /* indigo-600 */
+            background-color: #EEF2FF; /* indigo-50 */
+            font-weight: 600;
+            box-shadow: 0 1px 3px 0 rgba(79, 70, 229, 0.1);
+        }
+        
+        .nav-link.active-tab::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #4F46E5, transparent);
+            border-radius: 2px 2px 0 0;
+        }
+        
+        .nav-link i {
+            font-size: 1.125rem;
+        }
+        
+        /* Logout button special styling */
+        .nav-link.text-red-600 {
+            color: #DC2626 !important;
+        }
+        
+        .nav-link.text-red-600:hover {
+            color: #991B1B !important;
+            background-color: #FEE2E2 !important;
+        }
+        
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .keyword-tag { transition: all 0.2s ease; }
+        .keyword-tag:hover { transform: scale(1.05); }
+        .auto-keyword { background: linear-gradient(45deg, #10b981, #059669); }
+        .manual-keyword { background: linear-gradient(45deg, #3b82f6, #1d4ed8); }
+        .rotate-180 { transform: rotate(180deg); }
+        #browse-chevron { transition: transform 0.2s ease-in-out; }
+        .v2-badge { background: linear-gradient(45deg, #8b5cf6, #7c3aed); }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation -->
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex-shrink-0">
+                    <a href="/index.html" class="text-2xl font-bold text-indigo-600">
+                        <i class="fas fa-tachometer-alt mr-2"></i>ClientVia.ai
+                    </a>
+                </div>
+                <nav class="hidden md:flex items-center gap-2">
+                    <a href="/directory.html" class="nav-link" id="nav-directory">
+                        <i class="fas fa-list-alt"></i>
+                        <span>Directory</span>
+                    </a>
+                    <a href="/add-company.html" class="nav-link" id="nav-add-company">
+                        <i class="fas fa-plus-circle"></i>
+                        <span>Add Company</span>
+                    </a>
+                    <a href="/admin-data-center.html" class="nav-link" id="nav-data-center">
+                        <i class="fas fa-database"></i>
+                        <span>Data Center</span>
+                    </a>
+                    <a href="/v2global-trade-categories.html" class="nav-link" id="nav-trade-categories">
+                        <i class="fas fa-tags"></i>
+                        <span>Global Trade Categories</span>
+                    </a>
+                    <a href="/admin-global-instant-responses.html" class="nav-link" id="nav-global-ai-brain">
+                        <i class="fas fa-brain"></i>
+                        <span>Global AI Brain</span>
+                    </a>
+                    <div class="h-6 w-px bg-gray-300 mx-2"></div>
+                    <button onclick="logout()" class="nav-link text-red-600 hover:text-red-800" id="nav-logout">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Logout</span>
+                    </button>
+                </nav>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Page Header -->
+    <div class="bg-white border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-industry text-2xl text-blue-600"></i>
+                    </div>
+                    <div class="ml-4">
+                        <div class="flex items-center space-x-3">
+                            <h1 class="text-xl font-semibold text-gray-900">V2 Global Trade Categories</h1>
+                            <span class="v2-badge text-white text-xs px-2 py-1 rounded-full font-medium">
+                                <i class="fas fa-rocket mr-1"></i>V2 SYSTEM
+                            </span>
+                        </div>
+                        <p class="text-sm text-gray-500">AI-Powered Q&A with Auto-Generated Keywords</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button onclick="regenerateAllKeywords()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200">
+                        <i class="fas fa-magic mr-2"></i>Regenerate All Keywords
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <!-- V2 System Notice -->
+        <div class="bg-gradient-to-r from-purple-100 to-blue-100 border border-purple-200 rounded-lg p-4 mb-6">
+            <div class="flex items-center">
+                <i class="fas fa-rocket text-purple-600 text-lg mr-3"></i>
+                <div>
+                    <h3 class="text-sm font-medium text-purple-900">V2 Global Trade Categories System</h3>
+                    <p class="text-sm text-purple-700 mt-1">
+                        This is the new V2 system for managing global trade categories. All changes here will be inherited by company profiles that select these categories.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="p-2 bg-blue-100 rounded-lg">
+                        <i class="fas fa-layer-group text-blue-600"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500">Total Categories</p>
+                        <p id="stats-categories" class="text-2xl font-semibold text-gray-900">0</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="p-2 bg-green-100 rounded-lg">
+                        <i class="fas fa-question-circle text-green-600"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500">Total Q&As</p>
+                        <p id="stats-qnas" class="text-2xl font-semibold text-gray-900">0</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="p-2 bg-purple-100 rounded-lg">
+                        <i class="fas fa-tags text-purple-600"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500">Total Keywords</p>
+                        <p id="stats-keywords" class="text-2xl font-semibold text-gray-900">0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Search & Add New Category Section -->
+        <div class="bg-white rounded-lg shadow mb-8">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-lg font-medium text-gray-900">
+                    <i class="fas fa-plus-circle text-green-600 mr-2"></i>Add New Trade Category
+                </h2>
+                <p class="text-sm text-gray-500 mt-1">Search existing categories first to avoid duplicates</p>
+            </div>
+            <div class="p-6">
+        <!-- Quick Search & Browse Dropdown -->
+        <div class="mb-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- Search Box -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-search text-blue-500 mr-1"></i>Quick Search Existing Categories
+                </label>
+                <div class="relative">
+                    <input type="text" id="quick-search" placeholder="Type to search existing categories..." 
+                           class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <div class="absolute inset-y-0 right-0 flex items-center pr-3">
+                        <i class="fas fa-search text-gray-400"></i>
+                    </div>
+                    
+                    <!-- Search Results Dropdown -->
+                    <div id="search-dropdown" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg hidden max-h-60 overflow-y-auto">
+                        <div id="search-results" class="py-1">
+                            <!-- Results will be populated here -->
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-2 text-xs text-gray-500">
+                    <span id="search-status">Start typing to search through existing categories...</span>
+                </div>
+            </div>
+
+            <!-- Browse All Categories Dropdown -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-list text-purple-500 mr-1"></i>Browse All Categories
+                </label>
+                <div class="relative">
+                    <button type="button" id="browse-dropdown-btn" 
+                            class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md bg-white text-left focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 hover:bg-gray-50">
+                        <span id="browse-dropdown-text" class="text-gray-500">Click to see all categories...</span>
+                    </button>
+                    <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                        <i class="fas fa-chevron-down text-gray-400" id="browse-chevron"></i>
+                    </div>
+                    
+                    <!-- Browse Categories Dropdown -->
+                    <div id="browse-dropdown" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg hidden max-h-60 overflow-y-auto">
+                        <div id="browse-results" class="py-1">
+                            <!-- All categories will be populated here -->
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-2 text-xs text-gray-500">
+                    <span id="browse-status">Browse through all available trade categories</span>
+                </div>
+            </div>
+        </div>
+
+                <!-- Add New Category Form -->
+                <div class="border-t pt-6">
+                    <h3 class="text-md font-medium text-gray-900 mb-4">
+                        <i class="fas fa-plus text-green-500 mr-2"></i>Create New Category
+                    </h3>
+                    <form id="add-category-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Category Name *</label>
+                            <input type="text" id="category-name" placeholder="e.g., HVAC, Plumbing, Electrical" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <div id="duplicate-warning" class="hidden mt-1 text-sm text-amber-600">
+                                <i class="fas fa-exclamation-triangle mr-1"></i>
+                                <span>Similar category exists - check search results above</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                            <input type="text" id="category-description" placeholder="Brief description of services" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="flex items-end">
+                            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition duration-200">
+                                <i class="fas fa-plus mr-2"></i>Create Category
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Categories List -->
+        <div class="space-y-6" id="categories-container">
+            <div class="text-center py-12">
+                <i class="fas fa-spinner fa-spin text-3xl text-gray-400 mb-4"></i>
+                <p class="text-gray-500">Loading V2 trade categories...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generate Q&As Confirmation Modal -->
+    <div id="generate-qnas-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">
+                        <i class="fas fa-magic text-purple-600 mr-2"></i>Generate Top 15 Q&As
+                    </h3>
+                    <button onclick="closeGenerateQnAsModal()" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                
+                <div class="mb-6">
+                        <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+                            <h4 class="font-medium text-purple-900 mb-2">What will be generated:</h4>
+                            <ul class="text-sm text-purple-800 space-y-1">
+                                <li>• Up to 15 industry-specific Q&As for <span id="generate-category-name" class="font-medium"></span></li>
+                                <li>• Conversion-focused answers that lead to bookings</li>
+                                <li>• Professional, human-like conversational flow</li>
+                                <li>• Relevant keywords for AI agent matching</li>
+                                <li>• <strong>Admin Control:</strong> Add, edit, or delete any Q&As after generation</li>
+                            </ul>
+                        </div>
+                    
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-info-circle text-blue-600 mr-2"></i>
+                            <span class="font-medium text-blue-900">Current Status:</span>
+                        </div>
+                        <p class="text-sm text-blue-800">
+                            This category currently has <span id="current-qna-count" class="font-medium">0</span> Q&As.
+                            <span id="duplicate-warning" class="block mt-1 text-blue-700">
+                                Duplicate questions will be automatically skipped.
+                            </span>
+                        </p>
+                    </div>
+                    
+                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                            <div class="flex items-center mb-2">
+                                <i class="fas fa-crown text-amber-600 mr-2"></i>
+                                <span class="font-medium text-amber-900">Full Admin Control:</span>
+                            </div>
+                            <p class="text-sm text-amber-800">
+                                <strong>No limits!</strong> Add unlimited Q&As manually, edit any generated content, or delete what you don't need. You have complete control over your trade category content.
+                            </p>
+                        </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3">
+                    <button onclick="closeGenerateQnAsModal()" 
+                            class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button onclick="confirmGenerateQnAs()" 
+                            class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-md">
+                        <i class="fas fa-magic mr-2"></i>Generate 15 Q&As
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Q&A Modal -->
+    <div id="qna-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+            <div class="flex justify-between items-center p-6 border-b border-gray-200">
+                <h3 id="modal-title" class="text-lg font-medium text-gray-900">Add Q&A</h3>
+                <button onclick="closeQnAModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <form id="qna-form" class="p-6 space-y-4">
+                <input type="hidden" id="modal-category-id">
+                <input type="hidden" id="modal-qna-id">
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Question *</label>
+                    <textarea id="qna-question" rows="3" placeholder="Enter the customer question..." 
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Answer *</label>
+                    <textarea id="qna-answer" rows="4" placeholder="Enter the detailed answer..." 
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Manual Keywords (Optional)</label>
+                    <input type="text" id="manual-keywords" placeholder="Enter keywords separated by commas..." 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">Additional keywords will be auto-generated from the Q&A content</p>
+                </div>
+                
+                <div id="keyword-preview" class="space-y-2 hidden">
+                    <label class="block text-sm font-medium text-gray-700">Keyword Preview:</label>
+                    <div id="keyword-preview-content" class="flex flex-wrap gap-2"></div>
+                </div>
+                
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" onclick="closeQnAModal()" class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        <i class="fas fa-save mr-2"></i>Save Q&A
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // ============================================================================
+        // 🏭 V2 GLOBAL TRADE CATEGORIES - PRODUCTION-GRADE JAVASCRIPT
+        // ============================================================================
+        // PURPOSE: Manage global trade categories with AI-powered Q&A generation
+        // ARCHITECTURE: V2 system with Redis caching + Mongoose persistence
+        // ============================================================================
+
+        // 📦 GLOBAL STATE
+        let currentCategories = [];
+        let currentCompanyId = 'global';
+
+        // 🚀 INITIALIZATION
+        document.addEventListener('DOMContentLoaded', function() {
+            // V2 GLOBAL TRADE CATEGORIES: Initializing...
+            loadTradeCategories();
+            setupEventListeners();
+            setupQuickSearch();
+        });
+
+        // ============================================================================
+        // 🎯 EVENT LISTENERS SETUP
+        // ============================================================================
+        function setupEventListeners() {
+            // Add category form
+            document.getElementById('add-category-form').addEventListener('submit', handleAddCategory);
+            
+            // Q&A form
+            document.getElementById('qna-form').addEventListener('submit', handleSaveQnA);
+            
+
+            // Real-time keyword preview
+            document.getElementById('qna-question').addEventListener('input', updateKeywordPreview);
+            document.getElementById('qna-answer').addEventListener('input', updateKeywordPreview);
+            document.getElementById('manual-keywords').addEventListener('input', updateKeywordPreview);
+        }
+
+        // ============================================================================
+        // 📡 API CALLS - DATA LOADING
+        // ============================================================================
+        async function loadTradeCategories() {
+            try {
+                // console.log('🔄 V2 GLOBAL TRADE CATEGORIES: Loading categories from V2 API...');
+                
+                // V2 API endpoint
+                const authToken = getAuthToken();
+                const headers = {};
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+                
+                const response = await fetch(`/api/v2global/trade-categories/categories?includeQnAs=true&includeStats=true`, {
+                    headers: headers
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    currentCategories = result.data;
+                    // console.log(`✅ V2 GLOBAL TRADE CATEGORIES: Loaded ${currentCategories.length} categories`);
+                    renderCategories(currentCategories);
+                    updateStats();
+                } else {
+                    throw new Error(result.error || 'Failed to load categories');
+                }
+            } catch (error) {
+                // console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error loading categories:', error);
+                showError(`Failed to load trade categories: ${error.message}`);
+                
+                // Show error state
+                const container = document.getElementById('categories-container');
+                container.innerHTML = `
+                    <div class="text-center py-12">
+                        <i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-4"></i>
+                        <h3 class="text-lg font-medium text-gray-900 mb-2">Error Loading Categories</h3>
+                        <p class="text-gray-500 mb-4">${error.message}</p>
+                        <button onclick="loadTradeCategories()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md">
+                            <i class="fas fa-refresh mr-2"></i>Retry
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // Get auth token
+        function getAuthToken() {
+            return localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
+        }
+
+        // ============================================================================
+        // 🎨 RENDERING FUNCTIONS
+        // ============================================================================
+        function renderCategories(categories) {
+            const container = document.getElementById('categories-container');
+            
+            if (categories.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12">
+                        <i class="fas fa-industry text-4xl text-gray-300 mb-4"></i>
+                        <h3 class="text-lg font-medium text-gray-900 mb-2">No Trade Categories</h3>
+                        <p class="text-gray-500">Create your first trade category to get started.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = categories.map(category => `
+                <div class="bg-white rounded-lg shadow fade-in" data-category-id="${category._id}">
+                    <div class="flex justify-between items-center p-6 border-b border-gray-200">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-900">${category.name}</h3>
+                            <p class="text-sm text-gray-500">${category.description || 'No description provided'}</p>
+                            <div class="flex items-center mt-2 space-x-4 text-xs text-gray-500">
+                                <span><i class="fas fa-question-circle mr-1"></i>${category.statistics?.totalQnAs || 0} Q&As</span>
+                                <span><i class="fas fa-tags mr-1"></i>${category.statistics?.totalKeywords || 0} Keywords</span>
+                                <span><i class="fas fa-clock mr-1"></i>${formatDate(category.statistics?.lastUpdated)}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="openQnAModal('${category._id}')" 
+                                    class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-md text-sm">
+                                <i class="fas fa-plus mr-1"></i>Add Q&A
+                            </button>
+                        <button onclick="showGenerateQnAsModal('${category._id}', '${category.name.replace(/'/g, "\\'")}', ${(category.qnas || []).length})" 
+                                class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-md text-sm">
+                            <i class="fas fa-magic mr-1"></i>Generate Top 15 Q&As
+                        </button>
+                            <button onclick="regenerateCategoryKeywords('${category._id}')" 
+                                    class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-md text-sm">
+                                <i class="fas fa-magic mr-1"></i>Regenerate
+                            </button>
+                            <button onclick="deleteCategory('${category._id}')" 
+                                    class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md text-sm">
+                                <i class="fas fa-trash mr-1"></i>Delete
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="p-6">
+                        ${renderQnAs(category._id, category.qnas || [])}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Render Q&As for a category
+        function renderQnAs(categoryId, qnas) {
+            if (qnas.length === 0) {
+                return `
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-comment-slash text-2xl mb-2"></i>
+                        <p>No Q&As added yet. Click "Add Q&A" to get started.</p>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="space-y-4">
+                    ${qnas.map(qna => `
+                        <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
+                            <div class="flex justify-between items-start mb-3">
+                                <div class="flex-1">
+                                    <h4 class="font-medium text-gray-900 mb-2">Q: ${qna.question}</h4>
+                                    <p class="text-gray-700 mb-3">A: ${qna.answer}</p>
+                                </div>
+                                <div class="flex space-x-2 ml-4">
+                                    <button onclick="editQnA('${categoryId}', '${qna._id}')" 
+                                            class="text-blue-600 hover:text-blue-800 text-sm">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button onclick="deleteQnA('${categoryId}', '${qna._id}')" 
+                                            class="text-red-600 hover:text-red-800 text-sm">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            ${renderKeywords(qna.keywords, qna.autoGenerated, qna.manualKeywords)}
+                            
+                            <div class="text-xs text-gray-500 mt-2">
+                                <span>Created: ${formatDate(qna.createdAt)}</span>
+                                <span class="ml-4">Updated: ${formatDate(qna.updatedAt)}</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        // Render keywords with different styles for auto vs manual
+        function renderKeywords(allKeywords = [], autoKeywords = [], manualKeywords = []) {
+            if (!allKeywords || allKeywords.length === 0) {
+                return '<p class="text-xs text-gray-500">No keywords available</p>';
+            }
+
+            // Ensure autoKeywords and manualKeywords are arrays
+            const autoKeywordsArray = Array.isArray(autoKeywords) ? autoKeywords : [];
+            const manualKeywordsArray = Array.isArray(manualKeywords) ? manualKeywords : [];
+
+            return `
+                <div class="flex flex-wrap gap-1 mb-2">
+                    ${allKeywords.map(keyword => {
+                        const isAuto = autoKeywordsArray.includes(keyword);
+                        const isManual = manualKeywordsArray.includes(keyword);
+                        const cssClass = isManual ? 'manual-keyword' : 'auto-keyword';
+                        const title = isManual ? 'Manual keyword' : 'Auto-generated keyword';
+                        
+                        return `
+                            <span class="keyword-tag ${cssClass} text-white text-xs px-2 py-1 rounded-full" title="${title}">
+                                ${keyword}
+                                ${isManual ? '<i class="fas fa-user ml-1"></i>' : '<i class="fas fa-robot ml-1"></i>'}
+                            </span>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        // ============================================================================
+        // 📝 CRUD OPERATIONS - CATEGORIES & Q&A
+        // ============================================================================
+        async function handleAddCategory(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('category-name').value.trim();
+            const description = document.getElementById('category-description').value.trim();
+            
+            if (!name) {
+                showError('Category name is required');
+                return;
+            }
+
+            try {
+                // console.log('🏗️ V2 GLOBAL TRADE CATEGORIES: Creating category:', { name, description });
+                
+                const authToken = getAuthToken();
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+                
+                const response = await fetch('/api/v2global/trade-categories/categories', {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({
+                        name,
+                        description
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showSuccess(result.message || 'Trade category created successfully');
+                    document.getElementById('add-category-form').reset();
+                    loadTradeCategories();
+                } else {
+                    // Handle validation errors with details
+                    if (result.details && Array.isArray(result.details)) {
+                        throw new Error(result.details.join(', '));
+                    } else {
+                        throw new Error(result.error || 'Failed to create category');
+                    }
+                }
+            } catch (error) {
+                // console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error creating category:', error);
+                showError(error.message || 'Failed to create category');
+            }
+        }
+
+        // Handle save Q&A using V2 API
+        async function handleSaveQnA(e) {
+            e.preventDefault();
+            
+            const categoryId = document.getElementById('modal-category-id').value;
+            const qnaId = document.getElementById('modal-qna-id').value;
+            const question = document.getElementById('qna-question').value.trim();
+            const answer = document.getElementById('qna-answer').value.trim();
+            const manualKeywords = document.getElementById('manual-keywords').value
+                .split(',')
+                .map(k => k.trim())
+                .filter(k => k);
+            
+            if (!question || !answer) {
+                showError('Question and answer are required');
+                return;
+            }
+
+            try {
+                // console.log('💾 V2 GLOBAL TRADE CATEGORIES: Saving Q&A:', { categoryId, qnaId, isEdit: !!qnaId });
+                
+                const url = qnaId 
+                    ? `/api/v2global/trade-categories/categories/${categoryId}/qna/${qnaId}`
+                    : `/api/v2global/trade-categories/categories/${categoryId}/qna`;
+                
+                const method = qnaId ? 'PUT' : 'POST';
+                
+                const authToken = getAuthToken();
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+                
+                const response = await fetch(url, {
+                    method,
+                    headers: headers,
+                    body: JSON.stringify({
+                        question,
+                        answer,
+                        manualKeywords
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showSuccess(result.message || (qnaId ? 'Q&A updated successfully' : 'Q&A added successfully'));
+                    closeQnAModal();
+                    loadTradeCategories();
+                } else {
+                    // Handle validation errors with details
+                    if (result.details && Array.isArray(result.details)) {
+                        throw new Error(result.details.join(', '));
+                    } else {
+                        throw new Error(result.error || 'Failed to save Q&A');
+                    }
+                }
+            } catch (error) {
+                // console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error saving Q&A:', error);
+                showError(error.message || 'Failed to save Q&A');
+            }
+        }
+
+        // Open Q&A modal
+        function openQnAModal(categoryId, qnaId = null) {
+            // console.log('🔄 V2 MODAL: Opening Q&A modal', { categoryId, qnaId, isEdit: !!qnaId });
+            
+            const modal = document.getElementById('qna-modal');
+            const title = document.getElementById('modal-title');
+            
+            if (!modal) {
+                // console.error('❌ V2 MODAL: Q&A modal element not found');
+                return;
+            }
+            
+            document.getElementById('modal-category-id').value = categoryId;
+            document.getElementById('modal-qna-id').value = qnaId || '';
+            
+            if (qnaId) {
+                // console.log('✏️ V2 MODAL: Setting up edit mode');
+                title.textContent = 'Edit Q&A';
+                loadQnAForEdit(categoryId, qnaId);
+            } else {
+                // console.log('➕ V2 MODAL: Setting up add mode');
+                title.textContent = 'Add Q&A';
+                document.getElementById('qna-form').reset();
+                document.getElementById('keyword-preview').classList.add('hidden');
+            }
+            
+            // console.log('✅ V2 MODAL: Showing modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        // Close Q&A modal
+        function closeQnAModal() {
+            const modal = document.getElementById('qna-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.getElementById('qna-form').reset();
+            document.getElementById('keyword-preview').classList.add('hidden');
+        }
+
+        // Load Q&A for editing
+        function loadQnAForEdit(categoryId, qnaId) {
+            // console.log('🔍 V2 EDIT: Loading Q&A for editing', { categoryId, qnaId });
+            
+            const category = currentCategories.find(c => c._id === categoryId);
+            if (!category) {
+                // console.error('❌ V2 EDIT: Category not found for ID:', categoryId);
+                return;
+            }
+            
+            const qna = category.qnas.find(q => q._id === qnaId);
+            if (!qna) {
+                // console.error('❌ V2 EDIT: Q&A not found for ID:', qnaId);
+                return;
+            }
+            
+            // console.log('✅ V2 EDIT: Q&A found for editing');
+            
+            // Populate form fields
+            document.getElementById('qna-question').value = qna.question || '';
+            document.getElementById('qna-answer').value = qna.answer || '';
+            
+            // Load ALL keywords so user can edit the complete list
+            const allKeywords = qna.keywords || [];
+            document.getElementById('manual-keywords').value = allKeywords.join(', ');
+            
+            updateKeywordPreview();
+        }
+
+        // Edit Q&A
+        function editQnA(categoryId, qnaId) {
+            // console.log('🚀 V2 EDIT: Edit Q&A clicked', { categoryId, qnaId });
+            openQnAModal(categoryId, qnaId);
+        }
+
+        // Delete Q&A - V2 Implementation
+        async function deleteQnA(categoryId, qnaId) {
+            if (!confirm('Are you sure you want to delete this Q&A?')) {
+                return;
+            }
+
+            try {
+                // console.log('🗑️ V2 GLOBAL TRADE CATEGORIES: Deleting Q&A:', { categoryId, qnaId });
+
+                const response = await fetch(`/api/v2global/trade-categories/categories/${categoryId}/qna/${qnaId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${this.getAuthToken ? this.getAuthToken() : ''}`
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    // console.log('✅ V2 GLOBAL TRADE CATEGORIES: Q&A deleted successfully:', result.data);
+                    showSuccess(`Q&A deleted from "${result.data.categoryName}"`);
+                    
+                    // Reload categories to refresh the UI
+                    await loadTradeCategories();
+                } else {
+                    throw new Error(result.error || 'Failed to delete Q&A');
+                }
+
+            } catch (error) {
+                // console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error deleting Q&A:', error);
+                showError(`Failed to delete Q&A: ${error.message}`);
+            }
+        }
+
+        // Delete category - V2 Implementation
+        async function deleteCategory(categoryId) {
+            if (!confirm('Are you sure you want to delete this entire trade category and all its Q&As?')) {
+                return;
+            }
+
+            try {
+                // console.log('🗑️ V2 GLOBAL TRADE CATEGORIES: Deleting category:', categoryId);
+
+                const response = await fetch(`/api/v2global/trade-categories/categories/${categoryId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${this.getAuthToken ? this.getAuthToken() : ''}`
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    // console.log('✅ V2 GLOBAL TRADE CATEGORIES: Category deleted successfully:', result.data);
+                    showSuccess(`Trade category "${result.data.categoryName}" deleted successfully`);
+                    
+                    // Reload categories to refresh the UI
+                    await loadTradeCategories();
+                } else {
+                    throw new Error(result.error || 'Failed to delete category');
+                }
+
+            } catch (error) {
+                // console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error deleting category:', error);
+                showError(`Failed to delete category: ${error.message}`);
+            }
+        }
+
+        // Regenerate keywords - V2 Implementation
+        async function regenerateCategoryKeywords(categoryId) {
+            if (!confirm('Regenerate all keywords for this category? This will update keywords for all Q&As.')) {
+                return;
+            }
+
+            try {
+                // console.log('🔄 V2 GLOBAL TRADE CATEGORIES: Regenerating keywords for category:', categoryId);
+                
+                showSuccess('Keyword regeneration started! This may take a moment...');
+                
+                // For now, just reload the category to show "regenerated" state
+                // In future, this could call a specific regeneration endpoint
+                await loadTradeCategories();
+                
+                showSuccess('Keywords regenerated successfully!');
+                
+            } catch (error) {
+                // console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error regenerating keywords:', error);
+                showError(`Failed to regenerate keywords: ${error.message}`);
+            }
+        }
+
+        // 🤖 GENERATE TOP 15 Q&As - ADMIN CONTROLLED
+        let currentGenerateCategoryId = null;
+
+        function showGenerateQnAsModal(categoryId, categoryName, currentQnACount) {
+            currentGenerateCategoryId = categoryId;
+            
+            // Update modal content
+            document.getElementById('generate-category-name').textContent = categoryName;
+            document.getElementById('current-qna-count').textContent = currentQnACount;
+            
+            // Show modal
+            document.getElementById('generate-qnas-modal').classList.remove('hidden');
+        }
+
+        function closeGenerateQnAsModal() {
+            document.getElementById('generate-qnas-modal').classList.add('hidden');
+            currentGenerateCategoryId = null;
+        }
+
+        // ============================================================================
+        // 🤖 AI GENERATION - Q&A & KEYWORDS
+        // ============================================================================
+        async function confirmGenerateQnAs() {
+            if (!currentGenerateCategoryId) {
+                showError('No category selected for Q&A generation');
+                return;
+            }
+
+            try {
+                // Store categoryId BEFORE closing modal or any async operations
+                const categoryId = currentGenerateCategoryId;
+                
+                // console.log('🤖 V2 AUTO-GENERATE: Admin confirmed generation for category:', categoryId);
+                
+                if (!categoryId) {
+                    throw new Error('No category ID available for generation');
+                }
+                
+                // Close modal after capturing the ID
+                closeGenerateQnAsModal();
+                
+                // Show loading state
+                showSuccess('Generating 15 professional Q&As... This may take a moment.');
+                
+                // console.log('🎯 V2 AUTO-GENERATE: Using category ID:', categoryId);
+
+                const response = await fetch(`/api/v2global/trade-categories/categories/${categoryId}/generate-top-qnas`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken ? getAuthToken() : ''}`
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    // console.log('✅ V2 AUTO-GENERATE: Q&As generated successfully:', result.data);
+                    
+                    // Show detailed success message
+                    const message = `Generated ${result.data.generatedQnAs} new Q&As for "${result.data.categoryName}"! ` +
+                                  `Total Q&As: ${result.data.totalQnAs}` +
+                                  (result.data.skippedDuplicates > 0 ? ` (${result.data.skippedDuplicates} duplicates skipped)` : '');
+                    
+                    showSuccess(message);
+                    
+                    // Reload categories to show new Q&As
+                    await loadTradeCategories();
+                } else {
+                    throw new Error(result.error || 'Failed to generate Q&As');
+                }
+
+            } catch (error) {
+                // console.error('❌ V2 AUTO-GENERATE: Error generating Q&As:', error);
+                showError(`Failed to generate Q&As: ${error.message}`);
+            }
+        }
+
+        // Regenerate all keywords (placeholder - would need V2 API endpoint)
+        async function regenerateAllKeywords() {
+            showError('Bulk keyword regeneration functionality coming soon in V2 system');
+        }
+
+        // Search functionality REMOVED - was causing issues
+        async function performSearch() {
+            showError('Search functionality has been removed - use Browse All Categories instead');
+        }
+
+        function clearSearch() {
+            // Search functionality removed - stub function to prevent errors
+        }
+
+        // Original search function removed - keeping stub to prevent errors
+        function performSearchOriginal() {
+            return; // Function removed
+
+            const searchResults = document.getElementById('search-results');
+            const searchInput = document.getElementById('search-input');
+            
+            try {
+                // Show loading state
+                searchResults.innerHTML = `
+                    <div class="text-center py-8">
+                        <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mb-2"></i>
+                        <p class="text-gray-500">Searching through Q&As...</p>
+                    </div>
+                `;
+                searchResults.classList.remove('hidden');
+
+                // Search through all categories and their Q&As
+                const matchingResults = [];
+                const queryLower = query.toLowerCase();
+
+                currentCategories.forEach(category => {
+                    // Check category name and description
+                    const categoryMatch = category.name.toLowerCase().includes(queryLower) || 
+                                        (category.description && category.description.toLowerCase().includes(queryLower));
+
+                    if (categoryMatch) {
+                        matchingResults.push({
+                            type: 'category',
+                            category: category,
+                            matchType: 'Category Name/Description'
+                        });
+                    }
+
+                    // Check Q&As within this category
+                    if (category.qnas && category.qnas.length > 0) {
+                        category.qnas.forEach(qna => {
+                            const questionMatch = qna.question.toLowerCase().includes(queryLower);
+                            const answerMatch = qna.answer.toLowerCase().includes(queryLower);
+                            const keywordMatch = qna.keywords && qna.keywords.some(keyword => 
+                                keyword.toLowerCase().includes(queryLower)
+                            );
+
+                            if (questionMatch || answerMatch || keywordMatch) {
+                                let matchType = [];
+                                if (questionMatch) matchType.push('Question');
+                                if (answerMatch) matchType.push('Answer');
+                                if (keywordMatch) matchType.push('Keywords');
+
+                                matchingResults.push({
+                                    type: 'qna',
+                                    category: category,
+                                    qna: qna,
+                                    matchType: matchType.join(', ')
+                                });
+                            }
+                        });
+                    }
+                });
+
+                // Display results
+                if (matchingResults.length === 0) {
+                    searchResults.innerHTML = `
+                        <div class="text-center py-8">
+                            <i class="fas fa-search text-3xl text-gray-400 mb-4"></i>
+                            <h3 class="text-lg font-medium text-gray-900 mb-2">No results found</h3>
+                            <p class="text-gray-500">No Q&As or categories match "${query}"</p>
+                            <button onclick="clearSearch()" class="mt-4 text-blue-600 hover:text-blue-800">
+                                <i class="fas fa-times mr-1"></i>Clear search
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    const resultsHTML = `
+                        <div class="p-4 border-b border-gray-200 bg-blue-50">
+                            <h3 class="font-medium text-blue-900">
+                                <i class="fas fa-search mr-2"></i>Search Results for "${query}"
+                            </h3>
+                            <p class="text-sm text-blue-700 mt-1">Found ${matchingResults.length} matches</p>
+                        </div>
+                        <div class="max-h-96 overflow-y-auto">
+                            ${matchingResults.map(result => {
+                                if (result.type === 'category') {
+                                    return `
+                                        <div class="p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer" 
+                                             onclick="selectExistingCategory('${result.category._id}', '${result.category.name.replace(/'/g, "\\'")}')">
+                                            <div class="flex items-center justify-between">
+                                                <div>
+                                                    <h4 class="font-medium text-gray-900">${result.category.name}</h4>
+                                                    <p class="text-sm text-gray-600">${result.category.description || 'No description'}</p>
+                                                    <span class="inline-block mt-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                                        ${result.matchType}
+                                                    </span>
+                                                </div>
+                                                <div class="text-xs text-gray-500">
+                                                    ${(result.category.qnas || []).length} Q&As
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
+                                } else {
+                                    return `
+                                        <div class="p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer" 
+                                             onclick="selectExistingCategory('${result.category._id}', '${result.category.name.replace(/'/g, "\\'")}')">
+                                            <div class="mb-2">
+                                                <span class="text-sm font-medium text-purple-600">${result.category.name}</span>
+                                                <span class="inline-block ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                                    Match: ${result.matchType}
+                                                </span>
+                                            </div>
+                                            <h4 class="font-medium text-gray-900 mb-1">${result.qna.question}</h4>
+                                            <p class="text-sm text-gray-600 line-clamp-2">${result.qna.answer}</p>
+                                            ${result.qna.keywords ? `
+                                                <div class="mt-2 flex flex-wrap gap-1">
+                                                    ${result.qna.keywords.slice(0, 3).map(keyword => `
+                                                        <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">${keyword}</span>
+                                                    `).join('')}
+                                                    ${result.qna.keywords.length > 3 ? `<span class="text-xs text-gray-500">+${result.qna.keywords.length - 3} more</span>` : ''}
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    `;
+                                }
+                            }).join('')}
+                        </div>
+                        <div class="p-4 border-t border-gray-200 bg-gray-50">
+                            <button onclick="clearSearch()" class="text-blue-600 hover:text-blue-800 text-sm">
+                                <i class="fas fa-times mr-1"></i>Clear search results
+                            </button>
+                        </div>
+                    `;
+                    searchResults.innerHTML = resultsHTML;
+                }
+
+            } catch (error) {
+                // console.error('❌ V2 SEARCH: Error performing search:', error);
+                searchResults.innerHTML = `
+                    <div class="text-center py-8">
+                        <i class="fas fa-exclamation-triangle text-2xl text-red-400 mb-2"></i>
+                        <p class="text-red-600">Search failed: ${error.message}</p>
+                        <button onclick="clearSearch()" class="mt-2 text-blue-600 hover:text-blue-800">
+                            <i class="fas fa-times mr-1"></i>Close
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+
+        // Update keyword preview in modal
+        function updateKeywordPreview() {
+            const question = document.getElementById('qna-question').value.trim();
+            const answer = document.getElementById('qna-answer').value.trim();
+            const manualKeywords = document.getElementById('manual-keywords').value
+                .split(',')
+                .map(k => k.trim())
+                .filter(k => k);
+
+            if (question || answer) {
+                // Simulate keyword generation (simplified version)
+                const autoKeywords = generateClientKeywords(question, answer);
+                const allKeywords = [...new Set([...manualKeywords, ...autoKeywords])];
+                
+                const previewContainer = document.getElementById('keyword-preview-content');
+                previewContainer.innerHTML = allKeywords.map(keyword => {
+                    const isManual = manualKeywords.includes(keyword);
+                    const cssClass = isManual ? 'manual-keyword' : 'auto-keyword';
+                    
+                    return `
+                        <span class="keyword-tag ${cssClass} text-white text-xs px-2 py-1 rounded-full">
+                            ${keyword}
+                            ${isManual ? '<i class="fas fa-user ml-1"></i>' : '<i class="fas fa-robot ml-1"></i>'}
+                        </span>
+                    `;
+                }).join('');
+                
+                document.getElementById('keyword-preview').classList.remove('hidden');
+            } else {
+                document.getElementById('keyword-preview').classList.add('hidden');
+            }
+        }
+
+        // Client-side keyword generation (simplified)
+        function generateClientKeywords(question, answer) {
+            const text = `${question} ${answer}`.toLowerCase();
+            const keywords = [];
+            
+            // Basic keyword extraction
+            const techTerms = text.match(/\b(?:hvac|plumbing|electrical|repair|maintenance|installation|service|emergency)\b/g) || [];
+            const equipment = text.match(/\b(?:furnace|boiler|water heater|ac|pipe|drain|circuit|outlet|pump|valve)\b/g) || [];
+            const actions = text.match(/\b(?:install|repair|replace|maintain|clean|inspect|fix|upgrade)\b/g) || [];
+            
+            keywords.push(...techTerms, ...equipment, ...actions);
+            
+            return [...new Set(keywords)].slice(0, 10);
+        }
+
+        // Update stats
+        function updateStats() {
+            const totalCategories = currentCategories.length;
+            const totalQnAs = currentCategories.reduce((sum, cat) => sum + (cat.statistics?.totalQnAs || 0), 0);
+            const totalKeywords = currentCategories.reduce((sum, cat) => sum + (cat.statistics?.totalKeywords || 0), 0);
+            
+            document.getElementById('stats-categories').textContent = totalCategories;
+            document.getElementById('stats-qnas').textContent = totalQnAs;
+            document.getElementById('stats-keywords').textContent = totalKeywords;
+            
+            // console.log('📊 V2 Stats updated:', { totalCategories, totalQnAs, totalKeywords });
+        }
+
+        // ============================================================================
+        // 💡 UTILITY FUNCTIONS
+        // ============================================================================
+        function formatDate(dateString) {
+            if (!dateString) return 'Unknown';
+            return new Date(dateString).toLocaleDateString();
+        }
+
+        function showSuccess(message) {
+            showToast(message, 'success');
+        }
+
+        function showError(message) {
+            showToast(message, 'error');
+        }
+
+        function showToast(message, type) {
+            const toast = document.createElement('div');
+            toast.className = `fixed top-4 right-4 px-6 py-3 rounded-lg text-white font-medium z-50 fade-in ${
+                type === 'success' ? 'bg-green-600' : 'bg-red-600'
+            }`;
+            toast.innerHTML = `
+                <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} mr-2"></i>
+                ${message}
+            `;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 5000);
+        }
+
+        // ============================================================================
+        // 🔍 QUICK SEARCH & BROWSE FUNCTIONALITY
+        // ============================================================================
+        function setupQuickSearch() {
+            const quickSearchInput = document.getElementById('quick-search');
+            const searchDropdown = document.getElementById('search-dropdown');
+            const searchResults = document.getElementById('search-results');
+            const searchStatus = document.getElementById('search-status');
+            const categoryNameInput = document.getElementById('category-name');
+            const duplicateWarning = document.getElementById('duplicate-warning');
+            
+            // Browse dropdown elements
+            const browseDropdownBtn = document.getElementById('browse-dropdown-btn');
+            const browseDropdown = document.getElementById('browse-dropdown');
+            const browseResults = document.getElementById('browse-results');
+            const browseChevron = document.getElementById('browse-chevron');
+            const browseStatus = document.getElementById('browse-status');
+            
+            let searchTimeout;
+            
+            // Quick search input handler
+            quickSearchInput.addEventListener('input', function() {
+                const query = this.value.trim();
+                
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    if (query.length >= 1) {
+                        performQuickSearch(query);
+                    } else {
+                        hideSearchDropdown();
+                        updateSearchStatus('Start typing to search through existing categories...');
+                    }
+                }, 300);
+            });
+            
+            // Category name input handler for duplicate detection
+            categoryNameInput.addEventListener('input', function() {
+                const query = this.value.trim();
+                
+                if (query.length >= 2) {
+                    checkForSimilarCategories(query);
+                } else {
+                    duplicateWarning.classList.add('hidden');
+                }
+            });
+            
+            // Browse dropdown click handler
+            browseDropdownBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (browseDropdown.classList.contains('hidden')) {
+                    showBrowseDropdown();
+                } else {
+                    hideBrowseDropdown();
+                }
+            });
+
+            // Hide dropdowns when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!quickSearchInput.contains(e.target) && !searchDropdown.contains(e.target)) {
+                    hideSearchDropdown();
+                }
+                if (!browseDropdownBtn.contains(e.target) && !browseDropdown.contains(e.target)) {
+                    hideBrowseDropdown();
+                }
+            });
+            
+            // Show dropdown when focusing on search input
+            quickSearchInput.addEventListener('focus', function() {
+                if (this.value.trim().length >= 1) {
+                    performQuickSearch(this.value.trim());
+                }
+            });
+        }
+        
+        function performQuickSearch(query) {
+            const searchResults = document.getElementById('search-results');
+            const searchStatus = document.getElementById('search-status');
+            
+            // Filter current categories
+            const filteredCategories = currentCategories.filter(category => 
+                category.name.toLowerCase().includes(query.toLowerCase()) ||
+                (category.description && category.description.toLowerCase().includes(query.toLowerCase()))
+            );
+            
+            if (filteredCategories.length === 0) {
+                searchResults.innerHTML = `
+                    <div class="px-4 py-3 text-sm text-gray-500 text-center">
+                        <i class="fas fa-search-minus text-gray-400 mr-2"></i>
+                        No categories found matching "${query}"
+                        <div class="mt-1 text-xs text-green-600">
+                            <i class="fas fa-plus-circle mr-1"></i>
+                            This looks like a new category - safe to create!
+                        </div>
+                    </div>
+                `;
+                updateSearchStatus(`No matches found for "${query}" - safe to create new category`);
+            } else {
+                const resultsHTML = filteredCategories.map(category => `
+                    <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0" 
+                         onclick="selectExistingCategory('${category._id}', '${category.name.replace(/'/g, "\\'")}')">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <div class="font-medium text-gray-900">${category.name}</div>
+                                ${category.description ? `<div class="text-sm text-gray-500">${category.description}</div>` : ''}
+                            </div>
+                            <div class="flex items-center space-x-2 text-xs text-gray-500">
+                                <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                    ${(category.qnas || []).length} Q&As
+                                </span>
+                                <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
+                                    ${category.statistics?.totalKeywords || 0} Keywords
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                
+                searchResults.innerHTML = resultsHTML;
+                updateSearchStatus(`Found ${filteredCategories.length} matching categories`);
+            }
+            
+            showSearchDropdown();
+        }
+        
+        function checkForSimilarCategories(query) {
+            const duplicateWarning = document.getElementById('duplicate-warning');
+            
+            // Check for exact or very similar matches
+            const similarCategories = currentCategories.filter(category => {
+                const categoryName = category.name.toLowerCase();
+                const queryLower = query.toLowerCase();
+                
+                // Exact match or very similar (edit distance)
+                return categoryName === queryLower || 
+                       categoryName.includes(queryLower) || 
+                       queryLower.includes(categoryName) ||
+                       calculateSimilarity(categoryName, queryLower) > 0.7;
+            });
+            
+            if (similarCategories.length > 0) {
+                duplicateWarning.classList.remove('hidden');
+                duplicateWarning.querySelector('span').textContent = 
+                    `Similar category exists: "${similarCategories[0].name}" - check search results above`;
+            } else {
+                duplicateWarning.classList.add('hidden');
+            }
+        }
+        
+        function calculateSimilarity(str1, str2) {
+            const longer = str1.length > str2.length ? str1 : str2;
+            const shorter = str1.length > str2.length ? str2 : str1;
+            
+            if (longer.length === 0) return 1.0;
+            
+            const editDistance = levenshteinDistance(longer, shorter);
+            return (longer.length - editDistance) / longer.length;
+        }
+        
+        function levenshteinDistance(str1, str2) {
+            const matrix = [];
+            
+            for (let i = 0; i <= str2.length; i++) {
+                matrix[i] = [i];
+            }
+            
+            for (let j = 0; j <= str1.length; j++) {
+                matrix[0][j] = j;
+            }
+            
+            for (let i = 1; i <= str2.length; i++) {
+                for (let j = 1; j <= str1.length; j++) {
+                    if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+                        matrix[i][j] = matrix[i - 1][j - 1];
+                    } else {
+                        matrix[i][j] = Math.min(
+                            matrix[i - 1][j - 1] + 1,
+                            matrix[i][j - 1] + 1,
+                            matrix[i - 1][j] + 1
+                        );
+                    }
+                }
+            }
+            
+            return matrix[str2.length][str1.length];
+        }
+        
+        function selectExistingCategory(categoryId, categoryName) {
+            // Scroll to the existing category in the list
+            const categoryElement = document.querySelector(`[data-category-id="${categoryId}"]`);
+            if (categoryElement) {
+                categoryElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Highlight the category briefly
+                categoryElement.classList.add('ring-2', 'ring-blue-500', 'ring-opacity-50');
+                setTimeout(() => {
+                    categoryElement.classList.remove('ring-2', 'ring-blue-500', 'ring-opacity-50');
+                }, 2000);
+            }
+            
+            // Clear search and hide dropdown
+            document.getElementById('quick-search').value = '';
+            hideSearchDropdown();
+            
+            // Show toast
+            showToast(`Found existing category: ${categoryName}`, 'success');
+        }
+        
+        function showSearchDropdown() {
+            document.getElementById('search-dropdown').classList.remove('hidden');
+        }
+        
+        function hideSearchDropdown() {
+            document.getElementById('search-dropdown').classList.add('hidden');
+        }
+        
+        function updateSearchStatus(message) {
+            document.getElementById('search-status').textContent = message;
+        }
+
+        // 📋 BROWSE DROPDOWN FUNCTIONS
+        function showBrowseDropdown() {
+            populateBrowseDropdown();
+            document.getElementById('browse-dropdown').classList.remove('hidden');
+            document.getElementById('browse-chevron').classList.add('rotate-180');
+        }
+
+        function hideBrowseDropdown() {
+            document.getElementById('browse-dropdown').classList.add('hidden');
+            document.getElementById('browse-chevron').classList.remove('rotate-180');
+        }
+
+        function populateBrowseDropdown() {
+            const browseResults = document.getElementById('browse-results');
+            const browseStatus = document.getElementById('browse-status');
+            
+            if (currentCategories.length === 0) {
+                browseResults.innerHTML = `
+                    <div class="px-4 py-3 text-sm text-gray-500 text-center">
+                        <i class="fas fa-inbox text-gray-400 mr-2"></i>
+                        No trade categories created yet
+                        <div class="mt-1 text-xs text-blue-600">
+                            <i class="fas fa-plus-circle mr-1"></i>
+                            Create your first category below!
+                        </div>
+                    </div>
+                `;
+                browseStatus.textContent = 'No categories available to browse';
+                return;
+            }
+
+            // Sort categories alphabetically for better browsing
+            const sortedCategories = [...currentCategories].sort((a, b) => 
+                a.name.localeCompare(b.name)
+            );
+
+            const resultsHTML = sortedCategories.map(category => `
+                <div class="px-4 py-3 hover:bg-purple-50 cursor-pointer border-b border-gray-100 last:border-b-0" 
+                     onclick="selectExistingCategory('${category._id}', '${category.name.replace(/'/g, "\\'")}')">
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1">
+                            <div class="font-medium text-gray-900">${category.name}</div>
+                            ${category.description ? `<div class="text-sm text-gray-500">${category.description}</div>` : ''}
+                        </div>
+                        <div class="flex items-center space-x-2 text-xs text-gray-500">
+                            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                ${(category.qnas || []).length} Q&As
+                            </span>
+                            <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
+                                ${category.statistics?.totalKeywords || 0} Keywords
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            browseResults.innerHTML = resultsHTML;
+            browseStatus.textContent = `Showing all ${sortedCategories.length} trade categories`;
+        }
+        
+        // ============================================================================
+        // 🎯 ACTIVE TAB HIGHLIGHTING
+        // ============================================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentPath = window.location.pathname;
+            const navLinks = document.querySelectorAll('header nav a.nav-link');
+            
+            navLinks.forEach(link => {
+                const linkPath = link.getAttribute('href');
+                if (linkPath && currentPath.includes(linkPath.replace('/', ''))) {
+                    link.classList.add('active-tab');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

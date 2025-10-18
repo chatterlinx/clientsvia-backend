@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClientVia.ai - Admin Dashboard</title>
+    <script>
+        // Suppress Tailwind CDN warning in production
+        if (typeof console !== 'undefined' && console.warn) {
+            const originalWarn = console.warn;
+            console.warn = function(...args) {
+                if (args[0] && typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) {
+                    return; // Suppress Tailwind CDN warning
+                }
+                originalWarn.apply(console, args);
+            };
+        }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        /* ============================================================================ */
+        /* 🎨 MODERN NAVIGATION TABS */
+        /* ============================================================================ */
+        .nav-link {
+            position: relative;
+            padding: 0.75rem 1.25rem;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            color: #6B7280; /* gray-500 */
+            border-radius: 0.5rem;
+            transition: all 0.2s ease-in-out;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .nav-link:hover {
+            color: #111827; /* gray-900 */
+            background-color: #F3F4F6; /* gray-100 */
+            transform: translateY(-1px);
+        }
+        
+        .nav-link.active-tab {
+            color: #4F46E5; /* indigo-600 */
+            background-color: #EEF2FF; /* indigo-50 */
+            font-weight: 600;
+            box-shadow: 0 1px 3px 0 rgba(79, 70, 229, 0.1);
+        }
+        
+        .nav-link.active-tab::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #4F46E5, transparent);
+            border-radius: 2px 2px 0 0;
+        }
+        
+        .nav-link i {
+            font-size: 1.125rem;
+        }
+        
+        /* Logout button special styling */
+        .nav-link.text-red-600 {
+            color: #DC2626 !important;
+        }
+        
+        .nav-link.text-red-600:hover {
+            color: #991B1B !important;
+            background-color: #FEE2E2 !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="app" class="flex flex-col min-h-screen">
+        <header class="bg-white shadow-md sticky top-0 z-50">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex-shrink-0">
+                        <a href="/index.html" class="text-2xl font-bold text-indigo-600">
+                            <i class="fas fa-tachometer-alt mr-2"></i>ClientVia.ai
+                        </a>
+                    </div>
+                    <nav class="hidden md:flex items-center gap-2">
+                        <a href="/directory.html" class="nav-link" id="nav-directory">
+                            <i class="fas fa-list-alt"></i>
+                            <span>Directory</span>
+                        </a>
+                        <a href="/add-company.html" class="nav-link" id="nav-add-company">
+                            <i class="fas fa-plus-circle"></i>
+                            <span>Add Company</span>
+                        </a>
+                        <a href="/v2global-trade-categories.html" class="nav-link" id="nav-trade-categories">
+                            <i class="fas fa-tags"></i>
+                            <span>Global Trade Categories</span>
+                        </a>
+                        <a href="/admin-global-instant-responses.html" class="nav-link" id="nav-global-ai-brain">
+                            <i class="fas fa-brain"></i>
+                            <span>Global AI Brain</span>
+                        </a>
+                        <!-- 🗑️ DELETED: Monitoring tab - legacy alert system destroyed -->
+                        <div class="h-6 w-px bg-gray-300 mx-2"></div>
+                        <button onclick="logout()" class="nav-link text-red-600 hover:text-red-800" id="nav-logout">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span>Logout</span>
+                        </button>
+                    </nav>
+                    <div class="md:hidden flex items-center">
+                        <button id="mobile-menu-button" class="text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500">
+                            <span class="sr-only">Open main menu</span>
+                            <i class="fas fa-bars text-2xl"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="mobile-menu" class="md:hidden hidden">
+                <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                    <a href="/directory.html" class="block nav-link text-base" id="mobile-nav-directory">Directory</a>
+                    <a href="/add-company.html" class="block nav-link text-base" id="mobile-nav-add-company">Add Company</a>
+                    <a href="/v2global-trade-categories.html" class="block nav-link text-base" id="mobile-nav-trade-categories">V2 Global Trade Categories</a>
+                    <!-- 🗑️ DELETED: Mobile monitoring tab - legacy alert system destroyed -->
+                    <button onclick="logout()" class="block nav-link text-base text-red-600 hover:text-red-800 text-left w-full" id="mobile-nav-logout">
+                        <i class="fas fa-sign-out-alt mr-1"></i>Logout
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg">
+                <h1 class="text-3xl font-semibold text-gray-800 mb-6">Welcome to the Dashboard!</h1>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="bg-gray-50 p-6 rounded-lg shadow">
+                        <h2 class="text-xl font-medium text-gray-700 mb-2">Total Companies</h2>
+                        <p class="text-4xl font-bold text-indigo-600" id="total-companies-count">0</p>
+                        <p class="text-sm text-gray-500 mt-1">Managed via this platform.</p>
+                    </div>
+                    <div class="bg-gray-50 p-6 rounded-lg shadow">
+                        <h2 class="text-xl font-medium text-gray-700 mb-2">Active AI Agents</h2>
+                        <p class="text-4xl font-bold text-indigo-600" id="active-companies-count">0</p> 
+                        <p class="text-sm text-gray-500 mt-1">Currently operational.</p>
+                    </div>
+                    <div class="bg-gray-50 p-6 rounded-lg shadow">
+                        <h2 class="text-xl font-medium text-gray-700 mb-2">Recent Activity</h2>
+                        <ul class="list-disc list-inside text-gray-600 space-y-1" id="recent-activity-list">
+                            <li class="text-gray-400 italic">No recent activity to display.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- ============================================================================ -->
+                <!-- 🎯 MODERN CARD-BASED NAVIGATION -->
+                <!-- ============================================================================ -->
+                <div class="mt-10">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-6">Quick Navigation</h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        
+                        <!-- Directory Card -->
+                        <a href="/directory.html" class="group bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-indigo-500 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-14 h-14 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-500 transition-colors duration-300">
+                                    <i class="fas fa-list-alt text-2xl text-indigo-600 group-hover:text-white transition-colors duration-300"></i>
+                                </div>
+                            </div>
+                            <h3 class="text-xl font-semibold text-gray-800 mb-2 group-hover:text-indigo-600 transition-colors duration-300">Directory</h3>
+                            <p class="text-sm text-gray-600">Browse and manage all companies in your platform</p>
+                        </a>
+
+                        <!-- Add Company Card -->
+                        <a href="/add-company.html" class="group bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-green-500 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-14 h-14 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-500 transition-colors duration-300">
+                                    <i class="fas fa-plus-circle text-2xl text-green-600 group-hover:text-white transition-colors duration-300"></i>
+                                </div>
+                            </div>
+                            <h3 class="text-xl font-semibold text-gray-800 mb-2 group-hover:text-green-600 transition-colors duration-300">Add Company</h3>
+                            <p class="text-sm text-gray-600">Quick 2-field setup to onboard new clients</p>
+                        </a>
+
+                        <!-- V2 Global Trade Categories Card -->
+                        <a href="/v2global-trade-categories.html" class="group bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-purple-500 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-14 h-14 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-500 transition-colors duration-300">
+                                    <i class="fas fa-tags text-2xl text-purple-600 group-hover:text-white transition-colors duration-300"></i>
+                                </div>
+                            </div>
+                            <h3 class="text-xl font-semibold text-gray-800 mb-2 group-hover:text-purple-600 transition-colors duration-300">V2 Global Trade Categories</h3>
+                            <p class="text-sm text-gray-600">AI-powered Q&A with auto-generated keywords</p>
+                        </a>
+
+                        <!-- Global AI Brain Card -->
+                        <a href="/admin-global-instant-responses.html" class="group bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-blue-500 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-14 h-14 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-500 transition-colors duration-300">
+                                    <i class="fas fa-brain text-2xl text-blue-600 group-hover:text-white transition-colors duration-300"></i>
+                                </div>
+                            </div>
+                            <h3 class="text-xl font-semibold text-gray-800 mb-2 group-hover:text-blue-600 transition-colors duration-300">Global AI Brain</h3>
+                            <p class="text-sm text-gray-600">Manage 100+ world-class instant response scenarios</p>
+                        </a>
+
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="bg-white border-t border-gray-200 mt-auto">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 text-center text-gray-500 text-sm">
+                &copy; <span id="current-year"></span> ClientVia.ai All rights reserved.
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // JavaScript for Mobile Menu Toggle
+        const mobileMenuButton = document.getElementById('mobile-menu-button');
+        const mobileMenu = document.getElementById('mobile-menu');
+        if (mobileMenuButton && mobileMenu) {
+            mobileMenuButton.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+            });
+        }
+
+        // JavaScript for Active Tab Highlighting and Dashboard Stats
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('[JS index.html] DOMContentLoaded: Script initiated.');
+            
+            // Check authentication on page load
+            const token = localStorage.getItem('adminToken');
+            if (!token) {
+                console.log('[JS index.html] No authentication token found - redirecting to login');
+                window.location.href = '/login.html';
+                return;
+            }
+            
+            // Active Tab Highlighting
+            let currentPath = window.location.pathname.replace(/\/$/, ""); 
+            if (currentPath === "" || currentPath === "/") currentPath = "/index.html"; 
+
+            const navLinks = document.querySelectorAll('header nav a.nav-link, #mobile-menu a.nav-link');
+            navLinks.forEach(link => {
+                let linkPath = new URL(link.href).pathname.replace(/\/$/, "");
+                if (linkPath === "" || linkPath === "/") linkPath = "/index.html"; 
+
+                link.classList.remove('active-tab');
+                link.classList.add('text-gray-700'); 
+
+                if (linkPath === currentPath) {
+                    link.classList.add('active-tab');
+                    link.classList.remove('text-gray-700');
+                }
+            });
+
+            const yearSpan = document.getElementById('current-year');
+            if (yearSpan) {
+                yearSpan.textContent = new Date().getFullYear(); // This will correctly set 2025 this year
+            }
+
+            // Fetch and display dashboard stats
+            const totalCompaniesCountEl = document.getElementById('total-companies-count');
+            const activeCompaniesCountEl = document.getElementById('active-companies-count');
+
+            async function fetchDashboardStats() {
+                console.log('[JS index.html] fetchDashboardStats: Fetching company data for stats...');
+                if (!totalCompaniesCountEl || !activeCompaniesCountEl) {
+                    console.error('[JS index.html] Placeholder elements for stats not found.');
+                    return;
+                }
+
+                try {
+                    const apiUrl = `${window.location.origin}/api/companies`; 
+                    console.log('[JS index.html] fetchDashboardStats: Fetching from URL:', apiUrl);
+                    
+                    // Get JWT token from localStorage
+                    const token = localStorage.getItem('adminToken');
+                    const headers = {
+                        'Content-Type': 'application/json'
+                    };
+                    
+                    // Add Authorization header if token exists
+                    if (token) {
+                        headers['Authorization'] = `Bearer ${token}`;
+                    }
+                    
+                    const response = await fetch(apiUrl, {
+                        credentials: 'include', // Include cookies for authentication
+                        headers: headers
+                    }); 
+
+                    if (response.status === 401) {
+                        // Authentication required - redirect to login immediately
+                        console.log('[JS index.html] Authentication required - redirecting to login');
+                        
+                        // Clear any invalid tokens
+                        localStorage.removeItem('adminToken');
+                        localStorage.removeItem('adminUser');
+                        
+                        // Redirect to login page
+                        window.location.href = '/login.html';
+                        return;
+                        
+                        // Create login message with button
+                        const loginMessage = document.createElement('div');
+                        loginMessage.className = 'bg-blue-100 border border-blue-400 text-blue-700 px-6 py-4 rounded-lg mt-4';
+                        loginMessage.innerHTML = `
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <svg class="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <div>
+                                        <strong>Admin Authentication Required</strong>
+                                        <div class="text-sm mt-1">Please log in to access the admin dashboard and view company statistics.</div>
+                                    </div>
+                                </div>
+                                <a href="/login.html" class="ml-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-150 ease-in-out">
+                                    <i class="fas fa-sign-in-alt mr-2"></i>Login
+                                </a>
+                            </div>
+                        `;
+                        
+                        // Insert after the stats cards
+                        const statsContainer = document.querySelector('.grid.grid-cols-1.md\\:grid-cols-3');
+                        if (statsContainer && statsContainer.parentNode) {
+                            statsContainer.parentNode.insertBefore(loginMessage, statsContainer.nextSibling);
+                        }
+                        return;
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch companies: ${response.status} ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    const companies = data.data || data; // Handle both response formats
+                    console.log('[JS index.html] fetchDashboardStats: Companies fetched:', companies);
+
+                    const totalCompanies = companies.length;
+                    const activeCompanies = companies.filter(company => 
+                        typeof company.isActive === 'boolean' ? company.isActive : true 
+                    ).length;
+
+                    totalCompaniesCountEl.textContent = totalCompanies;
+                    activeCompaniesCountEl.textContent = activeCompanies; 
+                    
+                    console.log(`[JS index.html] Stats updated: Total=${totalCompanies}, Active (Companies)=${activeCompanies}`);
+
+                } catch (error) {
+                    console.error('[JS index.html] fetchDashboardStats: Error fetching stats:', error);
+                    totalCompaniesCountEl.textContent = 'Error';
+                    activeCompaniesCountEl.textContent = 'Error';
+                    
+                    // Show error message
+                    const errorMessage = document.createElement('div');
+                    errorMessage.className = 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mt-4';
+                    errorMessage.innerHTML = `
+                        <div class="flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                            </svg>
+                            <strong>Error Loading Statistics</strong>
+                        </div>
+                        <div class="mt-2">Unable to fetch company data. Please check your connection or contact support.</div>
+                    `;
+                    
+                    const statsContainer = document.querySelector('.grid.grid-cols-1.md\\:grid-cols-3');
+                    if (statsContainer && statsContainer.parentNode) {
+                        statsContainer.parentNode.insertBefore(errorMessage, statsContainer.nextSibling);
+                    }
+                }
+            }
+
+            fetchDashboardStats(); 
+        });
+
+        // Logout function - Global scope so onclick can access it
+        async function logout() {
+            console.log('🔍 Logout initiated...');
+            
+            try {
+                console.log('🔍 Calling backend logout endpoint...');
+                // Call backend logout endpoint to clear session and cookies
+                const response = await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    credentials: 'include', // Include cookies
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken') || ''}`
+                    }
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    console.log('🔍 Server logout successful:', result.message);
+                } else {
+                    console.warn('🔍 Server logout returned error:', result);
+                }
+            } catch (error) {
+                console.warn('🔍 Logout request failed:', error.message, 'Continuing with client-side logout');
+            }
+
+            // Clear stored tokens (always do this regardless of server response)
+            console.log('🔍 Clearing localStorage tokens...');
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('adminUser');
+            
+            // Additional cleanup - clear any other auth-related storage
+            localStorage.removeItem('authToken'); // Legacy cleanup
+            sessionStorage.clear(); // Clear session storage too
+            
+            console.log('🔍 Redirecting to login page...');
+            // Redirect to login page
+            window.location.href = '/login.html';
+        }
+    </script>
+</body>
+</html>

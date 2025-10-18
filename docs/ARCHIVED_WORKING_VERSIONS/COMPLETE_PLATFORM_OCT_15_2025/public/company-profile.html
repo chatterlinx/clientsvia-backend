@@ -1,0 +1,2490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Company Profile</title>
+    <link rel="icon" href="/favicon.ico">
+    
+    <!-- Tailwind CSS (Production Build) -->
+    <link rel="stylesheet" href="/css/output.css">
+    
+    <!-- 🗑️ DELETED: Knowledge Management CSS (AI Agent Logic tab removed) -->
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; scroll-behavior: smooth; }
+        
+        /* Global Navigation Styling */
+        .nav-link-global { 
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #6B7280;
+            text-decoration: none;
+            transition: all 0.2s ease-in-out;
+            border: 1px solid transparent;
+        }
+        .nav-link-global:hover {
+            color: #4F46E5;
+            background-color: #EEF2FF;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .nav-link-global.active { 
+            background-color: #4F46E5;
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+        }
+        
+        /* Tab Navigation Styling */
+        .nav-link.active-tab { border-bottom-width: 2px; border-color: #4F46E5; color: #4F46E5; font-weight: 600; background-color: #EEF2FF; }
+        .nav-link { @apply px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900; }
+        
+        .profile-section-title { @apply text-xl font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200; }
+        .detail-item { @apply flex flex-col sm:flex-row py-2; }
+        .detail-label { @apply sm:w-1/3 font-medium text-gray-600 mb-1 sm:mb-0; }
+        .detail-value { @apply sm:w-2/3 text-gray-800; }
+        .config-block { @apply mt-3 p-4 border border-gray-200 rounded-md bg-gray-50; }
+        .form-input, .form-select, .form-textarea, .form-checkbox { @apply mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition duration-150 ease-in-out; }
+        .form-checkbox { @apply w-auto h-4 text-indigo-600; } 
+        .form-label { @apply block text-sm font-medium text-gray-700; }
+        .form-check-label { @apply ml-2 text-sm text-gray-700; }
+        .tab-button { padding: 0.5rem 1rem; font-weight: 500; font-size: 0.875rem; line-height: 1.25rem; border-top-left-radius: 0.5rem; border-top-right-radius: 0.5rem; transition-property: color, background-color, border-color, text-decoration-color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; cursor: pointer; }
+        .tab-button:focus { outline: 2px solid transparent; outline-offset: 2px; }
+        .tab-button-active { background-color: #4F46E5; color: white; }
+        .tab-button-inactive { background-color: #E5E7EB; color: #374151; }
+        .tab-button-inactive:hover { background-color: #D1D5DB; }
+        .tab-content-item { @apply p-0 pt-6; } 
+        .tab-content-item.hidden { display: none; }
+        
+        /* ✅ CLEAN: AI Response System working normally */
+        #ai-response-system-content.tab-content-item:not(.hidden) { 
+            display: block !important; 
+            visibility: visible !important; 
+            opacity: 1 !important; 
+            position: relative !important;
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            max-width: none !important;
+            max-height: none !important;
+            overflow-y: visible !important;
+            z-index: auto !important;
+        }
+        
+        /* 🔧 AGGRESSIVE FIX: Tab navigation container - ensure ALL tabs are visible and clickable */ 
+        .mb-6 {
+            width: 100% !important;
+            max-width: none !important;
+            overflow: visible !important;
+        }
+        
+        /* 🔧 FIX: Container must expand to accommodate wrapped tabs */
+        .mb-6 {
+            min-height: auto !important;
+            height: auto !important;
+            overflow: visible !important;
+        }
+        
+        .mb-6 > .border-b.border-gray-300 {
+            width: 100% !important;
+            max-width: none !important; 
+            overflow: visible !important;
+            position: relative !important;
+            min-height: 80px !important; /* Allow space for wrapped tabs */
+            padding-bottom: 10px !important;
+        }
+        
+        .mb-6 > .border-b.border-gray-300 > nav {
+            width: 100% !important;
+            max-width: none !important;
+            overflow: visible !important;
+            flex-wrap: wrap !important; /* ALLOW wrapping but keep in container */
+            display: flex !important;
+            position: relative !important;
+            z-index: 100 !important;
+            gap: 4px !important; /* Add gap between wrapped tabs */
+            align-items: flex-start !important;
+        }
+        
+        /* 🔧 COMPACT TAB BUTTONS: Make them smaller to fit better */
+        .tab-button {
+            white-space: nowrap !important;
+            flex-shrink: 0 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            position: relative !important;
+            z-index: 101 !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            font-size: 12px !important; /* Smaller font */
+            padding: 6px 10px !important; /* Smaller padding */
+            margin: 2px !important; /* Small margin for spacing */
+        }
+        
+        /* 🔧 COMPACT TAB BADGES: Make badges smaller too */
+        .tab-button span {
+            font-size: 10px !important;
+            padding: 1px 4px !important;
+            margin-left: 4px !important;
+        }
+        
+        /* 🗑️ DELETED: CSS fix for AI Agent Logic tab (removed) */
+
+        #tab-ai-response-system {
+            display: inline-flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            position: relative !important;
+            z-index: 102 !important;
+        }
+        
+        /* 🧪 TEST TAB: Rainbow animation and super visible styling */
+        @keyframes rainbow {
+            0% { background: linear-gradient(45deg, #ff0000, #ff8000) !important; }
+            25% { background: linear-gradient(45deg, #ff8000, #ffff00) !important; }
+            50% { background: linear-gradient(45deg, #ffff00, #00ff00) !important; }
+            75% { background: linear-gradient(45deg, #00ff00, #0000ff) !important; }
+            100% { background: linear-gradient(45deg, #0000ff, #ff0000) !important; }
+        }
+        
+        /* 🔥 SCROLL FIX: Ensure tab content area is scrollable and positioned correctly */
+        #tab-content-area {
+            position: relative !important;
+            overflow-y: auto !important;
+            max-height: none !important;
+        }
+        
+        /* Clean toggle switch styling handled by Tailwind peer classes */
+        .wider-textbox { max-width: 800px; width: 100%; }
+        .status-badge { @apply px-2.5 py-0.5 rounded-full text-xs font-medium; }
+        .status-active { @apply bg-green-100 text-green-800; }
+        .status-inactive { @apply bg-red-100 text-red-800; }
+        
+        /* Account Status Control Styles */
+        .status-option .status-card {
+            border-color: #D1D5DB;
+            background-color: #F9FAFB;
+        }
+        .status-option .status-radio:checked ~ .status-card {
+            border-width: 3px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .status-option .status-radio:checked[value="active"] ~ .status-card {
+            border-color: #10B981;
+            background-color: #ECFDF5;
+        }
+        .status-option .status-radio:checked[value="call_forward"] ~ .status-card {
+            border-color: #F59E0B;
+            background-color: #FFFBEB;
+        }
+        .status-option .status-radio:checked[value="suspended"] ~ .status-card {
+            border-color: #EF4444;
+            background-color: #FEF2F2;
+        }
+        .status-option .status-radio:checked ~ .status-card .check-indicator {
+            display: inline-block !important;
+        }
+
+        
+
+
+        .contact-block-view { @apply mt-3 pt-3 border-t border-gray-200; }
+        .contact-block-view .detail-item:last-child { padding-bottom: 0; }
+        .scheduling-rule-daily-hours-header { @apply grid grid-cols-4 gap-x-3 mb-1 px-2 text-xs font-medium text-gray-500; }
+        .scheduling-rule-daily-hours-row { @apply grid grid-cols-4 gap-x-3 items-center p-2 hover:bg-gray-100 rounded-md; }
+        #toast-notification { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background-color: #333; color: white; padding: 10px 20px; border-radius: 5px; z-index: 1000; opacity: 0; transition: opacity 0.5s ease-in-out; }
+        #toast-notification.show { opacity: 1; }
+        #toast-notification.success { background-color: #4CAF50; }
+        #toast-notification.error { background-color: #f44336; }
+        
+        /* 🔧 HOTFIX: Prevent priority items from floating outside containers */
+        .clientsvia-priority-item {
+            position: relative !important;
+            transform: none !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            bottom: auto !important;
+            z-index: auto !important;
+        }
+        
+        /* Ensure priority flow container contains all elements */
+        #clientsvia-priority-flow-container {
+            position: relative;
+            overflow: visible;
+            contain: layout;
+        }
+        
+        /* Prevent any drag ghosts from becoming stuck */
+        .clientsvia-priority-item[style*="position"] {
+            position: relative !important;
+        }
+        
+        /* Knowledge Sources Sub-tabs */
+        .knowledge-sub-tab {
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .knowledge-subtab-panel {
+            min-height: 400px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .knowledge-subtab-panel.hidden {
+            display: none;
+        }
+        
+        /* 🔧 Flow Designer Canvas - Keep properly contained */
+        #flow-canvas {
+            position: relative;
+            overflow: visible;
+        }
+        
+        .flow-node {
+            position: absolute;
+            max-width: 200px;
+        }
+        
+        /* Ensure tab content containers don't overflow */
+        .clientsvia-tab-content {
+            position: relative;
+            overflow: visible;
+            width: 100%;
+            min-height: 200px;
+        }
+        
+        /* 🔧 TAB CONTAINER STRUCTURE FIX */
+        #clientsvia-tab-content {
+            position: relative;
+            overflow: visible;
+            contain: layout;
+            width: 100%;
+            min-height: 400px;
+        }
+        
+        /* Ensure all tab contents are properly contained */
+        .clientsvia-tab-content {
+            position: relative !important;
+            float: none !important;
+            clear: both;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        
+        /* Fix any floating elements within tabs */
+        .clientsvia-tab-content * {
+            position: relative;
+            z-index: auto;
+        }
+        
+        /* Legacy intelligence section container removed - using modern implementation */
+        
+        /* 🔧 CRITICAL: Remove separation between tab nav and content */
+        #clientsvia-tab-content {
+            margin-top: 0 !important;
+            padding-top: 1.5rem !important;
+            border-top: none !important;
+        }
+        
+        /* Ensure seamless tab-to-content connection */
+        .clientsvia-tab-btn.active {
+            border-bottom: 2px solid #6366f1 !important;
+            margin-bottom: -2px !important;
+            z-index: 10 !important;
+            position: relative !important;
+        }
+        @media (min-width: 768px) { .wider-textbox { max-width: 800px; } }
+        @media (max-width: 767px) { .wider-textbox { max-width: 100%; } }
+        
+        /* 🧠 Agent ClientsVia Intelligence Styles */
+        /* 🔧 BULLETPROOF TAB SWITCHING STYLES */
+        .clientsvia-tab-btn {
+            position: relative;
+            z-index: 1;
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+        }
+        
+        .clientsvia-tab-btn:hover {
+            background-color: #f8fafc;
+        }
+        
+        .clientsvia-tab-btn.active {
+            z-index: 2;
+            border-bottom-color: #6366f1 !important;
+            color: #6366f1 !important;
+            background-color: #eef2ff !important;
+            font-weight: 600;
+        }
+        
+        /* Force hide inactive tabs with multiple approaches */
+        .clientsvia-tab-content:not(.active) {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            height: 0 !important;
+            overflow: hidden !important;
+        }
+        
+        /* Force show active tabs */
+        .clientsvia-tab-content.active {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            height: auto !important;
+            overflow: visible !important;
+        }
+        
+        /* 🚨 REMOVED: Problematic CSS that was forcing AI Agent Logic to show on all tabs */
+        /* This was causing the AI Agent Logic content to bleed into other tabs */
+        
+        /* 🎯 NEW AI AGENT MANAGEMENT SYSTEM STYLES */
+        .new-ai-tab-btn {
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+        }
+        
+        .new-ai-tab-btn.active {
+            border-color: currentColor !important;
+            color: currentColor !important;
+        }
+        
+        .new-ai-tab-content {
+            display: none;
+        }
+        
+        .new-ai-tab-content.active {
+            display: block;
+        }
+
+        /* ============================================================================ */
+        /* KNOWLEDGE MANAGEMENT TAB STYLES - PHASE 3.2
+           📋 DESCRIPTION: CSS for Knowledge Management sub-tab navigation and content
+           🎯 PURPOSE: Handle 4-tab navigation within Knowledge Management (Company Q&A, Trade Q&A, Templates, Fallback)
+           🔧 FEATURES: Active state management, smooth transitions, responsive design
+           📝 FUTURE EXPANSION: Add animations, dark mode support, mobile optimizations
+           ⚠️  CRITICAL: .km-tab-btn and .km-tab-content classes control sub-tab visibility
+        */
+        /* ============================================================================ */
+        
+        /* Knowledge Management Tab Styles */
+        .km-tab-btn {
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+        }
+
+        .km-tab-btn.active {
+            border-color: currentColor !important;
+            color: currentColor !important;
+        }
+
+        .km-tab-content {
+            display: none;
+        }
+
+        .km-tab-content.active {
+            display: block !important;
+        }
+        
+        /* Form styling for new system */
+        .new-ai-tab-content select,
+        .new-ai-tab-content input[type="text"],
+        .new-ai-tab-content input[type="number"],
+        .new-ai-tab-content textarea {
+            transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        
+        .new-ai-tab-content select:focus,
+        .new-ai-tab-content input:focus,
+        .new-ai-tab-content textarea:focus {
+            outline: none;
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+        
+        /* Container stability */
+        #clientsvia-tab-content {
+            min-height: 500px;
+            position: relative;
+            overflow: visible;
+        }
+        .clientsvia-priority-item {
+            transition: all 0.3s ease;
+        }
+        .clientsvia-priority-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .clientsvia-source-item {
+            transition: all 0.3s ease;
+        }
+        .clientsvia-source-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 🚀 ENTERPRISE AI AGENT LOGIC STYLES */
+        .clientsvia-tab-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .clientsvia-tab-btn.active {
+            border-color: #6366f1 !important;
+            color: #6366f1 !important;
+            background-color: #eef2ff;
+        }
+        .clientsvia-priority-item {
+            transition: all 0.3s ease;
+        }
+        .clientsvia-priority-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* 📊 Analytics Dashboard Styles */
+        .analytics-metric-card {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+        .analytics-metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+        .analytics-chart-container {
+            background: white;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* 🎨 Flow Designer Styles */
+        .flow-canvas {
+            background: linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px),
+                        linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px);
+            background-size: 20px 20px;
+            border-radius: 8px;
+        }
+        .flow-node {
+            cursor: grab;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transition: all 0.3s ease;
+            border-radius: 12px;
+        }
+        .flow-node:hover {
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+            transform: scale(1.02);
+        }
+        .flow-node:active {
+            cursor: grabbing;
+        }
+        .flow-connection-line {
+            stroke: #6b7280;
+            stroke-width: 2;
+            marker-end: url(#arrowhead);
+        }
+        
+        /* 🧪 A/B Testing Styles */
+        .ab-test-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            background: white;
+            transition: all 0.3s ease;
+        }
+        .ab-test-card:hover {
+            border-color: #d1d5db;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .test-status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .test-status-running {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        .test-status-analyzing {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        
+        /* 👤 Personalization Engine Styles */
+        .segment-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            background: white;
+            transition: all 0.3s ease;
+        }
+        .segment-card:hover {
+            border-color: #d1d5db;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+        .personalization-rule {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1rem;
+            transition: all 0.3s ease;
+        }
+        .personalization-rule:hover {
+            border-color: #d1d5db;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+        .insight-card {
+            padding: 0.75rem;
+            border-radius: 8px;
+            border: 1px solid;
+            margin-bottom: 0.75rem;
+        }
+        .insight-emerging {
+            background-color: #fef3c7;
+            border-color: #f59e0b;
+            color: #92400e;
+        }
+        .insight-established {
+            background-color: #d1fae5;
+            border-color: #10b981;
+            color: #065f46;
+        }
+        
+        /* Toggle Switch Styles */
+        .toggle-switch {
+            appearance: none;
+            width: 2.75rem;
+            height: 1.5rem;
+            background-color: #d1d5db;
+            border-radius: 9999px;
+            position: relative;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .toggle-switch:checked {
+            background-color: #3b82f6;
+        }
+        .toggle-switch::before {
+            content: '';
+            position: absolute;
+            width: 1.25rem;
+            height: 1.25rem;
+            background-color: white;
+            border-radius: 50%;
+            top: 0.125rem;
+            left: 0.125rem;
+            transition: transform 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        .toggle-switch:checked::before {
+            transform: translateX(1.25rem);
+        }
+        
+        /* Progress Bars */
+        .knowledge-source-bar {
+            height: 0.5rem;
+            background-color: #e5e7eb;
+            border-radius: 0.25rem;
+            overflow: hidden;
+        }
+        .knowledge-source-bar-fill {
+            height: 100%;
+            border-radius: 0.25rem;
+            transition: width 0.8s ease;
+        }
+        
+        /* Drag and Drop Styles */
+        .drag-handle {
+            cursor: grab;
+        }
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+        .priority-item-dragging {
+            opacity: 0.5;
+            transform: rotate(2deg);
+        }
+        
+        /* V2 Buttons */
+        .v2-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .v2-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .flow-node {
+                width: 180px !important;
+                font-size: 0.875rem;
+            }
+            .analytics-metric-card {
+                padding: 1rem;
+            }
+            .segment-card {
+                margin-bottom: 1rem;
+            }
+        }
+
+        /* V2 Features Styling */
+        .v2-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .metric-card {
+            transition: all 0.3s ease-in-out;
+            border-radius: 12px;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .analytics-metric {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            padding: 1.5rem;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .analytics-metric::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+            pointer-events: none;
+        }
+        
+        .flow-node {
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            cursor: move;
+            transition: all 0.2s ease;
+        }
+        
+        .flow-node:hover {
+            border-color: #4f46e5;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15);
+        }
+        
+        .flow-canvas {
+            background-image: radial-gradient(circle, #e2e8f0 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        
+        .ab-test-card {
+            border-left: 4px solid #10b981;
+            background: linear-gradient(135deg, #f0fff4 0%, #f0fdf4 100%);
+        }
+        
+        .ab-test-variant {
+            border-radius: 8px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .personalization-segment {
+            background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
+            border-left: 4px solid #ec4899;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        
+        .predictive-insight {
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            border: 1px solid #93c5fd;
+            border-radius: 12px;
+            padding: 16px;
+        }
+        
+        .v2-save-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 12px;
+            padding: 12px 24px;
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s ease;
+        }
+        
+        .v2-save-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+        }
+        
+        .tab-nav-v2 {
+            border-bottom: 3px solid #e2e8f0;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border-radius: 12px 12px 0 0;
+            padding: 8px;
+        }
+        
+        .tab-nav-v2 .clientsvia-tab-btn {
+            position: relative;
+            margin: 0 4px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .tab-nav-v2 .clientsvia-tab-btn:hover {
+            background: rgba(79, 70, 229, 0.1);
+            transform: translateY(-1px);
+        }
+        
+        .tab-nav-v2 .clientsvia-tab-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        .v2-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .v2-card:hover {
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .status-active { background-color: #10b981; }
+        .status-running { background-color: #3b82f6; }
+        .status-paused { background-color: #f59e0b; }
+        .status-completed { background-color: #6b7280; }
+        
+        @keyframes pulse-v2 {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .loading-v2 {
+            animation: pulse-v2 2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="app" class="flex flex-col min-h-screen">
+        <header class="bg-white shadow-md sticky top-0 z-40">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex-shrink-0">
+                        <a href="/index.html" class="text-2xl font-bold text-indigo-600">
+                            <i class="fas fa-tachometer-alt mr-2"></i>Admin Dashboard
+                        </a>
+                        <div class="text-xs text-gray-500 mt-1">
+                            <i class="fas fa-clock mr-1"></i>ClientsVia V2 AI Agent Platform
+                            <span class="mx-2">•</span>
+                            <span id="page-loaded-time">Loading...</span>
+                        </div>
+                    </div>
+                    <nav class="hidden md:flex items-center" style="gap: 20px;">
+                        <a href="/directory.html" class="nav-link-global" id="nav-directory">Directory</a>
+                        <a href="/add-company.html" class="nav-link-global" id="nav-add-company">Add Company</a>
+                        <a href="/v2global-trade-categories.html" class="nav-link-global" id="nav-trade-categories">Global Trade Categories</a>
+                        <a href="/admin-global-instant-responses.html" class="nav-link-global" id="nav-global-ai-brain">Global AI Brain</a>
+                        <div style="height: 20px; width: 1px; background: #d1d5db; margin: 0 10px;"></div>
+                        <button onclick="logout()" class="nav-link-global" style="color: #dc2626;" id="nav-logout">Logout</button>
+                    </nav>
+                    <div class="md:hidden flex items-center">
+                        <button id="mobile-menu-button" class="text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500">
+                            <span class="sr-only">Open main menu</span>
+                            <i class="fas fa-bars text-2xl"></i>
+                        </button>
+                    </div>
+                </div>
+
+            <!-- ...existing code... -->
+            <div id="mobile-menu" class="md:hidden hidden">
+                <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                    <a href="/directory.html" class="block nav-link text-base">Directory</a>
+                    <a href="/add-company.html" class="block nav-link text-base">Add Company</a>
+                    <a href="/v2global-trade-categories.html" class="block nav-link text-base">Global Trade Categories</a>
+                    <a href="/admin-global-instant-responses.html" class="block nav-link text-base">Global AI Brain</a>
+                    <button onclick="logout()" class="block nav-link text-base text-left w-full" style="color: #dc2626;">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-1">
+                    <div> 
+                        <h1 class="text-3xl font-semibold text-gray-800" id="company-name-header">Loading...</h1>
+                        <p id="company-id-subheader" class="text-xs text-gray-500 mt-1">ID: Loading...</p> 
+                    </div>
+                    <div class="flex items-center gap-x-3 mt-3 md:mt-0">
+                         <span id="company-status-badge" class="status-badge mr-3">Status</span> 
+                    </div>
+                </div>
+                <hr class="mb-6 mt-3">
+
+                <div class="mb-6">
+                    <div class="border-b border-gray-300 sticky top-16 z-30 bg-white">
+                        <nav class="-mb-px flex flex-wrap space-x-1" aria-label="Tabs">
+                            <button class="tab-button tab-button-active" id="tab-overview" data-tab="overview">
+                                <i class="fas fa-info-circle mr-1"></i>Overview
+                            </button>
+                            <button class="tab-button tab-button-inactive" id="tab-config" data-tab="config">
+                                <i class="fas fa-cogs mr-1"></i>Configuration
+                            </button>
+                            <button class="tab-button tab-button-inactive" id="tab-notes" data-tab="notes">
+                                <i class="fas fa-sticky-note mr-1"></i>Notes
+                            </button>
+                             <!-- 🗑️ DELETED: Calendar Settings tab - legacy system removed -->
+                            <!-- REMOVED: Legacy AI Settings tab - conflicts with 100% in-house AI Agent Logic system -->
+                            <button class="tab-button tab-button-inactive" id="tab-ai-voice" data-tab="ai-voice">
+                                <i class="fas fa-microphone-alt mr-1"></i>AI Voice Settings
+                            </button>
+                            
+                            <!-- 🆕 AI AGENT SETTINGS - MODERN, ISOLATED, WORLD-CLASS -->
+                            <button class="tab-button tab-button-inactive" id="tab-ai-agent-settings" data-tab="ai-agent-settings">
+                                <i class="fas fa-robot mr-1"></i>🤖 AI Agent Settings
+                            </button>
+                            
+                            <!-- 🗑️ DELETED: AI Agent Logic tab - replaced by AI Agent Settings tab -->
+                            <!-- REMOVED: Legacy CRM & Contacts tab - will build V2 version in future -->
+
+                        </nav>
+                    </div>
+                </div>
+
+                <div id="tab-content-area">
+                    <!-- ===== TAB SECTION START: OVERVIEW ===== -->
+                    <div id="overview-content" class="tab-content-item">
+                        <section class="profile-section bg-transparent shadow-none p-0">
+                            <div id="company-details-edit-form">
+                                <!-- Modern form will be inserted here by JavaScript -->
+                                <p class="text-gray-500 text-center py-8">Loading company information...</p>
+                            </div>
+                            <!-- Company Contacts Section -->
+                            <div id="company-contacts-section" class="mt-8">
+                                <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                                    <i class="fas fa-address-book mr-2 text-indigo-600"></i>Company Contacts
+                                </h2>
+                                <div id="contacts-list" class="space-y-6"></div>
+                                <button type="button" id="add-contact-btn" class="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition duration-150">
+                                    <i class="fas fa-plus mr-1"></i>Add Contact
+                                </button>
+                            </div>
+                            <!-- 🗑️ DELETED: Quick Variables section - replaced by Placeholders in AI Agent Logic tab -->
+                        </section>
+                    </div>
+                    <!-- ===== TAB SECTION END: OVERVIEW ===== -->
+
+                    <!-- ===== TAB SECTION START: CONFIGURATION ===== -->
+                    <div id="config-content" class="tab-content-item hidden">
+                        <section class="profile-section bg-transparent shadow-none p-0">
+                            <h2 class="profile-section-title"><i class="fas fa-cogs mr-2 text-indigo-600"></i>Service Configuration</h2>
+                            <form id="config-settings-form">
+                                <div class="config-block">
+                                    <h3 class="font-semibold text-gray-700 mb-2">Twilio Integration Credentials</h3>
+                                    <p class="text-sm text-gray-500 mb-3">Enter the Twilio credentials that this company's AI agent will use.</p>
+                                    <div class="space-y-3">
+                                        <div>
+                                            <label for="twilioAccountSid" class="form-label">Account SID</label>
+                                            <input type="text" id="twilioAccountSid" name="twilioAccountSid" class="form-input wider-textbox" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+                                        </div>
+                                        <div>
+                                            <label for="twilioAuthToken" class="form-label">Auth Token</label>
+                                            <input type="text" id="twilioAuthToken" name="twilioAuthToken" class="form-input wider-textbox" placeholder="Enter Auth Token" style="font-family: monospace;">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- 🚨 Account Status Control -->
+                                <div class="config-block mt-6">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <h3 class="font-semibold text-gray-700">Account Status Control</h3>
+                                        <span id="account-status-badge" class="px-3 py-1 rounded-full text-xs font-bold">
+                                            <!-- Will be populated by JavaScript -->
+                                        </span>
+                                    </div>
+                                    <p class="text-sm text-gray-500 mb-4">Control call routing and account access. All Twilio settings are preserved when changing status.</p>
+                                    
+                                    <!-- Status Selector -->
+                                    <div class="bg-white border-2 border-gray-200 rounded-lg p-5 mb-4">
+                                        <label class="form-label mb-3 flex items-center">
+                                            <i class="fas fa-toggle-on mr-2 text-indigo-600"></i>
+                                            Account Status
+                                        </label>
+                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <!-- Active Status -->
+                                            <label class="status-option cursor-pointer">
+                                                <input type="radio" name="accountStatus" value="active" class="hidden status-radio">
+                                                <div class="status-card border-2 rounded-lg p-4 transition-all hover:shadow-md">
+                                                    <div class="flex items-center justify-between mb-2">
+                                                        <div class="flex items-center">
+                                                            <i class="fas fa-check-circle text-green-600 text-xl mr-2"></i>
+                                                            <span class="font-bold text-gray-900">Active</span>
+                                                        </div>
+                                                        <i class="fas fa-circle hidden check-indicator text-green-600"></i>
+                                                    </div>
+                                                    <p class="text-xs text-gray-600">AI agent handles all calls normally</p>
+                                                </div>
+                                            </label>
+                                            
+                                            <!-- Call Forward Status -->
+                                            <label class="status-option cursor-pointer">
+                                                <input type="radio" name="accountStatus" value="call_forward" class="hidden status-radio">
+                                                <div class="status-card border-2 rounded-lg p-4 transition-all hover:shadow-md">
+                                                    <div class="flex items-center justify-between mb-2">
+                                                        <div class="flex items-center">
+                                                            <i class="fas fa-phone-forward text-yellow-600 text-xl mr-2"></i>
+                                                            <span class="font-bold text-gray-900">Call Forward</span>
+                                                        </div>
+                                                        <i class="fas fa-circle hidden check-indicator text-yellow-600"></i>
+                                                    </div>
+                                                    <p class="text-xs text-gray-600">Forward calls to external number</p>
+                                                </div>
+                                            </label>
+                                            
+                                            <!-- Suspended Status -->
+                                            <label class="status-option cursor-pointer">
+                                                <input type="radio" name="accountStatus" value="suspended" class="hidden status-radio">
+                                                <div class="status-card border-2 rounded-lg p-4 transition-all hover:shadow-md">
+                                                    <div class="flex items-center justify-between mb-2">
+                                                        <div class="flex items-center">
+                                                            <i class="fas fa-ban text-red-600 text-xl mr-2"></i>
+                                                            <span class="font-bold text-gray-900">Suspended</span>
+                                                        </div>
+                                                        <i class="fas fa-circle hidden check-indicator text-red-600"></i>
+                                                    </div>
+                                                    <p class="text-xs text-gray-600">Block all incoming calls</p>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Call Forward Number (shown only when Call Forward is selected) -->
+                                    <div id="call-forward-section" class="hidden bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-4">
+                                        <div class="mb-4">
+                                            <label for="call-forward-number" class="form-label flex items-center text-yellow-900">
+                                                <i class="fas fa-phone mr-2"></i>
+                                                Forward To Phone Number
+                                            </label>
+                                            <input 
+                                                type="tel" 
+                                                id="call-forward-number" 
+                                                class="form-input mt-2" 
+                                                placeholder="+12395551234" 
+                                                pattern="\+?[1-9]\d{1,14}">
+                                            <p class="text-xs text-yellow-700 mt-2">
+                                                <i class="fas fa-info-circle mr-1"></i>
+                                                Enter phone number in E.164 format (e.g., +12395551234)
+                                            </p>
+                                        </div>
+                                        
+                                        <div>
+                                            <label for="call-forward-message" class="form-label flex items-center text-yellow-900">
+                                                <i class="fas fa-comment-dots mr-2"></i>
+                                                Custom Forward Message (Optional)
+                                            </label>
+                                            <textarea 
+                                                id="call-forward-message" 
+                                                class="form-input mt-2" 
+                                                rows="2" 
+                                                placeholder="Thank you for calling {Company Name}. Please hold while we connect your call."
+                                                maxlength="300"></textarea>
+                                            <p class="text-xs text-yellow-700 mt-2">
+                                                <i class="fas fa-magic mr-1"></i>
+                                                Use <code class="bg-yellow-200 px-1 rounded">{Company Name}</code> or <code class="bg-yellow-200 px-1 rounded">{CompanyName}</code> placeholder - it will be replaced with your company name. Leave empty for default message.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Suspended Message (shown only when Suspended is selected) -->
+                                    <div id="suspended-section" class="hidden bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4">
+                                        <div>
+                                            <label for="suspended-message" class="form-label flex items-center text-red-900">
+                                                <i class="fas fa-comment-dots mr-2"></i>
+                                                Custom Suspension Message
+                                            </label>
+                                            <textarea 
+                                                id="suspended-message" 
+                                                class="form-input mt-2" 
+                                                rows="3" 
+                                                placeholder="We're sorry, but service for this number is temporarily unavailable. Please contact support for assistance."
+                                                maxlength="300"></textarea>
+                                            <p class="text-xs text-red-700 mt-2">
+                                                <i class="fas fa-magic mr-1"></i>
+                                                Use <code class="bg-red-200 px-1 rounded">{Company Name}</code> or <code class="bg-red-200 px-1 rounded">{CompanyName}</code> placeholder - it will be replaced with your company name. This message is what callers will hear.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Reason for Change (INTERNAL NOTES ONLY) -->
+                                    <div class="mb-4">
+                                        <label for="status-change-reason" class="form-label">Reason for Status Change (Internal Notes Only)</label>
+                                        <textarea 
+                                            id="status-change-reason" 
+                                            class="form-input" 
+                                            rows="2" 
+                                            placeholder="e.g., Payment pending, Customer request, Maintenance"
+                                            maxlength="200"></textarea>
+                                        <p class="text-xs text-gray-500 mt-1">⚠️ INTERNAL ONLY - This is NOT read to callers. Use the message fields above for caller-facing messages.</p>
+                                    </div>
+                                    
+                                    <!-- Save Button -->
+                                    <button 
+                                        type="button" 
+                                        id="save-account-status-btn"
+                                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
+                                        <i class="fas fa-save mr-2"></i>Update Account Status
+                                    </button>
+                                    
+                                    <!-- Status History -->
+                                    <div id="status-history-section" class="mt-6 hidden">
+                                        <h4 class="font-semibold text-gray-700 mb-3 flex items-center">
+                                            <i class="fas fa-history mr-2 text-gray-600"></i>
+                                            Status Change History
+                                        </h4>
+                                        <div id="status-history-list" class="space-y-2 max-h-60 overflow-y-auto">
+                                            <!-- Will be populated by JavaScript -->
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Phone Numbers Management -->
+                                <div class="config-block mt-6">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <h3 class="font-semibold text-gray-700">Twilio Phone Numbers</h3>
+                                        <button type="button" id="addPhoneNumberBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-3 py-1 rounded-md flex items-center">
+                                            <i class="fas fa-plus mr-1"></i>Add Number
+                                        </button>
+                                    </div>
+                                    <p class="text-sm text-gray-500 mb-3">Manage all Twilio phone numbers available for this company's AI agents.</p>
+                                    
+                                    <!-- Phone Numbers List -->
+                                    <div id="phoneNumbersList" class="space-y-3">
+                                        <!-- Primary Phone Number (Default) -->
+                                        <div class="phone-number-item border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                    <div>
+                                                        <label class="form-label text-sm">Phone Number (E.164 format)</label>
+                                                        <input type="tel" name="phoneNumber" class="form-input" placeholder="+12395551212" value="">
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label text-sm">Friendly Name</label>
+                                                        <input type="text" name="friendlyName" class="form-input" placeholder="Main Business Line" value="Primary Number">
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label text-sm">Status</label>
+                                                        <select name="status" class="form-select">
+                                                            <option value="active" selected>Active</option>
+                                                            <option value="inactive">Inactive</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div class="ml-4 flex items-center space-x-2">
+                                                    <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">Primary</span>
+                                                    <button type="button" class="text-red-600 hover:text-red-800" title="Remove">
+                                                        <i class="fas fa-trash text-sm"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Add Phone Number Template (Hidden) -->
+                                    <template id="phoneNumberTemplate">
+                                        <div class="phone-number-item border border-gray-200 rounded-lg p-4">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                    <div>
+                                                        <label class="form-label text-sm">Phone Number (E.164 format)</label>
+                                                        <input type="tel" name="phoneNumber" class="form-input" placeholder="+12395551212">
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label text-sm">Friendly Name</label>
+                                                        <input type="text" name="friendlyName" class="form-input" placeholder="e.g., Emergency Line, Sales Line">
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label text-sm">Status</label>
+                                                        <select name="status" class="form-select">
+                                                            <option value="active" selected>Active</option>
+                                                            <option value="inactive">Inactive</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div class="ml-4 flex items-center space-x-2">
+                                                    <button type="button" class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full hover:bg-blue-200" title="Set as Primary">
+                                                        Set Primary
+                                                    </button>
+                                                    <button type="button" class="text-red-600 hover:text-red-800" title="Remove">
+                                                        <i class="fas fa-trash text-sm"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                                
+                                <!-- Webhook Configuration Reference -->
+                                <div class="config-block mt-6">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <h3 class="font-semibold text-gray-700">Twilio Webhook Configuration</h3>
+                                        <button type="button" id="toggleWebhookInfo" class="text-indigo-600 hover:text-indigo-800 text-sm flex items-center">
+                                            <i class="fas fa-info-circle mr-1"></i>Show Webhook URLs
+                                        </button>
+                                    </div>
+                                    <p class="text-sm text-gray-500 mb-3">Use these webhook URLs in your Twilio Console for phone number configuration.</p>
+                                    
+                                    <div id="webhookInfoPanel" class="hidden">
+                                        <!-- Dynamic webhook content will be generated by JavaScript -->
+                                    </div>
+                                </div>
+                                
+                                <!-- Additional API Configuration -->
+                                <div class="config-block mt-6">
+                                    <h3 class="font-semibold text-gray-700 mb-2">Additional API Keys</h3>
+                                    <p class="text-sm text-gray-500 mb-3">Configure additional integrations and services.</p>
+                                    <div class="space-y-3">
+                                        <div>
+                                            <label for="twilioApiKey" class="form-label">Twilio API Key (Optional)</label>
+                                            <input type="text" id="twilioApiKey" name="twilioApiKey" class="form-input wider-textbox" placeholder="SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" style="font-family: monospace;">
+                                        </div>
+                                        <div>
+                                            <label for="twilioApiSecret" class="form-label">Twilio API Secret (Optional)</label>
+                                            <input type="text" id="twilioApiSecret" name="twilioApiSecret" class="form-input wider-textbox" placeholder="Enter API Secret" style="font-family: monospace;">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-8 pt-5 border-t border-gray-200">
+                                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
+                                        <i class="fas fa-save mr-2"></i>Save Configuration
+                                    </button>
+                                </div>
+                            </form>
+                        </section>
+                    </div>
+                    <!-- ===== TAB SECTION END: CONFIGURATION ===== -->
+
+                    <!-- ===== TAB SECTION START: NOTES ===== -->
+                    <div id="notes-content" class="tab-content-item hidden">
+                        <section class="profile-section bg-transparent shadow-none p-0"> 
+                            <h2 class="profile-section-title"><i class="fas fa-sticky-note mr-2 text-indigo-600"></i>Company Notes</h2>
+                            <div id="add-note-area" class="mb-6">
+                                <textarea id="new-note-textarea" class="notes-textarea wider-textbox" placeholder="Type your new note here..."></textarea>
+                                <button id="add-new-note-button" class="mt-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out">
+                                    <i class="fas fa-plus-circle mr-2"></i>Add Note
+                                </button>
+                            </div>
+                            <div id="notes-display-area">
+                                <p class="text-gray-500 italic text-center py-4">Notes will appear here.</p>
+                            </div>
+                        </section>
+                    </div>
+                    <!-- ===== TAB SECTION END: NOTES ===== -->
+                    
+                    <!-- 🗑️ DELETED: Calendar Settings tab content - legacy Google Calendar integration removed -->
+
+                    <!-- ===== REMOVED: LEGACY AI SETTINGS TAB =====
+                         This entire section was removed because it conflicts with the 
+                         100% in-house AI Agent Logic system. The legacy tab included:
+                         - External LLM dependencies (Gemini 2.5 Flash)
+                         - Cloud LLM Chain fallbacks 
+                         - External Knowledge Base URLs
+                         - Legacy personality system
+                         
+                         All functionality now handled by AI Agent Logic tab.
+                         ===== LEGACY AI SETTINGS REMOVAL COMPLETE ===== -->
+
+                    <!-- ===== TAB SECTION START: AI VOICE ===== -->
+                    <div id="ai-voice-content" class="tab-content-item hidden">
+                        <section class="profile-section bg-transparent shadow-none p-0">
+                            <h2 class="profile-section-title">
+                                <i class="fas fa-microphone-alt mr-2 text-indigo-600"></i>AI Voice Settings
+                                <span class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Latest ElevenLabs API</span>
+                            </h2>
+
+                            <!-- API Configuration Section -->
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                <div class="border-b border-gray-200 bg-gray-50 px-6 py-4 rounded-t-lg">
+                                    <h3 class="text-lg font-medium text-gray-800 flex items-center">
+                                        <i class="fas fa-key mr-2 text-blue-600"></i>API Configuration
+                                        <button type="button" id="test-api-connection" class="ml-auto text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition duration-150">
+                                            <i class="fas fa-plug mr-1"></i>Test Connection
+                                        </button>
+                                    </h3>
+                                </div>
+                                
+                                <form id="elevenlabs-api-form" class="p-6">
+                                    <!-- API Key Source Toggle -->
+                                    <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <h4 class="text-sm font-semibold text-gray-800 mb-1">
+                                                    <i class="fas fa-toggle-on mr-2 text-blue-600"></i>ElevenLabs API Source
+                                                </h4>
+                                                <p class="text-xs text-gray-600" id="api-source-description">
+                                                    Using ClientsVia global API (default for all companies)
+                                                </p>
+                                            </div>
+                                            <div class="flex items-center">
+                                                <label class="relative inline-flex items-center cursor-pointer">
+                                                    <input type="checkbox" id="useOwnApiKey" class="sr-only peer">
+                                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                                    <span class="ml-3 text-sm font-medium text-gray-700" id="toggle-label">Use Own API</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Global API Info -->
+                                        <div id="global-api-info" class="mt-3 p-3 bg-white rounded border border-blue-100">
+                                            <div class="flex items-center text-sm text-green-700">
+                                                <i class="fas fa-check-circle mr-2"></i>
+                                                <span>Using ClientsVia shared ElevenLabs account - no setup required!</span>
+                                            </div>
+                                            <p class="text-xs text-gray-600 mt-1">
+                                                Voice synthesis costs are covered by ClientsVia. Perfect for most businesses.
+                                            </p>
+                                        </div>
+                                        
+                                        <!-- Own API Info (hidden by default) -->
+                                        <div id="own-api-info" class="mt-3 p-3 bg-orange-50 rounded border border-orange-200 hidden">
+                                            <div class="flex items-center text-sm text-orange-700">
+                                                <i class="fas fa-exclamation-triangle mr-2"></i>
+                                                <span>Using your own ElevenLabs API account</span>
+                                            </div>
+                                            <p class="text-xs text-gray-600 mt-1">
+                                                You'll be billed directly by ElevenLabs. Recommended for high-volume usage or special requirements.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <div id="api-key-section" class="hidden">
+                                            <label for="elevenlabsApiKey" class="form-label">
+                                                <span id="api-key-label">Your ElevenLabs API Key</span>
+                                                <span class="text-xs text-orange-600 ml-1" id="api-key-required">(Required when using own API)</span>
+                                            </label>
+                                            <input type="password" id="elevenlabsApiKey" name="elevenlabsApiKey" 
+                                                   class="form-input" placeholder="sk-..." autocomplete="new-password" disabled>
+                                            <p class="text-xs text-gray-500 mt-1" id="api-key-help">
+                                                Get your API key from <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" class="text-blue-600 hover:underline">ElevenLabs Dashboard</a>
+                                            </p>
+                                        </div>
+                                        
+                                        <div id="subscription-info" class="hidden">
+                                            <label class="form-label">Subscription Status</label>
+                                            <div id="subscription-details" class="text-sm bg-gray-50 p-3 rounded border">
+                                                <!-- Subscription info will be loaded here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <!-- Voice Selection & Preview -->
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                <div class="border-b border-gray-200 bg-gray-50 px-6 py-4 rounded-t-lg">
+                                    <h3 class="text-lg font-medium text-gray-800 flex items-center">
+                                        <i class="fas fa-user-friends mr-2 text-purple-600"></i>Voice Selection & Preview
+                                        <button type="button" id="refresh-voices" class="ml-auto text-sm bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded transition duration-150">
+                                            <i class="fas fa-sync mr-1"></i>Refresh Voices
+                                        </button>
+                                    </h3>
+                                </div>
+                                
+                                <div class="p-6">
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <!-- Voice Selection -->
+                                        <div>
+                                            <label for="voice-selector" class="form-label">Select Voice</label>
+                                            <select id="voice-selector" name="voiceId" class="form-select mb-3">
+                                                <option value="">Choose a voice...</option>
+                                            </select>
+                                            
+                                            <!-- Voice Filters -->
+                                            <div class="flex space-x-2 mb-4">
+                                                <select id="voice-gender-filter" class="text-xs border border-gray-300 rounded px-2 py-1">
+                                                    <option value="">All Genders</option>
+                                                    <option value="male">Male</option>
+                                                    <option value="female">Female</option>
+                                                </select>
+                                                <select id="voice-category-filter" class="text-xs border border-gray-300 rounded px-2 py-1">
+                                                    <option value="">All Categories</option>
+                                                    <option value="conversational">Conversational</option>
+                                                    <option value="professional">Professional</option>
+                                                    <option value="narration">Narration</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <!-- Voice Preview & Info -->
+                                        <div id="voice-preview-section" class="hidden">
+                                            <label class="form-label">Voice Preview</label>
+                                            <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                                <div id="voice-info" class="mb-3">
+                                                    <!-- Voice details will be populated here -->
+                                                </div>
+                                                
+                                                <div class="flex items-center space-x-2">
+                                                    <button type="button" id="play-voice-sample" class="text-sm bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded transition duration-150">
+                                                        <i class="fas fa-play mr-1"></i>Play Sample
+                                                    </button>
+                                                    <audio id="voice-preview-audio" controls class="hidden"></audio>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Advanced Voice Settings -->
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                <div class="border-b border-gray-200 bg-gray-50 px-6 py-4 rounded-t-lg">
+                                    <h3 class="text-lg font-medium text-gray-800 flex items-center">
+                                        <i class="fas fa-sliders-h mr-2 text-orange-600"></i>Advanced Voice Settings
+                                        <button type="button" id="reset-voice-settings" class="ml-auto text-sm bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded transition duration-150">
+                                            <i class="fas fa-undo mr-1"></i>Reset to Optimal
+                                        </button>
+                                    </h3>
+                                </div>
+                                
+                                <div class="p-6">
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <!-- Left Column: Voice Quality -->
+                                        <div class="space-y-4">
+                                            <h4 class="text-md font-semibold text-gray-700 border-b pb-2">Voice Quality</h4>
+                                            
+                                            <!-- Stability -->
+                                            <div>
+                                                <label for="voice-stability" class="form-label flex items-center justify-between">
+                                                    Stability
+                                                    <span id="stability-value" class="text-sm text-gray-500">0.5</span>
+                                                </label>
+                                                <input type="range" id="voice-stability" name="stability" 
+                                                       class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                                       value="0.5" min="0.0" max="1.0" step="0.1" oninput="updateSliderValue('stability', this.value)">
+                                                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                                    <span>Variable (0.0)</span>
+                                                    <span>Stable (1.0)</span>
+                                                </div>
+                                                <p class="text-xs text-gray-500 mt-1">Higher = more consistent, Lower = more expressive</p>
+                                            </div>
+
+                                            <!-- Similarity Boost -->
+                                            <div>
+                                                <label for="voice-similarity" class="form-label flex items-center justify-between">
+                                                    Similarity Boost
+                                                    <span id="similarity-value" class="text-sm text-gray-500">0.7</span>
+                                                </label>
+                                                <input type="range" id="voice-similarity" name="similarity_boost" 
+                                                       class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                                       value="0.7" min="0.0" max="1.0" step="0.1" oninput="updateSliderValue('similarity', this.value)">
+                                                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                                    <span>Creative (0.0)</span>
+                                                    <span>Accurate (1.0)</span>
+                                                </div>
+                                                <p class="text-xs text-gray-500 mt-1">Higher = more similar to original voice</p>
+                                            </div>
+
+                                            <!-- Style -->
+                                            <div>
+                                                <label for="voice-style" class="form-label flex items-center justify-between">
+                                                    Style Exaggeration
+                                                    <span id="style-value" class="text-sm text-gray-500">0.0</span>
+                                                </label>
+                                                <input type="range" id="voice-style" name="style" 
+                                                       class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                                       value="0.0" min="0.0" max="1.0" step="0.1" oninput="updateSliderValue('style', this.value)">
+                                                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                                    <span>Natural (0.0)</span>
+                                                    <span>Exaggerated (1.0)</span>
+                                                </div>
+                                                <p class="text-xs text-gray-500 mt-1">Higher = more expressive, can reduce quality</p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Right Column: Performance & Output -->
+                                        <div class="space-y-4">
+                                            <h4 class="text-md font-semibold text-gray-700 border-b pb-2">Performance & Output</h4>
+                                            
+                                            <!-- Speaker Boost -->
+                                            <div>
+                                                <label class="form-label">Speaker Boost</label>
+                                                <div class="flex items-center space-x-3">
+                                                    <input type="checkbox" id="voice-speaker-boost" name="use_speaker_boost" 
+                                                           class="form-checkbox" checked onchange="updateCheckboxValue('speaker-boost', this.checked)">
+                                                    <span class="text-sm text-gray-700">Enable speaker boost for better quality</span>
+                                                </div>
+                                                <p class="text-xs text-gray-500 mt-1">Recommended for most use cases</p>
+                                            </div>
+
+                                            <!-- Model Selection -->
+                                            <div>
+                                                <label for="voice-model" class="form-label">AI Model</label>
+                                                <select id="voice-model" name="model_id" class="form-select">
+                                                    <option value="eleven_turbo_v2_5">Turbo v2.5 (Fastest)</option>
+                                                    <option value="eleven_multilingual_v2">Multilingual v2 (Quality)</option>
+                                                    <option value="eleven_monolingual_v1">Monolingual v1 (Classic)</option>
+                                                </select>
+                                                <p class="text-xs text-gray-500 mt-1">Turbo recommended for real-time applications</p>
+                                            </div>
+
+                                            <!-- Output Format -->
+                                            <div>
+                                                <label for="voice-format" class="form-label">Output Format</label>
+                                                <select id="voice-format" name="output_format" class="form-select">
+                                                    <option value="mp3_44100_128">MP3 44.1kHz 128kbps (Recommended)</option>
+                                                    <option value="mp3_44100_192">MP3 44.1kHz 192kbps (Higher Quality)</option>
+                                                    <option value="pcm_16000">PCM 16kHz (Phone Quality)</option>
+                                                    <option value="pcm_22050">PCM 22kHz (Good Quality)</option>
+                                                    <option value="pcm_44100">PCM 44.1kHz (CD Quality)</option>
+                                                </select>
+                                                <p class="text-xs text-gray-500 mt-1">MP3 recommended for web delivery</p>
+                                            </div>
+
+                                            <!-- Streaming Optimization -->
+                                            <div>
+                                                <label for="voice-latency" class="form-label">Streaming Latency</label>
+                                                <select id="voice-latency" name="optimize_streaming_latency" class="form-select">
+                                                    <option value="0">No optimization (Best Quality)</option>
+                                                    <option value="1">Light optimization</option>
+                                                    <option value="2">Moderate optimization</option>
+                                                    <option value="3">High optimization</option>
+                                                    <option value="4">Maximum optimization (Real-time)</option>
+                                                </select>
+                                                <p class="text-xs text-gray-500 mt-1">Higher values reduce latency but may affect quality</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Test & Preview -->
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                <div class="border-b border-gray-200 bg-gray-50 px-6 py-4 rounded-t-lg">
+                                    <h3 class="text-lg font-medium text-gray-800 flex items-center">
+                                        <i class="fas fa-vial mr-2 text-green-600"></i>Test & Preview
+                                    </h3>
+                                </div>
+                                
+                                <div class="p-6">
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <!-- Test Input -->
+                                        <div>
+                                            <label for="test-text" class="form-label">Test Message</label>
+                                            <textarea id="test-text" name="testText" rows="3" class="form-input" 
+                                                      placeholder="Enter text to test voice synthesis...">Hello! Thanks for calling. How can I help you today?</textarea>
+                                            
+                                            <div class="flex items-center space-x-3 mt-3">
+                                                <button type="button" id="test-voice-btn" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition duration-150">
+                                                    <i class="fas fa-play mr-2"></i>Generate Test Audio
+                                                </button>
+                                                <button type="button" id="stream-test-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition duration-150">
+                                                    <i class="fas fa-broadcast-tower mr-2"></i>Stream Test
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Test Results -->
+                                        <div>
+                                            <label class="form-label">Test Results</label>
+                                            <div id="test-results" class="bg-gray-50 border border-gray-200 rounded-lg p-4 min-h-[120px]">
+                                                <div class="text-center text-gray-500 py-8">
+                                                    <i class="fas fa-headphones text-2xl mb-2"></i>
+                                                    <p>Test your voice settings to hear how they sound</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Save Settings -->
+                            <div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-6">
+                                <div>
+                                    <h3 class="text-md font-semibold text-gray-800">Save Voice Configuration</h3>
+                                    <p class="text-sm text-gray-600">Apply these settings to your AI agent</p>
+                                </div>
+                                <div class="flex space-x-3">
+                                    <button type="button" id="save-voice-settings" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150">
+                                        <i class="fas fa-save mr-2"></i>Save Voice Settings
+                                    </button>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                    <!-- ===== TAB SECTION END: AI VOICE ===== -->
+
+                    <!-- Legacy personality responses tab content removed - using modern AI Agent Logic system -->
+                    <!-- Legacy personality responses content removed -->
+                            <!-- V2 DELETED: Legacy informational text about response customization - V2 uses aiAgentLogic system -->
+
+                            <!-- V2 DELETED: Legacy Placeholder Management Section - V2 uses aiAgentLogic system -->
+                            <!-- Placeholder functionality integrated into V2 aiAgentLogic response categories -->
+
+                            <!-- V2 DELETED: Legacy Response Categories Management Section - V2 uses aiAgentLogic system -->
+                            <!-- Response category functionality integrated into V2 aiAgentLogic response system -->
+                            <form id="personality-responses-form">
+                                <div id="personality-responses-list" class="space-y-4"></div>
+                                <div class="mt-8 pt-5 border-t border-gray-200">
+                                </div>
+                            </form>
+                        </section>
+                    </div>
+
+                    <!-- Add/Edit Category Modal -->
+                    <div id="category-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center;">
+                        <div style="background: white; border-radius: 12px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+                            <div style="display: flex; align-items: center; justify-between; margin-bottom: 20px;">
+                                <h3 id="category-modal-title" style="font-size: 24px; font-weight: 700; color: #2c3e50; margin: 0;">Add Category</h3>
+                                <button onclick="instantResponseCategoriesManager.closeCategoryModal()" style="background: none; border: none; font-size: 24px; color: #95a5a6; cursor: pointer; padding: 0; width: 32px; height: 32px;">
+                                    &times;
+                                </button>
+                            </div>
+                            
+                            <form onsubmit="event.preventDefault(); instantResponseCategoriesManager.saveCategoryModal();">
+                                <div style="margin-bottom: 20px;">
+                                    <label for="ir-category-name" style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px;">
+                                        Category Name <span style="color: #e74c3c;">*</span>
+                                    </label>
+                                    <input type="text" id="ir-category-name" required
+                                           placeholder="e.g., Empathy, Greetings, Customer Waiting"
+                                           style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px;">
+                                    <small style="color: #7f8c8d; font-size: 13px;">Short, descriptive name for organizing responses</small>
+                                </div>
+                                
+                                <div style="margin-bottom: 20px;">
+                                    <label for="ir-category-description" style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px;">
+                                        Description <span style="color: #e74c3c;">*</span>
+                                    </label>
+                                    <textarea id="ir-category-description" required rows="4"
+                                              placeholder="Describe how AI should behave in this category..."
+                                              style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; resize: vertical;"></textarea>
+                                    <small style="color: #7f8c8d; font-size: 13px;">This guides AI when generating Q&As for this category</small>
+                                </div>
+                                
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                                    <div>
+                                        <label for="category-icon" style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px;">
+                                            Icon
+                                        </label>
+                                        <input type="text" id="category-icon" value="⚡"
+                                               placeholder="⚡"
+                                               style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 24px; text-align: center;">
+                                        <small style="color: #7f8c8d; font-size: 13px;">Emoji or icon</small>
+                                    </div>
+                                    
+                                    <div>
+                                        <label for="category-color" style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px;">
+                                            Color
+                                        </label>
+                                        <input type="color" id="category-color" value="#4F46E5"
+                                               style="width: 100%; height: 48px; padding: 4px; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer;">
+                                        <small style="color: #7f8c8d; font-size: 13px;">Visual identifier</small>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                                    <button type="button" onclick="instantResponseCategoriesManager.closeCategoryModal()"
+                                            style="padding: 12px 24px; border: 2px solid #e0e0e0; background: white; border-radius: 8px; font-weight: 600; color: #7f8c8d; cursor: pointer;">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" id="save-category-btn"
+                                            style="padding: 12px 24px; border: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; font-weight: 600; color: white; cursor: pointer;">
+                                        <i class="fas fa-save mr-2"></i>Save Category
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <!-- Add/Edit Q&A Modal (MEGA FORM) -->
+                    <div id="qna-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center; overflow-y: auto; padding: 20px;">
+                        <div style="background: white; border-radius: 16px; max-width: 900px; width: 100%; max-height: 95vh; overflow-y: auto; padding: 40px; box-shadow: 0 25px 80px rgba(0,0,0,0.4);">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #f0f0f0;">
+                                <h3 id="qna-modal-title" style="font-size: 28px; font-weight: 800; color: #1a1a1a; margin: 0; display: flex; align-items: center; gap: 12px;">
+                                    <span style="font-size: 32px;">💬</span>
+                                    <span>Add Q&A</span>
+                                </h3>
+                                <button onclick="instantResponseCategoriesManager.closeQnAModal()" style="background: none; border: none; font-size: 32px; color: #999; cursor: pointer; padding: 0; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: all 0.2s;">
+                                    &times;
+                                </button>
+                            </div>
+                            
+                            <form id="ir-qna-form" onsubmit="event.preventDefault(); instantResponseCategoriesManager.saveQnAModal();">
+                                <!-- TRIGGER VARIATIONS SECTION -->
+                                <div style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border: 2px solid #667eea40; border-radius: 12px; padding: 25px; margin-bottom: 25px;">
+                                    <h4 style="font-size: 18px; font-weight: 700; color: #667eea; margin: 0 0 15px 0; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-bolt"></i> Trigger Phrases
+                                    </h4>
+                                    
+                                    <div style="margin-bottom: 15px;">
+                                        <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px; font-size: 14px;">
+                                            Main Trigger <span style="color: #e74c3c;">*</span>
+                                        </label>
+                                        <div style="display: flex; gap: 10px;">
+                                            <input type="text" id="qna-main-trigger" required
+                                                   placeholder="e.g., I'm frustrated, please hold, thank you"
+                                                   style="flex: 1; padding: 14px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 16px; font-weight: 500;">
+                                            <button type="button" onclick="instantResponseCategoriesManager.generateTriggerVariations()" 
+                                                    style="padding: 14px 24px; border: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; font-weight: 700; color: white; cursor: pointer; white-space: nowrap; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);">
+                                                <i class="fas fa-magic mr-2"></i>Generate 8 Variations
+                                            </button>
+                                        </div>
+                                        <small style="color: #7f8c8d; font-size: 13px; display: block; margin-top: 5px;">
+                                            💡 Click "Generate Variations" to auto-create similar phrases
+                                        </small>
+                                    </div>
+                                    
+                                    <div id="variations-container" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 2px dashed #d0d0d0;">
+                                        <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 12px; font-size: 14px;">
+                                            Variations (Click ✏️ to edit, ❌ to remove, or click "+ Add" to add more)
+                                        </label>
+                                        <div id="variations-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
+                                            <!-- Variations will be inserted here -->
+                                        </div>
+                                        <button type="button" onclick="instantResponseCategoriesManager.addVariation()" 
+                                                style="padding: 10px 20px; border: 2px dashed #667eea; background: white; border-radius: 8px; font-weight: 600; color: #667eea; cursor: pointer;">
+                                            <i class="fas fa-plus mr-2"></i>Add Variation
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- RESPONSE SECTION -->
+                                <div style="background: #f8f9fa; border: 2px solid #e0e0e0; border-radius: 12px; padding: 25px; margin-bottom: 25px;">
+                                    <h4 style="font-size: 18px; font-weight: 700; color: #2c3e50; margin: 0 0 15px 0; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-comment-dots"></i> AI Response
+                                    </h4>
+                                    
+                                    <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px; font-size: 14px;">
+                                        What should AI say? <span style="color: #e74c3c;">*</span>
+                                    </label>
+                                    <textarea id="qna-response" required rows="4"
+                                              placeholder="e.g., I completely understand your frustration. Let me help you get this resolved right away."
+                                              style="width: 100%; padding: 14px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; resize: vertical; line-height: 1.6;"></textarea>
+                                    
+                                    <!-- AI SUGGEST RESPONSE BUTTON -->
+                                    <button type="button" onclick="instantResponseCategoriesManager.suggestAIResponseForModal()" 
+                                            style="margin-top: 10px; padding: 10px 20px; border: none; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 8px; font-weight: 700; color: white; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-magic"></i>
+                                        AI Suggest Response (3 variations)
+                                    </button>
+                                    
+                                    <small style="color: #7f8c8d; font-size: 13px; display: block; margin-top: 8px;">
+                                        💡 AI will generate 3 response variations based on your trigger phrase and category
+                                    </small>
+                                </div>
+                                
+                                <!-- ADVANCED BEHAVIOR (Collapsible) -->
+                                <div id="advanced-section" style="border: 2px solid #ffd70020; border-radius: 12px; margin-bottom: 25px; overflow: hidden;">
+                                    <button type="button" onclick="instantResponseCategoriesManager.toggleAdvanced()" 
+                                            style="width: 100%; padding: 20px 25px; background: linear-gradient(135deg, #ffd70015 0%, #ff850015 100%); border: none; display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                                        <span style="font-size: 16px; font-weight: 700; color: #f39c12; display: flex; align-items: center; gap: 10px;">
+                                            <i class="fas fa-cog"></i> Advanced Behavior (Optional - For Complex Scenarios)
+                                        </span>
+                                        <i id="advanced-toggle-icon" class="fas fa-chevron-down" style="color: #f39c12; font-size: 14px;"></i>
+                                    </button>
+                                    
+                                    <div id="advanced-content" style="display: none; padding: 25px; background: white;">
+                                        <!-- TIMING & FOLLOW-UP -->
+                                        <div style="margin-bottom: 25px;">
+                                            <h5 style="font-size: 16px; font-weight: 700; color: #e67e22; margin: 0 0 15px 0; display: flex; align-items: center; gap: 8px;">
+                                                <i class="fas fa-clock"></i> Timing & Follow-Up
+                                            </h5>
+                                            
+                                            <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px; cursor: pointer;">
+                                                <input type="checkbox" id="qna-timing-enabled" 
+                                                       style="width: 20px; height: 20px; cursor: pointer;">
+                                                <span style="font-weight: 600; color: #2c3e50;">Enable follow-up after silence</span>
+                                            </label>
+                                            
+                                            <div id="timing-options" style="display: none; padding-left: 30px; border-left: 3px solid #e67e22; margin-left: 10px;">
+                                                <div style="display: grid; grid-template-columns: 150px 1fr; gap: 15px; align-items: center; margin-bottom: 15px;">
+                                                    <label style="font-weight: 600; color: #555; font-size: 14px;">Wait Duration:</label>
+                                                    <input type="number" id="qna-wait-seconds" value="90" min="10" max="600"
+                                                           style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;">
+                                                </div>
+                                                
+                                                <div style="margin-bottom: 15px;">
+                                                    <label style="display: block; font-weight: 600; color: #555; margin-bottom: 8px; font-size: 14px;">Follow-up Message:</label>
+                                                    <textarea id="qna-followup-message" rows="2" placeholder="e.g., Excuse me, are you ready? I'm still here to help!"
+                                                              style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;"></textarea>
+                                                </div>
+                                                
+                                                <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px; cursor: pointer;">
+                                                    <input type="checkbox" id="qna-second-followup" 
+                                                           style="width: 18px; height: 18px; cursor: pointer;">
+                                                    <span style="font-weight: 600; color: #2c3e50; font-size: 14px;">Enable 2nd follow-up</span>
+                                                </label>
+                                                
+                                                <div id="second-followup-options" style="display: none; margin-left: 28px;">
+                                                    <div style="display: grid; grid-template-columns: 150px 1fr; gap: 15px; align-items: center; margin-bottom: 15px;">
+                                                        <label style="font-weight: 600; color: #555; font-size: 14px;">Wait Duration:</label>
+                                                        <input type="number" id="qna-second-wait" value="120" min="10" max="600"
+                                                               style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;">
+                                                    </div>
+                                                    
+                                                    <div>
+                                                        <label style="display: block; font-weight: 600; color: #555; margin-bottom: 8px; font-size: 14px;">2nd Follow-up Message:</label>
+                                                        <textarea id="qna-second-message" rows="2" placeholder="e.g., I'm still here whenever you're ready!"
+                                                                  style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;"></textarea>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- CONTEXT AWARENESS -->
+                                        <div style="margin-bottom: 25px;">
+                                            <h5 style="font-size: 16px; font-weight: 700; color: #3498db; margin: 0 0 15px 0; display: flex; align-items: center; gap: 8px;">
+                                                <i class="fas fa-brain"></i> Context Awareness
+                                            </h5>
+                                            
+                                            <label style="display: flex; align-items: start; gap: 12px; cursor: pointer; padding: 15px; background: #ecf0f1; border-radius: 8px;">
+                                                <input type="checkbox" id="qna-context-aware" 
+                                                       style="width: 20px; height: 20px; cursor: pointer; margin-top: 2px;">
+                                                <div>
+                                                    <span style="font-weight: 600; color: #2c3e50; display: block; margin-bottom: 5px;">Remember conversation context</span>
+                                                    <small style="color: #7f8c8d; font-size: 13px; line-height: 1.5;">
+                                                        AI will personalize this response based on what was discussed earlier in the conversation
+                                                        <br>Example: If discussing pricing, AI might say "Take your time reviewing the pricing..."
+                                                    </small>
+                                                </div>
+                                            </label>
+                                        </div>
+                                        
+                                        <!-- PRIORITY -->
+                                        <div>
+                                            <h5 style="font-size: 16px; font-weight: 700; color: #9b59b6; margin: 0 0 15px 0; display: flex; align-items: center; gap: 8px;">
+                                                <i class="fas fa-sort-amount-down"></i> Priority
+                                            </h5>
+                                            
+                                            <div style="background: #ecf0f1; border-radius: 8px; padding: 15px;">
+                                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 14px;">
+                                                    Match Priority: <span id="qna-priority-display" style="color: #9b59b6; font-size: 18px;">50</span>
+                                                </label>
+                                                <input type="range" id="qna-priority" min="1" max="100" value="50" 
+                                                       style="width: 100%; height: 8px; cursor: pointer;">
+                                                <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                                                    <small style="color: #7f8c8d; font-size: 12px;">Low (checked last)</small>
+                                                    <small style="color: #7f8c8d; font-size: 12px;">High (checked first)</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- STATUS & NOTES -->
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">
+                                    <div>
+                                        <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px; font-size: 14px;">
+                                            Status
+                                        </label>
+                                        <select id="qna-enabled" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; cursor: pointer;">
+                                            <option value="true">✅ Enabled (Active)</option>
+                                            <option value="false">❌ Disabled (Inactive)</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div>
+                                        <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px; font-size: 14px;">
+                                            Keywords <small style="color: #95a5a6; font-weight: 400;">(Auto-generated)</small>
+                                        </label>
+                                        <div id="qna-keywords-display" style="padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; background: #f8f9fa; min-height: 48px; font-size: 13px; color: #7f8c8d; display: flex; align-items: center;">
+                                            Keywords will be generated automatically
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div style="margin-bottom: 25px;">
+                                    <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px; font-size: 14px;">
+                                        Notes <small style="color: #95a5a6; font-weight: 400;">(Optional - Internal use only)</small>
+                                    </label>
+                                    <textarea id="qna-notes" rows="2" placeholder="Any special instructions or notes about this Q&A..."
+                                              style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; resize: vertical;"></textarea>
+                                </div>
+                                
+                                <!-- SUBMIT BUTTONS -->
+                                <div style="display: flex; gap: 12px; justify-content: flex-end; padding-top: 20px; border-top: 2px solid #f0f0f0;">
+                                    <button type="button" onclick="instantResponseCategoriesManager.closeQnAModal()"
+                                            style="padding: 14px 28px; border: 2px solid #e0e0e0; background: white; border-radius: 8px; font-weight: 600; color: #7f8c8d; cursor: pointer; font-size: 15px;">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" id="save-qna-btn"
+                                            style="padding: 14px 32px; border: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; font-weight: 700; color: white; cursor: pointer; font-size: 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);">
+                                        <i class="fas fa-save mr-2"></i>Save Q&A
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    
+
+                    <!-- Add/Edit Response Category Modal -->
+                    <div id="response-category-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+                        <div class="relative top-10 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+                            <div class="mt-3">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-lg font-medium text-gray-900" id="response-category-modal-title">Add Response Category</h3>
+                                    <button type="button" class="text-gray-400 hover:text-gray-600" id="close-response-category-modal">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <form id="response-category-form">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label for="response-category-key" class="block text-sm font-medium text-gray-700 mb-2">
+                                                Category Key <span class="text-red-500">*</span>
+                                            </label>
+                                            <input type="text" id="response-category-key" name="response-category-key" 
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                                   placeholder="e.g., greeting, pricing, support" required>
+                                            <p class="text-xs text-gray-500 mt-1">Lowercase, no spaces (used for identification)</p>
+                                        </div>
+                                        <div>
+                                            <label for="response-category-label" class="block text-sm font-medium text-gray-700 mb-2">
+                                                Display Label <span class="text-red-500">*</span>
+                                            </label>
+                                            <input type="text" id="response-category-label" name="response-category-label" 
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                                   placeholder="e.g., Greeting Response" required>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <label for="response-category-icon" class="block text-sm font-medium text-gray-700 mb-2">
+                                            Icon Class
+                                        </label>
+                                        <input type="text" id="response-category-icon" name="response-category-icon" 
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                               placeholder="e.g., fas fa-hand-wave">
+                                        <p class="text-xs text-gray-500 mt-1">FontAwesome icon class (optional)</p>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <label for="response-category-description" class="block text-sm font-medium text-gray-700 mb-2">
+                                            Description
+                                        </label>
+                                        <textarea id="response-category-description" name="response-category-description" 
+                                                  rows="2"
+                                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                                  placeholder="Brief description of when this response is used"></textarea>
+                                    </div>
+                                    
+                                    <div class="mb-6">
+                                        <label for="response-category-default" class="block text-sm font-medium text-gray-700 mb-2">
+                                            Default Response Template
+                                        </label>
+                                        <textarea id="response-category-default" name="response-category-default" 
+                                                  rows="3"
+                                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                                  placeholder="Enter the default response template (you can use placeholders like {companyname})"></textarea>
+                                        <p class="text-xs text-gray-500 mt-1">Use placeholders like {companyname} for dynamic content</p>
+                                    </div>
+                                    
+                                    <div class="flex justify-end space-x-3">
+                                        <button type="button" id="cancel-response-category" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">
+                                            Cancel
+                                        </button>
+                                        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
+                                            <span id="response-category-submit-text">Add Category</span>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Legacy personality responses section completely removed -->
+
+                    <!-- ============================================================================== -->
+                    <!-- ===== TAB SECTION START: AI AGENT SETTINGS (NEW, MODERN, ISOLATED) ===== -->
+                    <!-- ============================================================================== -->
+                    <!-- 🆕 PURPOSE: Modern AI configuration system (Variables, Filler Words, Scenarios)
+                         🎯 ARCHITECTURE: 100% isolated, zero dependencies on legacy code
+                         💎 DESIGN: World-class UI, enterprise-grade UX
+                         🚀 SCALABLE: Template marketplace ready, version control ready
+                         🔥 MIGRATION: When ready, delete AI Agent Logic tab, keep this
+                    -->
+                    <!-- ============================================================================== -->
+                    <div id="ai-agent-settings-content" class="tab-content-item hidden">
+                        
+                        <!-- Link isolated CSS -->
+                        <link rel="stylesheet" href="/css/ai-agent-settings.css">
+                        <link rel="stylesheet" href="/css/twilio-control-center.css">
+                        <link rel="stylesheet" href="/css/telephony-control-panel.css">
+                        <link rel="stylesheet" href="/css/system-diagnostics.css">
+                        
+                        <div class="ai-settings-container">
+                            
+                            <!-- ========================================== -->
+                            <!-- TELEPHONY CONTROL PANEL (TABBED) -->
+                            <!-- ========================================== -->
+                            <div class="telephony-control-panel">
+                                
+                                <!-- Tab Navigation -->
+                                <nav class="telephony-tabs">
+                                    <button class="telephony-tab active" data-telephony-tab="dashboard">
+                                        <i class="fas fa-tachometer-alt"></i>
+                                        Dashboard
+                                    </button>
+                                    <button class="telephony-tab" data-telephony-tab="messages">
+                                        <i class="fas fa-comments"></i>
+                                        Messages & Greetings
+                                    </button>
+                                    <button class="telephony-tab" data-telephony-tab="logs" disabled style="opacity: 0.5; cursor: not-allowed;">
+                                        <i class="fas fa-list"></i>
+                                        Call Logs
+                                        <span style="font-size: 10px; background: #6c757d; color: white; padding: 2px 6px; border-radius: 8px; margin-left: 4px;">Soon</span>
+                                    </button>
+                                </nav>
+                                
+                                <!-- Tab 1: Dashboard (Twilio Control Center) -->
+                                <div class="telephony-tab-content active" id="tab-dashboard">
+                                    <!-- System Diagnostics Panel -->
+                                    <div id="system-diagnostics-panel">
+                                        <!-- System Diagnostics will be loaded here by JavaScript -->
+                                    </div>
+
+                                    <div id="twilio-control-center">
+                                        <!-- Twilio Control Center will be loaded here by JavaScript -->
+                                        <div class="telephony-loading">
+                                            <i class="fas fa-spinner fa-spin"></i>
+                                            <p>Loading Twilio Control Center...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Tab 2: Messages & Greetings -->
+                                <div class="telephony-tab-content" id="tab-messages">
+                                    <div id="connection-messages-container">
+                                        <!-- Connection Messages UI will be loaded here by JavaScript -->
+                                        <div class="telephony-loading">
+                                            <i class="fas fa-spinner fa-spin"></i>
+                                            <p>Loading Connection Messages...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Tab 3: Call Logs (Future) -->
+                                <div class="telephony-tab-content" id="tab-logs">
+                                    <div class="telephony-empty-state">
+                                        <i class="fas fa-list"></i>
+                                        <h4>Call Logs Coming Soon</h4>
+                                        <p>Detailed call history, transcripts, and analytics will be available here</p>
+                                    </div>
+                                </div>
+                                
+                            </div>
+                            
+                            <!-- ========================================== -->
+                            <!-- STATUS BANNER -->
+                            <!-- ========================================== -->
+                            <div id="ai-settings-status-banner" class="ai-settings-status-banner">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="flex items-center gap-3">
+                                        <i class="fas fa-info-circle text-2xl"></i>
+                                        <div>
+                                            <div class="font-bold text-lg ai-settings-status-text">
+                                                Loading configuration...
+                                            </div>
+                                            <div class="text-sm opacity-75 mt-1">
+                                                <span id="ai-settings-config-count">0/0</span> configured
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-2xl font-bold" id="ai-settings-percentage">0%</div>
+                                        <div class="text-xs opacity-75">Complete</div>
+                                    </div>
+                                </div>
+                                <div id="ai-settings-progress-bar" class="ai-settings-progress-bar">
+                                    <div class="ai-settings-progress-fill" style="width: 0%"></div>
+                                </div>
+                                
+                                <!-- Go Live Button Container -->
+                                <div class="ai-settings-go-live-container">
+                                    <button 
+                                        id="ai-settings-go-live-btn" 
+                                        class="ai-settings-btn ai-settings-btn-secondary" 
+                                        onclick="aiAgentSettings.goLive()"
+                                        disabled>
+                                        🔒 Cannot Go Live
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- ========================================== -->
+                            <!-- BLOCKERS LIST (shown when not ready) -->
+                            <!-- ========================================== -->
+                            <div id="ai-settings-blockers" style="display: none;"></div>
+                            
+                            <!-- ========================================== -->
+                            <!-- SUB-TABS NAVIGATION -->
+                            <!-- ========================================== -->
+                            <nav class="ai-settings-subtabs">
+                                <button class="ai-settings-subtab-btn active" data-subtab="variables">
+                                    <i class="fas fa-sliders-h mr-2"></i>
+                                    💼 Variables
+                                </button>
+                                <button class="ai-settings-subtab-btn" data-subtab="filler-words">
+                                    <i class="fas fa-filter mr-2"></i>
+                                    🔇 Filler Words
+                                </button>
+                                <button class="ai-settings-subtab-btn" data-subtab="scenarios">
+                                    <i class="fas fa-comments mr-2"></i>
+                                    💬 Scenarios
+                                </button>
+                                <button class="ai-settings-subtab-btn" data-subtab="template-info">
+                                    <i class="fas fa-box mr-2"></i>
+                                    📦 Template Info
+                                </button>
+                                <button class="ai-settings-subtab-btn" data-subtab="analytics">
+                                    <i class="fas fa-chart-line mr-2"></i>
+                                    📊 Analytics
+                                </button>
+                            </nav>
+                            
+                            <!-- ========================================== -->
+                            <!-- SUB-TAB 1: VARIABLES -->
+                            <!-- ========================================== -->
+                            <div id="ai-settings-variables-content" class="ai-settings-subtab-content active">
+                                
+                                <div class="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4">
+                                    <div class="flex items-start gap-3">
+                                        <i class="fas fa-lightbulb text-blue-600 text-xl mt-1"></i>
+                                        <div>
+                                            <h4 class="font-bold text-blue-900 mb-1">What are Variables?</h4>
+                                            <p class="text-sm text-blue-800">
+                                                Variables like <code class="bg-blue-200 px-2 py-0.5 rounded">{companyName}</code> and 
+                                                <code class="bg-blue-200 px-2 py-0.5 rounded">{hvacServiceCall}</code> are 
+                                                automatically replaced in your AI's responses. Fill them out once, and they'll be used 
+                                                across ALL 500+ scenarios!
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Variables will be dynamically loaded here -->
+                                <div id="variables-container">
+                                    <div class="text-center py-12 text-gray-400">
+                                        <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
+                                        <p>Loading variables...</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Action Buttons -->
+                                <div class="flex gap-3 mt-6 justify-end">
+                                    <button class="ai-settings-btn ai-settings-btn-secondary" onclick="aiAgentSettings.previewVariables()">
+                                        <i class="fas fa-eye"></i>
+                                        Preview Changes
+                                    </button>
+                                    <button class="ai-settings-btn ai-settings-btn-primary" onclick="aiAgentSettings.saveVariables()">
+                                        <i class="fas fa-save"></i>
+                                        Save Variables
+                                    </button>
+                                </div>
+                                
+                            </div>
+                            
+                            <!-- ========================================== -->
+                            <!-- SUB-TAB 2: FILLER WORDS -->
+                            <!-- ========================================== -->
+                            <div id="ai-settings-filler-words-content" class="ai-settings-subtab-content">
+                                
+                                <div class="mb-6 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg p-4">
+                                    <div class="flex items-start gap-3">
+                                        <i class="fas fa-magic text-purple-600 text-xl mt-1"></i>
+                                        <div>
+                                            <h4 class="font-bold text-purple-900 mb-1">How Filler Words Work</h4>
+                                            <p class="text-sm text-purple-800">
+                                                Filler words like "um", "uh", "like" are automatically removed from caller speech 
+                                                before AI matching. This makes your AI smarter and more accurate! You inherit 
+                                                words from your template and can add custom ones.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Search Bar -->
+                                <div class="mb-6 flex gap-3">
+                                    <div class="flex-1 relative">
+                                        <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                        <input 
+                                            type="text" 
+                                            id="filler-search" 
+                                            placeholder="Search filler words..." 
+                                            class="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                                        />
+                                    </div>
+                                    <button class="ai-settings-btn ai-settings-btn-success" onclick="aiAgentSettings.showAddFillerWordModal()">
+                                        <i class="fas fa-plus"></i>
+                                        Add Word
+                                    </button>
+                                </div>
+                                
+                                <!-- Stats -->
+                                <div class="grid grid-cols-3 gap-4 mb-6">
+                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-4 text-center">
+                                        <div class="text-3xl font-bold text-blue-600" id="filler-inherited-count">0</div>
+                                        <div class="text-sm text-gray-600 mt-1">Inherited from Template</div>
+                                    </div>
+                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-4 text-center">
+                                        <div class="text-3xl font-bold text-green-600" id="filler-custom-count">0</div>
+                                        <div class="text-sm text-gray-600 mt-1">Custom Added</div>
+                                    </div>
+                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-4 text-center">
+                                        <div class="text-3xl font-bold text-purple-600" id="filler-total-count">0</div>
+                                        <div class="text-sm text-gray-600 mt-1">Total Active</div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Filler Words Display -->
+                                <div id="filler-words-container">
+                                    <div class="text-center py-12 text-gray-400">
+                                        <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
+                                        <p>Loading filler words...</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Action Buttons -->
+                                <div class="flex gap-3 mt-6 justify-end">
+                                    <button class="ai-settings-btn ai-settings-btn-secondary" onclick="aiAgentSettings.exportFillerWords()">
+                                        <i class="fas fa-download"></i>
+                                        Export
+                                    </button>
+                                    <button class="ai-settings-btn ai-settings-btn-danger" onclick="aiAgentSettings.resetFillerWords()">
+                                        <i class="fas fa-undo"></i>
+                                        Reset to Defaults
+                                    </button>
+                                </div>
+                                
+                            </div>
+                            
+                            <!-- ========================================== -->
+                            <!-- SUB-TAB 3: SCENARIOS -->
+                            <!-- ========================================== -->
+                            <div id="ai-settings-scenarios-content" class="ai-settings-subtab-content">
+                                
+                                <div class="mb-6 bg-gradient-to-r from-green-50 to-teal-50 border-2 border-green-200 rounded-lg p-4">
+                                    <div class="flex items-start gap-3">
+                                        <i class="fas fa-robot text-green-600 text-xl mt-1"></i>
+                                        <div>
+                                            <h4 class="font-bold text-green-900 mb-1">Your AI's Conversation Library</h4>
+                                            <p class="text-sm text-green-800">
+                                                These scenarios define how your AI responds in different situations. 
+                                                Each scenario has triggers (what caller says), replies (AI's response), 
+                                                and actions (what happens next).
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Search & Filters -->
+                                <div class="ai-settings-scenarios-search">
+                                    <input 
+                                        type="text" 
+                                        placeholder="🔍 Search 500+ scenarios..." 
+                                        id="scenarios-search"
+                                    />
+                                    <select id="scenarios-category-filter">
+                                        <option value="all">All Categories</option>
+                                        <option value="universal">Universal (103)</option>
+                                        <option value="hvac">HVAC (215)</option>
+                                        <option value="plumbing">Plumbing (206)</option>
+                                    </select>
+                                    <select id="scenarios-status-filter">
+                                        <option value="active">Active</option>
+                                        <option value="draft">Draft</option>
+                                        <option value="disabled">Disabled</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- Scenarios will be dynamically loaded here -->
+                                <div id="scenarios-container">
+                                    <div class="text-center py-12 text-gray-400">
+                                        <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
+                                        <p>Loading scenarios...</p>
+                                    </div>
+                                </div>
+                                
+                            </div>
+                            
+                            <!-- ========================================== -->
+                            <!-- SUB-TAB 4: TEMPLATE INFO -->
+                            <!-- ========================================== -->
+                            <div id="ai-settings-template-info-content" class="ai-settings-subtab-content">
+                                
+                                <div class="ai-settings-section">
+                                    <div class="ai-settings-section-header">
+                                        <h3>
+                                            <i class="fas fa-box text-blue-600"></i>
+                                            Template Details
+                                        </h3>
+                                    </div>
+                                    <div class="ai-settings-section-content expanded">
+                                        <div id="template-info-container">
+                                            <div class="text-center py-12 text-gray-400">
+                                                <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
+                                                <p>Loading template information...</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                            </div>
+                            
+                            <!-- ========================================== -->
+                            <!-- SUB-TAB 5: ANALYTICS -->
+                            <!-- ========================================== -->
+                            <div id="ai-settings-analytics-content" class="ai-settings-subtab-content">
+                                
+                                <div class="grid grid-cols-4 gap-6 mb-6">
+                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-6 text-center">
+                                        <i class="fas fa-bullseye text-4xl text-blue-600 mb-3"></i>
+                                        <div class="text-3xl font-bold text-gray-900" id="analytics-match-rate">--</div>
+                                        <div class="text-sm text-gray-600 mt-1">Match Rate</div>
+                                    </div>
+                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-6 text-center">
+                                        <i class="fas fa-gauge-high text-4xl text-green-600 mb-3"></i>
+                                        <div class="text-3xl font-bold text-gray-900" id="analytics-avg-confidence">--</div>
+                                        <div class="text-sm text-gray-600 mt-1">Avg Confidence</div>
+                                    </div>
+                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-6 text-center">
+                                        <i class="fas fa-bolt text-4xl text-yellow-600 mb-3"></i>
+                                        <div class="text-3xl font-bold text-gray-900" id="analytics-avg-speed">--</div>
+                                        <div class="text-sm text-gray-600 mt-1">Avg Speed</div>
+                                    </div>
+                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-6 text-center">
+                                        <i class="fas fa-fire text-4xl text-red-600 mb-3"></i>
+                                        <div class="text-3xl font-bold text-gray-900" id="analytics-total-calls">--</div>
+                                        <div class="text-sm text-gray-600 mt-1">Total Calls</div>
+                                    </div>
+                                </div>
+                                
+                                <div id="analytics-container">
+                                    <div class="text-center py-12 text-gray-400">
+                                        <i class="fas fa-chart-line text-6xl mb-4 opacity-30"></i>
+                                        <p class="text-lg font-semibold">Analytics Coming Soon</p>
+                                        <p class="text-sm mt-2">We're building beautiful performance dashboards!</p>
+                                    </div>
+                                </div>
+                                
+                            </div>
+                            
+                        </div>
+                        
+                        <!-- Load AI Agent Settings Managers -->
+                        <script src="/js/ai-agent-settings/SystemDiagnostics.js?v=1.0"></script>
+                        <script src="/js/ai-agent-settings/TelephonyTabManager.js?v=5.0"></script>
+                        <script src="/js/ai-agent-settings/TwilioControlCenter.js?v=5.0"></script>
+                        <script src="/js/ai-agent-settings/ConnectionMessagesManager.js?v=13.0"></script>
+                        <script src="/js/ai-agent-settings/VariablesManager.js?v=4.0"></script>
+                        <script src="/js/ai-agent-settings/FillerWordsManager.js?v=4.0"></script>
+                        <script src="/js/ai-agent-settings/ScenariosManager.js?v=4.0"></script>
+                        <script src="/js/ai-agent-settings/TemplateInfoManager.js?v=4.0"></script>
+                        <script src="/js/ai-agent-settings/AnalyticsManager.js?v=4.0"></script>
+                        <script src="/js/ai-agent-settings/AIAgentSettingsManager.js?v=4.0"></script>
+                        
+                        <!-- Load Voice Settings Manager -->
+                        <script src="/js/ai-voice-settings/VoiceSettingsManager.js?v=1.0"></script>
+                        
+                        <script>
+                            // Initialize when tab is activated
+                            let aiAgentSettings = null;
+                            let telephonyTabManager = null;
+                            let twilioControl = null;
+                            let connectionMessagesManager = null;
+                            let variablesManager = null;
+                            let fillerWordsManager = null;
+                            let scenariosManager = null;
+                            let templateInfoManager = null;
+                            let analyticsManager = null;
+                            let voiceSettingsManager = null;
+                            
+                            // Initialize on tab switch
+                            document.getElementById('tab-ai-agent-settings')?.addEventListener('click', function() {
+                                if (!aiAgentSettings) {
+                                    const companyId = window.currentCompanyId || document.getElementById('company-id')?.value;
+                                    if (companyId) {
+                                        console.log('🤖 [AI AGENT SETTINGS] Initializing for company:', companyId);
+                                        
+                                        // Initialize Telephony Tab Manager (handles tab switching)
+                                        telephonyTabManager = new TelephonyTabManager();
+                                        telephonyTabManager.initialize();
+                                        
+                                        // Initialize System Diagnostics (Dashboard tab - top panel)
+                                        systemDiagnostics = new SystemDiagnostics(companyId);
+                                        document.getElementById('system-diagnostics-panel').innerHTML = systemDiagnostics.render();
+                                        
+                                        // Initialize Twilio Control Center (Dashboard tab)
+                                        twilioControl = new TwilioControlCenter(companyId);
+                                        twilioControl.initialize();
+                                        
+                                        // Initialize Connection Messages Manager (Messages & Greetings tab)
+                                        connectionMessagesManager = new ConnectionMessagesManager(companyId);
+                                        // Note: Will be initialized when tab is first clicked
+                                        
+                                        // Initialize AI Agent Settings Manager
+                                        aiAgentSettings = new AIAgentSettingsManager(companyId);
+                                        aiAgentSettings.initialize();
+                                        
+                                        // Expose managers globally for onclick handlers
+                                        window.aiAgentSettings = aiAgentSettings;
+                                        window.telephonyTabManager = telephonyTabManager;
+                                        window.twilioControl = twilioControl;
+                                        window.connectionMessagesManager = connectionMessagesManager;
+                                        window.variablesManager = aiAgentSettings.variablesManager;
+                                        window.fillerWordsManager = aiAgentSettings.fillerWordsManager;
+                                        window.scenariosManager = aiAgentSettings.scenariosManager;
+                                        window.templateInfoManager = aiAgentSettings.templateInfoManager;
+                                        window.analyticsManager = aiAgentSettings.analyticsManager;
+                                    } else {
+                                        console.error('❌ [AI AGENT SETTINGS] No company ID found');
+                                    }
+                                }
+                            });
+                            
+                            // Initialize Voice Settings Manager when AI Voice Settings tab is clicked
+                            document.getElementById('tab-ai-voice')?.addEventListener('click', function() {
+                                if (!voiceSettingsManager) {
+                                    const companyId = window.currentCompanyId || document.getElementById('company-id')?.value;
+                                    
+                                    if (companyId) {
+                                        console.log('🎤 [VOICE TAB] Initializing Voice Settings Manager for company:', companyId);
+                                        
+                                        voiceSettingsManager = new VoiceSettingsManager(companyId);
+                                        voiceSettingsManager.initialize();
+                                        
+                                        // Make globally accessible for debugging
+                                        window.voiceSettingsManager = voiceSettingsManager;
+                                    } else {
+                                        console.error('❌ [VOICE TAB] No company ID found');
+                                    }
+                                }
+                            });
+                        </script>
+                        
+                    </div>
+                    <!-- ============================================================================== -->
+                    <!-- ===== TAB SECTION END: AI AGENT SETTINGS ===== -->
+                    <!-- ============================================================================== -->
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 mt-auto">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 text-center text-gray-500 text-sm">
+            © <span id="current-year"></span> ClientVia.ai All rights reserved.
+        </div>
+    </footer>
+    
+    <script>
+        // Set current year in footer
+        const yearSpan = document.getElementById('current-year');
+        if (yearSpan) {
+            yearSpan.textContent = new Date().getFullYear();
+        }
+        
+        // Global helper function for slider value updates (used by inline HTML oninput attributes)
+        function updateSliderValue(name, value) {
+            const displayElement = document.getElementById(`${name}-value`);
+            if (displayElement) {
+                displayElement.textContent = parseFloat(value).toFixed(1);
+            }
+        }
+    </script>
+    
+    <!-- Load Company Profile Modern JavaScript -->
+    <script src="/js/company-profile-modern.js?v=2.21"></script>
+    
+    <!-- Main Page Initialization Script -->
+    <script>
+        // Main initialization when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Company Profile page DOMContentLoaded - Starting initialization...');
+            
+            // Get company ID from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const companyId = urlParams.get('id');
+            
+            if (companyId) {
+                console.log('✅ Company ID found in URL:', companyId);
+                
+                // Set global company ID
+                window.companyId = companyId;
+                window.currentCompanyId = companyId;
+                
+                // Store in localStorage for persistence
+                localStorage.setItem('currentCompanyId', companyId);
+                
+                // Start fetching company data immediately
+                console.log('📡 Calling proven fetchCompanyData pattern...');
+                
+                // Wait a moment for all scripts to load
+                setTimeout(() => {
+                    if (typeof fetchCompanyData === 'function') {
+                        fetchCompanyData();
+                    } else if (window.companyProfileManager && typeof window.companyProfileManager.loadCompanyData === 'function') {
+                        window.companyProfileManager.loadCompanyData();
+                    } else {
+                        console.error('❌ No data loading function found');
+                    }
+                }, 100);
+            } else {
+                console.error('❌ No company ID found in URL');
+                document.querySelector('.profile-container')?.innerHTML = 
+                    '<div class="p-8 text-center"><h1 class="text-2xl font-bold text-red-600">Error: No company ID provided</h1><p class="text-gray-600 mt-2">Please access this page with a valid company ID.</p></div>';
+            }
+        });
+    </script>
+    
+</body>
+
+
+

@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent Monitoring Dashboard - ClientsVia</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .status-healthy { color: #10b981; }
+        .status-warning { color: #f59e0b; }
+        .status-error { color: #ef4444; }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-dot.healthy { background-color: #10b981; }
+        .status-dot.warning { background-color: #f59e0b; }
+        .status-dot.error { background-color: #ef4444; }
+        .pulse-dot {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .metric-card {
+            transition: all 0.3s ease;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center">
+                    <i class="fas fa-robot text-blue-600 text-2xl mr-3"></i>
+                    <h1 class="text-2xl font-bold text-gray-900">AI Agent Monitoring Dashboard</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-2">
+                        <div class="pulse-dot w-3 h-3 bg-green-500 rounded-full"></div>
+                        <span class="text-sm text-gray-600">Live Monitoring</span>
+                    </div>
+                    <button id="refresh-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                        <i class="fas fa-sync-alt mr-2"></i>Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Company Selection -->
+        <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900">Company Selection</h2>
+                    <p class="text-sm text-gray-600 mt-1">Select a company to monitor AI agent health</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <input type="text" id="company-id-input" placeholder="Enter Company ID" 
+                           class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <button id="monitor-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                        <i class="fas fa-search mr-2"></i>Monitor
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monitoring Results -->
+        <div id="monitoring-results" class="hidden">
+            <!-- Overall Health Status -->
+            <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-900">Overall System Health</h2>
+                        <p class="text-sm text-gray-600 mt-1">Real-time AI agent system status</p>
+                    </div>
+                    <div id="overall-status" class="flex items-center">
+                        <span class="status-dot healthy"></span>
+                        <span class="text-sm font-medium text-green-600">Checking...</span>
+                    </div>
+                </div>
+                <div id="health-summary" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <!-- Health cards will be populated here -->
+                </div>
+            </div>
+
+            <!-- Component Health -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <!-- System Components -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">System Components</h3>
+                    <div id="component-health" class="space-y-4">
+                        <!-- Component status cards will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Performance Metrics -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Performance Metrics</h3>
+                    <div id="performance-metrics" class="space-y-4">
+                        <!-- Performance metrics will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Issues and Recommendations -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <!-- Issues -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-exclamation-triangle text-yellow-500 mr-2"></i>Issues Detected
+                    </h3>
+                    <div id="issues-list" class="space-y-2">
+                        <!-- Issues will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Recommendations -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-lightbulb text-blue-500 mr-2"></i>Recommendations
+                    </h3>
+                    <div id="recommendations-list" class="space-y-2">
+                        <!-- Recommendations will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Flow -->
+            <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">AI Agent Flow Test</h3>
+                        <p class="text-sm text-gray-600 mt-1">Test the complete AI agent routing system</p>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <input type="text" id="test-query-input" placeholder="Enter test query (e.g., 'what are your hours')" 
+                               value="what are your hours"
+                               class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-64">
+                        <button id="test-flow-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                            <i class="fas fa-play mr-2"></i>Test Flow
+                        </button>
+                    </div>
+                </div>
+                <div id="test-results" class="hidden">
+                    <!-- Test results will be populated here -->
+                </div>
+            </div>
+
+            <!-- Diagnostics -->
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">System Diagnostics</h3>
+                        <p class="text-sm text-gray-600 mt-1">Deep system analysis and troubleshooting</p>
+                    </div>
+                    <button id="run-diagnostics-btn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                        <i class="fas fa-stethoscope mr-2"></i>Run Diagnostics
+                    </button>
+                </div>
+                <div id="diagnostics-results" class="hidden">
+                    <!-- Diagnostics results will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading-state" class="hidden text-center py-12">
+            <div class="inline-flex items-center px-4 py-2 font-semibold leading-6 text-sm shadow rounded-md text-blue-500 bg-blue-100 transition ease-in-out duration-150">
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Loading monitoring data...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class AIAgentMonitoring {
+            constructor() {
+                this.currentCompanyId = null;
+                this.initializeEventListeners();
+            }
+
+            initializeEventListeners() {
+                document.getElementById('monitor-btn').addEventListener('click', () => this.startMonitoring());
+                document.getElementById('refresh-btn').addEventListener('click', () => this.refreshMonitoring());
+                document.getElementById('test-flow-btn').addEventListener('click', () => this.testFlow());
+                document.getElementById('run-diagnostics-btn').addEventListener('click', () => this.runDiagnostics());
+                
+                // Enter key support
+                document.getElementById('company-id-input').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.startMonitoring();
+                });
+                document.getElementById('test-query-input').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.testFlow();
+                });
+            }
+
+            async startMonitoring() {
+                const companyId = document.getElementById('company-id-input').value.trim();
+                if (!companyId) {
+                    alert('Please enter a Company ID');
+                    return;
+                }
+
+                this.currentCompanyId = companyId;
+                this.showLoading();
+                
+                try {
+                    await this.loadHealthStatus();
+                    await this.loadMetrics();
+                    this.showResults();
+                } catch (error) {
+                    console.error('Monitoring failed:', error);
+                    alert('Failed to load monitoring data: ' + error.message);
+                } finally {
+                    this.hideLoading();
+                }
+            }
+
+            async refreshMonitoring() {
+                if (!this.currentCompanyId) return;
+                await this.startMonitoring();
+            }
+
+            async loadHealthStatus() {
+                const response = await fetch(`/api/admin/ai-agent-monitoring/health/${this.currentCompanyId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('authToken') || sessionStorage.getItem('authToken')}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Health check failed: ${response.status}`);
+                }
+
+                const data = await response.json();
+                this.displayHealthStatus(data.data);
+            }
+
+            async loadMetrics() {
+                const response = await fetch(`/api/admin/ai-agent-monitoring/metrics/${this.currentCompanyId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('authToken') || sessionStorage.getItem('authToken')}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Metrics failed: ${response.status}`);
+                }
+
+                const data = await response.json();
+                this.displayMetrics(data.data);
+            }
+
+            displayHealthStatus(health) {
+                // Overall status
+                const overallStatus = document.getElementById('overall-status');
+                const statusClass = health.overall === 'healthy' ? 'healthy' : 
+                                  health.overall === 'degraded' ? 'warning' : 'error';
+                const statusColor = health.overall === 'healthy' ? 'text-green-600' : 
+                                  health.overall === 'degraded' ? 'text-yellow-600' : 'text-red-600';
+                
+                overallStatus.innerHTML = `
+                    <span class="status-dot ${statusClass}"></span>
+                    <span class="text-sm font-medium ${statusColor}">${health.overall.toUpperCase()}</span>
+                `;
+
+                // Component health
+                const componentHealth = document.getElementById('component-health');
+                componentHealth.innerHTML = '';
+                
+                Object.entries(health.components).forEach(([name, component]) => {
+                    const statusClass = component.status === 'healthy' ? 'healthy' : 
+                                      component.status === 'warning' ? 'warning' : 'error';
+                    const statusColor = component.status === 'healthy' ? 'text-green-600' : 
+                                      component.status === 'warning' ? 'text-yellow-600' : 'text-red-600';
+                    
+                    componentHealth.innerHTML += `
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div class="flex items-center">
+                                <span class="status-dot ${statusClass}"></span>
+                                <span class="text-sm font-medium text-gray-900">${name.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</span>
+                            </div>
+                            <span class="text-xs ${statusColor} font-medium">${component.status.toUpperCase()}</span>
+                        </div>
+                    `;
+                });
+
+                // Issues
+                const issuesList = document.getElementById('issues-list');
+                issuesList.innerHTML = '';
+                if (health.issues.length === 0) {
+                    issuesList.innerHTML = '<p class="text-sm text-gray-500 italic">No issues detected</p>';
+                } else {
+                    health.issues.forEach(issue => {
+                        issuesList.innerHTML += `
+                            <div class="flex items-start space-x-2 p-2 bg-yellow-50 rounded">
+                                <i class="fas fa-exclamation-triangle text-yellow-500 mt-0.5"></i>
+                                <span class="text-sm text-gray-700">${issue}</span>
+                            </div>
+                        `;
+                    });
+                }
+
+                // Recommendations
+                const recommendationsList = document.getElementById('recommendations-list');
+                recommendationsList.innerHTML = '';
+                if (health.recommendations.length === 0) {
+                    recommendationsList.innerHTML = '<p class="text-sm text-gray-500 italic">No recommendations</p>';
+                } else {
+                    health.recommendations.forEach(rec => {
+                        recommendationsList.innerHTML += `
+                            <div class="flex items-start space-x-2 p-2 bg-blue-50 rounded">
+                                <i class="fas fa-lightbulb text-blue-500 mt-0.5"></i>
+                                <span class="text-sm text-gray-700">${rec}</span>
+                            </div>
+                        `;
+                    });
+                }
+            }
+
+            displayMetrics(metrics) {
+                const performanceMetrics = document.getElementById('performance-metrics');
+                performanceMetrics.innerHTML = `
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                            <span class="text-sm font-medium text-gray-900">Company Q&A Entries</span>
+                            <span class="text-sm font-bold text-blue-600">${metrics.knowledgeBase.companyQnA}</span>
+                        </div>
+                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                            <span class="text-sm font-medium text-gray-900">Trade Q&A Entries</span>
+                            <span class="text-sm font-bold text-green-600">${metrics.knowledgeBase.tradeQnA}</span>
+                        </div>
+                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                            <span class="text-sm font-medium text-gray-900">Templates</span>
+                            <span class="text-sm font-bold text-purple-600">${metrics.knowledgeBase.templates}</span>
+                        </div>
+                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                            <span class="text-sm font-medium text-gray-900">Response Time</span>
+                            <span class="text-sm font-bold text-orange-600">${metrics.performance.avgResponseTime}ms</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            async testFlow() {
+                const query = document.getElementById('test-query-input').value.trim();
+                if (!query) {
+                    alert('Please enter a test query');
+                    return;
+                }
+
+                const testResults = document.getElementById('test-results');
+                testResults.innerHTML = '<div class="text-center py-4"><i class="fas fa-spinner fa-spin text-blue-500"></i> Testing...</div>';
+                testResults.classList.remove('hidden');
+
+                try {
+                    const response = await fetch(`/api/admin/ai-agent-monitoring/test-flow/${this.currentCompanyId}?query=${encodeURIComponent(query)}`, {
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('authToken') || sessionStorage.getItem('authToken')}`
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Test failed: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    this.displayTestResults(data.data);
+                } catch (error) {
+                    testResults.innerHTML = `
+                        <div class="p-4 bg-red-50 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-times-circle text-red-500 mr-2"></i>
+                                <span class="text-sm text-red-700">Test failed: ${error.message}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            displayTestResults(testData) {
+                const testResults = document.getElementById('test-results');
+                const confidenceColor = testData.result.confidence >= 0.75 ? 'text-green-600' : 
+                                      testData.result.confidence >= 0.5 ? 'text-yellow-600' : 'text-red-600';
+                
+                testResults.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="p-4 bg-gray-50 rounded-lg">
+                            <div class="text-xs text-gray-500 uppercase tracking-wide">Source Used</div>
+                            <div class="text-lg font-semibold text-gray-900">${testData.result.source}</div>
+                        </div>
+                        <div class="p-4 bg-gray-50 rounded-lg">
+                            <div class="text-xs text-gray-500 uppercase tracking-wide">Confidence</div>
+                            <div class="text-lg font-semibold ${confidenceColor}">${(testData.result.confidence * 100).toFixed(1)}%</div>
+                        </div>
+                        <div class="p-4 bg-gray-50 rounded-lg">
+                            <div class="text-xs text-gray-500 uppercase tracking-wide">Response Time</div>
+                            <div class="text-lg font-semibold text-blue-600">${testData.result.responseTime}ms</div>
+                        </div>
+                    </div>
+                    <div class="mt-4 p-4 bg-blue-50 rounded-lg">
+                        <div class="text-xs text-gray-500 uppercase tracking-wide mb-2">AI Agent Response</div>
+                        <div class="text-sm text-gray-700">${testData.result.response}</div>
+                    </div>
+                `;
+            }
+
+            async runDiagnostics() {
+                const diagnosticsResults = document.getElementById('diagnostics-results');
+                diagnosticsResults.innerHTML = '<div class="text-center py-4"><i class="fas fa-spinner fa-spin text-red-500"></i> Running diagnostics...</div>';
+                diagnosticsResults.classList.remove('hidden');
+
+                try {
+                    const response = await fetch(`/api/admin/ai-agent-monitoring/diagnostics/${this.currentCompanyId}`, {
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('authToken') || sessionStorage.getItem('authToken')}`
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Diagnostics failed: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    this.displayDiagnostics(data.data);
+                } catch (error) {
+                    diagnosticsResults.innerHTML = `
+                        <div class="p-4 bg-red-50 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-times-circle text-red-500 mr-2"></i>
+                                <span class="text-sm text-red-700">Diagnostics failed: ${error.message}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            displayDiagnostics(diagnostics) {
+                const diagnosticsResults = document.getElementById('diagnostics-results');
+                
+                let testsHtml = '';
+                Object.entries(diagnostics.tests).forEach(([testName, test]) => {
+                    const statusClass = test.status === 'pass' ? 'healthy' : 
+                                      test.status === 'warning' ? 'warning' : 'error';
+                    const statusColor = test.status === 'pass' ? 'text-green-600' : 
+                                      test.status === 'warning' ? 'text-yellow-600' : 'text-red-600';
+                    
+                    testsHtml += `
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div class="flex items-center">
+                                <span class="status-dot ${statusClass}"></span>
+                                <span class="text-sm font-medium text-gray-900">${test.name}</span>
+                            </div>
+                            <span class="text-xs ${statusColor} font-medium">${test.status.toUpperCase()}</span>
+                        </div>
+                    `;
+                });
+
+                diagnosticsResults.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                        <div class="text-center p-4 bg-blue-50 rounded-lg">
+                            <div class="text-2xl font-bold text-blue-600">${diagnostics.summary.totalTests}</div>
+                            <div class="text-xs text-gray-500 uppercase">Total Tests</div>
+                        </div>
+                        <div class="text-center p-4 bg-green-50 rounded-lg">
+                            <div class="text-2xl font-bold text-green-600">${diagnostics.summary.passed}</div>
+                            <div class="text-xs text-gray-500 uppercase">Passed</div>
+                        </div>
+                        <div class="text-center p-4 bg-yellow-50 rounded-lg">
+                            <div class="text-2xl font-bold text-yellow-600">${diagnostics.summary.warnings}</div>
+                            <div class="text-xs text-gray-500 uppercase">Warnings</div>
+                        </div>
+                        <div class="text-center p-4 bg-red-50 rounded-lg">
+                            <div class="text-2xl font-bold text-red-600">${diagnostics.summary.failed}</div>
+                            <div class="text-xs text-gray-500 uppercase">Failed</div>
+                        </div>
+                    </div>
+                    <div class="space-y-3">
+                        ${testsHtml}
+                    </div>
+                `;
+            }
+
+            showLoading() {
+                document.getElementById('loading-state').classList.remove('hidden');
+                document.getElementById('monitoring-results').classList.add('hidden');
+            }
+
+            hideLoading() {
+                document.getElementById('loading-state').classList.add('hidden');
+            }
+
+            showResults() {
+                document.getElementById('monitoring-results').classList.remove('hidden');
+            }
+        }
+
+        // Initialize the monitoring dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            new AIAgentMonitoring();
+        });
+    </script>
+</body>
+</html>
