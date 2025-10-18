@@ -10,6 +10,7 @@ const { normalizePhoneNumber } = require('../utils/phone');
 const { redisClient } = require('../clients');
 const { apiLimiter } = require('../middleware/rateLimit'); // Rate limiting
 const { authenticateJWT, requireRole } = require('../middleware/auth'); // Authentication
+const CacheHelper = require('../utils/cacheHelper'); // Cache invalidation
 // Legacy personality system removed - using modern AI Agent Logic responseCategories
 
 // V2 DELETED: Google OAuth2 Client Setup - Calendar integration eliminated
@@ -569,10 +570,8 @@ router.patch('/company/:id', async (req, res) => {
             console.log('📝 [NOTES DEBUG] Notes after save:', updatedCompany.notes.length, 'notes saved');
         }
 
-        // 🚀 V2 OPTIMIZATION: Clear both company and AI config caches
-        const cacheKey = `company:${companyId}`;
-        const deletedCount = await redisClient.del(cacheKey);
-        console.log(`✅ [CACHE] DELETED from cache: ${cacheKey}, keys deleted: ${deletedCount}`);
+        // Clear cache using CacheHelper
+        await CacheHelper.clearCompanyCache(companyId);
         
         // Clear AI Agent Logic cache when aiAgentLogic is updated (includes keywords)
         if (req.body.aiAgentLogic) {
@@ -670,31 +669,8 @@ router.patch('/company/:companyId/account-status', async (req, res) => {
         // Save company
         await company.save();
         
-        // Clear ALL cache keys for this company to ensure fresh data
-        const cacheKeys = [
-            `company:${companyId}`,
-            `companyQnA:${companyId}`,
-            `tradeQnA:${companyId}`
-        ];
-        
-        // Add phone-based cache keys (Twilio uses these)
-        if (company.twilioConfig?.phoneNumber) {
-            cacheKeys.push(`company-phone:${company.twilioConfig.phoneNumber}`);
-        }
-        if (company.twilioConfig?.phoneNumbers && Array.isArray(company.twilioConfig.phoneNumbers)) {
-            company.twilioConfig.phoneNumbers.forEach(phone => {
-                if (phone.phoneNumber) {
-                    cacheKeys.push(`company-phone:${phone.phoneNumber}`);
-                }
-            });
-        }
-        
-        for (const key of cacheKeys) {
-            if (key && !key.includes('undefined')) {
-                await redisClient.del(key);
-                console.log(`🗑️ Cleared cache key: ${key}`);
-            }
-        }
+        // Clear cache using CacheHelper
+        await CacheHelper.clearCompanyCache(companyId);
         
         console.log(`🚨 Account status changed for company ${company.companyName} (${companyId}): ${status}`);
         console.log(`   Changed by: ${changedBy} at ${historyEntry.changedAt}`);
