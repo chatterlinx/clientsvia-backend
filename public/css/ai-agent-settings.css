@@ -220,6 +220,8 @@
 .ai-settings-subtab-content {
     display: none;
     animation: fadeIn 0.3s ease;
+    width: 100%;
+    max-width: 100%;
 }
 
 .ai-settings-subtab-content.active {
