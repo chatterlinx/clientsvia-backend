@@ -23,7 +23,7 @@
         body {
             font-family: 'Inter', sans-serif;
         }
-
+        
         /* WIDE CONTAINER - Full real estate like Data Center */
         .container {
             max-width: 1400px !important;
@@ -163,18 +163,153 @@
                                     </p>
                                 </div>
                             </div>
-                            <button 
-                                onclick="refreshAdminAlerts()" 
-                                class="px-4 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-                                title="Refresh all alerts"
-                            >
-                                <i class="fas fa-sync-alt mr-2"></i>
-                                Refresh
-                            </button>
+                            <div class="flex gap-2">
+                                <button 
+                                    onclick="openAlertSettings()" 
+                                    class="px-4 py-2 bg-white border-2 border-blue-400 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors font-medium"
+                                    title="Configure notifications"
+                                >
+                                    <i class="fas fa-cog mr-2"></i>
+                                    Settings
+                                </button>
+                                <button 
+                                    onclick="refreshAdminAlerts()" 
+                                    class="px-4 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                                    title="Refresh all alerts"
+                                >
+                                    <i class="fas fa-sync-alt mr-2"></i>
+                                    Refresh
+                                </button>
+                            </div>
                         </div>
                         
                         <div id="admin-alerts-list" class="space-y-3">
                             <!-- Alert items will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================================ -->
+                <!-- ⚙️ ALERT SETTINGS MODAL -->
+                <!-- ============================================================================ -->
+                <div id="alert-settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                    <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <!-- Modal Header -->
+                        <div class="bg-gradient-to-r from-blue-600 to-blue-700 p-6 rounded-t-xl">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <div class="w-12 h-12 bg-white bg-opacity-20 rounded-lg flex items-center justify-center mr-4">
+                                        <i class="fas fa-bell text-white text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <h2 class="text-2xl font-bold text-white">Alert Center Settings</h2>
+                                        <p class="text-sm text-blue-100 mt-1">Configure SMS and Email notifications</p>
+                                    </div>
+                                </div>
+                                <button onclick="closeAlertSettings()" class="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition-colors">
+                                    <i class="fas fa-times text-xl"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Modal Body -->
+                        <div class="p-6 space-y-6">
+                            <!-- SMS Settings -->
+                            <div class="border-2 border-blue-200 rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-sms text-blue-600 text-2xl mr-3"></i>
+                                        <h3 class="text-lg font-bold text-gray-900">SMS Notifications</h3>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="sms-enabled" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                    </label>
+                                </div>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Admin Phone Number</label>
+                                        <input type="tel" id="sms-phone" placeholder="+1 (555) 123-4567" class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Message Template</label>
+                                        <textarea id="sms-template" rows="3" class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none font-mono text-sm"></textarea>
+                                        <p class="text-xs text-gray-500 mt-1">Variables: {companyName}, {alertType}, {message}, {fixUrl}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Email Settings -->
+                            <div class="border-2 border-green-200 rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-envelope text-green-600 text-2xl mr-3"></i>
+                                        <h3 class="text-lg font-bold text-gray-900">Email Notifications</h3>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="email-enabled" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                                    </label>
+                                </div>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Admin Email Address</label>
+                                        <input type="email" id="email-address" placeholder="admin@company.com" class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Email Subject</label>
+                                        <input type="text" id="email-subject" class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Email Template</label>
+                                        <textarea id="email-template" rows="4" class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none font-mono text-sm"></textarea>
+                                        <p class="text-xs text-gray-500 mt-1">Variables: {companyName}, {alertType}, {message}, {fixUrl}, {timestamp}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Alert Types -->
+                            <div class="border-2 border-purple-200 rounded-lg p-4">
+                                <div class="flex items-center mb-4">
+                                    <i class="fas fa-filter text-purple-600 text-2xl mr-3"></i>
+                                    <h3 class="text-lg font-bold text-gray-900">Alert Types to Notify</h3>
+                                </div>
+                                <div class="space-y-2">
+                                    <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                                        <input type="checkbox" id="alert-missing-variables" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                                        <span class="ml-3 text-sm font-medium text-gray-700">Missing Variables</span>
+                                    </label>
+                                    <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                                        <input type="checkbox" id="alert-critical-errors" class="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500">
+                                        <span class="ml-3 text-sm font-medium text-gray-700">Critical Errors</span>
+                                    </label>
+                                    <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                                        <input type="checkbox" id="alert-warnings" class="w-4 h-4 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500">
+                                        <span class="ml-3 text-sm font-medium text-gray-700">Warnings (Optional)</span>
+                                    </label>
+                                    <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                                        <input type="checkbox" id="alert-info" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                                        <span class="ml-3 text-sm font-medium text-gray-700">Info Messages (Optional)</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modal Footer -->
+                        <div class="bg-gray-50 p-6 rounded-b-xl flex justify-between items-center">
+                            <button onclick="sendTestNotification()" class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors font-medium shadow-sm">
+                                <i class="fas fa-vial mr-2"></i>
+                                Send Test
+                            </button>
+                            <div class="flex gap-2">
+                                <button onclick="closeAlertSettings()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium">
+                                    Cancel
+                                </button>
+                                <button onclick="saveAlertSettings()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm">
+                                    <i class="fas fa-save mr-2"></i>
+                                    Save Settings
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -595,6 +730,174 @@
         function refreshAdminAlerts() {
             console.log('🔄 [ALERT CENTER] Refreshing all alerts...');
             loadAdminAlerts();
+        }
+        
+        // ========================================================================
+        // ALERT SETTINGS MODAL
+        // ========================================================================
+        
+        /**
+         * Open Alert Settings Modal
+         */
+        async function openAlertSettings() {
+            console.log('⚙️  [SETTINGS] Opening alert settings modal...');
+            
+            try {
+                // Load current settings from backend
+                const token = localStorage.getItem('adminToken');
+                const response = await fetch('/api/admin/notification-settings', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const settings = data.settings;
+                
+                console.log('✅ [SETTINGS] Loaded settings:', settings);
+                
+                // Populate form fields
+                document.getElementById('sms-enabled').checked = settings.sms?.enabled || false;
+                document.getElementById('sms-phone').value = settings.sms?.phoneNumber || '';
+                document.getElementById('sms-template').value = settings.sms?.template || '🚨 ALERT: {companyName} needs attention. {alertType}: {message}. Fix now: {fixUrl}';
+                
+                document.getElementById('email-enabled').checked = settings.email?.enabled || false;
+                document.getElementById('email-address').value = settings.email?.address || '';
+                document.getElementById('email-subject').value = settings.email?.subject || '🚨 ClientsVia Alert: {companyName} Needs Attention';
+                document.getElementById('email-template').value = settings.email?.template || '🚨 ALERT: {companyName} needs attention.\n\n{alertType}: {message}\n\nFix now: {fixUrl}';
+                
+                document.getElementById('alert-missing-variables').checked = settings.alertTypes?.missingVariables ?? true;
+                document.getElementById('alert-critical-errors').checked = settings.alertTypes?.criticalErrors ?? true;
+                document.getElementById('alert-warnings').checked = settings.alertTypes?.warnings || false;
+                document.getElementById('alert-info').checked = settings.alertTypes?.info || false;
+                
+                // Show modal
+                document.getElementById('alert-settings-modal').classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('❌ [SETTINGS] Failed to load settings:', error);
+                alert('Failed to load notification settings. Please try again.');
+            }
+        }
+        
+        /**
+         * Close Alert Settings Modal
+         */
+        function closeAlertSettings() {
+            console.log('✖️  [SETTINGS] Closing alert settings modal...');
+            document.getElementById('alert-settings-modal').classList.add('hidden');
+        }
+        
+        /**
+         * Save Alert Settings
+         */
+        async function saveAlertSettings() {
+            console.log('💾 [SETTINGS] Saving alert settings...');
+            
+            try {
+                // Gather form data
+                const settings = {
+                    sms: {
+                        enabled: document.getElementById('sms-enabled').checked,
+                        phoneNumber: document.getElementById('sms-phone').value,
+                        template: document.getElementById('sms-template').value
+                    },
+                    email: {
+                        enabled: document.getElementById('email-enabled').checked,
+                        address: document.getElementById('email-address').value,
+                        subject: document.getElementById('email-subject').value,
+                        template: document.getElementById('email-template').value
+                    },
+                    alertTypes: {
+                        missingVariables: document.getElementById('alert-missing-variables').checked,
+                        criticalErrors: document.getElementById('alert-critical-errors').checked,
+                        warnings: document.getElementById('alert-warnings').checked,
+                        info: document.getElementById('alert-info').checked
+                    }
+                };
+                
+                // Validate
+                if (settings.sms.enabled && !settings.sms.phoneNumber) {
+                    alert('Please enter an admin phone number or disable SMS notifications.');
+                    return;
+                }
+                
+                if (settings.email.enabled && !settings.email.address) {
+                    alert('Please enter an admin email address or disable Email notifications.');
+                    return;
+                }
+                
+                console.log('📤 [SETTINGS] Sending settings to backend:', settings);
+                
+                // Save to backend
+                const token = localStorage.getItem('adminToken');
+                const response = await fetch('/api/admin/notification-settings', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(settings)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                console.log('✅ [SETTINGS] Settings saved successfully');
+                
+                alert('✅ Notification settings saved successfully!');
+                closeAlertSettings();
+                
+            } catch (error) {
+                console.error('❌ [SETTINGS] Failed to save settings:', error);
+                alert('Failed to save notification settings. Please try again.');
+            }
+        }
+        
+        /**
+         * Send Test Notification
+         */
+        async function sendTestNotification() {
+            console.log('🧪 [SETTINGS] Sending test notification...');
+            
+            // First, save current settings
+            await saveAlertSettings();
+            
+            try {
+                const token = localStorage.getItem('adminToken');
+                const response = await fetch('/api/admin/notification-settings/test', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ type: 'both' })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                console.log('✅ [SETTINGS] Test notification sent:', data);
+                
+                const smsStatus = data.results?.sms?.success ? '✅ SMS Sent' : '❌ SMS Failed';
+                const emailStatus = data.results?.email?.success ? '✅ Email Sent' : '❌ Email Failed';
+                
+                alert(`🧪 Test Notification Results:\n\n${smsStatus}\n${emailStatus}\n\nCheck your phone and email!`);
+                
+            } catch (error) {
+                console.error('❌ [SETTINGS] Test notification failed:', error);
+                alert('Failed to send test notification. Please check your settings and try again.');
+            }
         }
         
         /**
