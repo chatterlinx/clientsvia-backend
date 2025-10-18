@@ -166,23 +166,23 @@ class TemplateInfoManager {
         container.innerHTML = `
             <div class="text-center py-16 w-full">
                 <i class="fas fa-box-open text-6xl text-gray-300 mb-4"></i>
-                <h3 class="text-xl font-bold text-gray-700 mb-2">No Template Cloned</h3>
+                <h3 class="text-xl font-bold text-gray-700 mb-2">No Template Loaded</h3>
                 <p class="text-gray-500 mb-6 max-w-2xl mx-auto">
-                    Clone a Global AI Brain template to get started. Your company will reference the template and receive automatic updates.
+                    Load a Global AI Brain template to get started. Your company will reference the template and receive automatic updates.
                 </p>
                 <button class="ai-settings-btn ai-settings-btn-primary" onclick="templateInfoManager.cloneTemplate()">
-                    <i class="fas fa-copy"></i>
-                    Clone Template
+                    <i class="fas fa-download"></i>
+                    Load Template
                 </button>
             </div>
         `;
     }
     
     /**
-     * Clone a template from Global AI Brain
+     * Load a template from Global AI Brain
      */
     async cloneTemplate() {
-        console.log('📦 [TEMPLATE INFO] Opening clone template modal...');
+        console.log('📦 [TEMPLATE INFO] Opening load template modal...');
         
         try {
             // Fetch available templates
@@ -222,8 +222,8 @@ class TemplateInfoManager {
                 <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full mx-4 max-h-[80vh] overflow-y-auto">
                     <!-- Header -->
                     <div class="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-6 rounded-t-2xl">
-                        <h2 class="text-2xl font-bold">📦 Clone Global AI Brain Template</h2>
-                        <p class="text-blue-100 mt-2">Select a template to clone to your company</p>
+                        <h2 class="text-2xl font-bold">📦 Load Global AI Brain Template</h2>
+                        <p class="text-blue-100 mt-2">Select a template to load for your company</p>
                     </div>
                     
                     <!-- Body -->
@@ -281,11 +281,11 @@ class TemplateInfoManager {
      * Confirm and execute clone
      */
     async confirmClone(templateId, templateName) {
-        if (!confirm(`🚀 Clone "${templateName}"?\n\nThis will:\n✅ Copy all scenarios\n✅ Copy all filler words\n✅ Set up variables for you to fill\n\nContinue?`)) {
+        if (!confirm(`🚀 Load "${templateName}"?\n\nThis will:\n✅ Load all scenarios\n✅ Load all filler words\n✅ Set up variables for you to fill\n\nContinue?`)) {
             return;
         }
         
-        console.log(`📦 [TEMPLATE INFO] Cloning template ${templateId}...`);
+        console.log(`📦 [TEMPLATE INFO] Loading template ${templateId}...`);
         
         this.closeCloneModal();
         
@@ -306,9 +306,9 @@ class TemplateInfoManager {
             
             const result = await response.json();
             
-            console.log('✅ [TEMPLATE INFO] Template cloned successfully:', result);
+            console.log('✅ [TEMPLATE INFO] Template loaded successfully:', result);
             
-            this.parent.showSuccess(`Template "${result.template.name}" cloned successfully! 🎉`);
+            this.parent.showSuccess(`Template "${result.template.name}" loaded successfully! 🎉`);
             
             // Reload everything
             await this.parent.refresh();
