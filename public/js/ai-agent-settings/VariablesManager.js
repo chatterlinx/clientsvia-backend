@@ -60,6 +60,180 @@ class VariablesManager {
     }
     
     /**
+     * ========================================================================
+     * SCAN PLACEHOLDERS - AUTO-DETECT VARIABLES FROM TEMPLATES
+     * ========================================================================
+     * Scans all cloned templates for placeholders ({}, [], all variants)
+     * Auto-detects new variables, updates usage counts, generates alerts
+     * ========================================================================
+     */
+    async scanPlaceholders() {
+        console.log('🔍 [VARIABLES] Starting placeholder scan...');
+        
+        try {
+            this.parent.showLoadingState();
+            
+            // Call scan API
+            const response = await fetch(`/api/company/${this.companyId}/configuration/variables/scan`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || `HTTP ${response.status}`);
+            }
+            
+            const scanResult = await response.json();
+            
+            console.log('✅ [VARIABLES] Scan complete:', scanResult);
+            
+            // Show results modal
+            this.showScanResultsModal(scanResult);
+            
+            // Reload variables to show updates
+            await this.load();
+            
+        } catch (error) {
+            console.error('❌ [VARIABLES] Scan failed:', error);
+            this.parent.showError(`Scan failed: ${error.message}`);
+        } finally {
+            this.parent.hideLoadingState();
+        }
+    }
+    
+    /**
+     * Show scan results modal
+     */
+    showScanResultsModal(scanResult) {
+        const modal = document.createElement('div');
+        modal.id = 'scan-results-modal';
+        modal.className = 'ai-settings-modal-overlay';
+        
+        // Determine alert status
+        const alertStatus = scanResult.hasAlert 
+            ? `<div class="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4 mb-6">
+                   <div class="flex items-center">
+                       <i class="fas fa-exclamation-triangle text-yellow-600 text-2xl mr-3"></i>
+                       <div>
+                           <div class="font-bold text-yellow-900">Missing Required Variables</div>
+                           <div class="text-yellow-800">${scanResult.missingRequired} required variable(s) need values before going live.</div>
+                       </div>
+                   </div>
+               </div>`
+            : `<div class="bg-green-50 border-2 border-green-400 rounded-lg p-4 mb-6">
+                   <div class="flex items-center">
+                       <i class="fas fa-check-circle text-green-600 text-2xl mr-3"></i>
+                       <div class="font-bold text-green-900">All Set! No missing required variables.</div>
+                   </div>
+               </div>`;
+        
+        modal.innerHTML = `
+            <div class="ai-settings-modal max-w-4xl">
+                <div class="ai-settings-modal-header">
+                    <h2><i class="fas fa-search mr-2"></i>Placeholder Scan Results</h2>
+                    <button class="ai-settings-modal-close" onclick="this.closest('.ai-settings-modal-overlay').remove()">×</button>
+                </div>
+                
+                <div class="ai-settings-modal-body">
+                    <!-- Summary -->
+                    <div class="grid grid-cols-3 gap-4 mb-6">
+                        <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 text-center">
+                            <div class="text-3xl font-bold text-blue-600">${scanResult.newPlaceholders || 0}</div>
+                            <div class="text-sm text-blue-800 font-medium">New Placeholders</div>
+                        </div>
+                        <div class="bg-purple-50 border-2 border-purple-200 rounded-lg p-4 text-center">
+                            <div class="text-3xl font-bold text-purple-600">${scanResult.existingPlaceholders || 0}</div>
+                            <div class="text-sm text-purple-800 font-medium">Existing Placeholders</div>
+                        </div>
+                        <div class="bg-orange-50 border-2 border-orange-200 rounded-lg p-4 text-center">
+                            <div class="text-3xl font-bold text-orange-600">${scanResult.updatedPlaceholders || 0}</div>
+                            <div class="text-sm text-orange-800 font-medium">Updated Counts</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Alert Status -->
+                    ${alertStatus}
+                    
+                    <!-- New Placeholders -->
+                    ${scanResult.details?.newItems && scanResult.details.newItems.length > 0 ? `
+                        <div class="mb-6">
+                            <h3 class="text-lg font-bold text-gray-900 mb-3">
+                                <i class="fas fa-plus-circle text-green-600 mr-2"></i>
+                                New Placeholders Detected (${scanResult.details.newItems.length})
+                            </h3>
+                            <div class="space-y-2">
+                                ${scanResult.details.newItems.map(item => `
+                                    <div class="bg-green-50 border-l-4 border-green-500 p-3 rounded">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <code class="bg-green-100 text-green-800 px-2 py-1 rounded font-mono text-sm">{${item.key}}</code>
+                                                <span class="ml-2 text-gray-700">${item.label || item.key}</span>
+                                                ${item.required ? '<span class="ml-2 text-red-600 font-bold">*</span>' : ''}
+                                            </div>
+                                            <div class="flex items-center space-x-3">
+                                                <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">${item.type || 'text'}</span>
+                                                <span class="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">${item.category || 'General'}</span>
+                                                <span class="text-xs text-gray-500">${item.usageCount || 0} uses</span>
+                                            </div>
+                                        </div>
+                                        ${item.description ? `<div class="text-xs text-gray-600 mt-1">${item.description}</div>` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <!-- Updated Placeholders -->
+                    ${scanResult.details?.updatedItems && scanResult.details.updatedItems.length > 0 ? `
+                        <div class="mb-6">
+                            <h3 class="text-lg font-bold text-gray-900 mb-3">
+                                <i class="fas fa-sync-alt text-orange-600 mr-2"></i>
+                                Updated Usage Counts (${scanResult.details.updatedItems.length})
+                            </h3>
+                            <div class="space-y-2">
+                                ${scanResult.details.updatedItems.map(item => `
+                                    <div class="bg-orange-50 border-l-4 border-orange-500 p-3 rounded">
+                                        <div class="flex items-center justify-between">
+                                            <code class="bg-orange-100 text-orange-800 px-2 py-1 rounded font-mono text-sm">{${item.key}}</code>
+                                            <div class="text-sm text-gray-700">
+                                                <span class="line-through text-gray-400">${item.oldCount} uses</span>
+                                                <i class="fas fa-arrow-right mx-2 text-gray-400"></i>
+                                                <span class="font-bold text-orange-700">${item.newCount} uses</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <!-- No Changes -->
+                    ${(!scanResult.details?.newItems || scanResult.details.newItems.length === 0) && 
+                      (!scanResult.details?.updatedItems || scanResult.details.updatedItems.length === 0) ? `
+                        <div class="text-center py-8">
+                            <i class="fas fa-check-circle text-6xl text-gray-300 mb-4"></i>
+                            <div class="text-lg font-bold text-gray-700">No Changes Detected</div>
+                            <div class="text-gray-500">All placeholders are up to date.</div>
+                        </div>
+                    ` : ''}
+                </div>
+                
+                <div class="ai-settings-modal-footer">
+                    <button class="ai-settings-btn ai-settings-btn-primary" onclick="this.closest('.ai-settings-modal-overlay').remove()">
+                        <i class="fas fa-check mr-2"></i>
+                        Got It
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+    }
+    
+    /**
      * Render variables UI
      */
     render() {
@@ -71,10 +245,31 @@ class VariablesManager {
             return;
         }
         
+        // Add scan button header
+        let html = `
+            <div class="flex items-center justify-between mb-6 bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg p-4">
+                <div>
+                    <div class="font-bold text-gray-900 text-lg">
+                        <i class="fas fa-sliders-h text-blue-600 mr-2"></i>
+                        Company Variables
+                    </div>
+                    <div class="text-sm text-gray-600 mt-1">
+                        Configure company-specific values used across all AI scenarios
+                    </div>
+                </div>
+                <button 
+                    class="ai-settings-btn ai-settings-btn-primary"
+                    onclick="variablesManager.scanPlaceholders()"
+                    title="Scan templates for new placeholders"
+                >
+                    <i class="fas fa-search mr-2"></i>
+                    Scan for Placeholders
+                </button>
+            </div>
+        `;
+        
         // Group variables by category
         const grouped = this.groupByCategory(this.variableDefinitions);
-        
-        let html = '';
         
         for (const [category, vars] of Object.entries(grouped)) {
             html += this.renderCategory(category, vars);
