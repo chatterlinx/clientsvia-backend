@@ -43,12 +43,11 @@ router.get('/:companyId/ai-agent-settings/diagnostics', async (req, res) => {
         }
 
         const timestamp = new Date().toISOString();
-        const aiLogic = company.aiAgentLogic || {};
         
         // ========================================================================
         // 1. GREETING SYSTEM STATUS
         // ========================================================================
-        const greetingDiagnostics = analyzeGreetingSystem(aiLogic);
+        const greetingDiagnostics = analyzeGreetingSystem(company);
 
         // ========================================================================
         // 2. LAST CALL DIAGNOSTICS (Future: query call logs)
@@ -63,7 +62,7 @@ router.get('/:companyId/ai-agent-settings/diagnostics', async (req, res) => {
         // ========================================================================
         // 4. CONFIGURATION CONFLICTS
         // ========================================================================
-        const conflictsDiagnostics = detectConfigurationConflicts(aiLogic);
+        const conflictsDiagnostics = detectConfigurationConflicts(company);
 
         // ========================================================================
         // 5. PERFORMANCE METRICS (Future: track actual metrics)
@@ -113,66 +112,64 @@ router.get('/:companyId/ai-agent-settings/diagnostics', async (req, res) => {
 /**
  * Analyze greeting system and determine active source
  */
-function analyzeGreetingSystem(aiLogic) {
-    const connectionMessages = aiLogic.connectionMessages?.voice?.text;
-    const legacyGreeting = aiLogic.initialGreeting;
-    const personalityPhrases = aiLogic.agentPersonality?.conversationPatterns?.openingPhrases;
+function analyzeGreetingSystem(company) {
+    // ✅ FIX: Use ROOT LEVEL connectionMessages (AI Agent Settings > Messages & Greetings)
+    // NOT aiAgentLogic.connectionMessages (deleted legacy tab)
+    const connectionMessages = company.connectionMessages;
+    const voiceConfig = connectionMessages?.voice;
+    const greetingText = voiceConfig?.text || voiceConfig?.realtime?.text;
+    const mode = voiceConfig?.mode;
 
     let activeSource = null;
     let activeText = null;
-    let lastUpdated = null;
+    let activeMode = null;
+    let lastUpdated = connectionMessages?.lastUpdated;
 
-    // Priority order (matches v2AIAgentRuntime.js)
-    if (connectionMessages && connectionMessages.trim()) {
+    // Check greeting configuration
+    if (mode === 'prerecorded' && voiceConfig?.prerecorded?.activeFileUrl) {
+        activeSource = 'connectionMessages.voice.prerecorded';
+        activeText = `Pre-recorded audio: ${voiceConfig.prerecorded.activeFileName || 'Unknown file'}`;
+        activeMode = 'prerecorded';
+    } else if (mode === 'realtime' && greetingText && greetingText.trim()) {
         activeSource = 'connectionMessages.voice.text';
-        activeText = connectionMessages;
-        lastUpdated = aiLogic.connectionMessages?.lastUpdated;
-    } else if (legacyGreeting && legacyGreeting.trim()) {
-        activeSource = 'initialGreeting (LEGACY)';
-        activeText = legacyGreeting;
-        lastUpdated = null; // Legacy doesn't track updates
-    } else if (personalityPhrases && personalityPhrases.length > 0) {
-        activeSource = 'agentPersonality.openingPhrases';
-        activeText = personalityPhrases[0];
-        lastUpdated = null;
+        activeText = greetingText;
+        activeMode = 'realtime';
+    } else if (mode === 'disabled') {
+        activeSource = 'connectionMessages.voice.disabled';
+        activeText = 'Greeting disabled - going straight to AI';
+        activeMode = 'disabled';
     } else {
-        activeSource = 'DEFAULT_FALLBACK';
-        activeText = 'System default greeting';
-        lastUpdated = null;
+        activeSource = 'FALLBACK_SYSTEM';
+        activeText = voiceConfig?.fallback?.voiceMessage || 'Using fallback greeting';
+        activeMode = 'fallback';
     }
 
-    // Build fallback chain status
-    const fallbackChain = [
+    // Build status chain (NEW SYSTEM ONLY - NO LEGACY!)
+    const statusChain = [
         {
             priority: 1,
-            source: 'connectionMessages.voice.text',
-            status: connectionMessages ? 'SET' : 'NOT_SET',
-            active: activeSource === 'connectionMessages.voice.text',
-            preview: connectionMessages ? connectionMessages.substring(0, 50) + '...' : null
+            source: 'connectionMessages.voice (AI Agent Settings)',
+            status: voiceConfig ? 'CONFIGURED' : 'NOT_CONFIGURED',
+            mode: mode || 'NOT_SET',
+            active: activeSource.includes('connectionMessages'),
+            preview: activeText ? activeText.substring(0, 60) + '...' : null
         },
         {
             priority: 2,
-            source: 'initialGreeting (LEGACY)',
-            status: legacyGreeting ? 'SET' : 'NOT_SET',
-            active: activeSource === 'initialGreeting (LEGACY)',
-            warning: legacyGreeting ? 'Legacy field - should migrate to Connection Messages' : null,
-            preview: legacyGreeting ? legacyGreeting.substring(0, 50) + '...' : null
-        },
-        {
-            priority: 3,
-            source: 'agentPersonality.openingPhrases',
-            status: (personalityPhrases && personalityPhrases.length > 0) ? 'SET' : 'NOT_SET',
-            active: activeSource === 'agentPersonality.openingPhrases',
-            preview: (personalityPhrases && personalityPhrases.length > 0) ? personalityPhrases[0].substring(0, 50) + '...' : null
+            source: 'Fallback System',
+            status: voiceConfig?.fallback?.enabled ? 'ENABLED' : 'DISABLED',
+            active: activeMode === 'fallback',
+            preview: voiceConfig?.fallback?.voiceMessage ? voiceConfig.fallback.voiceMessage.substring(0, 60) + '...' : null
         }
     ];
 
     return {
         activeSource,
         activeText,
+        activeMode,
         lastUpdated,
-        fallbackChain,
-        status: activeSource === 'connectionMessages.voice.text' ? 'OPTIMAL' : 'USING_FALLBACK'
+        statusChain,
+        status: voiceConfig ? 'CONFIGURED' : 'NOT_CONFIGURED'
     };
 }
 
@@ -194,33 +191,61 @@ async function analyzeLastCall(companyId) {
 function verifyDataPaths(company) {
     const checks = [];
 
-    // Check aiAgentLogic
+    // ✅ CHECK NEW SYSTEM: connectionMessages at ROOT LEVEL (AI Agent Settings)
+    checks.push({
+        path: 'connectionMessages',
+        exists: !!company.connectionMessages,
+        status: company.connectionMessages ? 'OK' : 'MISSING',
+        critical: true,
+        hint: 'Configure in AI Agent Settings > Messages & Greetings tab'
+    });
+
+    // Check voice config
+    checks.push({
+        path: 'connectionMessages.voice',
+        exists: !!company.connectionMessages?.voice,
+        status: company.connectionMessages?.voice ? 'OK' : 'MISSING',
+        critical: true
+    });
+
+    // Check voice mode
+    checks.push({
+        path: 'connectionMessages.voice.mode',
+        exists: !!company.connectionMessages?.voice?.mode,
+        status: company.connectionMessages?.voice?.mode ? 'OK' : 'NOT_SET',
+        value: company.connectionMessages?.voice?.mode || null,
+        critical: true
+    });
+
+    // Check voice text (for realtime TTS)
+    checks.push({
+        path: 'connectionMessages.voice.text',
+        exists: !!company.connectionMessages?.voice?.text,
+        status: company.connectionMessages?.voice?.text ? 'OK' : 'NOT_SET',
+        value: company.connectionMessages?.voice?.text ? `"${company.connectionMessages.voice.text.substring(0, 40)}..."` : null
+    });
+
+    // Check prerecorded audio
+    checks.push({
+        path: 'connectionMessages.voice.prerecorded.activeFileUrl',
+        exists: !!company.connectionMessages?.voice?.prerecorded?.activeFileUrl,
+        status: company.connectionMessages?.voice?.prerecorded?.activeFileUrl ? 'OK' : 'NOT_SET',
+        value: company.connectionMessages?.voice?.prerecorded?.activeFileName || null
+    });
+
+    // Check fallback system
+    checks.push({
+        path: 'connectionMessages.voice.fallback.enabled',
+        exists: company.connectionMessages?.voice?.fallback?.enabled !== undefined,
+        status: company.connectionMessages?.voice?.fallback?.enabled ? 'ENABLED' : 'DISABLED',
+        value: company.connectionMessages?.voice?.fallback?.enabled
+    });
+
+    // Check aiAgentLogic (legacy, but still used for voiceSettings)
     checks.push({
         path: 'aiAgentLogic',
         exists: !!company.aiAgentLogic,
         status: company.aiAgentLogic ? 'OK' : 'MISSING'
-    });
-
-    // Check connectionMessages
-    checks.push({
-        path: 'aiAgentLogic.connectionMessages',
-        exists: !!company.aiAgentLogic?.connectionMessages,
-        status: company.aiAgentLogic?.connectionMessages ? 'OK' : 'MISSING'
-    });
-
-    // Check voice settings
-    checks.push({
-        path: 'aiAgentLogic.connectionMessages.voice',
-        exists: !!company.aiAgentLogic?.connectionMessages?.voice,
-        status: company.aiAgentLogic?.connectionMessages?.voice ? 'OK' : 'MISSING'
-    });
-
-    // Check voice text
-    checks.push({
-        path: 'aiAgentLogic.connectionMessages.voice.text',
-        exists: !!company.aiAgentLogic?.connectionMessages?.voice?.text,
-        status: company.aiAgentLogic?.connectionMessages?.voice?.text ? 'OK' : 'NOT_SET',
-        critical: true
     });
 
     // Check voiceSettings
@@ -262,37 +287,40 @@ function verifyDataPaths(company) {
 /**
  * Detect configuration conflicts and provide recommendations
  */
-function detectConfigurationConflicts(aiLogic) {
+function detectConfigurationConflicts(company) {
     const issues = [];
     const recommendations = [];
 
-    // Check for legacy greeting still set
-    if (aiLogic.initialGreeting && aiLogic.connectionMessages?.voice?.text) {
+    // ✅ FIX: Check ROOT LEVEL connectionMessages (AI Agent Settings)
+    const connectionMessages = company.connectionMessages;
+    const voiceMode = connectionMessages?.voice?.mode;
+    const hasText = !!connectionMessages?.voice?.text;
+    const hasPrerecorded = !!connectionMessages?.voice?.prerecorded?.activeFileUrl;
+
+    // Check if connectionMessages is not configured at all
+    if (!connectionMessages || !connectionMessages.voice) {
         issues.push({
-            type: 'LEGACY_DATA',
-            severity: 'LOW',
-            message: 'Legacy initialGreeting field is set but will be ignored',
-            field: 'initialGreeting',
-            value: aiLogic.initialGreeting.substring(0, 50) + '...'
+            type: 'CONFIGURATION_MISSING',
+            severity: 'CRITICAL',
+            message: 'No connection messages configured',
+            field: 'connectionMessages',
+            hint: 'Configure in AI Agent Settings > Messages & Greetings tab'
         });
         recommendations.push({
-            action: 'Clear legacy initialGreeting field',
-            reason: 'No longer used, causes confusion',
-            priority: 'LOW'
+            action: 'Configure greeting in AI Agent Settings',
+            reason: 'Twilio calls require a greeting configuration',
+            priority: 'CRITICAL'
         });
     }
 
     // Check for voice mode mismatch
-    const voiceMode = aiLogic.connectionMessages?.voice?.mode;
-    const hasText = !!aiLogic.connectionMessages?.voice?.text;
-    const hasPrerecorded = !!aiLogic.connectionMessages?.voice?.prerecorded?.activeFileUrl;
-
     if (voiceMode === 'realtime' && !hasText) {
         issues.push({
             type: 'CONFIGURATION_ERROR',
             severity: 'HIGH',
             message: 'Voice mode is "realtime" but no text is set',
-            field: 'connectionMessages.voice.text'
+            field: 'connectionMessages.voice.text',
+            hint: 'Add greeting text in Messages & Greetings tab'
         });
         recommendations.push({
             action: 'Set voice text or switch to prerecorded mode',
@@ -306,7 +334,8 @@ function detectConfigurationConflicts(aiLogic) {
             type: 'CONFIGURATION_ERROR',
             severity: 'HIGH',
             message: 'Voice mode is "prerecorded" but no audio file uploaded',
-            field: 'connectionMessages.voice.prerecorded.activeFileUrl'
+            field: 'connectionMessages.voice.prerecorded.activeFileUrl',
+            hint: 'Upload audio file in Messages & Greetings tab'
         });
         recommendations.push({
             action: 'Upload audio file or switch to realtime mode',
@@ -315,13 +344,14 @@ function detectConfigurationConflicts(aiLogic) {
         });
     }
 
-    // Check voice settings
-    if (!aiLogic.voiceSettings?.voiceId) {
+    // Check voice settings (ElevenLabs)
+    if (!company.aiAgentLogic?.voiceSettings?.voiceId) {
         issues.push({
             type: 'MISSING_CONFIGURATION',
             severity: 'MEDIUM',
             message: 'No ElevenLabs voice selected',
-            field: 'voiceSettings.voiceId'
+            field: 'aiAgentLogic.voiceSettings.voiceId',
+            hint: 'Configure in AI Voice Settings tab'
         });
         recommendations.push({
             action: 'Select a voice in AI Voice Settings tab',

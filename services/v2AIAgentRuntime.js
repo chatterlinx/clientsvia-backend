@@ -91,13 +91,15 @@ class V2AIAgentRuntime {
     static generateV2Greeting(company) {
         console.log(`[V2 GREETING] 🎭 Generating greeting for ${company.businessName || company.companyName}`);
         
-        const aiLogic = company.aiAgentLogic;
-        const connectionMessages = aiLogic?.connectionMessages;
+        // ✅ FIX: Use ROOT LEVEL connectionMessages (AI Agent Settings tab)
+        // NOT aiAgentLogic.connectionMessages (deleted legacy tab)
+        const connectionMessages = company.connectionMessages;
         const voiceConfig = connectionMessages?.voice;
 
         // Check if connection messages are configured
         if (!voiceConfig) {
             console.error(`❌ CRITICAL: No connection messages configured for company ${company._id}`);
+            console.error(`❌ HINT: Configure greeting in AI Agent Settings > Messages & Greetings tab`);
             return {
                 mode: 'error',
                 text: "CONFIGURATION ERROR: No greeting has been set. Please configure a greeting in the AI Agent Settings tab."
@@ -166,10 +168,12 @@ class V2AIAgentRuntime {
     static triggerFallback(company, reason) {
         console.log(`🆘 V2 FALLBACK: Triggered for ${company.companyName} - Reason: ${reason}`);
         
-        const fallbackConfig = company.aiAgentLogic?.connectionMessages?.voice?.fallback;
+        // ✅ FIX: Use ROOT LEVEL connectionMessages (AI Agent Settings tab)
+        const fallbackConfig = company.connectionMessages?.voice?.fallback;
         
         if (!fallbackConfig || !fallbackConfig.enabled) {
             console.error(`❌ FALLBACK: Fallback system is disabled or not configured`);
+            console.error(`❌ HINT: Configure fallback in AI Agent Settings > Messages & Greetings > Fallback tab`);
             return {
                 mode: 'error',
                 text: "We're experiencing technical difficulties. Please try again later."
