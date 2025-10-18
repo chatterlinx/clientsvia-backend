@@ -289,10 +289,10 @@ class PriorityDrivenKnowledgeRouter {
 
             // Get company to access template ID, placeholders, filler words, and urgency keywords
             const company = await Company.findById(companyId)
-                .select('globalInstantResponseTemplate aiAgentLogic.placeholders configuration.fillerWords configuration.urgencyKeywords')
+                .select('configuration.clonedFrom aiAgentLogic.placeholders configuration.fillerWords configuration.urgencyKeywords')
                 .lean();
 
-            if (!company || !company.globalInstantResponseTemplate) {
+            if (!company || !company.configuration?.clonedFrom) {
                 logger.info(`ℹ️ [V3 HYBRID BRAIN] No Global AI Brain template assigned to company`, {
                     routingId: context.routingId,
                     companyId
@@ -308,14 +308,14 @@ class PriorityDrivenKnowledgeRouter {
             }
 
             // Fetch Global AI Brain template with all scenarios
-            const template = await GlobalInstantResponseTemplate.findById(company.globalInstantResponseTemplate)
+            const template = await GlobalInstantResponseTemplate.findById(company.configuration.clonedFrom)
                 .select('categories')
                 .lean();
 
             if (!template || !template.categories || template.categories.length === 0) {
                 logger.info(`ℹ️ [V3 HYBRID BRAIN] Template has no categories`, {
                     routingId: context.routingId,
-                    templateId: company.globalInstantResponseTemplate
+                    templateId: company.configuration.clonedFrom
                 });
                 return {
                     confidence: 0,
