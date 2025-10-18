@@ -10,6 +10,8 @@
  * - GET    /api/company/:companyId/configuration
  * - GET    /api/company/:companyId/configuration/variables
  * - PATCH  /api/company/:companyId/configuration/variables
+ * - POST   /api/company/:companyId/configuration/variables/scan      [NEW]
+ * - POST   /api/company/:companyId/configuration/variables/validate  [NEW]
  * - GET    /api/company/:companyId/configuration/variables/:key/usage
  * - GET    /api/company/:companyId/configuration/filler-words
  * - POST   /api/company/:companyId/configuration/filler-words
@@ -1311,6 +1313,112 @@ router.get('/:companyId/configuration/analytics', async (req, res) => {
     } catch (error) {
         console.error('[COMPANY CONFIG] Error loading analytics:', error);
         res.status(500).json({ error: 'Failed to load analytics' });
+    }
+});
+
+/**
+ * ============================================================================
+ * POST /api/company/:companyId/configuration/variables/scan
+ * Scan templates for placeholders and update variable definitions
+ * ============================================================================
+ */
+const PlaceholderScanService = require('../../services/PlaceholderScanService');
+const CacheHelper = require('../../utils/cacheHelper');
+
+router.post('/:companyId/configuration/variables/scan', async (req, res) => {
+    console.log(`🔍 [PLACEHOLDER SCAN] POST /configuration/variables/scan for company: ${req.params.companyId}`);
+    
+    try {
+        const companyId = req.params.companyId;
+        
+        // Verify company exists
+        const company = await Company.findById(companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Check if company has templates
+        if (!company.aiAgentSettings?.templateReferences || company.aiAgentSettings.templateReferences.length === 0) {
+            return res.status(400).json({ 
+                error: 'No templates configured',
+                message: 'Please clone a template first before scanning for variables'
+            });
+        }
+        
+        console.log(`🔍 [PLACEHOLDER SCAN] Scanning ${company.aiAgentSettings.templateReferences.length} template(s) for company ${companyId}`);
+        
+        // Run the scan
+        const scanResult = await PlaceholderScanService.scanCompany(companyId);
+        
+        console.log(`✅ [PLACEHOLDER SCAN] Scan complete: ${scanResult.newCount} new, ${scanResult.updatedCount} updated, ${scanResult.missingRequired.length} missing`);
+        
+        res.json({
+            success: true,
+            message: `Found ${scanResult.placeholders.length} unique placeholders`,
+            newPlaceholders: scanResult.newCount,
+            existingPlaceholders: scanResult.existingCount,
+            updatedPlaceholders: scanResult.updatedCount,
+            missingRequired: scanResult.missingRequired.length,
+            hasAlert: scanResult.hasAlert,
+            details: {
+                newItems: scanResult.newPlaceholders,
+                updatedItems: scanResult.updatedPlaceholders,
+                allDefinitions: scanResult.placeholders,
+                alert: company.aiAgentSettings.configurationAlert
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ [PLACEHOLDER SCAN] Error scanning company:', error);
+        res.status(500).json({ 
+            error: 'Failed to scan placeholders',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * ============================================================================
+ * POST /api/company/:companyId/configuration/variables/validate
+ * Validate if company has all required variables filled
+ * ============================================================================
+ */
+router.post('/:companyId/configuration/variables/validate', async (req, res) => {
+    console.log(`🔍 [VALIDATION] POST /configuration/variables/validate for company: ${req.params.companyId}`);
+    
+    try {
+        const companyId = req.params.companyId;
+        
+        // Verify company exists
+        const company = await Company.findById(companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Run validation
+        const validation = await PlaceholderScanService.validateCompanyVariables(companyId);
+        
+        console.log(`${validation.isValid ? '✅' : '⚠️ '} [VALIDATION] Company ${companyId}: ${validation.isValid ? 'VALID' : `Missing ${validation.missingRequired.length} required variables`}`);
+        
+        res.json({
+            success: true,
+            isValid: validation.isValid,
+            totalRequired: validation.totalRequired,
+            filledRequired: validation.filledRequired,
+            missingRequired: validation.missingRequired,
+            message: validation.isValid 
+                ? 'All required variables are configured' 
+                : `${validation.missingRequired.length} required variable(s) need values`
+        });
+        
+    } catch (error) {
+        console.error('❌ [VALIDATION] Error validating company:', error);
+        res.status(500).json({ 
+            error: 'Failed to validate variables',
+            message: error.message
+        });
     }
 });
 
