@@ -337,7 +337,7 @@ class ScenariosManager {
                 <p class="text-gray-500 mb-6">
                     Clone a Global AI Brain template to get 500+ pre-built scenarios.
                 </p>
-                <button class="ai-settings-btn ai-settings-btn-primary" onclick="alert('Navigate to Global AI Brain to clone a template')">
+                <button class="ai-settings-btn ai-settings-btn-primary" onclick="templateInfoManager.cloneTemplate()">
                     <i class="fas fa-copy"></i>
                     Clone Template
                 </button>

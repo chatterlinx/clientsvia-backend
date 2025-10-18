@@ -170,12 +170,163 @@ class TemplateInfoManager {
                 <p class="text-gray-500 mb-6">
                     Clone a Global AI Brain template to get started.
                 </p>
-                <button class="ai-settings-btn ai-settings-btn-primary" onclick="alert('Navigate to Global AI Brain to clone a template')">
+                <button class="ai-settings-btn ai-settings-btn-primary" onclick="templateInfoManager.cloneTemplate()">
                     <i class="fas fa-copy"></i>
                     Clone Template
                 </button>
             </div>
         `;
+    }
+    
+    /**
+     * Clone a template from Global AI Brain
+     */
+    async cloneTemplate() {
+        console.log('📦 [TEMPLATE INFO] Opening clone template modal...');
+        
+        try {
+            // Fetch available templates
+            const response = await fetch('/api/admin/global-ai-brain/templates', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const templates = await response.json();
+            
+            if (!templates || templates.length === 0) {
+                alert('⚠️ No templates available. Please create a template in the Global AI Brain first.');
+                return;
+            }
+            
+            // Show modal with template selection
+            this.showCloneModal(templates);
+            
+        } catch (error) {
+            console.error('❌ [TEMPLATE INFO] Failed to load templates:', error);
+            alert('❌ Failed to load available templates. Please try again.');
+        }
+    }
+    
+    /**
+     * Show clone template modal
+     */
+    showCloneModal(templates) {
+        // Create modal HTML
+        const modalHtml = `
+            <div id="clone-template-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+                    <!-- Header -->
+                    <div class="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-6 rounded-t-2xl">
+                        <h2 class="text-2xl font-bold">📦 Clone Global AI Brain Template</h2>
+                        <p class="text-blue-100 mt-2">Select a template to clone to your company</p>
+                    </div>
+                    
+                    <!-- Body -->
+                    <div class="p-8">
+                        ${templates.map(template => `
+                            <div class="mb-4 border-2 border-gray-200 rounded-xl p-6 hover:border-blue-500 transition-all cursor-pointer" 
+                                 onclick="templateInfoManager.confirmClone('${template._id}', '${this.escapeHtml(template.name)}')">
+                                <div class="flex items-start gap-4">
+                                    <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center text-white text-2xl flex-shrink-0">
+                                        📦
+                                    </div>
+                                    <div class="flex-1">
+                                        <h3 class="text-xl font-bold text-gray-900 mb-2">${this.escapeHtml(template.name)}</h3>
+                                        <p class="text-gray-600 mb-3">${this.escapeHtml(template.description || 'No description')}</p>
+                                        <div class="flex items-center gap-4 text-sm text-gray-500">
+                                            <span><i class="fas fa-layer-group mr-1"></i> ${template.categories?.length || 0} Categories</span>
+                                            <span><i class="fas fa-comments mr-1"></i> ${this.countScenarios(template)} Scenarios</span>
+                                            <span><i class="fas fa-code-branch mr-1"></i> v${template.version || '1.0.0'}</span>
+                                        </div>
+                                    </div>
+                                    <button class="ai-settings-btn ai-settings-btn-primary">
+                                        <i class="fas fa-clone"></i>
+                                        Clone
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                    <!-- Footer -->
+                    <div class="border-t border-gray-200 px-8 py-4 bg-gray-50 rounded-b-2xl">
+                        <button onclick="templateInfoManager.closeCloneModal()" 
+                                class="ai-settings-btn ai-settings-btn-secondary">
+                            <i class="fas fa-times"></i>
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Inject modal into page
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+    
+    /**
+     * Count total scenarios in a template
+     */
+    countScenarios(template) {
+        if (!template.categories) return 0;
+        return template.categories.reduce((sum, cat) => sum + (cat.scenarios?.length || 0), 0);
+    }
+    
+    /**
+     * Confirm and execute clone
+     */
+    async confirmClone(templateId, templateName) {
+        if (!confirm(`🚀 Clone "${templateName}"?\n\nThis will:\n✅ Copy all scenarios\n✅ Copy all filler words\n✅ Set up variables for you to fill\n\nContinue?`)) {
+            return;
+        }
+        
+        console.log(`📦 [TEMPLATE INFO] Cloning template ${templateId}...`);
+        
+        this.closeCloneModal();
+        
+        try {
+            const response = await fetch(`/api/company/${this.companyId}/configuration/clone-template`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ templateId })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || `HTTP ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            console.log('✅ [TEMPLATE INFO] Template cloned successfully:', result);
+            
+            this.parent.showSuccess(`Template "${result.template.name}" cloned successfully! 🎉`);
+            
+            // Reload everything
+            await this.parent.refresh();
+            
+        } catch (error) {
+            console.error('❌ [TEMPLATE INFO] Failed to clone template:', error);
+            alert(`❌ Failed to clone template:\n${error.message}`);
+        }
+    }
+    
+    /**
+     * Close clone modal
+     */
+    closeCloneModal() {
+        const modal = document.getElementById('clone-template-modal');
+        if (modal) {
+            modal.remove();
+        }
     }
     
     /**

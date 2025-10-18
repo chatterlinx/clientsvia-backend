@@ -960,6 +960,155 @@ router.get('/:companyId/configuration/template-info', async (req, res) => {
 
 /**
  * ============================================================================
+ * POST /api/company/:companyId/configuration/clone-template
+ * Clone a Global AI Brain template to this company (INITIAL CLONE)
+ * ============================================================================
+ */
+router.post('/:companyId/configuration/clone-template', async (req, res) => {
+    console.log(`[COMPANY CONFIG] POST /configuration/clone-template for company: ${req.params.companyId}`);
+    
+    try {
+        const { templateId } = req.body;
+        
+        if (!templateId) {
+            return res.status(400).json({ error: 'Template ID is required' });
+        }
+        
+        // Find company
+        const company = await Company.findById(req.params.companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Check if already has a template
+        if (company.configuration?.clonedFrom) {
+            return res.status(400).json({ 
+                error: 'Template already cloned',
+                message: 'Use the sync endpoint to update instead'
+            });
+        }
+        
+        // Find the Global AI Brain template
+        const template = await GlobalInstantResponseTemplate.findById(templateId);
+        
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        // Calculate total scenarios
+        let totalScenarios = 0;
+        template.categories.forEach(cat => {
+            totalScenarios += cat.scenarios.length;
+        });
+        
+        console.log(`[COMPANY CONFIG] Cloning template "${template.name}" v${template.version} (${totalScenarios} scenarios)`);
+        
+        // Initialize configuration object
+        if (!company.configuration) {
+            company.configuration = {};
+        }
+        
+        // Set template tracking
+        company.configuration.clonedFrom = template._id;
+        company.configuration.clonedVersion = template.version || '1.0.0';
+        company.configuration.clonedAt = new Date();
+        company.configuration.lastSyncedAt = new Date();
+        company.configuration.lastUpdatedAt = new Date();
+        
+        // Initialize variables (empty, will be filled by user)
+        if (!company.configuration.variables) {
+            company.configuration.variables = {};
+        }
+        
+        // Copy filler words from template (inherited)
+        company.configuration.fillerWords = {
+            inherited: template.fillerWords || [],
+            custom: []
+        };
+        
+        // Copy urgency keywords from template (inherited)
+        if (template.urgencyKeywords) {
+            company.configuration.urgencyKeywords = {
+                inherited: template.urgencyKeywords || [],
+                custom: []
+            };
+        }
+        
+        // Initialize customization tracking
+        company.configuration.customization = {
+            hasCustomVariables: false,
+            hasCustomFillerWords: false,
+            lastCustomizedAt: null
+        };
+        
+        // Initialize readiness tracking
+        company.configuration.readiness = {
+            score: 0,
+            lastCalculated: new Date(),
+            blockers: ['variables_not_configured']
+        };
+        
+        // Mark configuration as modified
+        company.markModified('configuration');
+        
+        // Save company
+        await company.save();
+        
+        console.log(`✅ [COMPANY CONFIG] Template cloned successfully for company ${req.params.companyId}`);
+        
+        // Clear Redis cache
+        if (redisClient && redisClient.isOpen) {
+            await redisClient.del(`company:${company._id}`);
+            console.log(`[COMPANY CONFIG] Cleared Redis cache for company ${company._id}`);
+        }
+        
+        // Log to audit
+        await AuditLog.create({
+            userId: req.user?._id || null,
+            userEmail: req.user?.email || 'System',
+            action: 'TEMPLATE_CLONED',
+            resourceType: 'Company',
+            resourceId: company._id,
+            changes: {
+                templateId: template._id,
+                templateName: template.name,
+                templateVersion: template.version,
+                scenariosCount: totalScenarios
+            },
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent')
+        });
+        
+        res.json({
+            success: true,
+            message: 'Template cloned successfully',
+            template: {
+                id: template._id,
+                name: template.name,
+                version: template.version,
+                description: template.description
+            },
+            stats: {
+                scenarios: totalScenarios,
+                categories: template.categories.length,
+                variables: template.availableVariables?.length || 0,
+                fillerWords: template.fillerWords?.length || 0
+            },
+            clonedAt: company.configuration.clonedAt
+        });
+        
+    } catch (error) {
+        console.error('[COMPANY CONFIG] Error cloning template:', error);
+        res.status(500).json({ 
+            error: 'Failed to clone template',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * ============================================================================
  * POST /api/company/:companyId/configuration/sync
  * Sync updates from Global AI Brain template
  * ============================================================================
