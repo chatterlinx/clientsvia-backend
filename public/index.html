@@ -147,36 +147,36 @@
                 </div>
 
                 <!-- ============================================================================ -->
-                <!-- ⚠️ CONFIGURATION TO-DO WIDGET -->
+                <!-- 🎯 ADMIN ALERT CENTER - CENTRAL NOTIFICATION HUB -->
                 <!-- ============================================================================ -->
-                <div id="configuration-todos-container" class="mt-10 hidden">
-                    <div class="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-400 rounded-xl p-6 shadow-lg">
+                <div id="admin-alert-center" class="mt-10">
+                    <div id="alert-center-container" class="bg-white border-2 border-gray-300 rounded-xl p-6 shadow-lg transition-all duration-300">
                         <div class="flex items-center justify-between mb-4">
                             <div class="flex items-center">
-                                <div class="w-12 h-12 bg-yellow-400 rounded-lg flex items-center justify-center mr-4">
-                                    <i class="fas fa-exclamation-triangle text-white text-xl"></i>
+                                <div id="alert-center-icon" class="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mr-4 transition-colors duration-300">
+                                    <i class="fas fa-check-circle text-white text-xl"></i>
                                 </div>
                                 <div>
                                     <h2 class="text-2xl font-bold text-gray-900">
-                                        Configuration TO-DOs
+                                        Admin Alert Center
                                     </h2>
-                                    <p class="text-sm text-gray-700">
-                                        Companies needing variable configuration
+                                    <p id="alert-center-status" class="text-sm text-gray-700">
+                                        Loading system status...
                                     </p>
                                 </div>
                             </div>
                             <button 
-                                onclick="refreshConfigurationTodos()" 
-                                class="px-4 py-2 bg-white border-2 border-yellow-400 text-yellow-700 rounded-lg hover:bg-yellow-50 transition-colors font-medium"
-                                title="Refresh alerts"
+                                onclick="refreshAdminAlerts()" 
+                                class="px-4 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                                title="Refresh all alerts"
                             >
                                 <i class="fas fa-sync-alt mr-2"></i>
                                 Refresh
                             </button>
                         </div>
                         
-                        <div id="configuration-todos-list" class="space-y-3">
-                            <!-- TO-DO items will be inserted here -->
+                        <div id="admin-alerts-list" class="space-y-3">
+                            <!-- Alert items will be inserted here -->
                         </div>
                     </div>
                 </div>
@@ -405,27 +405,29 @@
 
             fetchDashboardStats(); 
             
-            // Load Configuration TO-DOs
-            loadConfigurationTodos();
+            // Load Admin Alert Center
+            loadAdminAlerts();
         });
 
         // ========================================================================
-        // CONFIGURATION TO-DO WIDGET
+        // ADMIN ALERT CENTER - CENTRAL NOTIFICATION HUB
         // ========================================================================
         
         /**
-         * Load configuration alerts from backend
+         * Load all admin alerts from backend
          */
-        async function loadConfigurationTodos() {
-            console.log('📋 [TODO WIDGET] Loading configuration alerts...');
+        async function loadAdminAlerts() {
+            console.log('📋 [ALERT CENTER] Loading all alerts...');
             
             try {
                 const token = localStorage.getItem('adminToken');
                 if (!token) {
-                    console.log('📋 [TODO WIDGET] No token, skipping');
+                    console.log('📋 [ALERT CENTER] No token, skipping');
+                    renderAlertCenter([], 'Not authenticated');
                     return;
                 }
                 
+                // Fetch configuration alerts (more alert types will be added here)
                 const response = await fetch('/api/admin/configuration-todos', {
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -438,37 +440,81 @@
                 
                 const data = await response.json();
                 
-                console.log(`✅ [TODO WIDGET] Loaded ${data.totalAlerts} alerts`);
+                console.log(`✅ [ALERT CENTER] Loaded ${data.totalAlerts} alert(s)`);
                 
-                renderConfigurationTodos(data.alerts);
+                // Render alerts
+                renderAlertCenter(data.alerts, null);
                 
             } catch (error) {
-                console.error('❌ [TODO WIDGET] Failed to load:', error);
-                // Silently fail - widget is not critical
+                console.error('❌ [ALERT CENTER] Failed to load:', error);
+                renderAlertCenter([], 'Error loading alerts');
             }
         }
         
         /**
-         * Render configuration TO-DOs in the widget
+         * Render Admin Alert Center
          */
-        function renderConfigurationTodos(alerts) {
-            const container = document.getElementById('configuration-todos-container');
-            const list = document.getElementById('configuration-todos-list');
+        function renderAlertCenter(alerts, errorMessage) {
+            const container = document.getElementById('alert-center-container');
+            const icon = document.getElementById('alert-center-icon');
+            const status = document.getElementById('alert-center-status');
+            const list = document.getElementById('admin-alerts-list');
             
-            if (!container || !list) {
-                console.error('❌ [TODO WIDGET] Container not found');
+            if (!container || !icon || !status || !list) {
+                console.error('❌ [ALERT CENTER] Container elements not found');
                 return;
             }
             
-            // Hide widget if no alerts
+            // Handle errors
+            if (errorMessage) {
+                container.className = 'bg-gray-50 border-2 border-gray-300 rounded-xl p-6 shadow-lg transition-all duration-300';
+                icon.className = 'w-12 h-12 bg-gray-400 rounded-lg flex items-center justify-center mr-4 transition-colors duration-300';
+                icon.innerHTML = '<i class="fas fa-exclamation-circle text-white text-xl"></i>';
+                status.textContent = errorMessage;
+                list.innerHTML = '<p class="text-gray-500 text-sm">Unable to load alerts. Please refresh.</p>';
+                return;
+            }
+            
+            // No alerts - ALL GOOD
             if (!alerts || alerts.length === 0) {
-                container.classList.add('hidden');
-                console.log('✅ [TODO WIDGET] No alerts - widget hidden');
+                container.className = 'bg-green-50 border-2 border-green-400 rounded-xl p-6 shadow-lg transition-all duration-300';
+                icon.className = 'w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mr-4 transition-colors duration-300';
+                icon.innerHTML = '<i class="fas fa-check-circle text-white text-xl"></i>';
+                status.textContent = 'All systems operational - no issues detected';
+                list.innerHTML = `
+                    <div class="bg-white border-2 border-green-200 rounded-lg p-6 text-center">
+                        <i class="fas fa-check-circle text-green-500 text-4xl mb-3"></i>
+                        <p class="text-gray-700 font-medium">No alerts at this time</p>
+                        <p class="text-sm text-gray-500 mt-1">All companies are properly configured and operational</p>
+                    </div>
+                `;
+                console.log('✅ [ALERT CENTER] No alerts - showing success state');
                 return;
             }
             
-            // Show widget
-            container.classList.remove('hidden');
+            // Has alerts - determine severity
+            const hasError = alerts.some(a => a.alert?.severity === 'error');
+            const hasWarning = alerts.some(a => a.alert?.severity === 'warning');
+            
+            if (hasError) {
+                // CRITICAL
+                container.className = 'bg-red-50 border-2 border-red-400 rounded-xl p-6 shadow-lg transition-all duration-300';
+                icon.className = 'w-12 h-12 bg-red-500 rounded-lg flex items-center justify-center mr-4 transition-colors duration-300';
+                icon.innerHTML = '<i class="fas fa-exclamation-triangle text-white text-xl"></i>';
+                status.textContent = `${alerts.length} critical issue${alerts.length > 1 ? 's' : ''} require immediate attention`;
+            } else if (hasWarning) {
+                // WARNING
+                container.className = 'bg-yellow-50 border-2 border-yellow-400 rounded-xl p-6 shadow-lg transition-all duration-300';
+                icon.className = 'w-12 h-12 bg-yellow-500 rounded-lg flex items-center justify-center mr-4 transition-colors duration-300';
+                icon.innerHTML = '<i class="fas fa-exclamation-circle text-white text-xl"></i>';
+                status.textContent = `${alerts.length} item${alerts.length > 1 ? 's' : ''} need${alerts.length === 1 ? 's' : ''} attention`;
+            } else {
+                // INFO
+                container.className = 'bg-blue-50 border-2 border-blue-400 rounded-xl p-6 shadow-lg transition-all duration-300';
+                icon.className = 'w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center mr-4 transition-colors duration-300';
+                icon.innerHTML = '<i class="fas fa-info-circle text-white text-xl"></i>';
+                status.textContent = `${alerts.length} notification${alerts.length > 1 ? 's' : ''}`;
+            }
             
             // Render alert items
             list.innerHTML = alerts.map(alert => {
@@ -497,14 +543,14 @@
                                     </div>
                                     ${alert.alert?.missingVariables && alert.alert.missingVariables.length > 0 ? `
                                         <div class="text-xs text-gray-500 mt-2">
-                                            Missing: ${alert.alert.missingVariables.map(v => v.label || v.key).join(', ')}
+                                            <strong>Missing:</strong> ${alert.alert.missingVariables.map(v => v.label || v.key).join(', ')}
                                         </div>
                                     ` : ''}
                                 </div>
                             </div>
                             <div class="ml-4">
                                 <button 
-                                    onclick="fixNow('${alert.companyId}')"
+                                    onclick="fixAlert('${alert.companyId}', 'variables')"
                                     class="px-4 py-2 bg-${color}-500 text-white rounded-lg hover:bg-${color}-600 transition-colors font-medium shadow-sm hover:shadow-md"
                                 >
                                     <i class="fas fa-wrench mr-2"></i>
@@ -516,25 +562,41 @@
                 `;
             }).join('');
             
-            console.log(`✅ [TODO WIDGET] Rendered ${alerts.length} alert(s)`);
+            console.log(`✅ [ALERT CENTER] Rendered ${alerts.length} alert(s)`);
         }
         
         /**
-         * Fix Now button - Navigate to company's Variables tab
+         * Fix Alert - Navigate to appropriate page
          */
-        function fixNow(companyId) {
-            console.log(`🔧 [TODO WIDGET] Fix Now clicked for company ${companyId}`);
+        function fixAlert(companyId, alertType) {
+            console.log(`🔧 [ALERT CENTER] Fix Alert clicked - Company: ${companyId}, Type: ${alertType}`);
             
-            // Navigate to company profile, AI Agent Settings tab, Variables sub-tab
-            window.location.href = `/company-profile.html?id=${companyId}&tab=ai-agent-settings&subtab=variables`;
+            // Route based on alert type (expandable for future alert types)
+            switch(alertType) {
+                case 'variables':
+                    // Missing variables - go to Variables tab
+                    window.location.href = `/company-profile.html?id=${companyId}&tab=ai-agent-settings&subtab=variables`;
+                    break;
+                case 'twilio':
+                    // Twilio issues - go to Configuration tab
+                    window.location.href = `/company-profile.html?id=${companyId}&tab=configuration`;
+                    break;
+                case 'voice':
+                    // Voice issues - go to Voice tab
+                    window.location.href = `/company-profile.html?id=${companyId}&tab=voice`;
+                    break;
+                default:
+                    // Default - go to Overview
+                    window.location.href = `/company-profile.html?id=${companyId}`;
+            }
         }
         
         /**
-         * Refresh configuration TO-DOs
+         * Refresh all admin alerts
          */
-        function refreshConfigurationTodos() {
-            console.log('🔄 [TODO WIDGET] Refreshing alerts...');
-            loadConfigurationTodos();
+        function refreshAdminAlerts() {
+            console.log('🔄 [ALERT CENTER] Refreshing all alerts...');
+            loadAdminAlerts();
         }
         
         /**
