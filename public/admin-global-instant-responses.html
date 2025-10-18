@@ -397,7 +397,7 @@
                                 <i class="fas fa-chart-line"></i>
                                 Quality Dashboard
                             </button>
-                            <button onclick="loadTwilioTestConfig()" class="px-6 py-2 bg-white hover:bg-gray-50 text-purple-600 border-2 border-purple-300 rounded-lg font-medium transition-all flex items-center gap-2 whitespace-nowrap text-sm">
+                            <button onclick="refreshAllTestingData()" class="px-6 py-2 bg-white hover:bg-gray-50 text-purple-600 border-2 border-purple-300 rounded-lg font-medium transition-all flex items-center gap-2 whitespace-nowrap text-sm">
                                 <i class="fas fa-sync"></i>
                                 Refresh
                             </button>
@@ -3530,6 +3530,27 @@ Continue?`;
                 statusText.textContent = 'Enable Test Calls';
                 console.log('⚫ Test calls DISABLED');
             }
+        }
+
+        /**
+         * Refresh all testing data (Twilio config + Test Phrase Library)
+         */
+        async function refreshAllTestingData() {
+            console.log('🔄 [REFRESH ALL] Refreshing all testing data...');
+            
+            // Load Twilio test configuration
+            await loadTwilioTestConfig();
+            
+            // Load Test Phrase Library (if expanded)
+            if (testPhraseLibraryExpanded) {
+                console.log('🔄 [REFRESH ALL] Test Phrase Library is expanded, refreshing phrases...');
+                await loadTestPhrases();
+            } else {
+                console.log('ℹ️ [REFRESH ALL] Test Phrase Library is collapsed, skipping phrases refresh');
+                console.log('ℹ️ [REFRESH ALL] Expand the Test Phrase Library below to see test phrases');
+            }
+            
+            console.log('✅ [REFRESH ALL] All testing data refreshed');
         }
 
         /**
