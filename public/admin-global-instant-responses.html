@@ -408,24 +408,24 @@
                 <!-- ========================================================================== -->
                 <!-- TEST PHRASE LIBRARY - WORLD-CLASS TESTING COMPANION -->
                 <!-- ========================================================================== -->
-                <div class="mb-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl shadow-lg border-2 border-green-300 overflow-hidden">
+                <div class="mb-6 bg-white rounded-xl shadow-lg border-2 border-green-500 overflow-hidden">
                     <!-- Header -->
-                    <div class="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4 flex items-center justify-between">
+                    <div class="bg-green-600 px-6 py-4 flex items-center justify-between">
                         <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
+                            <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-md">
                                 <i class="fas fa-list-check text-green-600 text-lg"></i>
                             </div>
                             <div>
                                 <h3 class="text-xl font-bold text-white flex items-center gap-2">
                                     📋 Test Phrase Library
-                                    <span id="total-phrase-count" class="text-sm font-normal bg-white/20 px-2 py-0.5 rounded">0 phrases</span>
+                                    <span id="total-phrase-count" class="text-sm font-semibold bg-green-700 px-3 py-1 rounded-lg shadow">0 phrases</span>
                                 </h3>
-                                <p class="text-xs text-green-100">
+                                <p class="text-xs text-white font-medium">
                                     All test phrases from the current template - ready to copy & test
                                 </p>
                             </div>
                         </div>
-                        <button onclick="toggleTestPhraseLibrary()" id="test-phrase-toggle-btn" class="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg font-semibold transition-all flex items-center gap-2">
+                        <button onclick="toggleTestPhraseLibrary()" id="test-phrase-toggle-btn" class="px-4 py-2 bg-white text-green-600 hover:bg-green-50 rounded-lg font-semibold transition-all flex items-center gap-2 shadow-md">
                             <i class="fas fa-chevron-down" id="test-phrase-toggle-icon"></i>
                             <span id="test-phrase-toggle-text">Expand</span>
                         </button>
@@ -434,35 +434,35 @@
                     <!-- Expandable Content -->
                     <div id="test-phrase-library-content" class="hidden">
                         <!-- Search Bar -->
-                        <div class="px-6 pt-4">
+                        <div class="px-6 pt-4 bg-gray-50">
                             <div class="relative">
                                 <input type="text" id="test-phrase-search" 
                                        placeholder="🔍 Search test phrases... (e.g., 'appointment', 'emergency', 'pricing')"
-                                       class="w-full px-4 py-3 pl-10 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm bg-white"
+                                       class="w-full px-4 py-3 pl-10 border-2 border-green-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-600 text-sm bg-white shadow-sm"
                                        oninput="filterTestPhrases()">
-                                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-green-500"></i>
                             </div>
                         </div>
 
                         <!-- Action Buttons Row -->
-                        <div class="px-6 pt-3 flex gap-2 flex-wrap">
-                            <button onclick="expandAllCategories()" class="text-xs px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg font-semibold transition-colors">
+                        <div class="px-6 py-3 bg-gray-50 flex gap-2 flex-wrap border-b-2 border-gray-200">
+                            <button onclick="expandAllCategories()" class="text-xs px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold transition-colors shadow-sm">
                                 <i class="fas fa-expand-alt mr-1"></i>
                                 Expand All
                             </button>
-                            <button onclick="collapseAllCategories()" class="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition-colors">
+                            <button onclick="collapseAllCategories()" class="text-xs px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-semibold transition-colors shadow-sm">
                                 <i class="fas fa-compress-alt mr-1"></i>
                                 Collapse All
                             </button>
-                            <button onclick="getRandomTestPhrase()" class="text-xs px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg font-semibold transition-colors">
+                            <button onclick="getRandomTestPhrase()" class="text-xs px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg font-semibold transition-colors shadow-sm">
                                 <i class="fas fa-dice mr-1"></i>
                                 Random Phrase
                             </button>
-                            <button onclick="copyAllPhrases()" class="text-xs px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg font-semibold transition-colors">
+                            <button onclick="copyAllPhrases()" class="text-xs px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold transition-colors shadow-sm">
                                 <i class="fas fa-copy mr-1"></i>
                                 Copy All
                             </button>
-                            <button onclick="exportPhrasesAsPDF()" class="text-xs px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg font-semibold transition-colors">
+                            <button onclick="exportPhrasesAsPDF()" class="text-xs px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors shadow-sm">
                                 <i class="fas fa-file-pdf mr-1"></i>
                                 Export PDF
                             </button>
@@ -478,22 +478,22 @@
                         </div>
 
                         <!-- Footer Stats -->
-                        <div class="bg-green-100 px-6 py-3 border-t-2 border-green-300 flex items-center justify-between">
+                        <div class="bg-green-600 px-6 py-3 border-t-2 border-green-700 flex items-center justify-between">
                             <div class="flex gap-6 text-xs">
                                 <div class="flex items-center gap-2">
-                                    <i class="fas fa-layer-group text-green-600"></i>
-                                    <span class="font-semibold text-gray-700"><span id="footer-category-count">0</span> Categories</span>
+                                    <i class="fas fa-layer-group text-white"></i>
+                                    <span class="font-semibold text-white"><span id="footer-category-count">0</span> Categories</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <i class="fas fa-comment-dots text-green-600"></i>
-                                    <span class="font-semibold text-gray-700"><span id="footer-phrase-count">0</span> Total Phrases</span>
+                                    <i class="fas fa-comment-dots text-white"></i>
+                                    <span class="font-semibold text-white"><span id="footer-phrase-count">0</span> Total Phrases</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <i class="fas fa-clock text-green-600"></i>
-                                    <span class="text-gray-600">Updated: <span id="footer-last-updated">Just now</span></span>
+                                    <i class="fas fa-clock text-white"></i>
+                                    <span class="font-medium text-green-100">Updated: <span id="footer-last-updated">Just now</span></span>
                                 </div>
                             </div>
-                            <button onclick="refreshTestPhrases()" class="text-xs px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors">
+                            <button onclick="refreshTestPhrases()" class="text-xs px-4 py-2 bg-white hover:bg-green-50 text-green-600 rounded-lg font-semibold transition-colors shadow-md">
                                 <i class="fas fa-sync mr-1"></i>
                                 Refresh
                             </button>
