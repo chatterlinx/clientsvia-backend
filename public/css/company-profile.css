@@ -405,10 +405,23 @@ body {
 }
 
 /* 
-   Clean container system - works WITH Tailwind, not against it
-   Main container is set in HTML: max-w-[1400px] 
-   This ensures all content inside respects proper width
+   CRITICAL FIX: Force main container to always respect 1400px 
+   This prevents any dynamic content from shrinking the page
 */
+main.flex-grow {
+    max-width: 1400px !important;
+    width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+/* Force the white card wrapper to always fill the main container */
+main.flex-grow > div.bg-white {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+/* Tab content inherits full width */
 #tab-content-area,
 .tab-content-item,
 .profile-section {
@@ -423,7 +436,7 @@ body {
     box-sizing: border-box;
 }
 
-/* Tab content inherits width from parent white card */
+/* Config blocks respect parent width */
 .config-block {
     box-sizing: border-box;
 }
