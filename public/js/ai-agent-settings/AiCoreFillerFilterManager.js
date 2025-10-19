@@ -243,6 +243,9 @@ class AiCoreFillerFilterManager {
                 </div>
             </div>
             
+            <!-- Scan Report -->
+            ${this.renderScanReport()}
+            
             <!-- Info Banner -->
             <div style="background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); border-radius: 12px; padding: 24px; border-left: 4px solid #6366f1;">
                 <h3 style="font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
@@ -268,6 +271,64 @@ class AiCoreFillerFilterManager {
                             Company-specific additions for industry jargon or regional speech patterns unique to your business.
                         </div>
                     </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Render scan report
+     */
+    renderScanReport() {
+        const scanReport = this.scanStatus?.scanReport || [];
+        
+        if (scanReport.length === 0) {
+            return `
+                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                    <h3 style="font-size: 16px; font-weight: 700; color: #92400e; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                        📋 Last Scan Report
+                    </h3>
+                    <p style="font-size: 14px; color: #78350f; margin: 0;">
+                        <strong>No templates activated.</strong> Activate a template in the <strong>AiCore Templates</strong> tab to inherit filler words.
+                    </p>
+                </div>
+            `;
+        }
+        
+        return `
+            <div style="background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 24px; margin-bottom: 24px;">
+                <h3 style="font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                    📋 Last Scan Report
+                </h3>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    ${scanReport.map(report => `
+                        <div style="padding: 16px; background: ${report.fillers > 0 ? '#d1fae5' : '#fee2e2'}; border-left: 4px solid ${report.fillers > 0 ? '#10b981' : '#ef4444'}; border-radius: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                                <div style="flex: 1;">
+                                    <p style="font-size: 15px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
+                                        ${report.fillers > 0 ? '✅' : '⚠️'} ${report.templateName}
+                                    </p>
+                                    <p style="font-size: 13px; color: #6b7280; margin: 0;">
+                                        Scanned: <strong>${report.categories} categories</strong>, 
+                                        <strong>${report.scenarios} scenarios</strong>
+                                    </p>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 24px; font-weight: 700; color: ${report.fillers > 0 ? '#10b981' : '#ef4444'};">
+                                        ${report.fillers}
+                                    </div>
+                                    <div style="font-size: 11px; color: #6b7280; text-transform: uppercase; font-weight: 600;">
+                                        fillers
+                                    </div>
+                                </div>
+                            </div>
+                            ${report.fillers === 0 ? `
+                                <p style="font-size: 12px; color: #991b1b; margin: 8px 0 0 0; padding-top: 8px; border-top: 1px solid #fecaca;">
+                                    💡 This template has no filler words defined. Add custom fillers below to improve AI accuracy.
+                                </p>
+                            ` : ''}
+                        </div>
+                    `).join('')}
                 </div>
             </div>
         `;

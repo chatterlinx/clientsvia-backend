@@ -81,7 +81,27 @@ router.get('/company/:companyId/configuration/filler-filter', async (req, res) =
         // Get custom filler words (company-specific)
         const customFillers = (company.aiAgentSettings?.fillerWords?.custom || []).sort();
         
+        // Build detailed scan report
+        const scanReport = [];
+        if (activeTemplateIds.length > 0) {
+            templates.forEach(template => {
+                const templateFillers = template.fillerWords || [];
+                const categoryCount = template.categories ? template.categories.length : 0;
+                const scenarioCount = template.categories ? 
+                    template.categories.reduce((sum, cat) => sum + (cat.scenarios ? cat.scenarios.length : 0), 0) : 0;
+                
+                scanReport.push({
+                    templateName: template.name || 'Unknown Template',
+                    templateId: template._id.toString(),
+                    categories: categoryCount,
+                    scenarios: scenarioCount,
+                    fillers: templateFillers.length
+                });
+            });
+        }
+        
         console.log(`✅ [FILLER FILTER] Inherited: ${inheritedFillers.length}, Custom: ${customFillers.length}`);
+        console.log(`📋 [FILLER FILTER] Scan report:`, scanReport);
         
         res.json({
             success: true,
@@ -89,7 +109,8 @@ router.get('/company/:companyId/configuration/filler-filter', async (req, res) =
             customFillers,
             scanStatus: {
                 lastScan: company.aiAgentSettings?.fillerWords?.lastScan || null,
-                activeTemplatesScanned: activeTemplateIds.length
+                activeTemplatesScanned: activeTemplateIds.length,
+                scanReport
             }
         });
         
