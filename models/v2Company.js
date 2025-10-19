@@ -1603,6 +1603,22 @@ const companySchema = new mongoose.Schema({
         
         // Test calls tracking
         testCallsMade: { type: Number, default: 0 }
+    },
+    
+    // ============================================================================
+    // 🧠 AI KNOWLEDGEBASE - PERFORMANCE MONITORING
+    // ============================================================================
+    // PURPOSE: Track AI knowledge gaps and resolved issues
+    // ARCHITECTURE: Action items for admin based on low-confidence calls
+    // ============================================================================
+    aiKnowledgebase: {
+        // Resolved issues (to prevent re-showing)
+        resolvedIssues: [{
+            question: { type: String, required: true, trim: true },
+            resolvedAt: { type: Date, default: Date.now },
+            resolvedBy: { type: String, trim: true, default: 'admin' },
+            actionTaken: { type: String, trim: true, default: 'Marked as resolved' }
+        }]
     }
 }, { timestamps: true });
 

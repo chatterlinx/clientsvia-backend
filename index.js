@@ -115,6 +115,8 @@ async function loadAllRoutes() {
         routes.v2ConnectionMessagesRoutes = await loadRouteWithTimeout('./routes/company/v2connectionMessages', 'v2ConnectionMessagesRoutes');
         routes.v2TTSRoutes = await loadRouteWithTimeout('./routes/company/v2tts', 'v2TTSRoutes');
         routes.v2AIAgentDiagnosticsRoutes = await loadRouteWithTimeout('./routes/company/v2aiAgentDiagnostics', 'v2AIAgentDiagnosticsRoutes');
+        routes.v2AIKnowledgebaseRoutes = await loadRouteWithTimeout('./routes/company/v2aiKnowledgebase', 'v2AIKnowledgebaseRoutes');
+        routes.v2AILiveScenariosRoutes = await loadRouteWithTimeout('./routes/company/v2aiLiveScenarios', 'v2AILiveScenariosRoutes');
         
         // REMOVED: Legacy V2 AI Intelligence routes - archived to prevent external LLM dependencies
         

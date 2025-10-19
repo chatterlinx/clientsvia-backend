@@ -28,8 +28,8 @@ class AIAgentSettingsManager {
         this.variablesManager = null;
         this.fillerWordsManager = null;
         this.aiCoreTemplatesManager = null;
-        this.scenariosManager = null;
-		// AiCore Templates is the single source for templates
+        this.aiCoreLiveScenariosManager = null;
+        this.aiCoreKnowledgebaseManager = null;
         this.analyticsManager = null;
         
         console.log(`🤖 [AI AGENT SETTINGS] Initialized for company: ${companyId}`);
@@ -178,10 +178,12 @@ class AIAgentSettingsManager {
                 case 'aicore-templates':
                     await this.loadAiCoreTemplates();
                     break;
-                case 'scenarios':
-                    await this.loadScenarios();
+                case 'aicore-live-scenarios':
+                    await this.loadAiCoreLiveScenarios();
                     break;
-				// 'template-hub' removed
+                case 'aicore-knowledgebase':
+                    await this.loadAiCoreKnowledgebase();
+                    break;
                 case 'analytics':
                     await this.loadAnalytics();
                     break;
@@ -281,16 +283,31 @@ class AIAgentSettingsManager {
     }
     
     /**
-     * Load Scenarios sub-tab
+     * Load AiCore Live Scenarios sub-tab (NEW)
      */
-    async loadScenarios() {
-        console.log('💬 [AI AGENT SETTINGS] Loading scenarios...');
+    async loadAiCoreLiveScenarios() {
+        console.log('🎭 [AI AGENT SETTINGS] Loading AiCore Live Scenarios...');
         
-        if (!this.scenariosManager) {
-            this.scenariosManager = new ScenariosManager(this);
+        if (!this.aiCoreLiveScenariosManager) {
+            this.aiCoreLiveScenariosManager = new AiCoreLiveScenariosManager(this);
+            window.aiCoreLiveScenariosManager = this.aiCoreLiveScenariosManager;
         }
         
-        await this.scenariosManager.load();
+        await this.aiCoreLiveScenariosManager.load();
+    }
+    
+    /**
+     * Load AiCore Knowledgebase sub-tab (NEW)
+     */
+    async loadAiCoreKnowledgebase() {
+        console.log('🧠 [AI AGENT SETTINGS] Loading AiCore Knowledgebase...');
+        
+        if (!this.aiCoreKnowledgebaseManager) {
+            this.aiCoreKnowledgebaseManager = new AiCoreKnowledgebaseManager(this);
+            window.aiCoreKnowledgebaseManager = this.aiCoreKnowledgebaseManager;
+        }
+        
+        await this.aiCoreKnowledgebaseManager.load();
     }
     
     /**
