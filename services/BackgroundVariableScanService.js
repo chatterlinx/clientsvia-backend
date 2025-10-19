@@ -32,7 +32,21 @@
 const Company = require('../models/v2Company');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const { getDB } = require('../db');
-const redisClient = require('../utils/redisClient');
+
+// Import Redis client from centralized clients module
+let redisClient;
+try {
+    const clients = require('../clients/index');
+    redisClient = clients.redisClient;
+    if (redisClient) {
+        console.log('✅ [BACKGROUND SCAN] Redis client connected');
+    } else {
+        console.warn('⚠️  [BACKGROUND SCAN] Redis client not available - cache operations will be no-ops');
+    }
+} catch (error) {
+    console.warn('⚠️  [BACKGROUND SCAN] Redis import failed:', error.message);
+    redisClient = null;
+}
 
 class BackgroundVariableScanService {
     
@@ -201,8 +215,12 @@ class BackgroundVariableScanService {
             
             // Clear Redis cache
             console.log(`🔍 [BG SCAN] Checkpoint 15: Clearing Redis cache...`);
-            await redisClient.del(`company:${companyId}`);
-            console.log(`✅ [BG SCAN] Checkpoint 16: Cache cleared`);
+            if (redisClient) {
+                await redisClient.del(`company:${companyId}`);
+                console.log(`✅ [BG SCAN] Checkpoint 16: Cache cleared`);
+            } else {
+                console.log(`⚠️  [BG SCAN] Checkpoint 16: Redis not available - skipping cache clear`);
+            }
             
             console.log(`✅ [BG SCAN] Checkpoint 17: SCAN COMPLETE!`);
             console.log(`📊 [BG SCAN] Summary:
