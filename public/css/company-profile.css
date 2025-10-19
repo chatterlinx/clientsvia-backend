@@ -403,8 +403,25 @@ body {
     --cv-container-max: 1400px;
 }
 
+/* Override Tailwind's responsive .container breakpoints globally */
 .container {
     max-width: var(--cv-container-max) !important;
+}
+
+/* Force all main tab content areas to respect 1400px width */
+#tab-content-area,
+#tab-content-area > div,
+.tab-content-item,
+.profile-section {
+    width: 100% !important;
+    max-width: 100% !important; /* Let parent (main) control max-width */
+}
+
+/* Ensure the main content wrapper respects full width */
+main {
+    max-width: 1400px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
 }
 
 
