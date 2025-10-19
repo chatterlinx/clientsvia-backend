@@ -364,7 +364,7 @@ class AiCoreTemplatesManager {
                 </div>
             `;
         } else {
-            html += `<div class="grid grid-cols-1 md:grid-cols-2 gap-6">`;
+            html += `<div class="space-y-3">`;
             
             available.forEach(template => {
                 html += this.renderAvailableTemplateCard(template);
@@ -379,7 +379,7 @@ class AiCoreTemplatesManager {
     }
     
     /**
-     * Render a single available template card
+     * Render a single available template card (COMPACT BANNER STYLE)
      * @param {Object} template - Available template data from Global AI Brain
      */
     renderAvailableTemplateCard(template) {
@@ -393,49 +393,50 @@ class AiCoreTemplatesManager {
         const isActivating = this.activatingTemplateId === template._id;
         
         return `
-            <div class="bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-blue-400 hover:shadow-lg transition-all ${isActivating ? 'opacity-50 pointer-events-none' : ''}">
-                <!-- Template Header -->
-                <div class="flex items-start gap-4 mb-4">
-                    <div class="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-3xl flex-shrink-0 shadow-md">
+            <div class="bg-white border-2 border-gray-200 rounded-lg p-4 hover:border-blue-400 hover:shadow-md transition-all ${isActivating ? 'opacity-50 pointer-events-none' : ''}">
+                <div class="flex items-center gap-4">
+                    <!-- Icon -->
+                    <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">
                         ${icon}
                     </div>
+                    
+                    <!-- Template Info -->
                     <div class="flex-1 min-w-0">
-                        <h4 class="text-xl font-bold text-gray-900 mb-1">${this.escapeHtml(template.name)}</h4>
-                        <p class="text-xs text-gray-600 flex items-center gap-1">
-                            <i class="fas fa-industry"></i>
-                            ${this.escapeHtml(industry)} | ${version}
+                        <h4 class="text-lg font-bold text-gray-900 truncate">${this.escapeHtml(template.name)}</h4>
+                        <p class="text-xs text-gray-500 flex items-center gap-2">
+                            <span><i class="fas fa-industry"></i> ${this.escapeHtml(industry)}</span>
+                            <span>•</span>
+                            <span>${version}</span>
                         </p>
                     </div>
+                    
+                    <!-- Compact Stats -->
+                    <div class="flex items-center gap-3 text-sm">
+                        <div class="text-center">
+                            <div class="font-bold text-blue-600">${categories}</div>
+                            <div class="text-xs text-gray-500">Cat</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="font-bold text-green-600">${scenarios}</div>
+                            <div class="text-xs text-gray-500">Scen</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="font-bold text-purple-600">${triggers}</div>
+                            <div class="text-xs text-gray-500">Trig</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Activate Button (Compact) -->
+                    <button 
+                        onclick="window.aiCoreTemplatesManager.activateTemplate('${template._id}')"
+                        class="px-6 py-2 text-white font-semibold rounded-lg transition-all shadow-sm hover:shadow-md flex items-center gap-2 flex-shrink-0 ${isActivating ? 'cursor-not-allowed' : ''}"
+                        style="background: linear-gradient(to right, #2563eb, #4f46e5); ${isActivating ? 'opacity: 0.5;' : ''}"
+                        ${isActivating ? 'disabled' : ''}
+                        title="Activate this template for your company"
+                    >
+                        ${isActivating ? '<i class="fas fa-spinner fa-spin"></i> Activating...' : '<i class="fas fa-plus-circle"></i> Activate'}
+                    </button>
                 </div>
-                
-                <!-- Description -->
-                <p class="text-sm text-gray-600 mb-4 line-clamp-2">${this.escapeHtml(template.description || 'No description available')}</p>
-                
-                <!-- Stats -->
-                <div class="grid grid-cols-3 gap-2 mb-4">
-                    <div class="text-center bg-blue-50 rounded-lg p-2 border border-blue-200">
-                        <div class="text-2xl font-bold text-blue-600">${categories}</div>
-                        <div class="text-xs text-gray-600 font-medium">Categories</div>
-                    </div>
-                    <div class="text-center bg-green-50 rounded-lg p-2 border border-green-200">
-                        <div class="text-2xl font-bold text-green-600">${scenarios}</div>
-                        <div class="text-xs text-gray-600 font-medium">Scenarios</div>
-                    </div>
-                    <div class="text-center bg-purple-50 rounded-lg p-2 border border-purple-200">
-                        <div class="text-2xl font-bold text-purple-600">${triggers}</div>
-                        <div class="text-xs text-gray-600 font-medium">Triggers</div>
-                    </div>
-                </div>
-                
-                <!-- Activate Button -->
-                <button 
-                    onclick="window.aiCoreTemplatesManager.activateTemplate('${template._id}')"
-                    class="w-full px-4 py-3 text-white font-bold rounded-lg transition-all shadow-md hover:shadow-xl flex items-center justify-center gap-2 ${isActivating ? 'cursor-not-allowed' : ''}"
-                    style="background: linear-gradient(to right, #2563eb, #4f46e5); ${isActivating ? 'opacity: 0.5;' : ''}"
-                    ${isActivating ? 'disabled' : ''}
-                >
-                    ${isActivating ? '<i class="fas fa-spinner fa-spin"></i> Activating...' : '<i class="fas fa-plus-circle"></i> Activate Template'}
-                </button>
             </div>
         `;
     }
