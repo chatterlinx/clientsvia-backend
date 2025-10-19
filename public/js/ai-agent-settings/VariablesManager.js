@@ -38,6 +38,7 @@ class VariablesManager {
         this.scanStatus = null;
         this.lastScanResult = null;
         this.isScanning = false;
+        this.pollInterval = null; // For real-time scan progress polling
         
         console.log('✅ [VARIABLES] Checkpoint 2: Initialized for company:', this.companyId);
     }
@@ -84,9 +85,113 @@ class VariablesManager {
             
             console.log('✅ [VARIABLES] Checkpoint 10: Load complete');
             
+            // Start polling if scan is in progress
+            if (this.scanStatus?.isScanning) {
+                console.log('📡 [VARIABLES] Checkpoint 11: Scan in progress detected - starting poll');
+                this.startPolling();
+            }
+            
         } catch (error) {
             console.error('❌ [VARIABLES] Failed at load:', error);
             this.renderError('Failed to load variables. Please refresh the page.');
+        }
+    }
+    
+    /**
+     * Start polling for scan status updates (real-time progress)
+     */
+    startPolling() {
+        console.log('📡 [POLL] Checkpoint 1: Starting real-time scan status polling');
+        
+        // Clear any existing interval
+        if (this.pollInterval) {
+            clearInterval(this.pollInterval);
+        }
+        
+        // Poll every 2 seconds
+        this.pollInterval = setInterval(async () => {
+            await this.checkScanStatus();
+        }, 2000);
+        
+        console.log('✅ [POLL] Checkpoint 2: Polling started (every 2 seconds)');
+    }
+    
+    /**
+     * Stop polling
+     */
+    stopPolling() {
+        if (this.pollInterval) {
+            console.log('📡 [POLL] Checkpoint 3: Stopping poll');
+            clearInterval(this.pollInterval);
+            this.pollInterval = null;
+        }
+    }
+    
+    /**
+     * Check scan status (called by polling)
+     */
+    async checkScanStatus() {
+        console.log('📡 [POLL] Checkpoint 4: Checking scan status...');
+        
+        try {
+            const token = localStorage.getItem('adminToken');
+            const response = await fetch(`/api/company/${this.companyId}/configuration/variables/scan-status`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            const scanStatus = data.scanStatus;
+            
+            console.log('📡 [POLL] Checkpoint 5: Status received:', {
+                isScanning: scanStatus.isScanning,
+                progress: scanStatus.scanProgress
+            });
+            
+            // Update scan status
+            this.scanStatus = scanStatus;
+            
+            if (scanStatus.isScanning) {
+                // Still scanning - update progress UI
+                this.isScanning = true;
+                this.updateScanProgress(scanStatus.scanProgress);
+            } else {
+                // Scan complete - stop polling and reload
+                console.log('✅ [POLL] Checkpoint 6: Scan complete - stopping poll');
+                this.stopPolling();
+                this.isScanning = false;
+                
+                // Reload data to get new variables
+                await this.load();
+            }
+            
+        } catch (error) {
+            console.error('❌ [POLL] Error checking scan status:', error);
+            // Continue polling even if error
+        }
+    }
+    
+    /**
+     * Update scan progress UI in real-time
+     */
+    updateScanProgress(progress) {
+        console.log('📊 [PROGRESS] Updating UI:', progress);
+        
+        // Update progress text
+        const progressTextEl = document.getElementById('scan-progress-text');
+        if (progressTextEl) {
+            const percent = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
+            progressTextEl.textContent = `Scanning ${progress.currentTemplate}... ${progress.current}/${progress.total} scenarios (${percent}%)`;
+        }
+        
+        // Update progress bar
+        const progressBarEl = document.getElementById('scan-progress-bar');
+        if (progressBarEl && progress.total > 0) {
+            const percent = Math.round((progress.current / progress.total) * 100);
+            progressBarEl.style.width = `${percent}%`;
         }
     }
     
@@ -233,35 +338,36 @@ class VariablesManager {
             </div>
         `;
         
-        // Scan progress (if scanning)
-        if (this.isScanning) {
+        // Scan progress (if scanning) - REAL-TIME
+        if (this.isScanning || this.scanStatus?.isScanning) {
+            const progress = this.scanStatus?.scanProgress || { current: 0, total: 0, currentTemplate: '' };
+            const percent = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
+            
             html += `
                 <div class="bg-blue-50 border-2 border-blue-400 rounded-xl p-6 mb-6">
                     <h3 class="text-xl font-bold text-blue-900 mb-4">
                         <i class="fas fa-spinner fa-spin mr-2"></i>
-                        Scan in Progress...
+                        Background Scan in Progress
                     </h3>
-                    <div class="space-y-2 text-sm text-blue-800">
-                        <div id="scan-step-1" class="flex items-center gap-2">
-                            <i class="fas fa-circle-notch fa-spin text-blue-600"></i>
-                            <span>Step 1: Connecting to API...</span>
-                        </div>
-                        <div id="scan-step-2" class="flex items-center gap-2 opacity-50">
-                            <i class="far fa-circle text-gray-400"></i>
-                            <span>Step 2: Analyzing active templates...</span>
-                        </div>
-                        <div id="scan-step-3" class="flex items-center gap-2 opacity-50">
-                            <i class="far fa-circle text-gray-400"></i>
-                            <span>Step 3: Detecting placeholders...</span>
-                        </div>
-                        <div id="scan-step-4" class="flex items-center gap-2 opacity-50">
-                            <i class="far fa-circle text-gray-400"></i>
-                            <span>Step 4: Counting usage...</span>
-                        </div>
-                        <div id="scan-step-5" class="flex items-center gap-2 opacity-50">
-                            <i class="far fa-circle text-gray-400"></i>
-                            <span>Step 5: Building report...</span>
-                        </div>
+                    
+                    <!-- Progress Text -->
+                    <div id="scan-progress-text" class="text-blue-800 font-semibold mb-3">
+                        ${progress.currentTemplate ? `Scanning ${progress.currentTemplate}... ${progress.current}/${progress.total} scenarios (${percent}%)` : 'Initializing scan...'}
+                    </div>
+                    
+                    <!-- Progress Bar -->
+                    <div class="bg-blue-200 rounded-full h-4 overflow-hidden mb-4">
+                        <div 
+                            id="scan-progress-bar" 
+                            class="bg-gradient-to-r from-blue-500 to-indigo-600 h-full transition-all duration-500"
+                            style="width: ${percent}%"
+                        ></div>
+                    </div>
+                    
+                    <!-- Info -->
+                    <div class="text-sm text-blue-700">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        This scan is running in the background. You can close this page and it will continue.
                     </div>
                 </div>
             `;
@@ -624,6 +730,9 @@ class VariablesManager {
             await this.clearCache();
             
             this.parent.showSuccess(`Scan complete! Found ${this.variableDefinitions.length} variables.`);
+            
+            // Start polling to catch any background scans
+            this.startPolling();
             
         } catch (error) {
             console.error('❌ [SCAN] Failed:', error);
