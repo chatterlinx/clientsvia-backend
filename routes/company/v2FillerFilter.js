@@ -79,7 +79,13 @@ router.get('/company/:companyId/configuration/filler-filter', async (req, res) =
         }
         
         // Get custom filler words (company-specific)
+        console.log(`🔇 [FILLER FILTER DEBUG] company.aiAgentSettings:`, company.aiAgentSettings ? 'EXISTS' : 'NULL');
+        console.log(`🔇 [FILLER FILTER DEBUG] company.aiAgentSettings.fillerWords:`, company.aiAgentSettings?.fillerWords ? 'EXISTS' : 'NULL');
+        console.log(`🔇 [FILLER FILTER DEBUG] company.aiAgentSettings.fillerWords.custom:`, company.aiAgentSettings?.fillerWords?.custom);
+        
         const customFillers = (company.aiAgentSettings?.fillerWords?.custom || []).sort();
+        
+        console.log(`🔇 [FILLER FILTER DEBUG] Final customFillers array:`, customFillers);
         
         // Build detailed scan report
         const scanReport = [];
