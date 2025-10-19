@@ -119,12 +119,17 @@ class AiCoreTemplatesManager {
             
             const payload = await response.json();
             
+            console.log('📦 [AICORE TEMPLATES DEBUG] Raw API response:', JSON.stringify(payload, null, 2));
+            
             // Support both array and { success, data } response formats
             this.availableTemplates = Array.isArray(payload) 
                 ? payload 
                 : (payload && payload.data ? payload.data : []);
             
             console.log(`✅ [AICORE TEMPLATES] Loaded ${this.availableTemplates.length} available templates from Global AI Brain`);
+            console.log('📊 [AICORE TEMPLATES DEBUG] Template stats sample:', 
+                this.availableTemplates[0] ? JSON.stringify(this.availableTemplates[0].stats, null, 2) : 'No templates'
+            );
             
         } catch (error) {
             console.error('❌ [AICORE TEMPLATES] Failed to load available templates:', error);
