@@ -299,10 +299,17 @@ class VariablesManager {
      * Main render method: Hero Header + Pro Tip + Category Cards
      */
     render() {
+        console.log('🎨 [VARIABLES RENDER] Starting render...');
         const container = document.getElementById('variables-container');
-        if (!container) return;
+        if (!container) {
+            console.error('❌ [VARIABLES RENDER] Container not found!');
+            return;
+        }
+        
+        console.log('🎨 [VARIABLES RENDER] Variable definitions count:', this.variableDefinitions.length);
         
         if (this.variableDefinitions.length === 0) {
+            console.log('🎨 [VARIABLES RENDER] Calling renderEmpty()...');
             this.renderEmpty();
             return;
         }
@@ -545,9 +552,14 @@ class VariablesManager {
      * Render empty state (MODERN UI)
      */
     renderEmpty() {
+        console.log('🎨 [VARIABLES RENDER EMPTY] Starting renderEmpty...');
         const container = document.getElementById('variables-container');
-        if (!container) return;
+        if (!container) {
+            console.error('❌ [VARIABLES RENDER EMPTY] Container not found!');
+            return;
+        }
         
+        console.log('🎨 [VARIABLES RENDER EMPTY] Setting new HTML...');
         container.innerHTML = `
             <div class="flex items-center justify-center min-h-[500px]">
                 <div class="text-center max-w-2xl px-8">
