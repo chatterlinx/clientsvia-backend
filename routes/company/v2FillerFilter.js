@@ -184,6 +184,16 @@ router.post('/company/:companyId/configuration/filler-filter/scan', async (req, 
             company.markModified('aiAgentSettings');
             await company.save();
             
+            // 🔥 CRITICAL: Clear Redis cache to force fresh data load
+            try {
+                if (redisClient && redisClient.isOpen) {
+                    await redisClient.del(`company:${companyId}`);
+                    console.log(`✅ [FILLER FILTER] Redis cache cleared for company:${companyId}`);
+                }
+            } catch (cacheError) {
+                console.warn(`⚠️ [FILLER FILTER] Failed to clear cache:`, cacheError.message);
+            }
+            
             return res.json({
                 success: true,
                 status: 'no_templates',
@@ -297,6 +307,16 @@ router.post('/company/:companyId/configuration/filler-filter/scan', async (req, 
         
         company.markModified('aiAgentSettings');
         await company.save();
+        
+        // 🔥 CRITICAL: Clear Redis cache to force fresh data load
+        try {
+            if (redisClient && redisClient.isOpen) {
+                await redisClient.del(`company:${companyId}`);
+                console.log(`✅ [FILLER FILTER] Redis cache cleared for company:${companyId}`);
+            }
+        } catch (cacheError) {
+            console.warn(`⚠️ [FILLER FILTER] Failed to clear cache:`, cacheError.message);
+        }
         
         console.log(`✅ [SCAN STEP 6/6] Company record updated`);
         console.log(`✅ [FILLER FILTER SCAN] ━━━ SCAN COMPLETE ━━━`);
