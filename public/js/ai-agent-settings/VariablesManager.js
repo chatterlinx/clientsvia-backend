@@ -566,19 +566,19 @@ class VariablesManager {
                     <div class="inline-flex items-center justify-center w-32 h-32 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full shadow-lg mb-6">
                         <i class="fas fa-box-open text-6xl text-blue-400"></i>
                     </div>
-                    <h3 class="text-3xl font-bold text-gray-900 mb-3">No Template Active</h3>
+                    <h3 class="text-3xl font-bold text-gray-900 mb-3">No Variables Detected</h3>
                     <p class="text-lg text-gray-600 mb-8 leading-relaxed">
-                        Activate a <strong>Global AI Brain template</strong> first.<br>
+                        Click <strong>"Auto-Scan Variables"</strong> to detect placeholders from your active templates.<br>
                         Variables like <code class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">{companyName}</code> 
-                        will be auto-detected from your templates.
+                        will be automatically found and organized by category.
                     </p>
                     <button 
                         class="px-8 py-4 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-3 mx-auto"
                         style="background: linear-gradient(to right, #2563eb, #4f46e5);"
-                        onclick="document.querySelector('[data-subtab=\\'aicore-templates\\']').click()"
+                        onclick="variablesManager.scanPlaceholders()"
                     >
-                        <i class="fas fa-plus-circle text-xl"></i>
-                        Go to AiCore Templates
+                        <i class="fas fa-scan text-xl"></i>
+                        Auto-Scan Variables
                     </button>
                 </div>
             </div>
