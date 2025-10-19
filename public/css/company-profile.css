@@ -394,47 +394,38 @@ body {
 
 
 /* ==========================================================================
-   GLOBAL LAYOUT NORMALIZATION
-   Force uniform container width across legacy and modern pages
-   Adjust --cv-container-max if you want a different global cap
+   MODERN LAYOUT SYSTEM
+   Clean, predictable container widths following enterprise standards
    ==========================================================================
 */
 :root {
-    --cv-container-max: 1400px;
+    --cv-max-width: 1400px;
+    --cv-content-padding: 2rem;
+    --cv-section-spacing: 1.5rem;
 }
 
-/* Override Tailwind's responsive .container breakpoints globally */
-.container {
-    max-width: var(--cv-container-max) !important;
-}
-
-/* Force all main tab content areas to respect 1400px width */
+/* 
+   Clean container system - works WITH Tailwind, not against it
+   Main container is set in HTML: max-w-[1400px] 
+   This ensures all content inside respects proper width
+*/
 #tab-content-area,
-#tab-content-area > div,
 .tab-content-item,
 .profile-section {
-    width: 100% !important;
-    max-width: 100% !important; /* Let parent (main) control max-width */
+    width: 100%;
+    max-width: 100%;
 }
 
-/* Ensure the main content wrapper respects full width */
-main {
-    max-width: 1400px !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-    width: 100% !important;
+/* Ensure consistent box-sizing across all elements */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
 }
 
-/* Override Tailwind's responsive padding that shrinks content */
-main.flex-grow {
-    padding-left: 2rem !important;
-    padding-right: 2rem !important;
-}
-
-/* Ensure the white card wrapper inside main takes full available width */
-main > div.bg-white {
-    width: 100% !important;
-    max-width: 100% !important;
+/* Tab content inherits width from parent white card */
+.config-block {
+    box-sizing: border-box;
 }
 
 
