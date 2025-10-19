@@ -319,7 +319,9 @@ class AIAgentSettingsManager {
         console.log('📊 [AI AGENT SETTINGS] Loading analytics...');
         
         if (!this.analyticsManager) {
-            this.analyticsManager = new AnalyticsManager(this);
+            this.analyticsManager = new AnalyticsManager(this.companyId);
+            // Expose globally for onclick handlers
+            window.analyticsManager = this.analyticsManager;
         }
         
         await this.analyticsManager.load();

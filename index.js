@@ -117,6 +117,7 @@ async function loadAllRoutes() {
         routes.v2AIAgentDiagnosticsRoutes = await loadRouteWithTimeout('./routes/company/v2aiAgentDiagnostics', 'v2AIAgentDiagnosticsRoutes');
         routes.v2AIKnowledgebaseRoutes = await loadRouteWithTimeout('./routes/company/v2aiKnowledgebase', 'v2AIKnowledgebaseRoutes');
         routes.v2AILiveScenariosRoutes = await loadRouteWithTimeout('./routes/company/v2aiLiveScenarios', 'v2AILiveScenariosRoutes');
+        routes.v2AIAnalyticsRoutes = await loadRouteWithTimeout('./routes/company/v2aiAnalytics', 'v2AIAnalyticsRoutes');
         
         // REMOVED: Legacy V2 AI Intelligence routes - archived to prevent external LLM dependencies
         
@@ -261,6 +262,7 @@ function registerRoutes(routes) {
     app.use('/api/company', routes.v2AIAgentDiagnosticsRoutes); // V2: System Diagnostics (AI Agent Settings - copy/paste for debugging)
     app.use('/api', routes.v2AIKnowledgebaseRoutes); // V2: AiCore Knowledgebase (AI performance monitoring & action items)
     app.use('/api', routes.v2AILiveScenariosRoutes); // V2: AiCore Live Scenarios (real-time scenario browser from all templates)
+    app.use('/api', routes.v2AIAnalyticsRoutes); // V2: AI Analytics (real-time performance dashboard)
     // app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     // V2 DELETED: Legacy enhancedAgentSettings route mount - used external LLMs, violates in-house AI system
 
