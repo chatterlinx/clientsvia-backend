@@ -259,6 +259,8 @@ function registerRoutes(routes) {
     app.use('/api/company', routes.v2ConnectionMessagesRoutes); // V2: Connection Messages (AI Agent Settings - Messages & Greetings tab)
     app.use('/api/company', routes.v2TTSRoutes); // V2: Text-to-Speech for voice testing and preview (AI Voice Settings tab)
     app.use('/api/company', routes.v2AIAgentDiagnosticsRoutes); // V2: System Diagnostics (AI Agent Settings - copy/paste for debugging)
+    app.use('/api', routes.v2AIKnowledgebaseRoutes); // V2: AiCore Knowledgebase (AI performance monitoring & action items)
+    app.use('/api', routes.v2AILiveScenariosRoutes); // V2: AiCore Live Scenarios (real-time scenario browser from all templates)
     // app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     // V2 DELETED: Legacy enhancedAgentSettings route mount - used external LLMs, violates in-house AI system
 
