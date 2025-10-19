@@ -619,6 +619,43 @@ const companySchema = new mongoose.Schema({
         },
         
         // -------------------------------------------------------------------
+        // FILLER WORDS - AI Agent runtime word filtering
+        // -------------------------------------------------------------------
+        // Filler words (inherited from template + custom additions)
+        // HybridScenarioSelector strips these from user input before matching
+        fillerWords: {
+            inherited: { 
+                type: [String], 
+                default: [] 
+                // From active templates (read-only, auto-synced)
+            },
+            custom: { 
+                type: [String], 
+                default: [] 
+                // Company-specific additions (editable via AiCore Filler Filter)
+            },
+            
+            // Scan history for audit trail
+            scanHistory: [{
+                scanDate: { type: Date, required: true },
+                templatesScanned: [{ 
+                    templateId: { type: String, trim: true },
+                    templateName: { type: String, trim: true },
+                    categoriesCount: { type: Number, default: 0 },
+                    scenariosCount: { type: Number, default: 0 },
+                    fillersFound: { type: Number, default: 0 },
+                    fillerWords: { type: [String], default: [] }
+                }],
+                totalFillersFound: { type: Number, default: 0 },
+                newFillersAdded: { type: Number, default: 0 },
+                newFillers: { type: [String], default: [] },
+                status: { type: String, enum: ['success', 'no_templates', 'no_fillers', 'error'], default: 'success' },
+                message: { type: String, trim: true },
+                triggeredBy: { type: String, enum: ['manual', 'auto'], default: 'manual' }
+            }]
+        },
+        
+        // -------------------------------------------------------------------
         // METADATA - Tracking and debugging
         // -------------------------------------------------------------------
         lastScanDate: { 
