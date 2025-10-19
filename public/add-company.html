@@ -146,10 +146,11 @@
                             type="text" 
                             name="companyName" 
                             id="companyName" 
-                            class="form-input" 
+                            class="form-input w-full" 
                             required 
                             placeholder="e.g., Atlas Air Conditioning"
                             maxlength="100"
+                            style="max-width: 100% !important;"
                         >
                         <p class="text-xs text-gray-500 mt-2">This will appear on all communications and in the directory</p>
                     </div>
@@ -162,16 +163,17 @@
                             Business Address <span class="text-red-500">*</span>
                         </label>
                         <div class="space-y-4 p-6 bg-gray-50 rounded-lg border-2 border-gray-200">
-                            <!-- Street Address -->
-                            <div>
+                            <!-- Street Address - FULL WIDTH -->
+                            <div class="col-span-2">
                                 <label for="addressStreet" class="text-sm font-medium text-gray-700">Street Address</label>
                                 <input 
                                     type="text" 
                                     id="addressStreet" 
                                     name="address.street"
-                                    class="form-input" 
+                                    class="form-input w-full" 
                                     required
                                     placeholder="123 Main Street, Suite 100"
+                                    style="max-width: 100% !important;"
                                 >
                             </div>
                             
