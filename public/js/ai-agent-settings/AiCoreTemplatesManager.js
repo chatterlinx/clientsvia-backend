@@ -1,16 +1,15 @@
 /**
  * ============================================================================
- * AICORE TEMPLATES MANAGER - CLEAN SLATE IMPLEMENTATION
+ * AICORE TEMPLATES MANAGER - SIMPLE DROPDOWN APPROACH
  * ============================================================================
  * 
  * PURPOSE: Manage loaded Global AI Brain templates for this company
  * 
- * FEATURES:
- * - Dropdown search button at top (like Global AI Brain)
- * - Template banners with stats (Categories, Scenarios, Triggers, Version)
- * - Small trash bin icon on bottom-right of each banner
- * - Safe delete with 2-step confirmation
- * - Reference-based architecture (no data duplication)
+ * DESIGN: Simple dropdown select (one at a time)
+ * - User selects from dropdown
+ * - Template loads immediately
+ * - Banner appears below
+ * - Repeat to add more templates
  * 
  * ============================================================================
  */
@@ -20,6 +19,7 @@ class AiCoreTemplatesManager {
         this.parent = parentManager;
         this.companyId = parentManager.companyId;
         this.loadedTemplates = [];
+        this.availableTemplates = [];
         
         console.log('🧠 [AICORE TEMPLATES] Initialized');
     }
@@ -31,6 +31,7 @@ class AiCoreTemplatesManager {
         console.log('🧠 [AICORE TEMPLATES] Loading...');
         
         try {
+            // Load loaded templates
             const response = await fetch(`/api/company/${this.companyId}/configuration/templates`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
@@ -42,6 +43,9 @@ class AiCoreTemplatesManager {
             }
             
             this.loadedTemplates = await response.json();
+            
+            // Load available templates for dropdown
+            await this.loadAvailableTemplates();
             
             console.log('✅ [AICORE TEMPLATES] Loaded:', this.loadedTemplates);
             
@@ -55,6 +59,31 @@ class AiCoreTemplatesManager {
     }
     
     /**
+     * Load available templates from Global AI Brain
+     */
+    async loadAvailableTemplates() {
+        try {
+            const response = await fetch('/api/admin/global-instant-responses/published', {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            this.availableTemplates = await response.json();
+            
+            console.log('✅ [AICORE TEMPLATES] Available templates loaded:', this.availableTemplates.length);
+            
+        } catch (error) {
+            console.error('❌ [AICORE TEMPLATES] Failed to load available templates:', error);
+            this.availableTemplates = [];
+        }
+    }
+    
+    /**
      * Render the AiCore Templates tab
      */
     render() {
@@ -62,21 +91,50 @@ class AiCoreTemplatesManager {
         if (!container) return;
         
         let html = `
-            <!-- HEADER: Add Template Button -->
-            <div class="mb-6 flex items-center justify-between">
-                <div>
-                    <h3 class="text-xl font-bold text-gray-800">📦 Knowledge Templates</h3>
-                    <p class="text-sm text-gray-600 mt-1">Loaded templates provide scenarios, variables, and AI knowledge</p>
-                </div>
-                <div class="relative">
-                    <button 
-                        id="add-aicore-template-btn" 
-                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold shadow-lg transition-all flex items-center gap-2"
-                        onclick="window.aiCoreTemplatesManager.showTemplateSelector()"
-                    >
-                        <i class="fas fa-plus"></i>
-                        Add Template
-                    </button>
+            <!-- HEADER: Dropdown Selector -->
+            <div class="mb-6">
+                <div class="bg-blue-50 border-2 border-blue-300 rounded-xl p-6">
+                    <div class="flex items-center gap-4">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-cube text-blue-600 text-3xl"></i>
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                📦 Currently Editing Template:
+                            </label>
+                            <select 
+                                id="aicore-template-selector" 
+                                class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none bg-white text-gray-800 font-medium cursor-pointer"
+                                onchange="window.aiCoreTemplatesManager.handleTemplateSelect(this)"
+                            >
+                                <option value="">🔽 Select Template to Add...</option>
+        `;
+        
+        // Add available templates to dropdown (exclude already loaded ones)
+        const loadedIds = this.loadedTemplates.map(t => t.templateId ? t.templateId.toString() : '');
+        this.availableTemplates.forEach(template => {
+            const isLoaded = loadedIds.includes(template._id ? template._id.toString() : '');
+            if (!isLoaded) {
+                const stats = template.stats || {};
+                const icon = template.icon || '🔧';
+                const name = template.name || 'Unnamed Template';
+                const scenarios = stats.scenarios || 0;
+                const version = template.version || 'v1.0.0';
+                html += `<option value="${template._id}">${icon} ${name} - ${scenarios} scenarios (${version})</option>`;
+            }
+        });
+        
+        html += `
+                            </select>
+                        </div>
+                        <button 
+                            class="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-all"
+                            onclick="window.aiCoreTemplatesManager.refreshTemplates()"
+                            title="Refresh template list"
+                        >
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
@@ -88,15 +146,8 @@ class AiCoreTemplatesManager {
                     <i class="fas fa-box-open text-6xl text-gray-300 mb-4"></i>
                     <h3 class="text-xl font-bold text-gray-700 mb-2">No Templates Loaded</h3>
                     <p class="text-gray-500 mb-6">
-                        Add a Global AI Brain template to provide your AI agent with scenarios and knowledge.
+                        Select a Global AI Brain template from the dropdown above to get started.
                     </p>
-                    <button 
-                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold inline-flex items-center gap-2"
-                        onclick="window.aiCoreTemplatesManager.showTemplateSelector()"
-                    >
-                        <i class="fas fa-plus"></i>
-                        Add Your First Template
-                    </button>
                 </div>
             `;
         } else {
@@ -187,135 +238,31 @@ class AiCoreTemplatesManager {
     }
     
     /**
-     * Show template selector dropdown modal
+     * Handle template selection from dropdown
      */
-    async showTemplateSelector() {
-        console.log('🧠 [AICORE TEMPLATES] Opening template selector...');
+    async handleTemplateSelect(selectElement) {
+        const templateId = selectElement.value;
         
-        try {
-            // Fetch available templates from Global AI Brain
-            const response = await fetch('/api/admin/global-instant-responses/published', {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            const templates = await response.json();
-            
-            if (!templates || templates.length === 0) {
-                alert('⚠️ No templates available. Please create a template in the Global AI Brain first.');
-                return;
-            }
-            
-            // Build modal HTML
-            let modalHTML = `
-                <div id="aicore-template-selector-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-                    <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-                        <!-- Header -->
-                        <div class="bg-blue-600 text-white p-6">
-                            <h2 class="text-2xl font-bold flex items-center gap-3">
-                                <i class="fas fa-plus-circle"></i>
-                                Add Knowledge Template
-                            </h2>
-                            <p class="text-sm text-blue-100 mt-2">Select a Global AI Brain template to load</p>
-                        </div>
-                        
-                        <!-- Search Bar -->
-                        <div class="p-6 border-b">
-                            <input 
-                                type="text" 
-                                id="aicore-template-search" 
-                                class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                                placeholder="🔍 Search templates..."
-                                oninput="window.aiCoreTemplatesManager.filterTemplates()"
-                            />
-                        </div>
-                        
-                        <!-- Template List -->
-                        <div id="aicore-template-list" class="overflow-y-auto max-h-96 p-6 space-y-3">
-            `;
-            
-            templates.forEach(template => {
-                const stats = template.stats || {};
-                modalHTML += `
-                    <div class="aicore-template-option border-2 border-gray-200 rounded-lg p-4 hover:border-blue-500 hover:bg-blue-50 cursor-pointer transition-all" 
-                         data-name="${(template.name || '').toLowerCase()}"
-                         onclick="window.aiCoreTemplatesManager.addTemplate('${template._id}')">
-                        <div class="flex items-center gap-4">
-                            <div class="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center text-2xl flex-shrink-0">
-                                ${template.icon || '🔧'}
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <h3 class="font-bold text-gray-800">${template.name}</h3>
-                                <p class="text-xs text-gray-600 mt-1">${template.description || 'No description'}</p>
-                                <div class="flex gap-4 mt-2 text-xs text-gray-500">
-                                    <span><i class="fas fa-folder"></i> ${stats.categories || 0} Categories</span>
-                                    <span><i class="fas fa-comments"></i> ${stats.scenarios || 0} Scenarios</span>
-                                    <span><i class="fas fa-code-branch"></i> ${template.version || 'v1.0.0'}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            modalHTML += `
-                        </div>
-                        
-                        <!-- Footer -->
-                        <div class="p-6 border-t bg-gray-50 flex justify-end">
-                            <button 
-                                class="px-6 py-2 bg-gray-300 hover:bg-gray-400 rounded-lg font-semibold"
-                                onclick="window.aiCoreTemplatesManager.closeTemplateSelector()"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            // Inject modal into page
-            const modalContainer = document.createElement('div');
-            modalContainer.innerHTML = modalHTML;
-            document.body.appendChild(modalContainer);
-            
-        } catch (error) {
-            console.error('❌ [AICORE TEMPLATES] Failed to load templates:', error);
-            alert('❌ Failed to load templates. Please try again.');
+        if (!templateId) {
+            return; // User selected "Select Template to Add..."
         }
+        
+        console.log('🧠 [AICORE TEMPLATES] Template selected:', templateId);
+        
+        // Add the template
+        await this.addTemplate(templateId);
+        
+        // Reset dropdown
+        selectElement.value = '';
     }
     
     /**
-     * Filter templates in the selector modal
+     * Refresh templates (reload available list)
      */
-    filterTemplates() {
-        const searchInput = document.getElementById('aicore-template-search');
-        const filter = searchInput.value.toLowerCase();
-        const options = document.querySelectorAll('.aicore-template-option');
-        
-        options.forEach(option => {
-            const name = option.dataset.name;
-            if (name.includes(filter)) {
-                option.style.display = '';
-            } else {
-                option.style.display = 'none';
-            }
-        });
-    }
-    
-    /**
-     * Close template selector modal
-     */
-    closeTemplateSelector() {
-        const modal = document.getElementById('aicore-template-selector-modal');
-        if (modal && modal.parentElement) {
-            modal.parentElement.remove();
-        }
+    async refreshTemplates() {
+        console.log('🧠 [AICORE TEMPLATES] Refreshing templates...');
+        await this.loadAvailableTemplates();
+        this.render();
     }
     
     /**
@@ -336,15 +283,12 @@ class AiCoreTemplatesManager {
             
             if (!response.ok) {
                 const error = await response.json();
-                throw new Error(error.message || `HTTP ${response.status}`);
+                throw new Error(error.message || error.error || `HTTP ${response.status}`);
             }
             
             const result = await response.json();
             
             console.log('✅ [AICORE TEMPLATES] Template added:', result);
-            
-            // Close modal
-            this.closeTemplateSelector();
             
             // Reload templates
             await this.load();
@@ -396,7 +340,7 @@ class AiCoreTemplatesManager {
             
             if (!response.ok) {
                 const error = await response.json();
-                throw new Error(error.message || `HTTP ${response.status}`);
+                throw new Error(error.message || error.error || `HTTP ${response.status}`);
             }
             
             console.log('✅ [AICORE TEMPLATES] Template deleted:', templateId);
@@ -418,4 +362,3 @@ class AiCoreTemplatesManager {
 if (typeof window !== 'undefined') {
     window.AiCoreTemplatesManager = AiCoreTemplatesManager;
 }
-
