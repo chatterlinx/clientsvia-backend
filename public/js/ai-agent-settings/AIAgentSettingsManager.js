@@ -26,7 +26,7 @@ class AIAgentSettingsManager {
         
         // Sub-managers (loaded lazily)
         this.variablesManager = null;
-        this.fillerWordsManager = null;
+        this.aiCoreFillerFilterManager = null;
         this.aiCoreTemplatesManager = null;
         this.aiCoreLiveScenariosManager = null;
         this.aiCoreKnowledgebaseManager = null;
@@ -172,8 +172,8 @@ class AIAgentSettingsManager {
                 case 'variables':
                     await this.loadVariables();
                     break;
-                case 'filler-words':
-                    await this.loadFillerWords();
+                case 'aicore-filler-filter':
+                    await this.loadAiCoreFillerFilter();
                     break;
                 case 'aicore-templates':
                     await this.loadAiCoreTemplates();
@@ -212,16 +212,18 @@ class AIAgentSettingsManager {
     }
     
     /**
-     * Load Filler Words sub-tab
+     * Load AiCore Filler Filter sub-tab
      */
-    async loadFillerWords() {
-        console.log('🔇 [AI AGENT SETTINGS] Loading filler words...');
+    async loadAiCoreFillerFilter() {
+        console.log('🔇 [AI AGENT SETTINGS] Loading AiCore Filler Filter...');
         
-        if (!this.fillerWordsManager) {
-            this.fillerWordsManager = new FillerWordsManager(this);
+        if (!this.aiCoreFillerFilterManager) {
+            this.aiCoreFillerFilterManager = new AiCoreFillerFilterManager(this.companyId);
+            // Expose globally for onclick handlers
+            window.aiCoreFillerFilterManager = this.aiCoreFillerFilterManager;
         }
         
-        await this.fillerWordsManager.load();
+        await this.aiCoreFillerFilterManager.load();
     }
     
     /**

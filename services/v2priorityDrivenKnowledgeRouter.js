@@ -353,9 +353,12 @@ class PriorityDrivenKnowledgeRouter {
             logger.info(`🧠 [V3 HYBRID BRAIN] Found ${allScenarios.length} scenarios across ${template.categories.length} categories`);
 
             // 🔇 Load filler words (inherited + custom)
+            // NOTE: Custom filler words come from aiAgentSettings (new system)
+            //       Inherited fillers are auto-scanned from active templates
             const fillerWords = [
-                ...(company.configuration?.fillerWords?.inherited || []),
-                ...(company.configuration?.fillerWords?.custom || [])
+                ...(company.configuration?.fillerWords?.inherited || []),  // Legacy location
+                ...(company.configuration?.fillerWords?.custom || []),     // Legacy location
+                ...(company.aiAgentSettings?.fillerWords?.custom || [])    // NEW location (AiCore Filler Filter)
             ];
             
             // 🚨 Load urgency keywords (inherited + custom)
