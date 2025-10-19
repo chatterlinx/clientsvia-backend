@@ -29,8 +29,7 @@ class AIAgentSettingsManager {
         this.fillerWordsManager = null;
         this.aiCoreTemplatesManager = null;
         this.scenariosManager = null;
-		// Legacy Template Hub removed (replaced by AiCore Templates)
-		this.templateHubManager = null;
+		// AiCore Templates is the single source for templates
         this.analyticsManager = null;
         
         console.log(`🤖 [AI AGENT SETTINGS] Initialized for company: ${companyId}`);

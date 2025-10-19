@@ -38,7 +38,7 @@
 ## 🎯 OFFICIAL AICORE NAMING
 
 ### **Section Name**:
-**"KnowledgeCore - Template Hub"**
+**"KnowledgeCore - AiCore Templates"**
 
 ### **What It Is**:
 The control panel for managing your AI's intelligence source - the Global AI Brain template.
@@ -421,7 +421,7 @@ Show "Cloning... X scenarios copied" progress bar
 **Source**: "Global AI Brain"  
 
 ### **How to Refer to It**:
-✅ "Go to KnowledgeCore > Template Hub"  
+✅ "Go to KnowledgeCore > AiCore Templates"  
 ✅ "The Template Details section in KnowledgeCore"  
 ✅ "Clone a template from Global AI Brain"  
 ✅ "The bottom panel Template Info tab"  

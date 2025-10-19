@@ -1495,7 +1495,7 @@ function calculateVariablesStatus(company) {
 
 /**
  * ============================================================================
- * TEMPLATE HUB ENDPOINTS - NEW REFERENCE-BASED SYSTEM
+ * AICORE TEMPLATES ENDPOINTS - REFERENCE-BASED SYSTEM
  * ============================================================================
  */
 
@@ -1504,7 +1504,7 @@ function calculateVariablesStatus(company) {
  * Get all loaded templates for this company
  */
 router.get('/:companyId/configuration/templates', async (req, res) => {
-    console.log(`[TEMPLATE HUB] GET /configuration/templates for company: ${req.params.companyId}`);
+    console.log(`[AICORE TEMPLATES] GET /configuration/templates for company: ${req.params.companyId}`);
     
     try {
         const company = await Company.findById(req.params.companyId);
@@ -1530,7 +1530,7 @@ router.get('/:companyId/configuration/templates', async (req, res) => {
             const template = await GlobalInstantResponseTemplate.findById(ref.templateId);
             
             if (!template) {
-                console.warn(`[TEMPLATE HUB] Template ${ref.templateId} not found in Global AI Brain`);
+                console.warn(`[AICORE TEMPLATES] Template ${ref.templateId} not found in Global AI Brain`);
                 continue;
             }
             
@@ -1566,7 +1566,7 @@ router.get('/:companyId/configuration/templates', async (req, res) => {
         res.json(templates);
         
     } catch (error) {
-        console.error('[TEMPLATE HUB] Error fetching templates:', error);
+        console.error('[AICORE TEMPLATES] Error fetching templates:', error);
         res.status(500).json({ error: 'Failed to fetch templates' });
     }
 });
@@ -1576,7 +1576,7 @@ router.get('/:companyId/configuration/templates', async (req, res) => {
  * Add a template reference to this company
  */
 router.post('/:companyId/configuration/templates', async (req, res) => {
-    console.log(`[TEMPLATE HUB] POST /configuration/templates for company: ${req.params.companyId}`);
+    console.log(`[AICORE TEMPLATES] POST /configuration/templates for company: ${req.params.companyId}`);
     
     try {
         const { templateId } = req.body;
