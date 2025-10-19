@@ -642,20 +642,35 @@ class AiCoreFillerFilterManager {
      * Add custom filler word
      */
     async addCustomFiller() {
+        console.log('🔇 [FILLER FILTER] ADD CUSTOM - Step 1: Function called');
+        
         const word = prompt('Enter a custom filler word to add:');
-        if (!word || !word.trim()) return;
+        console.log('🔇 [FILLER FILTER] ADD CUSTOM - Step 2: User entered:', word);
+        
+        if (!word || !word.trim()) {
+            console.log('⚠️ [FILLER FILTER] ADD CUSTOM - Cancelled or empty input');
+            return;
+        }
         
         const cleanWord = word.trim().toLowerCase();
+        console.log('🔇 [FILLER FILTER] ADD CUSTOM - Step 3: Clean word:', cleanWord);
         
         // Check if already exists
         if (this.inheritedFillers.includes(cleanWord) || this.customFillers.includes(cleanWord)) {
+            console.log('⚠️ [FILLER FILTER] ADD CUSTOM - Word already exists');
             alert(`"${cleanWord}" already exists in the filler list.`);
             return;
         }
         
         try {
+            console.log('🔇 [FILLER FILTER] ADD CUSTOM - Step 4: Sending to API...');
             const token = localStorage.getItem('adminToken');
-            const response = await fetch(`/api/company/${this.companyId}/configuration/filler-filter/custom`, {
+            console.log('🔇 [FILLER FILTER] ADD CUSTOM - Step 5: Token exists?', !!token);
+            
+            const url = `/api/company/${this.companyId}/configuration/filler-filter/custom`;
+            console.log('🔇 [FILLER FILTER] ADD CUSTOM - Step 6: URL:', url);
+            
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: { 
                     'Authorization': `Bearer ${token}`,
@@ -664,15 +679,25 @@ class AiCoreFillerFilterManager {
                 body: JSON.stringify({ word: cleanWord })
             });
             
+            console.log('🔇 [FILLER FILTER] ADD CUSTOM - Step 7: Response status:', response.status);
+            
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                const errorText = await response.text();
+                console.error('❌ [FILLER FILTER] ADD CUSTOM - Error response:', errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
             }
             
+            const result = await response.json();
+            console.log('✅ [FILLER FILTER] ADD CUSTOM - Step 8: Success!', result);
+            
             // Reload data
+            console.log('🔇 [FILLER FILTER] ADD CUSTOM - Step 9: Reloading data...');
             await this.load();
+            console.log('✅ [FILLER FILTER] ADD CUSTOM - Step 10: Complete!');
             
         } catch (error) {
-            console.error('❌ [FILLER FILTER] Failed to add custom filler:', error);
+            console.error('❌ [FILLER FILTER] ADD CUSTOM - Fatal error:', error);
+            console.error('❌ [FILLER FILTER] ADD CUSTOM - Error stack:', error.stack);
             alert('Failed to add custom filler. Please try again.');
         }
     }
