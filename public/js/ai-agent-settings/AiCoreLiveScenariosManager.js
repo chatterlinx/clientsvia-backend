@@ -44,32 +44,52 @@ class AiCoreLiveScenariosManager {
      * Load all scenarios from activated templates
      */
     async load() {
-        console.log('🎭 [LIVE SCENARIOS] Loading...');
+        console.log('🎭 [LIVE SCENARIOS] Checkpoint 1: Starting load...');
+        console.log('🎭 [LIVE SCENARIOS] Checkpoint 2: Company ID:', this.companyId);
         
         this.isLoading = true;
         this.renderLoading();
         
         try {
-            const response = await fetch(`/api/company/${this.companyId}/live-scenarios`, {
+            const url = `/api/company/${this.companyId}/live-scenarios`;
+            console.log('🎭 [LIVE SCENARIOS] Checkpoint 3: Fetching from:', url);
+            console.log('🎭 [LIVE SCENARIOS] Checkpoint 4: Auth token exists?', !!localStorage.getItem('adminToken'));
+            
+            const response = await fetch(url, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 }
             });
             
+            console.log('🎭 [LIVE SCENARIOS] Checkpoint 5: Response status:', response.status);
+            
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                const errorText = await response.text();
+                console.error('🎭 [LIVE SCENARIOS] Checkpoint 6: HTTP ERROR!', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: errorText
+                });
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             
+            console.log('🎭 [LIVE SCENARIOS] Checkpoint 7: Parsing JSON...');
             const data = await response.json();
+            console.log('🎭 [LIVE SCENARIOS] Checkpoint 8: Data received:', data);
+            
             this.scenarios = data.scenarios || [];
             this.categories = data.categories || [];
             
-            console.log(`✅ [LIVE SCENARIOS] Loaded ${this.scenarios.length} scenarios from ${this.categories.length} categories`);
+            console.log(`✅ [LIVE SCENARIOS] Checkpoint 9: Loaded ${this.scenarios.length} scenarios from ${this.categories.length} categories`);
             
             this.render();
             
         } catch (error) {
-            console.error('❌ [LIVE SCENARIOS] Load failed:', error);
+            console.error('❌ [LIVE SCENARIOS] Checkpoint 10: LOAD FAILED!');
+            console.error('❌ [LIVE SCENARIOS] Error name:', error.name);
+            console.error('❌ [LIVE SCENARIOS] Error message:', error.message);
+            console.error('❌ [LIVE SCENARIOS] Full error:', error);
+            console.error('❌ [LIVE SCENARIOS] Stack trace:', error.stack);
             this.renderError('Failed to load scenarios. Please refresh.');
         } finally {
             this.isLoading = false;

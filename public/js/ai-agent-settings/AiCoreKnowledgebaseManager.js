@@ -44,32 +44,52 @@ class AiCoreKnowledgebaseManager {
      * Load action items from call logs
      */
     async load() {
-        console.log('🧠 [KNOWLEDGEBASE] Loading action items...');
+        console.log('🧠 [KNOWLEDGEBASE] Checkpoint 1: Starting load...');
+        console.log('🧠 [KNOWLEDGEBASE] Checkpoint 2: Company ID:', this.companyId);
         
         this.isLoading = true;
         this.renderLoading();
         
         try {
-            const response = await fetch(`/api/company/${this.companyId}/knowledgebase/action-items`, {
+            const url = `/api/company/${this.companyId}/knowledgebase/action-items`;
+            console.log('🧠 [KNOWLEDGEBASE] Checkpoint 3: Fetching from:', url);
+            console.log('🧠 [KNOWLEDGEBASE] Checkpoint 4: Auth token exists?', !!localStorage.getItem('adminToken'));
+            
+            const response = await fetch(url, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 }
             });
             
+            console.log('🧠 [KNOWLEDGEBASE] Checkpoint 5: Response status:', response.status);
+            
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                const errorText = await response.text();
+                console.error('🧠 [KNOWLEDGEBASE] Checkpoint 6: HTTP ERROR!', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: errorText
+                });
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             
+            console.log('🧠 [KNOWLEDGEBASE] Checkpoint 7: Parsing JSON...');
             const data = await response.json();
+            console.log('🧠 [KNOWLEDGEBASE] Checkpoint 8: Data received:', data);
+            
             this.actionItems = data.actionItems || [];
             
-            console.log(`✅ [KNOWLEDGEBASE] Loaded ${this.actionItems.length} action items`);
+            console.log(`✅ [KNOWLEDGEBASE] Checkpoint 9: Loaded ${this.actionItems.length} action items`);
             
             this.render();
             this.startAutoRefresh();
             
         } catch (error) {
-            console.error('❌ [KNOWLEDGEBASE] Load failed:', error);
+            console.error('❌ [KNOWLEDGEBASE] Checkpoint 10: LOAD FAILED!');
+            console.error('❌ [KNOWLEDGEBASE] Error name:', error.name);
+            console.error('❌ [KNOWLEDGEBASE] Error message:', error.message);
+            console.error('❌ [KNOWLEDGEBASE] Full error:', error);
+            console.error('❌ [KNOWLEDGEBASE] Stack trace:', error.stack);
             this.renderError('Failed to load knowledgebase. Please refresh.');
         } finally {
             this.isLoading = false;
