@@ -82,6 +82,13 @@ class AiCoreLiveScenariosManager {
             
             console.log(`✅ [LIVE SCENARIOS] Checkpoint 9: Loaded ${this.scenarios.length} scenarios from ${this.categories.length} categories`);
             
+            // Check if there's any data
+            if (this.scenarios.length === 0) {
+                console.log('🎭 [LIVE SCENARIOS] No scenarios found - rendering empty state');
+                this.renderEmptyState();
+                return;
+            }
+            
             this.render();
             
         } catch (error) {
@@ -406,6 +413,60 @@ class AiCoreLiveScenariosManager {
     async refresh() {
         console.log('🔄 [LIVE SCENARIOS] Refreshing...');
         await this.load();
+    }
+    
+    /**
+     * Render empty state (no scenarios)
+     */
+    renderEmptyState() {
+        const container = document.getElementById('ai-settings-aicore-live-scenarios-content');
+        if (!container) return;
+        
+        container.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; min-height: 400px;">
+                <div style="text-align: center; max-width: 600px; padding: 40px;">
+                    <div style="font-size: 80px; margin-bottom: 24px; opacity: 0.3;">🎭</div>
+                    
+                    <h3 style="font-size: 24px; font-weight: 700; color: #111827; margin-bottom: 12px;">
+                        No Live Scenarios Yet
+                    </h3>
+                    
+                    <p style="font-size: 16px; color: #6b7280; line-height: 1.6; margin-bottom: 32px;">
+                        We checked, but there are no active scenarios available. Scenarios come from activated 
+                        Global AI Brain templates. Once you activate a template, all its scenarios will appear 
+                        here for you to browse, search, and test.
+                    </p>
+                    
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; color: white; text-align: left; margin-bottom: 24px;">
+                        <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 12px;">
+                            💡 What are Live Scenarios?
+                        </h4>
+                        <p style="font-size: 14px; line-height: 1.6; margin-bottom: 12px;">
+                            Scenarios are pre-built conversation flows that teach your AI how to handle specific 
+                            customer questions like booking appointments, answering FAQs, providing hours, and more.
+                        </p>
+                        <p style="font-size: 14px; line-height: 1.6;">
+                            Each template contains dozens of scenarios organized by category (Booking, Hours, Pricing, etc.)
+                        </p>
+                    </div>
+                    
+                    <div style="padding: 20px; background: #f9fafb; border-radius: 8px; border: 2px dashed #e5e7eb;">
+                        <p style="font-size: 14px; color: #6b7280; margin-bottom: 12px;">
+                            <strong style="color: #111827;">🚀 To see live scenarios:</strong>
+                        </p>
+                        <ol style="text-align: left; font-size: 14px; color: #6b7280; line-height: 1.8; padding-left: 20px;">
+                            <li>Go to the <strong>AiCore Templates</strong> tab</li>
+                            <li>Click <strong>Activate</strong> on a template (e.g., "Universal AI Brain")</li>
+                            <li>Come back here to see all scenarios from that template</li>
+                            <li>Browse, search, and test scenarios in real-time</li>
+                        </ol>
+                        <button onclick="window.aiCoreLiveScenariosManager.goToTemplates()" style="margin-top: 16px; padding: 12px 24px; background: #6366f1; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                            Go to AiCore Templates →
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
     }
     
     /**

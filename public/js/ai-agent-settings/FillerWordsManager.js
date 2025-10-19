@@ -129,12 +129,46 @@ class FillerWordsManager {
         if (!container) return;
         
         container.innerHTML = `
-            <div class="text-center py-16">
-                <i class="fas fa-filter text-6xl text-gray-300 mb-4"></i>
-                <h3 class="text-xl font-bold text-gray-700 mb-2">No Filler Words</h3>
-                <p class="text-gray-500 mb-6">
-                    Clone a Global AI Brain template to inherit filler words.
-                </p>
+            <div style="display: flex; align-items: center; justify-content: center; min-height: 400px;">
+                <div style="text-align: center; max-width: 600px; padding: 40px;">
+                    <div style="font-size: 80px; margin-bottom: 24px; opacity: 0.3;">🔇</div>
+                    
+                    <h3 style="font-size: 24px; font-weight: 700; color: #111827; margin-bottom: 12px;">
+                        No Filler Words Yet
+                    </h3>
+                    
+                    <p style="font-size: 16px; color: #6b7280; line-height: 1.6; margin-bottom: 32px;">
+                        We checked, but there are no filler words configured. Filler words are automatically 
+                        inherited from Global AI Brain templates when you activate them. These words (like "um", 
+                        "uh", "you know") are removed from customer input for cleaner AI processing.
+                    </p>
+                    
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; color: white; text-align: left; margin-bottom: 24px;">
+                        <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 12px;">
+                            💡 What are Filler Words?
+                        </h4>
+                        <p style="font-size: 14px; line-height: 1.6; margin-bottom: 12px;">
+                            Filler words are common speech patterns (like "um", "uh", "you know", "like") that people 
+                            use naturally but add no meaning. The AI strips these out before processing to improve 
+                            accuracy and understanding.
+                        </p>
+                        <p style="font-size: 14px; line-height: 1.6;">
+                            Example: "Um, I need to, like, book an appointment" → "I need to book an appointment"
+                        </p>
+                    </div>
+                    
+                    <div style="padding: 20px; background: #f9fafb; border-radius: 8px; border: 2px dashed #e5e7eb;">
+                        <p style="font-size: 14px; color: #6b7280; margin-bottom: 12px;">
+                            <strong style="color: #111827;">🚀 To get filler words:</strong>
+                        </p>
+                        <ol style="text-align: left; font-size: 14px; color: #6b7280; line-height: 1.8; padding-left: 20px;">
+                            <li>Go to the <strong>AiCore Templates</strong> tab</li>
+                            <li>Activate a template (e.g., "Universal AI Brain")</li>
+                            <li>Filler words will automatically inherit from that template</li>
+                            <li>You can add custom filler words specific to your business</li>
+                        </ol>
+                    </div>
+                </div>
             </div>
         `;
     }
