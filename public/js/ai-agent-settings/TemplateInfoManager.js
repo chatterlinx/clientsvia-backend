@@ -71,85 +71,60 @@ class TemplateInfoManager {
         const isDiverged = info.syncStatus === 'diverged';
         
         let html = `
-            <!-- Template Name & Description -->
-            <div class="mb-6 bg-blue-50 border-2 border-blue-400 rounded-lg p-6">
-                <div class="flex items-start gap-4">
-                    <div class="w-16 h-16 bg-blue-600 rounded-lg flex items-center justify-center text-white text-3xl">
-                        📦
-                    </div>
-                    <div class="flex-1">
-                        <h3 class="text-2xl font-bold text-blue-900 mb-2">${this.escapeHtml(info.templateName)}</h3>
-                        <p class="text-blue-800">${this.escapeHtml(info.templateDescription || 'No description available')}</p>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Version Info -->
-            <div class="grid grid-cols-2 gap-6 mb-6">
-                <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
-                    <div class="text-sm text-gray-500 mb-1">Your Version</div>
-                    <div class="text-3xl font-bold text-gray-900">v${info.clonedVersion || '1.0.0'}</div>
-                    <div class="text-xs text-gray-500 mt-2">Cloned ${this.formatDate(info.clonedAt)}</div>
-                </div>
-                <div class="bg-white border-2 border-gray-200 rounded-lg p-6">
-                    <div class="text-sm text-gray-500 mb-1">Latest Version</div>
-                    <div class="text-3xl font-bold ${hasUpdates ? 'text-orange-600' : 'text-green-600'}">
-                        v${info.currentVersion || '1.0.0'}
-                    </div>
-                    <div class="text-xs ${hasUpdates ? 'text-orange-600 font-semibold' : 'text-green-600'} mt-2">
-                        ${hasUpdates ? '🔔 Updates Available!' : '✅ Up to Date'}
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Sync Status -->
-            <div class="mb-6 ${isUpToDate ? 'bg-green-50 border-green-200' : hasUpdates ? 'bg-orange-50 border-orange-200' : 'bg-yellow-50 border-yellow-200'} border-2 rounded-lg p-6">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-3">
-                        ${isUpToDate ? '<i class="fas fa-check-circle text-3xl text-green-600"></i>' : 
-                          hasUpdates ? '<i class="fas fa-sync text-3xl text-orange-600"></i>' : 
-                          '<i class="fas fa-exclamation-triangle text-3xl text-yellow-600"></i>'}
+            <!-- 🎨 TEMPLATE BANNER - Bold & Visual -->
+            <div class="bg-blue-600 rounded-xl p-8 mb-6 text-white shadow-xl">
+                <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-6">
+                        <div class="w-20 h-20 bg-white bg-opacity-20 rounded-xl flex items-center justify-center text-5xl">
+                            🔧
+                        </div>
                         <div>
-                            <div class="font-bold text-lg ${isUpToDate ? 'text-green-900' : hasUpdates ? 'text-orange-900' : 'text-yellow-900'}">
-                                ${this.getSyncStatusTitle(info.syncStatus)}
-                            </div>
-                            <div class="text-sm ${isUpToDate ? 'text-green-800' : hasUpdates ? 'text-orange-800' : 'text-yellow-800'}">
-                                ${this.getSyncStatusDescription(info.syncStatus)}
-                            </div>
+                            <h2 class="text-4xl font-bold mb-2">${this.escapeHtml(info.templateName)}</h2>
+                            <p class="text-lg text-white text-opacity-90">${this.escapeHtml(info.templateDescription || 'Industry Template')}</p>
                         </div>
                     </div>
-                    ${hasUpdates ? `
-                        <button class="ai-settings-btn ai-settings-btn-primary" onclick="templateInfoManager.syncUpdates()">
-                            <i class="fas fa-download"></i>
-                            Sync Updates
+                    <div class="flex gap-3">
+                        ${hasUpdates ? `
+                            <button class="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-semibold transition-all" onclick="templateInfoManager.syncUpdates()">
+                                <i class="fas fa-sync-alt mr-2"></i>
+                                Sync Updates
+                            </button>
+                        ` : `
+                            <div class="bg-green-500 px-6 py-3 rounded-lg font-semibold flex items-center gap-2">
+                                <i class="fas fa-check-circle"></i>
+                                Up to Date
+                            </div>
+                        `}
+                        <button class="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-semibold transition-all" onclick="templateInfoManager.removeTemplate()">
+                            <i class="fas fa-trash mr-2"></i>
+                            Remove
                         </button>
-                    ` : ''}
+                    </div>
                 </div>
-            </div>
-            
-            <!-- Stats -->
-            <div class="grid grid-cols-4 gap-4 mb-6">
-                <div class="bg-white border-2 border-gray-200 rounded-lg p-4 text-center">
-                    <div class="text-2xl font-bold text-blue-600">${info.stats?.scenarios || 0}</div>
-                    <div class="text-xs text-gray-600 mt-1">Scenarios</div>
+                
+                <!-- 📊 STATISTICS GRID -->
+                <div class="grid grid-cols-4 gap-4">
+                    <div class="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-4 text-center">
+                        <div class="text-3xl font-bold mb-1">${info.stats?.scenarios || 0}</div>
+                        <div class="text-sm text-white text-opacity-80">Scenarios</div>
+                    </div>
+                    <div class="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-4 text-center">
+                        <div class="text-3xl font-bold mb-1">${info.stats?.categories || 0}</div>
+                        <div class="text-sm text-white text-opacity-80">Categories</div>
+                    </div>
+                    <div class="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-4 text-center">
+                        <div class="text-3xl font-bold mb-1">${info.stats?.variables || 0}</div>
+                        <div class="text-sm text-white text-opacity-80">Variables</div>
+                    </div>
+                    <div class="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-4 text-center">
+                        <div class="text-3xl font-bold mb-1">${info.stats?.fillerWords || 0}</div>
+                        <div class="text-sm text-white text-opacity-80">Filler Words</div>
+                    </div>
                 </div>
-                <div class="bg-white border-2 border-gray-200 rounded-lg p-4 text-center">
-                    <div class="text-2xl font-bold text-green-600">${info.stats?.categories || 0}</div>
-                    <div class="text-xs text-gray-600 mt-1">Categories</div>
+                
+                <div class="mt-4 text-sm text-white text-opacity-70 text-center">
+                    Loaded ${this.formatDate(info.clonedAt)} • v${info.clonedVersion || '1.0.0'}
                 </div>
-                <div class="bg-white border-2 border-gray-200 rounded-lg p-4 text-center">
-                    <div class="text-2xl font-bold text-purple-600">${info.stats?.variables || 0}</div>
-                    <div class="text-xs text-gray-600 mt-1">Variables</div>
-                </div>
-                <div class="bg-white border-2 border-gray-200 rounded-lg p-4 text-center">
-                    <div class="text-2xl font-bold text-orange-600">${info.stats?.fillerWords || 0}</div>
-                    <div class="text-xs text-gray-600 mt-1">Filler Words</div>
-                </div>
-            </div>
-            
-            <!-- Last Sync -->
-            <div class="text-sm text-gray-500 text-center">
-                Last synced: ${this.formatDate(info.lastSyncedAt)}
             </div>
         `;
         
@@ -275,6 +250,68 @@ class TemplateInfoManager {
     countScenarios(template) {
         if (!template.categories) return 0;
         return template.categories.reduce((sum, cat) => sum + (cat.scenarios?.length || 0), 0);
+    }
+    
+    /**
+     * Remove template - SAFE DELETE with confirmation
+     */
+    async removeTemplate() {
+        const templateName = this.templateInfo?.templateName || 'this template';
+        const scenarioCount = this.templateInfo?.stats?.scenarios || 0;
+        
+        // STEP 1: Show warning
+        if (!confirm(`⚠️ WARNING: Remove "${templateName}"?\n\n` +
+                     `This will permanently remove:\n` +
+                     `❌ ${scenarioCount} scenarios\n` +
+                     `❌ All associated variables\n` +
+                     `❌ Connection to this template\n\n` +
+                     `You can always load it again later.\n\n` +
+                     `Continue to confirmation step?`)) {
+            return;
+        }
+        
+        // STEP 2: Type to confirm (SAFE DELETE)
+        const confirmation = prompt(
+            `🔒 SAFETY CHECK\n\n` +
+            `To confirm removal of "${templateName}", please type:\n\n` +
+            `DELETE\n\n` +
+            `(Type exactly as shown, in CAPITAL LETTERS)`
+        );
+        
+        if (confirmation !== 'DELETE') {
+            if (confirmation !== null) {
+                alert('❌ Deletion cancelled. Text did not match.');
+            }
+            return;
+        }
+        
+        console.log('🗑️ [TEMPLATE INFO] Removing template...');
+        
+        try {
+            const response = await fetch(`/api/company/${this.companyId}/configuration/remove-template`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || `HTTP ${response.status}`);
+            }
+            
+            console.log('✅ [TEMPLATE INFO] Template removed successfully');
+            
+            this.parent.showSuccess(`Template "${templateName}" removed successfully! 🗑️`);
+            
+            // Reload everything
+            await this.parent.refresh();
+            
+        } catch (error) {
+            console.error('❌ [TEMPLATE INFO] Failed to remove template:', error);
+            alert(`Failed to remove template: ${error.message}`);
+        }
     }
     
     /**
