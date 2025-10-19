@@ -341,17 +341,13 @@ class AiCoreFillerFilterManager {
      * TAB 2: Filler Words Table
      */
     renderFillerTable(container) {
-        if (this.inheritedFillers.length === 0 && this.customFillers.length === 0) {
-            this.renderEmptyState(container);
-            return;
-        }
-        
         // Combine and sort all fillers
         const allFillers = [
             ...this.inheritedFillers.map(f => ({ word: f, type: 'inherited' })),
             ...this.customFillers.map(f => ({ word: f, type: 'custom' }))
         ].sort((a, b) => a.word.localeCompare(b.word));
         
+        // Always show the header with "+ Add Custom Filler" button
         container.innerHTML = `
             <!-- Table Header -->
             <div style="background: white; border-radius: 12px 12px 0 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #e5e7eb;">
@@ -365,7 +361,9 @@ class AiCoreFillerFilterManager {
                 </div>
                 <button 
                     onclick="window.aiCoreFillerFilterManager.addCustomFiller()"
-                    style="padding: 12px 24px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    style="padding: 12px 24px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s;"
+                    onmouseover="this.style.background='#059669'"
+                    onmouseout="this.style.background='#10b981'">
                     + Add Custom Filler
                 </button>
             </div>
@@ -390,7 +388,20 @@ class AiCoreFillerFilterManager {
                         </tr>
                     </thead>
                     <tbody>
-                        ${allFillers.map((filler, index) => `
+                        ${allFillers.length === 0 ? `
+                            <tr>
+                                <td colspan="4" style="padding: 60px 20px; text-align: center;">
+                                    <div style="font-size: 48px; margin-bottom: 16px;">🔇</div>
+                                    <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0 0 8px 0;">No Filler Words Yet</h3>
+                                    <p style="font-size: 14px; color: #6b7280; margin: 0 0 24px 0; max-width: 500px; margin-left: auto; margin-right: auto;">
+                                        Filler words are automatically inherited from Global AI Brain templates when you activate them. You can also add custom company-specific filler words using the "+ Add Custom Filler" button above.
+                                    </p>
+                                    <div style="display: flex; gap: 12px; justify-content: center; align-items: center; font-size: 13px; color: #9ca3af;">
+                                        <span>💡 Tip: Go to "AiCore Templates" → Activate a template → Return here and run "Force Scan"</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        ` : allFillers.map((filler, index) => `
                             <tr style="border-bottom: 1px solid #f3f4f6; ${filler.type === 'inherited' ? 'background: #f9fafb;' : ''}">
                                 <td style="padding: 16px; font-size: 15px; font-weight: ${filler.type === 'custom' ? '600' : '500'}; color: ${filler.type === 'custom' ? '#111827' : '#6b7280'};">
                                     ${filler.type === 'inherited' ? '🔒' : '✏️'} "${filler.word}"
@@ -407,7 +418,9 @@ class AiCoreFillerFilterManager {
                                     ${filler.type === 'custom' ? `
                                         <button 
                                             onclick="window.aiCoreFillerFilterManager.removeCustomFiller('${filler.word}')"
-                                            style="padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">
+                                            style="padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+                                            onmouseover="this.style.background='#dc2626'"
+                                            onmouseout="this.style.background='#ef4444'">
                                             Remove
                                         </button>
                                     ` : `
