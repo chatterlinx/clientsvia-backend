@@ -43,6 +43,31 @@ router.use(authenticateJWT);
 
 /**
  * ============================================================================
+ * HELPER: Clear Redis Cache for Company
+ * ============================================================================
+ * CRITICAL: Mongoose + Redis architecture requires explicit cache invalidation
+ * after ANY write operation to company data
+ * ============================================================================
+ */
+async function clearCompanyCache(companyId, context = '') {
+    try {
+        if (redisClient && redisClient.isOpen) {
+            await redisClient.del(`company:${companyId}`);
+            console.log(`✅ [CACHE CLEAR] ${context} - Cleared Redis cache for company:${companyId}`);
+            return true;
+        } else {
+            console.warn(`⚠️ [CACHE CLEAR] ${context} - Redis client not available`);
+            return false;
+        }
+    } catch (error) {
+        console.error(`❌ [CACHE CLEAR] ${context} - Failed:`, error.message);
+        // Non-fatal error - don't block the response
+        return false;
+    }
+}
+
+/**
+ * ============================================================================
  * GET /api/company/:companyId/configuration
  * Load complete configuration (overview)
  * ============================================================================
@@ -169,6 +194,9 @@ router.patch('/:companyId/configuration/variables', async (req, res) => {
         company.configuration.lastUpdatedAt = new Date();
         
         await company.save();
+        
+        // Clear Redis cache
+        await clearCompanyCache(req.params.companyId, 'Variables Updated');
         
         console.log(`[COMPANY CONFIG] Variables updated for company: ${req.params.companyId}`);
         
@@ -653,6 +681,9 @@ router.post('/:companyId/configuration/filler-words', async (req, res) => {
         company.configuration.lastUpdatedAt = new Date();
         
         await company.save();
+        
+        // Clear Redis cache
+        await clearCompanyCache(req.params.companyId, 'Filler Words Added');
         
         console.log(`[COMPANY CONFIG] Added ${newWords.length} filler words for company: ${req.params.companyId}`);
         
