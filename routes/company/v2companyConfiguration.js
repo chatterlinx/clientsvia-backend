@@ -726,6 +726,9 @@ router.delete('/:companyId/configuration/filler-words/:word', async (req, res) =
         
         await company.save();
         
+        // Clear Redis cache
+        await clearCompanyCache(req.params.companyId, 'Filler Word Deleted');
+        
         console.log(`[COMPANY CONFIG] Deleted filler word "${word}" for company: ${req.params.companyId}`);
         
         res.json({
@@ -760,6 +763,9 @@ router.post('/:companyId/configuration/filler-words/reset', async (req, res) => 
             company.configuration.fillerWords.custom = [];
             company.configuration.lastUpdatedAt = new Date();
             await company.save();
+            
+            // Clear Redis cache
+            await clearCompanyCache(req.params.companyId, 'Filler Words Reset');
         }
         
         console.log(`[COMPANY CONFIG] Reset filler words for company: ${req.params.companyId}`);
@@ -857,6 +863,9 @@ router.post('/:companyId/configuration/urgency-keywords/sync', async (req, res) 
         company.configuration.lastUpdatedAt = new Date();
         
         await company.save();
+        
+        // Clear Redis cache
+        await clearCompanyCache(req.params.companyId, 'Urgency Keywords Synced');
         
         console.log(`[COMPANY CONFIG] ✅ Synced ${company.configuration.urgencyKeywords.inherited.length} urgency keywords from template`);
         
@@ -1125,6 +1134,10 @@ router.post('/:companyId/configuration/clone-template', async (req, res) => {
                     
                     company.markModified('aiAgentSettings.templateReferences');
                     await company.save();
+                    
+                    // Clear Redis cache
+                    await clearCompanyCache(req.params.companyId, 'Template Reference Added');
+                    
                     console.log(`✅ [AUTO-SCAN] Added template reference to aiAgentSettings`);
                 }
                 
@@ -1220,6 +1233,9 @@ router.post('/:companyId/configuration/sync', async (req, res) => {
         // For now, just update the metadata
         
         await company.save();
+        
+        // Clear Redis cache
+        await clearCompanyCache(req.params.companyId, 'Template Synced');
         
         console.log(`[COMPANY CONFIG] Synced company ${req.params.companyId} with template ${template._id}`);
         
