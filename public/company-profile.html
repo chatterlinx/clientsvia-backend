@@ -1331,39 +1331,12 @@
                             <!-- ========================================== -->
                             <div id="ai-settings-variables-content" class="ai-settings-subtab-content active">
                                 
-                                <div class="mb-6 bg-blue-50 border-2 border-blue-400 rounded-lg p-4">
-                                    <div class="flex items-start gap-3">
-                                        <i class="fas fa-lightbulb text-blue-600 text-xl mt-1"></i>
-                                        <div>
-                                            <h4 class="font-bold text-blue-900 mb-1">What are Variables?</h4>
-                                            <p class="text-sm text-blue-800">
-                                                Variables like <code class="bg-blue-200 px-2 py-0.5 rounded">{companyName}</code> and 
-                                                <code class="bg-blue-200 px-2 py-0.5 rounded">{hvacServiceCall}</code> are 
-                                                automatically replaced in your AI's responses. Fill them out once, and they'll be used 
-                                                across ALL 500+ scenarios!
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Variables will be dynamically loaded here -->
+                                <!-- Variables Container - Rendered by VariablesManager.js -->
                                 <div id="variables-container">
                                     <div class="text-center py-12 text-gray-400">
                                         <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
                                         <p>Loading variables...</p>
                                     </div>
-                                </div>
-                                
-                                <!-- Action Buttons -->
-                                <div class="flex gap-3 mt-6 justify-end">
-                                    <button class="ai-settings-btn ai-settings-btn-secondary" onclick="aiAgentSettings.previewVariables()">
-                                        <i class="fas fa-eye"></i>
-                                        Preview Changes
-                                    </button>
-                                    <button class="ai-settings-btn ai-settings-btn-primary" onclick="aiAgentSettings.saveVariables()">
-                                        <i class="fas fa-save"></i>
-                                        Save Variables
-                                    </button>
                                 </div>
                                 
                             </div>
