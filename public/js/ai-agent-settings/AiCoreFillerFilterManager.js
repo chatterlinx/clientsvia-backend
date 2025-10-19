@@ -83,9 +83,9 @@ class AiCoreFillerFilterManager {
     render() {
         console.log('🔇 [FILLER FILTER] Checkpoint 11: Starting render - Current tab:', this.currentTab);
         
-        const container = document.getElementById('ai-settings-filler-filter-content');
+        const container = document.getElementById('ai-settings-aicore-filler-filter-content');
         if (!container) {
-            console.error('❌ [FILLER FILTER] Container not found!');
+            console.error('❌ [FILLER FILTER] Container not found! Expected: ai-settings-aicore-filler-filter-content');
             return;
         }
         
