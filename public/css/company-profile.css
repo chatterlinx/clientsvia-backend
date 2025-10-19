@@ -422,6 +422,19 @@ main {
     max-width: 1400px !important;
     margin-left: auto !important;
     margin-right: auto !important;
+    width: 100% !important;
+}
+
+/* Override Tailwind's responsive padding that shrinks content */
+main.flex-grow {
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+}
+
+/* Ensure the white card wrapper inside main takes full available width */
+main > div.bg-white {
+    width: 100% !important;
+    max-width: 100% !important;
 }
 
 
