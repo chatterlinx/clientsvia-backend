@@ -1346,71 +1346,12 @@
                             <!-- ========================================== -->
                             <div id="ai-settings-filler-words-content" class="ai-settings-subtab-content">
                                 
-                                <div class="mb-6 bg-blue-50 border-2 border-blue-400 rounded-lg p-4">
-                                    <div class="flex items-start gap-3">
-                                        <i class="fas fa-magic text-purple-600 text-xl mt-1"></i>
-                                        <div>
-                                            <h4 class="font-bold text-purple-900 mb-1">How Filler Words Work</h4>
-                                            <p class="text-sm text-purple-800">
-                                                Filler words like "um", "uh", "like" are automatically removed from caller speech 
-                                                before AI matching. This makes your AI smarter and more accurate! You inherit 
-                                                words from your template and can add custom ones.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Search Bar -->
-                                <div class="mb-6 flex gap-3">
-                                    <div class="flex-1 relative">
-                                        <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                                        <input 
-                                            type="text" 
-                                            id="filler-search" 
-                                            placeholder="Search filler words..." 
-                                            class="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
-                                        />
-                                    </div>
-                                    <button class="ai-settings-btn ai-settings-btn-success" onclick="aiAgentSettings.showAddFillerWordModal()">
-                                        <i class="fas fa-plus"></i>
-                                        Add Word
-                                    </button>
-                                </div>
-                                
-                                <!-- Stats -->
-                                <div class="grid grid-cols-3 gap-4 mb-6">
-                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-4 text-center">
-                                        <div class="text-3xl font-bold text-blue-600" id="filler-inherited-count">0</div>
-                                        <div class="text-sm text-gray-600 mt-1">Inherited from Template</div>
-                                    </div>
-                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-4 text-center">
-                                        <div class="text-3xl font-bold text-green-600" id="filler-custom-count">0</div>
-                                        <div class="text-sm text-gray-600 mt-1">Custom Added</div>
-                                    </div>
-                                    <div class="bg-white rounded-lg border-2 border-gray-200 p-4 text-center">
-                                        <div class="text-3xl font-bold text-purple-600" id="filler-total-count">0</div>
-                                        <div class="text-sm text-gray-600 mt-1">Total Active</div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Filler Words Display -->
+                                <!-- Filler Words Container - Rendered by FillerWordsManager.js -->
                                 <div id="filler-words-container">
                                     <div class="text-center py-12 text-gray-400">
                                         <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
                                         <p>Loading filler words...</p>
                                     </div>
-                                </div>
-                                
-                                <!-- Action Buttons -->
-                                <div class="flex gap-3 mt-6 justify-end">
-                                    <button class="ai-settings-btn ai-settings-btn-secondary" onclick="aiAgentSettings.exportFillerWords()">
-                                        <i class="fas fa-download"></i>
-                                        Export
-                                    </button>
-                                    <button class="ai-settings-btn ai-settings-btn-danger" onclick="aiAgentSettings.resetFillerWords()">
-                                        <i class="fas fa-undo"></i>
-                                        Reset to Defaults
-                                    </button>
                                 </div>
                                 
                             </div>
@@ -1434,40 +1375,7 @@
                             <!-- ========================================== -->
                             <div id="ai-settings-scenarios-content" class="ai-settings-subtab-content">
                                 
-                                <div class="mb-6 bg-blue-50 border-2 border-blue-400 rounded-lg p-4">
-                                    <div class="flex items-start gap-3">
-                                        <i class="fas fa-robot text-green-600 text-xl mt-1"></i>
-                                        <div>
-                                            <h4 class="font-bold text-green-900 mb-1">Your AI's Conversation Library</h4>
-                                            <p class="text-sm text-green-800">
-                                                These scenarios define how your AI responds in different situations. 
-                                                Each scenario has triggers (what caller says), replies (AI's response), 
-                                                and actions (what happens next).
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Search & Filters -->
-                                <div class="ai-settings-scenarios-search">
-                                    <input 
-                                        type="text" 
-                                        id="scenarios-search"
-                                    />
-                                    <select id="scenarios-category-filter">
-                                        <option value="all">All Categories</option>
-                                        <option value="universal">Universal (103)</option>
-                                        <option value="hvac">HVAC (215)</option>
-                                        <option value="plumbing">Plumbing (206)</option>
-                                    </select>
-                                    <select id="scenarios-status-filter">
-                                        <option value="active">Active</option>
-                                        <option value="draft">Draft</option>
-                                        <option value="disabled">Disabled</option>
-                                    </select>
-                                </div>
-                                
-                                <!-- Scenarios will be dynamically loaded here -->
+                                <!-- Scenarios Container - Rendered by ScenariosManager.js -->
                                 <div id="scenarios-container">
                                     <div class="text-center py-12 text-gray-400">
                                         <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
@@ -1478,12 +1386,7 @@
                             </div>
                             
                             <!-- ========================================== -->
-                            <!-- SUB-TAB 4: TEMPLATE HUB (NEW) -->
-                            <!-- ========================================== -->
-                            
-                            
-                            <!-- ========================================== -->
-                            <!-- SUB-TAB 5: ANALYTICS -->
+                            <!-- SUB-TAB 4: ANALYTICS -->
                             <!-- ========================================== -->
                             <div id="ai-settings-analytics-content" class="ai-settings-subtab-content">
                                 
