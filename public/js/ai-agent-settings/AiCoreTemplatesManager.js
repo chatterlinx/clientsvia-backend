@@ -1,23 +1,76 @@
 /**
- * ============================================================================
- * AICORE TEMPLATES MANAGER - CARD GALLERY DESIGN
- * ============================================================================
+ * ╔════════════════════════════════════════════════════════════════════════════╗
+ * ║                      AICORE TEMPLATES TAB - MANAGER                        ║
+ * ║                AI Agent Settings > AiCore Templates Sub-Tab                ║
+ * ╚════════════════════════════════════════════════════════════════════════════╝
  * 
- * PURPOSE: Manage Global AI Brain template activation for this company
+ * FILE: public/js/ai-agent-settings/AiCoreTemplatesManager.js
+ * PARENT: AIAgentSettingsManager.js
+ * LOADED IN: public/company-profile.html (line ~1569)
  * 
- * ARCHITECTURE: Reference-based system (NO cloning)
- * - Templates live in Global AI Brain (shared across all companies)
- * - Companies "activate" templates (store references only)
- * - Multiple templates can be activated (stacking support)
- * - Variable auto-scan triggers on activation/removal
+ * ┌─ PURPOSE ──────────────────────────────────────────────────────────────────┐
+ * │ Manage Global AI Brain template activation/stacking for this company      │
+ * │ Templates provide industry-specific Q&A scenarios (HVAC, Dental, etc.)    │
+ * └────────────────────────────────────────────────────────────────────────────┘
  * 
- * DESIGN: Modern card-based gallery
- * - Top Section: Active Templates (loaded by this company)
- * - Bottom Section: Available Templates (from Global AI Brain)
- * - One-click activation with visual feedback
- * - Priority management for template stacking
+ * ┌─ ARCHITECTURE ─────────────────────────────────────────────────────────────┐
+ * │ REFERENCE-BASED SYSTEM (NO Cloning!)                                      │
+ * │ - Templates live in Global AI Brain (shared across ALL companies)         │
+ * │ - Companies "activate" templates → stores REFERENCES only                 │
+ * │ - Multiple templates can be active (stacking with priority)               │
+ * │ - Variables auto-scan triggers on activation/removal                      │
+ * │ - Cache invalidation: Redis cleared on template changes                   │
+ * └────────────────────────────────────────────────────────────────────────────┘
  * 
- * PERFORMANCE: Sub-500ms operations, Redis cache-aware
+ * ┌─ UI STRUCTURE ─────────────────────────────────────────────────────────────┐
+ * │ 1. ACTIVE TEMPLATES (Top Section)                                         │
+ * │    - Large cards with green border                                        │
+ * │    - Shows: Priority badge, stats (categories/scenarios/triggers)         │
+ * │    - "Remove Template" button (red)                                       │
+ * │    - Empty state: "No Templates Active Yet" with gray illustration        │
+ * │                                                                            │
+ * │ 2. AVAILABLE TEMPLATES (Bottom Section)                                   │
+ * │    - Compact horizontal banners (list style)                              │
+ * │    - Shows: Icon, Name, Industry, Version, Inline stats, Blue button     │
+ * │    - "Activate" button (blue gradient) on right side                      │
+ * │    - Filters out already-active templates                                 │
+ * └────────────────────────────────────────────────────────────────────────────┘
+ * 
+ * ┌─ KEY METHODS ──────────────────────────────────────────────────────────────┐
+ * │ load()                        - Fetch active + available templates        │
+ * │ render()                      - Main render (Active + Available sections) │
+ * │ renderActiveTemplatesSection() - Top section with active templates        │
+ * │ renderActiveTemplateCard()    - Big green card for active template        │
+ * │ renderAvailableTemplatesSection() - Bottom section gallery                │
+ * │ renderAvailableTemplateCard() - Compact banner with Activate button       │
+ * │ activateTemplate()            - POST to add template reference            │
+ * │ removeTemplate()              - DELETE to remove template reference       │
+ * └────────────────────────────────────────────────────────────────────────────┘
+ * 
+ * ┌─ API ENDPOINTS ────────────────────────────────────────────────────────────┐
+ * │ GET    /api/company/:companyId/configuration/templates (Active templates) │
+ * │ POST   /api/company/:companyId/configuration/templates (Activate)         │
+ * │ DELETE /api/company/:companyId/configuration/templates/:templateId        │
+ * │ GET    /api/admin/global-instant-responses/published (Available list)     │
+ * └────────────────────────────────────────────────────────────────────────────┘
+ * 
+ * ⚠️  CRITICAL DEPENDENCIES:
+ * - Parent: AIAgentSettingsManager.js
+ * - Backend: routes/company/v2companyConfiguration.js (templates CRUD)
+ * - Backend: routes/admin/globalInstantResponses.js (published templates)
+ * - Model: models/GlobalInstantResponseTemplate.js (template schema)
+ * 
+ * 📝 NOTES FOR FUTURE:
+ * - Activation triggers variable auto-scan (VariablesManager.scanPlaceholders)
+ * - Stats (categories, scenarios, triggers) come from backend calculation
+ * - Priority determines knowledge routing order (lower = checked first)
+ * - Cache keys cleared: company:${companyId}, company-phone:${phoneNumber}
+ * - Uses inline CSS for button colors (Tailwind classes weren't working)
+ * 
+ * 🔒 DO NOT:
+ * - Change to "cloning" model (breaks shared template updates)
+ * - Remove cache invalidation calls (causes stale data)
+ * - Modify activation flow without updating Variables tab trigger
  * 
  * ============================================================================
  */
@@ -37,6 +90,11 @@ class AiCoreTemplatesManager {
     /* ============================================================================
        DATA LOADING METHODS
        ============================================================================ */
+    
+    /* ═══════════════════════════════════════════════════════════════════════
+     * SECTION 1: DATA LOADING
+     * Fetch active templates (company references) + available (Global AI Brain)
+     * ═══════════════════════════════════════════════════════════════════════ */
     
     /**
      * Load all data (active + available templates)
@@ -138,9 +196,10 @@ class AiCoreTemplatesManager {
         }
     }
     
-    /* ============================================================================
-       RENDERING METHODS
-       ============================================================================ */
+    /* ═══════════════════════════════════════════════════════════════════════
+     * SECTION 2: UI RENDERING
+     * Card gallery: Active templates (top) + Available templates (bottom)
+     * ═══════════════════════════════════════════════════════════════════════ */
     
     /**
      * Main render method - orchestrates the entire UI
@@ -441,9 +500,11 @@ class AiCoreTemplatesManager {
         `;
     }
     
-    /* ============================================================================
-       ACTION METHODS
-       ============================================================================ */
+    /* ═══════════════════════════════════════════════════════════════════════
+     * SECTION 3: TEMPLATE ACTIONS
+     * Activate (add reference) and Remove (delete reference) operations
+     * ⚠️  CRITICAL: These trigger variable auto-scan + cache invalidation
+     * ═══════════════════════════════════════════════════════════════════════ */
     
     /**
      * Activate a template for this company

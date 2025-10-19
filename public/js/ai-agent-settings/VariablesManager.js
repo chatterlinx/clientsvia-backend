@@ -1,17 +1,68 @@
 /**
- * ============================================================================
- * VARIABLES MANAGER - COMPANY-SPECIFIC DATA CONFIGURATION
- * ============================================================================
+ * ╔════════════════════════════════════════════════════════════════════════════╗
+ * ║                         VARIABLES TAB - MANAGER                            ║
+ * ║                    AI Agent Settings > Variables Sub-Tab                   ║
+ * ╚════════════════════════════════════════════════════════════════════════════╝
  * 
- * PURPOSE: Manage company-specific variables used across all AI scenarios
- * EXAMPLES: {companyName}, {hvacServiceCall}, {dispatcherPhone}, etc.
+ * FILE: public/js/ai-agent-settings/VariablesManager.js
+ * PARENT: AIAgentSettingsManager.js
+ * LOADED IN: public/company-profile.html (line ~1566)
  * 
- * FEATURES:
- * - Visual validation (required fields highlighted)
- * - Usage tracking (shows where each variable is used)
- * - Preview system (see how replies will look with your data)
- * - Auto-save drafts
- * - Template inheritance
+ * ┌─ PURPOSE ──────────────────────────────────────────────────────────────────┐
+ * │ Manages company-specific variables used across all AI scenarios           │
+ * │ Variables like {companyName}, {hvacServiceCall} are auto-replaced         │
+ * │ in AI responses during live calls.                                         │
+ * └────────────────────────────────────────────────────────────────────────────┘
+ * 
+ * ┌─ UI STRUCTURE ─────────────────────────────────────────────────────────────┐
+ * │ 1. Hero Header (Purple gradient with progress bar)                        │
+ * │ 2. Pro Tip Banner (Blue info box)                                         │
+ * │ 3. Category Cards (Color-coded: Blue, Green, Purple, Orange, etc.)        │
+ * │    - Company Info (Blue) 🏢                                               │
+ * │    - Pricing (Green) 💰                                                   │
+ * │    - Contact (Purple) 📞                                                  │
+ * │    - Scheduling (Orange) 📅                                               │
+ * │    - Services (Indigo) 🔧                                                 │
+ * │    - General (Gray) 📝                                                    │
+ * │ 4. Variable Cards (Gray cards with status badges and Preview buttons)     │
+ * └────────────────────────────────────────────────────────────────────────────┘
+ * 
+ * ┌─ KEY METHODS ──────────────────────────────────────────────────────────────┐
+ * │ load()              - Fetch variables from API                             │
+ * │ render()            - Main render method (Hero + Categories)               │
+ * │ renderEmpty()       - Empty state when no template active                  │
+ * │ renderCategory()    - Color-coded category cards                           │
+ * │ renderVariableRow() - Individual variable inline cards                     │
+ * │ scanPlaceholders()  - Auto-detect new variables from templates             │
+ * │ save()              - Preview & save flow with validation                  │
+ * │ validateInput()     - Real-time validation (email, phone, URL, etc.)       │
+ * │ previewVariable()   - Show where variable is used in scenarios             │
+ * └────────────────────────────────────────────────────────────────────────────┘
+ * 
+ * ┌─ API ENDPOINTS ────────────────────────────────────────────────────────────┐
+ * │ GET    /api/company/:companyId/configuration/variables                     │
+ * │ POST   /api/company/:companyId/configuration/variables/scan                │
+ * │ POST   /api/company/:companyId/configuration/variables/preview             │
+ * │ POST   /api/company/:companyId/configuration/variables/apply               │
+ * │ GET    /api/company/:companyId/configuration/variables/:key/usage          │
+ * └────────────────────────────────────────────────────────────────────────────┘
+ * 
+ * ⚠️  CRITICAL DEPENDENCIES:
+ * - Parent: AIAgentSettingsManager.js (provides companyId, showError, etc.)
+ * - Backend: routes/company/v2companyConfiguration.js (variables endpoints)
+ * - CSS: public/css/ai-agent-settings.css (modern card styles)
+ * 
+ * 📝 NOTES FOR FUTURE:
+ * - All validation logic is client-side AND server-side mirrored
+ * - Preview system uses tokens with 10-minute expiration
+ * - Scan detects new variables from ALL active Global AI Brain templates
+ * - Category colors are hard-coded in renderCategory() method
+ * - Usage counts are auto-updated when templates change
+ * 
+ * 🔒 DO NOT:
+ * - Remove validation logic (backend depends on it matching)
+ * - Change API endpoints without updating backend routes
+ * - Modify preview token flow (idempotency key prevents double-apply)
  * 
  * ============================================================================
  */
@@ -26,6 +77,10 @@ class VariablesManager {
         
         console.log('💼 [VARIABLES] Initialized');
     }
+    
+    /* ═══════════════════════════════════════════════════════════════════════
+     * SECTION 1: DATA LOADING
+     * ═══════════════════════════════════════════════════════════════════════ */
     
     /**
      * Load variables from API
@@ -59,13 +114,15 @@ class VariablesManager {
         }
     }
     
+    /* ═══════════════════════════════════════════════════════════════════════
+     * SECTION 2: PLACEHOLDER SCANNING
+     * Purpose: Auto-detect variables from active templates
+     * Triggers: Manual (Scan button) or Auto (template activation/removal)
+     * ═══════════════════════════════════════════════════════════════════════ */
+    
     /**
-     * ========================================================================
-     * SCAN PLACEHOLDERS - AUTO-DETECT VARIABLES FROM TEMPLATES
-     * ========================================================================
-     * Scans all cloned templates for placeholders ({}, [], all variants)
+     * Scan all active templates for placeholders ({variable}, [variable], etc.)
      * Auto-detects new variables, updates usage counts, generates alerts
-     * ========================================================================
      */
     async scanPlaceholders() {
         console.log('🔍 [VARIABLES] Starting placeholder scan...');
@@ -233,8 +290,13 @@ class VariablesManager {
         document.body.appendChild(modal);
     }
     
+    /* ═══════════════════════════════════════════════════════════════════════
+     * SECTION 3: UI RENDERING
+     * Modern card-based design with hero header, progress tracking, categories
+     * ═══════════════════════════════════════════════════════════════════════ */
+    
     /**
-     * Render variables UI (MODERN HERO HEADER + CARDS)
+     * Main render method: Hero Header + Pro Tip + Category Cards
      */
     render() {
         const container = document.getElementById('variables-container');
@@ -511,8 +573,13 @@ class VariablesManager {
         `;
     }
     
+    /* ═══════════════════════════════════════════════════════════════════════
+     * SECTION 4: EVENT HANDLING & VALIDATION
+     * Real-time input validation, change detection, error display
+     * ═══════════════════════════════════════════════════════════════════════ */
+    
     /**
-     * Attach event listeners to inputs
+     * Attach event listeners to all variable inputs
      */
     attachEventListeners() {
         const inputs = document.querySelectorAll('.ai-settings-variable-input');
@@ -728,8 +795,13 @@ class VariablesManager {
         }
     }
     
+    /* ═══════════════════════════════════════════════════════════════════════
+     * SECTION 5: PREVIEW & SAVE SYSTEM
+     * Before/after comparison, 10-minute token expiration, idempotency keys
+     * ═══════════════════════════════════════════════════════════════════════ */
+    
     /**
-     * Preview where a variable is used
+     * Preview where a variable is used across scenarios
      */
     async previewVariable(key) {
         console.log(`💼 [VARIABLES] Previewing: ${key}`);
