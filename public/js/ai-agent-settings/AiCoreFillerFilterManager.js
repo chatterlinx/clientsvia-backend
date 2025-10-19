@@ -113,11 +113,14 @@ class AiCoreFillerFilterManager {
         `;
         
         console.log('✅ [FILLER FILTER] Checkpoint 13: Tab navigation rendered');
+        console.log('🔇 [FILLER FILTER] Checkpoint 13.5: Container innerHTML length:', container.innerHTML.length);
+        console.log('🔇 [FILLER FILTER] Checkpoint 13.6: Container visible?', container.style.display !== 'none');
         
         // Render current tab content
         this.renderTabContent();
         
         console.log('✅ [FILLER FILTER] Checkpoint 14: UI rendered successfully');
+        console.log('🔇 [FILLER FILTER] Checkpoint 14.5: Final innerHTML length:', container.innerHTML.length);
     }
 
     /**
