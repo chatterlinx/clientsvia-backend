@@ -1,422 +1,356 @@
 /**
- * ╔════════════════════════════════════════════════════════════════════════════╗
- * ║                         VARIABLES TAB - MANAGER                            ║
- * ║                    AI Agent Settings > Variables Sub-Tab                   ║
- * ╚════════════════════════════════════════════════════════════════════════════╝
+ * ═══════════════════════════════════════════════════════════════════════════
+ * VARIABLES MANAGER - MISSION CONTROL CENTER
+ * ═══════════════════════════════════════════════════════════════════════════
  * 
- * FILE: public/js/ai-agent-settings/VariablesManager.js
- * PARENT: AIAgentSettingsManager.js
- * LOADED IN: public/company-profile.html (line ~1566)
+ * PURPOSE: Enterprise-grade variable management with scan control & health monitoring
  * 
- * ┌─ PURPOSE ──────────────────────────────────────────────────────────────────┐
- * │ Manages company-specific variables used across all AI scenarios           │
- * │ Variables like {companyName}, {hvacServiceCall} are auto-replaced         │
- * │ in AI responses during live calls.                                         │
- * └────────────────────────────────────────────────────────────────────────────┘
+ * ARCHITECTURE:
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ TAB 1: Scan & Status                                                    │
+ * │  • Health check (system status, last scan time)                         │
+ * │  • Force scan button with live progress                                 │
+ * │  • Scan results (what was found, match counts)                          │
+ * │  • Category breakdown with completion %                                 │
+ * │  • Alerts (missing required variables)                                  │
+ * │                                                                          │
+ * │ TAB 2: Variables Table                                                  │
+ * │  • Clean table (one row per unique variable)                            │
+ * │  • Inline editing with auto-save                                        │
+ * │  • Status badges (OK, Required, Missing)                                │
+ * │  • Match count (usage across scenarios)                                 │
+ * └─────────────────────────────────────────────────────────────────────────┘
  * 
- * ┌─ UI STRUCTURE ─────────────────────────────────────────────────────────────┐
- * │ 1. Hero Header (Purple gradient with progress bar)                        │
- * │ 2. Pro Tip Banner (Blue info box)                                         │
- * │ 3. Category Cards (Color-coded: Blue, Green, Purple, Orange, etc.)        │
- * │    - Company Info (Blue) 🏢                                               │
- * │    - Pricing (Green) 💰                                                   │
- * │    - Contact (Purple) 📞                                                  │
- * │    - Scheduling (Orange) 📅                                               │
- * │    - Services (Indigo) 🔧                                                 │
- * │    - General (Gray) 📝                                                    │
- * │ 4. Variable Cards (Gray cards with status badges and Preview buttons)     │
- * └────────────────────────────────────────────────────────────────────────────┘
- * 
- * ┌─ KEY METHODS ──────────────────────────────────────────────────────────────┐
- * │ load()              - Fetch variables from API                             │
- * │ render()            - Main render method (Hero + Categories)               │
- * │ renderEmpty()       - Empty state when no template active                  │
- * │ renderCategory()    - Color-coded category cards                           │
- * │ renderVariableRow() - Individual variable inline cards                     │
- * │ scanPlaceholders()  - Auto-detect new variables from templates             │
- * │ save()              - Preview & save flow with validation                  │
- * │ validateInput()     - Real-time validation (email, phone, URL, etc.)       │
- * │ previewVariable()   - Show where variable is used in scenarios             │
- * └────────────────────────────────────────────────────────────────────────────┘
- * 
- * ┌─ API ENDPOINTS ────────────────────────────────────────────────────────────┐
- * │ GET    /api/company/:companyId/configuration/variables                     │
- * │ POST   /api/company/:companyId/configuration/variables/scan                │
- * │ POST   /api/company/:companyId/configuration/variables/preview             │
- * │ POST   /api/company/:companyId/configuration/variables/apply               │
- * │ GET    /api/company/:companyId/configuration/variables/:key/usage          │
- * └────────────────────────────────────────────────────────────────────────────┘
- * 
- * ⚠️  CRITICAL DEPENDENCIES:
- * - Parent: AIAgentSettingsManager.js (provides companyId, showError, etc.)
- * - Backend: routes/company/v2companyConfiguration.js (variables endpoints)
- * - CSS: public/css/ai-agent-settings.css (modern card styles)
- * 
- * 📝 NOTES FOR FUTURE:
- * - All validation logic is client-side AND server-side mirrored
- * - Preview system uses tokens with 10-minute expiration
- * - Scan detects new variables from ALL active Global AI Brain templates
- * - Category colors are hard-coded in renderCategory() method
- * - Usage counts are auto-updated when templates change
- * 
- * 🔒 DO NOT:
- * - Remove validation logic (backend depends on it matching)
- * - Change API endpoints without updating backend routes
- * - Modify preview token flow (idempotency key prevents double-apply)
- * 
- * ============================================================================
+ * CHECKPOINTS: Every critical operation logs checkpoint for debugging
+ * ═══════════════════════════════════════════════════════════════════════════
  */
 
 class VariablesManager {
-    constructor(parentManager) {
-        this.parent = parentManager;
-        this.companyId = parentManager.companyId;
-        this.variables = {};
-        this.variableDefinitions = []; // From template
-        this.isDirty = false;
+    constructor(parent) {
+        console.log('💼 [VARIABLES] Checkpoint 1: Constructor called');
+        this.parent = parent;
+        this.companyId = parent.companyId;
+        this.currentTab = 'scan-status'; // Default to Scan & Status tab
         
-        console.log('💼 [VARIABLES] Initialized');
+        // Data storage
+        this.variableDefinitions = [];
+        this.variables = {};
+        this.scanStatus = null;
+        this.lastScanResult = null;
+        this.isScanning = false;
+        
+        console.log('✅ [VARIABLES] Checkpoint 2: Initialized for company:', this.companyId);
     }
     
-    /* ═══════════════════════════════════════════════════════════════════════
-     * SECTION 1: DATA LOADING
-     * ═══════════════════════════════════════════════════════════════════════ */
-    
     /**
-     * Load variables from API
+     * Load variables data from API
      */
     async load() {
-        console.log('💼 [VARIABLES] Loading...');
+        console.log('💼 [VARIABLES] Checkpoint 3: Loading variables...');
         
         try {
+            const token = localStorage.getItem('adminToken');
+            if (!token) {
+                console.error('❌ [VARIABLES] Checkpoint 4: No auth token found');
+                throw new Error('Authentication required');
+            }
+            console.log('✅ [VARIABLES] Checkpoint 4: Auth token present');
+            
+            console.log('💼 [VARIABLES] Checkpoint 5: Fetching from API...');
             const response = await fetch(`/api/company/${this.companyId}/configuration/variables`, {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-                }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
+            
+            console.log('✅ [VARIABLES] Checkpoint 6: Response received - Status:', response.status);
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
             
+            console.log('💼 [VARIABLES] Checkpoint 7: Parsing JSON...');
             const data = await response.json();
             
-            this.variables = data.variables || {};
-            this.variableDefinitions = data.definitions || [];
-            
-            console.log('✅ [VARIABLES] Loaded:', this.variables);
-            
-            this.render();
-            
-        } catch (error) {
-            console.error('❌ [VARIABLES] Failed to load:', error);
-            this.renderEmpty();
-        }
-    }
-    
-    /* ═══════════════════════════════════════════════════════════════════════
-     * SECTION 2: PLACEHOLDER SCANNING
-     * Purpose: Auto-detect variables from active templates
-     * Triggers: Manual (Scan button) or Auto (template activation/removal)
-     * ═══════════════════════════════════════════════════════════════════════ */
-    
-    /**
-     * Scan all active templates for placeholders ({variable}, [variable], etc.)
-     * Auto-detects new variables, updates usage counts, generates alerts
-     */
-    async scanPlaceholders() {
-        console.log('🔍 [VARIABLES] Starting placeholder scan...');
-        
-        try {
-            this.parent.showLoadingState();
-            
-            // Call scan API
-            const response = await fetch(`/api/company/${this.companyId}/configuration/variables/scan`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-                }
+            console.log('✅ [VARIABLES] Checkpoint 8: Data parsed:', {
+                variableDefinitions: data.variableDefinitions?.length || 0,
+                variables: Object.keys(data.variables || {}).length
             });
             
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || `HTTP ${response.status}`);
-            }
+            this.variableDefinitions = data.variableDefinitions || [];
+            this.variables = data.variables || {};
+            this.scanStatus = data.scanStatus || null;
             
-            const scanResult = await response.json();
+            console.log('💼 [VARIABLES] Checkpoint 9: Rendering UI...');
+            this.render();
             
-            console.log('✅ [VARIABLES] Scan complete:', scanResult);
-            
-            // Show results modal
-            this.showScanResultsModal(scanResult);
-            
-            // Reload variables to show updates
-            await this.load();
+            console.log('✅ [VARIABLES] Checkpoint 10: Load complete');
             
         } catch (error) {
-            console.error('❌ [VARIABLES] Scan failed:', error);
-            this.parent.showError(`Scan failed: ${error.message}`);
-        } finally {
-            this.parent.hideLoadingState();
+            console.error('❌ [VARIABLES] Failed at load:', error);
+            this.renderError('Failed to load variables. Please refresh the page.');
         }
     }
     
     /**
-     * Show scan results modal
-     */
-    showScanResultsModal(scanResult) {
-        const modal = document.createElement('div');
-        modal.id = 'scan-results-modal';
-        modal.className = 'ai-settings-modal-overlay';
-        
-        // Determine alert status
-        const alertStatus = scanResult.hasAlert 
-            ? `<div class="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4 mb-6">
-                   <div class="flex items-center">
-                       <i class="fas fa-exclamation-triangle text-yellow-600 text-2xl mr-3"></i>
-                       <div>
-                           <div class="font-bold text-yellow-900">Missing Required Variables</div>
-                           <div class="text-yellow-800">${scanResult.missingRequired} required variable(s) need values before going live.</div>
-                       </div>
-                   </div>
-               </div>`
-            : `<div class="bg-green-50 border-2 border-green-400 rounded-lg p-4 mb-6">
-                   <div class="flex items-center">
-                       <i class="fas fa-check-circle text-green-600 text-2xl mr-3"></i>
-                       <div class="font-bold text-green-900">All Set! No missing required variables.</div>
-                   </div>
-               </div>`;
-        
-        modal.innerHTML = `
-            <div class="ai-settings-modal max-w-4xl">
-                <div class="ai-settings-modal-header">
-                    <h2><i class="fas fa-search mr-2"></i>Placeholder Scan Results</h2>
-                    <button class="ai-settings-modal-close" onclick="this.closest('.ai-settings-modal-overlay').remove()">×</button>
-                </div>
-                
-                <div class="ai-settings-modal-body">
-                    <!-- Summary -->
-                    <div class="grid grid-cols-3 gap-4 mb-6">
-                        <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 text-center">
-                            <div class="text-3xl font-bold text-blue-600">${scanResult.newPlaceholders || 0}</div>
-                            <div class="text-sm text-blue-800 font-medium">New Placeholders</div>
-                        </div>
-                        <div class="bg-purple-50 border-2 border-purple-200 rounded-lg p-4 text-center">
-                            <div class="text-3xl font-bold text-purple-600">${scanResult.existingPlaceholders || 0}</div>
-                            <div class="text-sm text-purple-800 font-medium">Existing Placeholders</div>
-                        </div>
-                        <div class="bg-orange-50 border-2 border-orange-200 rounded-lg p-4 text-center">
-                            <div class="text-3xl font-bold text-orange-600">${scanResult.updatedPlaceholders || 0}</div>
-                            <div class="text-sm text-orange-800 font-medium">Updated Counts</div>
-                        </div>
-                    </div>
-                    
-                    <!-- Alert Status -->
-                    ${alertStatus}
-                    
-                    <!-- New Placeholders -->
-                    ${scanResult.details?.newItems && scanResult.details.newItems.length > 0 ? `
-                        <div class="mb-6">
-                            <h3 class="text-lg font-bold text-gray-900 mb-3">
-                                <i class="fas fa-plus-circle text-green-600 mr-2"></i>
-                                New Placeholders Detected (${scanResult.details.newItems.length})
-                            </h3>
-                            <div class="space-y-2">
-                                ${scanResult.details.newItems.map(item => `
-                                    <div class="bg-green-50 border-l-4 border-green-500 p-3 rounded">
-                                        <div class="flex items-center justify-between">
-                                            <div>
-                                                <code class="bg-green-100 text-green-800 px-2 py-1 rounded font-mono text-sm">{${item.key}}</code>
-                                                <span class="ml-2 text-gray-700">${item.label || item.key}</span>
-                                                ${item.required ? '<span class="ml-2 text-red-600 font-bold">*</span>' : ''}
-                                            </div>
-                                            <div class="flex items-center space-x-3">
-                                                <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">${item.type || 'text'}</span>
-                                                <span class="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">${item.category || 'General'}</span>
-                                                <span class="text-xs text-gray-500">${item.usageCount || 0} uses</span>
-                                            </div>
-                                        </div>
-                                        ${item.description ? `<div class="text-xs text-gray-600 mt-1">${item.description}</div>` : ''}
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-                    
-                    <!-- Updated Placeholders -->
-                    ${scanResult.details?.updatedItems && scanResult.details.updatedItems.length > 0 ? `
-                        <div class="mb-6">
-                            <h3 class="text-lg font-bold text-gray-900 mb-3">
-                                <i class="fas fa-sync-alt text-orange-600 mr-2"></i>
-                                Updated Usage Counts (${scanResult.details.updatedItems.length})
-                            </h3>
-                            <div class="space-y-2">
-                                ${scanResult.details.updatedItems.map(item => `
-                                    <div class="bg-orange-50 border-l-4 border-orange-500 p-3 rounded">
-                                        <div class="flex items-center justify-between">
-                                            <code class="bg-orange-100 text-orange-800 px-2 py-1 rounded font-mono text-sm">{${item.key}}</code>
-                                            <div class="text-sm text-gray-700">
-                                                <span class="line-through text-gray-400">${item.oldCount} uses</span>
-                                                <i class="fas fa-arrow-right mx-2 text-gray-400"></i>
-                                                <span class="font-bold text-orange-700">${item.newCount} uses</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-                    
-                    <!-- No Changes -->
-                    ${(!scanResult.details?.newItems || scanResult.details.newItems.length === 0) && 
-                      (!scanResult.details?.updatedItems || scanResult.details.updatedItems.length === 0) ? `
-                        <div class="text-center py-8">
-                            <i class="fas fa-check-circle text-6xl text-gray-300 mb-4"></i>
-                            <div class="text-lg font-bold text-gray-700">No Changes Detected</div>
-                            <div class="text-gray-500">All placeholders are up to date.</div>
-                        </div>
-                    ` : ''}
-                </div>
-                
-                <div class="ai-settings-modal-footer">
-                    <button class="ai-settings-btn ai-settings-btn-primary" onclick="this.closest('.ai-settings-modal-overlay').remove()">
-                        <i class="fas fa-check mr-2"></i>
-                        Got It
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(modal);
-    }
-    
-    /* ═══════════════════════════════════════════════════════════════════════
-     * SECTION 3: UI RENDERING
-     * Modern card-based design with hero header, progress tracking, categories
-     * ═══════════════════════════════════════════════════════════════════════ */
-    
-    /**
-     * Main render method: Hero Header + Pro Tip + Category Cards
+     * Main render - switches between tabs
      */
     render() {
-        console.log('🎨 [VARIABLES RENDER] Starting render...');
+        console.log('🎨 [VARIABLES] Checkpoint 11: Starting render - Current tab:', this.currentTab);
+        
         const container = document.getElementById('variables-container');
         if (!container) {
-            console.error('❌ [VARIABLES RENDER] Container not found!');
+            console.error('❌ [VARIABLES] Checkpoint 12: Container not found!');
             return;
         }
+        console.log('✅ [VARIABLES] Checkpoint 12: Container found');
         
-        console.log('🎨 [VARIABLES RENDER] Variable definitions count:', this.variableDefinitions.length);
+        // Render tab navigation
+        const html = `
+            <!-- Tab Navigation -->
+            <div class="flex gap-4 mb-6 border-b-2 border-gray-200">
+                <button 
+                    class="px-6 py-3 font-bold transition-all ${this.currentTab === 'scan-status' ? 'border-b-4 border-purple-600 text-purple-600' : 'text-gray-600 hover:text-purple-600'}"
+                    onclick="variablesManager.switchTab('scan-status')"
+                >
+                    <i class="fas fa-radar mr-2"></i>
+                    Scan & Status
+                </button>
+                <button 
+                    class="px-6 py-3 font-bold transition-all ${this.currentTab === 'variables' ? 'border-b-4 border-purple-600 text-purple-600' : 'text-gray-600 hover:text-purple-600'}"
+                    onclick="variablesManager.switchTab('variables')"
+                >
+                    <i class="fas fa-table mr-2"></i>
+                    Variables
+                </button>
+            </div>
+            
+            <!-- Tab Content -->
+            <div id="variables-tab-content"></div>
+        `;
         
-        if (this.variableDefinitions.length === 0) {
-            console.log('🎨 [VARIABLES RENDER] Calling renderEmpty()...');
-            this.renderEmpty();
+        container.innerHTML = html;
+        console.log('✅ [VARIABLES] Checkpoint 13: Tab navigation rendered');
+        
+        // Render active tab content
+        this.renderTabContent();
+    }
+    
+    /**
+     * Switch between tabs
+     */
+    switchTab(tabName) {
+        console.log('🔄 [VARIABLES] Checkpoint 14: Switching to tab:', tabName);
+        this.currentTab = tabName;
+        this.render();
+    }
+    
+    /**
+     * Render active tab content
+     */
+    renderTabContent() {
+        console.log('🎨 [VARIABLES] Checkpoint 15: Rendering tab content:', this.currentTab);
+        
+        const contentContainer = document.getElementById('variables-tab-content');
+        if (!contentContainer) {
+            console.error('❌ [VARIABLES] Checkpoint 16: Tab content container not found');
             return;
         }
+        console.log('✅ [VARIABLES] Checkpoint 16: Tab content container found');
         
-        // Calculate stats
+        if (this.currentTab === 'scan-status') {
+            this.renderScanStatus(contentContainer);
+        } else if (this.currentTab === 'variables') {
+            this.renderVariablesTable(contentContainer);
+        }
+    }
+    
+    /**
+     * TAB 1: Scan & Status
+     */
+    renderScanStatus(container) {
+        console.log('🎨 [VARIABLES] Checkpoint 17: Rendering Scan & Status tab');
+        
         const totalVars = this.variableDefinitions.length;
         const filledVars = this.variableDefinitions.filter(v => {
             const value = this.variables[v.key] || '';
             return value.trim() !== '';
         }).length;
-        const completionPercent = Math.round((filledVars / totalVars) * 100);
-        const requiredVars = this.variableDefinitions.filter(v => v.required).length;
-        const filledRequired = this.variableDefinitions.filter(v => {
-            if (!v.required) return false;
-            const value = this.variables[v.key] || '';
-            return value.trim() !== '';
-        }).length;
+        const completionPercent = totalVars > 0 ? Math.round((filledVars / totalVars) * 100) : 0;
         
-        // Hero header with stats
+        const lastScan = this.scanStatus?.lastScan || null;
+        const lastScanText = lastScan ? this.getTimeAgo(new Date(lastScan)) : 'Never';
+        
+        // Health status
+        const isHealthy = totalVars > 0 && completionPercent >= 80;
+        const healthIcon = isHealthy ? '🟢' : (totalVars > 0 ? '🟡' : '🔴');
+        const healthText = isHealthy ? 'HEALTHY' : (totalVars > 0 ? 'NEEDS ATTENTION' : 'NO DATA');
+        
+        console.log('✅ [VARIABLES] Checkpoint 18: Status calculated:', {
+            total: totalVars,
+            filled: filledVars,
+            completion: completionPercent,
+            health: healthText
+        });
+        
         let html = `
-            <!-- Hero Header -->
-            <div class="relative overflow-hidden rounded-2xl shadow-lg mb-8" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                <div class="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -mr-32 -mt-16"></div>
-                <div class="absolute bottom-0 left-0 w-48 h-48 bg-white opacity-5 rounded-full -ml-24 -mb-12"></div>
-                
-                <div class="relative px-8 py-6">
-                    <div class="flex items-center justify-between">
-                        <div class="flex-1">
-                            <h2 class="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-                                <i class="fas fa-sliders-h"></i>
-                                Company Variables
-                            </h2>
-                            <p class="text-white text-opacity-90 text-lg mb-4">
-                                Fill in your details once. They'll auto-replace across <strong>ALL 500+ AI scenarios!</strong>
-                            </p>
-                            <div class="bg-white bg-opacity-20 rounded-full h-3 overflow-hidden mb-2">
-                                <div class="bg-white h-full rounded-full transition-all duration-500" style="width: ${completionPercent}%"></div>
-                            </div>
-                            <div class="text-white text-opacity-90 text-sm font-medium">
-                                ${filledVars} of ${totalVars} variables filled · ${completionPercent}% complete
+            <!-- Health Check Card -->
+            <div class="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl shadow-lg p-6 mb-6 text-white">
+                <div class="flex items-center justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3 mb-2">
+                            <span class="text-4xl">${healthIcon}</span>
+                            <div>
+                                <h2 class="text-2xl font-bold">SYSTEM ${healthText}</h2>
+                                <p class="text-purple-100 text-sm">Variables Management Control Center</p>
                             </div>
                         </div>
-                        <div class="flex gap-4 ml-8">
-                            <div class="bg-white bg-opacity-10 backdrop-blur-sm rounded-xl p-4 text-center min-w-[120px]">
-                                <div class="text-4xl font-bold text-white">${filledRequired}/${requiredVars}</div>
-                                <div class="text-white text-opacity-80 text-sm font-medium mt-1">Required</div>
+                        <div class="grid grid-cols-3 gap-4 mt-4 text-sm">
+                            <div>
+                                <div class="text-purple-200">Last Scan</div>
+                                <div class="font-bold text-lg">${lastScanText}</div>
                             </div>
-                            <button 
-                                onclick="variablesManager.scanPlaceholders()"
-                                class="bg-white bg-opacity-10 backdrop-blur-sm hover:bg-opacity-20 rounded-xl p-4 text-center min-w-[120px] transition-all border-2 border-white border-opacity-20"
-                                title="Scan templates for new placeholders"
-                            >
-                                <div class="text-3xl mb-1">🔍</div>
-                                <div class="text-white text-sm font-bold">Scan Now</div>
-                            </button>
+                            <div>
+                                <div class="text-purple-200">Variables Found</div>
+                                <div class="font-bold text-lg">${totalVars} unique</div>
+                            </div>
+                            <div>
+                                <div class="text-purple-200">Completion</div>
+                                <div class="font-bold text-lg">${filledVars}/${totalVars} (${completionPercent}%)</div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
-            
-            <!-- Pro Tip -->
-            <div class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4 mb-6 flex items-start gap-3">
-                <i class="fas fa-lightbulb text-blue-600 text-2xl mt-1"></i>
-                <div class="flex-1">
-                    <div class="font-bold text-blue-900 mb-1">💡 How Variables Work</div>
-                    <div class="text-blue-800 text-sm">
-                        Variables like <code class="bg-blue-200 text-blue-900 px-2 py-0.5 rounded font-mono text-xs">{companyName}</code> 
-                        are placeholders. When a caller asks "What's your company name?", your AI automatically replaces it with the actual value you enter below!
+                    <div class="ml-6">
+                        <button 
+                            onclick="variablesManager.forceScan()"
+                            class="bg-white text-purple-700 hover:bg-purple-50 rounded-xl px-8 py-4 font-bold text-lg transition-all shadow-lg hover:shadow-xl ${this.isScanning ? 'opacity-50 cursor-not-allowed' : ''}"
+                            ${this.isScanning ? 'disabled' : ''}
+                            title="Scan active templates for variables"
+                        >
+                            <i class="fas fa-radar text-2xl mr-3"></i>
+                            ${this.isScanning ? 'Scanning...' : 'Force Scan Now'}
+                        </button>
                     </div>
                 </div>
             </div>
         `;
         
-        // Group variables by category
-        const grouped = this.groupByCategory(this.variableDefinitions);
+        // Scan progress (if scanning)
+        if (this.isScanning) {
+            html += `
+                <div class="bg-blue-50 border-2 border-blue-400 rounded-xl p-6 mb-6">
+                    <h3 class="text-xl font-bold text-blue-900 mb-4">
+                        <i class="fas fa-spinner fa-spin mr-2"></i>
+                        Scan in Progress...
+                    </h3>
+                    <div class="space-y-2 text-sm text-blue-800">
+                        <div id="scan-step-1" class="flex items-center gap-2">
+                            <i class="fas fa-circle-notch fa-spin text-blue-600"></i>
+                            <span>Step 1: Connecting to API...</span>
+                        </div>
+                        <div id="scan-step-2" class="flex items-center gap-2 opacity-50">
+                            <i class="far fa-circle text-gray-400"></i>
+                            <span>Step 2: Analyzing active templates...</span>
+                        </div>
+                        <div id="scan-step-3" class="flex items-center gap-2 opacity-50">
+                            <i class="far fa-circle text-gray-400"></i>
+                            <span>Step 3: Detecting placeholders...</span>
+                        </div>
+                        <div id="scan-step-4" class="flex items-center gap-2 opacity-50">
+                            <i class="far fa-circle text-gray-400"></i>
+                            <span>Step 4: Counting usage...</span>
+                        </div>
+                        <div id="scan-step-5" class="flex items-center gap-2 opacity-50">
+                            <i class="far fa-circle text-gray-400"></i>
+                            <span>Step 5: Building report...</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
         
-        for (const [category, vars] of Object.entries(grouped)) {
-            html += this.renderCategory(category, vars);
+        // Last scan result
+        if (this.lastScanResult && !this.isScanning) {
+            html += this.renderScanResult();
+        }
+        
+        // Category breakdown
+        if (totalVars > 0) {
+            html += this.renderCategoryBreakdown();
+        }
+        
+        // Alerts
+        const missingRequired = this.variableDefinitions.filter(v => v.required && !this.variables[v.key]);
+        if (missingRequired.length > 0) {
+            html += this.renderAlerts(missingRequired);
+        }
+        
+        // Empty state
+        if (totalVars === 0) {
+            html += `
+                <div class="text-center py-16">
+                    <div class="inline-flex items-center justify-center w-32 h-32 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full shadow-lg mb-6">
+                        <i class="fas fa-radar text-6xl text-blue-400"></i>
+                    </div>
+                    <h3 class="text-3xl font-bold text-gray-900 mb-3">Ready to Scan</h3>
+                    <p class="text-lg text-gray-600 mb-4">
+                        Click <strong>"Force Scan Now"</strong> above to detect variables from your active templates.
+                    </p>
+                </div>
+            `;
         }
         
         container.innerHTML = html;
-        
-        // Attach event listeners
-        this.attachEventListeners();
+        console.log('✅ [VARIABLES] Checkpoint 19: Scan & Status tab rendered');
     }
     
     /**
-     * Group variables by category
+     * Render scan result
      */
-    groupByCategory(definitions) {
-        const groups = {};
+    renderScanResult() {
+        const result = this.lastScanResult;
+        const timestamp = new Date(result.scannedAt);
+        const timeAgo = this.getTimeAgo(timestamp);
         
-        definitions.forEach(def => {
-            const category = def.category || 'General';
-            if (!groups[category]) {
-                groups[category] = [];
-            }
-            groups[category].push(def);
-        });
+        let html = `
+            <div class="bg-green-50 border-2 border-green-400 rounded-xl p-6 mb-6">
+                <h3 class="text-xl font-bold text-green-900 mb-4">
+                    <i class="fas fa-check-circle mr-2"></i>
+                    Scan Completed - ${timeAgo}
+                </h3>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="bg-white rounded-lg p-4">
+                        <div class="text-3xl font-bold text-green-600">${result.found || 0}</div>
+                        <div class="text-sm text-gray-600">Variables Found</div>
+                    </div>
+                    <div class="bg-white rounded-lg p-4">
+                        <div class="text-3xl font-bold text-blue-600">${result.newCount || 0}</div>
+                        <div class="text-sm text-gray-600">New Variables</div>
+                    </div>
+                </div>
+                
+                <details class="bg-white rounded-lg p-4">
+                    <summary class="font-bold text-gray-900 cursor-pointer hover:text-purple-600">
+                        📋 View All Detected Variables (${result.found || 0})
+                    </summary>
+                    <div class="mt-4 space-y-2 text-sm max-h-64 overflow-y-auto">
+                        ${this.variableDefinitions.map(v => `
+                            <div class="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
+                                <code class="text-blue-700 font-mono">{${v.key}}</code>
+                                <span class="text-gray-600">${v.usageCount || 0} matches</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </details>
+            </div>
+        `;
         
-        return groups;
+        return html;
     }
     
     /**
-     * Render a category section (MODERN COLOR-CODED CARDS)
+     * Render category breakdown
      */
-    renderCategory(categoryName, variables) {
+    renderCategoryBreakdown() {
+        const grouped = this.groupByCategory(this.variableDefinitions);
         const categoryIcons = {
             'Company Info': '🏢',
             'Pricing': '💰',
@@ -426,57 +360,33 @@ class VariablesManager {
             'General': '📝'
         };
         
-        const categoryColors = {
-            'Company Info': { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-900', badge: 'bg-blue-100 text-blue-800' },
-            'Pricing': { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-900', badge: 'bg-green-100 text-green-800' },
-            'Contact': { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-900', badge: 'bg-purple-100 text-purple-800' },
-            'Scheduling': { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-900', badge: 'bg-orange-100 text-orange-800' },
-            'Services': { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-900', badge: 'bg-indigo-100 text-indigo-800' },
-            'General': { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-900', badge: 'bg-gray-100 text-gray-800' }
-        };
-        
-        const icon = categoryIcons[categoryName] || '📋';
-        const colors = categoryColors[categoryName] || categoryColors['General'];
-        const categoryId = categoryName.toLowerCase().replace(/\s+/g, '-');
-        
-        // Calculate completion
-        const filledCount = variables.filter(v => {
-            const value = this.variables[v.key] || '';
-            return value.trim() !== '';
-        }).length;
-        const completionPercent = Math.round((filledCount / variables.length) * 100);
-        
         let html = `
-            <div class="bg-white border-2 ${colors.border} rounded-xl shadow-md mb-6 overflow-hidden">
-                <!-- Card Header -->
-                <div class="${colors.bg} px-6 py-4 border-b-2 ${colors.border}">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <div class="text-4xl">${icon}</div>
-                            <div>
-                                <h3 class="text-xl font-bold ${colors.text}">${categoryName}</h3>
-                                <div class="text-sm ${colors.text} opacity-75">${variables.length} variable${variables.length === 1 ? '' : 's'}</div>
-                            </div>
+            <div class="bg-white border-2 border-gray-200 rounded-xl p-6 mb-6">
+                <h3 class="text-xl font-bold text-gray-900 mb-4">Category Breakdown</h3>
+                <div class="space-y-3">
+        `;
+        
+        for (const [category, vars] of Object.entries(grouped)) {
+            const icon = categoryIcons[category] || '📋';
+            const filled = vars.filter(v => this.variables[v.key]?.trim()).length;
+            const total = vars.length;
+            const percent = Math.round((filled / total) * 100);
+            
+            html += `
+                <div class="flex items-center gap-4">
+                    <span class="text-2xl">${icon}</span>
+                    <div class="flex-1">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-semibold text-gray-900">${category}</span>
+                            <span class="text-sm font-bold text-gray-700">${filled}/${total} (${percent}%)</span>
                         </div>
-                        <div class="flex items-center gap-4">
-                            <div class="text-right">
-                                <div class="text-2xl font-bold ${colors.text}" id="${categoryId}-complete">${filledCount}</div>
-                                <div class="text-xs ${colors.text} opacity-75">of ${variables.length}</div>
-                            </div>
-                            <div class="${colors.badge} px-4 py-2 rounded-lg font-bold text-sm">
-                                ${completionPercent}%
-                            </div>
+                        <div class="bg-gray-200 rounded-full h-3 overflow-hidden">
+                            <div class="bg-gradient-to-r from-purple-500 to-indigo-500 h-full transition-all" style="width: ${percent}%"></div>
                         </div>
                     </div>
                 </div>
-                
-                <!-- Card Body -->
-                <div class="p-6 space-y-4">
-        `;
-        
-        variables.forEach(varDef => {
-            html += this.renderVariableRow(varDef);
-        });
+            `;
+        }
         
         html += `
                 </div>
@@ -487,698 +397,384 @@ class VariablesManager {
     }
     
     /**
-     * Render a single variable row (MODERN INLINE CARD)
+     * Render alerts
      */
-    renderVariableRow(varDef) {
-        const value = this.variables[varDef.key] || '';
-        const isRequired = varDef.required || false;
-        const isEmpty = value.trim() === '';
-        const isFilled = !isEmpty;
-        const usageCount = varDef.usageCount || 0;
-        
-        const inputType = varDef.type === 'number' ? 'number' : 
-                         varDef.type === 'phone' ? 'tel' :
-                         varDef.type === 'email' ? 'email' :
-                         varDef.type === 'url' ? 'url' : 'text';
-        
-        const placeholder = varDef.example || `Enter ${varDef.label}...`;
-        
-        // Status badge
-        const statusBadge = isFilled 
-            ? '<span class="px-2 py-1 bg-green-100 text-green-800 text-xs font-bold rounded-full flex items-center gap-1"><i class="fas fa-check-circle"></i> Filled</span>'
-            : isRequired
-                ? '<span class="px-2 py-1 bg-red-100 text-red-800 text-xs font-bold rounded-full flex items-center gap-1"><i class="fas fa-exclamation-circle"></i> Required</span>'
-                : '<span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded-full">Optional</span>';
-        
-        return `
-            <div class="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-all" data-key="${varDef.key}">
-                <div class="flex items-start gap-4">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-2 mb-2">
-                            <code class="bg-white px-2 py-1 rounded text-sm font-mono text-blue-700 border border-blue-200">{${varDef.key}}</code>
-                            ${statusBadge}
+    renderAlerts(missingRequired) {
+        let html = `
+            <div class="bg-red-50 border-2 border-red-400 rounded-xl p-6">
+                <h3 class="text-xl font-bold text-red-900 mb-4">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    Action Required
+                </h3>
+                <p class="text-red-800 mb-3">
+                    ${missingRequired.length} required variable${missingRequired.length === 1 ? '' : 's'} missing value${missingRequired.length === 1 ? '' : 's'}:
+                </p>
+                <div class="space-y-2">
+                    ${missingRequired.map(v => `
+                        <div class="bg-white rounded-lg p-3 flex items-center justify-between">
+                            <div>
+                                <code class="text-red-700 font-mono">{${v.key}}</code>
+                                <span class="text-gray-600 text-sm ml-2">${v.usageCount || 0} matches</span>
+                            </div>
+                            <button 
+                                onclick="variablesManager.switchTab('variables')"
+                                class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all text-sm font-bold"
+                            >
+                                Fill Now
+                            </button>
                         </div>
-                        <div class="font-semibold text-gray-900 mb-1">${varDef.label}</div>
-                        ${varDef.description ? `<div class="text-xs text-gray-600 mb-3">${varDef.description}</div>` : ''}
-                        <input 
-                            type="${inputType}"
-                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-gray-900 font-medium ai-settings-variable-input"
-                            data-key="${varDef.key}"
-                            value="${this.escapeHtml(value)}"
-                            placeholder="${placeholder}"
-                            ${varDef.pattern ? `pattern="${varDef.pattern}"` : ''}
-                        />
-                    </div>
-                    <div class="flex flex-col items-center gap-2 pt-8">
-                        <div class="text-center bg-white border-2 border-blue-200 rounded-lg p-3 min-w-[80px]">
-                            <div class="text-2xl font-bold text-blue-600">${usageCount}</div>
-                            <div class="text-xs text-gray-600 font-medium">uses</div>
-                        </div>
-                        <button 
-                            class="px-4 py-2 bg-white border-2 border-gray-300 hover:border-blue-500 hover:bg-blue-50 rounded-lg transition-all text-sm font-semibold text-gray-700 hover:text-blue-700 flex items-center gap-2"
-                            onclick="variablesManager.previewVariable('${varDef.key}')"
-                            title="Preview where this is used"
-                        >
-                            <i class="fas fa-eye"></i>
-                            Preview
-                        </button>
-                    </div>
+                    `).join('')}
                 </div>
             </div>
         `;
+        
+        return html;
     }
     
     /**
-     * Render empty state (MODERN UI)
+     * TAB 2: Variables Table
      */
-    renderEmpty() {
-        console.log('🎨 [VARIABLES RENDER EMPTY] Starting renderEmpty...');
-        const container = document.getElementById('variables-container');
-        if (!container) {
-            console.error('❌ [VARIABLES RENDER EMPTY] Container not found!');
+    renderVariablesTable(container) {
+        console.log('🎨 [VARIABLES] Checkpoint 20: Rendering Variables Table');
+        
+        if (this.variableDefinitions.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-16">
+                    <div class="inline-flex items-center justify-center w-32 h-32 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full shadow-lg mb-6">
+                        <i class="fas fa-table text-6xl text-blue-400"></i>
+                    </div>
+                    <h3 class="text-3xl font-bold text-gray-900 mb-3">No Variables Yet</h3>
+                    <p class="text-lg text-gray-600 mb-6">
+                        Run a scan first to detect variables from your active templates.
+                    </p>
+                    <button 
+                        onclick="variablesManager.switchTab('scan-status')"
+                        class="px-8 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl hover:shadow-xl transition-all"
+                    >
+                        Go to Scan & Status
+                    </button>
+                </div>
+            `;
             return;
         }
         
-        console.log('🎨 [VARIABLES RENDER EMPTY] Setting new HTML...');
-        container.innerHTML = `
-            <div class="flex items-center justify-center min-h-[500px]">
-                <div class="text-center max-w-2xl px-8">
-                    <div class="inline-flex items-center justify-center w-32 h-32 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full shadow-lg mb-6">
-                        <i class="fas fa-box-open text-6xl text-blue-400"></i>
-                    </div>
-                    <h3 class="text-3xl font-bold text-gray-900 mb-3">No Variables Detected</h3>
-                    <p class="text-lg text-gray-600 mb-8 leading-relaxed">
-                        Click <strong>"Auto-Scan Variables"</strong> to detect placeholders from your active templates.<br>
-                        Variables like <code class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">{companyName}</code> 
-                        will be automatically found and organized by category.
-                    </p>
-                    <button 
-                        class="px-8 py-4 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-3 mx-auto"
-                        style="background: linear-gradient(to right, #2563eb, #4f46e5);"
-                        onclick="variablesManager.scanPlaceholders()"
-                    >
-                        <i class="fas fa-scan text-xl"></i>
-                        Auto-Scan Variables
-                    </button>
-                </div>
+        const html = `
+            <!-- Table Header -->
+            <div class="bg-white border-2 border-gray-200 rounded-t-xl p-4 flex items-center justify-between">
+                <h3 class="text-xl font-bold text-gray-900">
+                    <i class="fas fa-table mr-2"></i>
+                    All Variables (${this.variableDefinitions.length})
+                </h3>
+                <button 
+                    onclick="variablesManager.saveAll()"
+                    class="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl hover:shadow-lg transition-all"
+                >
+                    <i class="fas fa-save mr-2"></i>
+                    Save All Changes
+                </button>
             </div>
+            
+            <!-- Table -->
+            <div class="bg-white border-2 border-t-0 border-gray-200 rounded-b-xl overflow-hidden">
+                <table class="w-full">
+                    <thead class="bg-gray-100 border-b-2 border-gray-200">
+                        <tr>
+                            <th class="text-left p-4 font-bold text-gray-700">Variable</th>
+                            <th class="text-left p-4 font-bold text-gray-700">Category</th>
+                            <th class="text-left p-4 font-bold text-gray-700">Value</th>
+                            <th class="text-center p-4 font-bold text-gray-700">Matches</th>
+                            <th class="text-center p-4 font-bold text-gray-700">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${this.variableDefinitions.map(v => this.renderVariableRow(v)).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+        console.log('✅ [VARIABLES] Checkpoint 21: Variables Table rendered');
+    }
+    
+    /**
+     * Render single variable row
+     */
+    renderVariableRow(varDef) {
+        const value = this.variables[varDef.key] || '';
+        const isEmpty = value.trim() === '';
+        const isRequired = varDef.required || false;
+        
+        let statusBadge = '';
+        let rowClass = '';
+        
+        if (isEmpty && isRequired) {
+            statusBadge = '<span class="px-3 py-1 bg-red-100 text-red-800 text-xs font-bold rounded-full">⚠️ REQUIRED</span>';
+            rowClass = 'bg-red-50';
+        } else if (isEmpty) {
+            statusBadge = '<span class="px-3 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded-full">Optional</span>';
+        } else {
+            statusBadge = '<span class="px-3 py-1 bg-green-100 text-green-800 text-xs font-bold rounded-full">✅ OK</span>';
+        }
+        
+        return `
+            <tr class="border-b border-gray-200 hover:bg-gray-50 ${rowClass}">
+                <td class="p-4">
+                    <code class="text-blue-700 font-mono font-bold">{${varDef.key}}</code>
+                </td>
+                <td class="p-4 text-gray-700">${varDef.category || 'General'}</td>
+                <td class="p-4">
+                    <input 
+                        type="text"
+                        class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none transition-all"
+                        value="${this.escapeHtml(value)}"
+                        placeholder="${varDef.example || 'Enter value...'}"
+                        data-key="${varDef.key}"
+                        onchange="variablesManager.onVariableChange('${varDef.key}', this.value)"
+                    />
+                </td>
+                <td class="p-4 text-center">
+                    <span class="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full font-bold text-sm">
+                        ${varDef.usageCount || 0}
+                    </span>
+                </td>
+                <td class="p-4 text-center">
+                    ${statusBadge}
+                </td>
+            </tr>
         `;
     }
     
-    /* ═══════════════════════════════════════════════════════════════════════
-     * SECTION 4: EVENT HANDLING & VALIDATION
-     * Real-time input validation, change detection, error display
-     * ═══════════════════════════════════════════════════════════════════════ */
-    
     /**
-     * Attach event listeners to all variable inputs
+     * Force scan - trigger manual scan
      */
-    attachEventListeners() {
-        const inputs = document.querySelectorAll('.ai-settings-variable-input');
+    async forceScan() {
+        console.log('🔘 [SCAN] Checkpoint 22: Force Scan button clicked');
         
-        inputs.forEach(input => {
-            input.addEventListener('input', (e) => {
-                this.onVariableChange(e.target.dataset.key, e.target.value);
-            });
-            
-            input.addEventListener('blur', (e) => {
-                this.validateInput(e.target);
-            });
-        });
-    }
-    
-    /**
-     * Handle variable change
-     */
-    onVariableChange(key, value) {
-        this.variables[key] = value;
-        this.isDirty = true;
-        
-        // Update UI
-        this.updateCategoryStats();
-        this.parent.updateStatusBanner();
-        
-        console.log(`💼 [VARIABLES] Changed: ${key} = ${value}`);
-    }
-    
-    /**
-     * Validate input with inline error messages
-     * CRITICAL: Client-side validation matching backend validators
-     */
-    validateInput(input) {
-        const key = input.dataset.key;
-        const varDef = this.variableDefinitions.find(v => v.key === key);
-        
-        if (!varDef) {
-            this.clearValidationError(input);
-            return true;
+        if (this.isScanning) {
+            console.log('⚠️ [SCAN] Already scanning, ignoring click');
+            return;
         }
         
-        const value = input.value.trim();
-        const isEmpty = value === '';
-        const isRequired = varDef.required || false;
-        const type = varDef.type || 'text';
+        this.isScanning = true;
+        console.log('🔘 [SCAN] Checkpoint 23: Setting isScanning = true');
         
-        // Check required
-        if (isRequired && isEmpty) {
-            this.showValidationError(input, `${varDef.label} is required`);
-            return false;
-        }
-        
-        // Skip further validation if empty and not required
-        if (isEmpty && !isRequired) {
-            this.clearValidationError(input);
-            return true;
-        }
-        
-        // Type-specific validation
-        let error = null;
-        
-        switch (type) {
-            case 'email':
-                if (!this.validateEmail(value)) {
-                    error = 'Invalid email format (e.g. contact@company.com)';
-                }
-                break;
-                
-            case 'phone':
-                if (!this.validatePhone(value)) {
-                    error = 'Invalid phone format (e.g. +1-239-555-0100)';
-                }
-                break;
-                
-            case 'url':
-                if (!this.validateUrl(value)) {
-                    error = 'Invalid URL format (must start with http:// or https://)';
-                }
-                break;
-                
-            case 'currency':
-                if (!this.validateCurrency(value)) {
-                    error = 'Invalid currency format (e.g. 125.99 or $125.99)';
-                }
-                break;
-                
-            case 'enum':
-                if (varDef.enumValues && !varDef.enumValues.includes(value)) {
-                    error = `Must be one of: ${varDef.enumValues.join(', ')}`;
-                }
-                break;
-                
-            case 'text':
-            case 'multiline':
-                // Check pattern if specified
-                if (varDef.validation?.pattern) {
-                    const regex = new RegExp(varDef.validation.pattern);
-                    if (!regex.test(value)) {
-                        error = varDef.validation.message || 'Invalid format';
-                    }
-                }
-                
-                // Check min/max length
-                if (varDef.validation?.minLength && value.length < varDef.validation.minLength) {
-                    error = `Must be at least ${varDef.validation.minLength} characters`;
-                }
-                if (varDef.validation?.maxLength && value.length > varDef.validation.maxLength) {
-                    error = `Must be no more than ${varDef.validation.maxLength} characters`;
-                }
-                break;
-        }
-        
-        if (error) {
-            this.showValidationError(input, error);
-            return false;
-        }
-        
-        // Valid
-        this.clearValidationError(input);
-        return true;
-    }
-    
-    /**
-     * Show validation error message below input
-     */
-    showValidationError(input, message) {
-        input.classList.add('error');
-        
-        // Remove existing error message
-        const existingError = input.parentElement.querySelector('.validation-error');
-        if (existingError) {
-            existingError.remove();
-        }
-        
-        // Add new error message
-        const errorEl = document.createElement('div');
-        errorEl.className = 'validation-error';
-        errorEl.textContent = message;
-        input.parentElement.appendChild(errorEl);
-    }
-    
-    /**
-     * Clear validation error
-     */
-    clearValidationError(input) {
-        input.classList.remove('error');
-        
-        const errorEl = input.parentElement.querySelector('.validation-error');
-        if (errorEl) {
-            errorEl.remove();
-        }
-    }
-    
-    /**
-     * Validate email format
-     */
-    validateEmail(email) {
-        const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return regex.test(email);
-    }
-    
-    /**
-     * Validate phone format (basic check)
-     */
-    validatePhone(phone) {
-        // Remove all non-digit characters
-        const digits = phone.replace(/\D/g, '');
-        // Must have at least 10 digits
-        return digits.length >= 10;
-    }
-    
-    /**
-     * Validate URL format
-     */
-    validateUrl(url) {
-        try {
-            const parsed = new URL(url);
-            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-        } catch {
-            return false;
-        }
-    }
-    
-    /**
-     * Validate currency format
-     */
-    validateCurrency(value) {
-        // Remove $, commas, and spaces
-        const cleaned = value.replace(/[$,\s]/g, '');
-        // Must be a valid number
-        const num = parseFloat(cleaned);
-        return !isNaN(num) && num >= 0;
-    }
-    
-    /**
-     * Update category completion stats
-     */
-    updateCategoryStats() {
-        const grouped = this.groupByCategory(this.variableDefinitions);
-        
-        for (const [category, vars] of Object.entries(grouped)) {
-            const categoryId = category.toLowerCase().replace(/\s+/g, '-');
-            const completeCount = vars.filter(v => {
-                const value = this.variables[v.key] || '';
-                return value.trim() !== '';
-            }).length;
-            
-            const completeEl = document.getElementById(`${categoryId}-complete`);
-            if (completeEl) {
-                completeEl.textContent = completeCount;
-            }
-        }
-    }
-    
-    /* ═══════════════════════════════════════════════════════════════════════
-     * SECTION 5: PREVIEW & SAVE SYSTEM
-     * Before/after comparison, 10-minute token expiration, idempotency keys
-     * ═══════════════════════════════════════════════════════════════════════ */
-    
-    /**
-     * Preview where a variable is used across scenarios
-     */
-    async previewVariable(key) {
-        console.log(`💼 [VARIABLES] Previewing: ${key}`);
+        // Re-render to show progress
+        this.render();
         
         try {
-            const response = await fetch(`/api/company/${this.companyId}/configuration/variables/${key}/usage`, {
+            // Simulate progress steps
+            this.updateScanStep(1, 'complete');
+            await this.delay(300);
+            
+            console.log('🔘 [SCAN] Checkpoint 24: Calling API POST /variables/scan');
+            const token = localStorage.getItem('adminToken');
+            
+            this.updateScanStep(2, 'active');
+            
+            const response = await fetch(`/api/company/${this.companyId}/configuration/variables/scan`, {
+                method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
                 }
             });
+            
+            console.log('🔘 [SCAN] Checkpoint 25: Response received - HTTP', response.status);
+            
+            this.updateScanStep(2, 'complete');
+            this.updateScanStep(3, 'active');
+            await this.delay(300);
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
             
-            const usage = await response.json();
+            console.log('🔘 [SCAN] Checkpoint 26: Parsing JSON response...');
+            const data = await response.json();
             
-            this.showPreviewModal(key, usage);
+            this.updateScanStep(3, 'complete');
+            this.updateScanStep(4, 'active');
+            await this.delay(300);
             
-        } catch (error) {
-            console.error('❌ [VARIABLES] Failed to preview:', error);
-            alert('Failed to load preview');
-        }
-    }
-    
-    /**
-     * Show preview modal
-     */
-    showPreviewModal(key, usage) {
-        const value = this.variables[key] || `{${key}}`;
-        
-        let html = `
-            <div class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center" id="variable-preview-modal">
-                <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col">
-                    <div class="p-6 border-b-2 border-gray-200 flex items-center justify-between">
-                        <h3 class="text-2xl font-bold text-gray-900">
-                            <i class="fas fa-eye text-blue-600 mr-2"></i>
-                            Preview: <code class="bg-blue-100 text-blue-800 px-3 py-1 rounded">{${key}}</code>
-                        </h3>
-                        <button onclick="document.getElementById('variable-preview-modal').remove()" class="ai-settings-btn ai-settings-btn-danger">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                    <div class="p-6 overflow-y-auto flex-1">
-                        <div class="bg-green-50 border-2 border-green-200 rounded-lg p-4 mb-6">
-                            <div class="font-bold text-green-900 mb-2">Current Value:</div>
-                            <div class="text-lg text-green-800">${this.escapeHtml(value)}</div>
-                        </div>
-                        
-                        <div class="mb-4">
-                            <h4 class="font-bold text-gray-900 mb-2">Used in ${usage.scenarios.length} scenario(s):</h4>
-                        </div>
-                        
-                        ${usage.scenarios.map(scenario => `
-                            <div class="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 mb-4">
-                                <div class="font-bold text-gray-900 mb-2">${scenario.name}</div>
-                                <div class="text-sm text-gray-600 mb-3">${scenario.category}</div>
-                                <div class="bg-white rounded p-3 text-sm">
-                                    <div class="font-semibold text-gray-700 mb-1">Example Reply:</div>
-                                    <div class="text-gray-900">${this.replaceVariable(scenario.exampleReply, key, value)}</div>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        document.body.insertAdjacentHTML('beforeend', html);
-    }
-    
-    /**
-     * Replace variable in text (for preview)
-     */
-    replaceVariable(text, key, value) {
-        const regex = new RegExp(`\\{${key}\\}`, 'g');
-        const replaced = text.replace(regex, `<span class="bg-yellow-200 font-bold">${this.escapeHtml(value)}</span>`);
-        return replaced;
-    }
-    
-    /**
-     * Save variables to API
-     */
-    /**
-     * Preview changes before applying
-     * CRITICAL: Shows before/after comparison and impact on scenarios
-     */
-    async save() {
-        console.log('💼 [VARIABLES] Initiating preview...');
-        
-        // Validate all inputs
-        const inputs = document.querySelectorAll('.ai-settings-variable-input');
-        let isValid = true;
-        
-        inputs.forEach(input => {
-            if (!this.validateInput(input)) {
-                isValid = false;
-            }
-        });
-        
-        if (!isValid) {
-            this.parent.showError('⚠️ Please fix validation errors before saving.');
-            return;
-        }
-        
-        try {
-            this.parent.showLoadingState();
-            
-            // Call preview API
-            const response = await fetch(`/api/company/${this.companyId}/configuration/variables/preview`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-                },
-                body: JSON.stringify({
-                    variables: this.variables
-                })
+            console.log('🔘 [SCAN] Checkpoint 27: Data received:', {
+                variableDefinitions: data.variableDefinitions?.length || 0,
+                scannedAt: data.scannedAt
             });
             
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || `HTTP ${response.status}`);
-            }
+            // Update data
+            this.variableDefinitions = data.variableDefinitions || [];
+            this.variables = data.variables || {};
+            this.scanStatus = data.scanStatus || null;
+            this.lastScanResult = {
+                scannedAt: data.scannedAt || new Date().toISOString(),
+                found: this.variableDefinitions.length,
+                newCount: data.newCount || 0
+            };
             
-            const previewData = await response.json();
+            this.updateScanStep(4, 'complete');
+            this.updateScanStep(5, 'active');
+            await this.delay(300);
+            this.updateScanStep(5, 'complete');
             
-            console.log('✅ [VARIABLES] Preview generated:', previewData);
+            console.log('✅ [SCAN] Checkpoint 28: Scan complete!');
             
-            // Show preview modal
-            this.showPreviewModal(previewData);
+            // Clear Redis cache
+            console.log('🔘 [SCAN] Checkpoint 29: Clearing cache...');
+            await this.clearCache();
+            
+            this.parent.showSuccess(`Scan complete! Found ${this.variableDefinitions.length} variables.`);
             
         } catch (error) {
-            console.error('❌ [VARIABLES] Preview failed:', error);
-            this.parent.showError(`Preview failed: ${error.message}`);
+            console.error('❌ [SCAN] Failed:', error);
+            this.parent.showError('Scan failed. Please try again.');
         } finally {
-            this.parent.hideLoadingState();
+            this.isScanning = false;
+            console.log('🔘 [SCAN] Checkpoint 30: Setting isScanning = false');
+            
+            // Re-render to show results
+            this.render();
         }
     }
     
     /**
-     * Show preview modal with before/after comparison
+     * Update scan progress step
      */
-    showPreviewModal(previewData) {
-        const modal = document.createElement('div');
-        modal.id = 'variables-preview-modal';
-        modal.className = 'ai-settings-modal-overlay';
+    updateScanStep(step, status) {
+        const el = document.getElementById(`scan-step-${step}`);
+        if (!el) return;
         
-        // Countdown timer (10 minutes)
-        const expiresAt = Date.now() + (previewData.expiresIn * 1000);
-        
-        modal.innerHTML = `
-            <div class="ai-settings-modal">
-                <div class="ai-settings-modal-header">
-                    <h2>📝 Preview Changes</h2>
-                    <button class="ai-settings-modal-close" onclick="this.closest('.ai-settings-modal-overlay').remove()">×</button>
-                </div>
-                
-                <div class="ai-settings-modal-body">
-                    <!-- Summary -->
-                    <div class="preview-summary">
-                        <div class="preview-summary-card">
-                            <div class="preview-summary-icon">📊</div>
-                            <div>
-                                <div class="preview-summary-number">${previewData.summary.variablesChanging}</div>
-                                <div class="preview-summary-label">Variables Changing</div>
-                            </div>
-                        </div>
-                        <div class="preview-summary-card">
-                            <div class="preview-summary-icon">💬</div>
-                            <div>
-                                <div class="preview-summary-number">${previewData.summary.scenariosAffected}</div>
-                                <div class="preview-summary-label">Scenarios Affected</div>
-                            </div>
-                        </div>
-                        <div class="preview-summary-card">
-                            <div class="preview-summary-icon">⏰</div>
-                            <div>
-                                <div class="preview-summary-number" id="preview-countdown">10:00</div>
-                                <div class="preview-summary-label">Time Remaining</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Changes List -->
-                    <div class="preview-changes">
-                        <h3>🔄 Changes</h3>
-                        ${previewData.changes.map(change => `
-                            <div class="preview-change-item ${change.status}">
-                                <div class="preview-change-header">
-                                    <span class="preview-change-badge ${change.status}">
-                                        ${change.status === 'added' ? '➕ Added' : change.status === 'removed' ? '➖ Removed' : '✏️ Modified'}
-                                    </span>
-                                    <strong>${change.label || change.key}</strong>
-                                    ${change.type ? `<span class="preview-change-type">${change.type}</span>` : ''}
-                                </div>
-                                <div class="preview-change-comparison">
-                                    <div class="preview-change-old">
-                                        <span class="preview-label">Before:</span>
-                                        <code>${this.escapeHtml(change.oldValue)}</code>
-                                    </div>
-                                    <div class="preview-change-arrow">→</div>
-                                    <div class="preview-change-new">
-                                        <span class="preview-label">After:</span>
-                                        <code>${this.escapeHtml(change.newValue)}</code>
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                    
-                    <!-- Examples (if any) -->
-                    ${previewData.examples && previewData.examples.length > 0 ? `
-                        <div class="preview-examples">
-                            <h3>📋 Example Impact</h3>
-                            <p class="preview-examples-desc">See how these changes will affect AI responses:</p>
-                            ${previewData.examples.slice(0, 3).map(ex => `
-                                <div class="preview-example-item">
-                                    <div class="preview-example-scenario">${this.escapeHtml(ex.scenarioName)}</div>
-                                    <div class="preview-example-comparison">
-                                        <div class="preview-example-before">
-                                            <span class="preview-label">Before:</span>
-                                            <div class="preview-example-text">${this.escapeHtml(ex.beforeText)}</div>
-                                        </div>
-                                        <div class="preview-example-after">
-                                            <span class="preview-label">After:</span>
-                                            <div class="preview-example-text">${this.escapeHtml(ex.afterText)}</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    ` : ''}
-                </div>
-                
-                <div class="ai-settings-modal-footer">
-                    <button class="ai-settings-btn ai-settings-btn-secondary" onclick="this.closest('.ai-settings-modal-overlay').remove()">
-                        Cancel
-                    </button>
-                    <button class="ai-settings-btn ai-settings-btn-success" onclick="variablesManager.applyChanges('${previewData.previewToken}', ${expiresAt})">
-                        ✅ Apply Changes
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(modal);
-        
-        // Start countdown timer
-        this.startCountdown(expiresAt);
-    }
-    
-    /**
-     * Start countdown timer for preview expiration
-     */
-    startCountdown(expiresAt) {
-        const countdownEl = document.getElementById('preview-countdown');
-        if (!countdownEl) return;
-        
-        const interval = setInterval(() => {
-            const remaining = Math.max(0, expiresAt - Date.now());
-            const minutes = Math.floor(remaining / 60000);
-            const seconds = Math.floor((remaining % 60000) / 1000);
-            
-            countdownEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-            
-            if (remaining <= 0) {
-                clearInterval(interval);
-                countdownEl.textContent = 'Expired';
-                countdownEl.style.color = '#ef4444';
-                
-                // Disable apply button
-                const applyBtn = document.querySelector('.ai-settings-modal-footer .ai-settings-btn-success');
-                if (applyBtn) {
-                    applyBtn.disabled = true;
-                    applyBtn.textContent = '⏰ Preview Expired';
-                }
-            }
-        }, 1000);
-    }
-    
-    /**
-     * Apply changes using preview token
-     * CRITICAL: Uses idempotency key to prevent double-apply
-     */
-    async applyChanges(previewToken, expiresAt) {
-        console.log('💼 [VARIABLES] Applying changes...');
-        
-        // Check if preview expired
-        if (Date.now() >= expiresAt) {
-            this.parent.showError('Preview expired. Please generate a new preview.');
-            return;
+        if (status === 'active') {
+            el.className = 'flex items-center gap-2';
+            el.innerHTML = el.innerHTML.replace(/<i[^>]*>/, '<i class="fas fa-circle-notch fa-spin text-blue-600">');
+        } else if (status === 'complete') {
+            el.className = 'flex items-center gap-2';
+            el.innerHTML = el.innerHTML.replace(/<i[^>]*>/, '<i class="fas fa-check-circle text-green-600">');
         }
-        
-        // Generate idempotency key (UUID v4)
-        const idempotencyKey = this.generateIdempotencyKey();
+    }
+    
+    /**
+     * Handle variable value change
+     */
+    onVariableChange(key, value) {
+        console.log('✏️ [EDIT] Checkpoint 31: Variable changed:', key, '→', value);
+        this.variables[key] = value;
+    }
+    
+    /**
+     * Save all variables
+     */
+    async saveAll() {
+        console.log('💾 [SAVE] Checkpoint 32: Save All clicked');
         
         try {
-            this.parent.showLoadingState();
+            const token = localStorage.getItem('adminToken');
             
-            // Call apply API
-            const response = await fetch(`/api/company/${this.companyId}/configuration/variables/apply`, {
-                method: 'POST',
+            console.log('💾 [SAVE] Checkpoint 33: Calling API PATCH /variables');
+            const response = await fetch(`/api/company/${this.companyId}/configuration/variables`, {
+                method: 'PATCH',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
-                    'idempotency-key': idempotencyKey
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    variables: this.variables,
-                    previewToken: previewToken
-                })
+                body: JSON.stringify({ variables: this.variables })
             });
             
+            console.log('💾 [SAVE] Checkpoint 34: Response received - HTTP', response.status);
+            
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || `HTTP ${response.status}`);
+                throw new Error(`HTTP ${response.status}`);
             }
             
-            const result = await response.json();
+            console.log('💾 [SAVE] Checkpoint 35: Clearing cache...');
+            await this.clearCache();
             
-            console.log('✅ [VARIABLES] Applied successfully:', result);
+            console.log('✅ [SAVE] Checkpoint 36: Save complete!');
+            this.parent.showSuccess('All variables saved successfully!');
             
-            // Close modal
-            const modal = document.getElementById('variables-preview-modal');
-            if (modal) modal.remove();
-            
-            // Show success
-            this.isDirty = false;
-            this.parent.showSuccess('✅ Variables saved successfully!');
-            
-            // Refresh to show updated data
-            await this.parent.refresh();
+            // Reload to refresh stats
+            await this.load();
             
         } catch (error) {
-            console.error('❌ [VARIABLES] Apply failed:', error);
-            this.parent.showError(`Failed to apply changes: ${error.message}`);
-        } finally {
-            this.parent.hideLoadingState();
+            console.error('❌ [SAVE] Failed:', error);
+            this.parent.showError('Failed to save variables. Please try again.');
         }
     }
     
     /**
-     * Generate UUID v4 for idempotency key
+     * Clear Redis cache
      */
-    generateIdempotencyKey() {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-            const r = Math.random() * 16 | 0;
-            const v = c === 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
+    async clearCache() {
+        const token = localStorage.getItem('adminToken');
+        
+        // Clear company cache
+        await fetch(`/api/admin/cache/company/${this.companyId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
         });
+        
+        console.log('✅ [CACHE] Cache cleared for company:', this.companyId);
     }
     
     /**
-     * Escape HTML to prevent XSS
+     * Helper: Group variables by category
+     */
+    groupByCategory(variables) {
+        const grouped = {};
+        variables.forEach(v => {
+            const cat = v.category || 'General';
+            if (!grouped[cat]) grouped[cat] = [];
+            grouped[cat].push(v);
+        });
+        return grouped;
+    }
+    
+    /**
+     * Helper: Get time ago text
+     */
+    getTimeAgo(date) {
+        const seconds = Math.floor((new Date() - date) / 1000);
+        
+        if (seconds < 60) return 'Just now';
+        if (seconds < 3600) return `${Math.floor(seconds / 60)} minutes ago`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
+        return `${Math.floor(seconds / 86400)} days ago`;
+    }
+    
+    /**
+     * Helper: Delay for progress animation
+     */
+    delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    
+    /**
+     * Helper: Escape HTML
      */
     escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
+    
+    /**
+     * Render error state
+     */
+    renderError(message) {
+        const container = document.getElementById('variables-container');
+        if (!container) return;
+        
+        container.innerHTML = `
+            <div class="text-center py-16">
+                <div class="inline-flex items-center justify-center w-32 h-32 bg-red-100 rounded-full shadow-lg mb-6">
+                    <i class="fas fa-exclamation-triangle text-6xl text-red-500"></i>
+                </div>
+                <h3 class="text-3xl font-bold text-gray-900 mb-3">Error</h3>
+                <p class="text-lg text-gray-600">${message}</p>
+            </div>
+        `;
+    }
 }
 
-// Export for use in AIAgentSettingsManager
-if (typeof window !== 'undefined') {
-    window.VariablesManager = VariablesManager;
-}
-
+// Make globally accessible
+window.VariablesManager = VariablesManager;
