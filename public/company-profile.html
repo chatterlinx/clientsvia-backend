@@ -1240,45 +1240,73 @@
                             </div>
                             
                             <!-- ========================================== -->
-                            <!-- STATUS BANNER -->
+                            <!-- MISSION CONTROL DASHBOARD (REDESIGNED) -->
                             <!-- ========================================== -->
-                            <div id="ai-settings-status-banner" class="ai-settings-status-banner">
-                                <div class="flex items-center justify-between mb-3">
-                                    <div class="flex items-center gap-3">
-                                        <i class="fas fa-info-circle text-2xl"></i>
-                                        <div>
-                                            <div class="font-bold text-lg ai-settings-status-text">
-                                                Loading configuration...
+                            <div id="ai-settings-status-banner" class="ai-settings-mission-control">
+                                <div class="mission-control-header">
+                                    <div class="mission-control-icon">
+                                        <svg class="progress-ring" width="120" height="120">
+                                            <circle class="progress-ring-bg" cx="60" cy="60" r="54" />
+                                            <circle class="progress-ring-circle" cx="60" cy="60" r="54" id="progress-ring-circle" />
+                                            <text x="60" y="60" class="progress-ring-text" id="progress-ring-text" text-anchor="middle" dy=".3em">0%</text>
+                                        </svg>
+                                    </div>
+                                    <div class="mission-control-details">
+                                        <div class="mission-status">
+                                            <h3 class="ai-settings-status-text">Loading configuration...</h3>
+                                            <p class="mission-subtitle">Checking system readiness...</p>
+                                        </div>
+                                        <div class="mission-stats">
+                                            <div class="stat-item">
+                                                <div class="stat-icon">📋</div>
+                                                <div class="stat-content">
+                                                    <span class="stat-value" id="stat-templates">-</span>
+                                                    <span class="stat-label">Templates</span>
+                                                </div>
                                             </div>
-                                            <div class="text-sm opacity-75 mt-1">
-                                                <span id="ai-settings-config-count">0/0</span> configured
+                                            <div class="stat-item">
+                                                <div class="stat-icon">🔧</div>
+                                                <div class="stat-content">
+                                                    <span class="stat-value" id="stat-variables">-</span>
+                                                    <span class="stat-label">Variables</span>
+                                                </div>
+                                            </div>
+                                            <div class="stat-item">
+                                                <div class="stat-icon">📞</div>
+                                                <div class="stat-content">
+                                                    <span class="stat-value" id="stat-twilio">-</span>
+                                                    <span class="stat-label">Twilio</span>
+                                                </div>
+                                            </div>
+                                            <div class="stat-item">
+                                                <div class="stat-icon">🎙️</div>
+                                                <div class="stat-content">
+                                                    <span class="stat-value" id="stat-voice">-</span>
+                                                    <span class="stat-label">Voice</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="text-right">
-                                        <div class="text-2xl font-bold" id="ai-settings-percentage">0%</div>
-                                        <div class="text-xs opacity-75">Complete</div>
+                                    <div class="mission-control-actions">
+                                        <button 
+                                            id="ai-settings-go-live-btn" 
+                                            class="go-live-btn" 
+                                            onclick="aiAgentSettings.goLive()"
+                                            disabled>
+                                            <span class="btn-icon">🔒</span>
+                                            <span class="btn-text">Cannot Go Live</span>
+                                        </button>
+                                        <div class="go-live-hint" id="go-live-hint">
+                                            Fix blockers below to enable
+                                        </div>
                                     </div>
-                                </div>
-                                <div id="ai-settings-progress-bar" class="ai-settings-progress-bar">
-                                    <div class="ai-settings-progress-fill" style="width: 0%"></div>
-                                </div>
-                                
-                                <!-- Go Live Button Container -->
-                                <div class="ai-settings-go-live-container">
-                                    <button 
-                                        id="ai-settings-go-live-btn" 
-                                        class="ai-settings-btn ai-settings-btn-secondary" 
-                                        onclick="aiAgentSettings.goLive()"
-                                        disabled>
-                                    </button>
                                 </div>
                             </div>
                             
                             <!-- ========================================== -->
-                            <!-- BLOCKERS LIST (shown when not ready) -->
+                            <!-- ACTION CENTER (BLOCKERS - REDESIGNED) -->
                             <!-- ========================================== -->
-                            <div id="ai-settings-blockers" style="display: none;"></div>
+                            <div id="ai-settings-blockers" class="action-center" style="display: none;"></div>
                             
                             <!-- ========================================== -->
                             <!-- AICORE CONTROL CENTER TITLE -->
@@ -1466,7 +1494,7 @@
                         <script src="/js/ai-agent-settings/AiCoreKnowledgebaseManager.js?v=1.1"></script>
                         
                         <script src="/js/ai-agent-settings/AnalyticsManager.js?v=1.2"></script>
-                        <script src="/js/ai-agent-settings/AIAgentSettingsManager.js?v=4.3"></script>
+                        <script src="/js/ai-agent-settings/AIAgentSettingsManager.js?v=5.0"></script>
                         
                         <!-- Load Voice Settings Manager -->
                         <script src="/js/ai-voice-settings/VoiceSettingsManager.js?v=1.0"></script>

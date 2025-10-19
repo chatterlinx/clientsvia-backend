@@ -357,71 +357,84 @@ class AIAgentSettingsManager {
             const readiness = await response.json();
             console.log('📊 [AI AGENT SETTINGS] Readiness score:', readiness);
             
-            // Update banner class based on score
-            banner.className = 'ai-settings-status-banner';
-            if (readiness.canGoLive) {
-                banner.classList.add('success');
+            // Determine state class
+            banner.className = 'ai-settings-mission-control';
+            let stateClass = 'warning';
+            let progressColor = '#f59e0b';
+            
+            if (readiness.components?.readiness?.isLive) {
+                stateClass = 'live';
+                progressColor = '#06b6d4';
+            } else if (readiness.canGoLive) {
+                stateClass = 'ready';
+                progressColor = '#10b981';
             } else if (readiness.score < 30) {
-                banner.classList.add('error');
-            } else {
-                banner.classList.add('warning');
+                stateClass = 'error';
+                progressColor = '#ef4444';
             }
             
-            // Update text and Go Live button
-            const textEl = banner.querySelector('.ai-settings-status-text');
-            const goLiveBtn = document.getElementById('ai-settings-go-live-btn');
+            banner.classList.add(stateClass);
             
-            if (textEl) {
-                if (readiness.canGoLive) {
-                    if (readiness.components?.readiness?.isLive) {
-                        textEl.innerHTML = `🟢 <strong>Live!</strong> Your AI Agent is active and handling calls (Score: ${readiness.score}/100)`;
-                    } else {
-                        textEl.innerHTML = `✅ <strong>Ready to Go Live!</strong> Configuration score: ${readiness.score}/100 - All checks passed`;
-                    }
+            // Update circular progress ring
+            const progressRing = document.getElementById('progress-ring-circle');
+            const progressText = document.getElementById('progress-ring-text');
+            
+            if (progressRing && progressText) {
+                const circumference = 2 * Math.PI * 54; // 339.292
+                const offset = circumference - (readiness.score / 100) * circumference;
+                progressRing.style.strokeDashoffset = offset;
+                progressRing.style.stroke = progressColor;
+                progressText.textContent = `${readiness.score}%`;
+            }
+            
+            // Update status text
+            const textEl = banner.querySelector('.ai-settings-status-text');
+            const subtitle = banner.querySelector('.mission-subtitle');
+            
+            if (textEl && subtitle) {
+                if (readiness.components?.readiness?.isLive) {
+                    textEl.textContent = 'System Live & Operational';
+                    subtitle.textContent = 'Your AI Agent is actively handling customer calls';
+                } else if (readiness.canGoLive) {
+                    textEl.textContent = 'Ready for Launch';
+                    subtitle.textContent = 'All systems configured and ready to go live';
                 } else {
                     const blockerCount = readiness.blockers?.length || 0;
-                    textEl.innerHTML = `⚠️ <strong>Not Ready</strong> - Score: ${readiness.score}/100 (${blockerCount} blocker${blockerCount !== 1 ? 's' : ''})`;
+                    textEl.textContent = 'Configuration In Progress';
+                    subtitle.textContent = `${blockerCount} issue${blockerCount !== 1 ? 's' : ''} require${blockerCount === 1 ? 's' : ''} attention before going live`;
                 }
             }
             
-            // Update Go Live button state
+            // Update component stats
+            const stats = readiness.components || {};
+            document.getElementById('stat-templates').textContent = stats.templates?.configured ? '✓' : '✗';
+            document.getElementById('stat-variables').textContent = stats.variables?.configured ? '✓' : '✗';
+            document.getElementById('stat-twilio').textContent = stats.twilio?.configured ? '✓' : '✗';
+            document.getElementById('stat-voice').textContent = stats.voice?.configured ? '✓' : '✗';
+            
+            // Update Go Live button
+            const goLiveBtn = document.getElementById('ai-settings-go-live-btn');
+            const goLiveHint = document.getElementById('go-live-hint');
+            
             if (goLiveBtn) {
+                const btnIcon = goLiveBtn.querySelector('.btn-icon');
+                const btnText = goLiveBtn.querySelector('.btn-text');
+                
                 if (readiness.components?.readiness?.isLive) {
-                    // Already live - show status
-                    goLiveBtn.textContent = '🟢 Live';
+                    btnIcon.textContent = '🟢';
+                    btnText.textContent = 'System Live';
                     goLiveBtn.disabled = true;
-                    goLiveBtn.classList.add('is-live');
-                    goLiveBtn.classList.remove('ai-settings-btn-success');
-                    goLiveBtn.classList.add('ai-settings-btn-secondary');
+                    if (goLiveHint) goLiveHint.textContent = 'AI Agent is operational';
                 } else if (readiness.canGoLive) {
-                    // Ready to go live - enable button
-                    goLiveBtn.textContent = '🚀 Go Live Now';
+                    btnIcon.textContent = '🚀';
+                    btnText.textContent = 'Go Live Now';
                     goLiveBtn.disabled = false;
-                    goLiveBtn.classList.remove('is-live', 'ai-settings-btn-secondary');
-                    goLiveBtn.classList.add('ai-settings-btn-success');
+                    if (goLiveHint) goLiveHint.textContent = 'Click to activate AI Agent';
                 } else {
-                    // Not ready - disable button
-                    goLiveBtn.textContent = '🔒 Cannot Go Live';
+                    btnIcon.textContent = '🔒';
+                    btnText.textContent = 'Cannot Go Live';
                     goLiveBtn.disabled = true;
-                    goLiveBtn.classList.remove('is-live', 'ai-settings-btn-success');
-                    goLiveBtn.classList.add('ai-settings-btn-secondary');
-                }
-            }
-            
-            // Update progress bar
-            if (progressBar) {
-                const fill = progressBar.querySelector('.ai-settings-progress-fill');
-                if (fill) {
-                    fill.style.width = `${readiness.score}%`;
-                    
-                    // Color based on score
-                    if (readiness.score >= 80) {
-                        fill.style.background = '#10b981'; // Green
-                    } else if (readiness.score >= 50) {
-                        fill.style.background = '#f59e0b'; // Orange
-                    } else {
-                        fill.style.background = '#ef4444'; // Red
-                    }
+                    if (goLiveHint) goLiveHint.textContent = 'Fix issues below to enable';
                 }
             }
             
@@ -482,7 +495,7 @@ class AIAgentSettingsManager {
     }
     
     /**
-     * Render blockers list
+     * Render blockers list (NEW DESIGN)
      */
     renderBlockers(blockers, container) {
         if (!container) return;
@@ -494,26 +507,52 @@ class AIAgentSettingsManager {
         }
         
         container.style.display = 'block';
+        
+        // Map blocker codes to icons and priorities
+        const blockerMeta = {
+            'NO_TEMPLATE': { icon: '📋', priority: 'critical', category: 'Templates', impact: 30 },
+            'MISSING_VARIABLES': { icon: '🔧', priority: 'critical', category: 'Configuration', impact: 25 },
+            'NO_TWILIO': { icon: '📞', priority: 'critical', category: 'Telephony', impact: 30 },
+            'NO_VOICE': { icon: '🎙️', priority: 'warning', category: 'Voice', impact: 15 },
+            'DEFAULT': { icon: '⚠️', priority: 'warning', category: 'Configuration', impact: 10 }
+        };
+        
         container.innerHTML = `
-            <div class="ai-settings-blockers-header">
-                <h4>⚠️ Issues to Fix (${blockers.length})</h4>
-                <p>Resolve these blockers to go live:</p>
+            <div class="action-center-header">
+                <h4>🚨 Action Required (${blockers.length})</h4>
+                <p>Resolve these issues to enable your AI Agent for production</p>
             </div>
-            <div class="ai-settings-blockers-list">
-                ${blockers.map(blocker => `
-                    <div class="ai-settings-blocker-item">
-                        <div class="blocker-icon">🚫</div>
-                        <div class="blocker-content">
-                            <div class="blocker-code">${blocker.code}</div>
-                            <div class="blocker-message">${blocker.message}</div>
+            <div class="action-center-list">
+                ${blockers.map(blocker => {
+                    const meta = blockerMeta[blocker.code] || blockerMeta['DEFAULT'];
+                    return `
+                        <div class="action-card">
+                            <div class="action-icon ${meta.priority}">
+                                ${meta.icon}
+                            </div>
+                            <div class="action-content">
+                                <div class="action-header">
+                                    <span class="action-priority ${meta.priority}">
+                                        ${meta.priority === 'critical' ? '🔴 CRITICAL' : '🟡 WARNING'}
+                                    </span>
+                                    <span class="action-code">${blocker.code}</span>
+                                </div>
+                                <div class="action-message">${blocker.message}</div>
+                                <div class="action-impact">
+                                    <span>💡 Impact:</span>
+                                    <span class="action-impact-points">+${meta.impact} points</span>
+                                    <span>when resolved</span>
+                                </div>
+                            </div>
+                            ${blocker.target ? `
+                                <button class="action-fix-btn" onclick="aiAgentSettings.navigateToFix('${blocker.target}')">
+                                    <span>Fix Now</span>
+                                    <i class="fas fa-arrow-right"></i>
+                                </button>
+                            ` : ''}
                         </div>
-                        ${blocker.target ? `
-                            <button class="blocker-fix-btn" onclick="aiAgentSettings.navigateToFix('${blocker.target}')">
-                                Fix Now →
-                            </button>
-                        ` : ''}
-                    </div>
-                `).join('')}
+                    `;
+                }).join('')}
             </div>
         `;
     }
