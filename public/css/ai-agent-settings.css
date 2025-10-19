@@ -52,6 +52,17 @@
     padding-right: 0 !important;
 }
 
+/* Full-bleed escape to bypass legacy page containers while keeping inner max 1400px */
+#ai-agent-settings-content {
+    position: relative;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw !important;
+    margin-right: -50vw !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+}
+
 /* ============================================================================
    STATUS BANNER
    ============================================================================ */
