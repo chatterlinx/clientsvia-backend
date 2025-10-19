@@ -393,6 +393,21 @@ body {
 }
 
 
+/* ==========================================================================
+   GLOBAL LAYOUT NORMALIZATION
+   Force uniform container width across legacy and modern pages
+   Adjust --cv-container-max if you want a different global cap
+   ==========================================================================
+*/
+:root {
+    --cv-container-max: 1400px;
+}
+
+.container {
+    max-width: var(--cv-container-max) !important;
+}
+
+
 /* ============================================================================
    END OF STYLESHEET
    ============================================================================ */
