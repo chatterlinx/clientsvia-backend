@@ -273,7 +273,25 @@ class AIAgentSettingsManager {
             this.aiCoreTemplatesManager = new AiCoreTemplatesManager(this);
         }
         
+        try {
+            const subTab = document.getElementById('ai-settings-aicore-templates-content');
+            const rootContainer = document.querySelector('.ai-settings-container');
+            console.log('🧩 [LAYOUT CHECK] before-load', {
+                root: rootContainer ? getComputedStyle(rootContainer).maxWidth : 'n/a',
+                subTab: subTab ? getComputedStyle(subTab).maxWidth : 'n/a'
+            });
+        } catch {}
+
         await this.aiCoreTemplatesManager.load();
+
+        try {
+            const subTab = document.getElementById('ai-settings-aicore-templates-content');
+            const rootContainer = document.querySelector('.ai-settings-container');
+            console.log('🧩 [LAYOUT CHECK] after-load', {
+                root: rootContainer ? getComputedStyle(rootContainer).maxWidth : 'n/a',
+                subTab: subTab ? getComputedStyle(subTab).maxWidth : 'n/a'
+            });
+        } catch {}
     }
     
     /**
