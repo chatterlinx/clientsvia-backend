@@ -35,6 +35,8 @@ class TwilioControlCenter {
         this.health = null;
         this.activity = [];
         this.refreshInterval = null;
+        this.isRefreshing = false;
+        this.backoffMs = 0;
     }
 
     /**
@@ -75,20 +77,20 @@ class TwilioControlCenter {
         console.log('   - Health:   /api/company/' + this.companyId + '/twilio-control/health');
         console.log('   - Activity: /api/company/' + this.companyId + '/twilio-control/activity');
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const fetchWithOpts = (url) => fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` },
+            signal: controller.signal,
+            cache: 'no-cache'
+        });
+
         const [statusRes, configRes, healthRes, activityRes] = await Promise.all([
-            fetch(`/api/company/${this.companyId}/twilio-control/status`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            }),
-            fetch(`/api/company/${this.companyId}/twilio-control/config`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            }),
-            fetch(`/api/company/${this.companyId}/twilio-control/health`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            }),
-            fetch(`/api/company/${this.companyId}/twilio-control/activity?limit=5`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-        ]);
+            fetchWithOpts(`/api/company/${this.companyId}/twilio-control/status`),
+            fetchWithOpts(`/api/company/${this.companyId}/twilio-control/config`),
+            fetchWithOpts(`/api/company/${this.companyId}/twilio-control/health`),
+            fetchWithOpts(`/api/company/${this.companyId}/twilio-control/activity?limit=5`)
+        ]).finally(() => clearTimeout(timeoutId));
 
         console.log('📞 [TWILIO CONTROL] LOAD CHECKPOINT 3: All responses received');
         console.log('   - Status HTTP:   ', statusRes.status, statusRes.ok ? '✅' : '❌');
@@ -610,13 +612,28 @@ class TwilioControlCenter {
      * Refresh all data
      */
     async refresh() {
+        if (this.isRefreshing) {
+            console.warn('⏳ [TWILIO CONTROL] Refresh already in progress, skipping');
+            return;
+        }
+        this.isRefreshing = true;
         console.log('🔄 [TWILIO CONTROL] Refreshing...');
         try {
             await this.loadAllData();
             this.render();
+            this.backoffMs = 0; // reset backoff on success
             console.log('✅ [TWILIO CONTROL] Refreshed');
         } catch (error) {
             console.error('❌ [TWILIO CONTROL] Refresh failed:', error);
+            // Exponential backoff up to 5 minutes
+            this.backoffMs = this.backoffMs ? Math.min(this.backoffMs * 2, 300000) : 5000;
+            console.warn(`⏱️ [TWILIO CONTROL] Applying backoff: ${this.backoffMs}ms`);
+            this.stopAutoRefresh();
+            setTimeout(() => {
+                this.startAutoRefresh();
+            }, this.backoffMs);
+        } finally {
+            this.isRefreshing = false;
         }
     }
 
@@ -628,11 +645,12 @@ class TwilioControlCenter {
             clearInterval(this.refreshInterval);
         }
 
+        const intervalMs = this.backoffMs > 0 ? Math.max(this.backoffMs, 30000) : 30000;
         this.refreshInterval = setInterval(() => {
             this.refresh();
-        }, 30000); // 30 seconds
+        }, intervalMs);
 
-        console.log('🔄 [TWILIO CONTROL] Auto-refresh enabled (30s)');
+        console.log(`🔄 [TWILIO CONTROL] Auto-refresh enabled (${intervalMs / 1000}s)`);
     }
 
     /**

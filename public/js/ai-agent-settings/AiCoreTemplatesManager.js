@@ -63,7 +63,7 @@ class AiCoreTemplatesManager {
      */
     async loadAvailableTemplates() {
         try {
-            const response = await fetch('/api/admin/global-instant-responses/published', {
+			const response = await fetch('/api/admin/global-instant-responses/published', {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 }
@@ -73,9 +73,11 @@ class AiCoreTemplatesManager {
                 throw new Error(`HTTP ${response.status}`);
             }
             
-            this.availableTemplates = await response.json();
-            
-            console.log('✅ [AICORE TEMPLATES] Available templates loaded:', this.availableTemplates.length);
+			const payload = await response.json();
+			// Support both array and { success, data } shapes
+			this.availableTemplates = Array.isArray(payload) ? payload : (payload && payload.data ? payload.data : []);
+			
+			console.log('✅ [AICORE TEMPLATES] Available templates loaded:', this.availableTemplates.length);
             
         } catch (error) {
             console.error('❌ [AICORE TEMPLATES] Failed to load available templates:', error);

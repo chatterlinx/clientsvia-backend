@@ -29,7 +29,8 @@ class AIAgentSettingsManager {
         this.fillerWordsManager = null;
         this.aiCoreTemplatesManager = null;
         this.scenariosManager = null;
-        this.templateHubManager = null;
+		// Legacy Template Hub removed (replaced by AiCore Templates)
+		this.templateHubManager = null;
         this.analyticsManager = null;
         
         console.log(`🤖 [AI AGENT SETTINGS] Initialized for company: ${companyId}`);
@@ -181,9 +182,7 @@ class AIAgentSettingsManager {
                 case 'scenarios':
                     await this.loadScenarios();
                     break;
-                case 'template-hub':
-                    await this.loadTemplateHub();
-                    break;
+				// 'template-hub' removed
                 case 'analytics':
                     await this.loadAnalytics();
                     break;
@@ -294,15 +293,7 @@ class AIAgentSettingsManager {
     /**
      * Load Template Hub sub-tab
      */
-    async loadTemplateHub() {
-        console.log('🏢 [AI AGENT SETTINGS] Loading template hub...');
-        
-        if (!this.templateHubManager) {
-            this.templateHubManager = new TemplateHubManager(this);
-        }
-        
-        await this.templateHubManager.load();
-    }
+    // Legacy loadTemplateHub removed
     
     /**
      * Load Analytics sub-tab
