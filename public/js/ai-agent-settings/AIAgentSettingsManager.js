@@ -208,22 +208,6 @@ class AIAgentSettingsManager {
     }
     
     /**
-     * Save variables (called from UI)
-     */
-    async saveVariables() {
-        if (this.variablesManager) {
-            await this.variablesManager.save();
-        }
-    }
-    
-    /**
-     * Preview variables (called from UI)
-     */
-    async previewVariables() {
-        alert('Preview feature coming soon!');
-    }
-    
-    /**
      * Load Filler Words sub-tab
      */
     async loadFillerWords() {
@@ -308,11 +292,6 @@ class AIAgentSettingsManager {
         
         await this.scenariosManager.load();
     }
-    
-    /**
-     * Load Template Hub sub-tab
-     */
-    // Legacy loadTemplateHub removed
     
     /**
      * Load Analytics sub-tab
