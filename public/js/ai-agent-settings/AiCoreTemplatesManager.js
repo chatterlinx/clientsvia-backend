@@ -24,90 +24,11 @@ class AiCoreTemplatesManager {
         console.log('🧠 [AICORE TEMPLATES] Initialized');
     }
     
-    // ========== DEBUG UTILITIES (temporary, to isolate narrow layout) ==========
-    getElementMetrics(element) {
-        if (!element) return 'n/a';
-        try {
-            const cs = getComputedStyle(element);
-            const rect = element.getBoundingClientRect();
-            return {
-                width: cs.width,
-                maxWidth: cs.maxWidth,
-                minWidth: cs.minWidth,
-                marginLeft: cs.marginLeft,
-                marginRight: cs.marginRight,
-                paddingLeft: cs.paddingLeft,
-                paddingRight: cs.paddingRight,
-                rectWidth: Math.round(rect.width) + 'px',
-                offsetWidth: element.offsetWidth + 'px',
-                clientWidth: element.clientWidth + 'px',
-                scrollWidth: element.scrollWidth + 'px',
-                classList: Array.from(element.classList || [])
-            };
-        } catch (e) {
-            return { error: e.message };
-        }
-    }
-    
-    logLayoutCheckpoint(label) {
-        try {
-            const htmlEl = document.documentElement;
-            const bodyEl = document.body;
-            const rootContainer = document.querySelector('.ai-settings-container');
-            const subTab = document.getElementById('ai-settings-aicore-templates-content');
-            const container = document.getElementById('aicore-templates-container');
-            const nearestTailwindContainer = container ? container.closest('.container') : null;
-            console.group(`📐 [AICORE LAYOUT] ${label}`);
-            console.log('html      =>', this.getElementMetrics(htmlEl));
-            console.log('body      =>', this.getElementMetrics(bodyEl));
-            console.log('.ai-settings-container =>', this.getElementMetrics(rootContainer));
-            console.log('#ai-settings-aicore-templates-content =>', this.getElementMetrics(subTab));
-            console.log('#aicore-templates-container =>', this.getElementMetrics(container));
-            console.log('nearest .container =>', this.getElementMetrics(nearestTailwindContainer));
-            console.groupEnd();
-        } catch (e) {
-            console.warn('[AICORE LAYOUT] checkpoint failed:', e);
-        }
-    }
-    
-    ensureDebugOverlay() {
-        try {
-            const existing = document.getElementById('aicore-layout-debug');
-            if (existing) return existing;
-            const el = document.createElement('div');
-            el.id = 'aicore-layout-debug';
-            el.style.cssText = 'position:fixed;bottom:12px;right:12px;z-index:99999;background:#111827;color:#e5e7eb;border:2px solid #3b82f6;border-radius:8px;padding:10px 12px;font:12px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;box-shadow:0 4px 16px rgba(0,0,0,0.25);max-width:50vw;';
-            el.innerHTML = '<div style="font-weight:700;margin-bottom:6px">AiCore Layout</div><pre id="aicore-layout-debug-pre" style="margin:0;white-space:pre-wrap"></pre>';
-            document.body.appendChild(el);
-            return el;
-        } catch (e) {
-            return null;
-        }
-    }
-    
-    updateDebugOverlay() {
-        try {
-            const el = this.ensureDebugOverlay();
-            if (!el) return;
-            const pre = el.querySelector('#aicore-layout-debug-pre');
-            const rootContainer = document.querySelector('.ai-settings-container');
-            const subTab = document.getElementById('ai-settings-aicore-templates-content');
-            const container = document.getElementById('aicore-templates-container');
-            const data = {
-                root: this.getElementMetrics(rootContainer),
-                subTab: this.getElementMetrics(subTab),
-                container: this.getElementMetrics(container)
-            };
-            pre.textContent = JSON.stringify(data, null, 2);
-        } catch {}
-    }
-    
     /**
      * Load currently loaded templates for this company
      */
     async load() {
         console.log('🧠 [AICORE TEMPLATES] Loading...');
-        this.logLayoutCheckpoint('before-load');
         
         try {
             // Load loaded templates
@@ -135,8 +56,6 @@ class AiCoreTemplatesManager {
             this.loadedTemplates = [];
             this.render();
         }
-        this.logLayoutCheckpoint('after-load');
-        this.updateDebugOverlay();
     }
     
     /**
@@ -262,8 +181,6 @@ class AiCoreTemplatesManager {
         }
         
         container.innerHTML = html;
-        this.logLayoutCheckpoint('after-render');
-        this.updateDebugOverlay();
     }
     
     /**
