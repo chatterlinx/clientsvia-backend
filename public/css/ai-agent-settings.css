@@ -41,7 +41,7 @@
 #ai-agent-settings-content,
 #ai-agent-settings-content .ai-settings-container {
     width: 100% !important;
-    max-width: 1260px !important; /* align with main page container */
+    max-width: 1400px !important; /* unified platform width */
     margin: 0 auto !important;
 }
 
