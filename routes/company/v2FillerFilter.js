@@ -373,6 +373,12 @@ router.post('/company/:companyId/configuration/filler-filter/scan', async (req, 
  * Add a custom filler word
  */
 router.post('/company/:companyId/configuration/filler-filter/custom', async (req, res) => {
+    console.log(`🔥 [FILLER FILTER] ━━━ POST CUSTOM FILLER ROUTE HIT ━━━`);
+    console.log(`🔥 [FILLER FILTER] Full URL: ${req.originalUrl}`);
+    console.log(`🔥 [FILLER FILTER] Method: ${req.method}`);
+    console.log(`🔥 [FILLER FILTER] Params:`, req.params);
+    console.log(`🔥 [FILLER FILTER] Body:`, req.body);
+    
     const { companyId } = req.params;
     const { word } = req.body;
     
