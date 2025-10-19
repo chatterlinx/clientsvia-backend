@@ -430,7 +430,8 @@ class AiCoreTemplatesManager {
                 <!-- Activate Button -->
                 <button 
                     onclick="window.aiCoreTemplatesManager.activateTemplate('${template._id}')"
-                    class="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-lg transition-all shadow-md hover:shadow-xl flex items-center justify-center gap-2 ${isActivating ? 'cursor-not-allowed' : ''}"
+                    class="w-full px-4 py-3 text-white font-bold rounded-lg transition-all shadow-md hover:shadow-xl flex items-center justify-center gap-2 ${isActivating ? 'cursor-not-allowed' : ''}"
+                    style="background: linear-gradient(to right, #2563eb, #4f46e5); ${isActivating ? 'opacity: 0.5;' : ''}"
                     ${isActivating ? 'disabled' : ''}
                 >
                     ${isActivating ? '<i class="fas fa-spinner fa-spin"></i> Activating...' : '<i class="fas fa-plus-circle"></i> Activate Template'}
