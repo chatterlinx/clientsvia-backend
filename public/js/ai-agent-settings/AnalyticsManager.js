@@ -91,6 +91,17 @@ class AnalyticsManager {
                 business: this.data.business.success
             });
             
+            // Check if there's any actual data
+            const hasData = this.data.overview?.overview?.totalCalls?.value > 0;
+            console.log('📊 [ANALYTICS] Checkpoint 9: Has call data?', hasData);
+            
+            if (!hasData) {
+                console.log('📊 [ANALYTICS] No call data yet - rendering empty state');
+                this.renderEmptyState();
+                console.log('✅ [ANALYTICS] Checkpoint 10: Empty state rendered');
+                return;
+            }
+            
             console.log('📊 [ANALYTICS] Checkpoint 9: Rendering UI...');
             this.render();
             console.log('✅ [ANALYTICS] Checkpoint 10: Load complete');
@@ -629,6 +640,81 @@ class AnalyticsManager {
         }, 60000); // 60 seconds
         
         console.log('✅ [ANALYTICS] Auto-refresh enabled (60s)');
+    }
+
+    /**
+     * Render empty state (no call data yet)
+     */
+    renderEmptyState() {
+        const container = document.getElementById('ai-settings-analytics-content');
+        if (!container) return;
+        
+        container.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; min-height: 400px;">
+                <div style="text-align: center; max-width: 600px; padding: 40px;">
+                    <!-- Icon -->
+                    <div style="font-size: 80px; margin-bottom: 24px; opacity: 0.3;">📊</div>
+                    
+                    <!-- Title -->
+                    <h3 style="font-size: 24px; font-weight: 700; color: #111827; margin-bottom: 12px;">
+                        No Analytics Data Yet
+                    </h3>
+                    
+                    <!-- Description -->
+                    <p style="font-size: 16px; color: #6b7280; line-height: 1.6; margin-bottom: 32px;">
+                        We checked, but there's no call data available yet. Once your AI Agent starts handling calls, 
+                        you'll see beautiful real-time analytics here including match rates, confidence scores, 
+                        response times, and business intelligence insights.
+                    </p>
+                    
+                    <!-- Info Banner -->
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; color: white; text-align: left;">
+                        <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            💡 What you'll see here once data is available:
+                        </h4>
+                        <ul style="list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.5;">
+                            <li style="display: flex; align-items: start; gap: 8px;">
+                                <span style="font-size: 16px;">🎯</span>
+                                <span><strong>Match Rate</strong> - How often the AI successfully understands questions</span>
+                            </li>
+                            <li style="display: flex; align-items: start; gap: 8px;">
+                                <span style="font-size: 16px;">💯</span>
+                                <span><strong>Confidence Scores</strong> - How confident the AI is in its responses</span>
+                            </li>
+                            <li style="display: flex; align-items: start; gap: 8px;">
+                                <span style="font-size: 16px;">⚡</span>
+                                <span><strong>Response Speed</strong> - How fast the AI responds (target: <25ms)</span>
+                            </li>
+                            <li style="display: flex; align-items: start; gap: 8px;">
+                                <span style="font-size: 16px;">📈</span>
+                                <span><strong>Call Volume Trends</strong> - Daily call patterns and peak hours</span>
+                            </li>
+                            <li style="display: flex; align-items: start; gap: 8px;">
+                                <span style="font-size: 16px;">🔍</span>
+                                <span><strong>Knowledge Gaps</strong> - Questions the AI struggles with (for improvement)</span>
+                            </li>
+                            <li style="display: flex; align-items: start; gap: 8px;">
+                                <span style="font-size: 16px;">🎭</span>
+                                <span><strong>Top Scenarios</strong> - Most-used conversation flows</span>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Next Steps -->
+                    <div style="margin-top: 32px; padding: 20px; background: #f9fafb; border-radius: 8px; border: 2px dashed #e5e7eb;">
+                        <p style="font-size: 14px; color: #6b7280; margin-bottom: 12px;">
+                            <strong style="color: #111827;">🚀 To start seeing analytics:</strong>
+                        </p>
+                        <ol style="text-align: left; font-size: 14px; color: #6b7280; line-height: 1.8; padding-left: 20px;">
+                            <li>Activate a template in the <strong>AiCore Templates</strong> tab</li>
+                            <li>Configure your Twilio settings in the <strong>Dashboard</strong> tab</li>
+                            <li>Make test calls or wait for real customer calls</li>
+                            <li>Come back here to see your analytics! (Auto-refreshes every 60s)</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     /**
