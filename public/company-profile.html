@@ -1312,9 +1312,9 @@
                                     <i class="fas fa-comments mr-2"></i>
                                     <span>Scenarios</span>
                                 </button>
-                                <button class="ai-settings-subtab-btn" data-subtab="template-info">
+                                <button class="ai-settings-subtab-btn" data-subtab="template-hub">
                                     <i class="fas fa-box mr-2"></i>
-                                    <span>Template</span>
+                                    <span>Templates</span>
                                 </button>
                                 <button class="ai-settings-subtab-btn" data-subtab="analytics">
                                     <i class="fas fa-chart-line mr-2"></i>
@@ -1487,24 +1487,14 @@
                             </div>
                             
                             <!-- ========================================== -->
-                            <!-- SUB-TAB 4: TEMPLATE INFO -->
+                            <!-- SUB-TAB 4: TEMPLATE HUB (NEW) -->
                             <!-- ========================================== -->
-                            <div id="ai-settings-template-info-content" class="ai-settings-subtab-content">
+                            <div id="ai-settings-template-hub-content" class="ai-settings-subtab-content">
                                 
-                                <div class="ai-settings-section">
-                                    <div class="ai-settings-section-header">
-                                        <h3>
-                                            <i class="fas fa-box text-blue-600"></i>
-                                            Template Details
-                                        </h3>
-                                    </div>
-                                    <div class="ai-settings-section-content expanded">
-                                        <div id="template-info-container">
-                                            <div class="text-center py-12 text-gray-400">
-                                                <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
-                                                <p>Loading template information...</p>
-                                            </div>
-                                        </div>
+                                <div id="template-hub-container" class="w-full">
+                                    <div class="text-center py-12 text-gray-400">
+                                        <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
+                                        <p>Loading templates...</p>
                                     </div>
                                 </div>
                                 
@@ -1570,7 +1560,7 @@
                         <script src="/js/ai-agent-settings/VariablesManager.js?v=4.0"></script>
                         <script src="/js/ai-agent-settings/FillerWordsManager.js?v=4.0"></script>
                         <script src="/js/ai-agent-settings/ScenariosManager.js?v=4.0"></script>
-                        <script src="/js/ai-agent-settings/TemplateInfoManager.js?v=4.0"></script>
+                        <script src="/js/ai-agent-settings/TemplateHubManager.js?v=1.0"></script>
                         <script src="/js/ai-agent-settings/AnalyticsManager.js?v=4.0"></script>
                         <script src="/js/ai-agent-settings/AIAgentSettingsManager.js?v=4.0"></script>
                         
@@ -1624,7 +1614,7 @@
                                         window.variablesManager = aiAgentSettings.variablesManager;
                                         window.fillerWordsManager = aiAgentSettings.fillerWordsManager;
                                         window.scenariosManager = aiAgentSettings.scenariosManager;
-                                        window.templateInfoManager = aiAgentSettings.templateInfoManager;
+                                        window.templateHubManager = aiAgentSettings.templateHubManager;
                                         window.analyticsManager = aiAgentSettings.analyticsManager;
                                     } else {
                                     }

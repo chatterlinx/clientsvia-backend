@@ -1493,5 +1493,221 @@ function calculateVariablesStatus(company) {
     };
 }
 
+/**
+ * ============================================================================
+ * TEMPLATE HUB ENDPOINTS - NEW REFERENCE-BASED SYSTEM
+ * ============================================================================
+ */
+
+/**
+ * GET /api/company/:companyId/configuration/templates
+ * Get all loaded templates for this company
+ */
+router.get('/:companyId/configuration/templates', async (req, res) => {
+    console.log(`[TEMPLATE HUB] GET /configuration/templates for company: ${req.params.companyId}`);
+    
+    try {
+        const company = await Company.findById(req.params.companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Get template references from aiAgentSettings
+        const templateRefs = company.aiAgentSettings?.templateReferences || [];
+        
+        if (templateRefs.length === 0) {
+            return res.json([]);
+        }
+        
+        // Fetch full template details from Global AI Brain
+        const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+        const templates = [];
+        
+        for (const ref of templateRefs) {
+            if (!ref.enabled) continue; // Skip disabled templates
+            
+            const template = await GlobalInstantResponseTemplate.findById(ref.templateId);
+            
+            if (!template) {
+                console.warn(`[TEMPLATE HUB] Template ${ref.templateId} not found in Global AI Brain`);
+                continue;
+            }
+            
+            // Calculate stats
+            let totalScenarios = 0;
+            let totalTriggers = 0;
+            const totalCategories = template.categories.length;
+            
+            template.categories.forEach(cat => {
+                totalScenarios += cat.scenarios.length;
+                cat.scenarios.forEach(scenario => {
+                    totalTriggers += (scenario.triggers || []).length;
+                });
+            });
+            
+            templates.push({
+                templateId: template._id,
+                name: template.name,
+                description: template.description,
+                icon: template.icon,
+                version: template.version || 'v1.0.0',
+                lastUpdated: template.updatedAt,
+                priority: ref.priority,
+                clonedAt: ref.clonedAt,
+                stats: {
+                    categories: totalCategories,
+                    scenarios: totalScenarios,
+                    triggers: totalTriggers
+                }
+            });
+        }
+        
+        res.json(templates);
+        
+    } catch (error) {
+        console.error('[TEMPLATE HUB] Error fetching templates:', error);
+        res.status(500).json({ error: 'Failed to fetch templates' });
+    }
+});
+
+/**
+ * POST /api/company/:companyId/configuration/templates
+ * Add a template reference to this company
+ */
+router.post('/:companyId/configuration/templates', async (req, res) => {
+    console.log(`[TEMPLATE HUB] POST /configuration/templates for company: ${req.params.companyId}`);
+    
+    try {
+        const { templateId } = req.body;
+        
+        if (!templateId) {
+            return res.status(400).json({ error: 'templateId is required' });
+        }
+        
+        const company = await Company.findById(req.params.companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Verify template exists
+        const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+        const template = await GlobalInstantResponseTemplate.findById(templateId);
+        
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        // Initialize aiAgentSettings if needed
+        if (!company.aiAgentSettings) {
+            company.aiAgentSettings = {
+                templateReferences: [],
+                variableDefinitions: [],
+                variables: new Map()
+            };
+        }
+        
+        if (!company.aiAgentSettings.templateReferences) {
+            company.aiAgentSettings.templateReferences = [];
+        }
+        
+        // Check if template is already loaded
+        const existing = company.aiAgentSettings.templateReferences.find(
+            ref => ref.templateId.toString() === templateId.toString()
+        );
+        
+        if (existing) {
+            return res.status(400).json({ error: 'Template is already loaded' });
+        }
+        
+        // Add template reference
+        company.aiAgentSettings.templateReferences.push({
+            templateId: templateId,
+            enabled: true,
+            priority: company.aiAgentSettings.templateReferences.length + 1,
+            clonedAt: new Date()
+        });
+        
+        company.aiAgentSettings.lastUpdated = new Date();
+        company.markModified('aiAgentSettings');
+        
+        await company.save();
+        
+        // Trigger background placeholder scan
+        const PlaceholderScanService = require('../../services/PlaceholderScanService');
+        setImmediate(async () => {
+            try {
+                await PlaceholderScanService.scanCompany(req.params.companyId);
+                console.log(`✅ [TEMPLATE HUB] Background placeholder scan completed for company: ${req.params.companyId}`);
+            } catch (scanError) {
+                console.error(`❌ [TEMPLATE HUB] Background placeholder scan failed:`, scanError);
+            }
+        });
+        
+        // Clear cache
+        const CacheHelper = require('../../utils/cacheHelper');
+        await CacheHelper.clearCompanyCache(req.params.companyId);
+        
+        res.json({ 
+            success: true, 
+            message: 'Template added successfully',
+            templateId: templateId
+        });
+        
+    } catch (error) {
+        console.error('[TEMPLATE HUB] Error adding template:', error);
+        res.status(500).json({ error: 'Failed to add template' });
+    }
+});
+
+/**
+ * DELETE /api/company/:companyId/configuration/templates/:templateId
+ * Remove a template reference from this company
+ */
+router.delete('/:companyId/configuration/templates/:templateId', async (req, res) => {
+    console.log(`[TEMPLATE HUB] DELETE /configuration/templates/${req.params.templateId} for company: ${req.params.companyId}`);
+    
+    try {
+        const company = await Company.findById(req.params.companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        if (!company.aiAgentSettings || !company.aiAgentSettings.templateReferences) {
+            return res.status(404).json({ error: 'No templates loaded' });
+        }
+        
+        // Find and remove the template reference
+        const initialLength = company.aiAgentSettings.templateReferences.length;
+        company.aiAgentSettings.templateReferences = company.aiAgentSettings.templateReferences.filter(
+            ref => ref.templateId.toString() !== req.params.templateId.toString()
+        );
+        
+        if (company.aiAgentSettings.templateReferences.length === initialLength) {
+            return res.status(404).json({ error: 'Template not found in company' });
+        }
+        
+        company.aiAgentSettings.lastUpdated = new Date();
+        company.markModified('aiAgentSettings');
+        
+        await company.save();
+        
+        // Clear cache
+        const CacheHelper = require('../../utils/cacheHelper');
+        await CacheHelper.clearCompanyCache(req.params.companyId);
+        
+        res.json({ 
+            success: true, 
+            message: 'Template removed successfully'
+        });
+        
+    } catch (error) {
+        console.error('[TEMPLATE HUB] Error removing template:', error);
+        res.status(500).json({ error: 'Failed to remove template' });
+    }
+});
+
 module.exports = router;
 

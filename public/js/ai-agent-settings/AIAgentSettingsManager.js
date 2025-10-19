@@ -28,7 +28,7 @@ class AIAgentSettingsManager {
         this.variablesManager = null;
         this.fillerWordsManager = null;
         this.scenariosManager = null;
-        this.templateInfoManager = null;
+        this.templateHubManager = null;
         this.analyticsManager = null;
         
         console.log(`🤖 [AI AGENT SETTINGS] Initialized for company: ${companyId}`);
@@ -177,8 +177,8 @@ class AIAgentSettingsManager {
                 case 'scenarios':
                     await this.loadScenarios();
                     break;
-                case 'template-info':
-                    await this.loadTemplateInfo();
+                case 'template-hub':
+                    await this.loadTemplateHub();
                     break;
                 case 'analytics':
                     await this.loadAnalytics();
@@ -275,16 +275,16 @@ class AIAgentSettingsManager {
     }
     
     /**
-     * Load Template Info sub-tab
+     * Load Template Hub sub-tab
      */
-    async loadTemplateInfo() {
-        console.log('📦 [AI AGENT SETTINGS] Loading template info...');
+    async loadTemplateHub() {
+        console.log('🏢 [AI AGENT SETTINGS] Loading template hub...');
         
-        if (!this.templateInfoManager) {
-            this.templateInfoManager = new TemplateInfoManager(this);
+        if (!this.templateHubManager) {
+            this.templateHubManager = new TemplateHubManager(this);
         }
         
-        await this.templateInfoManager.load();
+        await this.templateHubManager.load();
     }
     
     /**
