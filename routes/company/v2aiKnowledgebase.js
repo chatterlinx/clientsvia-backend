@@ -38,7 +38,7 @@ const v2Company = require('../../models/v2Company');
  * 
  * Returns action items for admin to resolve
  */
-router.get('/api/company/:companyId/knowledgebase/action-items', async (req, res) => {
+router.get('/company/:companyId/knowledgebase/action-items', async (req, res) => {
     const { companyId } = req.params;
     
     console.log(`🧠 [KNOWLEDGEBASE API] Fetching action items for company: ${companyId}`);
@@ -166,7 +166,7 @@ router.get('/api/company/:companyId/knowledgebase/action-items', async (req, res
  * 
  * Marks an issue as resolved (prevents it from appearing again)
  */
-router.post('/api/company/:companyId/knowledgebase/action-items/:itemId/resolve', async (req, res) => {
+router.post('/company/:companyId/knowledgebase/action-items/:itemId/resolve', async (req, res) => {
     const { companyId, itemId } = req.params;
     const { question, actionTaken } = req.body;
     

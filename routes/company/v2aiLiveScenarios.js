@@ -32,7 +32,7 @@ const GlobalInstantResponseTemplate = require('../../models/GlobalInstantRespons
  * 
  * Returns all scenarios from active templates
  */
-router.get('/api/company/:companyId/live-scenarios', async (req, res) => {
+router.get('/company/:companyId/live-scenarios', async (req, res) => {
     const { companyId } = req.params;
     
     console.log(`🎭 [LIVE SCENARIOS API] Fetching scenarios for company: ${companyId}`);
