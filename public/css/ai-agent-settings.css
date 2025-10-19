@@ -28,7 +28,7 @@
 
 .ai-settings-container {
     width: 100%;
-    max-width: 1400px;
+    max-width: 1260px; /* Inner content width for clean spacing within 1400px main */
     margin: 0 auto;
     padding: 0 24px 24px 24px; /* Remove top padding to eliminate gap above sub-tabs */
     box-sizing: border-box;
@@ -38,10 +38,15 @@
    HARDEN AGAINST LEGACY NARROW CONTAINERS (scoped to AI Agent Settings tab)
    ============================================================================ */
 
-#ai-agent-settings-content,
+#ai-agent-settings-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+}
+
 #ai-agent-settings-content .ai-settings-container {
     width: 100% !important;
-    max-width: 1400px !important; /* unified platform width */
+    max-width: 1260px !important; /* Inner content capped at 1260px for clean spacing */
     margin: 0 auto !important;
 }
 
