@@ -271,6 +271,8 @@ class AIAgentSettingsManager {
         
         if (!this.aiCoreTemplatesManager) {
             this.aiCoreTemplatesManager = new AiCoreTemplatesManager(this);
+            // Expose globally for onclick handlers
+            window.aiCoreTemplatesManager = this.aiCoreTemplatesManager;
         }
         
         try {
