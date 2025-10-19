@@ -234,7 +234,7 @@ class VariablesManager {
     }
     
     /**
-     * Render variables UI (MODERN HERO HEADER + CARDS)
+     * Render variables UI
      */
     render() {
         const container = document.getElementById('variables-container');
@@ -245,72 +245,26 @@ class VariablesManager {
             return;
         }
         
-        // Calculate stats
-        const totalVars = this.variableDefinitions.length;
-        const filledVars = this.variableDefinitions.filter(v => {
-            const value = this.variables[v.key] || '';
-            return value.trim() !== '';
-        }).length;
-        const completionPercent = Math.round((filledVars / totalVars) * 100);
-        const requiredVars = this.variableDefinitions.filter(v => v.required).length;
-        const filledRequired = this.variableDefinitions.filter(v => {
-            if (!v.required) return false;
-            const value = this.variables[v.key] || '';
-            return value.trim() !== '';
-        }).length;
-        
-        // Hero header with stats
+        // Add scan button header
         let html = `
-            <!-- Hero Header -->
-            <div class="relative overflow-hidden rounded-2xl shadow-lg mb-8" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                <div class="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -mr-32 -mt-16"></div>
-                <div class="absolute bottom-0 left-0 w-48 h-48 bg-white opacity-5 rounded-full -ml-24 -mb-12"></div>
-                
-                <div class="relative px-8 py-6">
-                    <div class="flex items-center justify-between">
-                        <div class="flex-1">
-                            <h2 class="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-                                <i class="fas fa-sliders-h"></i>
-                                Company Variables
-                            </h2>
-                            <p class="text-white text-opacity-90 text-lg mb-4">
-                                Fill in your details once. They'll auto-replace across <strong>ALL 500+ AI scenarios!</strong>
-                            </p>
-                            <div class="bg-white bg-opacity-20 rounded-full h-3 overflow-hidden mb-2">
-                                <div class="bg-white h-full rounded-full transition-all duration-500" style="width: ${completionPercent}%"></div>
-                            </div>
-                            <div class="text-white text-opacity-90 text-sm font-medium">
-                                ${filledVars} of ${totalVars} variables filled · ${completionPercent}% complete
-                            </div>
-                        </div>
-                        <div class="flex gap-4 ml-8">
-                            <div class="bg-white bg-opacity-10 backdrop-blur-sm rounded-xl p-4 text-center min-w-[120px]">
-                                <div class="text-4xl font-bold text-white">${filledRequired}/${requiredVars}</div>
-                                <div class="text-white text-opacity-80 text-sm font-medium mt-1">Required</div>
-                            </div>
-                            <button 
-                                onclick="variablesManager.scanPlaceholders()"
-                                class="bg-white bg-opacity-10 backdrop-blur-sm hover:bg-opacity-20 rounded-xl p-4 text-center min-w-[120px] transition-all border-2 border-white border-opacity-20"
-                                title="Scan templates for new placeholders"
-                            >
-                                <div class="text-3xl mb-1">🔍</div>
-                                <div class="text-white text-sm font-bold">Scan Now</div>
-                            </button>
-                        </div>
+            <div class="flex items-center justify-between mb-6 bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg p-4">
+                <div>
+                    <div class="font-bold text-gray-900 text-lg">
+                        <i class="fas fa-sliders-h text-blue-600 mr-2"></i>
+                        Company Variables
+                    </div>
+                    <div class="text-sm text-gray-600 mt-1">
+                        Configure company-specific values used across all AI scenarios
                     </div>
                 </div>
-            </div>
-            
-            <!-- Pro Tip -->
-            <div class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4 mb-6 flex items-start gap-3">
-                <i class="fas fa-lightbulb text-blue-600 text-2xl mt-1"></i>
-                <div class="flex-1">
-                    <div class="font-bold text-blue-900 mb-1">💡 How Variables Work</div>
-                    <div class="text-blue-800 text-sm">
-                        Variables like <code class="bg-blue-200 text-blue-900 px-2 py-0.5 rounded font-mono text-xs">{companyName}</code> 
-                        are placeholders. When a caller asks "What's your company name?", your AI automatically replaces it with the actual value you enter below!
-                    </div>
-                </div>
+                <button 
+                    class="ai-settings-btn ai-settings-btn-primary"
+                    onclick="variablesManager.scanPlaceholders()"
+                    title="Scan templates for new placeholders"
+                >
+                    <i class="fas fa-search mr-2"></i>
+                    Scan for Placeholders
+                </button>
             </div>
         `;
         
@@ -345,7 +299,7 @@ class VariablesManager {
     }
     
     /**
-     * Render a category section (MODERN COLOR-CODED CARDS)
+     * Render a category section
      */
     renderCategory(categoryName, variables) {
         const categoryIcons = {
@@ -357,52 +311,21 @@ class VariablesManager {
             'General': '📝'
         };
         
-        const categoryColors = {
-            'Company Info': { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-900', badge: 'bg-blue-100 text-blue-800' },
-            'Pricing': { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-900', badge: 'bg-green-100 text-green-800' },
-            'Contact': { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-900', badge: 'bg-purple-100 text-purple-800' },
-            'Scheduling': { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-900', badge: 'bg-orange-100 text-orange-800' },
-            'Services': { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-900', badge: 'bg-indigo-100 text-indigo-800' },
-            'General': { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-900', badge: 'bg-gray-100 text-gray-800' }
-        };
-        
         const icon = categoryIcons[categoryName] || '📋';
-        const colors = categoryColors[categoryName] || categoryColors['General'];
         const categoryId = categoryName.toLowerCase().replace(/\s+/g, '-');
         
-        // Calculate completion
-        const filledCount = variables.filter(v => {
-            const value = this.variables[v.key] || '';
-            return value.trim() !== '';
-        }).length;
-        const completionPercent = Math.round((filledCount / variables.length) * 100);
-        
         let html = `
-            <div class="bg-white border-2 ${colors.border} rounded-xl shadow-md mb-6 overflow-hidden">
-                <!-- Card Header -->
-                <div class="${colors.bg} px-6 py-4 border-b-2 ${colors.border}">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <div class="text-4xl">${icon}</div>
-                            <div>
-                                <h3 class="text-xl font-bold ${colors.text}">${categoryName}</h3>
-                                <div class="text-sm ${colors.text} opacity-75">${variables.length} variable${variables.length === 1 ? '' : 's'}</div>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-4">
-                            <div class="text-right">
-                                <div class="text-2xl font-bold ${colors.text}" id="${categoryId}-complete">${filledCount}</div>
-                                <div class="text-xs ${colors.text} opacity-75">of ${variables.length}</div>
-                            </div>
-                            <div class="${colors.badge} px-4 py-2 rounded-lg font-bold text-sm">
-                                ${completionPercent}%
-                            </div>
-                        </div>
+            <div class="ai-settings-section mb-6">
+                <div class="ai-settings-section-header" onclick="this.nextElementSibling.classList.toggle('expanded')">
+                    <h3>
+                        ${icon} ${categoryName}
+                    </h3>
+                    <div class="ai-settings-section-status">
+                        <span id="${categoryId}-complete">0</span>/<span id="${categoryId}-total">${variables.length}</span> 
+                        <i class="fas fa-chevron-down ml-2"></i>
                     </div>
                 </div>
-                
-                <!-- Card Body -->
-                <div class="p-6 space-y-4">
+                <div class="ai-settings-section-content expanded">
         `;
         
         variables.forEach(varDef => {
@@ -418,13 +341,13 @@ class VariablesManager {
     }
     
     /**
-     * Render a single variable row (MODERN INLINE CARD)
+     * Render a single variable row
      */
     renderVariableRow(varDef) {
         const value = this.variables[varDef.key] || '';
         const isRequired = varDef.required || false;
         const isEmpty = value.trim() === '';
-        const isFilled = !isEmpty;
+        const errorClass = isRequired && isEmpty ? 'error' : '';
         const usageCount = varDef.usageCount || 0;
         
         const inputType = varDef.type === 'number' ? 'number' : 
@@ -434,79 +357,59 @@ class VariablesManager {
         
         const placeholder = varDef.example || `Enter ${varDef.label}...`;
         
-        // Status badge
-        const statusBadge = isFilled 
-            ? '<span class="px-2 py-1 bg-green-100 text-green-800 text-xs font-bold rounded-full flex items-center gap-1"><i class="fas fa-check-circle"></i> Filled</span>'
-            : isRequired
-                ? '<span class="px-2 py-1 bg-red-100 text-red-800 text-xs font-bold rounded-full flex items-center gap-1"><i class="fas fa-exclamation-circle"></i> Required</span>'
-                : '<span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded-full">Optional</span>';
-        
         return `
-            <div class="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-all" data-key="${varDef.key}">
-                <div class="flex items-start gap-4">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-2 mb-2">
-                            <code class="bg-white px-2 py-1 rounded text-sm font-mono text-blue-700 border border-blue-200">{${varDef.key}}</code>
-                            ${statusBadge}
-                        </div>
-                        <div class="font-semibold text-gray-900 mb-1">${varDef.label}</div>
-                        ${varDef.description ? `<div class="text-xs text-gray-600 mb-3">${varDef.description}</div>` : ''}
-                        <input 
-                            type="${inputType}"
-                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-gray-900 font-medium ai-settings-variable-input"
-                            data-key="${varDef.key}"
-                            value="${this.escapeHtml(value)}"
-                            placeholder="${placeholder}"
-                            ${varDef.pattern ? `pattern="${varDef.pattern}"` : ''}
-                        />
-                    </div>
-                    <div class="flex flex-col items-center gap-2 pt-8">
-                        <div class="text-center bg-white border-2 border-blue-200 rounded-lg p-3 min-w-[80px]">
-                            <div class="text-2xl font-bold text-blue-600">${usageCount}</div>
-                            <div class="text-xs text-gray-600 font-medium">uses</div>
-                        </div>
-                        <button 
-                            class="px-4 py-2 bg-white border-2 border-gray-300 hover:border-blue-500 hover:bg-blue-50 rounded-lg transition-all text-sm font-semibold text-gray-700 hover:text-blue-700 flex items-center gap-2"
-                            onclick="variablesManager.previewVariable('${varDef.key}')"
-                            title="Preview where this is used"
-                        >
-                            <i class="fas fa-eye"></i>
-                            Preview
-                        </button>
-                    </div>
+            <div class="ai-settings-variable-row" data-key="${varDef.key}">
+                <div class="ai-settings-variable-label">
+                    ${varDef.label}
+                    ${isRequired ? '<span class="text-red-600 ml-1">*</span>' : ''}
+                    ${varDef.description ? `
+                        <div class="text-xs text-gray-500 mt-1">${varDef.description}</div>
+                    ` : ''}
+                </div>
+                <input 
+                    type="${inputType}"
+                    class="ai-settings-variable-input ${errorClass}"
+                    data-key="${varDef.key}"
+                    value="${this.escapeHtml(value)}"
+                    placeholder="${placeholder}"
+                    ${varDef.pattern ? `pattern="${varDef.pattern}"` : ''}
+                />
+                <div class="ai-settings-variable-usage">
+                    <i class="fas fa-link text-gray-400"></i>
+                    <span class="font-semibold">${usageCount}</span>
+                    <div class="text-xs text-gray-400">uses</div>
+                </div>
+                <div class="ai-settings-variable-actions">
+                    <button 
+                        class="ai-settings-btn ai-settings-btn-secondary px-3 py-1 text-xs"
+                        onclick="variablesManager.previewVariable('${varDef.key}')"
+                        title="Preview where this is used"
+                    >
+                        <i class="fas fa-eye"></i>
+                    </button>
                 </div>
             </div>
         `;
     }
     
     /**
-     * Render empty state (MODERN UI)
+     * Render empty state
      */
     renderEmpty() {
         const container = document.getElementById('variables-container');
         if (!container) return;
         
         container.innerHTML = `
-            <div class="flex items-center justify-center min-h-[500px]">
-                <div class="text-center max-w-2xl px-8">
-                    <div class="inline-flex items-center justify-center w-32 h-32 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full shadow-lg mb-6">
-                        <i class="fas fa-box-open text-6xl text-blue-400"></i>
-                    </div>
-                    <h3 class="text-3xl font-bold text-gray-900 mb-3">No Template Active</h3>
-                    <p class="text-lg text-gray-600 mb-8 leading-relaxed">
-                        Activate a <strong>Global AI Brain template</strong> first.<br>
-                        Variables like <code class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">{companyName}</code> 
-                        will be auto-detected from your templates.
-                    </p>
-                    <button 
-                        class="px-8 py-4 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-3 mx-auto"
-                        style="background: linear-gradient(to right, #2563eb, #4f46e5);"
-                        onclick="document.querySelector('[data-subtab=\\'aicore-templates\\']').click()"
-                    >
-                        <i class="fas fa-plus-circle text-xl"></i>
-                        Go to AiCore Templates
-                    </button>
-                </div>
+            <div class="text-center py-16">
+                <i class="fas fa-box-open text-6xl text-gray-300 mb-4"></i>
+                <h3 class="text-xl font-bold text-gray-700 mb-2">No Template Loaded</h3>
+                <p class="text-gray-500 mb-6">
+                    Load a Global AI Brain template to get started with variables.
+                </p>
+                <button class="ai-settings-btn ai-settings-btn-primary" onclick="window.templateInfoManager.cloneTemplate()">
+                    <i class="fas fa-plus"></i>
+                    + Add Template
+                </button>
             </div>
         `;
     }
