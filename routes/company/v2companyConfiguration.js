@@ -1365,14 +1365,14 @@ router.get('/:companyId/configuration/analytics', async (req, res) => {
 /**
  * ============================================================================
  * POST /api/company/:companyId/configuration/variables/scan
- * Scan templates for placeholders and update variable definitions
+ * Trigger background scan for all active templates
  * ============================================================================
  */
-const PlaceholderScanService = require('../../services/PlaceholderScanService');
+const BackgroundVariableScanService = require('../../services/BackgroundVariableScanService');
 const CacheHelper = require('../../utils/cacheHelper');
 
 router.post('/:companyId/configuration/variables/scan', async (req, res) => {
-    console.log(`🔍 [PLACEHOLDER SCAN] POST /configuration/variables/scan for company: ${req.params.companyId}`);
+    console.log(`🔍 [VARIABLE SCAN] POST /configuration/variables/scan for company: ${req.params.companyId}`);
     
     try {
         const companyId = req.params.companyId;
@@ -1388,37 +1388,70 @@ router.post('/:companyId/configuration/variables/scan', async (req, res) => {
         if (!company.aiAgentSettings?.templateReferences || company.aiAgentSettings.templateReferences.length === 0) {
             return res.status(400).json({ 
                 error: 'No templates configured',
-                message: 'Please clone a template first before scanning for variables'
+                message: 'Please activate a template first before scanning for variables'
             });
         }
         
-        console.log(`🔍 [PLACEHOLDER SCAN] Scanning ${company.aiAgentSettings.templateReferences.length} template(s) for company ${companyId}`);
+        console.log(`🔍 [VARIABLE SCAN] Scanning ${company.aiAgentSettings.templateReferences.length} template(s) for company ${companyId}`);
         
-        // Run the scan
-        const scanResult = await PlaceholderScanService.scanCompany(companyId);
+        // Run the scan for all templates
+        const scanResult = await BackgroundVariableScanService.scanAllTemplatesForCompany(companyId);
         
-        console.log(`✅ [PLACEHOLDER SCAN] Scan complete: ${scanResult.newCount} new, ${scanResult.updatedCount} updated, ${scanResult.missingRequired.length} missing`);
+        console.log(`✅ [VARIABLE SCAN] Scan complete:`, scanResult);
+        
+        // Reload company to get updated data
+        const updatedCompany = await Company.findById(companyId);
         
         res.json({
             success: true,
-            message: `Found ${scanResult.placeholders.length} unique placeholders`,
-            newPlaceholders: scanResult.newCount,
-            existingPlaceholders: scanResult.existingCount,
-            updatedPlaceholders: scanResult.updatedCount,
-            missingRequired: scanResult.missingRequired.length,
-            hasAlert: scanResult.hasAlert,
-            details: {
-                newItems: scanResult.newPlaceholders,
-                updatedItems: scanResult.updatedPlaceholders,
-                allDefinitions: scanResult.placeholders,
-                alert: company.aiAgentSettings.configurationAlert
-            }
+            scannedAt: new Date().toISOString(),
+            variableDefinitions: updatedCompany.aiAgentSettings?.variableDefinitions || [],
+            variables: updatedCompany.aiAgentSettings?.variables || {},
+            scanStatus: updatedCompany.aiAgentSettings?.variableScanStatus || null,
+            ...scanResult
         });
         
     } catch (error) {
-        console.error('❌ [PLACEHOLDER SCAN] Error scanning company:', error);
+        console.error('❌ [VARIABLE SCAN] Error scanning company:', error);
         res.status(500).json({ 
-            error: 'Failed to scan placeholders',
+            error: 'Failed to scan variables',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * ============================================================================
+ * GET /api/company/:companyId/configuration/variables/scan-status
+ * Get current scan status and progress
+ * ============================================================================
+ */
+router.get('/:companyId/configuration/variables/scan-status', async (req, res) => {
+    console.log(`📊 [VARIABLE SCAN STATUS] GET /configuration/variables/scan-status for company: ${req.params.companyId}`);
+    
+    try {
+        const company = await Company.findById(req.params.companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        const scanStatus = company.aiAgentSettings?.variableScanStatus || {
+            isScanning: false,
+            lastScan: null,
+            scanProgress: { current: 0, total: 0, currentTemplate: '' },
+            scanHistory: []
+        };
+        
+        res.json({
+            success: true,
+            scanStatus
+        });
+        
+    } catch (error) {
+        console.error('❌ [VARIABLE SCAN STATUS] Error:', error);
+        res.status(500).json({ 
+            error: 'Failed to get scan status',
             message: error.message
         });
     }
@@ -1634,14 +1667,15 @@ router.post('/:companyId/configuration/templates', async (req, res) => {
         
         await company.save();
         
-        // Trigger background placeholder scan
-        const PlaceholderScanService = require('../../services/PlaceholderScanService');
+        // Trigger background variable scan (NEW)
+        const BackgroundVariableScanService = require('../../services/BackgroundVariableScanService');
         setImmediate(async () => {
             try {
-                await PlaceholderScanService.scanCompany(req.params.companyId);
-                console.log(`✅ [TEMPLATE HUB] Background placeholder scan completed for company: ${req.params.companyId}`);
+                console.log(`🔍 [TEMPLATE ACTIVATED] Triggering background scan for template: ${templateId}`);
+                const scanResult = await BackgroundVariableScanService.scanTemplateForCompany(req.params.companyId, templateId);
+                console.log(`✅ [TEMPLATE ACTIVATED] Background scan complete:`, scanResult);
             } catch (scanError) {
-                console.error(`❌ [TEMPLATE HUB] Background placeholder scan failed:`, scanError);
+                console.error(`❌ [TEMPLATE ACTIVATED] Background scan failed:`, scanError);
             }
         });
         
