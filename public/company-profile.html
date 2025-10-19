@@ -1308,6 +1308,10 @@
                                     <i class="fas fa-filter mr-2"></i>
                                     <span>Filler Words</span>
                                 </button>
+                                <button class="ai-settings-subtab-btn" data-subtab="aicore-templates">
+                                    <i class="fas fa-brain mr-2"></i>
+                                    <span>AiCore Templates</span>
+                                </button>
                                 <button class="ai-settings-subtab-btn" data-subtab="scenarios">
                                     <i class="fas fa-comments mr-2"></i>
                                     <span>Scenarios</span>
@@ -1439,6 +1443,20 @@
                             </div>
                             
                             <!-- ========================================== -->
+                            <!-- NEW TAB: AICORE TEMPLATES -->
+                            <!-- ========================================== -->
+                            <div id="ai-settings-aicore-templates-content" class="ai-settings-subtab-content">
+                                
+                                <div id="aicore-templates-container" class="w-full">
+                                    <div class="text-center py-12 text-gray-400">
+                                        <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
+                                        <p>Loading AiCore Templates...</p>
+                                    </div>
+                                </div>
+                                
+                            </div>
+                            
+                            <!-- ========================================== -->
                             <!-- SUB-TAB 3: SCENARIOS -->
                             <!-- ========================================== -->
                             <div id="ai-settings-scenarios-content" class="ai-settings-subtab-content">
@@ -1560,6 +1578,7 @@
                         <script src="/js/ai-agent-settings/VariablesManager.js?v=4.0"></script>
                         <script src="/js/ai-agent-settings/FillerWordsManager.js?v=4.0"></script>
                         <script src="/js/ai-agent-settings/ScenariosManager.js?v=4.0"></script>
+                        <script src="/js/ai-agent-settings/AiCoreTemplatesManager.js?v=1.0"></script>
                         <script src="/js/ai-agent-settings/TemplateHubManager.js?v=1.0"></script>
                         <script src="/js/ai-agent-settings/AnalyticsManager.js?v=4.0"></script>
                         <script src="/js/ai-agent-settings/AIAgentSettingsManager.js?v=4.0"></script>
@@ -1613,6 +1632,7 @@
                                         window.connectionMessagesManager = connectionMessagesManager;
                                         window.variablesManager = aiAgentSettings.variablesManager;
                                         window.fillerWordsManager = aiAgentSettings.fillerWordsManager;
+                                        window.aiCoreTemplatesManager = aiAgentSettings.aiCoreTemplatesManager;
                                         window.scenariosManager = aiAgentSettings.scenariosManager;
                                         window.templateHubManager = aiAgentSettings.templateHubManager;
                                         window.analyticsManager = aiAgentSettings.analyticsManager;

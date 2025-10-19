@@ -27,6 +27,7 @@ class AIAgentSettingsManager {
         // Sub-managers (loaded lazily)
         this.variablesManager = null;
         this.fillerWordsManager = null;
+        this.aiCoreTemplatesManager = null;
         this.scenariosManager = null;
         this.templateHubManager = null;
         this.analyticsManager = null;
@@ -174,6 +175,9 @@ class AIAgentSettingsManager {
                 case 'filler-words':
                     await this.loadFillerWords();
                     break;
+                case 'aicore-templates':
+                    await this.loadAiCoreTemplates();
+                    break;
                 case 'scenarios':
                     await this.loadScenarios();
                     break;
@@ -259,6 +263,19 @@ class AIAgentSettingsManager {
         if (this.fillerWordsManager) {
             this.fillerWordsManager.reset();
         }
+    }
+    
+    /**
+     * Load AiCore Templates sub-tab (NEW)
+     */
+    async loadAiCoreTemplates() {
+        console.log('🧠 [AI AGENT SETTINGS] Loading AiCore Templates...');
+        
+        if (!this.aiCoreTemplatesManager) {
+            this.aiCoreTemplatesManager = new AiCoreTemplatesManager(this);
+        }
+        
+        await this.aiCoreTemplatesManager.load();
     }
     
     /**
