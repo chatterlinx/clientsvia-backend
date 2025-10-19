@@ -40,8 +40,8 @@
 
 #ai-agent-settings-content,
 #ai-agent-settings-content .ai-settings-container {
-    width: 100%;
-    max-width: 1260px; /* align with main page container */
+    width: 100% !important;
+    max-width: 1260px !important; /* align with main page container */
     margin: 0 auto !important;
 }
 
@@ -50,6 +50,17 @@
     max-width: 100% !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
+}
+
+/* Full-bleed escape to bypass legacy outer container while keeping inner at 1260px */
+#ai-agent-settings-content {
+    position: relative;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw !important;
+    margin-right: -50vw !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
 }
 
 /* Full-bleed escape removed to align with page container */
