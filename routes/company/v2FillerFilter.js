@@ -25,6 +25,7 @@ const express = require('express');
 const router = express.Router();
 const v2Company = require('../../models/v2Company');
 const GlobalAIBehaviorTemplate = require('../../models/GlobalAIBehaviorTemplate');
+const { redisClient } = require('../../clients/index');
 
 /**
  * GET /api/company/:companyId/configuration/filler-filter
@@ -412,6 +413,16 @@ router.post('/company/:companyId/configuration/filler-filter/custom', async (req
         
         console.log(`✅ [FILLER FILTER] Added custom filler: "${cleanWord}"`);
         
+        // 🔥 CRITICAL: Clear Redis cache to force fresh data load
+        try {
+            if (redisClient) {
+                await redisClient.del(`company:${companyId}`);
+                console.log(`✅ [FILLER FILTER] Redis cache cleared for company:${companyId}`);
+            }
+        } catch (redisError) {
+            console.error('⚠️ [FILLER FILTER] Redis cache clear failed (non-fatal):', redisError.message);
+        }
+        
         res.json({
             success: true,
             message: 'Custom filler added',
@@ -456,6 +467,16 @@ router.delete('/company/:companyId/configuration/filler-filter/custom/:word', as
         await company.save();
         
         console.log(`✅ [FILLER FILTER] Removed custom filler: "${word}"`);
+        
+        // 🔥 CRITICAL: Clear Redis cache to force fresh data load
+        try {
+            if (redisClient) {
+                await redisClient.del(`company:${companyId}`);
+                console.log(`✅ [FILLER FILTER] Redis cache cleared for company:${companyId}`);
+            }
+        } catch (redisError) {
+            console.error('⚠️ [FILLER FILTER] Redis cache clear failed (non-fatal):', redisError.message);
+        }
         
         res.json({
             success: true,
