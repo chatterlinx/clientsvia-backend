@@ -204,6 +204,8 @@ class AIAgentSettingsManager {
         
         if (!this.variablesManager) {
             this.variablesManager = new VariablesManager(this);
+            // Expose globally for onclick handlers
+            window.variablesManager = this.variablesManager;
         }
         
         await this.variablesManager.load();
