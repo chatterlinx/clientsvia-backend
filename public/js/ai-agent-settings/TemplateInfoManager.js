@@ -145,9 +145,9 @@ class TemplateInfoManager {
                 <p class="text-gray-500 mb-6 max-w-2xl mx-auto">
                     Load a Global AI Brain template to get started. Your company will reference the template and receive automatic updates.
                 </p>
-                <button class="ai-settings-btn ai-settings-btn-primary" onclick="templateInfoManager.cloneTemplate()">
-                    <i class="fas fa-download"></i>
-                    Load Template
+                <button class="ai-settings-btn ai-settings-btn-primary" onclick="window.templateInfoManager.cloneTemplate()">
+                    <i class="fas fa-plus"></i>
+                    + Add Template
                 </button>
             </div>
         `;

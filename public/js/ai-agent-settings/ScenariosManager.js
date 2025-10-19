@@ -335,11 +335,11 @@ class ScenariosManager {
                 <i class="fas fa-box-open text-6xl text-gray-300 mb-4"></i>
                 <h3 class="text-xl font-bold text-gray-700 mb-2">No Scenarios Yet</h3>
                 <p class="text-gray-500 mb-6">
-                    Clone a Global AI Brain template to get 500+ pre-built scenarios.
+                    Load a Global AI Brain template to get 500+ pre-built scenarios.
                 </p>
-                <button class="ai-settings-btn ai-settings-btn-primary" onclick="templateInfoManager.cloneTemplate()">
-                    <i class="fas fa-copy"></i>
-                    Clone Template
+                <button class="ai-settings-btn ai-settings-btn-primary" onclick="window.templateInfoManager.cloneTemplate()">
+                    <i class="fas fa-plus"></i>
+                    + Add Template
                 </button>
             </div>
         `;
