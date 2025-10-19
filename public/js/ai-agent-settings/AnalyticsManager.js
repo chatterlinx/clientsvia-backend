@@ -41,9 +41,10 @@ class AnalyticsManager {
         console.log('📊 [ANALYTICS] Checkpoint 3: Loading analytics...');
         
         try {
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('adminToken');
             if (!token) {
-                throw new Error('No auth token found');
+                console.error('❌ [ANALYTICS] Checkpoint 4: No auth token found');
+                throw new Error('Authentication required');
             }
             
             console.log('✅ [ANALYTICS] Checkpoint 4: Auth token present');
