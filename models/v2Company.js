@@ -1559,7 +1559,26 @@ const companySchema = new mongoose.Schema({
         // Filler words (inherited from template + custom additions)
         fillerWords: {
             inherited: { type: [String], default: [] }, // From template (read-only)
-            custom: { type: [String], default: [] } // Company additions (editable)
+            custom: { type: [String], default: [] }, // Company additions (editable)
+            
+            // Scan history for audit trail
+            scanHistory: [{
+                scanDate: { type: Date, required: true },
+                templatesScanned: [{ 
+                    templateId: { type: String, trim: true },
+                    templateName: { type: String, trim: true },
+                    categoriesCount: { type: Number, default: 0 },
+                    scenariosCount: { type: Number, default: 0 },
+                    fillersFound: { type: Number, default: 0 },
+                    fillerWords: { type: [String], default: [] }
+                }],
+                totalFillersFound: { type: Number, default: 0 },
+                newFillersAdded: { type: Number, default: 0 },
+                newFillers: { type: [String], default: [] },
+                status: { type: String, enum: ['success', 'no_templates', 'no_fillers', 'error'], default: 'success' },
+                message: { type: String, trim: true },
+                triggeredBy: { type: String, enum: ['manual', 'auto'], default: 'manual' }
+            }]
         },
         
         // Urgency keywords (inherited from template + custom additions)

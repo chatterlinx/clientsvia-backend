@@ -451,15 +451,20 @@ class AiCoreFillerFilterManager {
     }
 
     /**
-     * Force scan for filler words
+     * Force scan for filler words with real-time modal logging
      */
     async forceScan() {
         console.log('🔇 [FILLER FILTER] Force scan triggered');
-        this.isScanning = true;
-        this.render();
+        
+        // Show modal
+        this.showScanModal();
         
         try {
+            this.updateScanModal('Starting scan...', 10);
+            
             const token = localStorage.getItem('adminToken');
+            this.updateScanModal('Connecting to server...', 20);
+            
             const response = await fetch(`/api/company/${this.companyId}/configuration/filler-filter/scan`, {
                 method: 'POST',
                 headers: { 
@@ -468,20 +473,156 @@ class AiCoreFillerFilterManager {
                 }
             });
             
+            this.updateScanModal('Processing response...', 60);
+            
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
             
-            // Reload data
-            await this.load();
+            const result = await response.json();
+            
+            this.updateScanModal('Scan complete!', 100);
+            
+            // Show detailed scan results
+            this.showScanResults(result);
+            
+            // Reload data to reflect changes
+            setTimeout(() => {
+                this.load();
+            }, 2000);
             
         } catch (error) {
             console.error('❌ [FILLER FILTER] Scan failed:', error);
-            alert('Failed to scan for filler words. Please try again.');
-        } finally {
-            this.isScanning = false;
-            this.render();
+            this.showScanError(error.message);
         }
+    }
+
+    /**
+     * Show scan modal
+     */
+    showScanModal() {
+        const modalHTML = `
+            <div id="filler-scan-modal" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 10000;">
+                <div style="background: white; border-radius: 16px; padding: 32px; max-width: 600px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+                    <div style="text-align: center;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">⚡</div>
+                        <h3 style="font-size: 24px; font-weight: 700; margin: 0 0 24px 0; color: #1e293b;">Force Scan In Progress</h3>
+                        
+                        <div id="scan-progress-container" style="margin-bottom: 24px;">
+                            <div style="background: #e2e8f0; border-radius: 8px; height: 12px; overflow: hidden;">
+                                <div id="scan-progress-bar" style="background: linear-gradient(90deg, #6366f1, #8b5cf6); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+                            </div>
+                            <p id="scan-status-text" style="margin: 12px 0 0 0; color: #64748b; font-size: 14px;">Initializing...</p>
+                        </div>
+                        
+                        <div id="scan-log-container" style="display: none; background: #f8fafc; border-radius: 8px; padding: 16px; max-height: 300px; overflow-y: auto; text-align: left; font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.6; color: #334155;">
+                            <!-- Log lines appear here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    }
+
+    /**
+     * Update scan modal progress
+     */
+    updateScanModal(message, progress) {
+        const progressBar = document.getElementById('scan-progress-bar');
+        const statusText = document.getElementById('scan-status-text');
+        
+        if (progressBar) {
+            progressBar.style.width = `${progress}%`;
+        }
+        
+        if (statusText) {
+            statusText.textContent = message;
+        }
+    }
+
+    /**
+     * Show scan results in modal
+     */
+    showScanResults(result) {
+        const logContainer = document.getElementById('scan-log-container');
+        const statusText = document.getElementById('scan-status-text');
+        const progressContainer = document.getElementById('scan-progress-container');
+        
+        if (progressContainer) {
+            progressContainer.style.display = 'none';
+        }
+        
+        if (logContainer && result.scanLog) {
+            logContainer.style.display = 'block';
+            logContainer.innerHTML = result.scanLog.map(line => {
+                return `<div style="margin-bottom: 4px;">${this.escapeHtml(line)}</div>`;
+            }).join('');
+        }
+        
+        // Add close button
+        const modal = document.getElementById('filler-scan-modal');
+        if (modal) {
+            const closeButtonHTML = `
+                <div style="text-align: center; margin-top: 24px;">
+                    <button onclick="document.getElementById('filler-scan-modal').remove()" style="padding: 12px 32px; background: #6366f1; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                        Close
+                    </button>
+                </div>
+            `;
+            modal.querySelector('div > div').insertAdjacentHTML('beforeend', closeButtonHTML);
+        }
+        
+        // Auto-close after 10 seconds
+        setTimeout(() => {
+            const modalElement = document.getElementById('filler-scan-modal');
+            if (modalElement) {
+                modalElement.remove();
+            }
+        }, 10000);
+    }
+
+    /**
+     * Show scan error in modal
+     */
+    showScanError(errorMessage) {
+        const logContainer = document.getElementById('scan-log-container');
+        const progressContainer = document.getElementById('scan-progress-container');
+        
+        if (progressContainer) {
+            progressContainer.style.display = 'none';
+        }
+        
+        if (logContainer) {
+            logContainer.style.display = 'block';
+            logContainer.innerHTML = `
+                <div style="color: #dc2626; font-weight: 600;">❌ Scan Failed</div>
+                <div style="margin-top: 8px;">${this.escapeHtml(errorMessage)}</div>
+            `;
+        }
+        
+        // Add close button
+        const modal = document.getElementById('filler-scan-modal');
+        if (modal) {
+            const closeButtonHTML = `
+                <div style="text-align: center; margin-top: 24px;">
+                    <button onclick="document.getElementById('filler-scan-modal').remove()" style="padding: 12px 32px; background: #dc2626; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                        Close
+                    </button>
+                </div>
+            `;
+            modal.querySelector('div > div').insertAdjacentHTML('beforeend', closeButtonHTML);
+        }
+    }
+
+    /**
+     * Escape HTML for safe display
+     */
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     /**
