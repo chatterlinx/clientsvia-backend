@@ -1683,11 +1683,34 @@ const companySchema = new mongoose.Schema({
     // PURPOSE: Spam detection, robocall blocking, blacklist/whitelist
     // ARCHITECTURE: Integrated with SmartCallFilter service
     // ============================================================================
+    // ============================================================================
+    // 🛡️ SPAM FILTER & CALL FILTERING SYSTEM
+    // ============================================================================
+    // Purpose: Multi-layer spam detection and call filtering for all incoming calls
+    // 
+    // IMPORTANT SCHEMA NOTES:
+    // - ACTIVE SCHEMA (2025): checkGlobalSpamDB, enableFrequencyCheck, enableRobocallDetection
+    // - DEPRECATED SCHEMA (pre-2025): blockKnownSpam, blockHighFrequency, blockRobocalls
+    // - Backend migration layer handles old → new schema automatically
+    // - Frontend ONLY uses NEW SCHEMA (see: public/js/ai-agent-settings/SpamFilterManager.js)
+    // 
+    // ⚠️ WARNING FOR FUTURE ENGINEERS:
+    // If you need to add new spam filter settings:
+    // 1. Add the field HERE in the Mongoose schema
+    // 2. Update backend GET migration logic (routes/admin/callFiltering.js:466-482)
+    // 3. Update backend PUT save logic (routes/admin/callFiltering.js:565-570)
+    // 4. Update frontend rendering (public/js/ai-agent-settings/SpamFilterManager.js)
+    // 5. Run: node scripts/verify-spam-filter-schema.js
+    // 
+    // Documentation: docs/SPAM-FILTER-FIX-COMPLETE-REPORT.md
+    // ============================================================================
     callFiltering: {
-        // Enable/disable filtering
+        // Master enable/disable switch
         enabled: { type: Boolean, default: true },
         
-        // Company-specific blacklist
+        // ========================================================================
+        // BLACKLIST - Company-specific numbers to block
+        // ========================================================================
         blacklist: [{
             phoneNumber: { type: String, required: true, trim: true },
             addedAt: { type: Date, default: Date.now },
@@ -1700,7 +1723,9 @@ const companySchema = new mongoose.Schema({
             }
         }],
         
-        // Company-specific whitelist (always allow)
+        // ========================================================================
+        // WHITELIST - Always allow these numbers (bypass all filters)
+        // ========================================================================
         whitelist: [{
             phoneNumber: { type: String, required: true, trim: true },
             addedAt: { type: Date, default: Date.now },
@@ -1708,26 +1733,46 @@ const companySchema = new mongoose.Schema({
             reason: { type: String, trim: true, default: null }
         }],
         
-        // Filter settings - NEW SCHEMA (migrated from old schema)
+        // ========================================================================
+        // DETECTION SETTINGS - Core spam filter configuration
+        // ========================================================================
+        // ⚠️ SCHEMA MIGRATION IN PROGRESS (Oct 2025)
+        // Old keys (blockKnownSpam, etc) → New keys (checkGlobalSpamDB, etc)
+        // Both schemas coexist for backward compatibility during migration
+        // ========================================================================
         settings: {
-            // ✅ NEW SCHEMA (active)
-            checkGlobalSpamDB: { type: Boolean, default: false },           // Check GlobalSpamDatabase
+            // ----------------------------------------------------------------
+            // ✅ ACTIVE SCHEMA (October 2025 onwards)
+            // ----------------------------------------------------------------
+            // These are the ONLY keys that should be used in new code
+            checkGlobalSpamDB: { type: Boolean, default: false },           // Check against GlobalSpamDatabase
             enableFrequencyCheck: { type: Boolean, default: false },        // Rate limiting / frequency analysis
-            enableRobocallDetection: { type: Boolean, default: false },     // AI-powered robocall detection
+            enableRobocallDetection: { type: Boolean, default: false },     // AI-powered robocall pattern detection
             
-            // 🔧 OLD SCHEMA (deprecated - kept for migration compatibility)
-            blockKnownSpam: { type: Boolean },                              // DEPRECATED: Use checkGlobalSpamDB
-            blockHighFrequency: { type: Boolean },                          // DEPRECATED: Use enableFrequencyCheck
-            blockRobocalls: { type: Boolean },                              // DEPRECATED: Use enableRobocallDetection
-            blockInvalidNumbers: { type: Boolean, default: true },          // Format validation (still used)
-            frequencyThreshold: { type: Number, default: 5 },               // Calls per 10 min (still used)
-            notifyOnBlock: { type: Boolean, default: false }                // Email/SMS notification (still used)
+            // ----------------------------------------------------------------
+            // 🔧 DEPRECATED SCHEMA (pre-October 2025)
+            // ----------------------------------------------------------------
+            // ⚠️ DO NOT USE IN NEW CODE - Kept for migration compatibility only
+            // Backend automatically migrates these to new schema on read
+            // Will be removed in future version (target: Q2 2026)
+            blockKnownSpam: { type: Boolean },                              // DEPRECATED → Use checkGlobalSpamDB
+            blockHighFrequency: { type: Boolean },                          // DEPRECATED → Use enableFrequencyCheck
+            blockRobocalls: { type: Boolean },                              // DEPRECATED → Use enableRobocallDetection
+            
+            // ----------------------------------------------------------------
+            // 📊 SUPPLEMENTARY SETTINGS (still active)
+            // ----------------------------------------------------------------
+            blockInvalidNumbers: { type: Boolean, default: true },          // Format validation (e.g., non-E.164)
+            frequencyThreshold: { type: Number, default: 5 },               // Max calls per 10 minutes
+            notifyOnBlock: { type: Boolean, default: false }                // Send email/SMS on block
         },
         
-        // Statistics
+        // ========================================================================
+        // STATISTICS - Spam filter performance metrics
+        // ========================================================================
         stats: {
-            totalBlocked: { type: Number, default: 0 },
-            lastBlockedAt: { type: Date, default: null }
+            totalBlocked: { type: Number, default: 0 },                     // Lifetime block count
+            lastBlockedAt: { type: Date, default: null }                    // Most recent block timestamp
         }
     }
 }, { timestamps: true });

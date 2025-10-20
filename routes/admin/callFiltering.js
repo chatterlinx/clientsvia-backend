@@ -429,6 +429,26 @@ router.delete('/admin/call-filtering/whitelist/:companyId', authenticateJWT, req
 // ============================================================================
 // GET COMPANY FILTERING SETTINGS
 // ============================================================================
+// Purpose: Retrieve spam filter settings for a company
+// 
+// ⚠️ SCHEMA MIGRATION LAYER (October 2025)
+// This endpoint handles both OLD and NEW schema formats:
+// - OLD: blockKnownSpam, blockHighFrequency, blockRobocalls (deprecated)
+// - NEW: checkGlobalSpamDB, enableFrequencyCheck, enableRobocallDetection (active)
+// 
+// Migration Logic:
+// 1. If NEW schema keys exist → Use them (even if false/undefined)
+// 2. If only OLD schema keys exist → Migrate to NEW schema names
+// 3. Frontend receives ONLY new schema keys
+// 
+// Note: This migration layer will be removed in Q2 2026 once all companies
+// have been migrated to the new schema.
+// 
+// Related Files:
+// - Model: models/v2Company.js (lines 1707-1777)
+// - Frontend: public/js/ai-agent-settings/SpamFilterManager.js
+// - Tests: scripts/verify-spam-filter-schema.js
+// ============================================================================
 router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const { companyId } = req.params;
@@ -460,7 +480,22 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
             stats: {}
         };
 
-        // 🔧 MIGRATION: Handle old setting names → new setting names
+        // ========================================================================
+        // 🔧 SCHEMA MIGRATION LAYER - OLD → NEW
+        // ========================================================================
+        // ⚠️ DEPRECATED: This migration logic will be removed in Q2 2026
+        // 
+        // Why this exists:
+        // - Pre-Oct 2025: settings used blockKnownSpam, blockHighFrequency, blockRobocalls
+        // - Post-Oct 2025: settings use checkGlobalSpamDB, enableFrequencyCheck, enableRobocallDetection
+        // - This ensures backward compatibility during transition
+        // 
+        // Future Engineer Note:
+        // Once all companies have new schema (verify with DB query), you can:
+        // 1. Remove this migration block (lines 472-486)
+        // 2. Remove old schema keys from Mongoose model (models/v2Company.js:1758-1760)
+        // 3. Update this to just: const migratedSettings = callFiltering.settings || {};
+        // ========================================================================
         const oldSettings = callFiltering.settings || {};
         
         // Priority: NEW schema names ALWAYS win if they exist (even if false/undefined from user save)
@@ -475,13 +510,16 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
             enableFrequencyCheck: oldSettings.enableFrequencyCheck,
             enableRobocallDetection: oldSettings.enableRobocallDetection
         } : {
-            // OLD SCHEMA: Migrate from old names
+            // OLD SCHEMA: Migrate from old names on-the-fly
             checkGlobalSpamDB: oldSettings.blockKnownSpam,
             enableFrequencyCheck: oldSettings.blockHighFrequency,
             enableRobocallDetection: oldSettings.blockRobocalls
         };
 
         console.log(`🔧 [CALL FILTERING] Schema detected: ${hasNewSchema ? 'NEW' : 'OLD'}`);
+        if (!hasNewSchema) {
+            console.log(`⚠️ [CALL FILTERING] Company ${companyId} still using OLD schema - will be migrated on next save`);
+        }
         console.log(`🔧 [CALL FILTERING] Migrated settings:`, migratedSettings);
 
         const transformedData = {
@@ -521,9 +559,41 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
 });
 
 // ============================================================================
-// UPDATE COMPANY FILTERING SETTINGS
+// UPDATE COMPANY FILTERING SETTINGS (PUT/PATCH)
 // ============================================================================
-// Helper function to handle settings update (used by both PATCH and PUT)
+// Purpose: Save spam filter settings for a company
+// 
+// ⚠️ CRITICAL SAVE LOGIC - Read carefully before modifying!
+// 
+// This function REPLACES the entire settings object (not merge) to ensure:
+// 1. Old schema keys (blockKnownSpam, etc) are purged on save
+// 2. Only NEW schema keys are saved (checkGlobalSpamDB, etc)
+// 3. Values are explicitly cast to boolean (prevents undefined from being saved)
+// 
+// Why REPLACE and not MERGE?
+// - Merging would keep old keys forever
+// - Old + New keys coexisting caused Mongoose validation confusion
+// - Replace ensures clean state after migration
+// 
+// Frontend Contract:
+// - Frontend sends: { checkGlobalSpamDB, enableFrequencyCheck, enableRobocallDetection }
+// - Backend saves: ONLY these 3 keys (as booleans)
+// - GET endpoint returns: Same 3 keys (migrated from old if needed)
+// 
+// Related Files:
+// - Model: models/v2Company.js (lines 1707-1777)
+// - GET endpoint: This file (lines 452-559)
+// - Frontend: public/js/ai-agent-settings/SpamFilterManager.js
+// 
+// Future Engineer Warning:
+// If you add a new spam filter setting:
+// 1. Add it to Mongoose schema (models/v2Company.js)
+// 2. Add it to this REPLACE block (line 603-608)
+// 3. Add it to GET migration logic (line 507-517)
+// 4. Update frontend to send/receive it
+// 5. Run: node scripts/verify-spam-filter-schema.js
+// ============================================================================
+// Helper function to handle settings update (used by both PATCH and PUT routes)
 async function updateFilteringSettings(req, res) {
     try {
         const { companyId } = req.params;
@@ -555,15 +625,19 @@ async function updateFilteringSettings(req, res) {
             company.callFiltering.enabled = enabled;
         }
 
+        // ========================================================================
+        // 🔥 CRITICAL SAVE LOGIC - REPLACE (not merge!)
+        // ========================================================================
         // Update settings if provided
         if (settings) {
             console.log(`📝 [CALL FILTERING] Incoming settings:`, settings);
             
-            // 🔥 CRITICAL: REPLACE old settings completely, don't merge!
-            // Old approach kept legacy keys (blockKnownSpam, etc) forever
-            // New approach: Only keep the new schema keys we're actively saving
+            // ⚠️ IMPORTANT: We REPLACE the entire settings object
+            // This purges old schema keys (blockKnownSpam, etc) on save
+            // Do NOT use Object.assign() or spread operator - would merge old keys
             company.callFiltering.settings = {
-                // Only save the new schema keys (with explicit true/false, not undefined)
+                // Only save the new schema keys (with explicit true/false cast)
+                // The "=== true" cast prevents undefined from being saved
                 checkGlobalSpamDB: settings.checkGlobalSpamDB === true,
                 enableFrequencyCheck: settings.enableFrequencyCheck === true,
                 enableRobocallDetection: settings.enableRobocallDetection === true

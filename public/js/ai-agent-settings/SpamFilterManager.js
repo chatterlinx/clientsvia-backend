@@ -1,14 +1,54 @@
 // ============================================================================
-// SPAM FILTER MANAGER
+// 🛡️ SPAM FILTER MANAGER - FRONTEND UI
 // ============================================================================
 // 📋 PURPOSE: Frontend UI for Smart Call Filter Management
+// 
 // 🎯 FEATURES:
 //    - Enable/disable spam filtering
-//    - Manage blacklist & whitelist
-//    - View blocked call logs
-//    - Configure detection settings
+//    - Manage blacklist & whitelist  
+//    - Configure detection settings (3 checkboxes)
 //    - View spam statistics
+// 
 // 🔄 AUTO-REFRESH: Every 60 seconds
+// 
+// ⚠️ CRITICAL SCHEMA INFORMATION (October 2025):
+// This UI uses the NEW schema keys ONLY:
+//    ✅ checkGlobalSpamDB (Check Global Spam Database)
+//    ✅ enableFrequencyCheck (Frequency Analysis)
+//    ✅ enableRobocallDetection (Robocall Detection)
+// 
+// OLD SCHEMA KEYS (DO NOT USE):
+//    ❌ blockKnownSpam → Replaced by checkGlobalSpamDB
+//    ❌ blockHighFrequency → Replaced by enableFrequencyCheck
+//    ❌ blockRobocalls → Replaced by enableRobocallDetection
+// 
+// 🔗 RELATED FILES:
+//    - Backend API: routes/admin/callFiltering.js
+//    - Mongoose Model: models/v2Company.js (lines 1707-1777)
+//    - Verification: scripts/verify-spam-filter-schema.js
+//    - Documentation: docs/SPAM-FILTER-FIX-COMPLETE-REPORT.md
+// 
+// 📝 FRONTEND-BACKEND CONTRACT:
+//    GET /api/admin/call-filtering/:companyId/settings
+//       → Returns: { settings: { checkGlobalSpamDB, enableFrequencyCheck, enableRobocallDetection } }
+//    
+//    PUT /api/admin/call-filtering/:companyId/settings
+//       → Sends: { settings: { checkGlobalSpamDB, enableFrequencyCheck, enableRobocallDetection } }
+//       → Backend saves ONLY these 3 keys (purges old schema)
+// 
+// ⚠️ WARNING FOR FUTURE ENGINEERS:
+// If you need to add a new spam filter checkbox:
+//    1. Add the key to this file (see lines 105-150 for checkbox rendering)
+//    2. Add the key to saveSettings() method (see line 513-523)
+//    3. Update backend API to accept/save the new key (routes/admin/callFiltering.js)
+//    4. Update Mongoose schema (models/v2Company.js)
+//    5. Run: node scripts/verify-spam-filter-schema.js
+// 
+// 🎨 UI STRUCTURE:
+//    - Section 1: Detection Settings (3 checkboxes)
+//    - Section 2: Blacklist Management
+//    - Section 3: Whitelist Management
+//    - Section 4: Statistics Dashboard
 // ============================================================================
 
 class SpamFilterManager {
