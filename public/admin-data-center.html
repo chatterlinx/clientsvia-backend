@@ -419,6 +419,33 @@
             color: #2c5282;
         }
 
+        /* Action Buttons */
+        .action-btn {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #4a5568;
+            font-size: 0.875rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .action-btn:hover {
+            background: #4299e1;
+            color: white;
+            border-color: #4299e1;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(66, 153, 225, 0.3);
+        }
+
+        .action-btn:active {
+            transform: translateY(0);
+        }
+
         /* Loading State */
         .loading {
             text-align: center;
@@ -466,6 +493,9 @@
             </a>
             <a href="/admin-data-center.html" class="nav-link active">
                 <i class="fas fa-database"></i> Data Center
+            </a>
+            <a href="/admin-call-archives.html" class="nav-link">
+                <i class="fas fa-phone-volume"></i> Call Archives
             </a>
             <a href="/v2global-trade-categories.html" class="nav-link">
                 <i class="fas fa-tags"></i> Global Trade Categories
@@ -578,11 +608,12 @@
                             <th>Scenarios</th>
                             <th>Last Activity</th>
                             <th>Created</th>
+                            <th>Quick Actions</th>
                         </tr>
                     </thead>
                     <tbody id="companies-table-body">
                         <tr>
-                            <td colspan="7" class="loading">
+                            <td colspan="8" class="loading">
                                 <div class="spinner"></div>
                                 <p>Loading companies...</p>
                             </td>
@@ -879,7 +910,7 @@
                 console.log('[DATA CENTER] ⚠️ No companies to display');
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="7" class="empty-state">
+                        <td colspan="8" class="empty-state">
                             <i class="fas fa-search"></i>
                             <h3>No Companies Found</h3>
                             <p>Try adjusting your search or filters</p>
@@ -890,38 +921,56 @@
             }
 
             tbody.innerHTML = companies.map(company => `
-                <tr style="cursor: pointer;" data-company-id="${company.companyId}">
-                    <td>
+                <tr data-company-id="${company.companyId}">
+                    <td onclick="viewCompany('${company.companyId}')" style="cursor: pointer;">
                         <strong>${company.companyName}</strong>
                         <br>
                         <small style="color: #718096;">${company.ownerEmail || ''}</small>
                     </td>
-                    <td>
+                    <td onclick="viewCompany('${company.companyId}')" style="cursor: pointer;">
                         <span class="health-badge ${company.healthBadge.color}">
                             ${company.healthBadge.icon} ${company.healthBadge.label}
                         </span>
                     </td>
-                    <td>${company.healthScore}/100</td>
-                    <td>${company.calls.toLocaleString()}</td>
-                    <td>${company.scenarios}</td>
-                    <td>${company.lastActivityFormatted || 'Never'}</td>
-                    <td>${new Date(company.createdAt).toLocaleDateString()}</td>
+                    <td onclick="viewCompany('${company.companyId}')" style="cursor: pointer;">${company.healthScore}/100</td>
+                    <td onclick="viewCompany('${company.companyId}')" style="cursor: pointer;">${company.calls.toLocaleString()}</td>
+                    <td onclick="viewCompany('${company.companyId}')" style="cursor: pointer;">${company.scenarios}</td>
+                    <td onclick="viewCompany('${company.companyId}')" style="cursor: pointer;">${company.lastActivityFormatted || 'Never'}</td>
+                    <td onclick="viewCompany('${company.companyId}')" style="cursor: pointer;">${new Date(company.createdAt).toLocaleDateString()}</td>
+                    <td style="padding: 0.5rem;">
+                        <div style="display: flex; gap: 0.5rem; justify-content: center;">
+                            <button onclick="viewCallHistory('${company.companyId}')" class="action-btn" title="View Call History">
+                                <i class="fas fa-phone-volume"></i>
+                            </button>
+                            <button onclick="viewAIPerformance('${company.companyId}')" class="action-btn" title="AI Performance">
+                                <i class="fas fa-chart-line"></i>
+                            </button>
+                            <button onclick="manageSpamFilter('${company.companyId}')" class="action-btn" title="Spam Filter">
+                                <i class="fas fa-shield-alt"></i>
+                            </button>
+                        </div>
+                    </td>
                 </tr>
             `).join('');
             
-            // Add event listeners to rows
-            const rows = document.querySelectorAll('#companies-table-body tr[data-company-id]');
-            console.log('[DATA CENTER] 🖱️ Attaching click listeners to', rows.length, 'rows');
-            
-            rows.forEach(row => {
-                row.addEventListener('click', () => {
-                    const companyId = row.dataset.companyId;
-                    console.log('[DATA CENTER] 👆 Row clicked, companyId:', companyId);
-                    viewCompany(companyId);
-                });
-            });
-            
             console.log('[DATA CENTER] ✅ Render complete');
+        }
+
+        // Quick Action Functions
+        function viewCallHistory(companyId) {
+            console.log('[DATA CENTER] 📞 Opening Call History for:', companyId);
+            window.location.href = `/admin-call-archives.html?companyId=${companyId}`;
+        }
+
+        function viewAIPerformance(companyId) {
+            console.log('[DATA CENTER] 📊 Opening AI Performance for:', companyId);
+            window.location.href = `/company-profile.html?id=${companyId}#ai-performance`;
+        }
+
+        function manageSpamFilter(companyId) {
+            console.log('[DATA CENTER] 🛡️ Opening Spam Filter for:', companyId);
+            // For now, just navigate to company profile - later we can add a dedicated spam management page
+            window.location.href = `/company-profile.html?id=${companyId}#configuration`;
         }
 
         function updateCounts(total) {

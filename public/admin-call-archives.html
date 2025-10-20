@@ -217,6 +217,18 @@
         document.addEventListener('DOMContentLoaded', () => {
             callArchivesManager = new CallArchivesManager();
             callArchivesManager.init();
+            
+            // Check for companyId in URL (coming from Data Center quick actions)
+            const urlParams = new URLSearchParams(window.location.search);
+            const companyId = urlParams.get('companyId');
+            if (companyId) {
+                console.log('[CALL ARCHIVES] 🎯 Auto-filtering by companyId:', companyId);
+                const companySelect = document.getElementById('filter-company');
+                if (companySelect) {
+                    companySelect.value = companyId;
+                    callArchivesManager.search();
+                }
+            }
         });
 
         // Logout function
