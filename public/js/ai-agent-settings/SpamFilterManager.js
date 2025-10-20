@@ -374,22 +374,37 @@ class SpamFilterManager {
      * ────────────────────────────────────────────────────────────────────────
      */
     async removeFromBlacklist(phoneNumber) {
-        if (!confirm(`Remove ${phoneNumber} from blacklist?`)) return;
+        console.log(`🗑️ [SPAM FILTER] Attempting to remove from blacklist: ${phoneNumber}`);
+        
+        if (!confirm(`Remove ${phoneNumber} from blacklist?`)) {
+            console.log(`⏭️ [SPAM FILTER] Removal cancelled by user`);
+            return;
+        }
 
         try {
             const token = localStorage.getItem('adminToken');
-            const response = await fetch(`/api/admin/call-filtering/${this.companyId}/blacklist`, {
+            
+            // ⚠️ CRITICAL BUG FIX: Backend route expects phoneNumber in URL path, not body!
+            console.log(`🌐 [SPAM FILTER] Sending DELETE request to: /api/admin/call-filtering/${this.companyId}/blacklist/${encodeURIComponent(phoneNumber)}`);
+            
+            const response = await fetch(`/api/admin/call-filtering/${this.companyId}/blacklist/${encodeURIComponent(phoneNumber)}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ phoneNumber })
+                }
             });
 
+            console.log(`📥 [SPAM FILTER] Response status: ${response.status}`);
+
             if (!response.ok) {
-                throw new Error('Failed to remove from blacklist');
+                const errorData = await response.json().catch(() => ({}));
+                console.error(`❌ [SPAM FILTER] Remove failed:`, errorData);
+                throw new Error(errorData.message || 'Failed to remove from blacklist');
             }
+
+            const responseData = await response.json();
+            console.log(`✅ [SPAM FILTER] Successfully removed from blacklist:`, responseData);
 
             this.settings.blacklist = this.settings.blacklist.filter(num => num !== phoneNumber);
             this.render();
@@ -397,6 +412,7 @@ class SpamFilterManager {
 
         } catch (error) {
             console.error(`❌ [SPAM FILTER] Error removing from blacklist:`, error);
+            console.error(`❌ [SPAM FILTER] Stack:`, error.stack);
             this.notify('Failed to remove number', 'error');
         }
     }
@@ -481,11 +497,27 @@ class SpamFilterManager {
      */
     async saveSettings() {
         try {
+            console.log(`💾 [SPAM FILTER] CHECKPOINT 7: Save Settings clicked`);
+
             const checkGlobalDB = document.getElementById('check-global-db').checked;
             const frequencyCheck = document.getElementById('frequency-check').checked;
             const robocallDetection = document.getElementById('robocall-detection').checked;
 
+            console.log(`📋 [SPAM FILTER] CHECKPOINT 8: Settings to save:`, {
+                checkGlobalSpamDB: checkGlobalDB,
+                enableFrequencyCheck: frequencyCheck,
+                enableRobocallDetection: robocallDetection
+            });
+
             const token = localStorage.getItem('adminToken');
+            if (!token) {
+                console.error(`❌ [SPAM FILTER] No auth token found`);
+                this.notify('Authentication required', 'error');
+                return;
+            }
+
+            console.log(`🌐 [SPAM FILTER] CHECKPOINT 9: Sending PUT request to: /api/admin/call-filtering/${this.companyId}/settings`);
+
             const response = await fetch(`/api/admin/call-filtering/${this.companyId}/settings`, {
                 method: 'PUT',
                 headers: {
@@ -501,14 +533,29 @@ class SpamFilterManager {
                 })
             });
 
+            console.log(`📥 [SPAM FILTER] CHECKPOINT 10: Response status: ${response.status}`);
+
             if (!response.ok) {
-                throw new Error('Failed to save settings');
+                const errorData = await response.json().catch(() => ({}));
+                console.error(`❌ [SPAM FILTER] Save failed:`, errorData);
+                throw new Error(errorData.message || 'Failed to save settings');
             }
+
+            const responseData = await response.json();
+            console.log(`✅ [SPAM FILTER] CHECKPOINT 11: Settings saved successfully:`, responseData);
+
+            // Update local settings
+            this.settings.settings = {
+                checkGlobalSpamDB: checkGlobalDB,
+                enableFrequencyCheck: frequencyCheck,
+                enableRobocallDetection: robocallDetection
+            };
 
             this.notify('Detection settings saved', 'success');
 
         } catch (error) {
             console.error(`❌ [SPAM FILTER] Error saving settings:`, error);
+            console.error(`❌ [SPAM FILTER] Stack:`, error.stack);
             this.notify('Failed to save settings', 'error');
         }
     }
