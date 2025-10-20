@@ -443,6 +443,14 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
             });
         }
 
+        // 🔍 DEBUG: Log what's in the database
+        console.log(`🔍 [CALL FILTERING] Raw callFiltering from DB:`, {
+            exists: !!company.callFiltering,
+            enabled: company.callFiltering?.enabled,
+            settings: company.callFiltering?.settings,
+            settingsKeys: company.callFiltering?.settings ? Object.keys(company.callFiltering.settings) : []
+        });
+
         // ✅ FIX #2: Transform blacklist/whitelist to string arrays for frontend
         const callFiltering = company.callFiltering || {
             enabled: true,
@@ -467,6 +475,11 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
             settings: callFiltering.settings || {},
             stats: callFiltering.stats || {}
         };
+
+        console.log(`✅ [CALL FILTERING] Sending to frontend:`, {
+            enabled: transformedData.enabled,
+            settings: transformedData.settings
+        });
 
         res.json({
             success: true,
