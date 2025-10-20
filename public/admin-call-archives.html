@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Call Archives - ClientsVia Admin</title>
+    <link rel="stylesheet" href="/css/output.css?v=1.0">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=1.0">
+    <link rel="stylesheet" href="/css/call-archives.css?v=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <h1 class="text-2xl font-bold text-gray-800">
+                        <i class="fas fa-phone-volume text-blue-500"></i>
+                        Call Archives
+                    </h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/directory.html" class="btn-secondary">
+                        <i class="fas fa-list"></i> Directory
+                    </a>
+                    <a href="/admin-data-center.html" class="btn-secondary">
+                        <i class="fas fa-database"></i> Data Center
+                    </a>
+                    <button onclick="logout()" class="btn-danger">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container mx-auto px-6 py-8">
+        
+        <!-- Header Section -->
+        <div class="mb-8">
+            <h2 class="text-3xl font-bold text-gray-900 mb-2">
+                📞 Call Transcripts & Recordings
+            </h2>
+            <p class="text-gray-600">
+                Search, view, and export all call transcripts across all companies
+            </p>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div id="stats-container" class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <!-- Will be populated by JS -->
+        </div>
+
+        <!-- Search & Filters Section -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-search text-blue-500"></i>
+                Search & Filters
+            </h3>
+
+            <!-- Search Box -->
+            <div class="mb-4">
+                <input type="text" 
+                       id="search-query" 
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                       placeholder="Search transcripts by keywords...">
+            </div>
+
+            <!-- Filter Row 1 -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <!-- Company Filter -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Company</label>
+                    <select id="filter-company" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="">All Companies</option>
+                        <!-- Will be populated by JS -->
+                    </select>
+                </div>
+
+                <!-- Source Filter -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">AI Source</label>
+                    <select id="filter-source" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="">All Sources</option>
+                        <option value="companyQnA">Company Q&A</option>
+                        <option value="tradeQnA">Trade Q&A</option>
+                        <option value="templates">Templates</option>
+                        <option value="inHouseFallback">Fallback</option>
+                    </select>
+                </div>
+
+                <!-- Sentiment Filter -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Sentiment</label>
+                    <select id="filter-sentiment" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="">All Sentiments</option>
+                        <option value="positive">Positive</option>
+                        <option value="neutral">Neutral</option>
+                        <option value="negative">Negative</option>
+                    </select>
+                </div>
+
+                <!-- Confidence Range -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Min Confidence</label>
+                    <input type="number" 
+                           id="filter-min-confidence" 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                           placeholder="0.0 - 1.0" 
+                           min="0" 
+                           max="1" 
+                           step="0.1">
+                </div>
+            </div>
+
+            <!-- Filter Row 2 - Date Range -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                    <input type="date" 
+                           id="filter-start-date" 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                    <input type="date" 
+                           id="filter-end-date" 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div class="flex items-end">
+                    <button onclick="callArchivesManager.search()" class="btn-primary w-full">
+                        <i class="fas fa-search"></i> Search
+                    </button>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex items-center justify-between pt-4 border-t border-gray-200">
+                <button onclick="callArchivesManager.clearFilters()" class="btn-secondary">
+                    <i class="fas fa-times"></i> Clear Filters
+                </button>
+                <div class="flex space-x-2">
+                    <button onclick="callArchivesManager.exportCSV()" class="btn-success">
+                        <i class="fas fa-file-csv"></i> Export CSV
+                    </button>
+                    <button onclick="callArchivesManager.exportJSON()" class="btn-secondary">
+                        <i class="fas fa-file-code"></i> Export JSON
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-semibold text-gray-900">
+                    <i class="fas fa-list text-blue-500"></i>
+                    Search Results
+                </h3>
+                <div id="results-count" class="text-sm text-gray-600">
+                    <!-- Will show count -->
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading-state" class="text-center py-12 hidden">
+                <i class="fas fa-spinner fa-spin text-4xl text-blue-500 mb-4"></i>
+                <p class="text-gray-600">Searching call archives...</p>
+            </div>
+
+            <!-- No Results State -->
+            <div id="no-results-state" class="text-center py-12 hidden">
+                <i class="fas fa-search text-4xl text-gray-400 mb-4"></i>
+                <p class="text-gray-600">No calls found matching your search criteria</p>
+            </div>
+
+            <!-- Results Table -->
+            <div id="results-container" class="overflow-x-auto">
+                <!-- Will be populated by JS -->
+            </div>
+
+            <!-- Pagination -->
+            <div id="pagination-container" class="mt-6">
+                <!-- Will be populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Call Details Modal -->
+    <div id="call-details-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+                <h3 class="text-xl font-semibold text-gray-900">
+                    <i class="fas fa-phone text-blue-500"></i>
+                    Call Details
+                </h3>
+                <button onclick="callArchivesManager.closeModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+            </div>
+            <div id="call-details-content" class="p-6">
+                <!-- Will be populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/js/call-archives/CallArchivesManager.js?v=1.0"></script>
+    <script>
+        // Initialize Call Archives Manager
+        let callArchivesManager = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            callArchivesManager = new CallArchivesManager();
+            callArchivesManager.init();
+        });
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('adminToken');
+            window.location.href = '/login.html';
+        }
+    </script>
+</body>
+</html>
+

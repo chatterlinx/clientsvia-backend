@@ -120,6 +120,7 @@ async function loadAllRoutes() {
         routes.v2AIAnalyticsRoutes = await loadRouteWithTimeout('./routes/company/v2aiAnalytics', 'v2AIAnalyticsRoutes');
         routes.v2FillerFilterRoutes = await loadRouteWithTimeout('./routes/company/v2FillerFilter', 'v2FillerFilterRoutes');
         routes.v2AIPerformanceRoutes = await loadRouteWithTimeout('./routes/company/v2aiPerformance', 'v2AIPerformanceRoutes');
+        routes.callArchivesRoutes = await loadRouteWithTimeout('./routes/admin/callArchives', 'callArchivesRoutes');
         
         // REMOVED: Legacy V2 AI Intelligence routes - archived to prevent external LLM dependencies
         
@@ -267,6 +268,7 @@ function registerRoutes(routes) {
     app.use('/api', routes.v2AIAnalyticsRoutes); // V2: AI Analytics (real-time performance dashboard)
     app.use('/api', routes.v2FillerFilterRoutes); // V2: AiCore Filler Filter (inherited + custom filler words management)
     app.use('/api', routes.v2AIPerformanceRoutes); // V2: AI Performance Dashboard (speed tracking, index usage, DB stats)
+    app.use('/api', routes.callArchivesRoutes); // ADMIN: Call Archives (search transcripts, export call history)
     // app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     // V2 DELETED: Legacy enhancedAgentSettings route mount - used external LLMs, violates in-house AI system
 

@@ -1,0 +1,46 @@
+/* ============================================================================
+   CALL ARCHIVES STYLES
+   ============================================================================ */
+
+/* Button Styles */
+.btn-primary {
+    @apply px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium;
+}
+
+.btn-secondary {
+    @apply px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium;
+}
+
+.btn-success {
+    @apply px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium;
+}
+
+.btn-danger {
+    @apply px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium;
+}
+
+/* Table Styles */
+table {
+    @apply w-full;
+}
+
+thead th {
+    @apply sticky top-0 bg-gray-50 z-10;
+}
+
+tbody tr:hover {
+    @apply bg-blue-50;
+}
+
+/* Modal Overlay */
+#call-details-modal {
+    backdrop-filter: blur(4px);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .grid-cols-4 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
