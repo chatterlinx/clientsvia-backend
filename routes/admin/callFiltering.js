@@ -460,6 +460,28 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
             stats: {}
         };
 
+        // 🔧 MIGRATION: Handle old setting names → new setting names
+        const oldSettings = callFiltering.settings || {};
+        const migratedSettings = {
+            // New names (if they exist)
+            checkGlobalSpamDB: oldSettings.checkGlobalSpamDB,
+            enableFrequencyCheck: oldSettings.enableFrequencyCheck,
+            enableRobocallDetection: oldSettings.enableRobocallDetection,
+            
+            // Fallback to old names if new names don't exist
+            ...(oldSettings.checkGlobalSpamDB === undefined && oldSettings.blockKnownSpam !== undefined && {
+                checkGlobalSpamDB: oldSettings.blockKnownSpam
+            }),
+            ...(oldSettings.enableFrequencyCheck === undefined && oldSettings.blockHighFrequency !== undefined && {
+                enableFrequencyCheck: oldSettings.blockHighFrequency
+            }),
+            ...(oldSettings.enableRobocallDetection === undefined && oldSettings.blockRobocalls !== undefined && {
+                enableRobocallDetection: oldSettings.blockRobocalls
+            })
+        };
+
+        console.log(`🔧 [CALL FILTERING] Migrated settings:`, migratedSettings);
+
         const transformedData = {
             enabled: callFiltering.enabled,
             blacklist: Array.isArray(callFiltering.blacklist)
@@ -472,7 +494,7 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
                     .filter(entry => typeof entry === 'object' ? entry.status === 'active' : true)
                     .map(entry => typeof entry === 'object' ? entry.phoneNumber : entry)
                 : [],
-            settings: callFiltering.settings || {},
+            settings: migratedSettings,
             stats: callFiltering.stats || {}
         };
 
