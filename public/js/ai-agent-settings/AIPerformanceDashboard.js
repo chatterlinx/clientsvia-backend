@@ -21,6 +21,16 @@ class AIPerformanceDashboard {
 
     /**
      * ────────────────────────────────────────────────────────────────────────
+     * INITIALIZE DASHBOARD
+     * ────────────────────────────────────────────────────────────────────────
+     */
+    init() {
+        console.log(`🎯 [AI PERF DASHBOARD] Init called - starting load...`);
+        this.load();
+    }
+
+    /**
+     * ────────────────────────────────────────────────────────────────────────
      * LOAD DASHBOARD
      * ────────────────────────────────────────────────────────────────────────
      */
@@ -121,11 +131,18 @@ class AIPerformanceDashboard {
     render() {
         console.log(`🎨 [AI PERF DASHBOARD] CHECKPOINT 11: Starting render...`);
         
-        const container = document.getElementById('ai-settings-ai-performance-content');
+        // Support both AI Agent Settings sub-tab and main tab
+        let container = document.getElementById('ai-performance-dashboard-container');
+        if (!container) {
+            container = document.getElementById('ai-settings-ai-performance-content');
+        }
+        
         if (!container) {
             console.error(`❌ [AI PERF DASHBOARD] Container not found`);
             return;
         }
+        
+        console.log(`✅ [AI PERF DASHBOARD] Rendering into:`, container.id);
 
         const { realtime, trends, indexUsage, slowQueries, dbStats } = this.data;
 
@@ -427,7 +444,12 @@ class AIPerformanceDashboard {
      * ────────────────────────────────────────────────────────────────────────
      */
     renderError(message) {
-        const container = document.getElementById('ai-settings-ai-performance-content');
+        // Support both AI Agent Settings sub-tab and main tab
+        let container = document.getElementById('ai-performance-dashboard-container');
+        if (!container) {
+            container = document.getElementById('ai-settings-ai-performance-content');
+        }
+        
         if (!container) return;
 
         container.innerHTML = `
