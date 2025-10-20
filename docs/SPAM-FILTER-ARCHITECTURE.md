@@ -68,18 +68,114 @@
     │  └──────────────────────────────────────────────────────────┘  │
     │                                                                  │
     │  ┌──────────────────────────────────────────────────────────┐  │
-    │  │  💾 MongoDB Atlas                                         │  │
+    │  │  💾 MongoDB Atlas (via Mongoose ODM)                     │  │
     │  │  Collection: companiesCollection                          │  │
     │  │  Document: { _id, companyName, callFiltering, ... }       │  │
+    │  │  Purpose: Persistent storage with schema validation       │  │
     │  └──────────────────────────────────────────────────────────┘  │
     │                                                                  │
     │  ┌──────────────────────────────────────────────────────────┐  │
-    │  │  ⚡ Redis Cache                                           │  │
+    │  │  ⚡ Redis Cache (In-Memory)                              │  │
     │  │  Key: company:{companyId}                                 │  │
     │  │  TTL: 3600s (1 hour)                                      │  │
-    │  │  Purpose: Sub-50ms performance                            │  │
+    │  │  Purpose: Sub-50ms performance for reads                  │  │
+    │  │  Note: Cleared after every save operation                 │  │
     │  └──────────────────────────────────────────────────────────┘  │
+    │                                                                  │
+    │  🎯 DUAL-LAYER ARCHITECTURE: Mongoose + Redis                   │
+    │     - Mongoose: Schema enforcement, persistence, validation     │
+    │     - Redis: Speed layer for frequently accessed data           │
+    │     - Target: Sub-50ms response times for all reads             │
     └─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🎯 Mongoose + Redis Dual-Layer Architecture
+
+**Why Both?**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  MONGOOSE (Persistent Layer)                                    │
+│  ✅ Schema validation & enforcement                             │
+│  ✅ Data integrity & relationships                              │
+│  ✅ Query optimization & indexing                               │
+│  ✅ Middleware hooks (pre-save, post-save)                      │
+│  ⚠️  Slower: ~100-200ms per query                               │
+└─────────────────────────────────────────────────────────────────┘
+                                +
+┌─────────────────────────────────────────────────────────────────┐
+│  REDIS (Speed Layer)                                             │
+│  ⚡ In-memory key-value store                                   │
+│  ⚡ Lightning fast: <5ms reads                                  │
+│  ⚡ Caches frequently accessed companies                        │
+│  ⚠️  Must invalidate on save (cleared after updates)            │
+└─────────────────────────────────────────────────────────────────┘
+                                ‖
+                    🎯 TARGET: SUB-50MS READS
+```
+
+### **How It Works Together**
+
+**READ Flow (Cache Hit):**
+```
+User Request → Redis Check → ✅ Found → Return (5ms) ⚡
+```
+
+**READ Flow (Cache Miss):**
+```
+User Request → Redis Check → ❌ Not Found
+             → Mongoose Query → MongoDB (100ms)
+             → Store in Redis (TTL: 1 hour)
+             → Return to user
+```
+
+**WRITE Flow (Settings Save):**
+```
+User Saves Settings → Mongoose Validation
+                   → MongoDB Update (100ms)
+                   → ✅ Success
+                   → Clear Redis Cache (key: company:{id})
+                   → Next read will fetch fresh data
+```
+
+### **Why Clear Redis After Save?**
+
+**Problem without cache invalidation:**
+```
+1. User saves settings → MongoDB updated ✅
+2. Redis still has OLD data ❌
+3. Next read returns OLD data from Redis ❌
+4. User sees stale settings 😞
+```
+
+**Solution with cache invalidation:**
+```
+1. User saves settings → MongoDB updated ✅
+2. Redis cache cleared ✅
+3. Next read misses cache → Fetches from MongoDB ✅
+4. Fresh data stored in Redis ✅
+5. Subsequent reads are fast again ⚡
+```
+
+### **Code Implementation**
+
+**Backend clears cache after save:**
+```javascript
+// routes/admin/callFiltering.js (line 651-657)
+await company.save();  // Save to MongoDB via Mongoose
+
+// Clear Redis cache
+const { redisClient } = require('../../clients');
+await redisClient.del(`company:${companyId}`);
+console.log(`✅ Redis cache cleared for company: ${companyId}`);
+```
+
+**Cache key format:**
+```
+company:{companyId}
+Example: company:68e3f77a9d623b8058c700c4
 ```
 
 ---
