@@ -25,15 +25,15 @@ router.use(authenticateJWT);
 // Enforce admin-only access for all Data Center operations
 router.use(requireRole('admin'));
 
-// Helper: Build a collections map based on existing collection names
+// ✅ V2 COLLECTIONS MAP - All legacy references removed
 function buildCollectionsMap(names) {
     return {
-        companies: names.has('companiesCollection') ? 'companiesCollection' : 'companies',
-        calls: names.has('v2aiagentcalllogs') ? 'v2aiagentcalllogs' : (names.has('aiagentcalllogs') ? 'aiagentcalllogs' : null),
-        contacts: names.has('v2contacts') ? 'v2contacts' : (names.has('contacts') ? 'contacts' : null),
-        notifications: names.has('v2notificationlogs') ? 'v2notificationlogs' : (names.has('notificationlogs') ? 'notificationlogs' : null),
-        transcripts: names.has('conversationlogs') ? 'conversationlogs' : null,
-        customers: names.has('customers') ? 'customers' : null
+        companies: 'companiesCollection',  // V2 Primary
+        calls: 'v2aiagentcalllogs',
+        contacts: 'v2contacts',
+        notifications: 'v2notificationlogs',
+        transcripts: null,  // No longer used
+        customers: null     // No longer used
     };
 }
 
@@ -66,11 +66,8 @@ router.get('/companies', async (req, res) => {
         const collections = await db.listCollections().toArray();
         const names = new Set(collections.map(c => c.name));
         const collectionsMap = buildCollectionsMap(names);
-        // Pick primary and legacy company collections
-        const companiesCollection = db.collection(collectionsMap.companies);
-        const legacyCollection = collectionsMap.companies === 'companiesCollection' && names.has('companies')
-            ? db.collection('companies')
-            : null;
+        // ✅ V2 Primary collection only - no legacy fallback
+        const companiesCollection = db.collection('companiesCollection');
 
         // First, let's see what's in the database
         const totalInDB = await companiesCollection.countDocuments({});
@@ -257,12 +254,9 @@ router.get('/companies', async (req, res) => {
             });
         }
 
-        const [primaryResults, legacyResults] = await Promise.all([
-            companiesCollection.aggregate(basePipeline).toArray(),
-            legacyCollection ? legacyCollection.aggregate(basePipeline).toArray() : Promise.resolve([])
-        ]);
-        const mergedCompanies = [...primaryResults, ...(legacyResults || [])];
-        console.log('[DATA CENTER] ✅ Native MongoDB aggregation returned', mergedCompanies.length, 'companies (merged)');
+        // ✅ V2 only - no legacy merging
+        const mergedCompanies = await companiesCollection.aggregate(basePipeline).toArray();
+        console.log('[DATA CENTER] ✅ Native MongoDB aggregation returned', mergedCompanies.length, 'companies');
         
         // DEBUG: Log first company to see structure
         if (mergedCompanies.length > 0) {
@@ -341,16 +335,12 @@ router.get('/companies', async (req, res) => {
             };
         });
 
-        // Get total count across both collections
-        const [primaryCount, legacyCount] = await Promise.all([
-            companiesCollection.countDocuments(finalMatch),
-            legacyCollection ? legacyCollection.countDocuments(finalMatch) : Promise.resolve(0)
-        ]);
-        const total = (primaryCount || 0) + (legacyCount || 0);
-        console.log('[DATA CENTER] 📊 Total count from native MongoDB (merged):', total);
+        // ✅ V2 only - get total count
+        const total = await companiesCollection.countDocuments(finalMatch);
+        console.log('[DATA CENTER] 📊 Total count from native MongoDB:', total);
 
         if (state === 'deleted') {
-            console.log('[DATA CENTER] 🔎 Pre-pagination deleted counts:', { primaryCount, legacyCount, total });
+            console.log('[DATA CENTER] 🔎 Pre-pagination deleted count:', total);
         }
 
         const response = {
@@ -424,37 +414,19 @@ router.get('/companies/:id/inventory', async (req, res) => {
             console.warn('[DATA CENTER] Redis cache get failed:', cacheErr.message);
         }
 
-        // Fetch company with legacy fallback
-        // Use native driver to bypass Mongoose middleware and .option()
+        // ✅ V2 only - fetch company from primary collection
         const db = mongoose.connection.db;
-        const collections = await db.listCollections().toArray();
-        const names = new Set(collections.map(c => c.name));
-        const collectionsMap = buildCollectionsMap(names);
-        const primaryName = collectionsMap.companies;
-        const raw = await db.collection(primaryName).findOne({ _id: new mongoose.Types.ObjectId(id) })
-            || (names.has('companies') ? await db.collection('companies').findOne({ _id: new mongoose.Types.ObjectId(id) }) : null);
+        const raw = await db.collection('companiesCollection').findOne({ _id: new mongoose.Types.ObjectId(id) });
         if (!raw) {
             return res.status(404).json({ error: 'Company not found' });
         }
 
-        // Count documents in each collection
-        // Support legacy collection names as well
-        const callLogsName = collectionsMap.calls || 'v2aiagentcalllogs';
-        const contactsName = collectionsMap.contacts || 'v2contacts';
-        const notificationsName = collectionsMap.notifications || 'v2notificationlogs';
-
+        // ✅ V2 only - count documents in V2 collections
         const [callsCount, contactsCount, notificationsCount] = await Promise.all([
-            db.collection(callLogsName).countDocuments({ companyId: raw._id }),
-            db.collection(contactsName).countDocuments({ companyId: raw._id }),
-            db.collection(notificationsName).countDocuments({ companyId: raw._id })
+            db.collection('v2aiagentcalllogs').countDocuments({ companyId: raw._id }),
+            db.collection('v2contacts').countDocuments({ companyId: raw._id }),
+            db.collection('v2notificationlogs').countDocuments({ companyId: raw._id })
         ]);
-
-        // Diagnostics: include chosen collection names
-        console.log('[DATA CENTER] Inventory collection map:', {
-            calls: callLogsName,
-            contacts: contactsName,
-            notifications: notificationsName
-        });
 
         // Count scenarios
         const scenariosCount = raw.aiAgentLogic?.instantResponses?.length || 0;
@@ -490,11 +462,10 @@ router.get('/companies/:id/inventory', async (req, res) => {
                 scenarios: scenariosCount
             },
             collectionsMap: {
-                ...collectionsMap,
-                companies: primaryName,
-                calls: callLogsName,
-                contacts: contactsName,
-                notifications: notificationsName
+                companies: 'companiesCollection',
+                calls: 'v2aiagentcalllogs',
+                contacts: 'v2contacts',
+                notifications: 'v2notificationlogs'
             },
             externals,
             redisKeys: redisKeysCount,
@@ -540,10 +511,8 @@ router.patch('/companies/:id/soft-delete', async (req, res) => {
 
         console.log('[DATA CENTER] PATCH /companies/:id/soft-delete', id);
 
-        // Fetch company (include deleted to check if already deleted)
-        // Use native driver to bypass Mongoose middleware and .option()
-        const rawCompany = await mongoose.connection.db.collection('companiesCollection').findOne({ _id: new mongoose.Types.ObjectId(id) })
-            || await mongoose.connection.db.collection('companies').findOne({ _id: new mongoose.Types.ObjectId(id) });
+        // ✅ V2 only - fetch company
+        const rawCompany = await mongoose.connection.db.collection('companiesCollection').findOne({ _id: new mongoose.Types.ObjectId(id) });
         if (!rawCompany) {
             return res.status(404).json({ error: 'Company not found' });
         }
@@ -564,17 +533,11 @@ router.patch('/companies/:id/soft-delete', async (req, res) => {
             }
         };
 
-        // Update both primary and legacy collections; only one will match
-        await Promise.all([
-            mongoose.connection.db.collection('companiesCollection').updateOne(
-                { _id: new mongoose.Types.ObjectId(id) },
-                softDeleteUpdate
-            ),
-            mongoose.connection.db.collection('companies').updateOne(
-                { _id: new mongoose.Types.ObjectId(id) },
-                softDeleteUpdate
-            )
-        ]);
+        // ✅ V2 only - update company
+        await mongoose.connection.db.collection('companiesCollection').updateOne(
+            { _id: new mongoose.Types.ObjectId(id) },
+            softDeleteUpdate
+        );
 
         // Clear cache (best-effort)
         try {
@@ -637,10 +600,8 @@ router.post('/companies/:id/restore', async (req, res) => {
 
         console.log('[DATA CENTER] POST /companies/:id/restore', id);
 
-        // Fetch company (include deleted)
-        // Use native driver to bypass Mongoose middleware and .option()
-        const rawRestore2 = await mongoose.connection.db.collection('companiesCollection').findOne({ _id: new mongoose.Types.ObjectId(id) })
-            || await mongoose.connection.db.collection('companies').findOne({ _id: new mongoose.Types.ObjectId(id) });
+        // ✅ V2 only - fetch company (include deleted)
+        const rawRestore2 = await mongoose.connection.db.collection('companiesCollection').findOne({ _id: new mongoose.Types.ObjectId(id) });
         if (!rawRestore2) {
             return res.status(404).json({ error: 'Company not found' });
         }
@@ -649,7 +610,7 @@ router.post('/companies/:id/restore', async (req, res) => {
             return res.status(400).json({ error: 'Company is not deleted' });
         }
 
-        // Restore company (primary + legacy)
+        // ✅ V2 only - restore company
         const restoreUpdate = {
             $set: {
                 isDeleted: false,
@@ -661,16 +622,10 @@ router.post('/companies/:id/restore', async (req, res) => {
             }
         };
 
-        await Promise.all([
-            mongoose.connection.db.collection('companiesCollection').updateOne(
-                { _id: new mongoose.Types.ObjectId(id) },
-                restoreUpdate
-            ),
-            mongoose.connection.db.collection('companies').updateOne(
-                { _id: new mongoose.Types.ObjectId(id) },
-                restoreUpdate
-            )
-        ]);
+        await mongoose.connection.db.collection('companiesCollection').updateOne(
+            { _id: new mongoose.Types.ObjectId(id) },
+            restoreUpdate
+        );
 
         // Clear cache (best-effort)
         try {
@@ -741,8 +696,7 @@ router.delete('/companies/:id/hard-delete', async (req, res) => {
 
         // Fetch company before deletion (for audit log)
         const db = mongoose.connection.db;
-        const rawCompany = await db.collection('companiesCollection').findOne({ _id: new mongoose.Types.ObjectId(id) })
-            || await db.collection('companies').findOne({ _id: new mongoose.Types.ObjectId(id) });
+        const rawCompany = await db.collection('companiesCollection').findOne({ _id: new mongoose.Types.ObjectId(id) });
 
         if (!rawCompany) {
             return res.status(404).json({ error: 'Company not found' });
@@ -753,14 +707,10 @@ router.delete('/companies/:id/hard-delete', async (req, res) => {
         console.log('[DATA CENTER] 💀 Permanently deleting company:', companyName);
 
         // ========================================
-        // DELETE COMPANY DOCUMENT
+        // DELETE COMPANY DOCUMENT (V2 only)
         // ========================================
-        const deleteResult = await Promise.all([
-            db.collection('companiesCollection').deleteOne({ _id: new mongoose.Types.ObjectId(id) }),
-            db.collection('companies').deleteOne({ _id: new mongoose.Types.ObjectId(id) })
-        ]);
-        
-        const deletedCount = deleteResult[0].deletedCount + deleteResult[1].deletedCount;
+        const deleteResult = await db.collection('companiesCollection').deleteOne({ _id: new mongoose.Types.ObjectId(id) });
+        const deletedCount = deleteResult.deletedCount;
         console.log('[DATA CENTER] 💀 Deleted company documents:', deletedCount);
 
         // ========================================
@@ -771,26 +721,21 @@ router.delete('/companies/:id/hard-delete', async (req, res) => {
         const deletionResults = await Promise.allSettled([
             // Call logs
             db.collection('v2aiagentcalllogs').deleteMany({ companyId: companyObjectId }),
-            db.collection('aiagentcalllogs').deleteMany({ companyId: companyObjectId }),
-            
+            // LEGACY REMOVED
             // Contacts
             db.collection('v2contacts').deleteMany({ companyId: companyObjectId }),
-            db.collection('contacts').deleteMany({ companyId: companyObjectId }),
-            
+            // LEGACY REMOVED
             // Notifications
             db.collection('v2notificationlogs').deleteMany({ companyId: companyObjectId }),
-            db.collection('notificationlogs').deleteMany({ companyId: companyObjectId }),
-            
+            // LEGACY REMOVED
             // Conversation logs / transcripts
-            db.collection('conversationlogs').deleteMany({ companyId: companyObjectId }),
-            
+            // LEGACY REMOVED
             // Company Q&A / Knowledge base
             db.collection('companyqnas').deleteMany({ companyId: companyObjectId }),
             db.collection('localcompanyqnas').deleteMany({ companyId: companyObjectId }),
             
             // Bookings
-            db.collection('bookings').deleteMany({ companyId: companyObjectId }),
-            
+            // LEGACY REMOVED
             // Templates
             db.collection('v2templates').deleteMany({ companyId: companyObjectId })
         ]);
@@ -1099,7 +1044,7 @@ router.get('/scan', async (req, res) => {
 
         // Company collections (primary + legacy)
         const primaryCompanies = db.collection(names.has('companiesCollection') ? 'companiesCollection' : 'companies');
-        const legacyCompanies = names.has('companies') ? db.collection('companies') : null;
+        const legacyCompanies = null // LEGACY REMOVED;
 
         const [
             totalPrimary, livePrimary, deletedPrimary,
@@ -1203,7 +1148,7 @@ router.get('/summary', async (req, res) => {
         const names = new Set(collections.map(c => c.name));
         const collectionsMap = buildCollectionsMap(names);
         const primary = db.collection(collectionsMap.companies);
-        const legacy = collectionsMap.companies === 'companiesCollection' && names.has('companies') ? db.collection('companies') : null;
+        const legacy = collectionsMap.companies === 'companiesCollection' && null // LEGACY REMOVED;
 
         // Unified deleted/live filters (legacy-aware)
         const deletedMatch = {
@@ -1331,13 +1276,7 @@ router.get('/companies/:id/deletion-debug', async (req, res) => {
             { projection: { companyName: 1, businessName: 1, isDeleted: 1, deleted: 1, deletedAt: 1, accountStatus: 1 } }
         );
 
-        if (!doc && usedCollection === 'companiesCollection' && names.has('companies')) {
-            usedCollection = 'companies';
-            doc = await db.collection('companies').findOne(
-                { _id: objectId },
-                { projection: { companyName: 1, businessName: 1, isDeleted: 1, deleted: 1, deletedAt: 1, accountStatus: 1 } }
-            );
-        }
+        // ✅ V2 only - no legacy fallback
 
         if (!doc) {
             return res.status(404).json({ error: 'Company not found' });

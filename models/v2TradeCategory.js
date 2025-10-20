@@ -161,7 +161,7 @@ const TradeCategorySchema = new mongoose.Schema({
     timestamps: true,
     
     // 🚀 V2 SYSTEM: Use proper collection name for V2 Global Trade Categories
-    collection: 'tradecategories'
+    collection: 'enterpriseTradeCategories'
 });
 
 // V2 OPTIMIZED INDEXES - V2 Performance
