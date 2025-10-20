@@ -788,6 +788,12 @@ globalInstantResponseTemplateSchema.methods.addChangeLog = function(changes, cha
         changedBy: changedBy || 'Platform Admin',
         date: new Date()
     });
+    
+    // 🔥 CRITICAL: Prevent memory leak - Keep only last 50 changelog entries
+    // MongoDB has 16MB document limit - unbounded arrays will eventually crash
+    if (this.changeLog.length > 50) {
+        this.changeLog = this.changeLog.slice(-50); // Keep most recent 50
+    }
 };
 
 globalInstantResponseTemplateSchema.methods.hasParent = function() {

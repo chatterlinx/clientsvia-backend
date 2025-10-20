@@ -205,6 +205,14 @@ contactSchema.statics.findByCompany = function(companyId, options = {}) {
 // Instance methods
 contactSchema.methods.addInteraction = function(interactionData) {
     this.interactions.push(interactionData);
+    
+    // 🔥 CRITICAL: Prevent memory leak - Keep only last 100 interactions
+    // MongoDB has 16MB document limit - a customer with 1000+ calls will crash
+    // Older interactions should be archived to a separate collection if needed
+    if (this.interactions.length > 100) {
+        this.interactions = this.interactions.slice(-100); // Keep most recent 100
+    }
+    
     return this.save();
 };
 
