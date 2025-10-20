@@ -602,6 +602,7 @@
                     <thead>
                         <tr>
                             <th>Company</th>
+                            <th>Company ID</th>
                             <th>Status</th>
                             <th>Health</th>
                             <th>Calls</th>
@@ -613,7 +614,7 @@
                     </thead>
                     <tbody id="companies-table-body">
                         <tr>
-                            <td colspan="8" class="loading">
+                            <td colspan="9" class="loading">
                                 <div class="spinner"></div>
                                 <p>Loading companies...</p>
                             </td>
@@ -910,7 +911,7 @@
                 console.log('[DATA CENTER] ⚠️ No companies to display');
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="8" class="empty-state">
+                        <td colspan="9" class="empty-state">
                             <i class="fas fa-search"></i>
                             <h3>No Companies Found</h3>
                             <p>Try adjusting your search or filters</p>
@@ -926,6 +927,9 @@
                         <strong>${company.companyName}</strong>
                         <br>
                         <small style="color: #718096;">${company.ownerEmail || ''}</small>
+                    </td>
+                    <td onclick="viewCompany('${company.companyId}')" style="cursor: pointer;">
+                        <code style="font-size: 0.75rem; background: #f7fafc; padding: 0.25rem 0.5rem; border-radius: 4px; color: #2d3748; font-family: 'Courier New', monospace;">${company.companyId}</code>
                     </td>
                     <td onclick="viewCompany('${company.companyId}')" style="cursor: pointer;">
                         <span class="health-badge ${company.healthBadge.color}">
