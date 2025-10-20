@@ -14,7 +14,7 @@
 const BlockedCallLog = require('../models/BlockedCallLog');
 const GlobalSpamDatabase = require('../models/GlobalSpamDatabase');
 const v2Company = require('../models/v2Company');
-const redisClient = require('../config/redis');
+const { redisClient } = require('../clients');
 
 class SmartCallFilter {
     /**

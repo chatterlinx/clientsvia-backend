@@ -192,7 +192,7 @@ blockedCallLogSchema.statics.getBlockedCallsForCompany = async function(companyI
  */
 blockedCallLogSchema.statics.getSpamStats = async function(companyId) {
     const stats = await this.aggregate([
-        { $match: { companyId: mongoose.Types.ObjectId(companyId) } },
+        { $match: { companyId: new mongoose.Types.ObjectId(companyId) } },
         {
             $group: {
                 _id: '$blockReason',

@@ -330,23 +330,34 @@ router.post('/admin/call-archives/export', authenticateJWT, requireRole('admin')
             res.setHeader('Content-Disposition', `attachment; filename="call-archives-${Date.now()}.json"`);
             res.json(calls);
         } else {
-            // CSV Export
+            // CSV Export with proper escaping
             const csvRows = [
                 // Header
                 ['ID', 'Company', 'Customer Phone', 'Date', 'Duration', 'Source', 'Confidence', 'Response Time', 'Transcript Preview'].join(',')
             ];
 
+            // Helper to properly escape CSV values
+            const escapeCSV = (value) => {
+                if (value === null || value === undefined) return '';
+                const str = String(value);
+                // If contains comma, quote, or newline, wrap in quotes and escape quotes
+                if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                    return `"${str.replace(/"/g, '""')}"`;
+                }
+                return str;
+            };
+
             calls.forEach(call => {
                 const row = [
-                    call._id,
-                    call.companyId?.companyName || 'Unknown',
-                    call.customerPhone,
-                    new Date(call.createdAt).toISOString(),
-                    call.callDuration || 0,
-                    call.finalMatchedSource || '',
-                    call.finalConfidenceScore || 0,
-                    call.responseTime || 0,
-                    `"${(call.conversation?.fullTranscript?.plainText || '').substring(0, 100).replace(/"/g, '""')}"`
+                    escapeCSV(call._id),
+                    escapeCSV(call.companyId?.companyName || 'Unknown'),
+                    escapeCSV(call.customerPhone),
+                    escapeCSV(new Date(call.createdAt).toISOString()),
+                    escapeCSV(call.callDuration || 0),
+                    escapeCSV(call.finalMatchedSource || ''),
+                    escapeCSV(call.finalConfidenceScore || 0),
+                    escapeCSV(call.responseTime || 0),
+                    escapeCSV((call.conversation?.fullTranscript?.plainText || '').substring(0, 100))
                 ];
                 csvRows.push(row.join(','));
             });
