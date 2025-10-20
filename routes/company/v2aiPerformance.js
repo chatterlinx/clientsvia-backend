@@ -311,12 +311,22 @@ router.get('/company/:companyId/ai-performance/db-stats', authenticateJWT, async
         console.log(`💾 [AI PERFORMANCE API] CHECKPOINT 1: Fetching DB stats for company: ${companyId}`);
 
         // ================================================================
-        // STEP 1: Get call log collection stats
+        // STEP 1: Check if collection exists
         // ================================================================
         const db = mongoose.connection.db;
-        const collStats = await db.collection('v2aiagentcalllogs').stats();
-
-        console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 2: Collection stats retrieved`);
+        const collections = await db.listCollections({ name: 'v2aiagentcalllogs' }).toArray();
+        
+        let collStats = null;
+        if (collections.length > 0) {
+            try {
+                collStats = await db.collection('v2aiagentcalllogs').stats();
+                console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 2: Collection stats retrieved`);
+            } catch (statsError) {
+                console.warn(`⚠️ [AI PERFORMANCE API] Could not get collection stats:`, statsError.message);
+            }
+        } else {
+            console.log(`⚠️ [AI PERFORMANCE API] CHECKPOINT 2: Collection does not exist yet (no calls made)`);
+        }
 
         // ================================================================
         // STEP 2: Count documents for this company
@@ -326,15 +336,15 @@ router.get('/company/:companyId/ai-performance/db-stats', authenticateJWT, async
         console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 3: Company has ${companyDocCount} call logs`);
 
         // ================================================================
-        // STEP 3: Format response
+        // STEP 3: Format response (with defaults for empty collection)
         // ================================================================
         const stats = {
-            totalDocuments: collStats.count,
+            totalDocuments: collStats?.count || 0,
             companyDocuments: companyDocCount,
-            indexSize: Math.round((collStats.totalIndexSize / 1024 / 1024) * 100) / 100, // MB
-            dataSize: Math.round((collStats.size / 1024 / 1024) * 100) / 100, // MB
-            avgDocSize: Math.round((collStats.avgObjSize / 1024) * 100) / 100, // KB
-            indexes: collStats.nindexes
+            indexSize: collStats ? Math.round((collStats.totalIndexSize / 1024 / 1024) * 100) / 100 : 0, // MB
+            dataSize: collStats ? Math.round((collStats.size / 1024 / 1024) * 100) / 100 : 0, // MB
+            avgDocSize: collStats ? Math.round((collStats.avgObjSize / 1024) * 100) / 100 : 0, // KB
+            indexes: collStats?.nindexes || 0
         };
 
         console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 4: Stats formatted`);
