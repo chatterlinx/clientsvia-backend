@@ -31,6 +31,7 @@ class AIAgentSettingsManager {
         this.aiCoreLiveScenariosManager = null;
         this.aiCoreKnowledgebaseManager = null;
         this.analyticsManager = null;
+        this.aiPerformanceDashboard = null;
         
         console.log(`🤖 [AI AGENT SETTINGS] Initialized for company: ${companyId}`);
     }
@@ -187,6 +188,9 @@ class AIAgentSettingsManager {
                 case 'analytics':
                     await this.loadAnalytics();
                     break;
+                case 'ai-performance':
+                    await this.loadAIPerformance();
+                    break;
                 default:
                     console.warn(`Unknown sub-tab: ${subTabName}`);
             }
@@ -327,6 +331,21 @@ class AIAgentSettingsManager {
         }
         
         await this.analyticsManager.load();
+    }
+    
+    /**
+     * Load AI Performance Dashboard
+     */
+    async loadAIPerformance() {
+        console.log('🚀 [AI AGENT SETTINGS] Loading AI Performance Dashboard...');
+        
+        if (!this.aiPerformanceDashboard) {
+            this.aiPerformanceDashboard = new AIPerformanceDashboard(this.companyId);
+            // Expose globally for onclick handlers
+            window.aiPerformanceDashboard = this.aiPerformanceDashboard;
+        }
+        
+        await this.aiPerformanceDashboard.load();
     }
     
     /**
