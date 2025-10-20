@@ -48,7 +48,7 @@ class SpamFilterManager {
             }
 
             // Fetch settings
-            const settingsRes = await fetch(`/api/admin/call-filtering/settings/${this.companyId}`, {
+            const settingsRes = await fetch(`/api/admin/call-filtering/${this.companyId}/settings`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -303,7 +303,7 @@ class SpamFilterManager {
             console.log(`🛡️ [SPAM FILTER] Toggling filter: ${enabled}`);
 
             const token = localStorage.getItem('adminToken');
-            const response = await fetch(`/api/admin/call-filtering/settings/${this.companyId}`, {
+            const response = await fetch(`/api/admin/call-filtering/${this.companyId}/settings`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -345,7 +345,7 @@ class SpamFilterManager {
 
         try {
             const token = localStorage.getItem('adminToken');
-            const response = await fetch(`/api/admin/call-filtering/blacklist/${this.companyId}`, {
+            const response = await fetch(`/api/admin/call-filtering/${this.companyId}/blacklist`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -378,7 +378,7 @@ class SpamFilterManager {
 
         try {
             const token = localStorage.getItem('adminToken');
-            const response = await fetch(`/api/admin/call-filtering/blacklist/${this.companyId}`, {
+            const response = await fetch(`/api/admin/call-filtering/${this.companyId}/blacklist`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -486,7 +486,7 @@ class SpamFilterManager {
             const robocallDetection = document.getElementById('robocall-detection').checked;
 
             const token = localStorage.getItem('adminToken');
-            const response = await fetch(`/api/admin/call-filtering/settings/${this.companyId}`, {
+            const response = await fetch(`/api/admin/call-filtering/${this.companyId}/settings`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
