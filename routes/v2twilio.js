@@ -460,6 +460,7 @@ router.post('/voice', async (req, res) => {
   try {
     console.log('[POST /api/twilio/voice] Incoming call:', req.body);
     const calledNumber = normalizePhoneNumber(req.body.To);
+    const callerNumber = normalizePhoneNumber(req.body.From);
     console.log(`[PHONE LOOKUP] [SEARCH] Searching for company with phone: ${calledNumber}`);
     
     let company = await getCompanyByPhoneNumber(calledNumber);
@@ -476,6 +477,29 @@ router.post('/voice', async (req, res) => {
       res.send(twiml.toString());
       return;
     }
+
+    // 🚫 SPAM FILTER - Check if call should be blocked
+    const SmartCallFilter = require('../services/SmartCallFilter');
+    const filterResult = await SmartCallFilter.checkCall({
+      callerPhone: callerNumber,
+      companyId: company._id.toString(),
+      companyPhone: calledNumber,
+      twilioCallSid: req.body.CallSid
+    });
+
+    if (filterResult.shouldBlock) {
+      console.log(`🚫 [SPAM BLOCKED] Call from ${callerNumber} blocked. Reason: ${filterResult.reason}`);
+      
+      // Play rejection message and hangup
+      twiml.say('This call has been blocked. Goodbye.');
+      twiml.hangup();
+      
+      res.type('text/xml');
+      res.send(twiml.toString());
+      return;
+    }
+
+    console.log(`✅ [SPAM FILTER] Call from ${callerNumber} passed all security checks`);
 
     // 🧠 GLOBAL AI BRAIN TEST MODE
     if (company.isGlobalTestTemplate) {
