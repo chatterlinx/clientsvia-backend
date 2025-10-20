@@ -602,19 +602,107 @@ class SpamFilterManager {
 
     /**
      * ────────────────────────────────────────────────────────────────────────
-     * NOTIFICATION HELPER
+     * NOTIFICATION HELPER - World-Class Toast System
      * ────────────────────────────────────────────────────────────────────────
      */
     notify(message, type = 'info') {
-        // Simple notification using alert for now
-        // Can be enhanced with a toast library
-        if (type === 'error') {
-            alert(`❌ ${message}`);
-        } else if (type === 'success') {
-            alert(`✅ ${message}`);
-        } else {
-            alert(`ℹ️ ${message}`);
+        console.log(`🔔 [SPAM FILTER] NOTIFICATION: [${type.toUpperCase()}] ${message}`);
+        
+        // Create toast container if it doesn't exist
+        let toastContainer = document.getElementById('spam-filter-toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'spam-filter-toast-container';
+            toastContainer.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 999999;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                pointer-events: none;
+            `;
+            document.body.appendChild(toastContainer);
         }
+
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = 'spam-filter-toast';
+        
+        // Set icon and color based on type
+        let icon = 'ℹ️';
+        let bgColor = '#3B82F6'; // blue
+        let textColor = '#FFFFFF';
+        
+        if (type === 'success') {
+            icon = '✅';
+            bgColor = '#10B981'; // green
+        } else if (type === 'error') {
+            icon = '❌';
+            bgColor = '#EF4444'; // red
+        } else if (type === 'warning') {
+            icon = '⚠️';
+            bgColor = '#F59E0B'; // orange
+        }
+
+        toast.style.cssText = `
+            background: ${bgColor};
+            color: ${textColor};
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 300px;
+            max-width: 500px;
+            pointer-events: auto;
+            cursor: pointer;
+            transform: translateX(400px);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        `;
+
+        toast.innerHTML = `
+            <span style="font-size: 20px; line-height: 1;">${icon}</span>
+            <span style="flex: 1;">${message}</span>
+            <span style="opacity: 0.7; font-size: 18px; line-height: 1;">×</span>
+        `;
+
+        toastContainer.appendChild(toast);
+
+        // Animate in
+        setTimeout(() => {
+            toast.style.transform = 'translateX(0)';
+            toast.style.opacity = '1';
+        }, 10);
+
+        // Auto-dismiss after 3 seconds
+        const dismissToast = () => {
+            toast.style.transform = 'translateX(400px)';
+            toast.style.opacity = '0';
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+                // Remove container if empty
+                if (toastContainer.children.length === 0 && toastContainer.parentNode) {
+                    toastContainer.parentNode.removeChild(toastContainer);
+                }
+            }, 300);
+        };
+
+        const timeoutId = setTimeout(dismissToast, 3000);
+
+        // Click to dismiss
+        toast.addEventListener('click', () => {
+            clearTimeout(timeoutId);
+            dismissToast();
+        });
     }
 }
 
