@@ -26,6 +26,12 @@ const connectDB = async () => {
     }
 
     try {
+        // --- ENABLE AUTO-INDEX CREATION ---
+        // ✅ Ensures all schema indexes (including text indexes) are created automatically
+        // This is critical for Call Archives search functionality
+        mongoose.set('autoIndex', true);
+        console.log('[Mongoose] ✅ Auto-index enabled - all schema indexes will be created');
+        
         // --- ESTABLISH MONGOOSE CONNECTION ---
         await mongoose.connect(uri, {
             // useNewUrlParser: true, // Deprecated in Mongoose 6+

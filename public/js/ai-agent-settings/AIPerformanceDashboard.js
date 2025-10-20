@@ -76,6 +76,30 @@ class AIPerformanceDashboard {
             console.log(`   - DB Stats: ${dbStatsRes.status}`);
 
             // ================================================================
+            // ✅ FIX: Check response status before parsing JSON (Bug #8)
+            // ================================================================
+            console.log(`🔍 [AI PERF DASHBOARD] CHECKPOINT 5.5: Validating response status...`);
+            
+            const responses = [
+                { name: 'Realtime', res: realtimeRes },
+                { name: 'Trends', res: trendsRes },
+                { name: 'Index Usage', res: indexUsageRes },
+                { name: 'Slow Queries', res: slowQueriesRes },
+                { name: 'DB Stats', res: dbStatsRes }
+            ];
+
+            for (const { name, res } of responses) {
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    console.error(`❌ [AI PERF DASHBOARD] ${name} API failed: ${res.status}`);
+                    console.error(`   Response: ${errorText}`);
+                    throw new Error(`${name} API failed with status ${res.status}: ${errorText.substring(0, 100)}`);
+                }
+            }
+
+            console.log(`✅ [AI PERF DASHBOARD] All API responses validated successfully`);
+
+            // ================================================================
             // STEP 2: Parse responses
             // ================================================================
             console.log(`📊 [AI PERF DASHBOARD] CHECKPOINT 6: Parsing JSON responses...`);
