@@ -563,10 +563,10 @@ async function updateFilteringSettings(req, res) {
             // Old approach kept legacy keys (blockKnownSpam, etc) forever
             // New approach: Only keep the new schema keys we're actively saving
             company.callFiltering.settings = {
-                // Only save the new schema keys
-                checkGlobalSpamDB: settings.checkGlobalSpamDB,
-                enableFrequencyCheck: settings.enableFrequencyCheck,
-                enableRobocallDetection: settings.enableRobocallDetection
+                // Only save the new schema keys (with explicit true/false, not undefined)
+                checkGlobalSpamDB: settings.checkGlobalSpamDB === true,
+                enableFrequencyCheck: settings.enableFrequencyCheck === true,
+                enableRobocallDetection: settings.enableRobocallDetection === true
             };
             
             console.log(`✅ [CALL FILTERING] Settings replaced (old schema purged):`, company.callFiltering.settings);
