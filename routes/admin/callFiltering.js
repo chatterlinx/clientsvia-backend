@@ -192,6 +192,15 @@ router.post('/admin/call-filtering/:companyId/blacklist', authenticateJWT, requi
 
         await company.save();
 
+        // ✅ FIX #3: Clear Redis cache
+        const { redisClient } = require('../../clients');
+        try {
+            await redisClient.del(`company:${companyId}`);
+            console.log(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
+        } catch (cacheError) {
+            console.warn(`⚠️ [CALL FILTERING] Failed to clear cache:`, cacheError);
+        }
+
         res.json({
             success: true,
             message: 'Number added to blacklist'
@@ -246,6 +255,15 @@ router.delete('/admin/call-filtering/:companyId/blacklist/:phoneNumber', authent
         entry.status = 'removed';
         await company.save();
 
+        // ✅ FIX #3: Clear Redis cache
+        const { redisClient } = require('../../clients');
+        try {
+            await redisClient.del(`company:${companyId}`);
+            console.log(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
+        } catch (cacheError) {
+            console.warn(`⚠️ [CALL FILTERING] Failed to clear cache:`, cacheError);
+        }
+
         res.json({
             success: true,
             message: 'Number removed from blacklist'
@@ -256,6 +274,153 @@ router.delete('/admin/call-filtering/:companyId/blacklist/:phoneNumber', authent
         res.status(500).json({
             success: false,
             message: 'Failed to remove from blacklist',
+            error: error.message
+        });
+    }
+});
+
+// ============================================================================
+// ADD TO COMPANY WHITELIST
+// ============================================================================
+router.post('/admin/call-filtering/whitelist/:companyId', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { phoneNumber, reason } = req.body;
+
+        console.log(`✅ [CALL FILTERING] Adding ${phoneNumber} to company ${companyId} whitelist`);
+
+        if (!phoneNumber) {
+            return res.status(400).json({
+                success: false,
+                message: 'Phone number is required'
+            });
+        }
+
+        const company = await v2Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found'
+            });
+        }
+
+        // Initialize callFiltering if not exists
+        if (!company.callFiltering) {
+            company.callFiltering = {
+                enabled: true,
+                blacklist: [],
+                whitelist: [],
+                settings: {},
+                stats: {}
+            };
+        }
+
+        // Check if already whitelisted
+        const existing = company.callFiltering.whitelist.find(entry => 
+            entry.phoneNumber === phoneNumber && entry.status === 'active'
+        );
+
+        if (existing) {
+            return res.status(400).json({
+                success: false,
+                message: 'Number already in whitelist'
+            });
+        }
+
+        // Add to whitelist
+        company.callFiltering.whitelist.push({
+            phoneNumber,
+            reason: reason || 'Manually whitelisted',
+            addedAt: new Date(),
+            addedBy: req.user.email || 'admin',
+            status: 'active'
+        });
+
+        await company.save();
+
+        // ✅ FIX #3: Clear Redis cache
+        const { redisClient } = require('../../clients');
+        try {
+            await redisClient.del(`company:${companyId}`);
+            console.log(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
+        } catch (cacheError) {
+            console.warn(`⚠️ [CALL FILTERING] Failed to clear cache:`, cacheError);
+        }
+
+        res.json({
+            success: true,
+            message: 'Number added to whitelist'
+        });
+
+    } catch (error) {
+        console.error(`❌ [CALL FILTERING] ERROR:`, error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to add to whitelist',
+            error: error.message
+        });
+    }
+});
+
+// ============================================================================
+// REMOVE FROM COMPANY WHITELIST
+// ============================================================================
+router.delete('/admin/call-filtering/whitelist/:companyId', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { phoneNumber } = req.body;
+
+        console.log(`❌ [CALL FILTERING] Removing ${phoneNumber} from company ${companyId} whitelist`);
+
+        const company = await v2Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found'
+            });
+        }
+
+        if (!company.callFiltering || !company.callFiltering.whitelist) {
+            return res.status(404).json({
+                success: false,
+                message: 'No whitelist found'
+            });
+        }
+
+        // Find and mark as removed
+        const entry = company.callFiltering.whitelist.find(entry => 
+            entry.phoneNumber === phoneNumber && entry.status === 'active'
+        );
+
+        if (!entry) {
+            return res.status(404).json({
+                success: false,
+                message: 'Number not found in whitelist'
+            });
+        }
+
+        entry.status = 'removed';
+        await company.save();
+
+        // ✅ FIX #3: Clear Redis cache
+        const { redisClient } = require('../../clients');
+        try {
+            await redisClient.del(`company:${companyId}`);
+            console.log(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
+        } catch (cacheError) {
+            console.warn(`⚠️ [CALL FILTERING] Failed to clear cache:`, cacheError);
+        }
+
+        res.json({
+            success: true,
+            message: 'Number removed from whitelist'
+        });
+
+    } catch (error) {
+        console.error(`❌ [CALL FILTERING] ERROR:`, error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to remove from whitelist',
             error: error.message
         });
     }
@@ -278,15 +443,34 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
             });
         }
 
+        // ✅ FIX #2: Transform blacklist/whitelist to string arrays for frontend
+        const callFiltering = company.callFiltering || {
+            enabled: true,
+            blacklist: [],
+            whitelist: [],
+            settings: {},
+            stats: {}
+        };
+
+        const transformedData = {
+            enabled: callFiltering.enabled,
+            blacklist: Array.isArray(callFiltering.blacklist)
+                ? callFiltering.blacklist
+                    .filter(entry => typeof entry === 'object' ? entry.status === 'active' : true)
+                    .map(entry => typeof entry === 'object' ? entry.phoneNumber : entry)
+                : [],
+            whitelist: Array.isArray(callFiltering.whitelist)
+                ? callFiltering.whitelist
+                    .filter(entry => typeof entry === 'object' ? entry.status === 'active' : true)
+                    .map(entry => typeof entry === 'object' ? entry.phoneNumber : entry)
+                : [],
+            settings: callFiltering.settings || {},
+            stats: callFiltering.stats || {}
+        };
+
         res.json({
             success: true,
-            data: company.callFiltering || {
-                enabled: true,
-                blacklist: [],
-                whitelist: [],
-                settings: {},
-                stats: {}
-            }
+            data: transformedData
         });
 
     } catch (error) {
@@ -302,10 +486,11 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
 // ============================================================================
 // UPDATE COMPANY FILTERING SETTINGS
 // ============================================================================
-router.patch('/admin/call-filtering/:companyId/settings', authenticateJWT, requireRole('admin'), async (req, res) => {
+// Helper function to handle settings update (used by both PATCH and PUT)
+async function updateFilteringSettings(req, res) {
     try {
         const { companyId } = req.params;
-        const { settings } = req.body;
+        const { enabled, settings } = req.body;
 
         console.log(`⚙️ [CALL FILTERING] Updating settings for company: ${companyId}`);
 
@@ -328,18 +513,34 @@ router.patch('/admin/call-filtering/:companyId/settings', authenticateJWT, requi
             };
         }
 
-        // Update settings
-        company.callFiltering.settings = {
-            ...company.callFiltering.settings,
-            ...settings
-        };
+        // Update enabled state if provided
+        if (enabled !== undefined) {
+            company.callFiltering.enabled = enabled;
+        }
+
+        // Update settings if provided
+        if (settings) {
+            company.callFiltering.settings = {
+                ...company.callFiltering.settings,
+                ...settings
+            };
+        }
 
         await company.save();
+
+        // ✅ FIX #3: Clear Redis cache
+        const { redisClient } = require('../../clients');
+        try {
+            await redisClient.del(`company:${companyId}`);
+            console.log(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
+        } catch (cacheError) {
+            console.warn(`⚠️ [CALL FILTERING] Failed to clear cache:`, cacheError);
+        }
 
         res.json({
             success: true,
             message: 'Settings updated successfully',
-            data: company.callFiltering.settings
+            data: company.callFiltering
         });
 
     } catch (error) {
@@ -350,7 +551,13 @@ router.patch('/admin/call-filtering/:companyId/settings', authenticateJWT, requi
             error: error.message
         });
     }
-});
+}
+
+// PATCH route (original)
+router.patch('/admin/call-filtering/:companyId/settings', authenticateJWT, requireRole('admin'), updateFilteringSettings);
+
+// ✅ FIX #1: Add PUT route for frontend compatibility
+router.put('/admin/call-filtering/:companyId/settings', authenticateJWT, requireRole('admin'), updateFilteringSettings);
 
 // ============================================================================
 // GET GLOBAL SPAM DATABASE (top spammers)
