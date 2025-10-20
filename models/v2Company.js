@@ -1675,6 +1675,54 @@ const companySchema = new mongoose.Schema({
             resolvedBy: { type: String, trim: true, default: 'admin' },
             actionTaken: { type: String, trim: true, default: 'Marked as resolved' }
         }]
+    },
+    
+    // ============================================================================
+    // 🚫 CALL FILTERING - SPAM & SECURITY
+    // ============================================================================
+    // PURPOSE: Spam detection, robocall blocking, blacklist/whitelist
+    // ARCHITECTURE: Integrated with SmartCallFilter service
+    // ============================================================================
+    callFiltering: {
+        // Enable/disable filtering
+        enabled: { type: Boolean, default: true },
+        
+        // Company-specific blacklist
+        blacklist: [{
+            phoneNumber: { type: String, required: true, trim: true },
+            addedAt: { type: Date, default: Date.now },
+            addedBy: { type: String, trim: true, default: 'admin' },
+            reason: { type: String, trim: true, default: null },
+            status: { 
+                type: String, 
+                enum: ['active', 'removed'], 
+                default: 'active' 
+            }
+        }],
+        
+        // Company-specific whitelist (always allow)
+        whitelist: [{
+            phoneNumber: { type: String, required: true, trim: true },
+            addedAt: { type: Date, default: Date.now },
+            addedBy: { type: String, trim: true, default: 'admin' },
+            reason: { type: String, trim: true, default: null }
+        }],
+        
+        // Filter settings
+        settings: {
+            blockKnownSpam: { type: Boolean, default: true },      // Use GlobalSpamDatabase
+            blockHighFrequency: { type: Boolean, default: true },  // Rate limiting
+            blockRobocalls: { type: Boolean, default: true },      // Pattern detection
+            blockInvalidNumbers: { type: Boolean, default: true }, // Format validation
+            frequencyThreshold: { type: Number, default: 5 },      // Calls per 10 min
+            notifyOnBlock: { type: Boolean, default: false }       // Email/SMS notification
+        },
+        
+        // Statistics
+        stats: {
+            totalBlocked: { type: Number, default: 0 },
+            lastBlockedAt: { type: Date, default: null }
+        }
     }
 }, { timestamps: true });
 
