@@ -557,10 +557,19 @@ async function updateFilteringSettings(req, res) {
 
         // Update settings if provided
         if (settings) {
+            console.log(`📝 [CALL FILTERING] Incoming settings:`, settings);
+            
+            // 🔥 CRITICAL: REPLACE old settings completely, don't merge!
+            // Old approach kept legacy keys (blockKnownSpam, etc) forever
+            // New approach: Only keep the new schema keys we're actively saving
             company.callFiltering.settings = {
-                ...company.callFiltering.settings,
-                ...settings
+                // Only save the new schema keys
+                checkGlobalSpamDB: settings.checkGlobalSpamDB,
+                enableFrequencyCheck: settings.enableFrequencyCheck,
+                enableRobocallDetection: settings.enableRobocallDetection
             };
+            
+            console.log(`✅ [CALL FILTERING] Settings replaced (old schema purged):`, company.callFiltering.settings);
         }
 
         await company.save();
