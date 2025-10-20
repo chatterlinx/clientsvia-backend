@@ -276,7 +276,7 @@ aiPerformanceMetricSchema.statics.getSpeedTrends = async function(companyId, day
     const trends = await this.aggregate([
         {
             $match: {
-                companyId: mongoose.Types.ObjectId(companyId),
+                companyId: new mongoose.Types.ObjectId(companyId),
                 timestamp: { $gte: startDate }
             }
         },

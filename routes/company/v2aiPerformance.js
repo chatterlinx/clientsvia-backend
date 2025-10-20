@@ -15,12 +15,13 @@ const router = express.Router();
 const v2AIPerformanceMetric = require('../../models/v2AIPerformanceMetric');
 const v2AIAgentCallLog = require('../../models/v2AIAgentCallLog');
 const Company = require('../../models/v2Company');
+const { isAuthenticated } = require('../../middleware/auth');
 const mongoose = require('mongoose');
 
 // ============================================================================
 // GET REAL-TIME METRICS (Last 24 Hours)
 // ============================================================================
-router.get('/company/:companyId/ai-performance/realtime', async (req, res) => {
+router.get('/company/:companyId/ai-performance/realtime', isAuthenticated, async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -114,7 +115,7 @@ router.get('/company/:companyId/ai-performance/realtime', async (req, res) => {
 // ============================================================================
 // GET SPEED TRENDS (Last 7 Days)
 // ============================================================================
-router.get('/company/:companyId/ai-performance/trends', async (req, res) => {
+router.get('/company/:companyId/ai-performance/trends', isAuthenticated, async (req, res) => {
     try {
         const { companyId } = req.params;
         const { days = 7 } = req.query;
@@ -161,7 +162,7 @@ router.get('/company/:companyId/ai-performance/trends', async (req, res) => {
 // ============================================================================
 // GET INDEX USAGE STATISTICS
 // ============================================================================
-router.get('/company/:companyId/ai-performance/index-usage', async (req, res) => {
+router.get('/company/:companyId/ai-performance/index-usage', isAuthenticated, async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -243,7 +244,7 @@ router.get('/company/:companyId/ai-performance/index-usage', async (req, res) =>
 // ============================================================================
 // GET SLOW QUERIES (Last 24 Hours)
 // ============================================================================
-router.get('/company/:companyId/ai-performance/slow-queries', async (req, res) => {
+router.get('/company/:companyId/ai-performance/slow-queries', isAuthenticated, async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -303,7 +304,7 @@ router.get('/company/:companyId/ai-performance/slow-queries', async (req, res) =
 // ============================================================================
 // GET DATABASE COLLECTION STATS
 // ============================================================================
-router.get('/company/:companyId/ai-performance/db-stats', async (req, res) => {
+router.get('/company/:companyId/ai-performance/db-stats', isAuthenticated, async (req, res) => {
     try {
         const { companyId } = req.params;
         
