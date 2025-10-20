@@ -93,6 +93,13 @@ class SpamFilterManager {
         }
 
         const { enabled, blacklist = [], whitelist = [], settings = {}, stats = {} } = this.settings;
+        
+        // 🔍 DEBUG: Log what settings we're rendering
+        console.log(`🔍 [SPAM FILTER] CHECKPOINT 6.1: Rendering with settings:`, {
+            checkGlobalSpamDB: settings.checkGlobalSpamDB,
+            enableFrequencyCheck: settings.enableFrequencyCheck,
+            enableRobocallDetection: settings.enableRobocallDetection
+        });
 
         // Build HTML
         container.innerHTML = `
@@ -244,21 +251,21 @@ class SpamFilterManager {
                         <div class="settings-grid">
                             <div class="setting-item">
                                 <label class="setting-label">
-                                    <input type="checkbox" id="check-global-db" ${settings.checkGlobalSpamDB !== false ? 'checked' : ''}>
+                                    <input type="checkbox" id="check-global-db" ${settings.checkGlobalSpamDB === true ? 'checked' : ''}>
                                     Check Global Spam Database
                                 </label>
                                 <p class="setting-description">Blocks numbers reported as spam by other companies</p>
                             </div>
                             <div class="setting-item">
                                 <label class="setting-label">
-                                    <input type="checkbox" id="frequency-check" ${settings.enableFrequencyCheck !== false ? 'checked' : ''}>
+                                    <input type="checkbox" id="frequency-check" ${settings.enableFrequencyCheck === true ? 'checked' : ''}>
                                     Frequency Analysis
                                 </label>
                                 <p class="setting-description">Blocks numbers calling too frequently</p>
                             </div>
                             <div class="setting-item">
                                 <label class="setting-label">
-                                    <input type="checkbox" id="robocall-detection" ${settings.enableRobocallDetection !== false ? 'checked' : ''}>
+                                    <input type="checkbox" id="robocall-detection" ${settings.enableRobocallDetection === true ? 'checked' : ''}>
                                     Robocall Detection
                                 </label>
                                 <p class="setting-description">AI-powered detection of automated calls</p>
