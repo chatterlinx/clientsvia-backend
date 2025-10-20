@@ -1708,14 +1708,20 @@ const companySchema = new mongoose.Schema({
             reason: { type: String, trim: true, default: null }
         }],
         
-        // Filter settings
+        // Filter settings - NEW SCHEMA (migrated from old schema)
         settings: {
-            blockKnownSpam: { type: Boolean, default: true },      // Use GlobalSpamDatabase
-            blockHighFrequency: { type: Boolean, default: true },  // Rate limiting
-            blockRobocalls: { type: Boolean, default: true },      // Pattern detection
-            blockInvalidNumbers: { type: Boolean, default: true }, // Format validation
-            frequencyThreshold: { type: Number, default: 5 },      // Calls per 10 min
-            notifyOnBlock: { type: Boolean, default: false }       // Email/SMS notification
+            // ✅ NEW SCHEMA (active)
+            checkGlobalSpamDB: { type: Boolean, default: false },           // Check GlobalSpamDatabase
+            enableFrequencyCheck: { type: Boolean, default: false },        // Rate limiting / frequency analysis
+            enableRobocallDetection: { type: Boolean, default: false },     // AI-powered robocall detection
+            
+            // 🔧 OLD SCHEMA (deprecated - kept for migration compatibility)
+            blockKnownSpam: { type: Boolean },                              // DEPRECATED: Use checkGlobalSpamDB
+            blockHighFrequency: { type: Boolean },                          // DEPRECATED: Use enableFrequencyCheck
+            blockRobocalls: { type: Boolean },                              // DEPRECATED: Use enableRobocallDetection
+            blockInvalidNumbers: { type: Boolean, default: true },          // Format validation (still used)
+            frequencyThreshold: { type: Number, default: 5 },               // Calls per 10 min (still used)
+            notifyOnBlock: { type: Boolean, default: false }                // Email/SMS notification (still used)
         },
         
         // Statistics
