@@ -470,6 +470,7 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
             settings: company.callFiltering?.settings,
             settingsKeys: company.callFiltering?.settings ? Object.keys(company.callFiltering.settings) : []
         });
+        console.log(`🔍 [CALL FILTERING] Full settings object from MongoDB:`, JSON.stringify(company.callFiltering?.settings, null, 2));
 
         // ✅ FIX #2: Transform blacklist/whitelist to string arrays for frontend
         const callFiltering = company.callFiltering || {
@@ -643,10 +644,17 @@ async function updateFilteringSettings(req, res) {
                 enableRobocallDetection: settings.enableRobocallDetection === true
             };
             
+            // 🔥 CRITICAL: Mark the nested path as modified so Mongoose detects the change
+            // Without this, Mongoose may not save changes to nested objects
+            company.markModified('callFiltering.settings');
+            
             console.log(`✅ [CALL FILTERING] Settings replaced (old schema purged):`, company.callFiltering.settings);
+            console.log(`🔍 [CALL FILTERING] Mongoose detected as modified:`, company.isModified('callFiltering.settings'));
         }
 
+        console.log(`💾 [CALL FILTERING] About to save to MongoDB...`);
         await company.save();
+        console.log(`✅ [CALL FILTERING] Successfully saved to MongoDB!`);
 
         // ✅ FIX #3: Clear Redis cache
         const { redisClient } = require('../../clients');
