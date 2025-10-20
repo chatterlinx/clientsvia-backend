@@ -92,6 +92,9 @@ class PriorityDrivenKnowledgeRouter {
             
             // Update performance metrics
             this.updatePerformanceMetrics(result, totalTime);
+            
+            // 🚀 NEW: Track performance for AI Performance Dashboard
+            await this.trackPerformanceMetrics(companyId, routingContext, result, totalTime);
 
             return result;
 
@@ -1344,6 +1347,44 @@ class PriorityDrivenKnowledgeRouter {
     clearCache() {
         this.routingCache.clear();
         logger.info('Priority-driven knowledge router cache cleared');
+    }
+    
+    /**
+     * 🚀 TRACK PERFORMANCE METRICS FOR AI PERFORMANCE DASHBOARD
+     * Called after every AI routing to collect performance data
+     */
+    async trackPerformanceMetrics(companyId, routingContext, result, totalTime) {
+        try {
+            const AIPerformanceTracker = require('./AIPerformanceTracker');
+            
+            // Build timing breakdown
+            const timings = {
+                mongoLookup: 3,  // Estimated - company lookup
+                redisCache: routingContext.options?.cacheHit ? 1 : 0,
+                templateLoading: 4,  // Estimated - loading scenarios
+                scenarioMatching: totalTime - 10,  // Main AI work
+                confidenceCalculation: 2,  // Estimated
+                responseGeneration: 1,  // Minimal
+                total: totalTime
+            };
+            
+            // Determine source
+            const source = result.source || 'inHouseFallback';
+            
+            // Track with AIPerformanceTracker
+            await AIPerformanceTracker.trackLookup({
+                companyId,
+                timings,
+                source,
+                confidence: result.confidence || 0,
+                cacheHit: routingContext.options?.cacheHit || false,
+                customerQuery: routingContext.query
+            });
+            
+        } catch (error) {
+            // Silent fail - don't break AI routing if tracking fails
+            logger.warn('Failed to track performance metrics:', error.message);
+        }
     }
 }
 
