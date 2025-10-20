@@ -155,6 +155,76 @@ const aiAgentCallLogSchema = new mongoose.Schema({
         index: true
     },
     
+    // ============================================================================
+    // 📝 TRANSCRIPT & RECORDING (NEW - System 2)
+    // ============================================================================
+    conversation: {
+        turns: [{
+            timestamp: Date,
+            speaker: { type: String, enum: ['customer', 'ai', 'system'] },
+            text: String,
+            audioUrl: String,
+            confidence: Number,
+            duration: Number
+        }],
+        
+        fullTranscript: {
+            formatted: String,    // "Customer: ...\nAI: ..."
+            plainText: String,    // For search
+            html: String,         // Styled version
+            markdown: String      // For docs
+        },
+        
+        recordingUrl: String,
+        recordingSid: String,
+        recordingDuration: Number,
+        recordingStatus: {
+            type: String,
+            enum: ['processing', 'completed', 'failed', 'deleted'],
+            default: 'processing'
+        },
+        
+        transcriptionProvider: {
+            type: String,
+            enum: ['twilio', 'google', 'whisper', 'deepgram'],
+            default: 'twilio'
+        }
+    },
+    
+    // ============================================================================
+    // 📱 SMS DELIVERY (NEW - System 2)
+    // ============================================================================
+    transcriptDelivery: {
+        smsEnabled: { type: Boolean, default: false },
+        sentToCustomer: Boolean,
+        sentAt: Date,
+        smsContent: String,
+        smsSid: String,
+        deliveryStatus: {
+            type: String,
+            enum: ['pending', 'sent', 'delivered', 'failed', 'optout']
+        },
+        customerOptIn: { type: Boolean, default: false },
+        deliveryPreference: {
+            type: String,
+            enum: ['immediate', 'end_of_call', 'end_of_day', 'manual'],
+            default: 'end_of_call'
+        }
+    },
+    
+    // ============================================================================
+    // 🔍 SEARCHABILITY (NEW - System 2)
+    // ============================================================================
+    searchMetadata: {
+        keywords: [String],
+        topics: [String],
+        sentiment: {
+            type: String,
+            enum: ['positive', 'neutral', 'negative', 'frustrated']
+        },
+        language: { type: String, default: 'en' }
+    },
+    
     // Metadata
     createdAt: {
         type: Date,
@@ -176,9 +246,16 @@ const aiAgentCallLogSchema = new mongoose.Schema({
         { companyId: 1, finalMatchedSource: 1 }, // Source performance by company
         { companyId: 1, wasSuccessful: 1 }, // Success rate by company
         { companyId: 1, queryType: 1 }, // Query patterns by company
-        { finalConfidence: 1, wasSuccessful: 1 } // Confidence vs success correlation
+        { finalConfidence: 1, wasSuccessful: 1 }, // Confidence vs success correlation
+        // NEW: System 2 indexes
+        { 'searchMetadata.keywords': 1 }, // Keyword search
+        { 'searchMetadata.sentiment': 1 }, // Sentiment filtering
+        { 'conversation.recordingStatus': 1 } // Recording status filtering
     ]
 });
+
+// Full-text search index on transcript (System 2)
+aiAgentCallLogSchema.index({ 'conversation.fullTranscript.plainText': 'text' });
 
 // 📊 ANALYTICS METHODS
 aiAgentCallLogSchema.statics.getPerformanceAnalytics = async function(companyId, days = 30) {
