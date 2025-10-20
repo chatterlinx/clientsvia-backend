@@ -66,14 +66,14 @@ class CallArchivesManager {
             console.log(`📊 [CALL ARCHIVES] CHECKPOINT 6: Loading companies...`);
             
             const token = localStorage.getItem('adminToken');
-            const response = await fetch('/api/admin/companies', {
+            const response = await fetch('/api/admin/data-center/companies?state=all', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
             if (!response.ok) throw new Error('Failed to load companies');
 
             const data = await response.json();
-            this.companies = data.companies || [];
+            this.companies = data.results || [];
 
             // Populate dropdown
             const companySelect = document.getElementById('filter-company');

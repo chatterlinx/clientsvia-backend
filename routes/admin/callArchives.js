@@ -428,18 +428,25 @@ router.get('/admin/call-archives/stats', authenticateJWT, requireRole('admin'), 
         // ================================================================
         // STEP 2: Format response
         // ================================================================
+        
+        // Find most common source
+        const mostCommonSource = sourceDistribution.length > 0 
+            ? sourceDistribution[0]._id 
+            : 'N/A';
+        
         res.json({
             success: true,
             data: {
                 totalCalls,
                 companiesWithCalls: companiesWithCalls.length,
                 avgConfidence: avgConfidence[0]?.avgConfidence || 0,
+                mostCommonSource,
                 sourceDistribution: sourceDistribution.map(s => ({
-                    source: s._id,
+                    source: s._id || 'Unknown',
                     count: s.count
                 })),
                 sentimentDistribution: sentimentDistribution.map(s => ({
-                    sentiment: s._id,
+                    sentiment: s._id || 'Unknown',
                     count: s.count
                 }))
             }
