@@ -63,6 +63,12 @@ class SpamFilterManager {
             console.log(`   - Enabled: ${this.settings.enabled}`);
             console.log(`   - Blacklist: ${this.settings.blacklist?.length || 0} numbers`);
             console.log(`   - Whitelist: ${this.settings.whitelist?.length || 0} numbers`);
+            console.log(`🔍 [SPAM FILTER] CHECKPOINT 4.1: Detection settings from backend:`, {
+                checkGlobalSpamDB: this.settings.settings?.checkGlobalSpamDB,
+                enableFrequencyCheck: this.settings.settings?.enableFrequencyCheck,
+                enableRobocallDetection: this.settings.settings?.enableRobocallDetection,
+                rawSettings: this.settings.settings
+            });
 
             // Render UI
             this.render();
