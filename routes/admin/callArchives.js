@@ -180,7 +180,90 @@ router.get('/admin/call-archives/search', authenticateJWT, requireRole('admin'),
 });
 
 // ============================================================================
-// GET SINGLE CALL DETAILS
+// GET STATISTICS (MUST BE BEFORE DYNAMIC :callId ROUTE)
+// ============================================================================
+router.get('/admin/call-archives/stats', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        console.log(`📊 [CALL ARCHIVES] CHECKPOINT 1: Fetching statistics...`);
+
+        // ================================================================
+        // STEP 1: Aggregate statistics
+        // ================================================================
+        const [
+            totalCalls,
+            companiesWithCalls,
+            avgConfidence,
+            sourceDistribution,
+            sentimentDistribution
+        ] = await Promise.all([
+            // Total calls
+            v2AIAgentCallLog.countDocuments({}),
+            
+            // Unique companies with calls
+            v2AIAgentCallLog.distinct('companyId'),
+            
+            // Average confidence
+            v2AIAgentCallLog.aggregate([
+                { $group: { _id: null, avgConfidence: { $avg: '$finalConfidenceScore' } } }
+            ]),
+            
+            // Source distribution
+            v2AIAgentCallLog.aggregate([
+                { $group: { _id: '$finalMatchedSource', count: { $sum: 1 } } },
+                { $sort: { count: -1 } }
+            ]),
+            
+            // Sentiment distribution
+            v2AIAgentCallLog.aggregate([
+                { $group: { _id: '$searchMetadata.sentiment', count: { $sum: 1 } } },
+                { $sort: { count: -1 } }
+            ])
+        ]);
+
+        console.log(`✅ [CALL ARCHIVES] CHECKPOINT 2: Statistics calculated`);
+
+        // ================================================================
+        // STEP 2: Format response
+        // ================================================================
+        
+        // Find most common source
+        const mostCommonSource = sourceDistribution.length > 0 
+            ? sourceDistribution[0]._id 
+            : 'N/A';
+        
+        res.json({
+            success: true,
+            data: {
+                totalCalls,
+                companiesWithCalls: companiesWithCalls.length,
+                avgConfidence: avgConfidence[0]?.avgConfidence || 0,
+                mostCommonSource,
+                sourceDistribution: sourceDistribution.map(s => ({
+                    source: s._id || 'Unknown',
+                    count: s.count
+                })),
+                sentimentDistribution: sentimentDistribution.map(s => ({
+                    sentiment: s._id || 'Unknown',
+                    count: s.count
+                }))
+            }
+        });
+
+        console.log(`✅ [CALL ARCHIVES] CHECKPOINT 3: Response sent successfully`);
+
+    } catch (error) {
+        console.error(`❌ [CALL ARCHIVES] ERROR in stats:`, error);
+        console.error(`❌ [CALL ARCHIVES] Stack:`, error.stack);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch statistics',
+            error: error.message
+        });
+    }
+});
+
+// ============================================================================
+// GET SINGLE CALL DETAILS (DYNAMIC ROUTE - MUST BE AFTER SPECIFIC ROUTES)
 // ============================================================================
 router.get('/admin/call-archives/:callId', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
@@ -377,89 +460,6 @@ router.post('/admin/call-archives/export', authenticateJWT, requireRole('admin')
         res.status(500).json({
             success: false,
             message: 'Failed to export call archives',
-            error: error.message
-        });
-    }
-});
-
-// ============================================================================
-// GET EXPORT STATISTICS
-// ============================================================================
-router.get('/admin/call-archives/stats', authenticateJWT, requireRole('admin'), async (req, res) => {
-    try {
-        console.log(`📊 [CALL ARCHIVES] CHECKPOINT 1: Fetching statistics...`);
-
-        // ================================================================
-        // STEP 1: Aggregate statistics
-        // ================================================================
-        const [
-            totalCalls,
-            companiesWithCalls,
-            avgConfidence,
-            sourceDistribution,
-            sentimentDistribution
-        ] = await Promise.all([
-            // Total calls
-            v2AIAgentCallLog.countDocuments({}),
-            
-            // Unique companies with calls
-            v2AIAgentCallLog.distinct('companyId'),
-            
-            // Average confidence
-            v2AIAgentCallLog.aggregate([
-                { $group: { _id: null, avgConfidence: { $avg: '$finalConfidenceScore' } } }
-            ]),
-            
-            // Source distribution
-            v2AIAgentCallLog.aggregate([
-                { $group: { _id: '$finalMatchedSource', count: { $sum: 1 } } },
-                { $sort: { count: -1 } }
-            ]),
-            
-            // Sentiment distribution
-            v2AIAgentCallLog.aggregate([
-                { $group: { _id: '$searchMetadata.sentiment', count: { $sum: 1 } } },
-                { $sort: { count: -1 } }
-            ])
-        ]);
-
-        console.log(`✅ [CALL ARCHIVES] CHECKPOINT 2: Statistics calculated`);
-
-        // ================================================================
-        // STEP 2: Format response
-        // ================================================================
-        
-        // Find most common source
-        const mostCommonSource = sourceDistribution.length > 0 
-            ? sourceDistribution[0]._id 
-            : 'N/A';
-        
-        res.json({
-            success: true,
-            data: {
-                totalCalls,
-                companiesWithCalls: companiesWithCalls.length,
-                avgConfidence: avgConfidence[0]?.avgConfidence || 0,
-                mostCommonSource,
-                sourceDistribution: sourceDistribution.map(s => ({
-                    source: s._id || 'Unknown',
-                    count: s.count
-                })),
-                sentimentDistribution: sentimentDistribution.map(s => ({
-                    sentiment: s._id || 'Unknown',
-                    count: s.count
-                }))
-            }
-        });
-
-        console.log(`✅ [CALL ARCHIVES] CHECKPOINT 3: Response sent successfully`);
-
-    } catch (error) {
-        console.error(`❌ [CALL ARCHIVES] ERROR in stats:`, error);
-        console.error(`❌ [CALL ARCHIVES] Stack:`, error.stack);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch statistics',
             error: error.message
         });
     }
