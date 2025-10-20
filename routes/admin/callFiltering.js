@@ -462,24 +462,26 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
 
         // 🔧 MIGRATION: Handle old setting names → new setting names
         const oldSettings = callFiltering.settings || {};
-        const migratedSettings = {
-            // New names (if they exist)
+        
+        // Priority: NEW schema names ALWAYS win if they exist (even if false/undefined from user save)
+        // Only use old schema names if NEW names have NEVER been saved
+        const hasNewSchema = 'checkGlobalSpamDB' in oldSettings || 
+                            'enableFrequencyCheck' in oldSettings || 
+                            'enableRobocallDetection' in oldSettings;
+        
+        const migratedSettings = hasNewSchema ? {
+            // NEW SCHEMA: Use exactly what's saved (including undefined/false)
             checkGlobalSpamDB: oldSettings.checkGlobalSpamDB,
             enableFrequencyCheck: oldSettings.enableFrequencyCheck,
-            enableRobocallDetection: oldSettings.enableRobocallDetection,
-            
-            // Fallback to old names if new names don't exist
-            ...(oldSettings.checkGlobalSpamDB === undefined && oldSettings.blockKnownSpam !== undefined && {
-                checkGlobalSpamDB: oldSettings.blockKnownSpam
-            }),
-            ...(oldSettings.enableFrequencyCheck === undefined && oldSettings.blockHighFrequency !== undefined && {
-                enableFrequencyCheck: oldSettings.blockHighFrequency
-            }),
-            ...(oldSettings.enableRobocallDetection === undefined && oldSettings.blockRobocalls !== undefined && {
-                enableRobocallDetection: oldSettings.blockRobocalls
-            })
+            enableRobocallDetection: oldSettings.enableRobocallDetection
+        } : {
+            // OLD SCHEMA: Migrate from old names
+            checkGlobalSpamDB: oldSettings.blockKnownSpam,
+            enableFrequencyCheck: oldSettings.blockHighFrequency,
+            enableRobocallDetection: oldSettings.blockRobocalls
         };
 
+        console.log(`🔧 [CALL FILTERING] Schema detected: ${hasNewSchema ? 'NEW' : 'OLD'}`);
         console.log(`🔧 [CALL FILTERING] Migrated settings:`, migratedSettings);
 
         const transformedData = {
