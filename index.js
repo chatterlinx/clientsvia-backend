@@ -354,6 +354,50 @@ app.use((req, res, next) => {
     // 🗑️ DELETED: AI Agent Logic routes (tab removed)
     
     console.log('[INIT] ✅ All API routes registered successfully');
+    
+    // ========================================================================
+    // ENHANCED 404 HANDLER (MUST BE LAST)
+    // ========================================================================
+    // This catches all unmatched routes AFTER all route registrations
+    // ========================================================================
+    
+    app.use((req, res, next) => {
+        if (!res.headersSent) {
+            // Increment 404 counter for monitoring
+            if (typeof notFoundCount !== 'undefined') {
+                notFoundCount++;
+            }
+            
+            // Log detailed 404 information
+            console.error('❌ [404 NOT FOUND]', {
+                timestamp: new Date().toISOString(),
+                method: req.method,
+                path: req.path,
+                url: req.originalUrl,
+                ip: req.ip,
+                userAgent: req.get('user-agent'),
+                referer: req.get('referer'),
+                query: req.query
+            });
+            
+            // Return structured JSON for API paths
+            if (req.path.startsWith('/api')) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Endpoint not found',
+                    path: req.path,
+                    method: req.method,
+                    suggestion: 'Check API documentation or contact support',
+                    timestamp: new Date().toISOString()
+                });
+            }
+            
+            // HTML 404 for pages
+            res.status(404).send('<h1>404 - Page Not Found</h1><p>The page you are looking for does not exist.</p>');
+        } else {
+            next();
+        }
+    });
 }
 console.log('[INIT] ✅ All API routes registered');
 
@@ -588,9 +632,10 @@ if (require.main === module) {
 }
 
 // ============================================================================
-// PRODUCTION 404 MONITORING
+// PRODUCTION 404 MONITORING (Global Counter)
 // ============================================================================
 // Track 404 rate and send alerts if threshold exceeded
+// This must be declared before registerRoutes() is called
 // ============================================================================
 
 let notFoundCount = 0;
@@ -621,50 +666,6 @@ setInterval(() => {
     notFoundCount = 0;
     lastResetTime = currentTime;
 }, 60000); // Check every minute
-
-// ============================================================================
-// ENHANCED 404 HANDLER (Production-Grade Logging)
-// ============================================================================
-// Catches all unmatched routes and logs detailed context for debugging
-// Added as part of Refactor Protocol V2.1 Advanced Enhancements
-// ============================================================================
-
-app.use((req, res, next) => {
-    if (!res.headersSent) {
-        // Increment 404 counter for monitoring
-        notFoundCount++;
-        
-        // Log detailed 404 information
-        console.error('❌ [404 NOT FOUND]', {
-            timestamp: new Date().toISOString(),
-            method: req.method,
-            path: req.path,
-            url: req.originalUrl,
-            ip: req.ip,
-            userAgent: req.get('user-agent'),
-            referer: req.get('referer'),
-            query: req.query,
-            body: req.method === 'POST' ? req.body : undefined
-        });
-        
-        // Return structured JSON for API paths
-        if (req.path.startsWith('/api')) {
-            return res.status(404).json({
-                success: false,
-                error: 'Endpoint not found',
-                path: req.path,
-                method: req.method,
-                suggestion: 'Check API documentation or contact support',
-                timestamp: new Date().toISOString()
-            });
-        }
-        
-        // HTML 404 for pages
-        res.status(404).send('<h1>404 - Page Not Found</h1><p>The page you are looking for does not exist.</p>');
-    } else {
-        next();
-    }
-});
 
 // ============================================================================
 // GENERAL ERROR HANDLER
