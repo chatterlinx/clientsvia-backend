@@ -2057,74 +2057,28 @@ router.post('/sms', async (req, res) => {
         if (message.match(/^(TEST|PING|HELLO|HI)$/i)) {
             console.log(`✅ [SMS WEBHOOK] Test command received from ${from}`);
             
-            // Send email notification since SMS might be blocked by Twilio verification
+            // 📧 Send email notification to admins (Gmail - clientsvia@gmail.com)
+            // ARCHITECTURE: Admin notifications use Gmail, customer emails use SendGrid (future)
             try {
-                console.log('📧 [SMS WEBHOOK] CHECKPOINT 1: Starting email notification process');
-                
-                const AdminSettings = require('../models/AdminSettings');
-                const settings = await AdminSettings.findOne({});
-                
-                console.log('📧 [SMS WEBHOOK] CHECKPOINT 2: AdminSettings loaded:', {
-                    exists: !!settings,
-                    hasNotificationCenter: !!settings?.notificationCenter,
-                    hasAdminContacts: !!settings?.notificationCenter?.adminContacts
+                const emailClient = require('../clients/emailClient');
+                const timestamp = new Date().toLocaleString('en-US', { 
+                    timeZone: 'America/New_York',
+                    dateStyle: 'short',
+                    timeStyle: 'long'
                 });
                 
-                const adminContacts = settings?.notificationCenter?.adminContacts || [];
-                console.log(`📧 [SMS WEBHOOK] CHECKPOINT 3: Found ${adminContacts.length} admin contacts`);
+                // Use new sendAdminAlert() method for clean separation
+                const result = await emailClient.sendAdminAlert(
+                    '✅ SMS Test Received',
+                    `SMS Test Command Received!\n\nFrom: ${from}\nMessage: "${message}"\nTime: ${timestamp} ET\n\n✅ Webhook is working correctly!\n📱 SMS system is LIVE!`,
+                    `<h2>✅ SMS Test Command Received!</h2><p><strong>From:</strong> ${from}</p><p><strong>Message:</strong> "${message}"</p><p><strong>Time:</strong> ${timestamp} ET</p><hr><p>✅ Webhook is working correctly!</p><p>📱 SMS system is LIVE!</p>`
+                );
                 
-                if (adminContacts.length === 0) {
-                    console.log('⚠️ [SMS WEBHOOK] No admin contacts configured - skipping email notification');
+                if (result.success) {
+                    console.log(`📧 [SMS WEBHOOK] ✅ Admin alert sent to ${result.recipients} recipient(s)`);
+                } else {
+                    console.error(`❌ [SMS WEBHOOK] Failed to send admin alert: ${result.error}`);
                 }
-                
-                for (const contact of adminContacts) {
-                    console.log(`📧 [SMS WEBHOOK] CHECKPOINT 4: Processing contact "${contact.name}":`, {
-                        hasEmail: !!contact.email,
-                        email: contact.email,
-                        receiveEmail: contact.receiveEmail
-                    });
-                    
-                    if (contact.receiveEmail && contact.email) {
-                        console.log(`📧 [SMS WEBHOOK] CHECKPOINT 5: Sending email to ${contact.email}`);
-                        
-                        const emailClient = require('../clients/emailClient');
-                        console.log('📧 [SMS WEBHOOK] CHECKPOINT 6: emailClient loaded:', {
-                            exists: !!emailClient,
-                            hasSendMethod: !!(emailClient && emailClient.send)
-                        });
-                        
-                        if (emailClient && emailClient.send) {
-                            const timestamp = new Date().toLocaleString('en-US', { 
-                                timeZone: 'America/New_York',
-                                dateStyle: 'short',
-                                timeStyle: 'long'
-                            });
-                            
-                            console.log(`📧 [SMS WEBHOOK] CHECKPOINT 7: Calling emailClient.send() for ${contact.email}`);
-                            
-                            const result = await emailClient.send({
-                                to: contact.email,
-                                subject: '✅ ClientsVia SMS Test Received',
-                                body: `SMS Test Command Received!\n\nFrom: ${from}\nMessage: "${message}"\nTime: ${timestamp} ET\n\n✅ Webhook is working correctly!\n📱 SMS system is LIVE!`,
-                                html: `<h2>✅ SMS Test Command Received!</h2><p><strong>From:</strong> ${from}</p><p><strong>Message:</strong> "${message}"</p><p><strong>Time:</strong> ${timestamp} ET</p><hr><p>✅ Webhook is working correctly!</p><p>📱 SMS system is LIVE!</p>`
-                            });
-                            
-                            console.log(`📧 [SMS WEBHOOK] CHECKPOINT 8: emailClient.send() returned:`, result);
-                            
-                            if (result.success) {
-                                console.log(`📧 [SMS WEBHOOK] ✅ Email sent successfully to ${contact.email}`);
-                            } else {
-                                console.error(`❌ [SMS WEBHOOK] Email failed to ${contact.email}:`, result.error);
-                            }
-                        } else {
-                            console.error('❌ [SMS WEBHOOK] emailClient or send method not available');
-                        }
-                    } else {
-                        console.log(`⚠️ [SMS WEBHOOK] Skipping contact "${contact.name}" - receiveEmail: ${contact.receiveEmail}, hasEmail: ${!!contact.email}`);
-                    }
-                }
-                
-                console.log('📧 [SMS WEBHOOK] CHECKPOINT 9: Email notification process complete');
                 
             } catch (emailError) {
                 console.error('⚠️ [SMS WEBHOOK] Failed to send email notification:', emailError);
