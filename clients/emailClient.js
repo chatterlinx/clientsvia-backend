@@ -1,31 +1,58 @@
 // clients/emailClient.js
-// V2-Grade Email Client with SendGrid Integration
-// Spartan Coder - Gold Standard Implementation
+// V2-Grade Email Client with Gmail/Nodemailer Integration
+// Supports both Gmail (free, 500/day) and SendGrid (backup)
 
-const sgMail = require('@sendgrid/mail');
+const nodemailer = require('nodemailer');
 
 class EmailClient {
   constructor() {
-    // Initialize SendGrid if API key is available
     this.isProduction = process.env.NODE_ENV === 'production';
-    this.testMode = process.env.EMAIL_TEST_MODE === 'true';
     
-    this.config = {
-      apiKey: process.env.SENDGRID_API_KEY,
-      fromEmail: process.env.FROM_EMAIL || process.env.SENDGRID_FROM_EMAIL,
-      fromName: process.env.FROM_NAME || 'ClientsVia Support'
-    };
-
-    // Initialize SendGrid if API key exists
-    if (this.config.apiKey) {
-      try {
-        sgMail.setApiKey(this.config.apiKey);
-        console.log('[Email] ✅ SendGrid client initialized successfully');
-      } catch (error) {
-        console.error('[Email] ❌ Failed to initialize SendGrid client:', error.message);
-      }
+    // Try Gmail first, fallback to SendGrid
+    this.useGmail = !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
+    
+    if (this.useGmail) {
+      // Gmail configuration
+      this.transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_APP_PASSWORD
+        }
+      });
+      
+      this.config = {
+        fromEmail: process.env.GMAIL_USER,
+        fromName: process.env.FROM_NAME || 'ClientsVia Alerts'
+      };
+      
+      console.log(`[Email] ✅ Gmail client initialized (${process.env.GMAIL_USER})`);
+      
+      // Verify connection
+      this.transporter.verify((error, success) => {
+        if (error) {
+          console.error('[Email] ⚠️  Gmail verification failed:', error.message);
+        } else {
+          console.log('[Email] ✅ Gmail ready to send emails');
+        }
+      });
+      
+    } else if (process.env.SENDGRID_API_KEY) {
+      // Fallback to SendGrid
+      const sgMail = require('@sendgrid/mail');
+      sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+      this.sgMail = sgMail;
+      
+      this.config = {
+        fromEmail: process.env.FROM_EMAIL || process.env.SENDGRID_FROM_EMAIL,
+        fromName: process.env.FROM_NAME || 'ClientsVia Support'
+      };
+      
+      console.log('[Email] ✅ SendGrid client initialized');
+      
     } else {
-      console.log('[Email] ⚠️  SendGrid API key not found, using mock mode');
+      console.log('[Email] ⚠️  No email service configured (Gmail or SendGrid)');
+      console.log('[Email] ℹ️  Set GMAIL_USER + GMAIL_APP_PASSWORD for Gmail (free, 500/day)');
     }
 
     // Message tracking
@@ -61,105 +88,73 @@ class EmailClient {
       return { success: false, error };
     }
 
-    const emailData = {
-      to: to.toLowerCase().trim(),
-      subject: subject.substring(0, 200), // Subject length limit
-      text: body,
-      html: html || this.convertToHTML(body),
-      from: from || `${this.config.fromName} <${this.config.fromEmail}>`,
-      timestamp: new Date().toISOString()
-    };
-
     try {
       let result;
 
-      if (this.testMode || !this.config.apiKey) {
-        // Mock mode for development/testing
-        result = await this.mockSend(emailData);
+      if (this.useGmail && this.transporter) {
+        // Send via Gmail
+        result = await this.sendViaGmail({ to, subject, body, html, from });
+      } else if (this.sgMail) {
+        // Send via SendGrid
+        result = await this.sendViaSendGrid({ to, subject, body, html, from });
       } else {
-        // Production SendGrid send
-        result = await this.sendGridSend(emailData);
+        // Mock mode - no email service configured
+        console.log(`[Email] 📧 [MOCK] Would send to ${to}: ${subject}`);
+        return { success: true, messageId: 'mock-' + Date.now(), mock: true };
       }
 
-      // Track successful email
-      this.trackEmail(emailData, result, true);
       this.stats.sent++;
-
       console.log(`[Email] ✅ Email sent to ${to}`);
       return { success: true, ...result };
 
     } catch (error) {
-      // Track failed email
-      this.trackEmail(emailData, null, false, error.message);
       this.stats.failed++;
-
       console.error(`[Email] ❌ Failed to send to ${to}:`, error.message);
       return { success: false, error: error.message };
     }
   }
 
   /**
-   * Send email via SendGrid
+   * Send via Gmail (nodemailer)
    */
-  async sendGridSend(emailData) {
+  async sendViaGmail({ to, subject, body, html, from }) {
+    const mailOptions = {
+      from: from || `"${this.config.fromName}" <${this.config.fromEmail}>`,
+      to: to,
+      subject: subject,
+      text: body,
+      html: html || this.convertToHTML(body)
+    };
+
+    const info = await this.transporter.sendMail(mailOptions);
+    
+    return {
+      messageId: info.messageId,
+      provider: 'gmail',
+      accepted: info.accepted,
+      rejected: info.rejected
+    };
+  }
+
+  /**
+   * Send via SendGrid
+   */
+  async sendViaSendGrid({ to, subject, body, html, from }) {
     const msg = {
-      to: emailData.to,
-      from: emailData.from,
-      subject: emailData.subject,
-      text: emailData.text,
-      html: emailData.html
+      to: to,
+      from: from || `${this.config.fromName} <${this.config.fromEmail}>`,
+      subject: subject,
+      text: body,
+      html: html || this.convertToHTML(body)
     };
 
-    const response = await sgMail.send(msg);
-    const messageId = response[0].headers['x-message-id'];
-
+    const [response] = await this.sgMail.send(msg);
+    
     return {
-      messageId,
+      messageId: response.headers['x-message-id'],
       provider: 'sendgrid',
-      status: 'sent',
-      deliveryStatus: 'queued'
+      statusCode: response.statusCode
     };
-  }
-
-  /**
-   * Mock email send for development/testing
-   */
-  async mockSend(emailData) {
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300));
-
-    // Simulate occasional failures (3% fail rate)
-    if (Math.random() < 0.03) {
-      throw new Error('Mock network error');
-    }
-
-    const mockId = 'mock_email_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-
-    console.log('[Email] 📧 MOCK EMAIL:');
-    console.log(`   To: ${emailData.to}`);
-    console.log(`   Subject: ${emailData.subject}`);
-    console.log(`   Body: ${emailData.text.substring(0, 100)}...`);
-    console.log(`   ID: ${mockId}`);
-
-    return {
-      messageId: mockId,
-      provider: 'mock',
-      status: 'sent',
-      deliveryStatus: 'delivered'
-    };
-  }
-
-  /**
-   * Convert plain text to basic HTML
-   */
-  convertToHTML(text) {
-    return text
-      .replace(/\n\n/g, '</p><p>')
-      .replace(/\n/g, '<br>')
-      .replace(/^(.+)/, '<p>$1')
-      .replace(/(.+)$/, '$1</p>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>');
   }
 
   /**
@@ -171,119 +166,39 @@ class EmailClient {
   }
 
   /**
-   * Send bulk emails with rate limiting
+   * Convert plain text to simple HTML
    */
-  async sendBulk(emails, options = {}) {
-    const { batchSize = 10, delayBetweenBatches = 1000 } = options;
-    const results = [];
-
-    for (let i = 0; i < emails.length; i += batchSize) {
-      const batch = emails.slice(i, i + batchSize);
-      
-      const batchPromises = batch.map(email => this.send(email));
-      const batchResults = await Promise.allSettled(batchPromises);
-      
-      results.push(...batchResults);
-
-      // Delay between batches to avoid rate limits
-      if (i + batchSize < emails.length && delayBetweenBatches > 0) {
-        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
-      }
-    }
-
-    return {
-      total: emails.length,
-      successful: results.filter(r => r.status === 'fulfilled' && r.value.success).length,
-      failed: results.filter(r => r.status === 'rejected' || !r.value.success).length,
-      results
-    };
+  convertToHTML(text) {
+    return `
+      <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px;">
+        <div style="white-space: pre-wrap;">${this.escapeHtml(text)}</div>
+      </div>
+    `;
   }
 
   /**
-   * Track sent emails for analytics
+   * Escape HTML special characters
    */
-  trackEmail(emailData, result, success, error = null) {
-    const record = {
-      ...emailData,
-      success,
-      result,
-      error,
-      sentAt: new Date().toISOString()
+  escapeHtml(text) {
+    const map = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
     };
-
-    this.sentEmails.push(record);
-
-    // Keep only last 500 emails in memory
-    if (this.sentEmails.length > 500) {
-      this.sentEmails = this.sentEmails.slice(-500);
-    }
+    return text.replace(/[&<>"']/g, m => map[m]);
   }
 
   /**
-   * Get email statistics
+   * Get email stats
    */
   getStats() {
-    const recent = this.sentEmails.filter(email => {
-      const emailTime = new Date(email.sentAt);
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      return emailTime >= oneDayAgo;
-    });
-
     return {
       ...this.stats,
-      recent24h: {
-        total: recent.length,
-        successful: recent.filter(email => email.success).length,
-        failed: recent.filter(email => !email.success).length
-      },
-      provider: this.config.apiKey ? 'sendgrid' : 'mock',
-      testMode: this.testMode
+      provider: this.useGmail ? 'gmail' : (this.sgMail ? 'sendgrid' : 'none'),
+      configured: !!(this.useGmail || this.sgMail)
     };
-  }
-
-  /**
-   * Get recent emails
-   */
-  getRecentEmails(limit = 10) {
-    return this.sentEmails
-      .slice(-limit)
-      .sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
-  }
-
-  /**
-   * Check if email client is properly configured
-   */
-  isConfigured() {
-    return !!(this.config.apiKey || this.testMode);
-  }
-
-  /**
-   * Get configuration status
-   */
-  getStatus() {
-    return {
-      configured: this.isConfigured(),
-      provider: this.config.apiKey ? 'sendgrid' : 'mock',
-      testMode: this.testMode,
-      hasApiKey: !!this.config.apiKey,
-      fromEmail: this.config.fromEmail || 'Not configured',
-      fromName: this.config.fromName
-    };
-  }
-
-  /**
-   * Test email configuration
-   */
-  async testConfiguration(testEmail) {
-    if (!testEmail) {
-      throw new Error('Test email address required');
-    }
-
-    return await this.send({
-      to: testEmail,
-      subject: 'Email Configuration Test',
-      body: 'This is a test email to verify your email configuration is working correctly.'
-    });
   }
 }
 
