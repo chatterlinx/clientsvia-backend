@@ -59,8 +59,7 @@ const scenarioSchema = new Schema({
         type: String,
         required: true,
         unique: true,
-        trim: true,
-        index: true
+        trim: true
         // ULID or UUID for stable, collision-free IDs across environments
     },
     
@@ -75,8 +74,7 @@ const scenarioSchema = new Schema({
     status: {
         type: String,
         enum: ['draft', 'live', 'archived'],
-        default: 'draft',
-        index: true
+        default: 'draft'
         // draft: editing, live: active matching, archived: historical
     },
     
@@ -98,8 +96,7 @@ const scenarioSchema = new Schema({
     
     categories: [{
         type: String,
-        trim: true,
-        index: true
+        trim: true
         // Many-to-many: scenario can belong to multiple categories
         // Replaces deep nesting for flexibility
     }],
@@ -490,8 +487,7 @@ const globalInstantResponseTemplateSchema = new Schema({
         type: String,
         required: true,
         trim: true,
-        unique: true,
-        index: true
+        unique: true
     },
     
     name: {
@@ -510,8 +506,7 @@ const globalInstantResponseTemplateSchema = new Schema({
     templateType: {
         type: String,
         default: 'universal',
-        trim: true,
-        index: true
+        trim: true
         // References GlobalIndustryType.industryId
     },
     
@@ -971,6 +966,8 @@ globalInstantResponseTemplateSchema.statics.getPublishedTemplates = async functi
 // ============================================
 // INDEXES
 // ============================================
+// Note: Field-level "index: true" removed to avoid Mongoose duplicate index warnings
+// All indexes declared here for clarity and control
 
 globalInstantResponseTemplateSchema.index({ version: 1 });
 globalInstantResponseTemplateSchema.index({ isActive: 1 });
