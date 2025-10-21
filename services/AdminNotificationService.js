@@ -1,338 +1,502 @@
-/**
- * ============================================================================
- * ADMIN NOTIFICATION SERVICE - SMS + EMAIL ALERTS
- * ============================================================================
- * 
- * PURPOSE:
- * Sends instant notifications to admin when critical alerts are generated.
- * Supports SMS (via Twilio) and Email (via existing email client).
- * 
- * ARCHITECTURE:
- * - Reads settings from AdminSettings model
- * - Composes messages from templates with dynamic variables
- * - Sends via Twilio REST API (SMS) and email client
- * - Handles errors gracefully (notifications should never block main flow)
- * 
- * USAGE:
- * ```javascript
- * const AdminNotificationService = require('./services/AdminNotificationService');
- * 
- * await AdminNotificationService.sendAlert({
- *     companyId: '64a1b2c3d4e5f6',
- *     companyName: 'Tesla Air',
- *     alertType: 'missing_variables',
- *     severity: 'warning',
- *     message: '3 required variables need values',
- *     fixUrl: 'https://clientsvia.ai/company-profile.html?id=64a1b2c3d4e5f6&tab=ai-agent-settings&subtab=variables'
- * });
- * ```
- * 
- * DYNAMIC VARIABLES:
- * - {companyName} - Name of the company
- * - {companyId} - Company ID
- * - {alertType} - Type of alert (missing_variables, error, etc.)
- * - {severity} - Severity level (info, warning, error)
- * - {message} - Alert message
- * - {fixUrl} - Direct link to fix the issue
- * - {timestamp} - Current timestamp
- */
-
-const AdminSettings = require('../models/AdminSettings');
-
-// Twilio client (lazy loaded)
-let twilioClient = null;
-
-// Email client
-const { emailClient } = require('../clients');
-
 // ============================================================================
-// TWILIO INITIALIZATION
+// 🔔 ADMIN NOTIFICATION SERVICE
+// ============================================================================
+// Purpose: Core notification engine with auto-registration and validation
+// 
+// Key Features:
+// - Auto-registers notification points on first use
+// - Validates entire notification chain before sending
+// - Sends SMS + Email to all admin contacts
+// - Records full delivery audit trail
+// - Integrates with AlertEscalationService for follow-up
+// - Provides stack trace analysis for error context
+//
+// Usage Example:
+//   await AdminNotificationService.sendAlert({
+//       code: 'TWILIO_GREETING_FALLBACK',
+//       severity: 'WARNING',
+//       companyId: company._id,
+//       companyName: company.companyName,
+//       message: 'Twilio greeting fallback triggered',
+//       details: error.message
+//   });
+//
+// This will:
+// 1. Auto-register 'TWILIO_GREETING_FALLBACK' in NotificationRegistry
+// 2. Validate notification system is working
+// 3. Send SMS to all admin phones
+// 4. Send email to all admin emails  
+// 5. Create NotificationLog entry
+// 6. Start escalation timer if not acknowledged
+//
+// Related Files:
+// - models/NotificationLog.js (stores alerts)
+// - models/NotificationRegistry.js (tracks notification points)
+// - services/AlertEscalationService.js (handles escalation)
+// - routes/v2twilio.js (example usage)
 // ============================================================================
 
-/**
- * Get or initialize Twilio client
- */
-function getTwilioClient() {
-    if (twilioClient) {
-        return twilioClient;
-    }
-    
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const phoneNumber = process.env.TWILIO_PHONE_NUMBER;
-    
-    if (!accountSid || !authToken || !phoneNumber) {
-        console.warn('⚠️  [NOTIFICATION SERVICE] Twilio credentials not configured - SMS disabled');
-        return null;
-    }
-    
-    try {
-        const twilio = require('twilio');
-        twilioClient = twilio(accountSid, authToken);
-        console.log('✅ [NOTIFICATION SERVICE] Twilio client initialized');
-        return twilioClient;
-    } catch (error) {
-        console.error('❌ [NOTIFICATION SERVICE] Failed to initialize Twilio:', error.message);
-        return null;
-    }
-}
+const v2Company = require('../models/v2Company');
+const NotificationLog = require('../models/NotificationLog');
+const NotificationRegistry = require('../models/NotificationRegistry');
+const smsClient = require('../clients/smsClient');
 
-// ============================================================================
-// MESSAGE COMPOSITION
-// ============================================================================
-
-/**
- * Replace template variables with actual values
- */
-function composeMessage(template, data) {
-    let message = template;
+class AdminNotificationService {
     
-    // Replace all variables
-    message = message.replace(/{companyName}/g, data.companyName || 'Unknown Company');
-    message = message.replace(/{companyId}/g, data.companyId || '');
-    message = message.replace(/{alertType}/g, data.alertType || 'Alert');
-    message = message.replace(/{severity}/g, data.severity || 'info');
-    message = message.replace(/{message}/g, data.message || 'No details provided');
-    message = message.replace(/{fixUrl}/g, data.fixUrl || '');
-    message = message.replace(/{timestamp}/g, new Date().toLocaleString());
-    
-    return message;
-}
-
-// ============================================================================
-// SMS NOTIFICATION
-// ============================================================================
-
-/**
- * Send SMS notification via Twilio
- */
-async function sendSMS(settings, data) {
-    console.log('📱 [NOTIFICATION SERVICE] Preparing SMS...');
-    
-    // Check if SMS is enabled
-    if (!settings.sms.enabled) {
-        console.log('⏭️  [NOTIFICATION SERVICE] SMS disabled, skipping');
-        return { success: false, reason: 'SMS notifications disabled' };
-    }
-    
-    // Check phone number
-    if (!settings.sms.phoneNumber) {
-        console.warn('⚠️  [NOTIFICATION SERVICE] No admin phone number configured');
-        return { success: false, reason: 'No phone number configured' };
-    }
-    
-    // Get Twilio client
-    const client = getTwilioClient();
-    if (!client) {
-        console.warn('⚠️  [NOTIFICATION SERVICE] Twilio not available');
-        return { success: false, reason: 'Twilio not configured' };
-    }
-    
-    try {
-        // Compose message
-        const messageBody = composeMessage(settings.sms.template, data);
+    /**
+     * 🔔 SEND ALERT TO ADMINS
+     * Main entry point - call this from anywhere in the codebase
+     */
+    static async sendAlert({
+        code,           // Unique code (e.g., 'TWILIO_GREETING_FALLBACK')
+        severity,       // 'CRITICAL', 'WARNING', 'INFO'
+        companyId = null,
+        companyName = 'Platform-Wide',
+        message,        // Short description
+        details = '',   // Long description / error message
+        stackTrace = null
+    }) {
+        const startTime = Date.now();
         
-        console.log(`📤 [NOTIFICATION SERVICE] Sending SMS to ${settings.sms.phoneNumber}`);
-        
-        // Send SMS
-        const result = await client.messages.create({
-            body: messageBody,
-            from: process.env.TWILIO_PHONE_NUMBER,
-            to: settings.sms.phoneNumber
-        });
-        
-        console.log(`✅ [NOTIFICATION SERVICE] SMS sent successfully (SID: ${result.sid})`);
-        
-        return { 
-            success: true, 
-            sid: result.sid,
-            to: settings.sms.phoneNumber
-        };
-        
-    } catch (error) {
-        console.error('❌ [NOTIFICATION SERVICE] Failed to send SMS:', error.message);
-        return { 
-            success: false, 
-            reason: error.message 
-        };
-    }
-}
-
-// ============================================================================
-// EMAIL NOTIFICATION
-// ============================================================================
-
-/**
- * Send Email notification
- */
-async function sendEmail(settings, data) {
-    console.log('📧 [NOTIFICATION SERVICE] Preparing Email...');
-    
-    // Check if Email is enabled
-    if (!settings.email.enabled) {
-        console.log('⏭️  [NOTIFICATION SERVICE] Email disabled, skipping');
-        return { success: false, reason: 'Email notifications disabled' };
-    }
-    
-    // Check email address
-    if (!settings.email.address) {
-        console.warn('⚠️  [NOTIFICATION SERVICE] No admin email configured');
-        return { success: false, reason: 'No email address configured' };
-    }
-    
-    // Check if email client is available
-    if (!emailClient || !emailClient.sendEmail) {
-        console.warn('⚠️  [NOTIFICATION SERVICE] Email client not available');
-        return { success: false, reason: 'Email client not configured' };
-    }
-    
-    try {
-        // Compose subject and body
-        const subject = composeMessage(settings.email.subject, data);
-        const body = composeMessage(settings.email.template, data);
-        
-        console.log(`📤 [NOTIFICATION SERVICE] Sending Email to ${settings.email.address}`);
-        
-        // Send email
-        await emailClient.sendEmail({
-            to: settings.email.address,
-            subject: subject,
-            text: body,
-            html: body.replace(/\n/g, '<br>')
-        });
-        
-        console.log('✅ [NOTIFICATION SERVICE] Email sent successfully');
-        
-        return { 
-            success: true,
-            to: settings.email.address
-        };
-        
-    } catch (error) {
-        console.error('❌ [NOTIFICATION SERVICE] Failed to send Email:', error.message);
-        return { 
-            success: false, 
-            reason: error.message 
-        };
-    }
-}
-
-// ============================================================================
-// MAIN NOTIFICATION FUNCTION
-// ============================================================================
-
-/**
- * Send admin alert notification
- * 
- * @param {Object} data - Alert data
- * @param {string} data.companyId - Company ID
- * @param {string} data.companyName - Company name
- * @param {string} data.alertType - Alert type (missing_variables, error, etc.)
- * @param {string} data.severity - Severity (info, warning, error)
- * @param {string} data.message - Alert message
- * @param {string} data.fixUrl - URL to fix the issue
- */
-async function sendAlert(data) {
-    console.log(`🔔 [NOTIFICATION SERVICE] Alert received for ${data.companyName}`);
-    
-    try {
-        // Get admin settings
-        const settings = await AdminSettings.getSettings();
-        
-        // Check if we should notify for this alert type
-        const shouldNotify = await AdminSettings.shouldNotify(data.alertType);
-        
-        if (!shouldNotify) {
-            console.log(`⏭️  [NOTIFICATION SERVICE] Notifications disabled for alert type: ${data.alertType}`);
+        try {
+            console.log(`🔔 [ADMIN NOTIFICATION] Starting alert: ${code} (${severity})`);
+            
+            // ================================================================
+            // STEP 1: AUTO-REGISTER THIS NOTIFICATION POINT
+            // ================================================================
+            const callerInfo = this.getCallerInfo();
+            await NotificationRegistry.registerOrUpdate({
+                code: code.toUpperCase(),
+                file: callerInfo.file,
+                line: callerInfo.line,
+                severity: severity
+            });
+            
+            // ================================================================
+            // STEP 2: VALIDATE NOTIFICATION SYSTEM
+            // ================================================================
+            const validationResult = await this.validateNotificationSystem();
+            
+            if (!validationResult.isValid) {
+                console.error(`❌ [ADMIN NOTIFICATION] Validation failed for ${code}:`, validationResult.errors);
+                // Continue anyway - we want the alert logged even if delivery fails
+            }
+            
+            // ================================================================
+            // STEP 3: GET ADMIN CONTACTS
+            // ================================================================
+            const notificationCenter = await v2Company.findOne({
+                'metadata.isNotificationCenter': true
+            });
+            
+            if (!notificationCenter) {
+                throw new Error('Notification Center company not configured');
+            }
+            
+            const adminContacts = notificationCenter.contacts?.filter(
+                c => c.type === 'admin-alert'
+            ) || [];
+            
+            if (adminContacts.length === 0) {
+                throw new Error('No admin contacts configured');
+            }
+            
+            console.log(`📋 [ADMIN NOTIFICATION] Found ${adminContacts.length} admin contacts`);
+            
+            // ================================================================
+            // STEP 4: CREATE NOTIFICATION LOG ENTRY
+            // ================================================================
+            const notificationLog = await NotificationLog.create({
+                code: code.toUpperCase(),
+                severity: severity,
+                companyId: companyId,
+                companyName: companyName,
+                message: message,
+                details: details,
+                stackTrace: stackTrace,
+                
+                // Set escalation schedule based on severity
+                escalation: {
+                    isEnabled: severity !== 'INFO',  // No escalation for INFO
+                    currentLevel: 1,
+                    maxLevel: severity === 'CRITICAL' ? 5 : 3,
+                    nextEscalationAt: this.calculateNextEscalation(severity, 1)
+                }
+            });
+            
+            console.log(`✅ [ADMIN NOTIFICATION] Created log entry: ${notificationLog.alertId}`);
+            
+            // ================================================================
+            // STEP 5: SEND SMS TO ALL ADMINS
+            // ================================================================
+            const smsResults = await this.sendSMSToAdmins({
+                alertId: notificationLog.alertId,
+                code: code,
+                severity: severity,
+                companyName: companyName,
+                message: message,
+                details: details,
+                adminContacts: adminContacts
+            });
+            
+            // ================================================================
+            // STEP 6: SEND EMAIL TO ALL ADMINS (if configured)
+            // ================================================================
+            const emailResults = await this.sendEmailToAdmins({
+                alertId: notificationLog.alertId,
+                code: code,
+                severity: severity,
+                companyName: companyName,
+                message: message,
+                details: details,
+                adminContacts: adminContacts
+            });
+            
+            // ================================================================
+            // STEP 7: RECORD DELIVERY ATTEMPT IN LOG
+            // ================================================================
+            notificationLog.deliveryAttempts.push({
+                attemptNumber: 1,
+                timestamp: new Date(),
+                sms: smsResults,
+                email: emailResults,
+                call: []
+            });
+            
+            // Calculate first delivery time
+            notificationLog.metrics.firstDeliveryTime = Date.now() - startTime;
+            
+            await notificationLog.save();
+            
+            // ================================================================
+            // STEP 8: UPDATE REGISTRY STATISTICS
+            // ================================================================
+            const registry = await NotificationRegistry.findOne({ code: code.toUpperCase() });
+            if (registry) {
+                const allSuccess = smsResults.every(r => r.status === 'sent' || r.status === 'delivered');
+                await registry.updateStats(allSuccess);
+            }
+            
+            console.log(`✅ [ADMIN NOTIFICATION] Alert ${notificationLog.alertId} sent successfully`);
+            console.log(`📊 [ADMIN NOTIFICATION] SMS: ${smsResults.filter(r => r.status === 'sent').length}/${smsResults.length} sent`);
+            console.log(`📊 [ADMIN NOTIFICATION] Email: ${emailResults.filter(r => r.status === 'sent').length}/${emailResults.length} sent`);
+            
             return {
                 success: true,
-                reason: 'Alert type not configured for notifications',
-                sms: null,
-                email: null
+                alertId: notificationLog.alertId,
+                smsResults: smsResults,
+                emailResults: emailResults
+            };
+            
+        } catch (error) {
+            console.error(`❌ [ADMIN NOTIFICATION] Failed to send alert ${code}:`, error);
+            
+            // Even if sending fails, try to log the attempt
+            try {
+                await NotificationLog.create({
+                    code: code.toUpperCase(),
+                    severity: severity,
+                    companyId: companyId,
+                    companyName: companyName,
+                    message: message,
+                    details: details,
+                    stackTrace: stackTrace,
+                    deliveryAttempts: [{
+                        attemptNumber: 1,
+                        timestamp: new Date(),
+                        sms: [{ status: 'failed', error: error.message }],
+                        email: [],
+                        call: []
+                    }],
+                    escalation: {
+                        isEnabled: false  // Disable escalation for failed initial send
+                    }
+                });
+            } catch (logError) {
+                console.error(`❌ [ADMIN NOTIFICATION] Failed to log error:`, logError);
+            }
+            
+            return {
+                success: false,
+                error: error.message
             };
         }
+    }
+    
+    /**
+     * 📱 SEND SMS TO ALL ADMIN CONTACTS
+     */
+    static async sendSMSToAdmins({ alertId, code, severity, companyName, message, details, adminContacts }) {
+        const results = [];
         
-        // Send SMS and Email in parallel (non-blocking)
-        const [smsResult, emailResult] = await Promise.allSettled([
-            sendSMS(settings, data),
-            sendEmail(settings, data)
-        ]);
-        
-        // Extract results
-        const sms = smsResult.status === 'fulfilled' ? smsResult.value : { success: false, reason: smsResult.reason?.message };
-        const email = emailResult.status === 'fulfilled' ? emailResult.value : { success: false, reason: emailResult.reason?.message };
-        
-        console.log('📋 [NOTIFICATION SERVICE] Notification summary:');
-        console.log(`   SMS: ${sms.success ? '✅ Sent' : '❌ Failed'}`);
-        console.log(`   Email: ${email.success ? '✅ Sent' : '❌ Failed'}`);
-        
-        return {
-            success: true,
-            sms,
-            email
+        const severityEmoji = {
+            'CRITICAL': '🚨',
+            'WARNING': '⚠️',
+            'INFO': 'ℹ️'
         };
         
-    } catch (error) {
-        console.error('❌ [NOTIFICATION SERVICE] Critical error:', error);
+        const smsMessage = `
+${severityEmoji[severity]} ClientsVia ${severity} Alert
+ID: ${alertId}
+
+Company: ${companyName}
+Issue: ${message}
+
+${details ? `Details: ${details}` : ''}
+
+⚠️ RESPOND: Text "ACK ${alertId}" to this number
+
+View: https://app.clientsvia.com/admin-notification-center.html
+        `.trim();
         
-        // NEVER throw - notifications should never block the main application
-        return {
-            success: false,
-            reason: error.message,
-            sms: null,
-            email: null
+        // Send to all admin contacts with SMS enabled
+        const smsContacts = adminContacts.filter(c => c.smsNotifications !== false);
+        
+        for (const contact of smsContacts) {
+            try {
+                console.log(`📱 [SMS] Sending to ${contact.name} (${contact.phoneNumber})...`);
+                
+                const result = await smsClient.sendSMS({
+                    to: contact.phoneNumber,
+                    message: smsMessage
+                });
+                
+                results.push({
+                    recipient: contact.phoneNumber,
+                    recipientName: contact.name,
+                    status: 'sent',
+                    twilioSid: result.sid || result.message_sid,
+                    twilioStatus: result.status,
+                    deliveredAt: null  // Will be updated by webhook
+                });
+                
+                console.log(`✅ [SMS] Sent to ${contact.name}: ${result.sid}`);
+                
+            } catch (error) {
+                console.error(`❌ [SMS] Failed to send to ${contact.name}:`, error);
+                
+                results.push({
+                    recipient: contact.phoneNumber,
+                    recipientName: contact.name,
+                    status: 'failed',
+                    error: error.message
+                });
+            }
+        }
+        
+        return results;
+    }
+    
+    /**
+     * 📧 SEND EMAIL TO ALL ADMIN CONTACTS
+     */
+    static async sendEmailToAdmins({ alertId, code, severity, companyName, message, details, adminContacts }) {
+        const results = [];
+        
+        // Email implementation would go here
+        // For now, we'll return empty array since email client isn't set up yet
+        
+        const emailContacts = adminContacts.filter(c => c.email && c.emailNotifications !== false);
+        
+        for (const contact of emailContacts) {
+            // TODO: Implement email sending via SendGrid/AWS SES
+            results.push({
+                recipient: contact.email,
+                recipientName: contact.name,
+                status: 'pending',
+                provider: 'not-configured'
+            });
+        }
+        
+        return results;
+    }
+    
+    /**
+     * 🔍 VALIDATE ENTIRE NOTIFICATION SYSTEM
+     */
+    static async validateNotificationSystem() {
+        const checks = {
+            isValid: true,
+            errors: []
         };
+        
+        try {
+            // Check 1: Notification Center company exists
+            const notificationCenter = await v2Company.findOne({
+                'metadata.isNotificationCenter': true
+            });
+            
+            if (!notificationCenter) {
+                checks.isValid = false;
+                checks.errors.push('Notification Center company not found');
+                return checks;
+            }
+            
+            // Check 2: Admin contacts exist
+            const adminContacts = notificationCenter.contacts?.filter(
+                c => c.type === 'admin-alert' && c.smsNotifications !== false
+            ) || [];
+            
+            if (adminContacts.length === 0) {
+                checks.isValid = false;
+                checks.errors.push('No admin contacts with SMS enabled');
+            }
+            
+            // Check 3: SMS client configured
+            if (!smsClient || !smsClient.sendSMS) {
+                checks.isValid = false;
+                checks.errors.push('SMS client not configured');
+            }
+            
+            // Check 4: Twilio credentials
+            if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+                checks.isValid = false;
+                checks.errors.push('Twilio credentials not configured');
+            }
+            
+        } catch (error) {
+            checks.isValid = false;
+            checks.errors.push(`Validation error: ${error.message}`);
+        }
+        
+        return checks;
+    }
+    
+    /**
+     * 📍 GET CALLER INFO (for auto-registration)
+     */
+    static getCallerInfo() {
+        const stack = new Error().stack;
+        const stackLines = stack.split('\n');
+        
+        // Go up the stack to find the actual caller (skip this file)
+        for (let i = 3; i < stackLines.length; i++) {
+            const line = stackLines[i];
+            
+            // Skip node_modules and this file
+            if (line.includes('node_modules') || line.includes('AdminNotificationService')) {
+                continue;
+            }
+            
+            // Extract file and line number
+            const match = line.match(/\((.+):(\d+):\d+\)/);
+            if (match) {
+                let filePath = match[1];
+                const lineNumber = parseInt(match[2]);
+                
+                // Make path relative to project root
+                const projectRoot = process.cwd();
+                if (filePath.startsWith(projectRoot)) {
+                    filePath = filePath.substring(projectRoot.length + 1);
+                }
+                
+                return {
+                    file: filePath,
+                    line: lineNumber
+                };
+            }
+        }
+        
+        return {
+            file: 'unknown',
+            line: 0
+        };
+    }
+    
+    /**
+     * ⏱️ CALCULATE NEXT ESCALATION TIME
+     */
+    static calculateNextEscalation(severity, currentLevel) {
+        const now = new Date();
+        
+        const intervals = {
+            'CRITICAL': [30, 30, 30, 15, 15],  // minutes
+            'WARNING': [60, 60, 60],
+            'INFO': []  // No escalation
+        };
+        
+        const minutes = intervals[severity]?.[currentLevel - 1] || 0;
+        
+        if (minutes === 0) {
+            return null;  // No escalation
+        }
+        
+        return new Date(now.getTime() + minutes * 60 * 1000);
+    }
+    
+    /**
+     * ✅ ACKNOWLEDGE ALERT (called from UI or SMS webhook)
+     */
+    static async acknowledgeAlert(alertId, acknowledgedBy, via = 'WEB_UI', message = '') {
+        try {
+            const alert = await NotificationLog.findOne({ alertId });
+            
+            if (!alert) {
+                throw new Error(`Alert ${alertId} not found`);
+            }
+            
+            if (alert.acknowledgment.isAcknowledged) {
+                console.log(`⚠️ [ADMIN NOTIFICATION] Alert ${alertId} already acknowledged`);
+                return { success: false, message: 'Alert already acknowledged' };
+            }
+            
+            await alert.acknowledge(acknowledgedBy, via, message);
+            
+            console.log(`✅ [ADMIN NOTIFICATION] Alert ${alertId} acknowledged by ${acknowledgedBy} via ${via}`);
+            
+            // Update registry stats
+            const registry = await NotificationRegistry.findOne({ code: alert.code });
+            if (registry && alert.metrics.acknowledgmentTime) {
+                await registry.updateStats(true, alert.metrics.acknowledgmentTime);
+            }
+            
+            // Send confirmation SMS
+            await this.sendAcknowledgmentConfirmation(alert, acknowledgedBy);
+            
+            return { success: true, alert };
+            
+        } catch (error) {
+            console.error(`❌ [ADMIN NOTIFICATION] Failed to acknowledge alert ${alertId}:`, error);
+            throw error;
+        }
+    }
+    
+    /**
+     * 📱 SEND ACKNOWLEDGMENT CONFIRMATION SMS
+     */
+    static async sendAcknowledgmentConfirmation(alert, acknowledgedBy) {
+        try {
+            const notificationCenter = await v2Company.findOne({
+                'metadata.isNotificationCenter': true
+            });
+            
+            const adminContacts = notificationCenter?.contacts?.filter(
+                c => c.type === 'admin-alert' && c.smsNotifications !== false
+            ) || [];
+            
+            const message = `
+✅ Alert ${alert.alertId} acknowledged by ${acknowledgedBy}.
+
+No further notifications will be sent.
+
+To reopen: Text "REOPEN ${alert.alertId}"
+            `.trim();
+            
+            for (const contact of adminContacts) {
+                try {
+                    await smsClient.sendSMS({
+                        to: contact.phoneNumber,
+                        message: message
+                    });
+                } catch (error) {
+                    console.error(`❌ Failed to send confirmation to ${contact.name}:`, error);
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ Failed to send acknowledgment confirmation:', error);
+        }
     }
 }
 
-/**
- * Send test notification
- */
-async function sendTestNotification(type = 'both') {
-    console.log(`🧪 [NOTIFICATION SERVICE] Sending test notification (type: ${type})`);
-    
-    const testData = {
-        companyId: 'test-123',
-        companyName: 'Test Company',
-        alertType: 'test',
-        severity: 'info',
-        message: 'This is a test notification from ClientsVia Alert Center',
-        fixUrl: 'https://clientsvia.ai/index.html'
-    };
-    
-    try {
-        const settings = await AdminSettings.getSettings();
-        
-        let results = {};
-        
-        if (type === 'sms' || type === 'both') {
-            results.sms = await sendSMS(settings, testData);
-        }
-        
-        if (type === 'email' || type === 'both') {
-            results.email = await sendEmail(settings, testData);
-        }
-        
-        return {
-            success: true,
-            results
-        };
-        
-    } catch (error) {
-        console.error('❌ [NOTIFICATION SERVICE] Test notification failed:', error);
-        return {
-            success: false,
-            reason: error.message
-        };
-    }
-}
-
-// ============================================================================
-// EXPORTS
-// ============================================================================
-
-module.exports = {
-    sendAlert,
-    sendTestNotification
-};
-
+module.exports = AdminNotificationService;

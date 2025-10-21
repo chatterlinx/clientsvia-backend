@@ -10,6 +10,8 @@
 const cron = require('node-cron');
 const Company = require('../models/v2Company');
 const DataCenterPurgeService = require('./DataCenterPurgeService');
+const AlertEscalationService = require('./AlertEscalationService');
+const PlatformHealthCheckService = require('./PlatformHealthCheckService');
 
 // System user for automated operations
 const SYSTEM_USER = {
@@ -99,7 +101,9 @@ async function runAutoPurge() {
  * Initialize auto-purge cron job
  */
 function initializeAutoPurgeCron() {
-    // Schedule: Every day at 02:00 UTC
+    // ========================================================================
+    // CRON JOB 1: AUTO-PURGE DELETED COMPANIES (Daily at 02:00 UTC)
+    // ========================================================================
     cron.schedule('0 2 * * *', () => {
         console.log('[AUTO-PURGE] Cron triggered at', new Date().toISOString());
         runAutoPurge().catch(error => {
@@ -108,8 +112,29 @@ function initializeAutoPurgeCron() {
     }, {
         timezone: 'UTC'
     });
-
     console.log('[AUTO-PURGE] ✅ Cron job initialized (runs daily at 02:00 UTC)');
+    
+    // ========================================================================
+    // CRON JOB 2: ALERT ESCALATION CHECK (Every 5 minutes)
+    // ========================================================================
+    cron.schedule('*/5 * * * *', () => {
+        console.log('[ALERT ESCALATION] Cron triggered at', new Date().toISOString());
+        AlertEscalationService.checkAndEscalate().catch(error => {
+            console.error('[ALERT ESCALATION] Unhandled error in cron job:', error);
+        });
+    });
+    console.log('[ALERT ESCALATION] ✅ Cron job initialized (runs every 5 minutes)');
+    
+    // ========================================================================
+    // CRON JOB 3: PLATFORM HEALTH CHECK (Every 6 hours)
+    // ========================================================================
+    cron.schedule('0 */6 * * *', () => {
+        console.log('[HEALTH CHECK] Cron triggered at', new Date().toISOString());
+        PlatformHealthCheckService.runFullHealthCheck('scheduled').catch(error => {
+            console.error('[HEALTH CHECK] Unhandled error in cron job:', error);
+        });
+    });
+    console.log('[HEALTH CHECK] ✅ Cron job initialized (runs every 6 hours)');
 }
 
 module.exports = {

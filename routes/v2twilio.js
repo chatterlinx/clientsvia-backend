@@ -1821,6 +1821,162 @@ router.get('/quality-report/:templateId', (req, res) => {
   });
 });
 
+// ============================================================================
+// 📱 SMS WEBHOOK - ADMIN ALERT ACKNOWLEDGMENTS
+// ============================================================================
+// Purpose: Handle admin responses to notification alerts via SMS
+// Supports: "ACK ALT-20251020-001", "SNOOZE ALT-###", "REOPEN ALT-###"
+//
+// Related Files:
+// - services/AdminNotificationService.js
+// - services/AlertEscalationService.js
+// - models/NotificationLog.js
+// ============================================================================
+
+router.post('/api/twilio/sms', async (req, res) => {
+    try {
+        const from = req.body.From;        // Admin phone number
+        const message = req.body.Body;     // SMS text content
+        
+        console.log(`📱 [SMS WEBHOOK] Received SMS from ${from}: "${message}"`);
+        
+        // ====================================================================
+        // CHECK FOR ACKNOWLEDGMENT: "ACK ALT-20251020-001"
+        // ====================================================================
+        const ackMatch = message.match(/ACK\s+(ALT-\d{8}-\d{3})/i);
+        
+        if (ackMatch) {
+            const alertId = ackMatch[1].toUpperCase();
+            
+            console.log(`✅ [SMS WEBHOOK] Acknowledgment detected for alert: ${alertId}`);
+            
+            try {
+                // Find admin name from Notification Center
+                const v2Company = require('../models/v2Company');
+                const notificationCenter = await v2Company.findOne({
+                    'metadata.isNotificationCenter': true
+                });
+                
+                const admin = notificationCenter?.contacts.find(c => 
+                    c.type === 'admin-alert' && c.phoneNumber === from
+                );
+                const adminName = admin?.name || from;
+                
+                // Acknowledge the alert
+                const AdminNotificationService = require('../services/AdminNotificationService');
+                await AdminNotificationService.acknowledgeAlert(alertId, adminName, 'SMS', message);
+                
+                console.log(`✅ [SMS WEBHOOK] Alert ${alertId} acknowledged by ${adminName}`);
+                
+                // Send TwiML response (empty - confirmation will be sent separately)
+                res.type('text/xml');
+                res.send('<Response></Response>');
+                return;
+                
+            } catch (error) {
+                console.error(`❌ [SMS WEBHOOK] Failed to acknowledge alert ${alertId}:`, error);
+                
+                // Send error response
+                const twiml = new twilio.twiml.MessagingResponse();
+                twiml.message(`Error: Failed to acknowledge alert ${alertId}. Please try again or use the web interface.`);
+                res.type('text/xml');
+                res.send(twiml.toString());
+                return;
+            }
+        }
+        
+        // ====================================================================
+        // CHECK FOR SNOOZE: "SNOOZE ALT-20251020-001 30"
+        // ====================================================================
+        const snoozeMatch = message.match(/SNOOZE\s+(ALT-\d{8}-\d{3})(?:\s+(\d+))?/i);
+        
+        if (snoozeMatch) {
+            const alertId = snoozeMatch[1].toUpperCase();
+            const minutes = parseInt(snoozeMatch[2]) || 60; // Default 1 hour
+            
+            console.log(`🔕 [SMS WEBHOOK] Snooze detected for alert: ${alertId} (${minutes} minutes)`);
+            
+            try {
+                const AlertEscalationService = require('../services/AlertEscalationService');
+                await AlertEscalationService.snoozeAlert(alertId, minutes, 'Snoozed via SMS');
+                
+                console.log(`✅ [SMS WEBHOOK] Alert ${alertId} snoozed for ${minutes} minutes`);
+                
+                res.type('text/xml');
+                res.send('<Response></Response>');
+                return;
+                
+            } catch (error) {
+                console.error(`❌ [SMS WEBHOOK] Failed to snooze alert ${alertId}:`, error);
+                
+                const twiml = new twilio.twiml.MessagingResponse();
+                twiml.message(`Error: Failed to snooze alert ${alertId}. Please try again.`);
+                res.type('text/xml');
+                res.send(twiml.toString());
+                return;
+            }
+        }
+        
+        // ====================================================================
+        // CHECK FOR REOPEN: "REOPEN ALT-20251020-001"
+        // ====================================================================
+        const reopenMatch = message.match(/REOPEN\s+(ALT-\d{8}-\d{3})/i);
+        
+        if (reopenMatch) {
+            const alertId = reopenMatch[1].toUpperCase();
+            
+            console.log(`🔄 [SMS WEBHOOK] Reopen detected for alert: ${alertId}`);
+            
+            try {
+                const AlertEscalationService = require('../services/AlertEscalationService');
+                await AlertEscalationService.resumeEscalation(alertId);
+                
+                console.log(`✅ [SMS WEBHOOK] Alert ${alertId} reopened`);
+                
+                const twiml = new twilio.twiml.MessagingResponse();
+                twiml.message(`✅ Alert ${alertId} has been reopened and escalation resumed.`);
+                res.type('text/xml');
+                res.send(twiml.toString());
+                return;
+                
+            } catch (error) {
+                console.error(`❌ [SMS WEBHOOK] Failed to reopen alert ${alertId}:`, error);
+                
+                const twiml = new twilio.twiml.MessagingResponse();
+                twiml.message(`Error: Failed to reopen alert ${alertId}. Please try again.`);
+                res.type('text/xml');
+                res.send(twiml.toString());
+                return;
+            }
+        }
+        
+        // ====================================================================
+        // NOT A RECOGNIZED COMMAND - Send help message
+        // ====================================================================
+        console.log(`ℹ️ [SMS WEBHOOK] Unrecognized command from ${from}`);
+        
+        const twiml = new twilio.twiml.MessagingResponse();
+        twiml.message(`
+ClientsVia Alert Commands:
+• ACK ALT-###-### - Acknowledge alert
+• SNOOZE ALT-###-### 30 - Snooze for 30 min
+• REOPEN ALT-###-### - Reopen alert
+
+Example: ACK ALT-20251020-001
+        `.trim());
+        
+        res.type('text/xml');
+        res.send(twiml.toString());
+        
+    } catch (error) {
+        console.error('❌ [SMS WEBHOOK] Error processing SMS:', error);
+        
+        // Always return valid TwiML even on error
+        res.type('text/xml');
+        res.send('<Response></Response>');
+    }
+});
+
 // 🚨 CATCH-ALL ENDPOINT - Must be LAST to log any unmatched Twilio requests
 router.all('*', (req, res) => {
   console.log('❌ UNMATCHED TWILIO REQUEST:', {

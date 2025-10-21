@@ -1,0 +1,177 @@
+/* ============================================================================
+   🔔 NOTIFICATION CENTER STYLES
+   ============================================================================ */
+
+/* ============================================================================
+   SUB-TAB NAVIGATION
+   ============================================================================ */
+
+.subtab-btn {
+    padding: 1rem 1.5rem;
+    border-bottom: 3px solid transparent;
+    font-weight: 500;
+    color: #6B7280;
+    transition: all 0.2s;
+    cursor: pointer;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+}
+
+.subtab-btn:hover {
+    color: #111827;
+    border-bottom-color: #D1D5DB;
+}
+
+.subtab-btn.active {
+    color: #2563EB;
+    border-bottom-color: #2563EB;
+}
+
+.subtab-content {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================================================
+   DYNAMIC NOTIFICATION CENTER TAB (Global - applies to index.html nav)
+   ============================================================================
+   This styles the main "Notification Center" tab in the admin navigation
+   Changes color based on alert status
+   ============================================================================ */
+
+/* Default State: GREEN (All systems healthy) */
+.admin-nav a[href="/admin-notification-center.html"],
+.admin-nav a[href="admin-notification-center.html"] {
+    background: linear-gradient(135deg, #10B981 0%, #059669 100%); /* Green */
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    position: relative;
+    transition: all 0.3s ease;
+    display: inline-block;
+}
+
+.admin-nav a[href="/admin-notification-center.html"]:hover,
+.admin-nav a[href="admin-notification-center.html"]:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+/* WARNING State: YELLOW (Minor issues) */
+.admin-nav a[href="/admin-notification-center.html"].status-warning,
+.admin-nav a[href="admin-notification-center.html"].status-warning {
+    background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%); /* Yellow */
+    animation: pulse-warning 2s ease-in-out infinite;
+}
+
+.admin-nav a[href="/admin-notification-center.html"].status-warning:hover,
+.admin-nav a[href="admin-notification-center.html"].status-warning:hover {
+    background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+    box-shadow: 0 4px 12px rgba(251, 191, 36, 0.4);
+}
+
+/* CRITICAL State: RED (PULSING!) */
+.admin-nav a[href="/admin-notification-center.html"].status-critical,
+.admin-nav a[href="admin-notification-center.html"].status-critical {
+    background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%); /* Red */
+    animation: pulse-critical 1s ease-in-out infinite;
+}
+
+.admin-nav a[href="/admin-notification-center.html"].status-critical:hover,
+.admin-nav a[href="admin-notification-center.html"].status-critical:hover {
+    background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.6);
+}
+
+/* OFFLINE State: GRAY */
+.admin-nav a[href="/admin-notification-center.html"].status-offline,
+.admin-nav a[href="admin-notification-center.html"].status-offline {
+    background: linear-gradient(135deg, #6B7280 0%, #4B5563 100%); /* Gray */
+    opacity: 0.7;
+}
+
+/* ============================================================================
+   ALERT BADGE (Shows unacknowledged count)
+   ============================================================================ */
+
+.admin-nav a[href="/admin-notification-center.html"]::after,
+.admin-nav a[href="admin-notification-center.html"]::after {
+    content: attr(data-alert-count);
+    display: none; /* Hidden by default */
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #DC2626;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.5);
+    animation: badge-pulse 2s ease-in-out infinite;
+}
+
+/* Show badge when there are alerts */
+.admin-nav a[href="/admin-notification-center.html"][data-alert-count]:not([data-alert-count="0"])::after,
+.admin-nav a[href="admin-notification-center.html"][data-alert-count]:not([data-alert-count="0"])::after {
+    display: block;
+}
+
+/* ============================================================================
+   ANIMATIONS
+   ============================================================================ */
+
+@keyframes pulse-warning {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(251, 191, 36, 0);
+    }
+}
+
+@keyframes pulse-critical {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.9);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 0 15px rgba(239, 68, 68, 0);
+        transform: scale(1.05);
+    }
+}
+
+@keyframes badge-pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.2);
+    }
+}
+
+/* ============================================================================
+   RESPONSIVE DESIGN
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    .subtab-btn {
+        padding: 0.75rem 1rem;
+        font-size: 0.875rem;
+    }
+}
+

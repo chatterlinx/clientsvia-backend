@@ -1,0 +1,259 @@
+// ============================================================================
+// 🔔 NOTIFICATION CENTER MANAGER - Main Controller
+// ============================================================================
+// Purpose: Orchestrates all notification center functionality
+//
+// Responsibilities:
+// - Sub-tab navigation
+// - API communication
+// - Sub-manager coordination
+// - Auto-refresh
+//
+// Related Files:
+// - DashboardManager.js
+// - RegistryManager.js
+// - LogManager.js
+// - SettingsManager.js
+// ============================================================================
+
+class NotificationCenterManager {
+    constructor() {
+        this.currentTab = 'dashboard';
+        this.token = localStorage.getItem('token');
+        this.refreshInterval = null;
+        
+        // Sub-managers
+        this.dashboardManager = null;
+        this.registryManager = null;
+        this.logManager = null;
+        this.settingsManager = null;
+        
+        this.init();
+    }
+    
+    async init() {
+        console.log('🔔 [NC MANAGER] Initializing Notification Center...');
+        
+        try {
+            // Setup sub-tab navigation
+            this.setupSubTabNavigation();
+            
+            // Initialize sub-managers
+            this.dashboardManager = new DashboardManager(this);
+            this.registryManager = new RegistryManager(this);
+            this.logManager = new LogManager(this);
+            this.settingsManager = new SettingsManager(this);
+            
+            // Load initial tab
+            await this.switchTab('dashboard');
+            
+            // Start auto-refresh (every 30 seconds)
+            this.startAutoRefresh();
+            
+            console.log('✅ [NC MANAGER] Notification Center initialized successfully');
+            
+        } catch (error) {
+            console.error('❌ [NC MANAGER] Initialization failed:', error);
+            this.showError('Failed to initialize Notification Center');
+        }
+    }
+    
+    /**
+     * Setup sub-tab navigation
+     */
+    setupSubTabNavigation() {
+        const subtabButtons = document.querySelectorAll('.subtab-btn');
+        
+        subtabButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const subtab = btn.dataset.subtab;
+                this.switchTab(subtab);
+            });
+        });
+    }
+    
+    /**
+     * Switch active tab
+     */
+    async switchTab(tabName) {
+        console.log(`🔔 [NC MANAGER] Switching to tab: ${tabName}`);
+        
+        this.currentTab = tabName;
+        
+        // Update button states
+        document.querySelectorAll('.subtab-btn').forEach(btn => {
+            if (btn.dataset.subtab === tabName) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+        
+        // Hide all tab contents
+        document.querySelectorAll('.subtab-content').forEach(content => {
+            content.classList.add('hidden');
+        });
+        
+        // Show selected tab
+        const selectedTab = document.getElementById(`${tabName}-tab`);
+        if (selectedTab) {
+            selectedTab.classList.remove('hidden');
+        }
+        
+        // Load tab data
+        try {
+            switch (tabName) {
+                case 'dashboard':
+                    await this.dashboardManager.load();
+                    break;
+                case 'registry':
+                    await this.registryManager.load();
+                    break;
+                case 'logs':
+                    await this.logManager.load();
+                    break;
+                case 'settings':
+                    await this.settingsManager.load();
+                    break;
+            }
+        } catch (error) {
+            console.error(`❌ [NC MANAGER] Failed to load tab ${tabName}:`, error);
+            this.showError(`Failed to load ${tabName}`);
+        }
+    }
+    
+    /**
+     * Start auto-refresh
+     */
+    startAutoRefresh() {
+        // Refresh every 30 seconds
+        this.refreshInterval = setInterval(() => {
+            if (this.currentTab === 'dashboard') {
+                console.log('🔄 [NC MANAGER] Auto-refreshing dashboard...');
+                this.dashboardManager.load();
+            }
+        }, 30000);
+        
+        console.log('✅ [NC MANAGER] Auto-refresh started (30s interval)');
+    }
+    
+    /**
+     * Stop auto-refresh
+     */
+    stopAutoRefresh() {
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+            this.refreshInterval = null;
+            console.log('⏸️ [NC MANAGER] Auto-refresh stopped');
+        }
+    }
+    
+    /**
+     * API Helper - GET request
+     */
+    async apiGet(endpoint) {
+        const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${this.token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+        
+        return response.json();
+    }
+    
+    /**
+     * API Helper - POST request
+     */
+    async apiPost(endpoint, data) {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${this.token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+        
+        return response.json();
+    }
+    
+    /**
+     * Show loading overlay
+     */
+    showLoading(message = 'Processing...') {
+        const overlay = document.getElementById('loading-overlay');
+        const messageEl = document.getElementById('loading-message');
+        
+        if (overlay && messageEl) {
+            messageEl.textContent = message;
+            overlay.classList.remove('hidden');
+        }
+    }
+    
+    /**
+     * Hide loading overlay
+     */
+    hideLoading() {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) {
+            overlay.classList.add('hidden');
+        }
+    }
+    
+    /**
+     * Show error message
+     */
+    showError(message) {
+        alert(`❌ Error: ${message}`);
+        // TODO: Replace with toast notification
+    }
+    
+    /**
+     * Show success message
+     */
+    showSuccess(message) {
+        alert(`✅ Success: ${message}`);
+        // TODO: Replace with toast notification
+    }
+    
+    /**
+     * Format date/time
+     */
+    formatDateTime(dateString) {
+        if (!dateString) return 'N/A';
+        const date = new Date(dateString);
+        return date.toLocaleString();
+    }
+    
+    /**
+     * Format relative time (e.g., "2 minutes ago")
+     */
+    formatRelativeTime(dateString) {
+        if (!dateString) return 'N/A';
+        
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+        
+        const diffHours = Math.floor(diffMins / 60);
+        if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+        
+        const diffDays = Math.floor(diffHours / 24);
+        return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    }
+}
+

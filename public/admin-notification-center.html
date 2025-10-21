@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔔 Notification Center - ClientsVia Admin</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/css/notification-center.css?v=1.0">
+</head>
+<body class="bg-gray-50">
+    
+    <!-- ====================================================================
+         NAVIGATION HEADER
+         ==================================================================== -->
+    <nav class="bg-white shadow-md border-b-2 border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <a href="/index.html" class="text-2xl font-bold text-blue-600">
+                        ClientsVia Admin
+                    </a>
+                    <span class="ml-4 text-gray-400">|</span>
+                    <span class="ml-4 text-lg font-semibold text-gray-700">
+                        🔔 Notification Center
+                    </span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/index.html" class="text-gray-600 hover:text-gray-900">
+                        <i class="fas fa-home mr-2"></i>Dashboard
+                    </a>
+                    <button id="logout-btn" class="text-red-600 hover:text-red-800">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ====================================================================
+         MAIN CONTENT AREA
+         ==================================================================== -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- ================================================================
+             SUB-TAB NAVIGATION
+             ================================================================ -->
+        <div class="bg-white rounded-lg shadow-md mb-6">
+            <div class="border-b border-gray-200">
+                <nav class="flex space-x-8 px-6" id="subtab-nav">
+                    <button class="subtab-btn active" data-subtab="dashboard">
+                        <i class="fas fa-tachometer-alt mr-2"></i>
+                        <span>Dashboard</span>
+                    </button>
+                    <button class="subtab-btn" data-subtab="registry">
+                        <i class="fas fa-clipboard-list mr-2"></i>
+                        <span>Alert Registry</span>
+                    </button>
+                    <button class="subtab-btn" data-subtab="logs">
+                        <i class="fas fa-history mr-2"></i>
+                        <span>Alert Log</span>
+                    </button>
+                    <button class="subtab-btn" data-subtab="settings">
+                        <i class="fas fa-cog mr-2"></i>
+                        <span>Settings</span>
+                    </button>
+                </nav>
+            </div>
+        </div>
+
+        <!-- ================================================================
+             SUB-TAB CONTENT CONTAINERS
+             ================================================================ -->
+        
+        <!-- DASHBOARD TAB -->
+        <div id="dashboard-tab" class="subtab-content">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                
+                <!-- UNACKNOWLEDGED ALERTS CARD -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-700">Unacknowledged Alerts</h3>
+                        <i class="fas fa-bell text-orange-500 text-2xl"></i>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-red-600 font-semibold">🚨 Critical:</span>
+                            <span id="critical-count" class="text-2xl font-bold text-red-600">-</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-yellow-600 font-semibold">⚠️ Warning:</span>
+                            <span id="warning-count" class="text-2xl font-bold text-yellow-600">-</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-blue-600 font-semibold">ℹ️ Info:</span>
+                            <span id="info-count" class="text-2xl font-bold text-blue-600">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NOTIFICATION SYSTEM STATUS CARD -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-700">System Status</h3>
+                        <i class="fas fa-server text-green-500 text-2xl"></i>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600">Notification Points:</span>
+                            <span id="registry-total" class="font-semibold">-</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600">Validated:</span>
+                            <span id="registry-valid" class="font-semibold text-green-600">-</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600">Last Health Check:</span>
+                            <span id="last-health-check" class="font-semibold text-sm">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- HEALTH CHECK BUTTON CARD -->
+                <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg shadow-md p-6 flex flex-col justify-center items-center">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-4 text-center">Platform Health Check</h3>
+                    <button id="run-health-check-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-lg shadow-lg transform transition hover:scale-105">
+                        <i class="fas fa-heartbeat mr-2"></i>
+                        RUN HEALTH CHECK
+                    </button>
+                    <p class="text-sm text-gray-600 mt-3 text-center">
+                        Tests 10+ critical systems
+                    </p>
+                </div>
+            </div>
+
+            <!-- RECENT ALERTS TABLE -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-4">
+                    <i class="fas fa-fire text-red-500 mr-2"></i>
+                    Recent Unacknowledged Alerts
+                </h3>
+                <div id="recent-alerts-container">
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-spinner fa-spin text-3xl mb-2"></i>
+                        <p>Loading alerts...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ALERT REGISTRY TAB -->
+        <div id="registry-tab" class="subtab-content hidden">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-semibold text-gray-700">
+                        <i class="fas fa-clipboard-list mr-2"></i>
+                        Registered Notification Points
+                    </h3>
+                    <button id="validate-all-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded">
+                        <i class="fas fa-check-circle mr-2"></i>
+                        Validate All
+                    </button>
+                </div>
+                <div id="registry-container">
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-spinner fa-spin text-3xl mb-2"></i>
+                        <p>Loading registry...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ALERT LOG TAB -->
+        <div id="logs-tab" class="subtab-content hidden">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-semibold text-gray-700">
+                        <i class="fas fa-history mr-2"></i>
+                        Alert Log
+                    </h3>
+                    <div class="flex space-x-2">
+                        <select id="log-filter-severity" class="border border-gray-300 rounded px-3 py-2">
+                            <option value="">All Severities</option>
+                            <option value="CRITICAL">Critical</option>
+                            <option value="WARNING">Warning</option>
+                            <option value="INFO">Info</option>
+                        </select>
+                        <select id="log-filter-acknowledged" class="border border-gray-300 rounded px-3 py-2">
+                            <option value="">All Status</option>
+                            <option value="false">Unacknowledged</option>
+                            <option value="true">Acknowledged</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="logs-container">
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-spinner fa-spin text-3xl mb-2"></i>
+                        <p>Loading logs...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SETTINGS TAB -->
+        <div id="settings-tab" class="subtab-content hidden">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-6">
+                    <i class="fas fa-cog mr-2"></i>
+                    Notification Center Settings
+                </h3>
+                <div class="space-y-6">
+                    <div>
+                        <h4 class="font-semibold text-gray-700 mb-3">Admin Contacts</h4>
+                        <div id="admin-contacts-container">
+                            <p class="text-gray-500">Loading...</p>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-gray-700 mb-3">Escalation Settings</h4>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-gray-700 mb-2">CRITICAL Alert Intervals (minutes)</label>
+                                <input type="text" value="30, 30, 30, 15, 15" class="border border-gray-300 rounded px-3 py-2 w-full" readonly>
+                                <p class="text-sm text-gray-500 mt-1">Resend every: 30min → 30min → 30min → 15min → 15min</p>
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 mb-2">WARNING Alert Intervals (minutes)</label>
+                                <input type="text" value="60, 60, 60" class="border border-gray-300 rounded px-3 py-2 w-full" readonly>
+                                <p class="text-sm text-gray-500 mt-1">Resend every: 1hr → 1hr → 1hr (then stop)</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ====================================================================
+         LOADING OVERLAY
+         ==================================================================== -->
+    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg p-8 max-w-sm">
+            <div class="text-center">
+                <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-4"></i>
+                <p class="text-lg font-semibold text-gray-700" id="loading-message">Processing...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====================================================================
+         JAVASCRIPT
+         ==================================================================== -->
+    <script src="/js/notification-center/NotificationCenterManager.js?v=1.0"></script>
+    <script src="/js/notification-center/DashboardManager.js?v=1.0"></script>
+    <script src="/js/notification-center/RegistryManager.js?v=1.0"></script>
+    <script src="/js/notification-center/LogManager.js?v=1.0"></script>
+    <script src="/js/notification-center/SettingsManager.js?v=1.0"></script>
+    
+    <script>
+        // Initialize Notification Center on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🔔 [NOTIFICATION CENTER] Page loaded, initializing...');
+            
+            // Check authentication
+            const token = localStorage.getItem('token');
+            if (!token) {
+                console.warn('⚠️ No authentication token found, redirecting to login...');
+                window.location.href = '/login.html';
+                return;
+            }
+            
+            // Initialize main manager
+            window.notificationCenter = new NotificationCenterManager();
+            
+            // Logout handler
+            document.getElementById('logout-btn').addEventListener('click', () => {
+                localStorage.removeItem('token');
+                window.location.href = '/login.html';
+            });
+        });
+    </script>
+</body>
+</html>
+

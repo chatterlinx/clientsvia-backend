@@ -1,0 +1,331 @@
+// ============================================================================
+// 📜 NOTIFICATION LOG MODEL
+// ============================================================================
+// Purpose: Track all platform alerts, SMS delivery, escalations, and acknowledgments
+// 
+// Key Features:
+// - Auto-generates unique alert IDs (ALT-YYYYMMDD-###)
+// - Tracks multiple delivery attempts with timestamps
+// - Records SMS, email, and phone call delivery status
+// - Manages acknowledgment workflow
+// - Handles escalation state and timing
+// - Full audit trail for compliance
+//
+// Related Files:
+// - services/AdminNotificationService.js (creates logs)
+// - services/AlertEscalationService.js (updates escalation)
+// - routes/admin/adminNotifications.js (queries logs)
+// - public/admin-notification-center.html (displays logs)
+// ============================================================================
+
+const mongoose = require('mongoose');
+
+const notificationLogSchema = new mongoose.Schema({
+    // ========================================================================
+    // ALERT IDENTIFICATION
+    // ========================================================================
+    alertId: { 
+        type: String, 
+        required: true, 
+        unique: true,
+        index: true
+    }, // 'ALT-20251020-001' (auto-generated)
+    
+    code: { 
+        type: String, 
+        required: true,
+        uppercase: true,
+        index: true
+    }, // 'AI_MATCHING_FAILED', 'TWILIO_GREETING_FALLBACK', etc.
+    
+    severity: { 
+        type: String, 
+        enum: ['CRITICAL', 'WARNING', 'INFO'],
+        required: true,
+        index: true
+    },
+    
+    // ========================================================================
+    // COMPANY CONTEXT (null for platform-wide alerts)
+    // ========================================================================
+    companyId: { 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: 'v2Company',
+        index: true,
+        default: null
+    },
+    companyName: { type: String, default: 'Platform-Wide' },
+    
+    // ========================================================================
+    // ALERT CONTENT
+    // ========================================================================
+    message: { type: String, required: true },
+    details: String,
+    stackTrace: String,  // For error alerts
+    
+    // ========================================================================
+    // DELIVERY TRACKING (Multiple attempts with full details)
+    // ========================================================================
+    deliveryAttempts: [{
+        attemptNumber: { type: Number, required: true },  // 1, 2, 3...
+        timestamp: { type: Date, default: Date.now },
+        
+        // SMS delivery details
+        sms: [{
+            recipient: String,           // '+15551234567'
+            recipientName: String,       // 'Marc'
+            status: {
+                type: String,
+                enum: ['pending', 'sent', 'delivered', 'failed', 'undelivered']
+            },
+            twilioSid: String,
+            twilioStatus: String,
+            deliveredAt: Date,
+            error: String
+        }],
+        
+        // Email delivery details
+        email: [{
+            recipient: String,           // 'marc@clientsvia.com'
+            recipientName: String,
+            status: {
+                type: String,
+                enum: ['pending', 'sent', 'delivered', 'bounced', 'failed']
+            },
+            provider: String,            // 'SendGrid', 'AWS SES', etc.
+            messageId: String,
+            deliveredAt: Date,
+            error: String
+        }],
+        
+        // Phone call details (for critical escalation level 4+)
+        call: [{
+            recipient: String,
+            recipientName: String,
+            status: {
+                type: String,
+                enum: ['initiated', 'ringing', 'answered', 'completed', 'failed', 'no-answer']
+            },
+            twilioCallSid: String,
+            duration: Number,            // seconds
+            completedAt: Date,
+            error: String
+        }]
+    }],
+    
+    // ========================================================================
+    // ACKNOWLEDGMENT TRACKING
+    // ========================================================================
+    acknowledgment: {
+        isAcknowledged: { type: Boolean, default: false, index: true },
+        acknowledgedAt: Date,
+        acknowledgedBy: String,          // 'Marc' or phone number
+        acknowledgedVia: {
+            type: String,
+            enum: ['SMS', 'WEB_UI', 'API', 'AUTO']
+        },
+        acknowledgedMessage: String,     // Raw SMS text received (e.g., "ACK ALT-20251020-001")
+        
+        // Snooze feature
+        snoozedUntil: Date,
+        snoozeCount: { type: Number, default: 0 },
+        snoozeReason: String
+    },
+    
+    // ========================================================================
+    // ESCALATION STATE
+    // ========================================================================
+    escalation: {
+        isEnabled: { type: Boolean, default: true },
+        currentLevel: { type: Number, default: 1 },      // 1, 2, 3, 4...
+        maxLevel: { type: Number, default: 5 },
+        nextEscalationAt: Date,
+        escalationPaused: { type: Boolean, default: false },
+        escalationHistory: [{
+            level: Number,
+            timestamp: Date,
+            action: String               // 'sent', 'paused', 'resumed'
+        }]
+    },
+    
+    // ========================================================================
+    // RESOLUTION
+    // ========================================================================
+    resolution: {
+        isResolved: { type: Boolean, default: false, index: true },
+        resolvedAt: Date,
+        resolvedBy: String,
+        resolutionNotes: String,
+        resolutionAction: {
+            type: String,
+            enum: ['fixed', 'false-positive', 'known-issue', 'wont-fix', 'duplicate']
+        }
+    },
+    
+    // ========================================================================
+    // PERFORMANCE METRICS
+    // ========================================================================
+    metrics: {
+        firstDeliveryTime: Number,       // Time from creation to first SMS sent (ms)
+        acknowledgmentTime: Number,      // Time from creation to acknowledgment (ms)
+        totalAttempts: { type: Number, default: 0 },
+        successfulDeliveries: { type: Number, default: 0 },
+        failedDeliveries: { type: Number, default: 0 }
+    },
+    
+    // ========================================================================
+    // METADATA
+    // ========================================================================
+    createdAt: { type: Date, default: Date.now, index: true },
+    updatedAt: { type: Date, default: Date.now },
+    
+    tags: [String],                      // For categorization/filtering
+    priority: {
+        type: String,
+        enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
+        default: 'MEDIUM'
+    }
+});
+
+// ============================================================================
+// INDEXES FOR PERFORMANCE
+// ============================================================================
+
+notificationLogSchema.index({ createdAt: -1 });
+notificationLogSchema.index({ 'acknowledgment.isAcknowledged': 1, severity: 1 });
+notificationLogSchema.index({ companyId: 1, createdAt: -1 });
+notificationLogSchema.index({ code: 1, createdAt: -1 });
+
+// ============================================================================
+// MIDDLEWARE - AUTO-UPDATE FIELDS
+// ============================================================================
+
+// Auto-update updatedAt on save
+notificationLogSchema.pre('save', function(next) {
+    this.updatedAt = new Date();
+    next();
+});
+
+// Auto-generate unique alert ID if not provided
+notificationLogSchema.pre('save', function(next) {
+    if (!this.alertId && this.isNew) {
+        const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        this.alertId = `ALT-${date}-${random}`;
+    }
+    next();
+});
+
+// Update metrics on save
+notificationLogSchema.pre('save', function(next) {
+    // Count total delivery attempts
+    this.metrics.totalAttempts = this.deliveryAttempts.length;
+    
+    // Count successful/failed deliveries
+    let successful = 0;
+    let failed = 0;
+    
+    this.deliveryAttempts.forEach(attempt => {
+        attempt.sms.forEach(sms => {
+            if (sms.status === 'delivered') successful++;
+            if (sms.status === 'failed' || sms.status === 'undelivered') failed++;
+        });
+    });
+    
+    this.metrics.successfulDeliveries = successful;
+    this.metrics.failedDeliveries = failed;
+    
+    // Calculate acknowledgment time
+    if (this.acknowledgment.isAcknowledged && this.acknowledgment.acknowledgedAt) {
+        this.metrics.acknowledgmentTime = this.acknowledgment.acknowledgedAt.getTime() - this.createdAt.getTime();
+    }
+    
+    next();
+});
+
+// ============================================================================
+// STATIC METHODS
+// ============================================================================
+
+/**
+ * Get unacknowledged alerts count by severity
+ */
+notificationLogSchema.statics.getUnacknowledgedCount = async function() {
+    const counts = await this.aggregate([
+        {
+            $match: {
+                'acknowledgment.isAcknowledged': false,
+                'resolution.isResolved': false
+            }
+        },
+        {
+            $group: {
+                _id: '$severity',
+                count: { $sum: 1 }
+            }
+        }
+    ]);
+    
+    return {
+        CRITICAL: counts.find(c => c._id === 'CRITICAL')?.count || 0,
+        WARNING: counts.find(c => c._id === 'WARNING')?.count || 0,
+        INFO: counts.find(c => c._id === 'INFO')?.count || 0,
+        total: counts.reduce((sum, c) => sum + c.count, 0)
+    };
+};
+
+/**
+ * Get alerts requiring escalation
+ */
+notificationLogSchema.statics.getAlertsForEscalation = async function() {
+    const now = new Date();
+    
+    return this.find({
+        'acknowledgment.isAcknowledged': false,
+        'resolution.isResolved': false,
+        'escalation.escalationPaused': false,
+        'escalation.nextEscalationAt': { $lte: now },
+        'escalation.currentLevel': { $lt: this.escalation.maxLevel }
+    });
+};
+
+// ============================================================================
+// INSTANCE METHODS
+// ============================================================================
+
+/**
+ * Acknowledge this alert
+ */
+notificationLogSchema.methods.acknowledge = function(acknowledgedBy, via = 'WEB_UI', message = '') {
+    this.acknowledgment = {
+        isAcknowledged: true,
+        acknowledgedAt: new Date(),
+        acknowledgedBy: acknowledgedBy,
+        acknowledgedVia: via,
+        acknowledgedMessage: message
+    };
+    
+    this.escalation.escalationPaused = true;
+    
+    return this.save();
+};
+
+/**
+ * Resolve this alert
+ */
+notificationLogSchema.methods.resolve = function(resolvedBy, action, notes = '') {
+    this.resolution = {
+        isResolved: true,
+        resolvedAt: new Date(),
+        resolvedBy: resolvedBy,
+        resolutionAction: action,
+        resolutionNotes: notes
+    };
+    
+    this.escalation.escalationPaused = true;
+    
+    return this.save();
+};
+
+module.exports = mongoose.model('NotificationLog', notificationLogSchema);
+
