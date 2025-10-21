@@ -631,8 +631,12 @@ router.post('/admin/notifications/test-sms', authenticateJWT, requireRole('admin
             });
         }
         
-        // Send test SMS via smsClient
-        const smsClient = require('../../clients/smsClient');
+        // Create Twilio client with AdminSettings credentials
+        const twilio = require('twilio');
+        const twilioClient = twilio(
+            settings.notificationCenter.twilio.accountSid,
+            settings.notificationCenter.twilio.authToken
+        );
         
         const testMessage = `
 🔔 ClientsVia Test Alert
@@ -646,17 +650,18 @@ Time: ${new Date().toLocaleString()}
 Reply STOP to unsubscribe.
         `.trim();
         
-        const result = await smsClient.sendSMS({
-            to: recipientPhone,
-            message: testMessage
+        const result = await twilioClient.messages.create({
+            body: testMessage,
+            from: settings.notificationCenter.twilio.phoneNumber,
+            to: recipientPhone
         });
         
-        console.log(`✅ [TEST SMS] Sent successfully to ${recipientName}:`, result.sid || result.message_sid);
+        console.log(`✅ [TEST SMS] Sent successfully to ${recipientName}:`, result.sid);
         
         res.json({
             success: true,
             message: `Test SMS sent to ${recipientName}`,
-            twilioSid: result.sid || result.message_sid,
+            twilioSid: result.sid,
             status: result.status
         });
         
