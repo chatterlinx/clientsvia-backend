@@ -600,4 +600,75 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
     }
 });
 
+// ============================================================================
+// SEND TEST SMS TO ADMIN CONTACT
+// ============================================================================
+
+router.post('/admin/notifications/test-sms', authenticateJWT, requireRole('admin'), async (req, res) => {
+    /* eslint-disable no-console */
+    // Console logging intentional for SMS delivery testing
+    
+    try {
+        const { recipientName, recipientPhone } = req.body;
+        
+        if (!recipientPhone) {
+            return res.status(400).json({
+                success: false,
+                error: 'Recipient phone number required'
+            });
+        }
+        
+        console.log(`📱 [TEST SMS] Sending test message to ${recipientName} (${recipientPhone})...`);
+        
+        // Get Twilio credentials from AdminSettings
+        const AdminSettings = require('../../models/AdminSettings');
+        const settings = await AdminSettings.findOne({});
+        
+        if (!settings || !settings.notificationCenter?.twilio?.accountSid) {
+            return res.status(400).json({
+                success: false,
+                error: 'Twilio credentials not configured. Please configure in Settings tab first.'
+            });
+        }
+        
+        // Send test SMS via smsClient
+        const smsClient = require('../../clients/smsClient');
+        
+        const testMessage = `
+🔔 ClientsVia Test Alert
+
+Hi ${recipientName}! This is a test message from the Notification Center.
+
+If you received this, your SMS alerts are configured correctly! ✅
+
+Time: ${new Date().toLocaleString()}
+
+Reply STOP to unsubscribe.
+        `.trim();
+        
+        const result = await smsClient.sendSMS({
+            to: recipientPhone,
+            message: testMessage
+        });
+        
+        console.log(`✅ [TEST SMS] Sent successfully to ${recipientName}:`, result.sid || result.message_sid);
+        
+        res.json({
+            success: true,
+            message: `Test SMS sent to ${recipientName}`,
+            twilioSid: result.sid || result.message_sid,
+            status: result.status
+        });
+        
+    } catch (error) {
+        console.error('❌ [TEST SMS] Failed to send:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to send test SMS'
+        });
+    }
+    
+    /* eslint-enable no-console */
+});
+
 module.exports = router;

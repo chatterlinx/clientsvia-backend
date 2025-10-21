@@ -126,11 +126,21 @@ class SettingsManager {
                                     ${escapeEmail}
                                 </p>
                             ` : ''}
-                            <div class="mt-3 flex gap-2">
+                            <div class="mt-3 flex gap-2 flex-wrap">
                                 ${contact.receiveSMS ? '<span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">📱 SMS</span>' : ''}
                                 ${contact.receiveEmail ? '<span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">📧 Email</span>' : ''}
                                 ${contact.receiveCalls ? '<span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">📞 Calls</span>' : ''}
                             </div>
+                            ${contact.receiveSMS ? `
+                                <button 
+                                    class="mt-3 text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition"
+                                    onclick="window.settingsManager.sendTestSMS(${index})"
+                                    title="Send test SMS to verify delivery"
+                                >
+                                    <i class="fas fa-paper-plane mr-1"></i>
+                                    Send Test SMS
+                                </button>
+                            ` : ''}
                         </div>
                         <button 
                             class="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded transition" 
@@ -246,6 +256,34 @@ class SettingsManager {
             // Re-add if save failed
             this.adminContacts.splice(index, 0, contact);
             this.renderAdminContacts();
+        }
+    }
+    
+    async sendTestSMS(index) {
+        const contact = this.adminContacts[index];
+        
+        if (!confirm(`Send test SMS to ${contact.name} (${contact.phone})?`)) {
+            return;
+        }
+        
+        try {
+            this.nc.showToast('Sending test SMS...', 'info');
+            
+            const data = await this.nc.apiPost('/api/admin/notifications/test-sms', {
+                contactIndex: index,
+                recipientName: contact.name,
+                recipientPhone: contact.phone
+            });
+            
+            if (data.success) {
+                this.nc.showToast(`✅ Test SMS sent to ${contact.name}! Check your phone.`, 'success');
+            } else {
+                this.nc.showToast(`Failed to send test SMS: ${data.error || 'Unknown error'}`, 'error');
+            }
+            
+        } catch (error) {
+            console.error('❌ [SETTINGS] Failed to send test SMS:', error);
+            this.nc.showToast(`Error: ${error.message}`, 'error');
         }
     }
     
