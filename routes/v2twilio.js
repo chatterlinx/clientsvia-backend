@@ -317,12 +317,31 @@ function escapeTwiML(text) {
 }
 
 // Helper function to get company data, with caching
-// NOW ALSO CHECKS: Global AI Brain Test Templates (for admin testing)
+// NOW ALSO CHECKS: 
+//   1. Notification Center Test (for system verification)
+//   2. Global AI Brain Test Templates (for admin testing)
 async function getCompanyByPhoneNumber(phoneNumber) {
   const cacheKey = `company-phone:${phoneNumber}`;
   let company = null;
 
   try {
+    // 🔔 CHECK 0: Is this Notification Center test number?
+    console.log(`[NOTIFICATION CENTER CHECK] Checking if ${phoneNumber} is notification center test...`);
+    const AdminSettings = require('../models/AdminSettings');
+    const adminSettings = await AdminSettings.findOne({});
+    
+    if (adminSettings?.notificationCenter?.twilioTest?.enabled && 
+        adminSettings.notificationCenter.twilioTest.phoneNumber === phoneNumber) {
+      console.log(`🔔 [NOTIFICATION CENTER] Test number found: ${phoneNumber}`);
+      // Return a special "company" object that signals this is notification center test
+      return {
+        isNotificationCenterTest: true,
+        settings: adminSettings,
+        _id: 'notification-center',
+        name: 'Notification Center Test'
+      };
+    }
+    
     // 🧠 CHECK 1: Is this a Global AI Brain test number?
     console.log(`[GLOBAL BRAIN CHECK] Checking if ${phoneNumber} is a test template...`);
     const testTemplate = await GlobalInstantResponseTemplate.findOne({
@@ -467,42 +486,6 @@ router.post('/voice', async (req, res) => {
 
     const twiml = new twilio.twiml.VoiceResponse();
 
-    // 🎯 CHECK IF THIS IS NOTIFICATION CENTER (System Test Call)
-    if (company && company.metadata?.isNotificationCenter) {
-      console.log(`[NOTIFICATION CENTER] Test call detected - company ID: ${company._id}`);
-      
-      try {
-        const AdminSettings = require('../models/AdminSettings');
-        const settings = await AdminSettings.getSettings();
-        const greeting = settings.notificationCenter?.testCallGreeting || 
-            'This is a ClientsVia system check. Your Twilio integration is working correctly. If you can hear this message, voice webhooks are properly configured. Thank you for calling.';
-        
-        console.log(`🗣️ [NOTIFICATION CENTER] Playing test greeting (${greeting.length} chars)`);
-        
-        twiml.say({
-            voice: 'alice',
-            language: 'en-US'
-        }, greeting);
-        
-        twiml.hangup();
-        res.type('text/xml');
-        res.send(twiml.toString());
-        
-        console.log('✅ [NOTIFICATION CENTER] TwiML response sent');
-        return;
-        
-      } catch (testError) {
-        console.error('❌ [NOTIFICATION CENTER] Failed to load test greeting:', testError);
-        
-        // Fallback
-        twiml.say('System test. Twilio integration is working.');
-        twiml.hangup();
-        res.type('text/xml');
-        res.send(twiml.toString());
-        return;
-      }
-    }
-
     if (!company) {
       console.log(`[ERROR] [ERROR] No company found for phone number: ${calledNumber}`);
       
@@ -537,6 +520,33 @@ router.post('/voice', async (req, res) => {
     }
 
     console.log(`✅ [SPAM FILTER] Call from ${callerNumber} passed all security checks`);
+
+    // 🔔 NOTIFICATION CENTER TEST MODE (Same pattern as Global AI Brain)
+    if (company.isNotificationCenterTest) {
+      console.log(`🔔 [NOTIFICATION CENTER] Test mode activated`);
+      
+      const greeting = company.settings.notificationCenter.twilioTest.greeting;
+      
+      console.log(`🎙️ [NOTIFICATION CENTER] Playing greeting: "${greeting.substring(0, 80)}..."`);
+      
+      twiml.say({
+        voice: 'alice',
+        language: 'en-US'
+      }, greeting);
+      
+      twiml.hangup();
+      
+      // Update stats (same as Global Brain)
+      company.settings.notificationCenter.twilioTest.testCallCount++;
+      company.settings.notificationCenter.twilioTest.lastTestedAt = new Date();
+      await company.settings.save();
+      
+      console.log(`✅ [NOTIFICATION CENTER] Test call complete. Total calls: ${company.settings.notificationCenter.twilioTest.testCallCount}`);
+      
+      res.type('text/xml');
+      res.send(twiml.toString());
+      return;
+    }
 
     // 🧠 GLOBAL AI BRAIN TEST MODE
     if (company.isGlobalTestTemplate) {

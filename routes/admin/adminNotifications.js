@@ -494,8 +494,15 @@ router.get('/admin/notifications/settings', authenticateJWT, requireRole('admin'
                     authToken: '',
                     phoneNumber: ''
                 },
-                testCallGreeting: settings.notificationCenter?.testCallGreeting || 
-                    'This is a ClientsVia system check. Your Twilio integration is working correctly. If you can hear this message, voice webhooks are properly configured. Thank you for calling.',
+                twilioTest: settings.notificationCenter?.twilioTest || {
+                    enabled: false,
+                    phoneNumber: '',
+                    accountSid: '',
+                    authToken: '',
+                    greeting: 'This is a ClientsVia system check. Your Twilio integration is working correctly. If you can hear this message, voice webhooks are properly configured. Thank you for calling.',
+                    testCallCount: 0,
+                    notes: ''
+                },
                 adminContacts: settings.notificationCenter?.adminContacts || [],
                 escalation: settings.notificationCenter?.escalation || {
                     CRITICAL: [30, 30, 30, 15, 15],
@@ -521,7 +528,7 @@ router.get('/admin/notifications/settings', authenticateJWT, requireRole('admin'
 router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const AdminSettings = require('../../models/AdminSettings');
-        const { twilio, testCallGreeting, adminContacts, escalation } = req.body;
+        const { twilio, twilioTest, adminContacts, escalation } = req.body;
         
         // Get or create admin settings document
         let settings = await AdminSettings.findOne({});
@@ -547,15 +554,24 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
             console.log('✅ [NOTIFICATION SETTINGS] Twilio credentials updated');
         }
         
-        // Update test call greeting if provided
-        if (testCallGreeting !== undefined) {
+        // Update Twilio Test config if provided (same pattern as Global Brain)
+        if (twilioTest !== undefined) {
             if (!settings.notificationCenter) {
                 settings.notificationCenter = {};
             }
             
-            settings.notificationCenter.testCallGreeting = testCallGreeting;
+            settings.notificationCenter.twilioTest = {
+                enabled: twilioTest.enabled || false,
+                phoneNumber: twilioTest.phoneNumber || '',
+                accountSid: twilioTest.accountSid || '',
+                authToken: twilioTest.authToken || '',
+                greeting: twilioTest.greeting || settings.notificationCenter.twilioTest?.greeting || 'This is a ClientsVia system check. Your Twilio integration is working correctly.',
+                testCallCount: settings.notificationCenter.twilioTest?.testCallCount || 0,
+                lastTestedAt: settings.notificationCenter.twilioTest?.lastTestedAt,
+                notes: twilioTest.notes || ''
+            };
             
-            console.log('✅ [NOTIFICATION SETTINGS] Test call greeting updated');
+            console.log('✅ [NOTIFICATION SETTINGS] Twilio Test config updated');
         }
         
         // Update admin contacts if provided

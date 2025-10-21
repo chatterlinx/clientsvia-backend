@@ -179,11 +179,52 @@ const adminSettingsSchema = new mongoose.Schema({
             }
         },
         
-        // System Test Call Greeting
-        testCallGreeting: {
-            type: String,
-            default: 'This is a ClientsVia system check. Your Twilio integration is working correctly. If you can hear this message, voice webhooks are properly configured. Thank you for calling.',
-            description: 'Message spoken when admin calls the system for testing'
+        // 📞 TWILIO TEST CONFIGURATION (Same pattern as Global AI Brain)
+        // Allows admin to test system via dedicated test phone number
+        twilioTest: {
+            enabled: {
+                type: Boolean,
+                default: false,
+                description: 'Toggle ON to enable test calls, OFF to disable'
+            },
+            phoneNumber: {
+                type: String,
+                trim: true,
+                default: '',
+                description: 'Test phone number (E.164 format: +15551234567)'
+            },
+            accountSid: {
+                type: String,
+                trim: true,
+                default: '',
+                description: 'Twilio Account SID for test number'
+            },
+            authToken: {
+                type: String,
+                trim: true,
+                default: '',
+                description: 'Twilio Auth Token (store encrypted in production)'
+            },
+            greeting: {
+                type: String,
+                trim: true,
+                default: 'This is a ClientsVia system check. Your Twilio integration is working correctly. If you can hear this message, voice webhooks are properly configured. Thank you for calling.',
+                description: 'Custom greeting spoken when test calls connect'
+            },
+            lastTestedAt: {
+                type: Date,
+                description: 'Track when last tested'
+            },
+            testCallCount: {
+                type: Number,
+                default: 0,
+                description: 'Track how many test calls made'
+            },
+            notes: {
+                type: String,
+                trim: true,
+                description: 'Admin notes about testing'
+            }
         }
     },
     
