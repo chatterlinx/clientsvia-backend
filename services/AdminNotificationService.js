@@ -1,3 +1,5 @@
+/* eslint-disable no-console */
+// Console.log statements are intentional for monitoring and debugging notification delivery
 // ============================================================================
 // 🔔 ADMIN NOTIFICATION SERVICE
 // ============================================================================
@@ -69,7 +71,7 @@ class AdminNotificationService {
                 code: code.toUpperCase(),
                 file: callerInfo.file,
                 line: callerInfo.line,
-                severity: severity
+                severity
             });
             
             // ================================================================
@@ -108,12 +110,12 @@ class AdminNotificationService {
             // ================================================================
             const notificationLog = await NotificationLog.create({
                 code: code.toUpperCase(),
-                severity: severity,
-                companyId: companyId,
-                companyName: companyName,
-                message: message,
-                details: details,
-                stackTrace: stackTrace,
+                severity,
+                companyId,
+                companyName,
+                message,
+                details,
+                stackTrace,
                 
                 // Set escalation schedule based on severity
                 escalation: {
@@ -131,12 +133,12 @@ class AdminNotificationService {
             // ================================================================
             const smsResults = await this.sendSMSToAdmins({
                 alertId: notificationLog.alertId,
-                code: code,
-                severity: severity,
-                companyName: companyName,
-                message: message,
-                details: details,
-                adminContacts: adminContacts
+                code,
+                severity,
+                companyName,
+                message,
+                details,
+                adminContacts
             });
             
             // ================================================================
@@ -144,12 +146,12 @@ class AdminNotificationService {
             // ================================================================
             const emailResults = await this.sendEmailToAdmins({
                 alertId: notificationLog.alertId,
-                code: code,
-                severity: severity,
-                companyName: companyName,
-                message: message,
-                details: details,
-                adminContacts: adminContacts
+                code,
+                severity,
+                companyName,
+                message,
+                details,
+                adminContacts
             });
             
             // ================================================================
@@ -184,8 +186,8 @@ class AdminNotificationService {
             return {
                 success: true,
                 alertId: notificationLog.alertId,
-                smsResults: smsResults,
-                emailResults: emailResults
+                smsResults,
+                emailResults
             };
             
         } catch (error) {
@@ -195,12 +197,12 @@ class AdminNotificationService {
             try {
                 await NotificationLog.create({
                     code: code.toUpperCase(),
-                    severity: severity,
-                    companyId: companyId,
-                    companyName: companyName,
-                    message: message,
-                    details: details,
-                    stackTrace: stackTrace,
+                    severity,
+                    companyId,
+                    companyName,
+                    message,
+                    details,
+                    stackTrace,
                     deliveryAttempts: [{
                         attemptNumber: 1,
                         timestamp: new Date(),
@@ -230,9 +232,9 @@ class AdminNotificationService {
         const results = [];
         
         const severityEmoji = {
-            'CRITICAL': '🚨',
-            'WARNING': '⚠️',
-            'INFO': 'ℹ️'
+            CRITICAL: '🚨',
+            WARNING: '⚠️',
+            INFO: 'ℹ️'
         };
         
         const smsMessage = `
@@ -416,9 +418,9 @@ View: https://app.clientsvia.com/admin-notification-center.html
         const now = new Date();
         
         const intervals = {
-            'CRITICAL': [30, 30, 30, 15, 15],  // minutes
-            'WARNING': [60, 60, 60],
-            'INFO': []  // No escalation
+            CRITICAL: [30, 30, 30, 15, 15],  // minutes
+            WARNING: [60, 60, 60],
+            INFO: []  // No escalation
         };
         
         const minutes = intervals[severity]?.[currentLevel - 1] || 0;
@@ -492,7 +494,7 @@ To reopen: Text "REOPEN ${alert.alertId}"
                 try {
                     await smsClient.sendSMS({
                         to: contact.phoneNumber,
-                        message: message
+                        message
                     });
                 } catch (error) {
                     console.error(`❌ Failed to send confirmation to ${contact.name}:`, error);

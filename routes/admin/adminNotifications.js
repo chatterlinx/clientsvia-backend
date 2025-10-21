@@ -1,3 +1,5 @@
+/* eslint-disable no-console */
+// Console.log statements are intentional for monitoring and debugging notification system
 // ============================================================================
 // 🔔 ADMIN NOTIFICATION CENTER - API ROUTES
 // ============================================================================
@@ -74,7 +76,7 @@ router.get('/admin/notifications/status', authenticateJWT, requireRole('admin'),
         
         res.json({
             success: true,
-            overallStatus: overallStatus,
+            overallStatus,
             unacknowledgedCount: counts.total,
             breakdown: {
                 critical: counts.CRITICAL,
@@ -120,9 +122,9 @@ router.get('/admin/notifications/dashboard', authenticateJWT, requireRole('admin
             data: {
                 unacknowledgedAlerts: counts,
                 notificationPointsValidation: validationSummary,
-                latestHealthCheck: latestHealthCheck,
+                latestHealthCheck,
                 healthTrend24h: healthTrend,
-                recentAlerts: recentAlerts
+                recentAlerts
             }
         });
         
@@ -148,7 +150,7 @@ router.get('/admin/notifications/registry', authenticateJWT, requireRole('admin'
             success: true,
             data: {
                 notificationPoints: grouped,
-                summary: summary
+                summary
             }
         });
         
@@ -187,8 +189,8 @@ router.post('/admin/notifications/registry/validate', authenticateJWT, requireRo
             success: true,
             data: {
                 validatedCount: results.length,
-                results: results,
-                summary: summary
+                results,
+                summary
             }
         });
         
@@ -220,32 +222,32 @@ router.get('/admin/notifications/logs', authenticateJWT, requireRole('admin'), a
         // Build filter
         const filter = {};
         
-        if (severity) filter.severity = severity;
-        if (code) filter.code = code.toUpperCase();
-        if (companyId) filter.companyId = companyId;
-        if (acknowledged !== undefined) filter['acknowledgment.isAcknowledged'] = acknowledged === 'true';
-        if (resolved !== undefined) filter['resolution.isResolved'] = resolved === 'true';
+        if (severity) {filter.severity = severity;}
+        if (code) {filter.code = code.toUpperCase();}
+        if (companyId) {filter.companyId = companyId;}
+        if (acknowledged !== undefined) {filter['acknowledgment.isAcknowledged'] = acknowledged === 'true';}
+        if (resolved !== undefined) {filter['resolution.isResolved'] = resolved === 'true';}
         
         // Execute query
-        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
         
         const [logs, total] = await Promise.all([
             NotificationLog.find(filter)
                 .sort({ createdAt: -1 })
                 .skip(skip)
-                .limit(parseInt(limit)),
+                .limit(parseInt(limit, 10)),
             NotificationLog.countDocuments(filter)
         ]);
         
         res.json({
             success: true,
             data: {
-                logs: logs,
+                logs,
                 pagination: {
-                    page: parseInt(page),
-                    limit: parseInt(limit),
-                    total: total,
-                    pages: Math.ceil(total / parseInt(limit))
+                    page: parseInt(page, 10),
+                    limit: parseInt(limit, 10),
+                    total,
+                    pages: Math.ceil(total / parseInt(limit, 10))
                 }
             }
         });
@@ -339,7 +341,7 @@ router.post('/admin/notifications/snooze', authenticateJWT, requireRole('admin')
         
         const result = await AlertEscalationService.snoozeAlert(
             alertId,
-            parseInt(minutes),
+            parseInt(minutes, 10),
             reason || ''
         );
         
@@ -430,16 +432,16 @@ router.get('/admin/notifications/health-history', authenticateJWT, requireRole('
     try {
         const { limit = 10, hours = 24 } = req.query;
         
-        const history = await HealthCheckLog.getHistory(parseInt(limit));
+        const history = await HealthCheckLog.getHistory(parseInt(limit, 10));
         const trend = await HealthCheckLog.getTrend();
-        const componentSummary = await HealthCheckLog.getComponentSummary(parseInt(hours));
+        const componentSummary = await HealthCheckLog.getComponentSummary(parseInt(hours, 10));
         
         res.json({
             success: true,
             data: {
-                history: history,
+                history,
                 trend24h: trend,
-                componentSummary: componentSummary
+                componentSummary
             }
         });
         
@@ -475,6 +477,13 @@ router.get('/admin/notifications/settings', authenticateJWT, requireRole('admin'
                 }
             });
             await settings.save();
+            
+            // CRITICAL: Clear Redis cache when creating new settings
+            const redisClient = require('../../db').redisClient;
+            if (redisClient && redisClient.del) {
+                await redisClient.del('admin:settings:notification-center');
+                console.log('✅ [NOTIFICATION SETTINGS] Redis cache cleared after initial save');
+            }
         }
         
         res.json({
