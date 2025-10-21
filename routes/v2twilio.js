@@ -2057,6 +2057,30 @@ router.post('/sms', async (req, res) => {
         if (message.match(/^(TEST|PING|HELLO|HI)$/i)) {
             console.log(`✅ [SMS WEBHOOK] Test command received from ${from}`);
             
+            // Send email notification since SMS might be blocked by Twilio verification
+            try {
+                const AdminSettings = require('../models/AdminSettings');
+                const settings = await AdminSettings.findOne({});
+                const adminContacts = settings?.notificationCenter?.adminContacts || [];
+                
+                for (const contact of adminContacts) {
+                    if (contact.receiveEmail && contact.email) {
+                        const emailClient = require('../clients').emailClient;
+                        if (emailClient && emailClient.sendEmail) {
+                            await emailClient.sendEmail({
+                                to: contact.email,
+                                subject: '✅ ClientsVia SMS Test Received',
+                                text: `SMS Test Command Received!\n\nFrom: ${from}\nMessage: "${message}"\nTime: ${new Date().toLocaleString()}\n\n✅ Webhook is working correctly!\n📱 SMS system is LIVE!`,
+                                html: `<h2>✅ SMS Test Command Received!</h2><p><strong>From:</strong> ${from}</p><p><strong>Message:</strong> "${message}"</p><p><strong>Time:</strong> ${new Date().toLocaleString()}</p><hr><p>✅ Webhook is working correctly!</p><p>📱 SMS system is LIVE!</p>`
+                            });
+                            console.log(`📧 [SMS WEBHOOK] Email notification sent to ${contact.email}`);
+                        }
+                    }
+                }
+            } catch (emailError) {
+                console.error('⚠️ [SMS WEBHOOK] Failed to send email notification:', emailError);
+            }
+            
             const twiml = new twilio.twiml.MessagingResponse();
             twiml.message(`✅ ClientsVia SMS System is LIVE!\n\n🚀 2-way SMS confirmed working.\n📱 Webhook connected.\n⏰ ${new Date().toLocaleString()}`);
             
