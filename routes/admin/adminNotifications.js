@@ -624,12 +624,42 @@ router.post('/admin/notifications/test-sms', authenticateJWT, requireRole('admin
         const AdminSettings = require('../../models/AdminSettings');
         const settings = await AdminSettings.findOne({});
         
-        if (!settings || !settings.notificationCenter?.twilio?.accountSid) {
+        if (!settings) {
+            console.error('❌ [TEST SMS] AdminSettings document not found');
             return res.status(400).json({
                 success: false,
-                error: 'Twilio credentials not configured. Please configure in Settings tab first.'
+                error: 'AdminSettings not initialized. Please save Twilio credentials in Settings tab first.'
             });
         }
+        
+        if (!settings.notificationCenter?.twilio?.accountSid) {
+            console.error('❌ [TEST SMS] Twilio Account SID missing');
+            return res.status(400).json({
+                success: false,
+                error: 'Twilio Account SID not configured. Please save credentials in Settings tab.'
+            });
+        }
+        
+        if (!settings.notificationCenter?.twilio?.authToken) {
+            console.error('❌ [TEST SMS] Twilio Auth Token missing');
+            return res.status(400).json({
+                success: false,
+                error: 'Twilio Auth Token not configured. Please save credentials in Settings tab.'
+            });
+        }
+        
+        if (!settings.notificationCenter?.twilio?.phoneNumber) {
+            console.error('❌ [TEST SMS] Twilio Phone Number missing');
+            return res.status(400).json({
+                success: false,
+                error: 'Twilio Phone Number not configured. Please save credentials in Settings tab.'
+            });
+        }
+        
+        console.log(`✅ [TEST SMS] Twilio credentials found:`, {
+            accountSid: settings.notificationCenter.twilio.accountSid.substring(0, 10) + '...',
+            phoneNumber: settings.notificationCenter.twilio.phoneNumber
+        });
         
         // Create Twilio client with AdminSettings credentials
         const twilio = require('twilio');
