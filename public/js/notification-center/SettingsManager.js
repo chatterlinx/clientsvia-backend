@@ -276,7 +276,16 @@ class SettingsManager {
             });
             
             if (data.success) {
-                this.nc.showToast(`✅ Test SMS sent to ${contact.name}! Check your phone.`, 'success');
+                console.log('✅ [TEST SMS] Success response:', data);
+                console.log(`   Twilio SID: ${data.twilioSid}`);
+                console.log(`   Status: ${data.status}`);
+                console.log(`   From: ${data.debug?.from}`);
+                console.log(`   To: ${data.debug?.to}`);
+                
+                this.nc.showToast(
+                    `✅ Test SMS sent to ${contact.name}!\n\nTwilio SID: ${data.twilioSid}\nStatus: ${data.status}\n\nCheck your phone in 10-30 seconds.`, 
+                    'success'
+                );
             } else {
                 this.nc.showToast(`Failed to send test SMS: ${data.error || 'Unknown error'}`, 'error');
             }

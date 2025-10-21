@@ -680,19 +680,42 @@ Time: ${new Date().toLocaleString()}
 Reply STOP to unsubscribe.
         `.trim();
         
+        console.log(`🚀 [TEST SMS] Calling Twilio API...`);
+        console.log(`   From: ${settings.notificationCenter.twilio.phoneNumber}`);
+        console.log(`   To: ${recipientPhone}`);
+        
         const result = await twilioClient.messages.create({
             body: testMessage,
             from: settings.notificationCenter.twilio.phoneNumber,
             to: recipientPhone
         });
         
-        console.log(`✅ [TEST SMS] Sent successfully to ${recipientName}:`, result.sid);
+        console.log(`✅ [TEST SMS] Twilio API responded successfully!`);
+        console.log(`   Twilio SID: ${result.sid}`);
+        console.log(`   Status: ${result.status}`);
+        console.log(`   Date Created: ${result.dateCreated}`);
+        console.log(`   Price: ${result.price || 'pending'}`);
+        console.log(`   Error Code: ${result.errorCode || 'none'}`);
+        console.log(`   Error Message: ${result.errorMessage || 'none'}`);
         
         res.json({
             success: true,
             message: `Test SMS sent to ${recipientName}`,
             twilioSid: result.sid,
-            status: result.status
+            status: result.status,
+            dateCreated: result.dateCreated,
+            price: result.price,
+            debug: {
+                from: settings.notificationCenter.twilio.phoneNumber,
+                to: recipientPhone,
+                messageLength: testMessage.length,
+                twilioResponse: {
+                    sid: result.sid,
+                    status: result.status,
+                    direction: result.direction,
+                    apiVersion: result.apiVersion
+                }
+            }
         });
         
     } catch (error) {
