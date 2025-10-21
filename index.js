@@ -124,7 +124,7 @@ async function loadAllRoutes() {
         routes.callFilteringRoutes = await loadRouteWithTimeout('./routes/admin/callFiltering', 'callFilteringRoutes');
         routes.adminNotificationsRoutes = await loadRouteWithTimeout('./routes/admin/adminNotifications', 'adminNotificationsRoutes');
         routes.setupNotificationCenterRoutes = await loadRouteWithTimeout('./routes/admin/setup-notification-center', 'setupNotificationCenterRoutes');
-        routes.healthRoutes = await loadRouteWithTimeout('./routes/admin/health', 'healthRoutes');
+        routes.healthRoutes = await loadRouteWithTimeout('./routes/health', 'healthRoutes');
         
         // REMOVED: Legacy V2 AI Intelligence routes - archived to prevent external LLM dependencies
         
