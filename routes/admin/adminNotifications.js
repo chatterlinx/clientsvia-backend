@@ -494,7 +494,12 @@ router.get('/admin/notifications/settings', authenticateJWT, requireRole('admin'
                     authToken: '',
                     phoneNumber: ''
                 },
-                adminContacts: settings.notificationCenter?.adminContacts || []
+                adminContacts: settings.notificationCenter?.adminContacts || [],
+                escalation: settings.notificationCenter?.escalation || {
+                    CRITICAL: [30, 30, 30, 15, 15],
+                    WARNING: [60, 60, 60],
+                    INFO: [120]
+                }
             }
         });
         
@@ -514,7 +519,7 @@ router.get('/admin/notifications/settings', authenticateJWT, requireRole('admin'
 router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const AdminSettings = require('../../models/AdminSettings');
-        const { twilio, adminContacts } = req.body;
+        const { twilio, adminContacts, escalation } = req.body;
         
         // Get or create admin settings document
         let settings = await AdminSettings.findOne({});
@@ -551,6 +556,21 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
             console.log(`✅ [NOTIFICATION SETTINGS] Admin contacts updated: ${adminContacts.length} contacts`);
         }
         
+        // Update escalation settings if provided
+        if (escalation) {
+            if (!settings.notificationCenter) {
+                settings.notificationCenter = {};
+            }
+            
+            settings.notificationCenter.escalation = {
+                CRITICAL: escalation.CRITICAL || [30, 30, 30, 15, 15],
+                WARNING: escalation.WARNING || [60, 60, 60],
+                INFO: escalation.INFO || [120]
+            };
+            
+            console.log('✅ [NOTIFICATION SETTINGS] Escalation intervals updated');
+        }
+        
         settings.markModified('notificationCenter');
         await settings.save();
         
@@ -566,7 +586,8 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
             message: 'Notification settings updated successfully',
             data: {
                 twilio: settings.notificationCenter?.twilio || {},
-                adminContacts: settings.notificationCenter?.adminContacts || []
+                adminContacts: settings.notificationCenter?.adminContacts || [],
+                escalation: settings.notificationCenter?.escalation || {}
             }
         });
         

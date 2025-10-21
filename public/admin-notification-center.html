@@ -310,17 +310,29 @@
                     <i class="fas fa-clock mr-2"></i>
                     Escalation Settings
                 </h3>
+                <p class="text-sm text-gray-600 mb-4">
+                    Configure how often unacknowledged alerts are resent. Use comma-separated minutes.
+                </p>
                 <div class="space-y-4">
                     <div>
                         <label class="block text-gray-700 mb-2 font-semibold">CRITICAL Alert Intervals (minutes)</label>
-                        <input type="text" value="30, 30, 30, 15, 15" class="border border-gray-300 rounded px-3 py-2 w-full" readonly>
-                        <p class="text-sm text-gray-500 mt-1">Resend every: 30min → 30min → 30min → 15min → 15min</p>
+                        <input type="text" id="critical-intervals" class="border border-gray-300 rounded px-3 py-2 w-full" placeholder="30, 30, 30, 15, 15">
+                        <p class="text-sm text-gray-500 mt-1">Example: "30, 30, 30, 15, 15" = Resend every 30min (3x), then every 15min (2x)</p>
                     </div>
                     <div>
                         <label class="block text-gray-700 mb-2 font-semibold">WARNING Alert Intervals (minutes)</label>
-                        <input type="text" value="60, 60, 60" class="border border-gray-300 rounded px-3 py-2 w-full" readonly>
-                        <p class="text-sm text-gray-500 mt-1">Resend every: 1hr → 1hr → 1hr (then stop)</p>
+                        <input type="text" id="warning-intervals" class="border border-gray-300 rounded px-3 py-2 w-full" placeholder="60, 60, 60">
+                        <p class="text-sm text-gray-500 mt-1">Example: "60, 60, 60" = Resend every 1 hour (3x), then stop</p>
                     </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-semibold">INFO Alert Intervals (minutes)</label>
+                        <input type="text" id="info-intervals" class="border border-gray-300 rounded px-3 py-2 w-full" placeholder="120">
+                        <p class="text-sm text-gray-500 mt-1">Example: "120" = Resend once after 2 hours (low priority)</p>
+                    </div>
+                    <button id="save-escalation-btn" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded">
+                        <i class="fas fa-save mr-2"></i>
+                        Save Escalation Settings
+                    </button>
                 </div>
             </div>
         </div>

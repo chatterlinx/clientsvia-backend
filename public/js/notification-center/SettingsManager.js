@@ -15,7 +15,8 @@ class SettingsManager {
         
         await Promise.all([
             this.loadTwilioCredentials(),
-            this.loadAdminContacts()
+            this.loadAdminContacts(),
+            this.loadEscalationSettings()
         ]);
         
         this.attachEventHandlers();
@@ -249,6 +250,72 @@ class SettingsManager {
     }
     
     // ========================================================================
+    // ESCALATION SETTINGS
+    // ========================================================================
+    
+    async loadEscalationSettings() {
+        try {
+            const response = await this.nc.apiGet('/api/admin/notifications/settings');
+            
+            if (response.success && response.data && response.data.escalation) {
+                const esc = response.data.escalation;
+                document.getElementById('critical-intervals').value = (esc.CRITICAL || [30, 30, 30, 15, 15]).join(', ');
+                document.getElementById('warning-intervals').value = (esc.WARNING || [60, 60, 60]).join(', ');
+                document.getElementById('info-intervals').value = (esc.INFO || [120]).join(', ');
+            } else {
+                // Set defaults
+                document.getElementById('critical-intervals').value = '30, 30, 30, 15, 15';
+                document.getElementById('warning-intervals').value = '60, 60, 60';
+                document.getElementById('info-intervals').value = '120';
+            }
+            
+        } catch (error) {
+            console.error('❌ [SETTINGS] Failed to load escalation settings:', error);
+        }
+    }
+    
+    async saveEscalationSettings() {
+        try {
+            const criticalStr = document.getElementById('critical-intervals').value.trim();
+            const warningStr = document.getElementById('warning-intervals').value.trim();
+            const infoStr = document.getElementById('info-intervals').value.trim();
+            
+            // Parse comma-separated values
+            const parseIntervals = (str) => {
+                return str.split(',').map(v => parseInt(v.trim(), 10)).filter(n => !isNaN(n) && n > 0);
+            };
+            
+            const critical = parseIntervals(criticalStr);
+            const warning = parseIntervals(warningStr);
+            const info = parseIntervals(infoStr);
+            
+            // Validation
+            if (critical.length === 0 || warning.length === 0 || info.length === 0) {
+                this.nc.showToast('Please enter valid intervals (comma-separated numbers)', 'error');
+                return;
+            }
+            
+            const data = await this.nc.apiPut('/api/admin/notifications/settings', {
+                escalation: {
+                    CRITICAL: critical,
+                    WARNING: warning,
+                    INFO: info
+                }
+            });
+            
+            if (data.success) {
+                this.nc.showToast('Escalation settings saved successfully', 'success');
+            } else {
+                this.nc.showToast('Failed to save escalation settings', 'error');
+            }
+            
+        } catch (error) {
+            console.error('❌ [SETTINGS] Failed to save escalation settings:', error);
+            this.nc.showToast(`Error: ${error.message}`, 'error');
+        }
+    }
+    
+    // ========================================================================
     // EVENT HANDLERS
     // ========================================================================
     
@@ -263,6 +330,12 @@ class SettingsManager {
         const addBtn = document.getElementById('add-contact-btn');
         if (addBtn) {
             addBtn.addEventListener('click', () => this.addAdminContact());
+        }
+        
+        // Escalation save button
+        const escalationBtn = document.getElementById('save-escalation-btn');
+        if (escalationBtn) {
+            escalationBtn.addEventListener('click', () => this.saveEscalationSettings());
         }
         
         // Make this instance globally accessible for remove buttons

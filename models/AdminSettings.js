@@ -158,7 +158,26 @@ const adminSettingsSchema = new mongoose.Schema({
                 default: true,
                 description: 'Receive escalation calls'
             }
-        }]
+        }],
+        
+        // Escalation Intervals (minutes)
+        escalation: {
+            CRITICAL: {
+                type: [Number],
+                default: [30, 30, 30, 15, 15],
+                description: 'CRITICAL alert resend intervals in minutes'
+            },
+            WARNING: {
+                type: [Number],
+                default: [60, 60, 60],
+                description: 'WARNING alert resend intervals in minutes'
+            },
+            INFO: {
+                type: [Number],
+                default: [120],
+                description: 'INFO alert resend intervals in minutes'
+            }
+        }
     },
     
     // Metadata
