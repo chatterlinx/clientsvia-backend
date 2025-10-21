@@ -188,6 +188,26 @@ class NotificationCenterManager {
     }
     
     /**
+     * API Helper - PUT request
+     */
+    async apiPut(endpoint, data) {
+        const response = await fetch(endpoint, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${this.token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+        
+        return response.json();
+    }
+    
+    /**
      * Show loading overlay
      */
     showLoading(message = 'Processing...') {
@@ -214,16 +234,77 @@ class NotificationCenterManager {
      * Show error message
      */
     showError(message) {
-        alert(`❌ Error: ${message}`);
-        // TODO: Replace with toast notification
+        this.showToast(message, 'error');
     }
     
     /**
      * Show success message
      */
     showSuccess(message) {
-        alert(`✅ Success: ${message}`);
-        // TODO: Replace with toast notification
+        this.showToast(message, 'success');
+    }
+    
+    /**
+     * Show toast notification
+     */
+    showToast(message, type = 'info') {
+        // Create toast container if it doesn't exist
+        let toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toast-container';
+            toastContainer.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999;';
+            document.body.appendChild(toastContainer);
+        }
+        
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        
+        // Style based on type
+        let bgColor = '#3B82F6'; // blue (info)
+        let icon = 'ℹ️';
+        
+        if (type === 'success') {
+            bgColor = '#10B981'; // green
+            icon = '✅';
+        } else if (type === 'error') {
+            bgColor = '#EF4444'; // red
+            icon = '❌';
+        } else if (type === 'warning') {
+            bgColor = '#F59E0B'; // orange
+            icon = '⚠️';
+        }
+        
+        toast.style.cssText = `
+            background: ${bgColor};
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideIn 0.3s ease-out;
+            min-width: 300px;
+            max-width: 500px;
+        `;
+        
+        toast.innerHTML = `
+            <span style="font-size: 20px;">${icon}</span>
+            <span style="flex: 1; font-weight: 500;">${message}</span>
+            <button onclick="this.parentElement.remove()" style="background: none; border: none; color: white; font-size: 20px; cursor: pointer; padding: 0; line-height: 1;">×</button>
+        `;
+        
+        // Add to container
+        toastContainer.appendChild(toast);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            toast.style.animation = 'slideOut 0.3s ease-out';
+            setTimeout(() => toast.remove(), 300);
+        }, 5000);
     }
     
     /**
