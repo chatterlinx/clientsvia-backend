@@ -67,7 +67,7 @@
         
         async updateTabStatus() {
             try {
-                const token = localStorage.getItem('token');
+                const token = localStorage.getItem('adminToken'); // FIXED: Use adminToken (same as index.html)
                 if (!token) {
                     console.warn('⚠️ [GLOBAL TAB MONITOR] No auth token, skipping update');
                     return;

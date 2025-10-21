@@ -315,7 +315,7 @@
             console.log('🔔 [NOTIFICATION CENTER] Page loaded, initializing...');
             
             // Check authentication
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('adminToken'); // FIXED: Use adminToken (same as index.html)
             if (!token) {
                 console.warn('⚠️ No authentication token found, redirecting to login...');
                 window.location.href = '/login.html';
@@ -327,7 +327,8 @@
             
             // Logout handler
             document.getElementById('logout-btn').addEventListener('click', () => {
-                localStorage.removeItem('token');
+                localStorage.removeItem('adminToken');
+                localStorage.removeItem('adminUser');
                 window.location.href = '/login.html';
             });
         });

@@ -19,7 +19,7 @@
 class NotificationCenterManager {
     constructor() {
         this.currentTab = 'dashboard';
-        this.token = localStorage.getItem('token');
+        this.token = localStorage.getItem('adminToken'); // FIXED: Use adminToken (same as index.html)
         this.refreshInterval = null;
         
         // Sub-managers
