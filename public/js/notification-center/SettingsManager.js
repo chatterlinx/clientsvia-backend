@@ -27,12 +27,14 @@ class SettingsManager {
     
     async loadTwilioCredentials() {
         try {
-            const data = await this.nc.apiGet('/api/admin/notifications/settings');
+            const response = await this.nc.apiGet('/api/admin/notifications/settings');
             
-            if (data.success && data.settings.twilio) {
-                document.getElementById('twilio-account-sid').value = data.settings.twilio.accountSid || '';
-                document.getElementById('twilio-auth-token').value = data.settings.twilio.authToken || '';
-                document.getElementById('twilio-phone-number').value = data.settings.twilio.phoneNumber || '';
+            if (response.success && response.data && response.data.twilio) {
+                document.getElementById('twilio-account-sid').value = response.data.twilio.accountSid || '';
+                document.getElementById('twilio-auth-token').value = response.data.twilio.authToken || '';
+                document.getElementById('twilio-phone-number').value = response.data.twilio.phoneNumber || '';
+            } else {
+                console.log('ℹ️ [SETTINGS] No Twilio credentials configured yet');
             }
             
         } catch (error) {
@@ -77,10 +79,14 @@ class SettingsManager {
     
     async loadAdminContacts() {
         try {
-            const data = await this.nc.apiGet('/api/admin/notifications/settings');
+            const response = await this.nc.apiGet('/api/admin/notifications/settings');
             
-            if (data.success) {
-                this.adminContacts = data.settings.adminContacts || [];
+            if (response.success && response.data) {
+                this.adminContacts = response.data.adminContacts || [];
+                this.renderAdminContacts();
+            } else {
+                console.log('ℹ️ [SETTINGS] No admin contacts configured yet');
+                this.adminContacts = [];
                 this.renderAdminContacts();
             }
             
