@@ -2065,15 +2065,19 @@ router.post('/sms', async (req, res) => {
                 
                 for (const contact of adminContacts) {
                     if (contact.receiveEmail && contact.email) {
-                        const emailClient = require('../clients').emailClient;
-                        if (emailClient && emailClient.sendEmail) {
-                            await emailClient.sendEmail({
+                        const emailClient = require('../clients/emailClient');
+                        if (emailClient && emailClient.send) {
+                            const result = await emailClient.send({
                                 to: contact.email,
                                 subject: '✅ ClientsVia SMS Test Received',
-                                text: `SMS Test Command Received!\n\nFrom: ${from}\nMessage: "${message}"\nTime: ${new Date().toLocaleString()}\n\n✅ Webhook is working correctly!\n📱 SMS system is LIVE!`,
+                                body: `SMS Test Command Received!\n\nFrom: ${from}\nMessage: "${message}"\nTime: ${new Date().toLocaleString()}\n\n✅ Webhook is working correctly!\n📱 SMS system is LIVE!`,
                                 html: `<h2>✅ SMS Test Command Received!</h2><p><strong>From:</strong> ${from}</p><p><strong>Message:</strong> "${message}"</p><p><strong>Time:</strong> ${new Date().toLocaleString()}</p><hr><p>✅ Webhook is working correctly!</p><p>📱 SMS system is LIVE!</p>`
                             });
-                            console.log(`📧 [SMS WEBHOOK] Email notification sent to ${contact.email}`);
+                            if (result.success) {
+                                console.log(`📧 [SMS WEBHOOK] Email sent to ${contact.email}`);
+                            } else {
+                                console.error(`❌ [SMS WEBHOOK] Email failed to ${contact.email}:`, result.error);
+                            }
                         }
                     }
                 }
