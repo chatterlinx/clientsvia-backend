@@ -174,7 +174,7 @@ router.post('/admin/notifications/registry/validate', authenticateJWT, requireRo
         const results = [];
         
         for (const point of points) {
-            await point.validate();
+            await point.validateNotificationPoint();
             results.push({
                 code: point.code,
                 isValid: point.validation.isValid,

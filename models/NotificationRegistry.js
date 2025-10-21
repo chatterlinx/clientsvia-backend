@@ -245,9 +245,10 @@ notificationRegistrySchema.statics.getValidationSummary = async function() {
 // ============================================================================
 
 /**
- * Validate this notification point
+ * Validate this notification point configuration
+ * Note: Renamed from 'validate' to avoid Mongoose method name collision
  */
-notificationRegistrySchema.methods.validate = async function() {
+notificationRegistrySchema.methods.validateNotificationPoint = async function() {
     const v2Company = require('./v2Company');
     const smsClient = require('../clients/smsClient');
     
