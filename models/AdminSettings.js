@@ -105,6 +105,62 @@ const adminSettingsSchema = new mongoose.Schema({
         }
     },
     
+    // Notification Center Configuration
+    notificationCenter: {
+        twilio: {
+            accountSid: {
+                type: String,
+                default: '',
+                trim: true,
+                description: 'Twilio Account SID for SMS notifications'
+            },
+            authToken: {
+                type: String,
+                default: '',
+                trim: true,
+                description: 'Twilio Auth Token (encrypted in production)'
+            },
+            phoneNumber: {
+                type: String,
+                default: '',
+                trim: true,
+                description: 'Twilio phone number (E.164 format)'
+            }
+        },
+        adminContacts: [{
+            name: {
+                type: String,
+                required: true,
+                description: 'Admin contact name'
+            },
+            phone: {
+                type: String,
+                required: true,
+                description: 'Admin phone number (E.164 format)'
+            },
+            email: {
+                type: String,
+                default: '',
+                description: 'Admin email address (optional)'
+            },
+            receiveSMS: {
+                type: Boolean,
+                default: true,
+                description: 'Receive SMS alerts'
+            },
+            receiveEmail: {
+                type: Boolean,
+                default: false,
+                description: 'Receive email alerts'
+            },
+            receiveCalls: {
+                type: Boolean,
+                default: true,
+                description: 'Receive escalation calls'
+            }
+        }]
+    },
+    
     // Metadata
     lastUpdated: {
         type: Date,

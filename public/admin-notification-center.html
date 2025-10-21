@@ -209,32 +209,78 @@
 
         <!-- SETTINGS TAB -->
         <div id="settings-tab" class="subtab-content hidden">
-            <div class="bg-white rounded-lg shadow-md p-6">
+            
+            <!-- TWILIO CREDENTIALS -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
                 <h3 class="text-xl font-semibold text-gray-700 mb-6">
-                    <i class="fas fa-cog mr-2"></i>
-                    Notification Center Settings
+                    <i class="fas fa-phone mr-2"></i>
+                    Twilio SMS Configuration
                 </h3>
-                <div class="space-y-6">
+                <div class="space-y-4">
                     <div>
-                        <h4 class="font-semibold text-gray-700 mb-3">Admin Contacts</h4>
-                        <div id="admin-contacts-container">
-                            <p class="text-gray-500">Loading...</p>
-                        </div>
+                        <label class="block text-gray-700 mb-2 font-semibold">Account SID</label>
+                        <input type="text" id="twilio-account-sid" class="border border-gray-300 rounded px-3 py-2 w-full" placeholder="AC...">
+                        <p class="text-sm text-gray-500 mt-1">Your Twilio Account SID (starts with AC)</p>
                     </div>
                     <div>
-                        <h4 class="font-semibold text-gray-700 mb-3">Escalation Settings</h4>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-gray-700 mb-2">CRITICAL Alert Intervals (minutes)</label>
-                                <input type="text" value="30, 30, 30, 15, 15" class="border border-gray-300 rounded px-3 py-2 w-full" readonly>
-                                <p class="text-sm text-gray-500 mt-1">Resend every: 30min → 30min → 30min → 15min → 15min</p>
-                            </div>
-                            <div>
-                                <label class="block text-gray-700 mb-2">WARNING Alert Intervals (minutes)</label>
-                                <input type="text" value="60, 60, 60" class="border border-gray-300 rounded px-3 py-2 w-full" readonly>
-                                <p class="text-sm text-gray-500 mt-1">Resend every: 1hr → 1hr → 1hr (then stop)</p>
-                            </div>
-                        </div>
+                        <label class="block text-gray-700 mb-2 font-semibold">Auth Token</label>
+                        <input type="password" id="twilio-auth-token" class="border border-gray-300 rounded px-3 py-2 w-full" placeholder="Enter auth token">
+                        <p class="text-sm text-gray-500 mt-1">Your Twilio Auth Token (keep this secret)</p>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-semibold">Phone Number</label>
+                        <input type="text" id="twilio-phone-number" class="border border-gray-300 rounded px-3 py-2 w-full" placeholder="+15551234567">
+                        <p class="text-sm text-gray-500 mt-1">Your Twilio phone number (E.164 format: +1...)</p>
+                    </div>
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4">
+                        <p class="text-sm text-gray-700">
+                            <strong>Important:</strong> After saving, configure your Twilio SMS webhook:
+                        </p>
+                        <p class="text-sm text-gray-600 mt-2">
+                            Webhook URL: <code class="bg-white px-2 py-1 rounded">https://clientsvia-backend.onrender.com/api/twilio/sms</code>
+                        </p>
+                        <p class="text-sm text-gray-600 mt-1">
+                            Method: POST
+                        </p>
+                    </div>
+                    <button id="save-twilio-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded">
+                        <i class="fas fa-save mr-2"></i>
+                        Save Twilio Credentials
+                    </button>
+                </div>
+            </div>
+            
+            <!-- ADMIN CONTACTS -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-6">
+                    <i class="fas fa-users mr-2"></i>
+                    Admin Contacts
+                </h3>
+                <div id="admin-contacts-container">
+                    <p class="text-gray-500">Loading...</p>
+                </div>
+                <button id="add-admin-contact-btn" class="mt-4 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded">
+                    <i class="fas fa-plus mr-2"></i>
+                    Add Admin Contact
+                </button>
+            </div>
+            
+            <!-- ESCALATION SETTINGS -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-6">
+                    <i class="fas fa-clock mr-2"></i>
+                    Escalation Settings
+                </h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-semibold">CRITICAL Alert Intervals (minutes)</label>
+                        <input type="text" value="30, 30, 30, 15, 15" class="border border-gray-300 rounded px-3 py-2 w-full" readonly>
+                        <p class="text-sm text-gray-500 mt-1">Resend every: 30min → 30min → 30min → 15min → 15min</p>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-semibold">WARNING Alert Intervals (minutes)</label>
+                        <input type="text" value="60, 60, 60" class="border border-gray-300 rounded px-3 py-2 w-full" readonly>
+                        <p class="text-sm text-gray-500 mt-1">Resend every: 1hr → 1hr → 1hr (then stop)</p>
                     </div>
                 </div>
             </div>

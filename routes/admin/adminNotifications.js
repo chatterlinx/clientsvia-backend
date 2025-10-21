@@ -452,4 +452,115 @@ router.get('/admin/notifications/health-history', authenticateJWT, requireRole('
     }
 });
 
+// ============================================================================
+// GET NOTIFICATION SETTINGS (Twilio + Admin Contacts)
+// ============================================================================
+
+router.get('/admin/notifications/settings', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const AdminSettings = require('../../models/AdminSettings');
+        
+        // Get admin settings document
+        let settings = await AdminSettings.findOne({});
+        
+        if (!settings) {
+            settings = new AdminSettings({
+                notificationCenter: {
+                    twilio: {
+                        accountSid: process.env.TWILIO_ACCOUNT_SID || '',
+                        authToken: process.env.TWILIO_AUTH_TOKEN || '',
+                        phoneNumber: process.env.TWILIO_PHONE_NUMBER || ''
+                    },
+                    adminContacts: []
+                }
+            });
+            await settings.save();
+        }
+        
+        res.json({
+            success: true,
+            data: {
+                twilio: settings.notificationCenter?.twilio || {
+                    accountSid: '',
+                    authToken: '',
+                    phoneNumber: ''
+                },
+                adminContacts: settings.notificationCenter?.adminContacts || []
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ [GET NOTIFICATION SETTINGS] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============================================================================
+// UPDATE NOTIFICATION SETTINGS (Twilio + Admin Contacts)
+// ============================================================================
+
+router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const AdminSettings = require('../../models/AdminSettings');
+        const { twilio, adminContacts } = req.body;
+        
+        // Get or create admin settings document
+        let settings = await AdminSettings.findOne({});
+        
+        if (!settings) {
+            settings = new AdminSettings({
+                notificationCenter: {}
+            });
+        }
+        
+        // Update Twilio credentials if provided
+        if (twilio) {
+            if (!settings.notificationCenter) {
+                settings.notificationCenter = {};
+            }
+            
+            settings.notificationCenter.twilio = {
+                accountSid: twilio.accountSid,
+                authToken: twilio.authToken,
+                phoneNumber: twilio.phoneNumber
+            };
+            
+            console.log('✅ [NOTIFICATION SETTINGS] Twilio credentials updated');
+        }
+        
+        // Update admin contacts if provided
+        if (adminContacts) {
+            if (!settings.notificationCenter) {
+                settings.notificationCenter = {};
+            }
+            
+            settings.notificationCenter.adminContacts = adminContacts;
+            
+            console.log(`✅ [NOTIFICATION SETTINGS] Admin contacts updated: ${adminContacts.length} contacts`);
+        }
+        
+        settings.markModified('notificationCenter');
+        await settings.save();
+        
+        res.json({
+            success: true,
+            message: 'Notification settings updated successfully',
+            data: {
+                twilio: settings.notificationCenter?.twilio || {},
+                adminContacts: settings.notificationCenter?.adminContacts || []
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ [UPDATE NOTIFICATION SETTINGS] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;

@@ -348,10 +348,16 @@ View: https://app.clientsvia.com/admin-notification-center.html
                 checks.errors.push('SMS client not configured');
             }
             
-            // Check 4: Twilio credentials
-            if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+            // Check 4: Twilio credentials (from AdminSettings or env vars)
+            const AdminSettings = require('../models/AdminSettings');
+            const settings = await AdminSettings.findOne({});
+            
+            const hasTwilioInSettings = settings?.notificationCenter?.twilio?.accountSid;
+            const hasTwilioInEnv = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN;
+            
+            if (!hasTwilioInSettings && !hasTwilioInEnv) {
                 checks.isValid = false;
-                checks.errors.push('Twilio credentials not configured');
+                checks.errors.push('Twilio credentials not configured (check Settings tab)');
             }
             
         } catch (error) {
