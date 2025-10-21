@@ -256,13 +256,39 @@
                 </div>
             </div>
             
-            <!-- TEST CALL GREETING -->
+            <!-- TEST CALL SYSTEM -->
             <div class="bg-white rounded-lg shadow-md p-6 mb-6">
                 <h3 class="text-xl font-semibold text-gray-700 mb-6">
                     <i class="fas fa-microphone mr-2"></i>
-                    Test Call Greeting
+                    Test Call System
                 </h3>
+                
+                <!-- ENABLE TOGGLE -->
+                <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <label class="block text-gray-700 font-semibold mb-1">Enable Test Calls</label>
+                            <p class="text-sm text-gray-600">Turn ON to activate test call system</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="test-call-enabled" class="sr-only peer">
+                            <div class="w-14 h-7 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-green-600"></div>
+                        </label>
+                    </div>
+                </div>
+                
                 <div class="space-y-4">
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-semibold">Test Phone Number</label>
+                        <input 
+                            type="text" 
+                            id="test-call-phone" 
+                            class="border border-gray-300 rounded px-3 py-2 w-full" 
+                            placeholder="+18885222241"
+                            value="+18885222241">
+                        <p class="text-sm text-gray-500 mt-1">Your Twilio phone number (E.164 format)</p>
+                    </div>
+                    
                     <div>
                         <label class="block text-gray-700 mb-2 font-semibold">Greeting Message</label>
                         <textarea 
@@ -274,6 +300,7 @@
                             This message will be spoken when you call your Twilio number to test the system.
                         </p>
                     </div>
+                    
                     <div class="bg-green-50 border-l-4 border-green-500 p-4">
                         <p class="text-sm text-gray-700">
                             <strong>🎯 To Test:</strong> Call your Twilio number: <strong>+1 (888) 522-2241</strong>
@@ -282,9 +309,10 @@
                             You'll hear this message played back by Twilio's text-to-speech engine (Alice voice).
                         </p>
                     </div>
-                    <button id="save-test-greeting-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded">
+                    
+                    <button id="save-test-call-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded">
                         <i class="fas fa-save mr-2"></i>
-                        Save Greeting
+                        Save Test Call Settings
                     </button>
                 </div>
             </div>
