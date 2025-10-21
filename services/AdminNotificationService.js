@@ -85,25 +85,22 @@ class AdminNotificationService {
             }
             
             // ================================================================
-            // STEP 3: GET ADMIN CONTACTS
+            // STEP 3: GET ADMIN CONTACTS (from AdminSettings)
             // ================================================================
-            const notificationCenter = await v2Company.findOne({
-                'metadata.isNotificationCenter': true
-            });
+            const AdminSettings = require('../models/AdminSettings');
+            const settings = await AdminSettings.findOne({});
             
-            if (!notificationCenter) {
-                throw new Error('Notification Center company not configured');
+            if (!settings) {
+                throw new Error('AdminSettings not found - initialize first');
             }
             
-            const adminContacts = notificationCenter.contacts?.filter(
-                c => c.type === 'admin-alert'
-            ) || [];
+            const adminContacts = settings.notificationCenter?.adminContacts || [];
             
             if (adminContacts.length === 0) {
-                throw new Error('No admin contacts configured');
+                throw new Error('No admin contacts configured in Settings tab');
             }
             
-            console.log(`📋 [ADMIN NOTIFICATION] Found ${adminContacts.length} admin contacts`);
+            console.log(`📋 [ADMIN NOTIFICATION] Found ${adminContacts.length} admin contacts from AdminSettings`);
             
             // ================================================================
             // STEP 4: CREATE NOTIFICATION LOG ENTRY
@@ -182,15 +179,15 @@ class AdminNotificationService {
             console.log(`✅ [ADMIN NOTIFICATION] Alert ${notificationLog.alertId} sent successfully`);
             console.log(`📊 [ADMIN NOTIFICATION] SMS: ${smsResults.filter(r => r.status === 'sent').length}/${smsResults.length} sent`);
             console.log(`📊 [ADMIN NOTIFICATION] Email: ${emailResults.filter(r => r.status === 'sent').length}/${emailResults.length} sent`);
-            
-            return {
-                success: true,
+        
+        return { 
+            success: true, 
                 alertId: notificationLog.alertId,
                 smsResults,
                 emailResults
-            };
-            
-        } catch (error) {
+        };
+        
+    } catch (error) {
             console.error(`❌ [ADMIN NOTIFICATION] Failed to send alert ${code}:`, error);
             
             // Even if sending fails, try to log the attempt
@@ -218,8 +215,8 @@ class AdminNotificationService {
                 console.error(`❌ [ADMIN NOTIFICATION] Failed to log error:`, logError);
             }
             
-            return {
-                success: false,
+        return { 
+            success: false, 
                 error: error.message
             };
         }
@@ -252,19 +249,19 @@ View: https://app.clientsvia.com/admin-notification-center.html
         `.trim();
         
         // Send to all admin contacts with SMS enabled
-        const smsContacts = adminContacts.filter(c => c.smsNotifications !== false);
+        const smsContacts = adminContacts.filter(c => c.receiveSMS !== false);
         
         for (const contact of smsContacts) {
             try {
-                console.log(`📱 [SMS] Sending to ${contact.name} (${contact.phoneNumber})...`);
+                console.log(`📱 [SMS] Sending to ${contact.name} (${contact.phone})...`);
                 
                 const result = await smsClient.sendSMS({
-                    to: contact.phoneNumber,
+                    to: contact.phone,
                     message: smsMessage
                 });
                 
                 results.push({
-                    recipient: contact.phoneNumber,
+                    recipient: contact.phone,
                     recipientName: contact.name,
                     status: 'sent',
                     twilioSid: result.sid || result.message_sid,
@@ -278,7 +275,7 @@ View: https://app.clientsvia.com/admin-notification-center.html
                 console.error(`❌ [SMS] Failed to send to ${contact.name}:`, error);
                 
                 results.push({
-                    recipient: contact.phoneNumber,
+                    recipient: contact.phone,
                     recipientName: contact.name,
                     status: 'failed',
                     error: error.message
@@ -298,7 +295,7 @@ View: https://app.clientsvia.com/admin-notification-center.html
         // Email implementation would go here
         // For now, we'll return empty array since email client isn't set up yet
         
-        const emailContacts = adminContacts.filter(c => c.email && c.emailNotifications !== false);
+        const emailContacts = adminContacts.filter(c => c.email && c.receiveEmail !== false);
         
         for (const contact of emailContacts) {
             // TODO: Implement email sending via SendGrid/AWS SES
@@ -323,37 +320,38 @@ View: https://app.clientsvia.com/admin-notification-center.html
         };
         
         try {
-            // Check 1: Notification Center company exists
-            const notificationCenter = await v2Company.findOne({
-                'metadata.isNotificationCenter': true
-            });
+            // Check 1: AdminSettings exists
+            const AdminSettings = require('../models/AdminSettings');
+            const settings = await AdminSettings.findOne({});
             
-            if (!notificationCenter) {
+            if (!settings) {
                 checks.isValid = false;
-                checks.errors.push('Notification Center company not found');
+                checks.errors.push('AdminSettings not found - initialize first');
                 return checks;
             }
             
             // Check 2: Admin contacts exist
-            const adminContacts = notificationCenter.contacts?.filter(
-                c => c.type === 'admin-alert' && c.smsNotifications !== false
-            ) || [];
+            const adminContacts = settings.notificationCenter?.adminContacts || [];
             
             if (adminContacts.length === 0) {
+                checks.isValid = false;
+                checks.errors.push('No admin contacts configured (add in Settings tab)');
+            }
+            
+            // Check 3: At least one contact has SMS enabled
+            const smsEnabledContacts = adminContacts.filter(c => c.receiveSMS !== false);
+            if (smsEnabledContacts.length === 0) {
                 checks.isValid = false;
                 checks.errors.push('No admin contacts with SMS enabled');
             }
             
-            // Check 3: SMS client configured
+            // Check 4: SMS client configured
             if (!smsClient || !smsClient.sendSMS) {
                 checks.isValid = false;
                 checks.errors.push('SMS client not configured');
             }
             
-            // Check 4: Twilio credentials (from AdminSettings or env vars)
-            const AdminSettings = require('../models/AdminSettings');
-            const settings = await AdminSettings.findOne({});
-            
+            // Check 5: Twilio credentials (from AdminSettings or env vars)
             const hasTwilioInSettings = settings?.notificationCenter?.twilio?.accountSid;
             const hasTwilioInEnv = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN;
             
@@ -397,11 +395,11 @@ View: https://app.clientsvia.com/admin-notification-center.html
                 if (filePath.startsWith(projectRoot)) {
                     filePath = filePath.substring(projectRoot.length + 1);
                 }
-                
-                return {
+        
+        return {
                     file: filePath,
                     line: lineNumber
-                };
+        };
             }
         }
         
@@ -474,12 +472,16 @@ View: https://app.clientsvia.com/admin-notification-center.html
      */
     static async sendAcknowledgmentConfirmation(alert, acknowledgedBy) {
         try {
-            const notificationCenter = await v2Company.findOne({
-                'metadata.isNotificationCenter': true
-            });
+            const AdminSettings = require('../models/AdminSettings');
+            const settings = await AdminSettings.findOne({});
             
-            const adminContacts = notificationCenter?.contacts?.filter(
-                c => c.type === 'admin-alert' && c.smsNotifications !== false
+            if (!settings) {
+                console.error('❌ AdminSettings not found');
+                return;
+            }
+            
+            const adminContacts = settings.notificationCenter?.adminContacts?.filter(
+                c => c.receiveSMS !== false
             ) || [];
             
             const message = `
@@ -493,15 +495,15 @@ To reopen: Text "REOPEN ${alert.alertId}"
             for (const contact of adminContacts) {
                 try {
                     await smsClient.sendSMS({
-                        to: contact.phoneNumber,
+                        to: contact.phone,
                         message
                     });
                 } catch (error) {
                     console.error(`❌ Failed to send confirmation to ${contact.name}:`, error);
                 }
             }
-            
-        } catch (error) {
+        
+    } catch (error) {
             console.error('❌ Failed to send acknowledgment confirmation:', error);
         }
     }
