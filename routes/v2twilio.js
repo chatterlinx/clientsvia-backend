@@ -467,11 +467,9 @@ router.post('/voice', async (req, res) => {
 
     const twiml = new twilio.twiml.VoiceResponse();
 
-    if (!company) {
-      console.log(`[ERROR] [ERROR] No company found for phone number: ${calledNumber}`);
-      
-      // 🎯 SYSTEM TEST MODE - If no company found, play admin test greeting
-      console.log(`[SYSTEM TEST] No company configured - playing admin test greeting`);
+    // 🎯 CHECK IF THIS IS NOTIFICATION CENTER (System Test Call)
+    if (company && company.metadata?.isNotificationCenter) {
+      console.log(`[NOTIFICATION CENTER] Test call detected - company ID: ${company._id}`);
       
       try {
         const AdminSettings = require('../models/AdminSettings');
@@ -479,7 +477,7 @@ router.post('/voice', async (req, res) => {
         const greeting = settings.notificationCenter?.testCallGreeting || 
             'This is a ClientsVia system check. Your Twilio integration is working correctly. If you can hear this message, voice webhooks are properly configured. Thank you for calling.';
         
-        console.log(`🗣️ [SYSTEM TEST] Playing greeting (${greeting.length} chars)`);
+        console.log(`🗣️ [NOTIFICATION CENTER] Playing test greeting (${greeting.length} chars)`);
         
         twiml.say({
             voice: 'alice',
@@ -490,20 +488,31 @@ router.post('/voice', async (req, res) => {
         res.type('text/xml');
         res.send(twiml.toString());
         
-        console.log('✅ [SYSTEM TEST] TwiML response sent');
+        console.log('✅ [NOTIFICATION CENTER] TwiML response sent');
         return;
         
       } catch (testError) {
-        console.error('❌ [SYSTEM TEST] Failed to load test greeting:', testError);
+        console.error('❌ [NOTIFICATION CENTER] Failed to load test greeting:', testError);
         
-        // Fallback to default error message
-        const msg = 'Configuration error: Company must configure AI Agent Logic responses';
-        twiml.say(escapeTwiML(msg));
+        // Fallback
+        twiml.say('System test. Twilio integration is working.');
         twiml.hangup();
         res.type('text/xml');
         res.send(twiml.toString());
         return;
       }
+    }
+
+    if (!company) {
+      console.log(`[ERROR] [ERROR] No company found for phone number: ${calledNumber}`);
+      
+      // Configuration error for unconfigured numbers
+      const msg = 'Configuration error: Company must configure AI Agent Logic responses';
+      twiml.say(escapeTwiML(msg));
+      twiml.hangup();
+      res.type('text/xml');
+      res.send(twiml.toString());
+      return;
     }
 
     // 🚫 SPAM FILTER - Check if call should be blocked
