@@ -469,13 +469,41 @@ router.post('/voice', async (req, res) => {
 
     if (!company) {
       console.log(`[ERROR] [ERROR] No company found for phone number: ${calledNumber}`);
-      // Legacy personality system removed - using configuration error message
-      const msg = 'Configuration error: Company must configure AI Agent Logic responses';
-      twiml.say(escapeTwiML(msg));
-      twiml.hangup();
-      res.type('text/xml');
-      res.send(twiml.toString());
-      return;
+      
+      // 🎯 SYSTEM TEST MODE - If no company found, play admin test greeting
+      console.log(`[SYSTEM TEST] No company configured - playing admin test greeting`);
+      
+      try {
+        const AdminSettings = require('../models/AdminSettings');
+        const settings = await AdminSettings.getSettings();
+        const greeting = settings.notificationCenter?.testCallGreeting || 
+            'This is a ClientsVia system check. Your Twilio integration is working correctly. If you can hear this message, voice webhooks are properly configured. Thank you for calling.';
+        
+        console.log(`🗣️ [SYSTEM TEST] Playing greeting (${greeting.length} chars)`);
+        
+        twiml.say({
+            voice: 'alice',
+            language: 'en-US'
+        }, greeting);
+        
+        twiml.hangup();
+        res.type('text/xml');
+        res.send(twiml.toString());
+        
+        console.log('✅ [SYSTEM TEST] TwiML response sent');
+        return;
+        
+      } catch (testError) {
+        console.error('❌ [SYSTEM TEST] Failed to load test greeting:', testError);
+        
+        // Fallback to default error message
+        const msg = 'Configuration error: Company must configure AI Agent Logic responses';
+        twiml.say(escapeTwiML(msg));
+        twiml.hangup();
+        res.type('text/xml');
+        res.send(twiml.toString());
+        return;
+      }
     }
 
     // 🚫 SPAM FILTER - Check if call should be blocked
@@ -1826,9 +1854,10 @@ router.get('/quality-report/:templateId', (req, res) => {
 // ============================================================================
 // Purpose: Handle incoming calls to verify Twilio voice integration
 // Plays customizable greeting from AdminSettings.notificationCenter.testCallGreeting
+// NOTE: This route is mounted at /api/twilio, so /voice-test becomes /api/twilio/voice-test
 // ============================================================================
 
-router.post('/api/twilio/voice', async (req, res) => {
+router.post('/voice-test', async (req, res) => {
     try {
         const from = req.body.From;
         const to = req.body.To;
