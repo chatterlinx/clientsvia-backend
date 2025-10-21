@@ -2067,11 +2067,17 @@ router.post('/sms', async (req, res) => {
                     if (contact.receiveEmail && contact.email) {
                         const emailClient = require('../clients/emailClient');
                         if (emailClient && emailClient.send) {
+                            const timestamp = new Date().toLocaleString('en-US', { 
+                                timeZone: 'America/New_York',
+                                dateStyle: 'short',
+                                timeStyle: 'long'
+                            });
+                            
                             const result = await emailClient.send({
                                 to: contact.email,
                                 subject: '✅ ClientsVia SMS Test Received',
-                                body: `SMS Test Command Received!\n\nFrom: ${from}\nMessage: "${message}"\nTime: ${new Date().toLocaleString()}\n\n✅ Webhook is working correctly!\n📱 SMS system is LIVE!`,
-                                html: `<h2>✅ SMS Test Command Received!</h2><p><strong>From:</strong> ${from}</p><p><strong>Message:</strong> "${message}"</p><p><strong>Time:</strong> ${new Date().toLocaleString()}</p><hr><p>✅ Webhook is working correctly!</p><p>📱 SMS system is LIVE!</p>`
+                                body: `SMS Test Command Received!\n\nFrom: ${from}\nMessage: "${message}"\nTime: ${timestamp} ET\n\n✅ Webhook is working correctly!\n📱 SMS system is LIVE!`,
+                                html: `<h2>✅ SMS Test Command Received!</h2><p><strong>From:</strong> ${from}</p><p><strong>Message:</strong> "${message}"</p><p><strong>Time:</strong> ${timestamp} ET</p><hr><p>✅ Webhook is working correctly!</p><p>📱 SMS system is LIVE!</p>`
                             });
                             if (result.success) {
                                 console.log(`📧 [SMS WEBHOOK] Email sent to ${contact.email}`);
