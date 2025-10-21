@@ -494,6 +494,8 @@ router.get('/admin/notifications/settings', authenticateJWT, requireRole('admin'
                     authToken: '',
                     phoneNumber: ''
                 },
+                testCallGreeting: settings.notificationCenter?.testCallGreeting || 
+                    'This is a ClientsVia system check. Your Twilio integration is working correctly. If you can hear this message, voice webhooks are properly configured. Thank you for calling.',
                 adminContacts: settings.notificationCenter?.adminContacts || [],
                 escalation: settings.notificationCenter?.escalation || {
                     CRITICAL: [30, 30, 30, 15, 15],
@@ -519,7 +521,7 @@ router.get('/admin/notifications/settings', authenticateJWT, requireRole('admin'
 router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const AdminSettings = require('../../models/AdminSettings');
-        const { twilio, adminContacts, escalation } = req.body;
+        const { twilio, testCallGreeting, adminContacts, escalation } = req.body;
         
         // Get or create admin settings document
         let settings = await AdminSettings.findOne({});
@@ -543,6 +545,17 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
             };
             
             console.log('✅ [NOTIFICATION SETTINGS] Twilio credentials updated');
+        }
+        
+        // Update test call greeting if provided
+        if (testCallGreeting !== undefined) {
+            if (!settings.notificationCenter) {
+                settings.notificationCenter = {};
+            }
+            
+            settings.notificationCenter.testCallGreeting = testCallGreeting;
+            
+            console.log('✅ [NOTIFICATION SETTINGS] Test call greeting updated');
         }
         
         // Update admin contacts if provided

@@ -177,6 +177,13 @@ const adminSettingsSchema = new mongoose.Schema({
                 default: [120],
                 description: 'INFO alert resend intervals in minutes'
             }
+        },
+        
+        // System Test Call Greeting
+        testCallGreeting: {
+            type: String,
+            default: 'This is a ClientsVia system check. Your Twilio integration is working correctly. If you can hear this message, voice webhooks are properly configured. Thank you for calling.',
+            description: 'Message spoken when admin calls the system for testing'
         }
     },
     

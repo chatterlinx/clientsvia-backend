@@ -15,6 +15,7 @@ class SettingsManager {
         
         await Promise.all([
             this.loadTwilioCredentials(),
+            this.loadTestCallGreeting(),
             this.loadAdminContacts(),
             this.loadEscalationSettings()
         ]);
@@ -70,6 +71,52 @@ class SettingsManager {
             
         } catch (error) {
             console.error('❌ [SETTINGS] Failed to save Twilio credentials:', error);
+            this.nc.showToast(`Error: ${error.message}`, 'error');
+        }
+    }
+    
+    // ========================================================================
+    // TEST CALL GREETING
+    // ========================================================================
+    
+    async loadTestCallGreeting() {
+        try {
+            const response = await this.nc.apiGet('/api/admin/notifications/settings');
+            
+            if (response.success && response.data && response.data.testCallGreeting) {
+                document.getElementById('test-call-greeting').value = response.data.testCallGreeting;
+            } else {
+                // Set default greeting if none exists
+                document.getElementById('test-call-greeting').value = 
+                    'This is a ClientsVia system check. Your Twilio integration is working correctly. If you can hear this message, voice webhooks are properly configured. Thank you for calling.';
+            }
+            
+        } catch (error) {
+            console.error('❌ [SETTINGS] Failed to load test call greeting:', error);
+        }
+    }
+    
+    async saveTestCallGreeting() {
+        try {
+            const greeting = document.getElementById('test-call-greeting').value.trim();
+            
+            if (!greeting) {
+                this.nc.showToast('Please enter a greeting message', 'error');
+                return;
+            }
+            
+            const data = await this.nc.apiPut('/api/admin/notifications/settings', {
+                testCallGreeting: greeting
+            });
+            
+            if (data.success) {
+                this.nc.showToast('Test call greeting saved successfully', 'success');
+            } else {
+                this.nc.showToast('Failed to save test call greeting', 'error');
+            }
+            
+        } catch (error) {
+            console.error('❌ [SETTINGS] Failed to save test call greeting:', error);
             this.nc.showToast(`Error: ${error.message}`, 'error');
         }
     }
@@ -371,6 +418,12 @@ class SettingsManager {
         const twilioBtn = document.getElementById('save-twilio-btn');
         if (twilioBtn) {
             twilioBtn.addEventListener('click', () => this.saveTwilioCredentials());
+        }
+        
+        // Test greeting save button
+        const testGreetingBtn = document.getElementById('save-test-greeting-btn');
+        if (testGreetingBtn) {
+            testGreetingBtn.addEventListener('click', () => this.saveTestCallGreeting());
         }
         
         // Add contact button

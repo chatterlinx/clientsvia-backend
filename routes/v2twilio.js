@@ -1822,6 +1822,59 @@ router.get('/quality-report/:templateId', (req, res) => {
 });
 
 // ============================================================================
+// 📞 VOICE WEBHOOK - SYSTEM TEST CALL
+// ============================================================================
+// Purpose: Handle incoming calls to verify Twilio voice integration
+// Plays customizable greeting from AdminSettings.notificationCenter.testCallGreeting
+// ============================================================================
+
+router.post('/api/twilio/voice', async (req, res) => {
+    try {
+        const from = req.body.From;
+        const to = req.body.To;
+        
+        console.log(`📞 [VOICE WEBHOOK] Incoming call from ${from} to ${to}`);
+        
+        // Get custom greeting from AdminSettings
+        const AdminSettings = require('../models/AdminSettings');
+        const settings = await AdminSettings.getSettings();
+        const greeting = settings.notificationCenter?.testCallGreeting || 
+            'This is a ClientsVia system check. Your Twilio integration is working correctly.';
+        
+        console.log(`🗣️ [VOICE WEBHOOK] Playing greeting (${greeting.length} chars)`);
+        
+        // Create TwiML response
+        const VoiceResponse = twilio.twiml.VoiceResponse;
+        const twiml = new VoiceResponse();
+        
+        twiml.say({
+            voice: 'alice',
+            language: 'en-US'
+        }, greeting);
+        
+        // Hang up after message
+        twiml.hangup();
+        
+        res.type('text/xml');
+        res.send(twiml.toString());
+        
+        console.log('✅ [VOICE WEBHOOK] TwiML response sent');
+        
+    } catch (error) {
+        console.error('❌ [VOICE WEBHOOK] Error processing call:', error);
+        
+        // Always return valid TwiML even on error
+        const VoiceResponse = twilio.twiml.VoiceResponse;
+        const twiml = new VoiceResponse();
+        twiml.say('System error. Please try again later.');
+        twiml.hangup();
+        
+        res.type('text/xml');
+        res.send(twiml.toString());
+    }
+});
+
+// ============================================================================
 // 📱 SMS WEBHOOK - ADMIN ALERT ACKNOWLEDGMENTS
 // ============================================================================
 // Purpose: Handle admin responses to notification alerts via SMS
@@ -1951,6 +2004,20 @@ router.post('/api/twilio/sms', async (req, res) => {
         }
         
         // ====================================================================
+        // CHECK FOR TEST COMMAND: "TEST" or "PING"
+        // ====================================================================
+        if (message.match(/^(TEST|PING|HELLO|HI)$/i)) {
+            console.log(`✅ [SMS WEBHOOK] Test command received from ${from}`);
+            
+            const twiml = new twilio.twiml.MessagingResponse();
+            twiml.message(`✅ ClientsVia SMS System is LIVE!\n\n🚀 2-way SMS confirmed working.\n📱 Webhook connected.\n⏰ ${new Date().toLocaleString()}`);
+            
+            res.type('text/xml');
+            res.send(twiml.toString());
+            return;
+        }
+        
+        // ====================================================================
         // NOT A RECOGNIZED COMMAND - Send help message
         // ====================================================================
         console.log(`ℹ️ [SMS WEBHOOK] Unrecognized command from ${from}`);
@@ -1958,6 +2025,7 @@ router.post('/api/twilio/sms', async (req, res) => {
         const twiml = new twilio.twiml.MessagingResponse();
         twiml.message(`
 ClientsVia Alert Commands:
+• TEST - Verify SMS system
 • ACK ALT-###-### - Acknowledge alert
 • SNOOZE ALT-###-### 30 - Snooze for 30 min
 • REOPEN ALT-###-### - Reopen alert
