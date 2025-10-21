@@ -490,6 +490,225 @@ app.use((req, res, next) => {
 
 ---
 
+## 🐛 CRITICAL DEPLOYMENT LESSONS (Learned Oct 21, 2025)
+
+### Middleware Order Matters - 404 Handler Placement
+
+**THE RULE**: The 404 handler MUST be the LAST middleware registered, AFTER all routes.
+
+**WRONG** ❌ (Causes all requests to 404):
+```javascript
+// Global scope - executes before routes load
+app.use((req, res) => { res.status(404).json(...) });
+
+async function registerRoutes(routes) {
+  app.use('/api/companies', routes.companiesRoutes);
+  app.use('/api/admin', routes.adminRoutes);
+  // Routes registered AFTER 404 handler - NEVER REACHED!
+}
+```
+
+**CORRECT** ✅:
+```javascript
+async function registerRoutes(routes) {
+  // 1. Register ALL routes first
+  app.use('/api/companies', routes.companiesRoutes);
+  app.use('/api/admin', routes.adminRoutes);
+  // ... all other routes ...
+  
+  // 2. THEN register 404 handler (must be LAST in this function)
+  app.use((req, res, next) => {
+    if (!res.headersSent) {
+      console.error('❌ [404 NOT FOUND]', { path: req.path, method: req.method });
+      if (req.path.startsWith('/api')) {
+        return res.status(404).json({ error: 'Endpoint not found' });
+      }
+      res.status(404).send('Page not found');
+    }
+  });
+}
+```
+
+**Checklist**:
+- [ ] 404 handler is INSIDE `registerRoutes()` function
+- [ ] 404 handler is at the END of `registerRoutes()` (before closing `}`)
+- [ ] NO 404 handler in global scope
+- [ ] Error handler (with `err` param) comes AFTER 404 handler
+
+---
+
+### Frontend Class Method Dependencies
+
+**THE RULE**: When building manager classes, ensure all helper methods exist BEFORE using them in child classes.
+
+**PROBLEM**: `SettingsManager` calls `this.nc.apiPut()` and `this.nc.showToast()`, but `NotificationCenterManager` only had `apiGet()` and `apiPost()`.
+
+**SOLUTION CHECKLIST**:
+- [ ] List all methods parent class needs BEFORE coding child classes
+- [ ] Common helpers needed in manager classes:
+  - [ ] `apiGet(endpoint)` - GET requests
+  - [ ] `apiPost(endpoint, data)` - POST requests
+  - [ ] `apiPut(endpoint, data)` - PUT/PATCH requests
+  - [ ] `apiDelete(endpoint)` - DELETE requests
+  - [ ] `showToast(message, type)` - User feedback
+  - [ ] `showError(message)` - Error alerts
+  - [ ] `showSuccess(message)` - Success alerts
+  - [ ] `showLoading()` / `hideLoading()` - Loading states
+- [ ] Test parent class methods in console BEFORE building children
+
+**EXAMPLE**:
+```javascript
+// Parent Manager (e.g., NotificationCenterManager, AIAgentSettingsManager)
+class ParentManager {
+    constructor() { this.token = localStorage.getItem('adminToken'); }
+    
+    // API Helpers (ALL METHODS)
+    async apiGet(endpoint) { /* ... */ }
+    async apiPost(endpoint, data) { /* ... */ }
+    async apiPut(endpoint, data) { /* ... */ }
+    async apiDelete(endpoint) { /* ... */ }
+    
+    // UI Helpers (ALL METHODS)
+    showToast(message, type) { /* create toast DOM */ }
+    showError(message) { this.showToast(message, 'error'); }
+    showSuccess(message) { this.showToast(message, 'success'); }
+    showLoading() { /* show overlay */ }
+    hideLoading() { /* hide overlay */ }
+}
+
+// Child Manager
+class ChildManager {
+    constructor(parent) {
+        this.parent = parent;
+    }
+    
+    async save() {
+        try {
+            // Now ALL these methods exist!
+            await this.parent.apiPut('/api/settings', data);
+            this.parent.showSuccess('Saved!');
+        } catch (error) {
+            this.parent.showError('Failed!');
+        }
+    }
+}
+```
+
+---
+
+### Navigation Consistency Across All Pages
+
+**THE RULE**: When adding a new top-level admin tab, add it to ALL admin pages, not just one.
+
+**PROBLEM**: Notification Center tab was added to `index.html` but missing from `directory.html`, `add-company.html`, etc.
+
+**SOLUTION CHECKLIST**:
+- [ ] Identify ALL admin pages (use `ls public/admin-*.html public/{index,directory,add-company}.html`)
+- [ ] Add navigation link to ALL pages
+- [ ] Add CSS file reference (`<link rel="stylesheet" href="/css/notification-center.css">`)
+- [ ] Add global monitor script if applicable (`<script src="/js/global-notification-tab-monitor.js">`)
+- [ ] Test by navigating to EACH page and confirming tab appears
+
+**AUTOMATED CHECK**:
+```bash
+# After adding a new tab, verify it exists in all admin pages
+grep -l "admin-notification-center.html" public/*.html | wc -l
+# Should equal total number of admin pages (e.g., 8)
+```
+
+**FILES TO UPDATE** (for any new top-level tab):
+1. ✅ `public/index.html` (dashboard)
+2. ✅ `public/directory.html`
+3. ✅ `public/add-company.html`
+4. ✅ `public/admin-data-center.html`
+5. ✅ `public/admin-call-archives.html`
+6. ✅ `public/v2global-trade-categories.html`
+7. ✅ `public/admin-global-instant-responses.html`
+8. ✅ Any other admin pages with shared navigation
+
+---
+
+### Pre-Deployment Smoke Test Protocol
+
+**THE RULE**: ALWAYS run local tests BEFORE pushing to production.
+
+**CHECKLIST BEFORE `git push`**:
+```bash
+# 1. Route Validation
+npm run check:routes
+# ✅ Must show: "All routes registered"
+
+# 2. Local Server Test
+npm start &
+SERVER_PID=$!
+sleep 5  # Wait for server to start
+
+# 3. Critical Endpoint Tests
+curl -f http://localhost:3000/api/health || echo "❌ Health check failed"
+curl -f http://localhost:3000/index.html || echo "❌ Dashboard failed"
+curl -f http://localhost:3000/api/companies -H "Authorization: Bearer $ADMIN_TOKEN" || echo "⚠️ Companies endpoint failed (expected 401 without token)"
+
+# 4. Frontend Load Test (check console for errors)
+open http://localhost:3000/admin-notification-center.html
+# Manually check browser console for errors
+
+# 5. Kill test server
+kill $SERVER_PID
+
+# 6. If ALL PASS, then push
+git push
+```
+
+**AUTOMATION**: Add to `package.json`:
+```json
+{
+  "scripts": {
+    "pre-deploy": "npm run check:routes && npm run smoke-test"
+  }
+}
+```
+
+Then before pushing:
+```bash
+npm run pre-deploy && git push
+```
+
+---
+
+## 📋 UPDATED PRE-PUSH CHECKLIST (Enhanced)
+
+Run this BEFORE every `git push`:
+
+```bash
+# 1. Code Quality
+npm run check:routes          # ✅ All routes registered
+# npm run lint                 # (if ESLint configured)
+
+# 2. Database Safety
+grep -r "hardcoded.*companyId" routes/ services/  # ❌ Must return empty
+grep -A3 "\.save()" routes/ services/ | grep -B3 "redisClient.del"  # ✅ Cache invalidation after saves
+
+# 3. Multi-Tenant Safety
+grep -r "companyId" routes/ | grep -v "req.params.companyId" | grep -v "req.user.companyId"  # Check for unsafe usage
+
+# 4. API Completeness (for manager classes)
+# If building a new manager class, ensure parent has:
+# apiGet, apiPost, apiPut, apiDelete, showToast, showError, showSuccess
+
+# 5. Navigation Consistency (if adding new tab)
+# Check tab appears in all admin pages:
+grep -l "your-new-tab.html" public/*.html | wc -l  # Should match admin page count
+
+# 6. Git Status
+git status  # ✅ Ensure all files committed
+git log --oneline -1  # ✅ Review last commit message
+
+# 7. THEN PUSH
+git push
+```
+
+---
+
 ✅ This version now includes:
 
 * Idempotency + safe retries
@@ -500,4 +719,8 @@ app.use((req, res, next) => {
 * Automated dead-code + hot-path CI gates
 * **Route validation + smoke tests** (NEW)
 * **Enhanced 404 logging** (NEW)
+* **Middleware order enforcement** (NEW - Oct 21, 2025)
+* **Frontend class method dependencies** (NEW - Oct 21, 2025)
+* **Navigation consistency checks** (NEW - Oct 21, 2025)
+* **Pre-deployment smoke test protocol** (NEW - Oct 21, 2025)
 
