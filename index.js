@@ -587,6 +587,89 @@ if (require.main === module) {
     startServer();
 }
 
+// ============================================================================
+// PRODUCTION 404 MONITORING
+// ============================================================================
+// Track 404 rate and send alerts if threshold exceeded
+// ============================================================================
+
+let notFoundCount = 0;
+let lastResetTime = Date.now();
+
+// Reset counter every minute and check threshold
+setInterval(() => {
+    const currentTime = Date.now();
+    const elapsedMinutes = (currentTime - lastResetTime) / 60000;
+    
+    if (notFoundCount > 10) {
+        console.warn(`⚠️ [404 MONITORING] High 404 rate: ${notFoundCount} in last ${elapsedMinutes.toFixed(1)} minute(s)`);
+        
+        // Send alert via AdminNotificationService
+        try {
+            const AdminNotificationService = require('./services/AdminNotificationService');
+            AdminNotificationService.sendAlert({
+                code: 'HIGH_404_RATE',
+                severity: 'WARNING',
+                message: `High 404 error rate detected: ${notFoundCount} requests in ${elapsedMinutes.toFixed(1)} minute(s)`,
+                details: 'Check for broken links, missing routes, or incorrect API calls. Review recent deployments.'
+            }).catch(err => console.error('Failed to send 404 alert:', err));
+        } catch (error) {
+            console.error('❌ Failed to send 404 rate alert:', error.message);
+        }
+    }
+    
+    notFoundCount = 0;
+    lastResetTime = currentTime;
+}, 60000); // Check every minute
+
+// ============================================================================
+// ENHANCED 404 HANDLER (Production-Grade Logging)
+// ============================================================================
+// Catches all unmatched routes and logs detailed context for debugging
+// Added as part of Refactor Protocol V2.1 Advanced Enhancements
+// ============================================================================
+
+app.use((req, res, next) => {
+    if (!res.headersSent) {
+        // Increment 404 counter for monitoring
+        notFoundCount++;
+        
+        // Log detailed 404 information
+        console.error('❌ [404 NOT FOUND]', {
+            timestamp: new Date().toISOString(),
+            method: req.method,
+            path: req.path,
+            url: req.originalUrl,
+            ip: req.ip,
+            userAgent: req.get('user-agent'),
+            referer: req.get('referer'),
+            query: req.query,
+            body: req.method === 'POST' ? req.body : undefined
+        });
+        
+        // Return structured JSON for API paths
+        if (req.path.startsWith('/api')) {
+            return res.status(404).json({
+                success: false,
+                error: 'Endpoint not found',
+                path: req.path,
+                method: req.method,
+                suggestion: 'Check API documentation or contact support',
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        // HTML 404 for pages
+        res.status(404).send('<h1>404 - Page Not Found</h1><p>The page you are looking for does not exist.</p>');
+    } else {
+        next();
+    }
+});
+
+// ============================================================================
+// GENERAL ERROR HANDLER
+// ============================================================================
+
 app.use((err, req, res, next) => {
     console.error('Unhandled error:', err.stack);
     if (!res.headersSent) {

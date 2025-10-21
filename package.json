@@ -15,7 +15,10 @@
     "fix-directories": "node scripts/fix-inactive-directories.js",
     "fix-universal": "node scripts/fix-universal-template-published.js",
     "nuclear-reset": "node scripts/nuclear-template-reset.js",
-    "seed-global-ai-brain": "node scripts/seed-global-ai-brain.js"
+    "seed-global-ai-brain": "node scripts/seed-global-ai-brain.js",
+    "check:routes": "node scripts/check-routes.js",
+    "smoke-test": "node scripts/smoke-test.js",
+    "validate": "npm run check:routes && npm run smoke-test"
   },
   "keywords": [],
   "author": "",
