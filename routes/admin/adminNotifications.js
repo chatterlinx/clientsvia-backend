@@ -545,6 +545,13 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
         settings.markModified('notificationCenter');
         await settings.save();
         
+        // CRITICAL: Clear Redis cache for admin settings
+        const redisClient = require('../../db').redisClient;
+        if (redisClient && redisClient.del) {
+            await redisClient.del('admin:settings:notification-center');
+            console.log('✅ [NOTIFICATION SETTINGS] Redis cache cleared');
+        }
+        
         res.json({
             success: true,
             message: 'Notification settings updated successfully',
