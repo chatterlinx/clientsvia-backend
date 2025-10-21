@@ -1934,7 +1934,7 @@ router.post('/voice-test', async (req, res) => {
 // - models/NotificationLog.js
 // ============================================================================
 
-router.post('/api/twilio/sms', async (req, res) => {
+router.post('/sms', async (req, res) => {
     try {
         const from = req.body.From;        // Admin phone number
         const message = req.body.Body;     // SMS text content
