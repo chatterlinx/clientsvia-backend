@@ -6,7 +6,6 @@
 // ============================================================================
 
 const logger = require('./logger');
-const logger = require('./logger.js');
 
 
 /**

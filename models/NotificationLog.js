@@ -207,11 +207,32 @@ notificationLogSchema.pre('save', function(next) {
 });
 
 // Auto-generate unique alert ID if not provided
-notificationLogSchema.pre('save', function(next) {
+notificationLogSchema.pre('save', async function(next) {
     if (!this.alertId && this.isNew) {
         const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
-        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-        this.alertId = `ALT-${date}-${random}`;
+        
+        // Use milliseconds + random for better uniqueness (avoids collisions)
+        const timestamp = Date.now().toString().slice(-6); // Last 6 digits of timestamp
+        const random = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+        this.alertId = `ALT-${date}-${timestamp}${random}`;
+        
+        // Verify uniqueness (retry if collision - extremely rare)
+        let attempts = 0;
+        while (attempts < 3) {
+            try {
+                const existing = await this.constructor.findOne({ alertId: this.alertId });
+                if (!existing) {
+                    break; // Unique ID found
+                }
+                // Collision detected (very rare), regenerate
+                const newRandom = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+                this.alertId = `ALT-${date}-${Date.now().toString().slice(-6)}${newRandom}`;
+                attempts++;
+            } catch (err) {
+                // If check fails, proceed anyway (unique index will catch it)
+                break;
+            }
+        }
     }
     next();
 });
