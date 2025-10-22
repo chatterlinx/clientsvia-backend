@@ -1078,4 +1078,229 @@ Reply STOP to unsubscribe.
      
 });
 
+// ============================================================================
+// PHASE 3: ADVANCED ERROR INTELLIGENCE ENDPOINTS
+// ============================================================================
+
+const RootCauseAnalyzer = require('../../services/RootCauseAnalyzer');
+const ErrorTrendTracker = require('../../services/ErrorTrendTracker');
+const DependencyHealthMonitor = require('../../services/DependencyHealthMonitor');
+
+// ----------------------------------------------------------------------------
+// GET /api/admin/notifications/root-cause-analysis
+// AI-powered pattern detection and root cause identification
+// ----------------------------------------------------------------------------
+router.get('/api/admin/notifications/root-cause-analysis', 
+    authenticateJWT, 
+    requireRole('admin'), 
+    async (req, res) => {
+    try {
+        const timeWindow = parseInt(req.query.timeWindow) || 15; // minutes
+        
+        logger.info(`🧠 [ROOT CAUSE API] Analyzing error patterns (${timeWindow}min window)`);
+        
+        const analysis = await RootCauseAnalyzer.analyzeErrors(timeWindow);
+        
+        await AdminNotificationService.sendAlert({
+            code: "NOTIF_ROOT_CAUSE_ANALYSIS_OK",
+            severity: 'INFO',
+            message: 'ok',
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'ROOT_CAUSE_ANALYZER',
+            eventType: 'important_event'
+        });
+        
+        res.json({
+            success: true,
+            timeWindow,
+            ...analysis
+        });
+        
+    } catch (error) {
+        logger.error('❌ [ROOT CAUSE API] Analysis failed:', error);
+        
+        await AdminNotificationService.sendAlert({
+            code: "NOTIF_ROOT_CAUSE_ANALYSIS_FAILURE",
+            severity: 'WARNING',
+            message: 'Root cause analysis failed',
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'ROOT_CAUSE_ANALYZER',
+            eventType: 'failure',
+            meta: { route: `${req.method} ${req.originalUrl}` }
+        });
+        
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ----------------------------------------------------------------------------
+// GET /api/admin/notifications/error-trends
+// Historical trend analysis and regression detection
+// ----------------------------------------------------------------------------
+router.get('/api/admin/notifications/error-trends', 
+    authenticateJWT, 
+    requireRole('admin'), 
+    async (req, res) => {
+    try {
+        const periodHours = parseInt(req.query.periodHours) || 24;
+        
+        logger.info(`📊 [TREND API] Fetching error trends (${periodHours}h period)`);
+        
+        const trends = await ErrorTrendTracker.getErrorTrends(periodHours);
+        const baseline = await ErrorTrendTracker.compareWithBaseline();
+        
+        await AdminNotificationService.sendAlert({
+            code: "NOTIF_ERROR_TRENDS_OK",
+            severity: 'INFO',
+            message: 'ok',
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'ERROR_TREND_TRACKER',
+            eventType: 'important_event'
+        });
+        
+        res.json({
+            success: true,
+            trends,
+            baseline
+        });
+        
+    } catch (error) {
+        logger.error('❌ [TREND API] Failed to get trends:', error);
+        
+        await AdminNotificationService.sendAlert({
+            code: "NOTIF_ERROR_TRENDS_FAILURE",
+            severity: 'WARNING',
+            message: 'Error trend analysis failed',
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'ERROR_TREND_TRACKER',
+            eventType: 'failure',
+            meta: { route: `${req.method} ${req.originalUrl}` }
+        });
+        
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ----------------------------------------------------------------------------
+// GET /api/admin/notifications/dependency-health
+// Real-time monitoring of all external services
+// ----------------------------------------------------------------------------
+router.get('/api/admin/notifications/dependency-health', 
+    authenticateJWT, 
+    requireRole('admin'), 
+    async (req, res) => {
+    try {
+        logger.info('🏥 [DEPENDENCY API] Checking all service dependencies');
+        
+        const healthStatus = await DependencyHealthMonitor.getHealthStatus();
+        
+        // Send alert if any critical services are down
+        if (healthStatus.overallStatus === 'CRITICAL' || healthStatus.overallStatus === 'DOWN') {
+            await AdminNotificationService.sendAlert({
+                code: "DEPENDENCY_HEALTH_CRITICAL",
+                severity: 'CRITICAL',
+                message: `Dependency health check failed: ${healthStatus.overallStatus}`,
+                companyId: null,
+                requestId: req.headers['x-request-id'] || null,
+                feature: 'notification-center',
+                tab: 'NOTIFICATION_CENTER',
+                module: 'DEPENDENCY_HEALTH_MONITOR',
+                eventType: 'failure',
+                meta: { 
+                    route: `${req.method} ${req.originalUrl}`,
+                    downServices: Object.entries(healthStatus.services || {})
+                        .filter(([_, service]) => service.status === 'DOWN')
+                        .map(([name]) => name)
+                }
+            });
+        } else {
+            await AdminNotificationService.sendAlert({
+                code: "NOTIF_DEPENDENCY_HEALTH_OK",
+                severity: 'INFO',
+                message: 'ok',
+                companyId: null,
+                requestId: req.headers['x-request-id'] || null,
+                feature: 'notification-center',
+                tab: 'NOTIFICATION_CENTER',
+                module: 'DEPENDENCY_HEALTH_MONITOR',
+                eventType: 'important_event'
+            });
+        }
+        
+        res.json({
+            success: true,
+            ...healthStatus
+        });
+        
+    } catch (error) {
+        logger.error('❌ [DEPENDENCY API] Health check failed:', error);
+        
+        await AdminNotificationService.sendAlert({
+            code: "NOTIF_DEPENDENCY_HEALTH_FAILURE",
+            severity: 'CRITICAL',
+            message: 'Dependency health monitor failed',
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'DEPENDENCY_HEALTH_MONITOR',
+            eventType: 'failure',
+            meta: { route: `${req.method} ${req.originalUrl}` }
+        });
+        
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ----------------------------------------------------------------------------
+// GET /api/admin/notifications/service-status/:serviceName
+// Quick status check for specific service (MongoDB, Redis, Twilio, ElevenLabs)
+// ----------------------------------------------------------------------------
+router.get('/api/admin/notifications/service-status/:serviceName', 
+    authenticateJWT, 
+    requireRole('admin'), 
+    async (req, res) => {
+    try {
+        const { serviceName } = req.params;
+        
+        logger.info(`🏥 [SERVICE STATUS API] Checking ${serviceName}`);
+        
+        const status = await DependencyHealthMonitor.getDependencyStatus(serviceName);
+        
+        res.json({
+            success: true,
+            service: status
+        });
+        
+    } catch (error) {
+        logger.error(`❌ [SERVICE STATUS API] Failed to check ${req.params.serviceName}:`, error);
+        
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;

@@ -530,6 +530,143 @@ class ErrorIntelligenceService {
                     revenue: 'CRITICAL - Platform appears empty',
                     priority: 'P0 - CRITICAL'
                 }
+            },
+
+            // ===== PHASE 3: ADVANCED INTELLIGENCE ERRORS =====
+            'NOTIF_ROOT_CAUSE_ANALYSIS_FAILURE': {
+                title: 'Root Cause Analysis Failed',
+                category: 'SYSTEM',
+                severity: 'WARNING',
+                customerFacing: false,
+                fixUrl: '/admin-notification-center.html#dashboard',
+                sourceFile: 'services/RootCauseAnalyzer.js',
+                sourceLine: 150,
+                reproduceSteps: [
+                    '1. Check if recent errors exist in NotificationLog',
+                    '2. Verify pattern library is up to date',
+                    '3. Check for database connectivity',
+                    '4. Review analyzer logs for specific error'
+                ],
+                verifySteps: [
+                    '1. Go to Notification Center → Dashboard',
+                    '2. Wait for errors to accumulate',
+                    '3. Root cause analysis should display patterns'
+                ],
+                commonCauses: [
+                    'Database query failed',
+                    'Insufficient error data for analysis',
+                    'Pattern matching logic error',
+                    'Memory/CPU constraints'
+                ],
+                impact: {
+                    features: ['Root cause detection', 'Pattern analysis'],
+                    companies: 'NONE',
+                    revenue: 'NONE - Analytics feature only',
+                    priority: 'P3 - LOW'
+                }
+            },
+
+            'NOTIF_ERROR_TRENDS_FAILURE': {
+                title: 'Error Trend Analysis Failed',
+                category: 'SYSTEM',
+                severity: 'WARNING',
+                customerFacing: false,
+                fixUrl: '/admin-notification-center.html#dashboard',
+                sourceFile: 'services/ErrorTrendTracker.js',
+                sourceLine: 80,
+                reproduceSteps: [
+                    '1. Check if NotificationLog has historical data',
+                    '2. Verify time window parameters are valid',
+                    '3. Check for database performance issues',
+                    '4. Review trend tracker logs'
+                ],
+                verifySteps: [
+                    '1. Wait for error data to accumulate (24+ hours)',
+                    '2. Go to Notification Center → Dashboard',
+                    '3. Trend analysis should display'
+                ],
+                commonCauses: [
+                    'Insufficient historical data',
+                    'Database query timeout',
+                    'Invalid time window parameters',
+                    'Statistical calculation error'
+                ],
+                impact: {
+                    features: ['Trend analysis', 'Regression detection'],
+                    companies: 'NONE',
+                    revenue: 'NONE - Analytics feature only',
+                    priority: 'P3 - LOW'
+                }
+            },
+
+            'NOTIF_DEPENDENCY_HEALTH_FAILURE': {
+                title: 'Dependency Health Check Failed',
+                category: 'SYSTEM',
+                severity: 'CRITICAL',
+                customerFacing: false,
+                fixUrl: '/admin-notification-center.html#dashboard',
+                sourceFile: 'services/DependencyHealthMonitor.js',
+                sourceLine: 50,
+                reproduceSteps: [
+                    '1. Check which specific service check failed',
+                    '2. Review health monitor logs',
+                    '3. Verify all services are accessible',
+                    '4. Test each service individually'
+                ],
+                verifySteps: [
+                    '1. Go to Notification Center → Dashboard',
+                    '2. Service health indicators should be green',
+                    '3. All dependency checks passing'
+                ],
+                relatedErrors: ['DB_CONNECTION_ERROR', 'REDIS_CONNECTION_ERROR', 'TWILIO_API_FAILURE', 'ELEVENLABS_API_FAILURE'],
+                commonCauses: [
+                    'Health monitor itself crashed',
+                    'All services timing out simultaneously',
+                    'Network connectivity lost',
+                    'Critical system resource exhaustion'
+                ],
+                impact: {
+                    features: ['Service monitoring', 'Health dashboard'],
+                    companies: 'NONE',
+                    revenue: 'NONE - Monitoring feature only',
+                    priority: 'P2 - MEDIUM'
+                }
+            },
+
+            'DEPENDENCY_HEALTH_CRITICAL': {
+                title: 'Critical Service Dependency Down',
+                category: 'INFRASTRUCTURE',
+                severity: 'CRITICAL',
+                customerFacing: true,
+                fixUrl: '/admin-notification-center.html#dashboard',
+                sourceFile: 'services/DependencyHealthMonitor.js',
+                sourceLine: 100,
+                reproduceSteps: [
+                    '1. Review which specific services are down',
+                    '2. Check environment variables for API keys',
+                    '3. Verify network connectivity to external services',
+                    '4. Review service status pages (Twilio, ElevenLabs, MongoDB Atlas)'
+                ],
+                verifySteps: [
+                    '1. Fix the reported service issue',
+                    '2. Go to Notification Center → Dashboard',
+                    '3. Run dependency health check',
+                    '4. All services should show green status'
+                ],
+                relatedErrors: ['DB_CONNECTION_ERROR', 'REDIS_CONNECTION_ERROR', 'TWILIO_API_FAILURE', 'ELEVENLABS_API_FAILURE'],
+                commonCauses: [
+                    'MongoDB Atlas cluster paused or down',
+                    'Twilio account suspended',
+                    'ElevenLabs API quota exceeded',
+                    'Redis addon disconnected',
+                    'Network outage'
+                ],
+                impact: {
+                    features: ['Varies by service - may affect all features'],
+                    companies: 'ALL',
+                    revenue: 'CRITICAL - Platform stability at risk',
+                    priority: 'P0 - CRITICAL - ALL HANDS'
+                }
             }
         };
     }
