@@ -155,6 +155,12 @@ class LogManager {
                             ⏰ Snooze 1hr
                         </button>
                     ` : ''}
+                    ${!log.resolution?.isResolved ? `
+                        <button onclick="notificationCenter.logManager.resolveAlert('${log.alertId}')" 
+                                class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
+                            ✅ Resolve
+                        </button>
+                    ` : ''}
                     <button onclick="notificationCenter.logManager.copyDebugInfo('${log.alertId}')" 
                             class="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700">
                         📋 Copy Debug Info
@@ -635,6 +641,24 @@ Paste this report to your AI assistant for instant root cause analysis!
             
         } catch (error) {
             this.nc.showError('Failed to snooze alert');
+        }
+    }
+    
+    async resolveAlert(alertId) {
+        if (!confirm(`Mark alert ${alertId} as resolved? This will start the 90-day auto-purge countdown.`)) return;
+        
+        try {
+            await this.nc.apiPost('/api/admin/notifications/resolve', {
+                alertId: alertId,
+                resolvedBy: 'Admin (Web UI)',
+                notes: 'Manually resolved from Alert Log'
+            });
+            
+            this.nc.showSuccess('Alert resolved! Will auto-delete in 90 days.');
+            this.load();
+            
+        } catch (error) {
+            this.nc.showError('Failed to resolve alert');
         }
     }
 }
