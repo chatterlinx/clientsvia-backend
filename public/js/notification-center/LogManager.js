@@ -6,6 +6,7 @@ class LogManager {
     constructor(notificationCenter) {
         this.nc = notificationCenter;
         this.currentPage = 1;
+        this.logs = []; // Store current logs for copyDebugInfo
         this.setupEventListeners();
     }
     
@@ -46,6 +47,9 @@ class LogManager {
     
     renderLogs(logs, pagination) {
         const container = document.getElementById('logs-container');
+        
+        // Store logs for copyDebugInfo function
+        this.logs = logs;
         
         if (logs.length === 0) {
             container.innerHTML = `
