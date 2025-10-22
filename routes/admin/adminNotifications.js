@@ -1081,6 +1081,9 @@ Reply STOP to unsubscribe.
 // ============================================================================
 // PHASE 3: ADVANCED ERROR INTELLIGENCE ENDPOINTS
 // ============================================================================
+// TEMPORARILY DISABLED: Phase 3 services are causing server crashes
+// Will re-enable after investigating the "Instance failed" error
+// ============================================================================
 
 // Simple test route to verify Phase 3 routes are being registered
 router.get('/notifications/_test', authenticateJWT, requireRole('admin'), (req, res) => {
@@ -1088,13 +1091,15 @@ router.get('/notifications/_test', authenticateJWT, requireRole('admin'), (req, 
         success: true, 
         message: '🎉 Phase 3 routes are registered!',
         timestamp: new Date().toISOString(),
-        server: 'Render production'
+        server: 'Render production',
+        status: 'Phase 3 temporarily disabled for debugging'
     });
 });
 
-const RootCauseAnalyzer = require('../../services/RootCauseAnalyzer');
-const ErrorTrendTracker = require('../../services/ErrorTrendTracker');
-const DependencyHealthMonitor = require('../../services/DependencyHealthMonitor');
+// TEMPORARILY COMMENTED OUT - CAUSING SERVER CRASHES
+// const RootCauseAnalyzer = require('../../services/RootCauseAnalyzer');
+// const ErrorTrendTracker = require('../../services/ErrorTrendTracker');
+// const DependencyHealthMonitor = require('../../services/DependencyHealthMonitor');
 
 // ----------------------------------------------------------------------------
 // GET /api/admin/notifications/root-cause-analysis

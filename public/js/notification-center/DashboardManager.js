@@ -28,9 +28,10 @@ class DashboardManager {
             }
             
             // Load intelligence widgets in parallel
-            this.loadServiceHealth();
-            this.loadRootCauseAnalysis();
-            this.loadErrorTrends();
+            // TEMPORARILY DISABLED: Phase 3 routes causing server crashes
+            // this.loadServiceHealth();
+            // this.loadRootCauseAnalysis();
+            // this.loadErrorTrends();
             
         } catch (error) {
             console.error('❌ [DASHBOARD] Load failed:', error);
