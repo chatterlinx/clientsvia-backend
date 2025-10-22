@@ -107,6 +107,63 @@ class AdminNotificationService {
             logger.debug(`📋 [ADMIN NOTIFICATION] Found ${adminContacts.length} admin contacts from AdminSettings`);
             
             // ================================================================
+            // STEP 3.25: CHECK NOTIFICATION POLICY (Respect quiet hours & severity rules)
+            // ================================================================
+            const policy = await AdminSettings.shouldSendNotification(severity);
+            const isQuietHours = await AdminSettings.isQuietHours();
+            
+            logger.debug(`🔔 [POLICY CHECK] Severity: ${severity} | SMS: ${policy.sendSMS} | Email: ${policy.sendEmail} | LogOnly: ${policy.logOnly} | QuietHours: ${isQuietHours}`);
+            
+            // If log-only, just log and return early
+            if (policy.logOnly) {
+                logger.info(`📋 [POLICY] ${severity} alerts are log-only. Skipping SMS/Email delivery for ${code}`);
+                
+                // Create log entry but don't send notifications
+                const notificationLog = await NotificationLog.create({
+                    code: code.toUpperCase(),
+                    severity,
+                    companyId,
+                    companyName,
+                    message,
+                    details,
+                    stackTrace,
+                    status: 'info',
+                    intelligence: {}, // Skip intelligence for INFO logs
+                    deliveryAttempts: [{
+                        attemptNumber: 1,
+                        timestamp: new Date(),
+                        sms: [],
+                        email: [],
+                        call: [],
+                        status: 'log-only'
+                    }],
+                    escalation: {
+                        isEnabled: false,
+                        currentLevel: 0,
+                        maxLevel: 0
+                    }
+                });
+                
+                logger.info(`✅ [POLICY] ${severity} alert logged: ${notificationLog.alertId}`);
+                return { success: true, alertId: notificationLog.alertId, policyAction: 'log-only' };
+            }
+            
+            // If in quiet hours, handle based on severity
+            if (isQuietHours) {
+                const quietHoursPolicy = settings.notificationCenter?.notificationPolicy?.quietHours;
+                
+                if (severity === 'CRITICAL' && quietHoursPolicy?.allowCritical) {
+                    logger.info(`🌙 [QUIET HOURS] CRITICAL alert - sending immediately despite quiet hours`);
+                } else if (severity === 'WARNING' && quietHoursPolicy?.deferWarnings) {
+                    logger.info(`🌙 [QUIET HOURS] WARNING alert - deferring to morning digest`);
+                    // TODO: Add to queued alerts for morning digest
+                    return { success: true, alertId: null, policyAction: 'deferred-to-digest' };
+                } else if (severity === 'WARNING') {
+                    logger.info(`🌙 [QUIET HOURS] WARNING alert - sending (defer disabled)`);
+                }
+            }
+            
+            // ================================================================
             // STEP 3.5: ENHANCE ERROR WITH INTELLIGENCE
             // ================================================================
             const errorAnalysis = errorIntelligence.enhanceError({
@@ -151,30 +208,42 @@ class AdminNotificationService {
             logger.debug(`✅ [ADMIN NOTIFICATION] Created log entry: ${notificationLog.alertId}`);
             
             // ================================================================
-            // STEP 5: SEND SMS TO ALL ADMINS
+            // STEP 5: SEND SMS TO ALL ADMINS (if policy allows)
             // ================================================================
-            const smsResults = await this.sendSMSToAdmins({
-                alertId: notificationLog.alertId,
-                code,
-                severity,
-                companyName,
-                message,
-                details,
-                adminContacts
-            });
+            let smsResults = [];
+            if (policy.sendSMS) {
+                logger.debug(`📱 [POLICY] SMS enabled for ${severity} - sending to admins`);
+                smsResults = await this.sendSMSToAdmins({
+                    alertId: notificationLog.alertId,
+                    code,
+                    severity,
+                    companyName,
+                    message,
+                    details,
+                    adminContacts
+                });
+            } else {
+                logger.debug(`📱 [POLICY] SMS disabled for ${severity} - skipping SMS delivery`);
+            }
             
             // ================================================================
-            // STEP 6: SEND EMAIL TO ALL ADMINS (if configured)
+            // STEP 6: SEND EMAIL TO ALL ADMINS (if policy allows)
             // ================================================================
-            const emailResults = await this.sendEmailToAdmins({
-                alertId: notificationLog.alertId,
-                code,
-                severity,
-                companyName,
-                message,
-                details,
-                adminContacts
-            });
+            let emailResults = [];
+            if (policy.sendEmail) {
+                logger.debug(`📧 [POLICY] Email enabled for ${severity} - sending to admins`);
+                emailResults = await this.sendEmailToAdmins({
+                    alertId: notificationLog.alertId,
+                    code,
+                    severity,
+                    companyName,
+                    message,
+                    details,
+                    adminContacts
+                });
+            } else {
+                logger.debug(`📧 [POLICY] Email disabled for ${severity} - skipping email delivery`);
+            }
             
             // ================================================================
             // STEP 7: RECORD DELIVERY ATTEMPT IN LOG
