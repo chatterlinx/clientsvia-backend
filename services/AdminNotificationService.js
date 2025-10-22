@@ -257,9 +257,9 @@ View: https://app.clientsvia.com/admin-notification-center.html
             try {
                 logger.info(`📱 [SMS] Sending to ${contact.name} (${contact.phone})...`);
                 
-                const result = await smsClient.sendSMS({
+                const result = await smsClient.send({
                     to: contact.phone,
-                    message: smsMessage
+                    body: smsMessage
                 });
                 
                 results.push({
@@ -348,7 +348,7 @@ View: https://app.clientsvia.com/admin-notification-center.html
             }
             
             // Check 4: SMS client configured
-            if (!smsClient || !smsClient.sendSMS) {
+            if (!smsClient || !smsClient.send) {
                 checks.isValid = false;
                 checks.errors.push('SMS client not configured');
             }
@@ -496,9 +496,9 @@ To reopen: Text "REOPEN ${alert.alertId}"
             
             for (const contact of adminContacts) {
                 try {
-                    await smsClient.sendSMS({
+                    await smsClient.send({
                         to: contact.phone,
-                        message
+                        body: message
                     });
                 } catch (error) {
                     logger.error(`❌ Failed to send confirmation to ${contact.name}:`, error);
