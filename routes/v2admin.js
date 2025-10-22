@@ -204,13 +204,7 @@ router.post('/clear-cache/:companyId', authenticateJWT, async (req, res) => {
     }
 });
 
-/**
- * ============================================================================
- * GET /api/admin/configuration-todos
- * Get all companies with configuration alerts (Dashboard TO-DO widget)
- * ============================================================================
- */
-// Legacy /configuration-todos endpoint removed (Admin Alert Center decommissioned)
+// (Intentionally left blank – legacy endpoint permanently removed)
 
 // Mount admin routes
 router.use('/account-deletion', accountDeletionRoutes);
