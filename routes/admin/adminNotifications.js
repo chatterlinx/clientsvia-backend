@@ -1303,4 +1303,32 @@ router.get('/notifications/service-status/:serviceName',
     }
 });
 
+// ============================================================================
+// DIAGNOSTIC: List all registered routes (for debugging 404s)
+// ============================================================================
+router.get('/notifications/_routes', authenticateJWT, requireRole('admin'), (req, res) => {
+    const routes = [];
+    router.stack.forEach((r) => {
+        if (r.route) {
+            routes.push({
+                path: `/api/admin${r.route.path}`,
+                methods: Object.keys(r.route.methods)
+            });
+        }
+    });
+    res.json({
+        success: true,
+        message: 'Phase 3 routes are loaded!',
+        timestamp: new Date().toISOString(),
+        routeCount: routes.length,
+        phase3Routes: [
+            '/api/admin/notifications/root-cause-analysis',
+            '/api/admin/notifications/error-trends',
+            '/api/admin/notifications/dependency-health',
+            '/api/admin/notifications/service-status/:serviceName'
+        ],
+        allRoutes: routes.slice(0, 20) // First 20 routes
+    });
+});
+
 module.exports = router;
