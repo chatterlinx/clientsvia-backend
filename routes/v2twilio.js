@@ -5,9 +5,9 @@
 // NEVER hardcode company IDs or special treatment for any single company
 // ALWAYS design for global platform scalability
 // TEST: "Would this work for company #1000 tomorrow?" If NO, fix it!
-logger.debug('🚀 [V2TWILIO] ========== LOADING v2twilio.js FILE ==========');
 const express = require('express');
 const logger = require('../utils/logger.js');
+logger.debug('🚀 [V2TWILIO] ========== LOADING v2twilio.js FILE ==========');
 
 const twilio = require('twilio');
 const Company = require('../models/v2Company');
