@@ -1,25 +1,27 @@
 const { ElevenLabsClient } = require('@elevenlabs/elevenlabs-js');
+const logger = require('../utils/logger.js');
+
 const fs = require('fs');
 const path = require('path');
 
 const ELEVENLABS_API_BASE = 'https://api.elevenlabs.io/v1';
 
 function getElevenLabsApiKey(company) {
-  console.log(`🔍 [API KEY CHECK] Starting API key detection for company: ${company?._id || 'unknown'}`);
+  logger.debug(`🔍 [API KEY CHECK] Starting API key detection for company: ${company?._id || 'unknown'}`);
   
   // V2 VOICE SETTINGS: Check new aiAgentLogic.voiceSettings path first
   const v2VoiceSettings = company?.aiAgentLogic?.voiceSettings;
-  console.log(`🔍 [API KEY CHECK] Has voiceSettings: ${Boolean(v2VoiceSettings)}`);
-  console.log(`🔍 [API KEY CHECK] API Source: ${v2VoiceSettings?.apiSource || 'NOT SET'}`);
-  console.log(`🔍 [API KEY CHECK] Has company API key: ${Boolean(v2VoiceSettings?.apiKey)}`);
-  console.log(`🔍 [API KEY CHECK] Has global ELEVENLABS_API_KEY env: ${Boolean(process.env.ELEVENLABS_API_KEY)}`);
+  logger.debug(`🔍 [API KEY CHECK] Has voiceSettings: ${Boolean(v2VoiceSettings)}`);
+  logger.debug(`🔍 [API KEY CHECK] API Source: ${v2VoiceSettings?.apiSource || 'NOT SET'}`);
+  logger.debug(`🔍 [API KEY CHECK] Has company API key: ${Boolean(v2VoiceSettings?.apiKey)}`);
+  logger.debug(`🔍 [API KEY CHECK] Has global ELEVENLABS_API_KEY env: ${Boolean(process.env.ELEVENLABS_API_KEY)}`);
   
   if (v2VoiceSettings) {
     const useOwnApi = v2VoiceSettings.apiSource === 'own';
     const companyKey = v2VoiceSettings.apiKey;
     
     if (useOwnApi && companyKey && companyKey.trim()) {
-      console.log(`🔑 V2: Company ${company._id || 'unknown'} using OWN ElevenLabs API (last 4: ...${companyKey.slice(-4)})`);
+      logger.info(`🔑 V2: Company ${company._id || 'unknown'} using OWN ElevenLabs API (last 4: ...${companyKey.slice(-4)})`);
       return companyKey.trim();
     }
     
@@ -27,10 +29,10 @@ function getElevenLabsApiKey(company) {
     if (v2VoiceSettings.apiSource === 'clientsvia' || !useOwnApi) {
       if (process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_API_KEY.trim()) {
         const globalKey = process.env.ELEVENLABS_API_KEY.trim();
-        console.log(`🏢 V2: Using ClientsVia GLOBAL ElevenLabs API for company ${company?._id || 'global'} (last 4: ...${globalKey.slice(-4)})`);
+        logger.debug(`🏢 V2: Using ClientsVia GLOBAL ElevenLabs API for company ${company?._id || 'global'} (last 4: ...${globalKey.slice(-4)})`);
         return globalKey;
       } 
-        console.error(`❌ V2: API Source is 'clientsvia' but ELEVENLABS_API_KEY env variable is NOT SET!`);
+        logger.error(`❌ V2: API Source is 'clientsvia' but ELEVENLABS_API_KEY env variable is NOT SET!`);
       
     }
   }
@@ -38,13 +40,13 @@ function getElevenLabsApiKey(company) {
   // V2 ONLY: No legacy support - use ClientsVia global API as fallback
   if (process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_API_KEY.trim()) {
     const globalKey = process.env.ELEVENLABS_API_KEY.trim();
-    console.log(`🏢 V2: Using ClientsVia GLOBAL ElevenLabs API (fallback) for company ${company?._id || 'global'} (last 4: ...${globalKey.slice(-4)})`);
+    logger.debug(`🏢 V2: Using ClientsVia GLOBAL ElevenLabs API (fallback) for company ${company?._id || 'global'} (last 4: ...${globalKey.slice(-4)})`);
     return globalKey;
   }
   
   // No valid key found
-  console.error(`⚠️ No ElevenLabs API key configured for company ${company?._id || 'global'}`);
-  console.error(`⚠️ Checked: voiceSettings.apiKey (company-specific), process.env.ELEVENLABS_API_KEY (global)`);
+  logger.error(`⚠️ No ElevenLabs API key configured for company ${company?._id || 'global'}`);
+  logger.error(`⚠️ Checked: voiceSettings.apiKey (company-specific), process.env.ELEVENLABS_API_KEY (global)`);
   return null;
 }
 
@@ -69,7 +71,7 @@ function createClient({ apiKey, company } = {}) {
  * Get all available voices from ElevenLabs
  */
 async function getAvailableVoices({ apiKey, company } = {}) {
-  console.log('🎙️ getAvailableVoices called with:', { 
+  logger.info('🎙️ getAvailableVoices called with:', { 
     hasApiKey: Boolean(apiKey), 
     companyId: company?._id,
     useOwnApi: company?.aiSettings?.elevenLabs?.useOwnApiKey 
@@ -79,7 +81,7 @@ async function getAvailableVoices({ apiKey, company } = {}) {
     const client = createClient({ apiKey, company });
     const response = await client.voices.getAll();
     
-    console.log('✅ ElevenLabs API response received:', {
+    logger.info('✅ ElevenLabs API response received:', {
       voicesCount: response.voices?.length || 0,
       firstVoiceSample: response.voices?.[0] ? {
         name: response.voices[0].name,
@@ -95,7 +97,7 @@ async function getAvailableVoices({ apiKey, company } = {}) {
       const voiceId = voice.voice_id || voice.id || voice.voiceId || `${voice.name}-generated-id-${index}`;
       
       if (index < 3) {
-        console.log(`🎙️ Processing voice ${index}: ${voice.name}, ID fields:`, {
+        logger.debug(`🎙️ Processing voice ${index}: ${voice.name}, ID fields:`, {
           voice_id: voice.voice_id,
           id: voice.id,
           voiceId: voice.voiceId,
@@ -126,16 +128,16 @@ async function getAvailableVoices({ apiKey, company } = {}) {
       };
     });
   } catch (error) {
-    console.error('❌ ElevenLabs getAvailableVoices error:', error);
+    logger.error('❌ ElevenLabs getAvailableVoices error:', error);
     
     // Check if it's an API key error - use mock data for testing
     if (error.statusCode === 401 || 
         error.message.includes('invalid_api_key') || 
         error.message.includes('API key') ||
         error.body?.detail?.status === 'invalid_api_key') {
-      console.log('🎭 Using mock voice data for testing (invalid API key)');
+      logger.info('🎭 Using mock voice data for testing (invalid API key)');
       const mockVoices = getMockVoices();
-      console.log('🎭 Mock voices created:', mockVoices.length, 'voices');
+      logger.debug('🎭 Mock voices created:', mockVoices.length, 'voices');
       return mockVoices;
     }
     
@@ -167,7 +169,7 @@ async function getAvailableModels({ apiKey, company } = {}) {
       language: model.language
     }));
   } catch (error) {
-    console.error('❌ ElevenLabs getAvailableModels error:', error);
+    logger.error('❌ ElevenLabs getAvailableModels error:', error);
     throw new Error(`Failed to fetch models: ${error.message}`);
   }
 }
@@ -216,7 +218,7 @@ async function synthesizeSpeech({
     
     return Buffer.concat(chunks);
   } catch (error) {
-    console.error('❌ ElevenLabs synthesizeSpeech error:', error);
+    logger.error('❌ ElevenLabs synthesizeSpeech error:', error);
     throw new Error(`Failed to synthesize speech: ${error.message}`);
   }
 }
@@ -257,7 +259,7 @@ async function streamSpeech({
       }
     });
   } catch (error) {
-    console.error('❌ ElevenLabs streamSpeech error:', error);
+    logger.error('❌ ElevenLabs streamSpeech error:', error);
     throw new Error(`Failed to stream speech: ${error.message}`);
   }
 }
@@ -289,7 +291,7 @@ async function analyzeVoice({ voiceId, apiKey, company } = {}) {
       samples: voice.samples || []
     };
   } catch (error) {
-    console.error('❌ ElevenLabs analyzeVoice error:', error);
+    logger.error('❌ ElevenLabs analyzeVoice error:', error);
     throw new Error(`Failed to analyze voice: ${error.message}`);
   }
 }
@@ -361,7 +363,7 @@ async function getUserInfo({ apiKey, company } = {}) {
       can_use_professional_voice_cloning: user.subscription?.can_use_professional_voice_cloning
     };
   } catch (error) {
-    console.error('❌ ElevenLabs getUserInfo error:', error);
+    logger.error('❌ ElevenLabs getUserInfo error:', error);
     throw new Error(`Failed to get user info: ${error.message}`);
   }
 }

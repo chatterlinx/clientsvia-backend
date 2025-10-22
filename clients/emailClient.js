@@ -27,6 +27,8 @@
 // ============================================================================
 
 const nodemailer = require('nodemailer');
+const logger = require('../utils/logger.js');
+
 
 class EmailClient {
     constructor() {
@@ -51,9 +53,9 @@ class EmailClient {
                     pass: this.config.appPassword,
                 },
             });
-            console.log('[Email] ✅ Gmail mailer initialized successfully');
+            logger.security('[Email] ✅ Gmail mailer initialized successfully');
         } else {
-            console.log('[Email] ⚠️  GMAIL_USER or GMAIL_APP_PASSWORD not found, using mock mode');
+            logger.security('[Email] ⚠️  GMAIL_USER or GMAIL_APP_PASSWORD not found, using mock mode');
         }
         
         // ========================================================================
@@ -64,7 +66,7 @@ class EmailClient {
         //     const sgMail = require('@sendgrid/mail');
         //     sgMail.setApiKey(this.sendGridApiKey);
         //     this.sgMail = sgMail;
-        //     console.log('[Email] ✅ SendGrid initialized for customer emails');
+        //     logger.debug('[Email] ✅ SendGrid initialized for customer emails');
         // }
         
         // Statistics
@@ -107,7 +109,7 @@ class EmailClient {
                 .map(c => c.email);
             
             if (recipients.length === 0) {
-                console.log('[Email] ⚠️  No admin contacts configured with email - cannot send admin alert');
+                logger.info('[Email] ⚠️  No admin contacts configured with email - cannot send admin alert');
                 return { success: false, error: 'No admin email recipients configured' };
             }
             
@@ -133,7 +135,7 @@ class EmailClient {
             };
             
         } catch (error) {
-            console.error('[Email] ❌ Failed to send admin alert:', error);
+            logger.error('[Email] ❌ Failed to send admin alert:', error);
             this.stats.adminEmailsFailed++;
             return { success: false, error: error.message };
         }
@@ -188,7 +190,7 @@ class EmailClient {
      */
     async sendCustomerEmail(options) {
         // TODO: Implement SendGrid customer email
-        console.log('[Email] ⚠️  sendCustomerEmail() not yet implemented - use SendGrid');
+        logger.info('[Email] ⚠️  sendCustomerEmail() not yet implemented - use SendGrid');
         
         // Notify admin that customer email system is not ready
         await this.sendAdminAlert(
@@ -217,13 +219,13 @@ class EmailClient {
         // Validation
         if (!to || !subject || !body) {
             const error = 'Missing required fields: to, subject, and body';
-            console.error('[Email] ❌', error);
+            logger.error('[Email] ❌', error);
             return { success: false, error };
         }
         
         if (!this.isValidEmail(to)) {
             const error = `Invalid email format: ${to}`;
-            console.error('[Email] ❌', error);
+            logger.error('[Email] ❌', error);
             return { success: false, error };
         }
         
@@ -246,12 +248,12 @@ class EmailClient {
                 result.messageId = result.messageId; // Nodemailer returns messageId directly
             }
             
-            console.log(`[Email] ✅ Sent to ${to}: ${subject}`);
+            logger.info(`[Email] ✅ Sent to ${to}: ${subject}`);
             
             return { success: true, ...result };
             
         } catch (error) {
-            console.error(`[Email] ❌ Failed to send to ${to}:`, error.message);
+            logger.error(`[Email] ❌ Failed to send to ${to}:`, error.message);
             return { success: false, error: error.message };
         }
     }
@@ -260,7 +262,7 @@ class EmailClient {
      * Mock email sending (test mode)
      */
     async mockSend(emailData) {
-        console.log('[Email] 📧 [MOCK MODE] Would send:', {
+        logger.info('[Email] 📧 [MOCK MODE] Would send:', {
             to: emailData.to,
             subject: emailData.subject,
             bodyPreview: emailData.text.substring(0, 100)

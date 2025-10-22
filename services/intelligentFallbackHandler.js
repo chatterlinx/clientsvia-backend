@@ -52,8 +52,8 @@ class IntelligentFallbackHandler {
             fallbackConfig
         } = options;
 
-        console.log(`🆘 [FALLBACK] Executing intelligent fallback for company: ${companyName} (${companyId})`);
-        console.log(`🆘 [FALLBACK] Failure reason: ${failureReason}`);
+        logger.info(`🆘 [FALLBACK] Executing intelligent fallback for company: ${companyName} (${companyId})`);
+        logger.info(`🆘 [FALLBACK] Failure reason: ${failureReason}`);
 
         const result = {
             success: false,
@@ -100,10 +100,10 @@ class IntelligentFallbackHandler {
             });
 
             result.success = true;
-            console.log(`✅ [FALLBACK] Fallback executed successfully for ${companyName}`);
+            logger.info(`✅ [FALLBACK] Fallback executed successfully for ${companyName}`);
 
         } catch (error) {
-            console.error(`❌ [FALLBACK] Error executing fallback for ${companyName}:`, error);
+            logger.error(`❌ [FALLBACK] Error executing fallback for ${companyName}:`, error);
             result.errors.push(error.message);
         }
 
@@ -118,7 +118,7 @@ class IntelligentFallbackHandler {
      */
     async generateFallbackVoice(company, fallbackConfig) {
         try {
-            console.log(`🎤 [FALLBACK] Generating fallback voice audio...`);
+            logger.info(`🎤 [FALLBACK] Generating fallback voice audio...`);
 
             const voiceSettings = company.voiceSettings || {};
             const selectedVoiceId = voiceSettings.selectedVoiceId || 'Rachel'; // Default voice
@@ -135,15 +135,15 @@ class IntelligentFallbackHandler {
             );
 
             if (audioData && audioData.audioUrl) {
-                console.log(`✅ [FALLBACK] Voice audio generated: ${audioData.audioUrl}`);
+                logger.info(`✅ [FALLBACK] Voice audio generated: ${audioData.audioUrl}`);
                 return audioData.audioUrl;
             }
 
-            console.warn(`⚠️ [FALLBACK] ElevenLabs returned no audio`);
+            logger.warn(`⚠️ [FALLBACK] ElevenLabs returned no audio`);
             return null;
 
         } catch (error) {
-            console.error(`❌ [FALLBACK] Error generating fallback voice:`, error);
+            logger.error(`❌ [FALLBACK] Error generating fallback voice:`, error);
             return null;
         }
     }
@@ -158,7 +158,7 @@ class IntelligentFallbackHandler {
      */
     async notifyCustomerViaSMS(phoneNumber, companyName, message, company) {
         try {
-            console.log(`📱 [FALLBACK] Sending SMS to customer: ${phoneNumber}`);
+            logger.debug(`📱 [FALLBACK] Sending SMS to customer: ${phoneNumber}`);
 
             // Process variables in message using company's Variables system
             const processedMessage = this.replaceVariables(message, company);
@@ -169,13 +169,13 @@ class IntelligentFallbackHandler {
                 from: companyName
             });
 
-            console.log(`✅ [FALLBACK] SMS sent to customer: ${phoneNumber}`);
-            console.log(`📝 [FALLBACK] Original message: ${message}`);
-            console.log(`📝 [FALLBACK] Processed message: ${processedMessage}`);
+            logger.debug(`✅ [FALLBACK] SMS sent to customer: ${phoneNumber}`);
+            logger.debug(`📝 [FALLBACK] Original message: ${message}`);
+            logger.debug(`📝 [FALLBACK] Processed message: ${processedMessage}`);
             return true;
 
         } catch (error) {
-            console.error(`❌ [FALLBACK] Error sending SMS to customer:`, error);
+            logger.error(`❌ [FALLBACK] Error sending SMS to customer:`, error);
             return false;
         }
     }
@@ -218,7 +218,7 @@ class IntelligentFallbackHandler {
      */
     async notifyAdmin(companyId, companyName, failureReason, method, fallbackConfig, company) {
         try {
-            console.log(`🚨 [FALLBACK] Notifying admin via: ${method}`);
+            logger.info(`🚨 [FALLBACK] Notifying admin via: ${method}`);
 
             // Use custom admin SMS message with variable replacement
             const smsMessage = fallbackConfig.adminSmsMessage || 
@@ -245,13 +245,13 @@ class IntelligentFallbackHandler {
                         from: 'ClientsVia Alert'
                     });
                     smsSent = true;
-                    console.log(`✅ [FALLBACK] Admin SMS sent to: ${adminPhone}`);
-                    console.log(`📝 [FALLBACK] SMS message: ${processedSmsMessage}`);
+                    logger.debug(`✅ [FALLBACK] Admin SMS sent to: ${adminPhone}`);
+                    logger.debug(`📝 [FALLBACK] SMS message: ${processedSmsMessage}`);
                 } catch (smsError) {
-                    console.error(`❌ [FALLBACK] Admin SMS failed:`, smsError);
+                    logger.error(`❌ [FALLBACK] Admin SMS failed:`, smsError);
                 }
             } else if ((method === 'sms' || method === 'both') && !adminPhone) {
-                console.warn(`⚠️ [FALLBACK] Admin SMS notification requested but no phone number configured`);
+                logger.warn(`⚠️ [FALLBACK] Admin SMS notification requested but no phone number configured`);
             }
 
             // Send Email
@@ -274,18 +274,18 @@ class IntelligentFallbackHandler {
                         `
                     });
                     emailSent = true;
-                    console.log(`✅ [FALLBACK] Admin email sent to: ${adminEmail}`);
+                    logger.info(`✅ [FALLBACK] Admin email sent to: ${adminEmail}`);
                 } catch (emailError) {
-                    console.error(`❌ [FALLBACK] Admin email failed:`, emailError);
+                    logger.error(`❌ [FALLBACK] Admin email failed:`, emailError);
                 }
             } else if ((method === 'email' || method === 'both') && !adminEmail) {
-                console.warn(`⚠️ [FALLBACK] Admin email notification requested but no email configured`);
+                logger.warn(`⚠️ [FALLBACK] Admin email notification requested but no email configured`);
             }
 
             return smsSent || emailSent;
 
         } catch (error) {
-            console.error(`❌ [FALLBACK] Error notifying admin:`, error);
+            logger.error(`❌ [FALLBACK] Error notifying admin:`, error);
             return false;
         }
     }
@@ -308,7 +308,7 @@ class IntelligentFallbackHandler {
                 errors: eventData.result.errors
             });
         } catch (error) {
-            console.error(`❌ [FALLBACK] Error logging fallback event:`, error);
+            logger.error(`❌ [FALLBACK] Error logging fallback event:`, error);
         }
     }
 }

@@ -11,6 +11,8 @@
 // ============================================================================
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const v2AIPerformanceMetric = require('../../models/v2AIPerformanceMetric');
 const v2AIAgentCallLog = require('../../models/v2AIAgentCallLog');
@@ -25,21 +27,21 @@ router.get('/company/:companyId/ai-performance/realtime', authenticateJWT, async
     try {
         const { companyId } = req.params;
         
-        console.log(`📊 [AI PERFORMANCE API] CHECKPOINT 1: Fetching realtime metrics for company: ${companyId}`);
+        logger.security(`📊 [AI PERFORMANCE API] CHECKPOINT 1: Fetching realtime metrics for company: ${companyId}`);
 
         // ================================================================
         // STEP 1: Validate company exists
         // ================================================================
         const company = await Company.findById(companyId);
         if (!company) {
-            console.log(`❌ [AI PERFORMANCE API] Company not found: ${companyId}`);
+            logger.debug(`❌ [AI PERFORMANCE API] Company not found: ${companyId}`);
             return res.status(404).json({
                 success: false,
                 message: 'Company not found'
             });
         }
 
-        console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 2: Company validated: ${company.companyName}`);
+        logger.debug(`✅ [AI PERFORMANCE API] CHECKPOINT 2: Company validated: ${company.companyName}`);
 
         // ================================================================
         // STEP 2: Get 24-hour summary from model
@@ -47,7 +49,7 @@ router.get('/company/:companyId/ai-performance/realtime', authenticateJWT, async
         const summary = await v2AIPerformanceMetric.getLast24HoursSummary(companyId);
 
         if (!summary) {
-            console.log(`⚠️ [AI PERFORMANCE API] CHECKPOINT 3: No metrics found (new company)`);
+            logger.debug(`⚠️ [AI PERFORMANCE API] CHECKPOINT 3: No metrics found (new company)`);
             return res.json({
                 success: true,
                 message: 'No performance data yet',
@@ -73,10 +75,10 @@ router.get('/company/:companyId/ai-performance/realtime', authenticateJWT, async
             });
         }
 
-        console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 4: Summary calculated`);
-        console.log(`📊 [AI PERFORMANCE API] Total lookups: ${summary.totalLookups}`);
-        console.log(`⚡ [AI PERFORMANCE API] Avg speed: ${Math.round(summary.avgSpeed)}ms`);
-        console.log(`💾 [AI PERFORMANCE API] Cache hit rate: ${Math.round(summary.cacheHitRate)}%`);
+        logger.debug(`✅ [AI PERFORMANCE API] CHECKPOINT 4: Summary calculated`);
+        logger.debug(`📊 [AI PERFORMANCE API] Total lookups: ${summary.totalLookups}`);
+        logger.debug(`⚡ [AI PERFORMANCE API] Avg speed: ${Math.round(summary.avgSpeed)}ms`);
+        logger.debug(`💾 [AI PERFORMANCE API] Cache hit rate: ${Math.round(summary.cacheHitRate)}%`);
 
         // ================================================================
         // STEP 3: Return data
@@ -99,11 +101,11 @@ router.get('/company/:companyId/ai-performance/realtime', authenticateJWT, async
             }
         });
 
-        console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 5: Response sent successfully`);
+        logger.info(`✅ [AI PERFORMANCE API] CHECKPOINT 5: Response sent successfully`);
 
     } catch (error) {
-        console.error(`❌ [AI PERFORMANCE API] ERROR in realtime metrics:`, error);
-        console.error(`❌ [AI PERFORMANCE API] Stack:`, error.stack);
+        logger.error(`❌ [AI PERFORMANCE API] ERROR in realtime metrics:`, error);
+        logger.error(`❌ [AI PERFORMANCE API] Stack:`, error.stack);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch realtime metrics',
@@ -120,14 +122,14 @@ router.get('/company/:companyId/ai-performance/trends', authenticateJWT, async (
         const { companyId } = req.params;
         const { days = 7 } = req.query;
         
-        console.log(`📈 [AI PERFORMANCE API] CHECKPOINT 1: Fetching ${days}-day trends for company: ${companyId}`);
+        logger.security(`📈 [AI PERFORMANCE API] CHECKPOINT 1: Fetching ${days}-day trends for company: ${companyId}`);
 
         // ================================================================
         // STEP 1: Get trends from model
         // ================================================================
         const trends = await v2AIPerformanceMetric.getSpeedTrends(companyId, parseInt(days));
 
-        console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 2: Found trends for ${trends.length} days`);
+        logger.debug(`✅ [AI PERFORMANCE API] CHECKPOINT 2: Found trends for ${trends.length} days`);
 
         // ================================================================
         // STEP 2: Format response
@@ -139,18 +141,18 @@ router.get('/company/:companyId/ai-performance/trends', authenticateJWT, async (
             cacheHitRate: Math.round(day.cacheHitRate * 10) / 10
         }));
 
-        console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 3: Response formatted`);
+        logger.debug(`✅ [AI PERFORMANCE API] CHECKPOINT 3: Response formatted`);
 
         res.json({
             success: true,
             data: formattedTrends
         });
 
-        console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 4: Response sent successfully`);
+        logger.info(`✅ [AI PERFORMANCE API] CHECKPOINT 4: Response sent successfully`);
 
     } catch (error) {
-        console.error(`❌ [AI PERFORMANCE API] ERROR in trends:`, error);
-        console.error(`❌ [AI PERFORMANCE API] Stack:`, error.stack);
+        logger.error(`❌ [AI PERFORMANCE API] ERROR in trends:`, error);
+        logger.error(`❌ [AI PERFORMANCE API] Stack:`, error.stack);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch trends',
@@ -166,7 +168,7 @@ router.get('/company/:companyId/ai-performance/index-usage', authenticateJWT, as
     try {
         const { companyId } = req.params;
         
-        console.log(`🔍 [AI PERFORMANCE API] CHECKPOINT 1: Fetching index usage for company: ${companyId}`);
+        logger.security(`🔍 [AI PERFORMANCE API] CHECKPOINT 1: Fetching index usage for company: ${companyId}`);
 
         // ================================================================
         // STEP 1: Get latest metrics (last hour)
@@ -178,10 +180,10 @@ router.get('/company/:companyId/ai-performance/index-usage', authenticateJWT, as
             timestamp: { $gte: oneHourAgo }
         }).sort({ timestamp: -1 }).limit(4); // Last 4 intervals (1 hour)
 
-        console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 2: Found ${recentMetrics.length} recent intervals`);
+        logger.info(`✅ [AI PERFORMANCE API] CHECKPOINT 2: Found ${recentMetrics.length} recent intervals`);
 
         if (recentMetrics.length === 0) {
-            console.log(`⚠️ [AI PERFORMANCE API] CHECKPOINT 3: No recent metrics`);
+            logger.info(`⚠️ [AI PERFORMANCE API] CHECKPOINT 3: No recent metrics`);
             return res.json({
                 success: true,
                 message: 'No recent activity',
@@ -221,18 +223,18 @@ router.get('/company/:companyId/ai-performance/index-usage', authenticateJWT, as
             }
         });
 
-        console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 4: Index usage aggregated`);
+        logger.info(`✅ [AI PERFORMANCE API] CHECKPOINT 4: Index usage aggregated`);
 
         res.json({
             success: true,
             data: indexUsage
         });
 
-        console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 5: Response sent successfully`);
+        logger.info(`✅ [AI PERFORMANCE API] CHECKPOINT 5: Response sent successfully`);
 
     } catch (error) {
-        console.error(`❌ [AI PERFORMANCE API] ERROR in index usage:`, error);
-        console.error(`❌ [AI PERFORMANCE API] Stack:`, error.stack);
+        logger.error(`❌ [AI PERFORMANCE API] ERROR in index usage:`, error);
+        logger.error(`❌ [AI PERFORMANCE API] Stack:`, error.stack);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch index usage',
@@ -248,7 +250,7 @@ router.get('/company/:companyId/ai-performance/slow-queries', authenticateJWT, a
     try {
         const { companyId } = req.params;
         
-        console.log(`🐌 [AI PERFORMANCE API] CHECKPOINT 1: Fetching slow queries for company: ${companyId}`);
+        logger.security(`🐌 [AI PERFORMANCE API] CHECKPOINT 1: Fetching slow queries for company: ${companyId}`);
 
         // ================================================================
         // STEP 1: Get metrics from last 24 hours
@@ -261,7 +263,7 @@ router.get('/company/:companyId/ai-performance/slow-queries', authenticateJWT, a
             'slowQueries.0': { $exists: true } // Only metrics with slow queries
         }).sort({ timestamp: -1 });
 
-        console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 2: Found ${metrics.length} intervals with slow queries`);
+        logger.debug(`✅ [AI PERFORMANCE API] CHECKPOINT 2: Found ${metrics.length} intervals with slow queries`);
 
         // ================================================================
         // STEP 2: Collect all slow queries
@@ -280,7 +282,7 @@ router.get('/company/:companyId/ai-performance/slow-queries', authenticateJWT, a
         // Limit to top 20
         allSlowQueries = allSlowQueries.slice(0, 20);
 
-        console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 3: Collected ${allSlowQueries.length} slow queries`);
+        logger.info(`✅ [AI PERFORMANCE API] CHECKPOINT 3: Collected ${allSlowQueries.length} slow queries`);
 
         res.json({
             success: true,
@@ -288,11 +290,11 @@ router.get('/company/:companyId/ai-performance/slow-queries', authenticateJWT, a
             count: allSlowQueries.length
         });
 
-        console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 4: Response sent successfully`);
+        logger.info(`✅ [AI PERFORMANCE API] CHECKPOINT 4: Response sent successfully`);
 
     } catch (error) {
-        console.error(`❌ [AI PERFORMANCE API] ERROR in slow queries:`, error);
-        console.error(`❌ [AI PERFORMANCE API] Stack:`, error.stack);
+        logger.error(`❌ [AI PERFORMANCE API] ERROR in slow queries:`, error);
+        logger.error(`❌ [AI PERFORMANCE API] Stack:`, error.stack);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch slow queries',
@@ -308,7 +310,7 @@ router.get('/company/:companyId/ai-performance/db-stats', authenticateJWT, async
     try {
         const { companyId } = req.params;
         
-        console.log(`💾 [AI PERFORMANCE API] CHECKPOINT 1: Fetching DB stats for company: ${companyId}`);
+        logger.security(`💾 [AI PERFORMANCE API] CHECKPOINT 1: Fetching DB stats for company: ${companyId}`);
 
         // ================================================================
         // STEP 1: Check if collection exists
@@ -320,12 +322,12 @@ router.get('/company/:companyId/ai-performance/db-stats', authenticateJWT, async
         if (collections.length > 0) {
             try {
                 collStats = await db.collection('v2aiagentcalllogs').stats();
-                console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 2: Collection stats retrieved`);
+                logger.debug(`✅ [AI PERFORMANCE API] CHECKPOINT 2: Collection stats retrieved`);
             } catch (statsError) {
-                console.warn(`⚠️ [AI PERFORMANCE API] Could not get collection stats:`, statsError.message);
+                logger.warn(`⚠️ [AI PERFORMANCE API] Could not get collection stats:`, statsError.message);
             }
         } else {
-            console.log(`⚠️ [AI PERFORMANCE API] CHECKPOINT 2: Collection does not exist yet (no calls made)`);
+            logger.debug(`⚠️ [AI PERFORMANCE API] CHECKPOINT 2: Collection does not exist yet (no calls made)`);
         }
 
         // ================================================================
@@ -333,7 +335,7 @@ router.get('/company/:companyId/ai-performance/db-stats', authenticateJWT, async
         // ================================================================
         const companyDocCount = await v2AIAgentCallLog.countDocuments({ companyId });
 
-        console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 3: Company has ${companyDocCount} call logs`);
+        logger.debug(`✅ [AI PERFORMANCE API] CHECKPOINT 3: Company has ${companyDocCount} call logs`);
 
         // ================================================================
         // STEP 3: Format response (with defaults for empty collection)
@@ -347,18 +349,18 @@ router.get('/company/:companyId/ai-performance/db-stats', authenticateJWT, async
             indexes: collStats?.nindexes || 0
         };
 
-        console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 4: Stats formatted`);
+        logger.info(`✅ [AI PERFORMANCE API] CHECKPOINT 4: Stats formatted`);
 
         res.json({
             success: true,
             data: stats
         });
 
-        console.log(`✅ [AI PERFORMANCE API] CHECKPOINT 5: Response sent successfully`);
+        logger.info(`✅ [AI PERFORMANCE API] CHECKPOINT 5: Response sent successfully`);
 
     } catch (error) {
-        console.error(`❌ [AI PERFORMANCE API] ERROR in DB stats:`, error);
-        console.error(`❌ [AI PERFORMANCE API] Stack:`, error.stack);
+        logger.error(`❌ [AI PERFORMANCE API] ERROR in DB stats:`, error);
+        logger.error(`❌ [AI PERFORMANCE API] Stack:`, error.stack);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch DB stats',

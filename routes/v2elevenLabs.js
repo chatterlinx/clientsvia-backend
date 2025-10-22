@@ -1,4 +1,6 @@
 const express = require('express');
+const logger = require('../utils/logger.js');
+
 const router = express.Router();
 const Company = require('../models/v2Company');
 const { 
@@ -20,7 +22,7 @@ async function listVoices(req, res) {
     const voices = await getAvailableVoices();
     res.json({ success: true, voices, count: voices.length });
   } catch (err) {
-    console.error('[GET /api/elevenlabs/voices] Error:', err.message);
+    logger.error('[GET /api/elevenlabs/voices] Error:', err.message);
     res.status(500).json({ success: false, message: 'Failed to fetch voices', error: err.message });
   }
 }
@@ -33,7 +35,7 @@ async function listModels(req, res) {
     const models = await getAvailableModels();
     res.json({ success: true, models, count: models.length });
   } catch (err) {
-    console.error('[GET /api/elevenlabs/models] Error:', err.message);
+    logger.error('[GET /api/elevenlabs/models] Error:', err.message);
     res.status(500).json({ success: false, message: 'Failed to fetch models', error: err.message });
   }
 }
@@ -47,7 +49,7 @@ async function getVoiceAnalysis(req, res) {
     const analysis = await analyzeVoice({ voiceId });
     res.json({ success: true, voice: analysis });
   } catch (err) {
-    console.error('[GET /api/elevenlabs/voice/:voiceId] Error:', err.message);
+    logger.error('[GET /api/elevenlabs/voice/:voiceId] Error:', err.message);
     res.status(500).json({ success: false, message: 'Failed to analyze voice', error: err.message });
   }
 }
@@ -60,7 +62,7 @@ async function getUserSubscription(req, res) {
     const userInfo = await getUserInfo();
     res.json({ success: true, user: userInfo });
   } catch (err) {
-    console.error('[GET /api/elevenlabs/user] Error:', err.message);
+    logger.error('[GET /api/elevenlabs/user] Error:', err.message);
     res.status(500).json({ success: false, message: 'Failed to get user info', error: err.message });
   }
 }
@@ -89,7 +91,7 @@ async function synthesize(req, res) {
     if (companyId) {
       const Company = require('../models/v2Company');
       company = await Company.findById(companyId);
-      console.log(`🎙️ [Synthesize] Using company-specific settings for: ${company?.companyName || companyId}`);
+      logger.debug(`🎙️ [Synthesize] Using company-specific settings for: ${company?.companyName || companyId}`);
     }
     
     const buffer = await synthesizeSpeech({
@@ -112,7 +114,7 @@ async function synthesize(req, res) {
       format: output_format || 'mp3_44100_128'
     });
   } catch (err) {
-    console.error('[POST /api/elevenlabs/synthesize] Error:', err.message);
+    logger.error('[POST /api/elevenlabs/synthesize] Error:', err.message);
     res.status(500).json({ success: false, message: 'Failed to synthesize speech', error: err.message });
   }
 }
@@ -141,7 +143,7 @@ async function streamSynthesis(req, res) {
     if (companyId) {
       const Company = require('../models/v2Company');
       company = await Company.findById(companyId);
-      console.log(`🌊 [Stream] Using company-specific settings for: ${company?.companyName || companyId}`);
+      logger.debug(`🌊 [Stream] Using company-specific settings for: ${company?.companyName || companyId}`);
     }
     
     const audioStream = await streamSpeech({
@@ -172,7 +174,7 @@ async function streamSynthesis(req, res) {
     
     res.end();
   } catch (err) {
-    console.error('[POST /api/elevenlabs/stream] Error:', err.message);
+    logger.error('[POST /api/elevenlabs/stream] Error:', err.message);
     if (!res.headersSent) {
       res.status(500).json({ success: false, message: 'Failed to stream speech', error: err.message });
     }
@@ -210,7 +212,7 @@ async function generateStatic(req, res) {
     
     res.json({ success: true, url, filename: filename || 'generated audio' });
   } catch (err) {
-    console.error('[POST /api/elevenlabs/static] Error:', err.message);
+    logger.error('[POST /api/elevenlabs/static] Error:', err.message);
     res.status(500).json({ success: false, message: 'Failed to generate static audio', error: err.message });
   }
 }
@@ -221,22 +223,22 @@ async function generateStatic(req, res) {
 async function getCompanyVoices(req, res) {
   try {
     const { companyId } = req.params;
-    console.log(`🏢 [Company Voices] Request for company ID: ${companyId}`);
+    logger.debug(`🏢 [Company Voices] Request for company ID: ${companyId}`);
     
     // Fetch company data to get API settings
     const company = await Company.findById(companyId);
     if (!company) {
-      console.log(`❌ [Company Voices] Company not found: ${companyId}`);
+      logger.debug(`❌ [Company Voices] Company not found: ${companyId}`);
       return res.status(404).json({ success: false, message: 'Company not found' });
     }
     
-    console.log(`✅ [Company Voices] Found company: ${company.companyName}`);
+    logger.debug(`✅ [Company Voices] Found company: ${company.companyName}`);
 
-    console.log(`🎙️ [Company Voices] Fetching voices for company: ${company.companyName} (${companyId})`);
+    logger.debug(`🎙️ [Company Voices] Fetching voices for company: ${company.companyName} (${companyId})`);
     
     const voices = await getAvailableVoices({ company });
     
-    console.log(`✅ [Company Voices] Found ${voices.length} voices for ${company.companyName}`);
+    logger.debug(`✅ [Company Voices] Found ${voices.length} voices for ${company.companyName}`);
     res.json({ 
       success: true, 
       voices, 
@@ -248,11 +250,11 @@ async function getCompanyVoices(req, res) {
       }
     });
   } catch (err) {
-    console.error(`❌ [Company Voices] Error for company ${req.params.companyId}:`, err.message);
+    logger.error(`❌ [Company Voices] Error for company ${req.params.companyId}:`, err.message);
     
     // Handle API key errors with mock data for testing
     if (err.message.includes('invalid_api_key') || err.message.includes('API key')) {
-      console.log('🎭 [Company Voices] Using mock voice data for testing (invalid API key)');
+      logger.info('🎭 [Company Voices] Using mock voice data for testing (invalid API key)');
       const mockVoices = getMockVoices();
       
       return res.json({ 
@@ -282,21 +284,21 @@ async function getCompanyVoices(req, res) {
 async function testCompanyConnection(req, res) {
   try {
     const { companyId } = req.params;
-    console.log(`🔧 [Test Connection] Request for company ID: ${companyId}`);
+    logger.debug(`🔧 [Test Connection] Request for company ID: ${companyId}`);
     
     // Fetch company data to get API settings
     const company = await Company.findById(companyId);
     if (!company) {
-      console.log(`❌ [Test Connection] Company not found: ${companyId}`);
+      logger.debug(`❌ [Test Connection] Company not found: ${companyId}`);
       return res.status(404).json({ success: false, message: 'Company not found' });
     }
 
-    console.log(`🔧 [Test Connection] Testing ElevenLabs connection for: ${company.companyName}`);
+    logger.debug(`🔧 [Test Connection] Testing ElevenLabs connection for: ${company.companyName}`);
     
     // Test connection by fetching user info
     const userInfo = await getUserInfo({ company });
     
-    console.log(`✅ [Test Connection] Success for ${company.companyName}`);
+    logger.debug(`✅ [Test Connection] Success for ${company.companyName}`);
     res.json({ 
       success: true, 
       message: 'Connection successful',
@@ -312,7 +314,7 @@ async function testCompanyConnection(req, res) {
       }
     });
   } catch (err) {
-    console.error(`❌ [Test Connection] Error for company ${req.params.companyId}:`, err.message);
+    logger.error(`❌ [Test Connection] Error for company ${req.params.companyId}:`, err.message);
     res.status(500).json({ 
       success: false, 
       message: 'Connection failed', 

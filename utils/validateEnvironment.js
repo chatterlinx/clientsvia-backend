@@ -6,13 +6,15 @@
 // ============================================================================
 
 const logger = require('./logger');
+const logger = require('./logger.js');
+
 
 /**
  * Validate all required environment variables
  * @throws {Error} If any required variable is missing or invalid
  */
 function validateEnvironment() {
-  console.log('[ENV VALIDATION] 🔍 Starting environment variable validation...');
+  logger.debug('[ENV VALIDATION] 🔍 Starting environment variable validation...');
   
   const errors = [];
   const warnings = [];
@@ -49,7 +51,7 @@ function validateEnvironment() {
     } else if (config.validator && !config.validator(value)) {
       errors.push(`❌ CRITICAL: ${varName} is invalid - ${config.message}`);
     } else {
-      console.log(`✅ ${varName} validated`);
+      logger.info(`✅ ${varName} validated`);
     }
   }
   
@@ -94,7 +96,7 @@ function validateEnvironment() {
     } else if (config.validator && !config.validator(value)) {
       warnings.push(`⚠️  ${varName} is invalid - ${config.message}`);
     } else {
-      console.log(`✅ ${varName} validated`);
+      logger.info(`✅ ${varName} validated`);
     }
   }
   
@@ -136,7 +138,7 @@ function validateEnvironment() {
     if (!process.env.REDIS_HOST) {
       warnings.push('⚠️  Neither REDIS_URL nor REDIS_HOST is set - Redis caching will be disabled');
     } else {
-      console.log('✅ Redis configuration using individual parameters (REDIS_HOST, REDIS_PORT)');
+      logger.debug('✅ Redis configuration using individual parameters (REDIS_HOST, REDIS_PORT)');
     }
   }
   
@@ -147,33 +149,33 @@ function validateEnvironment() {
   if (!process.env.SENTRY_DSN) {
     warnings.push('⚠️  SENTRY_DSN is not set - Error monitoring will be disabled');
   } else {
-    console.log('✅ Sentry error monitoring configured');
+    logger.debug('✅ Sentry error monitoring configured');
   }
   
   // ============================================================================
   // REPORT RESULTS
   // ============================================================================
   
-  console.log(`\n${  '='.repeat(80)}`);
-  console.log('ENVIRONMENT VALIDATION RESULTS');
-  console.log('='.repeat(80));
+  logger.info(`\n${  '='.repeat(80)}`);
+  logger.info('ENVIRONMENT VALIDATION RESULTS');
+  logger.info('='.repeat(80));
   
   if (errors.length === 0 && warnings.length === 0) {
-    console.log('✅ All environment variables validated successfully!');
-    console.log('🚀 Server is ready for production deployment');
+    logger.info('✅ All environment variables validated successfully!');
+    logger.info('🚀 Server is ready for production deployment');
   } else {
     if (warnings.length > 0) {
-      console.log('\n⚠️  WARNINGS:');
-      warnings.forEach(warning => console.log(`   ${warning}`));
+      logger.info('\n⚠️  WARNINGS:');
+      warnings.forEach(warning => logger.info(`   ${warning}`));
     }
     
     if (errors.length > 0) {
-      console.log('\n❌ CRITICAL ERRORS:');
-      errors.forEach(error => console.log(`   ${error}`));
+      logger.info('\n❌ CRITICAL ERRORS:');
+      errors.forEach(error => logger.info(`   ${error}`));
     }
   }
   
-  console.log(`${'='.repeat(80)  }\n`);
+  logger.info(`${'='.repeat(80)  }\n`);
   
   // ============================================================================
   // THROW ERROR IF CRITICAL ISSUES FOUND

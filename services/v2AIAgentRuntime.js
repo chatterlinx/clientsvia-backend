@@ -9,6 +9,8 @@
  */
 
 const Company = require('../models/v2Company');
+const logger = require('../utils/logger.js');
+
 const { redisClient } = require('../clients');
 
 class V2AIAgentRuntime {
@@ -22,13 +24,13 @@ class V2AIAgentRuntime {
      * @returns {Object} Initialization result with V2 greeting
      */
     static async initializeCall(companyID, callId, from, to) {
-        console.log(`[V2 AGENT] 🚀 Initializing call for company ${companyID}`);
+        logger.debug(`[V2 AGENT] 🚀 Initializing call for company ${companyID}`);
         
         try {
             // Load company with V2 configuration
             const company = await Company.findById(companyID);
             if (!company) {
-                console.error(`❌ V2 AGENT: Company ${companyID} not found`);
+                logger.error(`❌ V2 AGENT: Company ${companyID} not found`);
                 return {
                     greeting: "Configuration error: Company not found in V2 system",
                     callState: { callId, from, to, stage: 'error' }
@@ -37,25 +39,25 @@ class V2AIAgentRuntime {
 
             // Check if V2 AI Agent Logic is configured
             if (!company.aiAgentLogic || !company.aiAgentLogic.enabled) {
-                console.error(`❌ V2 AGENT: Company ${companyID} does not have V2 AI Agent Logic enabled`);
+                logger.error(`❌ V2 AGENT: Company ${companyID} does not have V2 AI Agent Logic enabled`);
                 return {
                     greeting: "Configuration error: Company must configure V2 Agent Personality",
                     callState: { callId, from, to, stage: 'configuration_error' }
                 };
             }
 
-            console.log(`✅ V2 AGENT: Found V2 configuration for ${company.businessName || company.companyName}`);
+            logger.debug(`✅ V2 AGENT: Found V2 configuration for ${company.businessName || company.companyName}`);
             
             // 🔍 DIAGNOSTIC: Log voice settings from database
-            console.log(`🔍 V2 VOICE DEBUG: Raw voiceSettings from DB:`, JSON.stringify(company.aiAgentLogic?.voiceSettings, null, 2));
-            console.log(`🔍 V2 VOICE DEBUG: Has voiceSettings: ${Boolean(company.aiAgentLogic?.voiceSettings)}`);
-            console.log(`🔍 V2 VOICE DEBUG: Voice ID: ${company.aiAgentLogic?.voiceSettings?.voiceId || 'NOT SET'}`);
-            console.log(`🔍 V2 VOICE DEBUG: API Source: ${company.aiAgentLogic?.voiceSettings?.apiSource || 'NOT SET'}`);
+            logger.debug(`🔍 V2 VOICE DEBUG: Raw voiceSettings from DB:`, JSON.stringify(company.aiAgentLogic?.voiceSettings, null, 2));
+            logger.debug(`🔍 V2 VOICE DEBUG: Has voiceSettings: ${Boolean(company.aiAgentLogic?.voiceSettings)}`);
+            logger.debug(`🔍 V2 VOICE DEBUG: Voice ID: ${company.aiAgentLogic?.voiceSettings?.voiceId || 'NOT SET'}`);
+            logger.debug(`🔍 V2 VOICE DEBUG: API Source: ${company.aiAgentLogic?.voiceSettings?.apiSource || 'NOT SET'}`);
 
             // Generate V2 greeting from Agent Personality system (4-MODE SYSTEM)
             const greetingConfig = this.generateV2Greeting(company);
             
-            console.log(`🎤 V2 AGENT: Generated greeting config:`, JSON.stringify(greetingConfig, null, 2));
+            logger.debug(`🎤 V2 AGENT: Generated greeting config:`, JSON.stringify(greetingConfig, null, 2));
 
             return {
                 greetingConfig, // NEW: Full greeting configuration with mode
@@ -75,7 +77,7 @@ class V2AIAgentRuntime {
             };
 
         } catch (error) {
-            console.error(`❌ V2 AGENT: Error initializing call:`, error);
+            logger.error(`❌ V2 AGENT: Error initializing call:`, error);
             return {
                 greeting: `System error: Unable to initialize V2 Agent for this call`,
                 callState: { callId, from, to, stage: 'system_error' }
@@ -89,7 +91,7 @@ class V2AIAgentRuntime {
      * @returns {Object} Greeting configuration with mode and content
      */
     static generateV2Greeting(company) {
-        console.log(`[V2 GREETING] 🎭 Generating greeting for ${company.businessName || company.companyName}`);
+        logger.info(`[V2 GREETING] 🎭 Generating greeting for ${company.businessName || company.companyName}`);
         
         // ✅ FIX: Use ROOT LEVEL connectionMessages (AI Agent Settings tab)
         // NOT aiAgentLogic.connectionMessages (deleted legacy tab)
@@ -98,8 +100,8 @@ class V2AIAgentRuntime {
 
         // Check if connection messages are configured
         if (!voiceConfig) {
-            console.error(`❌ CRITICAL: No connection messages configured for company ${company._id}`);
-            console.error(`❌ HINT: Configure greeting in AI Agent Settings > Messages & Greetings tab`);
+            logger.error(`❌ CRITICAL: No connection messages configured for company ${company._id}`);
+            logger.error(`❌ HINT: Configure greeting in AI Agent Settings > Messages & Greetings tab`);
             return {
                 mode: 'error',
                 text: "CONFIGURATION ERROR: No greeting has been set. Please configure a greeting in the AI Agent Settings tab."
@@ -107,12 +109,12 @@ class V2AIAgentRuntime {
         }
 
         const mode = voiceConfig.mode || 'disabled';
-        console.log(`🎯 V2 GREETING: Mode selected: ${mode}`);
+        logger.info(`🎯 V2 GREETING: Mode selected: ${mode}`);
 
         // MODE 1: PRE-RECORDED AUDIO
         if (mode === 'prerecorded') {
             if (voiceConfig.prerecorded?.activeFileUrl) {
-                console.log(`✅ V2 GREETING: Using pre-recorded audio: ${voiceConfig.prerecorded.activeFileUrl}`);
+                logger.info(`✅ V2 GREETING: Using pre-recorded audio: ${voiceConfig.prerecorded.activeFileUrl}`);
                 return {
                     mode: 'prerecorded',
                     audioUrl: voiceConfig.prerecorded.activeFileUrl,
@@ -120,7 +122,7 @@ class V2AIAgentRuntime {
                     duration: voiceConfig.prerecorded.activeDuration
                 };
             } 
-                console.warn(`⚠️ V2 GREETING: Pre-recorded mode selected but no file uploaded`);
+                logger.warn(`⚠️ V2 GREETING: Pre-recorded mode selected but no file uploaded`);
                 // Trigger fallback
                 return this.triggerFallback(company, 'Pre-recorded audio file missing');
             
@@ -132,14 +134,14 @@ class V2AIAgentRuntime {
             
             if (greetingText && greetingText.trim()) {
                 const processedText = this.buildPureResponse(greetingText, company);
-                console.log(`✅ V2 GREETING: Using real-time TTS: "${processedText}"`);
+                logger.debug(`✅ V2 GREETING: Using real-time TTS: "${processedText}"`);
                 return {
                     mode: 'realtime',
                     text: processedText,
                     voiceId: voiceConfig.realtime?.voiceId || company.voiceSettings?.selectedVoiceId
                 };
             } 
-                console.warn(`⚠️ V2 GREETING: Real-time mode selected but no text configured`);
+                logger.warn(`⚠️ V2 GREETING: Real-time mode selected but no text configured`);
                 // Trigger fallback
                 return this.triggerFallback(company, 'Real-time TTS text missing');
             
@@ -147,7 +149,7 @@ class V2AIAgentRuntime {
 
         // MODE 3: DISABLED (SKIP GREETING - GO STRAIGHT TO AI)
         if (mode === 'disabled') {
-            console.log(`✅ V2 GREETING: Greeting disabled - going straight to AI`);
+            logger.info(`✅ V2 GREETING: Greeting disabled - going straight to AI`);
             return {
                 mode: 'disabled',
                 text: null
@@ -155,7 +157,7 @@ class V2AIAgentRuntime {
         }
 
         // MODE 4: FALLBACK (EMERGENCY BACKUP)
-        console.warn(`⚠️ V2 GREETING: Invalid or missing mode - triggering fallback`);
+        logger.warn(`⚠️ V2 GREETING: Invalid or missing mode - triggering fallback`);
         return this.triggerFallback(company, 'Invalid greeting mode');
     }
 
@@ -166,14 +168,14 @@ class V2AIAgentRuntime {
      * @returns {Object} Fallback greeting configuration
      */
     static triggerFallback(company, reason) {
-        console.log(`🆘 V2 FALLBACK: Triggered for ${company.companyName} - Reason: ${reason}`);
+        logger.info(`🆘 V2 FALLBACK: Triggered for ${company.companyName} - Reason: ${reason}`);
         
         // ✅ FIX: Use ROOT LEVEL connectionMessages (AI Agent Settings tab)
         const fallbackConfig = company.connectionMessages?.voice?.fallback;
         
         if (!fallbackConfig || !fallbackConfig.enabled) {
-            console.error(`❌ FALLBACK: Fallback system is disabled or not configured`);
-            console.error(`❌ HINT: Configure fallback in AI Agent Settings > Messages & Greetings > Fallback tab`);
+            logger.error(`❌ FALLBACK: Fallback system is disabled or not configured`);
+            logger.error(`❌ HINT: Configure fallback in AI Agent Settings > Messages & Greetings > Fallback tab`);
             return {
                 mode: 'error',
                 text: "We're experiencing technical difficulties. Please try again later."
@@ -183,11 +185,11 @@ class V2AIAgentRuntime {
         const fallbackText = fallbackConfig.voiceMessage || "We're experiencing technical difficulties. Please hold while we connect you to our team.";
         const processedText = this.buildPureResponse(fallbackText, company);
 
-        console.log(`✅ V2 FALLBACK: Using fallback message: "${processedText}"`);
+        logger.debug(`✅ V2 FALLBACK: Using fallback message: "${processedText}"`);
 
         // Queue async fallback actions (SMS + Admin notifications)
         this.executeFallbackActions(company, reason, fallbackConfig).catch(error => {
-            console.error(`❌ FALLBACK: Error executing fallback actions:`, error);
+            logger.error(`❌ FALLBACK: Error executing fallback actions:`, error);
         });
 
         return {
@@ -217,7 +219,7 @@ class V2AIAgentRuntime {
                 fallbackConfig
             });
         } catch (error) {
-            console.error(`❌ FALLBACK ACTIONS: Error:`, error);
+            logger.error(`❌ FALLBACK ACTIONS: Error:`, error);
         }
     }
 
@@ -235,7 +237,7 @@ class V2AIAgentRuntime {
         
         // Replace placeholders from company.aiAgentLogic.placeholders
         if (company.aiAgentLogic?.placeholders && Array.isArray(company.aiAgentLogic.placeholders)) {
-            console.log(`🔧 [PLACEHOLDERS] Replacing ${company.aiAgentLogic.placeholders.length} placeholders`);
+            logger.debug(`🔧 [PLACEHOLDERS] Replacing ${company.aiAgentLogic.placeholders.length} placeholders`);
             
             company.aiAgentLogic.placeholders.forEach(placeholder => {
                 // Escape special regex characters in placeholder name
@@ -248,11 +250,11 @@ class V2AIAgentRuntime {
                 processedText = processedText.replace(regex, placeholder.value);
                 
                 if (before !== processedText) {
-                    console.log(`🔧 [PLACEHOLDERS] Replaced {${placeholder.name}} → ${placeholder.value}`);
+                    logger.debug(`🔧 [PLACEHOLDERS] Replaced {${placeholder.name}} → ${placeholder.value}`);
                 }
             });
         } else {
-            console.log(`[PLACEHOLDERS] ⚠️ No placeholders configured for company ${company._id}`);
+            logger.debug(`[PLACEHOLDERS] ⚠️ No placeholders configured for company ${company._id}`);
         }
         
         return processedText.trim();
@@ -267,7 +269,7 @@ class V2AIAgentRuntime {
      * @returns {Object} Response and updated call state
      */
     static async processUserInput(companyID, callId, userInput, callState) {
-        console.log(`[V2 AGENT] 🗣️ Processing user input for call ${callId}: "${userInput}"`);
+        logger.debug(`[V2 AGENT] 🗣️ Processing user input for call ${callId}: "${userInput}"`);
         
         try {
             // Load company V2 configuration
@@ -292,7 +294,7 @@ class V2AIAgentRuntime {
                 timestamp: new Date()
             };
 
-            console.log(`✅ V2 AGENT: Generated response: "${response.text}"`);
+            logger.info(`✅ V2 AGENT: Generated response: "${response.text}"`);
 
             return {
                 response: response.text,
@@ -302,7 +304,7 @@ class V2AIAgentRuntime {
             };
 
         } catch (error) {
-            console.error(`❌ V2 AGENT: Error processing user input:`, error);
+            logger.error(`❌ V2 AGENT: Error processing user input:`, error);
             return {
                 response: "I'm experiencing a technical issue. Let me connect you to our support team.",
                 action: 'transfer',
@@ -319,7 +321,7 @@ class V2AIAgentRuntime {
      * @returns {Object} Generated response
      */
     static async generateV2Response(userInput, company, callState) {
-        console.log(`[V2 RESPONSE] 🧠 Generating V2 response for: "${userInput}"`);
+        logger.info(`[V2 RESPONSE] 🧠 Generating V2 response for: "${userInput}"`);
         
         const aiLogic = company.aiAgentLogic;
         const personality = aiLogic.agentPersonality || {};
@@ -347,14 +349,14 @@ class V2AIAgentRuntime {
             const routingResult = await router.executePriorityRouting(context);
             
             if (routingResult && routingResult.response && routingResult.confidence >= 0.5) {
-                console.log(`[V2 KNOWLEDGE] ✅ Found answer from ${routingResult.source} (confidence: ${routingResult.confidence})`);
+                logger.info(`[V2 KNOWLEDGE] ✅ Found answer from ${routingResult.source} (confidence: ${routingResult.confidence})`);
                 
                 let responseText = routingResult.response;
                 
                 // 🤖 AI AGENT ROLE INJECTION: If category has AI Agent Role, apply it to the response
                 if (routingResult.metadata?.aiAgentRole) {
-                    console.log(`🤖 [AI AGENT ROLE] Applying role from category: ${routingResult.metadata.category}`);
-                    console.log(`🤖 [AI AGENT ROLE] Role instructions: ${routingResult.metadata.aiAgentRole.substring(0, 150)}...`);
+                    logger.info(`🤖 [AI AGENT ROLE] Applying role from category: ${routingResult.metadata.category}`);
+                    logger.info(`🤖 [AI AGENT ROLE] Role instructions: ${routingResult.metadata.aiAgentRole.substring(0, 150)}...`);
                     
                     // Prefix the response with role-aware context
                     // This ensures the AI adopts the persona defined in the category
@@ -379,7 +381,7 @@ class V2AIAgentRuntime {
                 };
             }
         } catch (knowledgeError) {
-            console.warn(`[V2 KNOWLEDGE] ⚠️ Knowledge routing failed, using fallback:`, knowledgeError.message);
+            logger.warn(`[V2 KNOWLEDGE] ⚠️ Knowledge routing failed, using fallback:`, knowledgeError.message);
         }
         
         // 🔄 FALLBACK: Basic V2 response logic if knowledge routing fails
@@ -466,7 +468,7 @@ class V2AIAgentRuntime {
      * @returns {string} Role-enhanced response
      */
     static applyAIAgentRole(baseResponse, aiAgentRole, company) {
-        console.log(`🤖 [AI ROLE] Applying AI Agent role to response`);
+        logger.info(`🤖 [AI ROLE] Applying AI Agent role to response`);
         
         // Parse role instructions to understand the persona
         const roleLower = aiAgentRole.toLowerCase();
@@ -501,7 +503,7 @@ class V2AIAgentRuntime {
         // 🔧 PLACEHOLDERS: Replace all placeholders with their actual values
         // Supports both [brackets] and {braces}, case-insensitive
         if (company.aiAgentLogic?.placeholders && Array.isArray(company.aiAgentLogic.placeholders)) {
-            console.log(`🔧 [PLACEHOLDERS] Replacing ${company.aiAgentLogic.placeholders.length} placeholders in AI role response`);
+            logger.info(`🔧 [PLACEHOLDERS] Replacing ${company.aiAgentLogic.placeholders.length} placeholders in AI role response`);
             company.aiAgentLogic.placeholders.forEach(placeholder => {
                 // Escape special regex characters in placeholder name
                 const escapedName = placeholder.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -514,12 +516,12 @@ class V2AIAgentRuntime {
                 enhancedResponse = enhancedResponse.replace(regex, placeholder.value);
                 
                 if (before !== enhancedResponse) {
-                    console.log(`🔧 [PLACEHOLDERS] Replaced {${placeholder.name}} → ${placeholder.value}`);
+                    logger.info(`🔧 [PLACEHOLDERS] Replaced {${placeholder.name}} → ${placeholder.value}`);
                 }
             });
         }
         
-        console.log(`🤖 [AI ROLE] ✅ Response enhanced with role persona`);
+        logger.info(`🤖 [AI ROLE] ✅ Response enhanced with role persona`);
         return enhancedResponse;
     }
 
@@ -532,10 +534,10 @@ class V2AIAgentRuntime {
             if (redisClient) {
                 await redisClient.del(`v2_agent_${companyID}`);
                 await redisClient.del(`v2_config_${companyID}`);
-                console.log(`✅ V2 AGENT: Cache cleared for company ${companyID}`);
+                logger.debug(`✅ V2 AGENT: Cache cleared for company ${companyID}`);
             }
         } catch (error) {
-            console.warn(`⚠️ V2 AGENT: Cache clear failed for ${companyID}:`, error.message);
+            logger.warn(`⚠️ V2 AGENT: Cache clear failed for ${companyID}:`, error.message);
         }
     }
 }

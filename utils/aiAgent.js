@@ -1,4 +1,6 @@
 const stringSimilarity = require('string-similarity');
+const logger = require('./logger.js');
+
 
 /**
  * Returns answer if question or keyword matches, else null.
@@ -17,8 +19,8 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.4) {
   const qNorm = userQuestion.trim().toLowerCase();
   const userWords = qNorm.split(/\s+/).filter(w => w.length > 2); // Words longer than 2 chars
   
-  console.log(`🔍 [Q&A MATCHING] Input: "${userQuestion}" | Normalized: "${qNorm}"`);
-  console.log(`📊 [Q&A MATCHING] Entries: ${entries.length} | User words: [${userWords.join(', ')}] | Threshold: ${fuzzyThreshold}`);
+  logger.info(`🔍 [Q&A MATCHING] Input: "${userQuestion}" | Normalized: "${qNorm}"`);
+  logger.info(`📊 [Q&A MATCHING] Entries: ${entries.length} | User words: [${userWords.join(', ')}] | Threshold: ${fuzzyThreshold}`);
 
   // NEGATIVE CONTEXT DETECTION - Don't match if customer is correcting/rejecting
   const negativePatterns = [
@@ -30,11 +32,11 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.4) {
   
   const hasNegativeContext = negativePatterns.some(pattern => pattern.test(qNorm));
   if (hasNegativeContext) {
-    console.log(`🚫 [Q&A NEGATIVE] Detected correction/rejection context - using stricter matching`);
+    logger.info(`🚫 [Q&A NEGATIVE] Detected correction/rejection context - using stricter matching`);
     
     // Extract rejected terms more comprehensively
     const rejectedTerms = extractRejectedTerms(qNorm);
-    console.log(`🚫 [Q&A REJECTED TERMS] Identified rejected terms: [${rejectedTerms.join(', ')}]`);
+    logger.info(`🚫 [Q&A REJECTED TERMS] Identified rejected terms: [${rejectedTerms.join(', ')}]`);
   }
 
   // Extract what the customer actually wants (after correction phrases)
@@ -51,7 +53,7 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.4) {
     const match = qNorm.match(pattern);
     if (match) {
       actualRequest = match[1].trim();
-      console.log(`✂️ [Q&A CORRECTION] Extracted actual request: "${actualRequest}"`);
+      logger.info(`✂️ [Q&A CORRECTION] Extracted actual request: "${actualRequest}"`);
       break;
     }
   }
@@ -68,7 +70,7 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.4) {
         : [])
     ].filter(q => q); // Remove empty strings
     
-    console.log(`🎯 [Q&A CHECK] Entry: "${entry.question}" | Variants: [${questionVariants.join(', ')}]`);
+    logger.info(`🎯 [Q&A CHECK] Entry: "${entry.question}" | Variants: [${questionVariants.join(', ')}]`);
     
     let entryScore = 0;
     let matchedVariant = '';
@@ -76,7 +78,7 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.4) {
     for (const variant of questionVariants) {
       // 1. Exact match - highest priority (but check both original and corrected request)
       if (variant === qNorm || variant === actualRequest) {
-        console.log(`✅ [Q&A EXACT] Perfect match: "${entry.question}"`);
+        logger.info(`✅ [Q&A EXACT] Perfect match: "${entry.question}"`);
         return entry.answer;
       }
       
@@ -92,7 +94,7 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.4) {
           const rejectedTerms = extractRejectedTerms(qNorm);
           const variantContainsRejected = rejectedTerms.some(term => variant.includes(term));
           if (variantContainsRejected) {
-            console.log(`🚫 [Q&A REJECTED] Skipping "${entry.question}" - contains rejected term: [${rejectedTerms.join(', ')}]`);
+            logger.info(`🚫 [Q&A REJECTED] Skipping "${entry.question}" - contains rejected term: [${rejectedTerms.join(', ')}]`);
             continue;
           }
         }
@@ -129,7 +131,7 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.4) {
         const rejectedTerms = extractRejectedTerms(qNorm);
         const variantContainsRejected = rejectedTerms.some(term => variant.includes(term));
         if (variantContainsRejected) {
-          console.log(`🚫 [Q&A REJECTED] Skipping "${entry.question}" - contains rejected term: [${rejectedTerms.join(', ')}]`);
+          logger.info(`🚫 [Q&A REJECTED] Skipping "${entry.question}" - contains rejected term: [${rejectedTerms.join(', ')}]`);
           continue;
         }
       }
@@ -226,11 +228,11 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.4) {
   
   // Return the best match if found
   if (bestMatch) {
-    console.log(`✅ [Q&A BEST MATCH] Selected: "${bestMatch.question}" | Score: ${bestScore.toFixed(3)}`);
+    logger.info(`✅ [Q&A BEST MATCH] Selected: "${bestMatch.question}" | Score: ${bestScore.toFixed(3)}`);
     return bestMatch.answer;
   }
 
-  console.log(`❌ [Q&A NO MATCH] No suitable Q&A match found for: "${userQuestion}"`);
+  logger.info(`❌ [Q&A NO MATCH] No suitable Q&A match found for: "${userQuestion}"`);
   return null;
 }
 

@@ -30,6 +30,8 @@
  */
 
 const CompanyKnowledgeQnA = require('../../models/knowledge/CompanyQnA');
+const logger = require('../../utils/logger.js');
+
 const KeywordGenerationService = require('./KeywordGenerationService');
 // V2 DELETED: Legacy natural NLP library - using V2 keyword-based system
 // const natural = require('natural');
@@ -285,12 +287,12 @@ class CompanyKnowledgeService {
   // Create new Q&A entry
   async createQnA(companyId, qnaData, userId = null) {
     try {
-      console.log('🧠 CHECKPOINT: CompanyKnowledgeService.createQnA started');
-      console.log('🧠 CHECKPOINT: Input data:', { companyId, userId, qnaData });
+      logger.debug('🧠 CHECKPOINT: CompanyKnowledgeService.createQnA started');
+      logger.debug('🧠 CHECKPOINT: Input data:', { companyId, userId, qnaData });
       
       logger.info(`📝 Creating new Q&A for company ${companyId}`);
 
-      console.log('🧠 CHECKPOINT: Creating new CompanyQnA instance');
+      logger.debug('🧠 CHECKPOINT: Creating new CompanyQnA instance');
       const qna = new CompanyQnA({
         ...qnaData,
         companyId,
@@ -298,19 +300,19 @@ class CompanyKnowledgeService {
         lastModifiedBy: userId
       });
 
-      console.log('🧠 CHECKPOINT: Running validation');
+      logger.info('🧠 CHECKPOINT: Running validation');
       // Validate before saving
       await qna.validate();
       
-      console.log('🧠 CHECKPOINT: Validation passed, attempting save');
+      logger.debug('🧠 CHECKPOINT: Validation passed, attempting save');
       // Save (triggers keyword generation middleware)
       const savedQnA = await qna.save();
       
-      console.log('🧠 CHECKPOINT: Q&A saved successfully, invalidating caches');
+      logger.debug('🧠 CHECKPOINT: Q&A saved successfully, invalidating caches');
       // Invalidate relevant caches
       await this.invalidateCompanyCaches(companyId);
       
-      console.log('✅ CHECKPOINT: Q&A creation completed successfully');
+      logger.debug('✅ CHECKPOINT: Q&A creation completed successfully');
       logger.info(`✅ Q&A created successfully: ${savedQnA._id}`);
       
       return {
@@ -320,11 +322,11 @@ class CompanyKnowledgeService {
       };
 
     } catch (error) {
-      console.error('❌ CRITICAL: CompanyKnowledgeService.createQnA failed:');
-      console.error('❌ CHECKPOINT: Error message:', error.message);
-      console.error('❌ CHECKPOINT: Error stack:', error.stack);
-      console.error('❌ CHECKPOINT: Error name:', error.name);
-      console.error('❌ CHECKPOINT: Input data that caused error:', { companyId, userId, qnaData });
+      logger.error('❌ CRITICAL: CompanyKnowledgeService.createQnA failed:');
+      logger.error('❌ CHECKPOINT: Error message:', error.message);
+      logger.error('❌ CHECKPOINT: Error stack:', error.stack);
+      logger.error('❌ CHECKPOINT: Error name:', error.name);
+      logger.error('❌ CHECKPOINT: Input data that caused error:', { companyId, userId, qnaData });
       
       logger.error('❌ Failed to create Q&A:', error);
       
@@ -359,7 +361,7 @@ class CompanyKnowledgeService {
         query.status = status;
       }
       
-      console.log('🔍 CHECKPOINT: MongoDB query for Q&A entries:', query);
+      logger.info('🔍 CHECKPOINT: MongoDB query for Q&A entries:', query);
 
       // Add filters
       if (category) {query.category = category;}
@@ -406,42 +408,42 @@ class CompanyKnowledgeService {
   // Update Q&A entry
   async updateQnA(qnaId, updateData, userId = null) {
     try {
-      console.log('🧠 CHECKPOINT: CompanyKnowledgeService.updateQnA called');
-      console.log('🧠 CHECKPOINT: Q&A ID:', qnaId);
-      console.log('🧠 CHECKPOINT: Update data received:', updateData);
-      console.log('🧠 CHECKPOINT: Status in update data:', updateData.status);
+      logger.info('🧠 CHECKPOINT: CompanyKnowledgeService.updateQnA called');
+      logger.info('🧠 CHECKPOINT: Q&A ID:', qnaId);
+      logger.info('🧠 CHECKPOINT: Update data received:', updateData);
+      logger.info('🧠 CHECKPOINT: Status in update data:', updateData.status);
       
       logger.info(`✏️ Updating Q&A: ${qnaId}`);
 
       const qna = await CompanyKnowledgeQnA.findById(qnaId);
       if (!qna) {
-        console.error('❌ CHECKPOINT: Q&A entry not found in database');
+        logger.error('❌ CHECKPOINT: Q&A entry not found in database');
         return {
           success: false,
           error: 'Q&A entry not found'
         };
       }
 
-      console.log('✅ CHECKPOINT: Q&A found in database');
-      console.log('🧠 CHECKPOINT: Current Q&A status:', qna.status);
-      console.log('🧠 CHECKPOINT: New status to set:', updateData.status);
+      logger.info('✅ CHECKPOINT: Q&A found in database');
+      logger.info('🧠 CHECKPOINT: Current Q&A status:', qna.status);
+      logger.info('🧠 CHECKPOINT: New status to set:', updateData.status);
 
       // Update fields
       Object.assign(qna, updateData);
       qna.lastModifiedBy = userId;
       
-      console.log('🧠 CHECKPOINT: Fields assigned, Q&A status after assign:', qna.status);
-      console.log('🧠 CHECKPOINT: About to save Q&A to database');
+      logger.info('🧠 CHECKPOINT: Fields assigned, Q&A status after assign:', qna.status);
+      logger.info('🧠 CHECKPOINT: About to save Q&A to database');
       
       // Save (triggers keyword regeneration if question/answer changed)
       const updatedQnA = await qna.save();
       
-      console.log('✅ CHECKPOINT: Q&A saved to database successfully');
-      console.log('🧠 CHECKPOINT: Final Q&A status in database:', updatedQnA.status);
+      logger.debug('✅ CHECKPOINT: Q&A saved to database successfully');
+      logger.debug('🧠 CHECKPOINT: Final Q&A status in database:', updatedQnA.status);
       
       // Invalidate caches
       await this.invalidateCompanyCaches(qna.companyId);
-      console.log('✅ CHECKPOINT: Redis caches invalidated');
+      logger.debug('✅ CHECKPOINT: Redis caches invalidated');
       
       logger.info(`✅ Q&A updated successfully: ${qnaId}`);
       

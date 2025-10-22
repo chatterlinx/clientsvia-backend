@@ -4,6 +4,8 @@
  */
 
 const jwt = require('jsonwebtoken');
+const logger = require('../utils/logger.js');
+
 const crypto = require('crypto');
 const RedisSessionStore = require('./redisSessionStore');
 const GeoIPSecurityService = require('./geoIPSecurityService');
@@ -25,7 +27,7 @@ class V2SingleSessionManager {
         // Rate limiting
         this.loginAttempts = new Map();
         
-        console.log('🛡️ V2 Single Session Manager initialized');
+        logger.security('🛡️ V2 Single Session Manager initialized');
     }
 
     /**
@@ -65,7 +67,7 @@ class V2SingleSessionManager {
             if (!hardwareValidation.valid && hardwareValidation.requiresApproval) {
                 // For single-user platform, auto-approve new devices
                 this.hardwareService.registerTrustedDevice(userId, deviceInfo.deviceFingerprint, deviceInfo);
-                console.log(`🔐 Auto-approved new device for single-user platform: ${userId}`);
+                logger.security(`🔐 Auto-approved new device for single-user platform: ${userId}`);
             }
 
             // Step 4: Kill all existing sessions (aggressive lockout)
@@ -115,15 +117,15 @@ class V2SingleSessionManager {
                 securityLevel: sessionData.securityLevel
             });
 
-            console.log(`🔐 V2 session created for ${userId}: ${sessionId}`);
-            console.log(`📍 Location: ${geoValidation.location.city}, ${geoValidation.location.country} (${geoValidation.risk} risk)`);
-            console.log(`🖥️ Device: ${enhancedFingerprint.substring(0, 10)}... (Security Level: ${sessionData.securityLevel})`);
-            console.log(`💀 Killed ${killedCount} existing sessions`);
+            logger.security(`🔐 V2 session created for ${userId}: ${sessionId}`);
+            logger.security(`📍 Location: ${geoValidation.location.city}, ${geoValidation.location.country} (${geoValidation.risk} risk)`);
+            logger.security(`🖥️ Device: ${enhancedFingerprint.substring(0, 10)}... (Security Level: ${sessionData.securityLevel})`);
+            logger.security(`💀 Killed ${killedCount} existing sessions`);
 
             return { token, sessionId, sessionData, geoValidation };
 
         } catch (error) {
-            console.error('V2 session creation failed:', error);
+            logger.security('V2 session creation failed:', error);
             throw error;
         }
     }
@@ -263,7 +265,7 @@ class V2SingleSessionManager {
             killedSessions: killedCount
         });
 
-        console.log(`🔒 Forced re-auth for ${userId}: ${reason} (${killedCount} sessions killed)`);
+        logger.security(`🔒 Forced re-auth for ${userId}: ${reason} (${killedCount} sessions killed)`);
         return killedCount;
     }
 
@@ -305,7 +307,7 @@ class V2SingleSessionManager {
         }
 
         if (cleanedCount > 0) {
-            console.log(`🧹 Cleaned up ${cleanedCount} expired sessions`);
+            logger.security(`🧹 Cleaned up ${cleanedCount} expired sessions`);
         }
 
         return cleanedCount;
@@ -332,7 +334,7 @@ class V2SingleSessionManager {
      * Emergency bypass for server-level access
      */
     emergencyBypass(userId) {
-        console.log(`🚨 EMERGENCY BYPASS activated for user: ${userId}`);
+        logger.security(`🚨 EMERGENCY BYPASS activated for user: ${userId}`);
         const bypassToken = jwt.sign({
             userId,
             sessionId: 'EMERGENCY_BYPASS',
@@ -371,7 +373,7 @@ class V2SingleSessionManager {
             session.lastRefresh = new Date();
             this.activeSessions.set(decoded.sessionId, session);
 
-            console.log(`🔄 Token refreshed for session: ${decoded.sessionId}`);
+            logger.security(`🔄 Token refreshed for session: ${decoded.sessionId}`);
             return { success: true, token: newToken, session };
 
         } catch (error) {

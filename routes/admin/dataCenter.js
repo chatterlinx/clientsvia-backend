@@ -12,6 +12,8 @@
  */
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const mongoose = require('mongoose');
 const Company = require('../../models/v2Company');
@@ -54,7 +56,7 @@ router.get('/companies', async (req, res) => {
             sort = '-lastActivity'
         } = req.query;
 
-        console.log('[DATA CENTER] 📊 GET /companies', { query, state, page, pageSize });
+        logger.info('[DATA CENTER] 📊 GET /companies', { query, state, page, pageSize });
 
         const pageNum = parseInt(page);
         const limit = parseInt(pageSize);
@@ -74,12 +76,12 @@ router.get('/companies', async (req, res) => {
         const liveInDB = await companiesCollection.countDocuments({ isDeleted: { $ne: true } });
         const deletedInDB = await companiesCollection.countDocuments({ isDeleted: true });
         
-        console.log('[DATA CENTER] 🔍 MongoDB Stats:', {
+        logger.info('[DATA CENTER] 🔍 MongoDB Stats:', {
             total: totalInDB,
             live: liveInDB,
             deleted: deletedInDB
         });
-        console.log('[DATA CENTER] 🔍 Querying MongoDB native driver with state:', state);
+        logger.info('[DATA CENTER] 🔍 Querying MongoDB native driver with state:', state);
 
         // Build match filter
         const match = {};
@@ -104,7 +106,7 @@ router.get('/companies', async (req, res) => {
             match.$or = deletedOr;
         } else {
             // 'all' - explicitly include both deleted and non-deleted
-            console.log('[DATA CENTER] 📋 Fetching ALL companies (deleted + live)');
+            logger.debug('[DATA CENTER] 📋 Fetching ALL companies (deleted + live)');
         }
 
         // Search filter
@@ -247,8 +249,8 @@ router.get('/companies', async (req, res) => {
         // Execute aggregation using NATIVE MongoDB driver across BOTH possible collections
         // Diagnostics: when filtering deleted, log chosen collections and filter
         if (state === 'deleted' || state === 'live' || state === 'all') {
-            console.log('[DATA CENTER] 🔎 Companies list final $match:', JSON.stringify(finalMatch));
-            console.log('[DATA CENTER] 🔎 Using company collections:', {
+            logger.info('[DATA CENTER] 🔎 Companies list final $match:', JSON.stringify(finalMatch));
+            logger.info('[DATA CENTER] 🔎 Using company collections:', {
                 primary: collectionsMap.companies || '(none)',
                 legacy: (collectionsMap.companies === 'companiesCollection' && names.has('companies')) ? 'companies' : null
             });
@@ -256,11 +258,11 @@ router.get('/companies', async (req, res) => {
 
         // ✅ V2 only - no legacy merging
         const mergedCompanies = await companiesCollection.aggregate(basePipeline).toArray();
-        console.log('[DATA CENTER] ✅ Native MongoDB aggregation returned', mergedCompanies.length, 'companies');
+        logger.debug('[DATA CENTER] ✅ Native MongoDB aggregation returned', mergedCompanies.length, 'companies');
         
         // DEBUG: Log first company to see structure
         if (mergedCompanies.length > 0) {
-            console.log('[DATA CENTER] 🔍 First company sample:', {
+            logger.debug('[DATA CENTER] 🔍 First company sample:', {
                 _id: mergedCompanies[0]._id,
                 companyName: mergedCompanies[0].companyName,
                 businessName: mergedCompanies[0].businessName,
@@ -337,10 +339,10 @@ router.get('/companies', async (req, res) => {
 
         // ✅ V2 only - get total count
         const total = await companiesCollection.countDocuments(finalMatch);
-        console.log('[DATA CENTER] 📊 Total count from native MongoDB:', total);
+        logger.info('[DATA CENTER] 📊 Total count from native MongoDB:', total);
 
         if (state === 'deleted') {
-            console.log('[DATA CENTER] 🔎 Pre-pagination deleted count:', total);
+            logger.info('[DATA CENTER] 🔎 Pre-pagination deleted count:', total);
         }
 
         const response = {
@@ -352,7 +354,7 @@ router.get('/companies', async (req, res) => {
             collectionsMap
         };
         
-        console.log('[DATA CENTER] 📤 Sending response:', {
+        logger.info('[DATA CENTER] 📤 Sending response:', {
             resultsCount: results.length,
             total: response.total,
             page: response.page
@@ -361,7 +363,7 @@ router.get('/companies', async (req, res) => {
         res.json(response);
 
     } catch (error) {
-        console.error('[DATA CENTER] Error listing companies:', error);
+        logger.error('[DATA CENTER] Error listing companies:', error);
         res.status(500).json({ 
             error: 'Failed to list companies',
             details: error.message 
@@ -398,7 +400,7 @@ function buildSortObject(sortStr) {
 router.get('/companies/:id/inventory', async (req, res) => {
     try {
         const { id } = req.params;
-        console.log('[DATA CENTER] GET /companies/:id/inventory', id);
+        logger.debug('[DATA CENTER] GET /companies/:id/inventory', id);
 
         // Check cache first (guard if redis is unavailable)
         const cacheKey = `datacenter:inventory:${id}`;
@@ -406,12 +408,12 @@ router.get('/companies/:id/inventory', async (req, res) => {
             if (redisClient && typeof redisClient.get === 'function') {
                 const cached = await redisClient.get(cacheKey);
                 if (cached) {
-                    console.log('[DATA CENTER] Returning cached inventory');
+                    logger.debug('[DATA CENTER] Returning cached inventory');
                     return res.json(JSON.parse(cached));
                 }
             }
         } catch (cacheErr) {
-            console.warn('[DATA CENTER] Redis cache get failed:', cacheErr.message);
+            logger.warn('[DATA CENTER] Redis cache get failed:', cacheErr.message);
         }
 
         // ✅ V2 only - fetch company from primary collection
@@ -482,13 +484,13 @@ router.get('/companies/:id/inventory', async (req, res) => {
                 await redisClient.setex(cacheKey, 30, JSON.stringify(inventory));
             }
         } catch (cacheErr) {
-            console.warn('[DATA CENTER] Redis cache set failed:', cacheErr.message);
+            logger.warn('[DATA CENTER] Redis cache set failed:', cacheErr.message);
         }
 
         res.json(inventory);
 
     } catch (error) {
-        console.error('[DATA CENTER] Error getting inventory:', error);
+        logger.error('[DATA CENTER] Error getting inventory:', error);
         res.status(500).json({ 
             error: 'Failed to get inventory',
             details: error.message 
@@ -509,7 +511,7 @@ router.patch('/companies/:id/soft-delete', async (req, res) => {
         const userId = req.user?._id || req.user?.id;
         const userEmail = req.user?.email || null;
 
-        console.log('[DATA CENTER] PATCH /companies/:id/soft-delete', id);
+        logger.debug('[DATA CENTER] PATCH /companies/:id/soft-delete', id);
 
         // ✅ V2 only - fetch company
         const rawCompany = await mongoose.connection.db.collection('companiesCollection').findOne({ _id: new mongoose.Types.ObjectId(id) });
@@ -545,13 +547,13 @@ router.patch('/companies/:id/soft-delete', async (req, res) => {
                 await redisClient.del(`company:${id}`);
                 await redisClient.del(`datacenter:inventory:${id}`);
                 await redisClient.del(`readiness:${id}`);
-                console.log('[DATA CENTER] Cache cleared for deleted company');
+                logger.debug('[DATA CENTER] Cache cleared for deleted company');
             }
         } catch (cacheError) {
-            console.warn('[DATA CENTER] Cache clear failed:', cacheError.message);
+            logger.warn('[DATA CENTER] Cache clear failed:', cacheError.message);
         }
 
-        console.log('[DATA CENTER] ✅ Company soft deleted:', id);
+        logger.debug('[DATA CENTER] ✅ Company soft deleted:', id);
 
         // Audit log - Soft delete
         try {
@@ -566,7 +568,7 @@ router.patch('/companies/:id/soft-delete', async (req, res) => {
                 success: true
             });
         } catch (auditErr) {
-            console.warn('[DATA CENTER] Audit log failed (SOFT_DELETE):', auditErr.message);
+            logger.warn('[DATA CENTER] Audit log failed (SOFT_DELETE):', auditErr.message);
         }
 
         res.json({
@@ -578,7 +580,7 @@ router.patch('/companies/:id/soft-delete', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[DATA CENTER] Error soft deleting company:', error);
+        logger.error('[DATA CENTER] Error soft deleting company:', error);
         res.status(500).json({ 
             error: 'Failed to soft delete company',
             details: error.message 
@@ -598,7 +600,7 @@ router.post('/companies/:id/restore', async (req, res) => {
         const userId = req.user?._id || req.user?.id;
         const userEmail = req.user?.email || null;
 
-        console.log('[DATA CENTER] POST /companies/:id/restore', id);
+        logger.debug('[DATA CENTER] POST /companies/:id/restore', id);
 
         // ✅ V2 only - fetch company (include deleted)
         const rawRestore2 = await mongoose.connection.db.collection('companiesCollection').findOne({ _id: new mongoose.Types.ObjectId(id) });
@@ -633,13 +635,13 @@ router.post('/companies/:id/restore', async (req, res) => {
                 await redisClient.del(`company:${id}`);
                 await redisClient.del(`datacenter:inventory:${id}`);
                 await redisClient.del(`readiness:${id}`);
-                console.log('[DATA CENTER] Cache cleared for restored company');
+                logger.debug('[DATA CENTER] Cache cleared for restored company');
             }
         } catch (cacheError) {
-            console.warn('[DATA CENTER] Cache clear failed:', cacheError.message);
+            logger.warn('[DATA CENTER] Cache clear failed:', cacheError.message);
         }
 
-        console.log('[DATA CENTER] ✅ Company restored:', id);
+        logger.debug('[DATA CENTER] ✅ Company restored:', id);
 
         // Audit log - Restore
         try {
@@ -653,7 +655,7 @@ router.post('/companies/:id/restore', async (req, res) => {
                 success: true
             });
         } catch (auditErr) {
-            console.warn('[DATA CENTER] Audit log failed (RESTORE):', auditErr.message);
+            logger.warn('[DATA CENTER] Audit log failed (RESTORE):', auditErr.message);
         }
 
         res.json({
@@ -662,7 +664,7 @@ router.post('/companies/:id/restore', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[DATA CENTER] Error restoring company:', error);
+        logger.error('[DATA CENTER] Error restoring company:', error);
         res.status(500).json({ 
             error: 'Failed to restore company',
             details: error.message 
@@ -684,7 +686,7 @@ router.delete('/companies/:id/hard-delete', async (req, res) => {
         const userId = req.user?._id || req.user?.id;
         const userEmail = req.user?.email || null;
 
-        console.log('[DATA CENTER] ⚠️  HARD DELETE request for company:', id);
+        logger.info('[DATA CENTER] ⚠️  HARD DELETE request for company:', id);
 
         // Require confirmation
         if (!confirmDelete || confirmDelete !== true) {
@@ -704,14 +706,14 @@ router.delete('/companies/:id/hard-delete', async (req, res) => {
 
         const companyName = rawCompany.companyName || rawCompany.businessName || 'Unknown Company';
         
-        console.log('[DATA CENTER] 💀 Permanently deleting company:', companyName);
+        logger.info('[DATA CENTER] 💀 Permanently deleting company:', companyName);
 
         // ========================================
         // DELETE COMPANY DOCUMENT (V2 only)
         // ========================================
         const deleteResult = await db.collection('companiesCollection').deleteOne({ _id: new mongoose.Types.ObjectId(id) });
         const deletedCount = deleteResult.deletedCount;
-        console.log('[DATA CENTER] 💀 Deleted company documents:', deletedCount);
+        logger.info('[DATA CENTER] 💀 Deleted company documents:', deletedCount);
 
         // ========================================
         // DELETE ALL RELATED DATA
@@ -746,11 +748,11 @@ router.delete('/companies/:id/hard-delete', async (req, res) => {
             if (result.status === 'fulfilled') {
                 totalRecordsDeleted += result.value?.deletedCount || 0;
             } else {
-                console.warn(`[DATA CENTER] Failed to delete from collection ${index}:`, result.reason?.message);
+                logger.warn(`[DATA CENTER] Failed to delete from collection ${index}:`, result.reason?.message);
             }
         });
 
-        console.log('[DATA CENTER] 💀 Total related records deleted:', totalRecordsDeleted);
+        logger.debug('[DATA CENTER] 💀 Total related records deleted:', totalRecordsDeleted);
 
         // ========================================
         // CLEAR REDIS CACHE
@@ -762,9 +764,9 @@ router.delete('/companies/:id/hard-delete', async (req, res) => {
                 `ai-agent:${id}`
             ];
             await Promise.all(cacheKeys.map(key => redisClient.del(key).catch(() => null)));
-            console.log('[DATA CENTER] 🗑️  Redis cache cleared for company:', id);
+            logger.debug('[DATA CENTER] 🗑️  Redis cache cleared for company:', id);
         } catch (cacheError) {
-            console.warn('[DATA CENTER] Cache clear failed:', cacheError.message);
+            logger.warn('[DATA CENTER] Cache clear failed:', cacheError.message);
         }
 
         // ========================================
@@ -785,10 +787,10 @@ router.delete('/companies/:id/hard-delete', async (req, res) => {
                 success: true
             });
         } catch (auditErr) {
-            console.warn('[DATA CENTER] Audit log failed (HARD_DELETE):', auditErr.message);
+            logger.warn('[DATA CENTER] Audit log failed (HARD_DELETE):', auditErr.message);
         }
 
-        console.log('[DATA CENTER] ✅ Hard delete complete for company:', companyName);
+        logger.info('[DATA CENTER] ✅ Hard delete complete for company:', companyName);
 
         res.json({
             success: true,
@@ -804,7 +806,7 @@ router.delete('/companies/:id/hard-delete', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[DATA CENTER] ❌ Error during hard delete:', error);
+        logger.error('[DATA CENTER] ❌ Error during hard delete:', error);
         res.status(500).json({ 
             error: 'Failed to permanently delete company',
             details: error.message 
@@ -823,7 +825,7 @@ router.get('/companies/:id/customers', async (req, res) => {
         const { id } = req.params;
         const { search = '', page = 1, pageSize = 50 } = req.query;
 
-        console.log('[DATA CENTER] GET /companies/:id/customers', id);
+        logger.info('[DATA CENTER] GET /companies/:id/customers', id);
 
         const pageNum = parseInt(page);
         const limit = parseInt(pageSize);
@@ -866,7 +868,7 @@ router.get('/companies/:id/customers', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[DATA CENTER] Error fetching customers:', error);
+        logger.error('[DATA CENTER] Error fetching customers:', error);
         res.status(500).json({ 
             error: 'Failed to fetch customers',
             details: error.message 
@@ -885,7 +887,7 @@ router.get('/companies/:id/transcripts', async (req, res) => {
         const { id } = req.params;
         const { startDate, endDate, page = 1, pageSize = 50 } = req.query;
 
-        console.log('[DATA CENTER] GET /companies/:id/transcripts', id);
+        logger.debug('[DATA CENTER] GET /companies/:id/transcripts', id);
 
         const pageNum = parseInt(page);
         const limit = parseInt(pageSize);
@@ -926,7 +928,7 @@ router.get('/companies/:id/transcripts', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[DATA CENTER] Error fetching transcripts:', error);
+        logger.error('[DATA CENTER] Error fetching transcripts:', error);
         res.status(500).json({ 
             error: 'Failed to fetch transcripts',
             details: error.message 
@@ -942,7 +944,7 @@ router.get('/companies/:id/transcripts', async (req, res) => {
  */
 router.get('/duplicates', async (req, res) => {
     try {
-        console.log('[DATA CENTER] GET /duplicates');
+        logger.info('[DATA CENTER] GET /duplicates');
         const db = mongoose.connection.db;
         const collections = await db.listCollections().toArray();
         const names = new Set(collections.map(c => c.name));
@@ -1019,7 +1021,7 @@ router.get('/duplicates', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[DATA CENTER] Error finding duplicates:', error);
+        logger.error('[DATA CENTER] Error finding duplicates:', error);
         res.status(500).json({ 
             error: 'Failed to find duplicates',
             details: error.message 
@@ -1129,7 +1131,7 @@ router.get('/scan', async (req, res) => {
             redis
         });
     } catch (error) {
-        console.error('[DATA CENTER] Error scanning environment:', error);
+        logger.error('[DATA CENTER] Error scanning environment:', error);
         res.status(500).json({ error: 'Scan failed', details: error.message });
     }
 });
@@ -1170,9 +1172,9 @@ router.get('/summary', async (req, res) => {
             ]
         };
 
-        console.log('[SUMMARY] Using companies collection:', collectionsMap.companies || '(none)');
-        console.log('[SUMMARY] deletedMatch =', JSON.stringify(deletedMatch));
-        console.log('[SUMMARY] liveMatch    =', JSON.stringify(liveMatch));
+        logger.info('[SUMMARY] Using companies collection:', collectionsMap.companies || '(none)');
+        logger.info('[SUMMARY] deletedMatch =', JSON.stringify(deletedMatch));
+        logger.info('[SUMMARY] liveMatch    =', JSON.stringify(liveMatch));
 
         // Basic counts for primary and legacy, then merge
         const [totalP, delP, liveP] = await Promise.all([
@@ -1238,7 +1240,7 @@ router.get('/summary', async (req, res) => {
                 }
             }
         } catch (e) {
-            console.warn('[SUMMARY] neverLive computation skipped:', e.message);
+            logger.warn('[SUMMARY] neverLive computation skipped:', e.message);
         }
 
         const summary = {
@@ -1250,7 +1252,7 @@ router.get('/summary', async (req, res) => {
 
         res.json({ ...summary, collectionsMap });
     } catch (error) {
-        console.error('[DATA CENTER] Error getting summary:', error);
+        logger.error('[DATA CENTER] Error getting summary:', error);
         res.status(500).json({ error: 'Failed to get summary', details: error.message });
     }
 });
@@ -1318,7 +1320,7 @@ router.get('/companies/:id/deletion-debug', async (req, res) => {
             raw
         });
     } catch (error) {
-        console.error('[DATA CENTER] Error in deletion-debug:', error);
+        logger.error('[DATA CENTER] Error in deletion-debug:', error);
         res.status(500).json({ error: 'Failed to debug deletion status', details: error.message });
     }
 });
@@ -1337,7 +1339,7 @@ router.get('/collections-map', async (req, res) => {
         const collectionsMap = buildCollectionsMap(names);
         res.json(collectionsMap);
     } catch (error) {
-        console.error('[DATA CENTER] Error in collections-map:', error);
+        logger.error('[DATA CENTER] Error in collections-map:', error);
         res.status(500).json({ error: 'Failed to get collections map', details: error.message });
     }
 });
@@ -1425,7 +1427,7 @@ router.post('/seed/e2e', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('[DATA CENTER] Seed E2E error:', error);
+        logger.error('[DATA CENTER] Seed E2E error:', error);
         return res.status(500).json({ ok: false, error: 'SEED_FAILED', message: error.message });
     }
 });
@@ -1461,7 +1463,7 @@ router.post('/seed/e2e/wipe', async (req, res) => {
 
         return res.json({ ok: true, collectionsMap: cmap });
     } catch (error) {
-        console.error('[DATA CENTER] Wipe E2E error:', error);
+        logger.error('[DATA CENTER] Wipe E2E error:', error);
         return res.status(500).json({ ok: false, error: 'WIPE_FAILED', message: error.message });
     }
 });

@@ -18,6 +18,8 @@
  */
 
 const rateLimit = require('express-rate-limit');
+const logger = require('../utils/logger.js');
+
 
 /**
  * Ensure user has access to the company they're trying to configure
@@ -27,14 +29,14 @@ function ensureCompanyScope(req, res, next) {
     const requestedCompanyId = req.params.companyId;
     const user = req.user; // Set by authMiddleware
     
-    console.log(`[CONFIG SECURITY] Access check: User ${user?.userId} → Company ${requestedCompanyId}`);
+    logger.security(`[CONFIG SECURITY] Access check: User ${user?.userId} → Company ${requestedCompanyId}`);
     
     // Verify user has access to this company
     // For now, we trust that authMiddleware has validated the token
     // In a more complex system, you'd check user.companies[] array
     
     if (!requestedCompanyId) {
-        console.error('[CONFIG SECURITY] ❌ No companyId in request');
+        logger.security('[CONFIG SECURITY] ❌ No companyId in request');
         return res.status(400).json({ 
             error: 'Company ID required',
             code: 'MISSING_COMPANY_ID'
@@ -42,7 +44,7 @@ function ensureCompanyScope(req, res, next) {
     }
     
     if (!user) {
-        console.error('[CONFIG SECURITY] ❌ No user in request');
+        logger.security('[CONFIG SECURITY] ❌ No user in request');
         return res.status(401).json({ 
             error: 'Authentication required',
             code: 'UNAUTHENTICATED'
@@ -53,7 +55,7 @@ function ensureCompanyScope(req, res, next) {
     // For now, if user is authenticated, they can access any company
     // This will be enhanced when we add multi-user company access
     
-    console.log(`[CONFIG SECURITY] ✅ Access granted`);
+    logger.security(`[CONFIG SECURITY] ✅ Access granted`);
     next();
 }
 
@@ -72,7 +74,7 @@ const configWriteRateLimit = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     handler: (req, res) => {
-        console.warn(`[CONFIG SECURITY] ⚠️ Rate limit exceeded: ${req.ip}`);
+        logger.security(`[CONFIG SECURITY] ⚠️ Rate limit exceeded: ${req.ip}`);
         res.status(429).json({
             error: 'Too many configuration requests. Please try again in a minute.',
             code: 'RATE_LIMIT_EXCEEDED',
@@ -100,7 +102,7 @@ const configApplyRateLimit = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     handler: (req, res) => {
-        console.warn(`[CONFIG SECURITY] ⚠️ Apply rate limit exceeded: ${req.ip}`);
+        logger.security(`[CONFIG SECURITY] ⚠️ Apply rate limit exceeded: ${req.ip}`);
         res.status(429).json({
             error: 'Too many apply requests. Please wait before applying more changes.',
             code: 'APPLY_RATE_LIMIT_EXCEEDED',
@@ -134,7 +136,7 @@ function captureAuditInfo(req, res, next) {
         userId: req.user?.userId || 'anonymous'
     };
     
-    console.log(`[CONFIG SECURITY] 📝 Audit: ${req.auditInfo.userId} from ${ip}`);
+    logger.security(`[CONFIG SECURITY] 📝 Audit: ${req.auditInfo.userId} from ${ip}`);
     
     next();
 }
@@ -147,7 +149,7 @@ function requireIdempotency(req, res, next) {
     const idempotencyKey = req.headers['idempotency-key'];
     
     if (!idempotencyKey) {
-        console.error('[CONFIG SECURITY] ❌ Missing idempotency key');
+        logger.security('[CONFIG SECURITY] ❌ Missing idempotency key');
         return res.status(400).json({
             error: 'Idempotency-Key header is required for this operation',
             code: 'MISSING_IDEMPOTENCY_KEY',
@@ -158,7 +160,7 @@ function requireIdempotency(req, res, next) {
     // Validate format (should be UUID-like)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(idempotencyKey)) {
-        console.error('[CONFIG SECURITY] ❌ Invalid idempotency key format');
+        logger.security('[CONFIG SECURITY] ❌ Invalid idempotency key format');
         return res.status(400).json({
             error: 'Idempotency-Key must be a valid UUID',
             code: 'INVALID_IDEMPOTENCY_KEY',
@@ -169,7 +171,7 @@ function requireIdempotency(req, res, next) {
     // Attach to request
     req.idempotencyKey = idempotencyKey;
     
-    console.log(`[CONFIG SECURITY] 🔑 Idempotency key: ${idempotencyKey.substring(0, 8)}...`);
+    logger.security(`[CONFIG SECURITY] 🔑 Idempotency key: ${idempotencyKey.substring(0, 8)}...`);
     
     next();
 }

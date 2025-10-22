@@ -1,4 +1,6 @@
 const jwt = require('jsonwebtoken');
+const logger = require('../utils/logger.js');
+
 const User = require('../models/v2User');
 const sessionManager = require('./singleSessionManager');
 
@@ -37,27 +39,27 @@ async function authenticateJWT(req, res, next) {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log('🔍 AUTH CHECKPOINT: JWT decoded successfully, userId:', decoded.userId);
+    logger.security('🔍 AUTH CHECKPOINT: JWT decoded successfully, userId:', decoded.userId);
     
     const user = await User.findById(decoded.userId).populate('companyId');
-    console.log('🔍 AUTH CHECKPOINT: User found:', Boolean(user));
-    console.log('🔍 AUTH CHECKPOINT: User companyId field:', user?.companyId);
-    console.log('🔍 AUTH CHECKPOINT: User companyId type:', typeof user?.companyId);
-    console.log('🔍 AUTH CHECKPOINT: User status:', user?.status);
+    logger.security('🔍 AUTH CHECKPOINT: User found:', Boolean(user));
+    logger.security('🔍 AUTH CHECKPOINT: User companyId field:', user?.companyId);
+    logger.security('🔍 AUTH CHECKPOINT: User companyId type:', typeof user?.companyId);
+    logger.security('🔍 AUTH CHECKPOINT: User status:', user?.status);
     
     if (!user || user.status !== 'active') {
-      console.error('❌ AUTH CHECKPOINT: User not found or inactive');
+      logger.security('❌ AUTH CHECKPOINT: User not found or inactive');
       return res.status(401).json({ message: 'User not found or inactive' });
     }
 
     // Attach user to request - companyId validation moved to specific endpoints that need it
     // This allows flexibility for endpoints that don't require company association
     req.user = user;
-    console.log('✅ AUTH CHECKPOINT: Authentication successful, user attached to request');
+    logger.security('✅ AUTH CHECKPOINT: Authentication successful, user attached to request');
     next();
   } catch (error) {
-    console.error('❌ JWT Authentication failed:', error.message);
-    console.error('❌ JWT Error details:', {
+    logger.security('❌ JWT Authentication failed:', error.message);
+    logger.security('❌ JWT Error details:', {
       name: error.name,
       message: error.message,
       hasToken: Boolean(token),
@@ -144,7 +146,7 @@ async function authenticateSingleSession(req, res, next) {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       if (decoded.emergency && decoded.sessionId === 'EMERGENCY_BYPASS') {
-        console.log('🚨 Emergency bypass access granted');
+        logger.security('🚨 Emergency bypass access granted');
         req.user = { _id: decoded.userId, emergency: true };
         return next();
       }
@@ -174,7 +176,7 @@ async function authenticateSingleSession(req, res, next) {
 
     // Verify user has valid company association
     if (!user.companyId) {
-      console.error('❌ Single-session auth: User has no company association', { userId: user._id });
+      logger.security('❌ Single-session auth: User has no company association', { userId: user._id });
       return res.status(403).json({ 
         message: 'User account is not properly configured. Please contact support.',
         code: 'MISSING_COMPANY_ASSOCIATION'
@@ -187,7 +189,7 @@ async function authenticateSingleSession(req, res, next) {
     next();
 
   } catch (error) {
-    console.error('Single session auth error:', error);
+    logger.security('Single session auth error:', error);
     return res.status(401).json({ 
       message: 'Authentication failed',
       code: 'AUTH_ERROR'

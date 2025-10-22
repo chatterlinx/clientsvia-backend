@@ -19,6 +19,8 @@
  */
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const GlobalActionHookDirectory = require('../../models/GlobalActionHookDirectory');
 
@@ -42,7 +44,7 @@ router.get('/', async (req, res) => {
             data: directories
         });
     } catch (error) {
-        console.error('Error fetching action hook directories:', error);
+        logger.error('Error fetching action hook directories:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch action hook directories',
@@ -69,7 +71,7 @@ router.get('/:id', async (req, res) => {
             data: directory
         });
     } catch (error) {
-        console.error('Error fetching action hook directory:', error);
+        logger.error('Error fetching action hook directory:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch action hook directory',
@@ -119,7 +121,7 @@ router.post('/', async (req, res) => {
             data: newDirectory
         });
     } catch (error) {
-        console.error('Error creating action hook directory:', error);
+        logger.error('Error creating action hook directory:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to create action hook directory',
@@ -165,7 +167,7 @@ router.put('/:id', async (req, res) => {
             data: directory
         });
     } catch (error) {
-        console.error('Error updating action hook directory:', error);
+        logger.error('Error updating action hook directory:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to update action hook directory',
@@ -206,7 +208,7 @@ router.delete('/:id', async (req, res) => {
             message: 'Action hook directory deleted successfully'
         });
     } catch (error) {
-        console.error('Error deleting action hook directory:', error);
+        logger.error('Error deleting action hook directory:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to delete action hook directory',
@@ -251,7 +253,7 @@ router.post('/seed', async (req, res) => {
             count: defaultDirectories.length
         });
     } catch (error) {
-        console.error('Error seeding action hook directories:', error);
+        logger.error('Error seeding action hook directories:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to seed action hook directories',

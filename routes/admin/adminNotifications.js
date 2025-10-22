@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+ 
 // Console.log statements are intentional for monitoring and debugging notification system
 // ============================================================================
 // 🔔 ADMIN NOTIFICATION CENTER - API ROUTES
@@ -28,6 +28,8 @@
 // ============================================================================
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const { captureAuditInfo, requireIdempotency, configWriteRateLimit } = require('../../middleware/configSecurity');
@@ -57,7 +59,7 @@ async function respondWithIdempotency(req, res, handler, opts = {}) {
             try {
                 await redisClient.setEx(key, ttlSeconds, JSON.stringify(result));
             } catch (cacheErr) {
-                console.warn('⚠️ [IDEMPOTENCY CACHE] Failed to store result:', cacheErr?.message);
+                logger.warn('⚠️ [IDEMPOTENCY CACHE] Failed to store result:', cacheErr?.message);
             }
         }
 
@@ -125,7 +127,7 @@ router.get('/admin/notifications/status', authenticateJWT, requireRole('admin'),
         });
         
     } catch (error) {
-        console.error('❌ [NOTIFICATION STATUS] Error:', error);
+        logger.error('❌ [NOTIFICATION STATUS] Error:', error);
         res.status(500).json({
             success: false,
             overallStatus: 'offline',
@@ -179,7 +181,7 @@ router.get('/admin/notifications/dashboard', authenticateJWT, requireRole('admin
         });
         
     } catch (error) {
-        console.error('❌ [NOTIFICATION DASHBOARD] Error:', error);
+        logger.error('❌ [NOTIFICATION DASHBOARD] Error:', error);
         try { AdminNotificationService.sendAlert({
             code: 'NOTIF_DASHBOARD_LOAD_FAILURE',
             severity: 'WARNING',
@@ -230,7 +232,7 @@ router.get('/admin/notifications/registry', authenticateJWT, requireRole('admin'
         });
         
     } catch (error) {
-        console.error('❌ [NOTIFICATION REGISTRY] Error:', error);
+        logger.error('❌ [NOTIFICATION REGISTRY] Error:', error);
         try { AdminNotificationService.sendAlert({
             code: 'NOTIF_REGISTRY_VALIDATE_FAILURE',
             severity: 'WARNING',
@@ -292,7 +294,7 @@ router.post('/admin/notifications/registry/validate', authenticateJWT, requireRo
             };
         });
     } catch (error) {
-        console.error('❌ [NOTIFICATION VALIDATION] Error:', error);
+        logger.error('❌ [NOTIFICATION VALIDATION] Error:', error);
         try { AdminNotificationService.sendAlert({
             code: 'NOTIF_REGISTRY_VALIDATE_FAILURE',
             severity: 'WARNING',
@@ -375,7 +377,7 @@ router.get('/admin/notifications/logs', authenticateJWT, requireRole('admin'), a
         });
         
     } catch (error) {
-        console.error('❌ [NOTIFICATION LOGS] Error:', error);
+        logger.error('❌ [NOTIFICATION LOGS] Error:', error);
         try { AdminNotificationService.sendAlert({
             code: 'NOTIF_LOGS_LIST_FAILURE',
             severity: 'WARNING',
@@ -431,7 +433,7 @@ router.get('/admin/notifications/logs/:alertId', authenticateJWT, requireRole('a
         });
         
     } catch (error) {
-        console.error('❌ [NOTIFICATION ALERT DETAILS] Error:', error);
+        logger.error('❌ [NOTIFICATION ALERT DETAILS] Error:', error);
         try { AdminNotificationService.sendAlert({
             code: 'NOTIF_LOGS_LIST_FAILURE',
             severity: 'WARNING',
@@ -484,7 +486,7 @@ router.post('/admin/notifications/acknowledge', authenticateJWT, requireRole('ad
             return result;
         });
     } catch (error) {
-        console.error('❌ [NOTIFICATION ACKNOWLEDGE] Error:', error);
+        logger.error('❌ [NOTIFICATION ACKNOWLEDGE] Error:', error);
         try { AdminNotificationService.sendAlert({
             code: 'NOTIF_ALERT_ACK_FAILURE',
             severity: 'WARNING',
@@ -537,7 +539,7 @@ router.post('/admin/notifications/snooze', authenticateJWT, requireRole('admin')
             return result;
         });
     } catch (error) {
-        console.error('❌ [NOTIFICATION SNOOZE] Error:', error);
+        logger.error('❌ [NOTIFICATION SNOOZE] Error:', error);
         try { AdminNotificationService.sendAlert({
             code: 'NOTIF_ALERT_SNOOZE_FAILURE',
             severity: 'WARNING',
@@ -596,7 +598,7 @@ router.post('/admin/notifications/resolve', authenticateJWT, requireRole('admin'
             };
         });
     } catch (error) {
-        console.error('❌ [NOTIFICATION RESOLVE] Error:', error);
+        logger.error('❌ [NOTIFICATION RESOLVE] Error:', error);
         try { AdminNotificationService.sendAlert({
             code: 'NOTIF_ALERT_RESOLVE_FAILURE',
             severity: 'WARNING',
@@ -625,7 +627,7 @@ router.post('/admin/notifications/health-check', authenticateJWT, requireRole('a
         const t0 = Date.now();
         const { triggeredBy = 'manual' } = req.body;
         const triggeredByUser = req.user?.name || req.user?.email || 'admin';
-        console.log(`🏥 [HEALTH CHECK API] Starting health check (triggered by: ${triggeredByUser})...`);
+        logger.security(`🏥 [HEALTH CHECK API] Starting health check (triggered by: ${triggeredByUser})...`);
         await respondWithIdempotency(req, res, async () => {
             const results = await PlatformHealthCheckService.runFullHealthCheck(triggeredBy, triggeredByUser);
             const latencyMs = Date.now() - t0;
@@ -662,7 +664,7 @@ router.post('/admin/notifications/health-check', authenticateJWT, requireRole('a
             };
         }, { ttlSeconds: 120 }); // cache health-check results briefly
     } catch (error) {
-        console.error('❌ [HEALTH CHECK API] Error:', error);
+        logger.error('❌ [HEALTH CHECK API] Error:', error);
         try { AdminNotificationService.sendAlert({
             code: 'NOTIF_HEALTH_RUN_FAILURE',
             severity: 'WARNING',
@@ -704,7 +706,7 @@ router.get('/admin/notifications/health-history', authenticateJWT, requireRole('
         });
         
     } catch (error) {
-        console.error('❌ [HEALTH HISTORY] Error:', error);
+        logger.error('❌ [HEALTH HISTORY] Error:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -740,7 +742,7 @@ router.get('/admin/notifications/settings', authenticateJWT, requireRole('admin'
             const redisClient = require('../../db').redisClient;
             if (redisClient && redisClient.del) {
                 await redisClient.del('admin:settings:notification-center');
-                console.log('✅ [NOTIFICATION SETTINGS] Redis cache cleared after initial save');
+                logger.debug('✅ [NOTIFICATION SETTINGS] Redis cache cleared after initial save');
             }
         }
         
@@ -771,7 +773,7 @@ router.get('/admin/notifications/settings', authenticateJWT, requireRole('admin'
         });
         
     } catch (error) {
-        console.error('❌ [GET NOTIFICATION SETTINGS] Error:', error);
+        logger.error('❌ [GET NOTIFICATION SETTINGS] Error:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -809,7 +811,7 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
                 phoneNumber: twilio.phoneNumber
             };
             
-            console.log('✅ [NOTIFICATION SETTINGS] Twilio credentials updated');
+            logger.security('✅ [NOTIFICATION SETTINGS] Twilio credentials updated');
         }
         
         // Update Twilio Test config if provided (same pattern as Global Brain)
@@ -829,7 +831,7 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
                 notes: twilioTest.notes || ''
             };
             
-            console.log('✅ [NOTIFICATION SETTINGS] Twilio Test config updated');
+            logger.info('✅ [NOTIFICATION SETTINGS] Twilio Test config updated');
         }
         
         // Update admin contacts if provided
@@ -840,7 +842,7 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
             
             settings.notificationCenter.adminContacts = adminContacts;
             
-            console.log(`✅ [NOTIFICATION SETTINGS] Admin contacts updated: ${adminContacts.length} contacts`);
+            logger.info(`✅ [NOTIFICATION SETTINGS] Admin contacts updated: ${adminContacts.length} contacts`);
         }
         
         // Update escalation settings if provided
@@ -855,7 +857,7 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
                 INFO: escalation.INFO || [120]
             };
             
-            console.log('✅ [NOTIFICATION SETTINGS] Escalation intervals updated');
+            logger.info('✅ [NOTIFICATION SETTINGS] Escalation intervals updated');
         }
         
         // Emit missing Twilio credentials warnings (non-blocking)
@@ -875,7 +877,7 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
         const redisClient = require('../../db').redisClient;
         if (redisClient && redisClient.del) {
             await redisClient.del('admin:settings:notification-center');
-            console.log('✅ [NOTIFICATION SETTINGS] Redis cache cleared');
+            logger.debug('✅ [NOTIFICATION SETTINGS] Redis cache cleared');
         }
         
         await respondWithIdempotency(req, res, async () => ({
@@ -902,7 +904,7 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
         }); } catch (_) {}
         
     } catch (error) {
-        console.error('❌ [UPDATE NOTIFICATION SETTINGS] Error:', error);
+        logger.error('❌ [UPDATE NOTIFICATION SETTINGS] Error:', error);
         try { AdminNotificationService.sendAlert({
             code: 'NOTIF_SETTINGS_SAVE_FAILURE',
             severity: 'WARNING',
@@ -927,7 +929,7 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
 // ============================================================================
 
 router.post('/admin/notifications/test-sms', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
-    /* eslint-disable no-console */
+     
     // Console logging intentional for SMS delivery testing
     
     try {
@@ -940,14 +942,14 @@ router.post('/admin/notifications/test-sms', authenticateJWT, requireRole('admin
             });
         }
         
-        console.log(`📱 [TEST SMS] Sending test message to ${recipientName} (${recipientPhone})...`);
+        logger.info(`📱 [TEST SMS] Sending test message to ${recipientName} (${recipientPhone})...`);
         
         // Get Twilio credentials from AdminSettings
         const AdminSettings = require('../../models/AdminSettings');
         const settings = await AdminSettings.findOne({});
         
         if (!settings) {
-            console.error('❌ [TEST SMS] AdminSettings document not found');
+            logger.error('❌ [TEST SMS] AdminSettings document not found');
             return res.status(400).json({
                 success: false,
                 error: 'AdminSettings not initialized. Please save Twilio credentials in Settings tab first.'
@@ -955,7 +957,7 @@ router.post('/admin/notifications/test-sms', authenticateJWT, requireRole('admin
         }
         
         if (!settings.notificationCenter?.twilio?.accountSid) {
-            console.error('❌ [TEST SMS] Twilio Account SID missing');
+            logger.error('❌ [TEST SMS] Twilio Account SID missing');
             return res.status(400).json({
                 success: false,
                 error: 'Twilio Account SID not configured. Please save credentials in Settings tab.'
@@ -963,7 +965,7 @@ router.post('/admin/notifications/test-sms', authenticateJWT, requireRole('admin
         }
         
         if (!settings.notificationCenter?.twilio?.authToken) {
-            console.error('❌ [TEST SMS] Twilio Auth Token missing');
+            logger.security('❌ [TEST SMS] Twilio Auth Token missing');
             return res.status(400).json({
                 success: false,
                 error: 'Twilio Auth Token not configured. Please save credentials in Settings tab.'
@@ -971,14 +973,14 @@ router.post('/admin/notifications/test-sms', authenticateJWT, requireRole('admin
         }
         
         if (!settings.notificationCenter?.twilio?.phoneNumber) {
-            console.error('❌ [TEST SMS] Twilio Phone Number missing');
+            logger.security('❌ [TEST SMS] Twilio Phone Number missing');
             return res.status(400).json({
                 success: false,
                 error: 'Twilio Phone Number not configured. Please save credentials in Settings tab.'
             });
         }
         
-        console.log(`✅ [TEST SMS] Twilio credentials found:`, {
+        logger.info(`✅ [TEST SMS] Twilio credentials found:`, {
             accountSid: `${settings.notificationCenter.twilio.accountSid.substring(0, 10)  }...`,
             phoneNumber: settings.notificationCenter.twilio.phoneNumber
         });
@@ -1002,9 +1004,9 @@ Time: ${new Date().toLocaleString()}
 Reply STOP to unsubscribe.
         `.trim();
         
-        console.log(`🚀 [TEST SMS] Calling Twilio API...`);
-        console.log(`   From: ${settings.notificationCenter.twilio.phoneNumber}`);
-        console.log(`   To: ${recipientPhone}`);
+        logger.info(`🚀 [TEST SMS] Calling Twilio API...`);
+        logger.info(`   From: ${settings.notificationCenter.twilio.phoneNumber}`);
+        logger.info(`   To: ${recipientPhone}`);
         
         await respondWithIdempotency(req, res, async () => {
             const result = await twilioClient.messages.create({
@@ -1012,13 +1014,13 @@ Reply STOP to unsubscribe.
                 from: settings.notificationCenter.twilio.phoneNumber,
                 to: recipientPhone
             });
-            console.log(`✅ [TEST SMS] Twilio API responded successfully!`);
-            console.log(`   Twilio SID: ${result.sid}`);
-            console.log(`   Status: ${result.status}`);
-            console.log(`   Date Created: ${result.dateCreated}`);
-            console.log(`   Price: ${result.price || 'pending'}`);
-            console.log(`   Error Code: ${result.errorCode || 'none'}`);
-            console.log(`   Error Message: ${result.errorMessage || 'none'}`);
+            logger.info(`✅ [TEST SMS] Twilio API responded successfully!`);
+            logger.info(`   Twilio SID: ${result.sid}`);
+            logger.info(`   Status: ${result.status}`);
+            logger.info(`   Date Created: ${result.dateCreated}`);
+            logger.info(`   Price: ${result.price || 'pending'}`);
+            logger.info(`   Error Code: ${result.errorCode || 'none'}`);
+            logger.info(`   Error Message: ${result.errorMessage || 'none'}`);
             // Heartbeat OK (non-blocking)
             try { AdminNotificationService.sendAlert({
                 code: 'NOTIF_SETTINGS_TEST_SMS_OK',
@@ -1054,7 +1056,7 @@ Reply STOP to unsubscribe.
         });
         
     } catch (error) {
-        console.error('❌ [TEST SMS] Failed to send:', error);
+        logger.error('❌ [TEST SMS] Failed to send:', error);
         try { AdminNotificationService.sendAlert({
             code: 'NOTIF_SETTINGS_TEST_SMS_FAILURE',
             severity: 'WARNING',
@@ -1073,7 +1075,7 @@ Reply STOP to unsubscribe.
         });
     }
     
-    /* eslint-enable no-console */
+     
 });
 
 module.exports = router;

@@ -2,6 +2,8 @@
 // Centralized client exports for Redis, Email, and SMS
 
 const redis = require('redis');
+const logger = require('../utils/logger.js');
+
 
 let redisClient = null;
 
@@ -19,7 +21,7 @@ async function initializeRedis() {
       socket: {
         reconnectStrategy: (retries) => {
           if (retries > 3) {
-            console.warn('⚠️ Redis max reconnection attempts reached. Operating without cache.');
+            logger.warn('⚠️ Redis max reconnection attempts reached. Operating without cache.');
             return false; // Stop retrying
           }
           return Math.min(retries * 100, 3000);
@@ -28,15 +30,15 @@ async function initializeRedis() {
     });
 
     redisClient.on('connect', () => {
-      console.log('✅ Redis Session Store connected');
+      logger.security('✅ Redis Session Store connected');
     });
 
     redisClient.on('ready', () => {
-      console.log('🔥 Redis Session Store ready for v2 operations');
+      logger.security('🔥 Redis Session Store ready for v2 operations');
     });
 
     redisClient.on('error', (err) => {
-      console.warn('⚠️ Redis initialization failed:', { timestamp: new Date().toISOString() });
+      logger.security('⚠️ Redis initialization failed:', { timestamp: new Date().toISOString() });
       redisClient = null; // Disable Redis operations
     });
 
@@ -45,12 +47,12 @@ async function initializeRedis() {
     
     // Test connection
     await redisClient.ping();
-    console.log('🚀 Redis client initialized successfully');
+    logger.debug('🚀 Redis client initialized successfully');
     
     return redisClient;
 
   } catch (error) {
-    console.warn('⚠️ Redis initialization failed:', { timestamp: new Date().toISOString() });
+    logger.warn('⚠️ Redis initialization failed:', { timestamp: new Date().toISOString() });
     redisClient = null;
     return null;
   }
@@ -58,7 +60,7 @@ async function initializeRedis() {
 
 // Initialize Redis on module load
 initializeRedis().catch(err => {
-  console.warn('⚠️ Redis initialization failed:', { timestamp: new Date().toISOString() });
+  logger.warn('⚠️ Redis initialization failed:', { timestamp: new Date().toISOString() });
 });
 
 module.exports = {

@@ -5,23 +5,25 @@
 // ============================================================================
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const v2Company = require('../../models/v2Company');
 
 router.post('/admin/setup-notification-center', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
-        console.log('🔔 [SETUP] Setting up Notification Center...');
+        logger.security('🔔 [SETUP] Setting up Notification Center...');
         
         // Check if exists
         let company = await v2Company.findOne({ 'metadata.isNotificationCenter': true });
         
         if (company) {
-            console.log('📋 [SETUP] Notification Center already exists:', company._id);
+            logger.info('📋 [SETUP] Notification Center already exists:', company._id);
             
             // Update twilioConfig if missing
             if (!company.twilioConfig?.phoneNumber) {
-                console.log('🔧 [SETUP] Fixing twilioConfig...');
+                logger.security('🔧 [SETUP] Fixing twilioConfig...');
                 
                 company.twilioConfig = {
                     accountSid: process.env.TWILIO_ACCOUNT_SID || '',
@@ -30,7 +32,7 @@ router.post('/admin/setup-notification-center', authenticateJWT, requireRole('ad
                 };
                 
                 await company.save();
-                console.log('✅ [SETUP] twilioConfig updated');
+                logger.security('✅ [SETUP] twilioConfig updated');
                 
                 return res.json({
                     success: true,
@@ -49,7 +51,7 @@ router.post('/admin/setup-notification-center', authenticateJWT, requireRole('ad
         }
         
         // Create new
-        console.log('📝 [SETUP] Creating new Notification Center...');
+        logger.info('📝 [SETUP] Creating new Notification Center...');
         
         company = await v2Company.create({
             companyName: '🔔 Admin Notification Center',
@@ -73,7 +75,7 @@ router.post('/admin/setup-notification-center', authenticateJWT, requireRole('ad
             }
         });
         
-        console.log('✅ [SETUP] Notification Center created:', company._id);
+        logger.info('✅ [SETUP] Notification Center created:', company._id);
         
         res.json({
             success: true,
@@ -84,7 +86,7 @@ router.post('/admin/setup-notification-center', authenticateJWT, requireRole('ad
         });
         
     } catch (error) {
-        console.error('❌ [SETUP] Failed:', error);
+        logger.error('❌ [SETUP] Failed:', error);
         res.status(500).json({
             success: false,
             error: error.message

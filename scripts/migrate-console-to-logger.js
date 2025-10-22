@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-'use strict';
+
 
 /**
  * WORLD-CLASS CONSOLE.LOG → WINSTON LOGGER MIGRATION

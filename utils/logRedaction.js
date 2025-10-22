@@ -13,7 +13,7 @@
  * 
  * USAGE:
  *   const safe = redactSensitiveData({ phone: '239-555-0100', email: 'user@example.com' });
- *   console.log('[INFO]', safe); // { phone: '[REDACTED]', email: '[REDACTED]' }
+ *   logger.security('[INFO]', safe); // { phone: '[REDACTED]', email: '[REDACTED]' }
  * 
  * ============================================================================
  */
@@ -189,9 +189,9 @@ function safeLog(level, message, data) {
     
     if (data) {
         const redacted = redactSensitiveData(data);
-        console.log(`[${timestamp}] [${level}] ${message}`, redacted);
+        logger.info(`[${timestamp}] [${level}] ${message}`, redacted);
     } else {
-        console.log(`[${timestamp}] [${level}] ${message}`);
+        logger.info(`[${timestamp}] [${level}] ${message}`);
     }
 }
 
@@ -204,7 +204,7 @@ function requestLogger(req, res, next) {
     // Log request (redacted)
     if (process.env.LOG_LEVEL === 'DEBUG') {
         const logSafe = createLogSafeRequest(req);
-        console.log('[REQUEST]', logSafe);
+        logger.debug('[REQUEST]', logSafe);
     }
     
     // Intercept response to log it
@@ -212,7 +212,7 @@ function requestLogger(req, res, next) {
     res.send = function(data) {
         const duration = Date.now() - start;
         
-        console.log(
+        logger.debug(
             `[RESPONSE] ${req.method} ${req.path} ${res.statusCode} ${duration}ms`
         );
         

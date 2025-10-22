@@ -47,7 +47,7 @@ router.use(authenticateJWT);
  * ============================================================================
  */
 router.get('/:companyId/twilio-control/status', async (req, res) => {
-    console.log(`[TWILIO CONTROL] GET /status for company: ${req.params.companyId}`);
+    logger.info(`[TWILIO CONTROL] GET /status for company: ${req.params.companyId}`);
 
     try {
         const company = await Company.findById(req.params.companyId)
@@ -61,13 +61,13 @@ router.get('/:companyId/twilio-control/status', async (req, res) => {
         const voiceSettings = company.aiAgentLogic?.voiceSettings || {};
 
         // DIAGNOSTIC: Log what we're seeing
-        console.log(`[TWILIO CONTROL] 🔍 DIAGNOSTIC for ${company.companyName}:`);
-        console.log(`   - twilioConfig exists:`, Boolean(twilioConfig));
-        console.log(`   - accountSid exists:`, Boolean(twilioConfig.accountSid));
-        console.log(`   - authToken exists:`, Boolean(twilioConfig.authToken));
-        console.log(`   - phoneNumber (legacy):`, twilioConfig.phoneNumber || 'NOT SET');
-        console.log(`   - phoneNumbers (modern):`, twilioConfig.phoneNumbers?.length || 0, 'numbers');
-        console.log(`   - voiceSettings.voiceId:`, voiceSettings.voiceId || 'NOT SET');
+        logger.security(`[TWILIO CONTROL] 🔍 DIAGNOSTIC for ${company.companyName}:`);
+        logger.security(`   - twilioConfig exists:`, Boolean(twilioConfig));
+        logger.security(`   - accountSid exists:`, Boolean(twilioConfig.accountSid));
+        logger.security(`   - authToken exists:`, Boolean(twilioConfig.authToken));
+        logger.security(`   - phoneNumber (legacy):`, twilioConfig.phoneNumber || 'NOT SET');
+        logger.security(`   - phoneNumbers (modern):`, twilioConfig.phoneNumbers?.length || 0, 'numbers');
+        logger.security(`   - voiceSettings.voiceId:`, voiceSettings.voiceId || 'NOT SET');
 
         // Check if Twilio is configured (support both legacy and modern phone number structure)
         const hasAccountSid = Boolean(twilioConfig.accountSid && twilioConfig.accountSid.trim());
@@ -101,7 +101,7 @@ router.get('/:companyId/twilio-control/status', async (req, res) => {
                 accountStatus: 'Active',
                 accountFriendlyName: 'ClientsVia Master Account'
             };
-            console.log(`[TWILIO CONTROL] ✅ Using global ClientsVia Twilio account for company: ${req.params.companyId}`);
+            logger.security(`[TWILIO CONTROL] ✅ Using global ClientsVia Twilio account for company: ${req.params.companyId}`);
         } else if (isConfigured) {
             try {
                 // Test company-specific Twilio connection
@@ -118,10 +118,10 @@ router.get('/:companyId/twilio-control/status', async (req, res) => {
                     accountType: account.type
                 };
 
-                console.log(`[TWILIO CONTROL] ✅ Connection verified for company: ${req.params.companyId}`);
+                logger.info(`[TWILIO CONTROL] ✅ Connection verified for company: ${req.params.companyId}`);
 
             } catch (twilioError) {
-                console.error(`[TWILIO CONTROL] ❌ Connection failed:`, twilioError.message);
+                logger.error(`[TWILIO CONTROL] ❌ Connection failed:`, twilioError.message);
                 errorMessage = twilioError.message;
                 
                 // Add helpful diagnostic info
@@ -165,7 +165,7 @@ router.get('/:companyId/twilio-control/status', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[TWILIO CONTROL] Error getting status:', error);
+        logger.error('[TWILIO CONTROL] Error getting status:', error);
         res.status(500).json({ 
             error: 'Failed to get Twilio status',
             message: error.message,
@@ -181,7 +181,7 @@ router.get('/:companyId/twilio-control/status', async (req, res) => {
  * ============================================================================
  */
 router.get('/:companyId/twilio-control/config', async (req, res) => {
-    console.log(`[TWILIO CONTROL] GET /config for company: ${req.params.companyId}`);
+    logger.info(`[TWILIO CONTROL] GET /config for company: ${req.params.companyId}`);
 
     try {
         const company = await Company.findById(req.params.companyId)
@@ -229,7 +229,7 @@ router.get('/:companyId/twilio-control/config', async (req, res) => {
         res.json(safeConfig);
 
     } catch (error) {
-        console.error('[TWILIO CONTROL] Error getting config:', error);
+        logger.error('[TWILIO CONTROL] Error getting config:', error);
         res.status(500).json({ error: 'Failed to get Twilio configuration' });
     }
 });
@@ -241,7 +241,7 @@ router.get('/:companyId/twilio-control/config', async (req, res) => {
  * ============================================================================
  */
 router.patch('/:companyId/twilio-control/routing', async (req, res) => {
-    console.log(`[TWILIO CONTROL] PATCH /routing for company: ${req.params.companyId}`);
+    logger.info(`[TWILIO CONTROL] PATCH /routing for company: ${req.params.companyId}`);
 
     try {
         const { mode, forwardNumber, recordingEnabled, whisperMessage } = req.body;
@@ -286,12 +286,12 @@ router.patch('/:companyId/twilio-control/routing', async (req, res) => {
         // Clear cache
         try {
             await redisClient.del(`company:${req.params.companyId}`);
-            console.log(`[TWILIO CONTROL] Cache cleared for company: ${req.params.companyId}`);
+            logger.debug(`[TWILIO CONTROL] Cache cleared for company: ${req.params.companyId}`);
         } catch (cacheError) {
-            console.warn('[TWILIO CONTROL] Cache clear failed:', cacheError.message);
+            logger.warn('[TWILIO CONTROL] Cache clear failed:', cacheError.message);
         }
 
-        console.log(`[TWILIO CONTROL] ✅ Routing updated for company: ${req.params.companyId}`);
+        logger.debug(`[TWILIO CONTROL] ✅ Routing updated for company: ${req.params.companyId}`);
 
         res.json({
             success: true,
@@ -305,7 +305,7 @@ router.patch('/:companyId/twilio-control/routing', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[TWILIO CONTROL] Error updating routing:', error);
+        logger.error('[TWILIO CONTROL] Error updating routing:', error);
         res.status(500).json({ error: 'Failed to update call routing' });
     }
 });
@@ -317,7 +317,7 @@ router.patch('/:companyId/twilio-control/routing', async (req, res) => {
  * ============================================================================
  */
 router.post('/:companyId/twilio-control/test-call', async (req, res) => {
-    console.log(`[TWILIO CONTROL] POST /test-call for company: ${req.params.companyId}`);
+    logger.info(`[TWILIO CONTROL] POST /test-call for company: ${req.params.companyId}`);
 
     try {
         const { testPhoneNumber } = req.body;
@@ -364,7 +364,7 @@ router.post('/:companyId/twilio-control/test-call', async (req, res) => {
                 `
             });
 
-            console.log(`[TWILIO CONTROL] ✅ Test call initiated: ${call.sid}`);
+            logger.debug(`[TWILIO CONTROL] ✅ Test call initiated: ${call.sid}`);
 
             res.json({
                 success: true,
@@ -376,7 +376,7 @@ router.post('/:companyId/twilio-control/test-call', async (req, res) => {
             });
 
         } catch (twilioError) {
-            console.error('[TWILIO CONTROL] ❌ Test call failed:', twilioError.message);
+            logger.error('[TWILIO CONTROL] ❌ Test call failed:', twilioError.message);
             
             res.status(400).json({
                 error: 'Test call failed',
@@ -386,7 +386,7 @@ router.post('/:companyId/twilio-control/test-call', async (req, res) => {
         }
 
     } catch (error) {
-        console.error('[TWILIO CONTROL] Error making test call:', error);
+        logger.error('[TWILIO CONTROL] Error making test call:', error);
         res.status(500).json({ error: 'Failed to initiate test call' });
     }
 });
@@ -398,7 +398,7 @@ router.post('/:companyId/twilio-control/test-call', async (req, res) => {
  * ============================================================================
  */
 router.get('/:companyId/twilio-control/activity', async (req, res) => {
-    console.log(`[TWILIO CONTROL] GET /activity for company: ${req.params.companyId}`);
+    logger.info(`[TWILIO CONTROL] GET /activity for company: ${req.params.companyId}`);
 
     try {
         const limit = parseInt(req.query.limit) || 10;
@@ -441,7 +441,7 @@ router.get('/:companyId/twilio-control/activity', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[TWILIO CONTROL] Error getting activity:', error);
+        logger.error('[TWILIO CONTROL] Error getting activity:', error);
         res.status(500).json({ error: 'Failed to get call activity' });
     }
 });
@@ -453,7 +453,7 @@ router.get('/:companyId/twilio-control/activity', async (req, res) => {
  * ============================================================================
  */
 router.get('/:companyId/twilio-control/health', async (req, res) => {
-    console.log(`[TWILIO CONTROL] GET /health for company: ${req.params.companyId}`);
+    logger.info(`[TWILIO CONTROL] GET /health for company: ${req.params.companyId}`);
 
     try {
         const company = await Company.findById(req.params.companyId)
@@ -522,7 +522,7 @@ router.get('/:companyId/twilio-control/health', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[TWILIO CONTROL] Error calculating health:', error);
+        logger.error('[TWILIO CONTROL] Error calculating health:', error);
         res.status(500).json({ error: 'Failed to calculate health score' });
     }
 });

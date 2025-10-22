@@ -23,6 +23,8 @@
 // ============================================================================
 
 const NotificationLog = require('../models/NotificationLog');
+const logger = require('../utils/logger.js');
+
 const v2Company = require('../models/v2Company');
 const smsClient = require('../clients/smsClient');
 
@@ -36,7 +38,7 @@ class AlertEscalationService {
         try {
             const now = new Date();
             
-            console.log('🔍 [ESCALATION] Checking for unacknowledged alerts...');
+            logger.info('🔍 [ESCALATION] Checking for unacknowledged alerts...');
             
             // Find alerts that need escalation
             const alertsToEscalate = await NotificationLog.find({
@@ -47,11 +49,11 @@ class AlertEscalationService {
             });
             
             if (alertsToEscalate.length === 0) {
-                console.log('✅ [ESCALATION] No alerts need escalation');
+                logger.info('✅ [ESCALATION] No alerts need escalation');
                 return { escalated: 0 };
             }
             
-            console.log(`📊 [ESCALATION] Found ${alertsToEscalate.length} alerts to escalate`);
+            logger.info(`📊 [ESCALATION] Found ${alertsToEscalate.length} alerts to escalate`);
             
             let escalatedCount = 0;
             
@@ -59,7 +61,7 @@ class AlertEscalationService {
                 try {
                     // Check if we've hit max escalation level
                     if (alert.escalation.currentLevel >= alert.escalation.maxLevel) {
-                        console.log(`⚠️ [ESCALATION] Alert ${alert.alertId} has reached max level ${alert.escalation.maxLevel}`);
+                        logger.info(`⚠️ [ESCALATION] Alert ${alert.alertId} has reached max level ${alert.escalation.maxLevel}`);
                         continue;
                     }
                     
@@ -67,16 +69,16 @@ class AlertEscalationService {
                     escalatedCount++;
                     
                 } catch (error) {
-                    console.error(`❌ [ESCALATION] Failed to escalate alert ${alert.alertId}:`, error);
+                    logger.error(`❌ [ESCALATION] Failed to escalate alert ${alert.alertId}:`, error);
                 }
             }
             
-            console.log(`✅ [ESCALATION] Successfully escalated ${escalatedCount}/${alertsToEscalate.length} alerts`);
+            logger.info(`✅ [ESCALATION] Successfully escalated ${escalatedCount}/${alertsToEscalate.length} alerts`);
             
             return { escalated: escalatedCount };
             
         } catch (error) {
-            console.error('❌ [ESCALATION] Error in checkAndEscalate:', error);
+            logger.error('❌ [ESCALATION] Error in checkAndEscalate:', error);
             return { error: error.message };
         }
     }
@@ -87,7 +89,7 @@ class AlertEscalationService {
     static async escalateAlert(alert) {
         const nextLevel = alert.escalation.currentLevel + 1;
         
-        console.log(`🔺 [ESCALATION] Escalating alert ${alert.alertId} to level ${nextLevel} (${alert.severity})`);
+        logger.info(`🔺 [ESCALATION] Escalating alert ${alert.alertId} to level ${nextLevel} (${alert.severity})`);
         
         try {
             // Get admin contacts
@@ -132,7 +134,7 @@ class AlertEscalationService {
             // MAKE PHONE CALLS (for CRITICAL level 4+)
             // ================================================================
             if (alert.severity === 'CRITICAL' && nextLevel >= 4) {
-                console.log(`📞 [ESCALATION] CRITICAL level ${nextLevel} - initiating phone calls`);
+                logger.debug(`📞 [ESCALATION] CRITICAL level ${nextLevel} - initiating phone calls`);
                 const callResults = await this.makeEscalationCalls(alert, adminContacts, nextLevel);
                 deliveryAttempt.call = callResults;
             }
@@ -156,20 +158,20 @@ class AlertEscalationService {
             
             // If we've hit max level, pause escalation
             if (nextLevel >= alert.escalation.maxLevel) {
-                console.log(`⚠️ [ESCALATION] Alert ${alert.alertId} reached max level - stopping escalation`);
+                logger.info(`⚠️ [ESCALATION] Alert ${alert.alertId} reached max level - stopping escalation`);
                 alert.escalation.escalationPaused = true;
             }
             
             await alert.save();
             
-            console.log(`✅ [ESCALATION] Alert ${alert.alertId} escalated to level ${nextLevel}`);
-            console.log(`📊 [ESCALATION] SMS: ${smsResults.filter(r => r.status === 'sent').length}/${smsResults.length} sent`);
-            console.log(`⏱️  [ESCALATION] Next escalation: ${nextEscalationTime || 'N/A'}`);
+            logger.info(`✅ [ESCALATION] Alert ${alert.alertId} escalated to level ${nextLevel}`);
+            logger.info(`📊 [ESCALATION] SMS: ${smsResults.filter(r => r.status === 'sent').length}/${smsResults.length} sent`);
+            logger.info(`⏱️  [ESCALATION] Next escalation: ${nextEscalationTime || 'N/A'}`);
             
             return { success: true };
             
         } catch (error) {
-            console.error(`❌ [ESCALATION] Failed to escalate alert ${alert.alertId}:`, error);
+            logger.error(`❌ [ESCALATION] Failed to escalate alert ${alert.alertId}:`, error);
             throw error;
         }
     }
@@ -207,7 +209,7 @@ Time: ${new Date().toLocaleTimeString()}
         
         for (const contact of smsContacts) {
             try {
-                console.log(`📱 [ESCALATION SMS] Sending to ${contact.name} (${contact.phoneNumber})...`);
+                logger.info(`📱 [ESCALATION SMS] Sending to ${contact.name} (${contact.phoneNumber})...`);
                 
                 const result = await smsClient.sendSMS({
                     to: contact.phoneNumber,
@@ -222,10 +224,10 @@ Time: ${new Date().toLocaleTimeString()}
                     twilioStatus: result.status
                 });
                 
-                console.log(`✅ [ESCALATION SMS] Sent to ${contact.name}`);
+                logger.info(`✅ [ESCALATION SMS] Sent to ${contact.name}`);
                 
             } catch (error) {
-                console.error(`❌ [ESCALATION SMS] Failed to send to ${contact.name}:`, error);
+                logger.error(`❌ [ESCALATION SMS] Failed to send to ${contact.name}:`, error);
                 
                 results.push({
                     recipient: contact.phoneNumber,
@@ -250,7 +252,7 @@ Time: ${new Date().toLocaleTimeString()}
         for (const contact of emailContacts) {
             // TODO: Implement email sending via SendGrid/AWS SES
             // For now, just log that we would send email
-            console.log(`📧 [ESCALATION EMAIL] Would send to ${contact.name} (${contact.email})`);
+            logger.info(`📧 [ESCALATION EMAIL] Would send to ${contact.name} (${contact.email})`);
             
             results.push({
                 recipient: contact.email,
@@ -273,7 +275,7 @@ Time: ${new Date().toLocaleTimeString()}
         
         for (const contact of callContacts) {
             try {
-                console.log(`📞 [ESCALATION CALL] Calling ${contact.name} (${contact.phoneNumber})...`);
+                logger.debug(`📞 [ESCALATION CALL] Calling ${contact.name} (${contact.phoneNumber})...`);
                 
                 // Use Twilio Voice API to make automated call
                 const twilioClient = require('twilio')(
@@ -294,10 +296,10 @@ Time: ${new Date().toLocaleTimeString()}
                     twilioCallSid: call.sid
                 });
                 
-                console.log(`✅ [ESCALATION CALL] Call initiated to ${contact.name}: ${call.sid}`);
+                logger.debug(`✅ [ESCALATION CALL] Call initiated to ${contact.name}: ${call.sid}`);
                 
             } catch (error) {
-                console.error(`❌ [ESCALATION CALL] Failed to call ${contact.name}:`, error);
+                logger.error(`❌ [ESCALATION CALL] Failed to call ${contact.name}:`, error);
                 
                 results.push({
                     recipient: contact.phoneNumber,
@@ -383,12 +385,12 @@ Time: ${new Date().toLocaleTimeString()}
             
             await alert.save();
             
-            console.log(`⏸️ [ESCALATION] Alert ${alertId} escalation paused: ${reason}`);
+            logger.info(`⏸️ [ESCALATION] Alert ${alertId} escalation paused: ${reason}`);
             
             return { success: true };
             
         } catch (error) {
-            console.error(`❌ [ESCALATION] Failed to pause alert ${alertId}:`, error);
+            logger.error(`❌ [ESCALATION] Failed to pause alert ${alertId}:`, error);
             throw error;
         }
     }
@@ -417,12 +419,12 @@ Time: ${new Date().toLocaleTimeString()}
             
             await alert.save();
             
-            console.log(`▶️ [ESCALATION] Alert ${alertId} escalation resumed`);
+            logger.info(`▶️ [ESCALATION] Alert ${alertId} escalation resumed`);
             
             return { success: true };
             
         } catch (error) {
-            console.error(`❌ [ESCALATION] Failed to resume alert ${alertId}:`, error);
+            logger.error(`❌ [ESCALATION] Failed to resume alert ${alertId}:`, error);
             throw error;
         }
     }
@@ -453,7 +455,7 @@ Time: ${new Date().toLocaleTimeString()}
             
             await alert.save();
             
-            console.log(`🔕 [ESCALATION] Alert ${alertId} snoozed for ${minutes} minutes until ${snoozeUntil}`);
+            logger.info(`🔕 [ESCALATION] Alert ${alertId} snoozed for ${minutes} minutes until ${snoozeUntil}`);
             
             // Send confirmation SMS
             const notificationCenter = await v2Company.findOne({
@@ -479,14 +481,14 @@ To cancel snooze: Text "UNSNOOZE ${alertId}"
                         message
                     });
                 } catch (error) {
-                    console.error(`❌ Failed to send snooze confirmation to ${contact.name}:`, error);
+                    logger.error(`❌ Failed to send snooze confirmation to ${contact.name}:`, error);
                 }
             }
             
             return { success: true, snoozeUntil };
             
         } catch (error) {
-            console.error(`❌ [ESCALATION] Failed to snooze alert ${alertId}:`, error);
+            logger.error(`❌ [ESCALATION] Failed to snooze alert ${alertId}:`, error);
             throw error;
         }
     }

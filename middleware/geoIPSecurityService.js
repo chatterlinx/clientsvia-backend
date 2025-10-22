@@ -4,6 +4,8 @@
  */
 
 const axios = require('axios');
+const logger = require('../utils/logger.js');
+
 const crypto = require('crypto');
 
 class GeoIPSecurityService {
@@ -56,11 +58,11 @@ class GeoIPSecurityService {
                 timestamp: Date.now()
             });
 
-            console.log(`🌍 GeoIP lookup: ${ip} -> ${locationData.city}, ${locationData.country}`);
+            logger.debug(`🌍 GeoIP lookup: ${ip} -> ${locationData.city}, ${locationData.country}`);
             return locationData;
 
         } catch (error) {
-            console.error('GeoIP lookup failed:', error.message);
+            logger.error('GeoIP lookup failed:', error.message);
             
             // Fallback for localhost/private IPs
             if (ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
@@ -129,7 +131,7 @@ class GeoIPSecurityService {
             }
         }
 
-        console.log(`🔍 Location validation for ${userId}: ${validation.allowed ? 'ALLOWED' : 'BLOCKED'} (${validation.risk} risk)`);
+        logger.security(`🔍 Location validation for ${userId}: ${validation.allowed ? 'ALLOWED' : 'BLOCKED'} (${validation.risk} risk)`);
         return validation;
     }
 
@@ -195,7 +197,7 @@ class GeoIPSecurityService {
      */
     updateAllowedCountries(countries) {
         this.allowedCountries = countries;
-        console.log(`🌍 Updated allowed countries: ${countries.join(', ')}`);
+        logger.security(`🌍 Updated allowed countries: ${countries.join(', ')}`);
     }
 }
 

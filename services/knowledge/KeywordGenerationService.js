@@ -29,6 +29,8 @@
 // V2 DELETED: Legacy natural NLP library - using V2 keyword-based system
 // const natural = require('natural');
 const stopwords = require('stopwords').english;
+const logger = require('../../utils/logger.js');
+
 
 class KeywordGenerationService {
   constructor() {
@@ -60,29 +62,29 @@ class KeywordGenerationService {
     const answerLower = answer.toLowerCase();
     const { tradeCategories = [], companyName = '', businessType = '' } = context;
     
-    console.log('🧠 V3 Advanced keyword generation started...');
-    console.log('📝 Question:', question);
-    console.log('📝 Answer:', answer);
+    logger.debug('🧠 V3 Advanced keyword generation started...');
+    logger.debug('📝 Question:', question);
+    logger.debug('📝 Answer:', answer);
     
     // 🎯 STEP 1: Extract EXACT phrases from question (HIGHEST PRIORITY!)
     const exactPhrases = this.extractExactPhrases(questionLower);
-    console.log('✅ Exact phrases:', exactPhrases);
+    logger.debug('✅ Exact phrases:', exactPhrases);
     
     // 🎯 STEP 2: Detect Q&A intent (pricing, hours, location, etc.)
     const qnaIntent = this.detectQnAIntent(questionLower, answerLower);
-    console.log('✅ Q&A Intent:', qnaIntent);
+    logger.debug('✅ Q&A Intent:', qnaIntent);
     
     // 🎯 STEP 3: Get FOCUSED keywords for this specific intent
     const intentKeywords = this.getFocusedIntentKeywords(qnaIntent, questionLower, answerLower);
-    console.log('✅ Intent keywords:', intentKeywords);
+    logger.debug('✅ Intent keywords:', intentKeywords);
     
     // 🎯 STEP 4: Extract important nouns/verbs (ONLY if length > 3 chars)
     const importantWords = this.extractImportantWords(questionLower, answerLower);
-    console.log('✅ Important words:', importantWords);
+    logger.security('✅ Important words:', importantWords);
     
     // 🎯 STEP 5: Technical terms ONLY (if relevant to trade)
     const technical = this.extractTechnicalTerms(this.cleanAndTokenize(combinedText), tradeCategories);
-    console.log('✅ Technical terms:', technical);
+    logger.security('✅ Technical terms:', technical);
     
     // 🎯 STEP 6: Combine with STRICT DEDUPLICATION
     const allKeywords = [
@@ -94,7 +96,7 @@ class KeywordGenerationService {
     
     // 🎯 STEP 7: STRICT FILTERING - Remove duplicates, generic words, and pollutants
     const cleanedKeywords = this.strictFilter(allKeywords, qnaIntent);
-    console.log('✅ After strict filter:', cleanedKeywords);
+    logger.debug('✅ After strict filter:', cleanedKeywords);
     
     // 🎯 STEP 8: Rank by relevance and limit to TOP 10
     const rankedKeywords = this.rankKeywordsByRelevance(cleanedKeywords, questionLower, answerLower);
@@ -109,7 +111,7 @@ class KeywordGenerationService {
       confidence: this.calculateConfidence(finalKeywords, combinedText)
     };
     
-    console.log('✅ FINAL KEYWORDS (Top 10):', result.primary);
+    logger.info('✅ FINAL KEYWORDS (Top 10):', result.primary);
     
     return result;
   }

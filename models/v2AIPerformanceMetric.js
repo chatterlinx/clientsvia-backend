@@ -11,6 +11,8 @@
 // ============================================================================
 
 const mongoose = require('mongoose');
+const logger = require('../utils/logger.js');
+
 const { ObjectId } = mongoose.Schema.Types;
 
 // ============================================================================
@@ -204,7 +206,7 @@ aiPerformanceMetricSchema.index(
  * Get performance summary for a company (last 24 hours)
  */
 aiPerformanceMetricSchema.statics.getLast24HoursSummary = async function(companyId) {
-    console.log(`📊 [PERFORMANCE] Fetching 24h summary for company: ${companyId}`);
+    logger.debug(`📊 [PERFORMANCE] Fetching 24h summary for company: ${companyId}`);
     
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     
@@ -214,7 +216,7 @@ aiPerformanceMetricSchema.statics.getLast24HoursSummary = async function(company
     }).sort({ timestamp: -1 });
     
     if (!metrics || metrics.length === 0) {
-        console.log(`⚠️ [PERFORMANCE] No metrics found for last 24 hours`);
+        logger.info(`⚠️ [PERFORMANCE] No metrics found for last 24 hours`);
         return null;
     }
     
@@ -260,7 +262,7 @@ aiPerformanceMetricSchema.statics.getLast24HoursSummary = async function(company
         summary.speedBreakdown.responseGeneration += (metric.lookupSpeed.responseGeneration?.avg || 0) / count;
     });
     
-    console.log(`✅ [PERFORMANCE] Summary calculated: ${summary.totalLookups} lookups, ${Math.round(summary.avgSpeed)}ms avg`);
+    logger.info(`✅ [PERFORMANCE] Summary calculated: ${summary.totalLookups} lookups, ${Math.round(summary.avgSpeed)}ms avg`);
     
     return summary;
 };
@@ -269,7 +271,7 @@ aiPerformanceMetricSchema.statics.getLast24HoursSummary = async function(company
  * Get speed trends over time (last 7 days)
  */
 aiPerformanceMetricSchema.statics.getSpeedTrends = async function(companyId, days = 7) {
-    console.log(`📈 [PERFORMANCE] Fetching ${days}-day trends for company: ${companyId}`);
+    logger.debug(`📈 [PERFORMANCE] Fetching ${days}-day trends for company: ${companyId}`);
     
     const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     
@@ -291,7 +293,7 @@ aiPerformanceMetricSchema.statics.getSpeedTrends = async function(companyId, day
         { $sort: { _id: 1 } }
     ]);
     
-    console.log(`✅ [PERFORMANCE] Trends calculated for ${trends.length} days`);
+    logger.info(`✅ [PERFORMANCE] Trends calculated for ${trends.length} days`);
     
     return trends;
 };

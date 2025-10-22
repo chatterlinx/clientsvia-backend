@@ -58,7 +58,7 @@ router.use(authenticateJWT);
 router.use((req, res, next) => {
     const action = `${req.method} ${req.path}`;
     const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
-    console.log(`🔐 [ADMIN GLOBAL TEMPLATES] ${action} by ${adminUser}`);
+    logger.info(`🔐 [ADMIN GLOBAL TEMPLATES] ${action} by ${adminUser}`);
     next();
 });
 
@@ -77,8 +77,8 @@ router.get('/', async (req, res) => {
             .sort({ createdAt: -1 })
             .lean();
         
-        console.log(`✅ Retrieved ${templates.length} global templates`);
-        console.log(`   Default template: ${templates.find(t => t.isDefaultTemplate)?.name || 'NONE'}`);
+        logger.debug(`✅ Retrieved ${templates.length} global templates`);
+        logger.debug(`   Default template: ${templates.find(t => t.isDefaultTemplate)?.name || 'NONE'}`);
         
         res.json({
             success: true,
@@ -86,7 +86,7 @@ router.get('/', async (req, res) => {
             count: templates.length
         });
     } catch (error) {
-        console.error('❌ Error fetching global templates:', error.message, error.stack);
+        logger.error('❌ Error fetching global templates:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error fetching templates: ${error.message}`
@@ -109,14 +109,14 @@ router.get('/active', async (req, res) => {
             });
         }
         
-        console.log(`✅ Active template: ${activeTemplate.version} (${activeTemplate.stats.totalScenarios} scenarios)`);
+        logger.info(`✅ Active template: ${activeTemplate.version} (${activeTemplate.stats.totalScenarios} scenarios)`);
         
         res.json({
             success: true,
             data: activeTemplate
         });
     } catch (error) {
-        console.error('❌ Error fetching active template:', error.message, error.stack);
+        logger.error('❌ Error fetching active template:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error fetching active template: ${error.message}`
@@ -139,7 +139,7 @@ router.get('/published', async (req, res) => {
             data: templates
         });
     } catch (error) {
-        console.error('❌ Error fetching published templates:', error.message);
+        logger.error('❌ Error fetching published templates:', error.message);
         res.status(500).json({
             success: false,
             message: `Error fetching published templates: ${error.message}`
@@ -164,14 +164,14 @@ router.get('/:id', async (req, res) => {
             });
         }
         
-        console.log(`✅ Retrieved template: ${template.version}`);
+        logger.debug(`✅ Retrieved template: ${template.version}`);
         
         res.json({
             success: true,
             data: template
         });
     } catch (error) {
-        console.error('❌ Error fetching template:', error.message, error.stack);
+        logger.error('❌ Error fetching template:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error fetching template: ${error.message}`
@@ -208,9 +208,9 @@ router.get('/:id/export', async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.json(template);
         
-        console.log(`✅ Exported template: ${template.version}`);
+        logger.info(`✅ Exported template: ${template.version}`);
     } catch (error) {
-        console.error('❌ Error exporting template:', error.message, error.stack);
+        logger.error('❌ Error exporting template:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error exporting template: ${error.message}`
@@ -263,7 +263,7 @@ router.post('/', async (req, res) => {
         
         await newTemplate.save();
         
-        console.log(`✅ Created new global template: ${version} with ${newTemplate.stats.totalScenarios} scenarios`);
+        logger.info(`✅ Created new global template: ${version} with ${newTemplate.stats.totalScenarios} scenarios`);
         
         res.status(201).json({
             success: true,
@@ -271,7 +271,7 @@ router.post('/', async (req, res) => {
             data: newTemplate
         });
     } catch (error) {
-        console.error('❌ Error creating template:', error.message, error.stack);
+        logger.error('❌ Error creating template:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error creating template: ${error.message}`
@@ -301,7 +301,7 @@ router.post('/:id/activate', async (req, res) => {
         template.addChangeLog(`Activated as global template`, adminUser);
         await template.save();
         
-        console.log(`✅ Activated template: ${template.version}`);
+        logger.info(`✅ Activated template: ${template.version}`);
         
         res.json({
             success: true,
@@ -309,7 +309,7 @@ router.post('/:id/activate', async (req, res) => {
             data: template
         });
     } catch (error) {
-        console.error('❌ Error activating template:', error.message, error.stack);
+        logger.error('❌ Error activating template:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error activating template: ${error.message}`
@@ -336,7 +336,7 @@ router.post('/:id/clone', async (req, res) => {
         
         const clonedTemplate = await GlobalInstantResponseTemplate.createNewVersion(id, newVersion, adminUser);
         
-        console.log(`✅ Cloned template ${id} to version ${newVersion}`);
+        logger.info(`✅ Cloned template ${id} to version ${newVersion}`);
         
         res.status(201).json({
             success: true,
@@ -344,7 +344,7 @@ router.post('/:id/clone', async (req, res) => {
             data: clonedTemplate
         });
     } catch (error) {
-        console.error('❌ Error cloning template:', error.message, error.stack);
+        logger.error('❌ Error cloning template:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error cloning template: ${error.message}`
@@ -383,7 +383,7 @@ router.post('/:id/clone-industry', async (req, res) => {
             adminUser
         );
         
-        console.log(`✅ Cloned template ${id} for industry ${templateType}`);
+        logger.info(`✅ Cloned template ${id} for industry ${templateType}`);
         
         res.status(201).json({
             success: true,
@@ -391,7 +391,7 @@ router.post('/:id/clone-industry', async (req, res) => {
             data: clonedTemplate
         });
     } catch (error) {
-        console.error('❌ Error cloning template for industry:', error.message, error.stack);
+        logger.error('❌ Error cloning template for industry:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error cloning template: ${error.message}`
@@ -437,7 +437,7 @@ router.post('/import', async (req, res) => {
         
         await importedTemplate.save();
         
-        console.log(`✅ Imported template: ${templateData.version} with ${importedTemplate.stats.totalScenarios} scenarios`);
+        logger.info(`✅ Imported template: ${templateData.version} with ${importedTemplate.stats.totalScenarios} scenarios`);
         
         res.status(201).json({
             success: true,
@@ -445,7 +445,7 @@ router.post('/import', async (req, res) => {
             data: importedTemplate
         });
     } catch (error) {
-        console.error('❌ Error importing template:', error.message, error.stack);
+        logger.error('❌ Error importing template:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error importing template: ${error.message}`
@@ -493,7 +493,7 @@ router.post('/:id/set-default', async (req, res) => {
         
         await template.save();
         
-        console.log(`✅ Set default template: ${template.name} (${template.version}) by ${adminUser}`);
+        logger.info(`✅ Set default template: ${template.name} (${template.version}) by ${adminUser}`);
         
         res.json({
             success: true,
@@ -501,7 +501,7 @@ router.post('/:id/set-default', async (req, res) => {
             data: template
         });
     } catch (error) {
-        console.error('❌ Error setting default template:', error.message, error.stack);
+        logger.error('❌ Error setting default template:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error setting default template: ${error.message}`
@@ -578,7 +578,7 @@ router.patch('/:id', async (req, res) => {
                 'twilioTest.notes': updates.twilioTest.notes?.trim() || ''
             };
             
-            console.log(`🔧 [TWILIO UPDATE] Saving:`, {
+            logger.security(`🔧 [TWILIO UPDATE] Saving:`, {
                 enabled: twilioUpdate['twilioTest.enabled'],
                 phoneNumber: twilioUpdate['twilioTest.phoneNumber'] ? twilioUpdate['twilioTest.phoneNumber'] : 'NULL',
                 accountSid: twilioUpdate['twilioTest.accountSid'] ? `${twilioUpdate['twilioTest.accountSid'].substring(0, 10)  }...` : 'NULL',
@@ -593,7 +593,7 @@ router.patch('/:id', async (req, res) => {
                 { new: true }
             );
             
-            console.log(`✅ Updated Twilio test config for template ${updatedTemplate.version}`);
+            logger.info(`✅ Updated Twilio test config for template ${updatedTemplate.version}`);
             
             // If ONLY twilioTest is being updated, return early (skip full validation)
             if (Object.keys(updates).length === 1 && updates.twilioTest) {
@@ -614,7 +614,7 @@ router.patch('/:id', async (req, res) => {
         
         await template.save();
         
-        console.log(`✅ Updated template ${template.version}: ${changes.join(', ')}`);
+        logger.debug(`✅ Updated template ${template.version}: ${changes.join(', ')}`);
         
         // ========================================================================
         // 🔥 AUTO-SCAN & CACHE INVALIDATION
@@ -624,18 +624,18 @@ router.patch('/:id', async (req, res) => {
         // ========================================================================
         setImmediate(async () => {
             try {
-                console.log(`🔍 [AUTO-SCAN] Triggering background scan for template ${id}`);
+                logger.debug(`🔍 [AUTO-SCAN] Triggering background scan for template ${id}`);
                 
                 // 1. Clear template cache
                 await CacheHelper.clearTemplateCache(id);
-                console.log(`✅ [AUTO-SCAN] Cache cleared for template ${id}`);
+                logger.debug(`✅ [AUTO-SCAN] Cache cleared for template ${id}`);
                 
                 // 2. Scan all companies using this template
                 const scanResult = await PlaceholderScanService.scanAllCompaniesForTemplate(id);
-                console.log(`✅ [AUTO-SCAN] Background scan complete: ${scanResult.companiesScanned} companies scanned, ${scanResult.companiesWithAlerts} alerts generated`);
+                logger.debug(`✅ [AUTO-SCAN] Background scan complete: ${scanResult.companiesScanned} companies scanned, ${scanResult.companiesWithAlerts} alerts generated`);
                 
             } catch (scanError) {
-                console.error(`❌ [AUTO-SCAN] Background scan failed for template ${id}:`, scanError.message);
+                logger.error(`❌ [AUTO-SCAN] Background scan failed for template ${id}:`, scanError.message);
                 // Non-critical error - don't block response
             }
         });
@@ -650,7 +650,7 @@ router.patch('/:id', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('❌ Error updating template:', error.message, error.stack);
+        logger.error('❌ Error updating template:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error updating template: ${error.message}`
@@ -691,14 +691,14 @@ router.delete('/:id', async (req, res) => {
         const templateVersion = template.version;
         await GlobalInstantResponseTemplate.findByIdAndDelete(id);
         
-        console.log(`✅ Deleted template ${templateVersion} by ${adminUser}`);
+        logger.info(`✅ Deleted template ${templateVersion} by ${adminUser}`);
         
         res.json({
             success: true,
             message: 'Template deleted successfully'
         });
     } catch (error) {
-        console.error('❌ Error deleting template:', error.message, error.stack);
+        logger.error('❌ Error deleting template:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error deleting template: ${error.message}`
@@ -713,23 +713,23 @@ router.delete('/:id', async (req, res) => {
 router.post('/seed', authenticateJWT, async (req, res) => {
     const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
     
-    console.log('🌱 [SEED CHECKPOINT 1] Seed endpoint called by:', adminUser);
+    logger.security('🌱 [SEED CHECKPOINT 1] Seed endpoint called by:', adminUser);
     
     try {
-        console.log('🌱 [SEED CHECKPOINT 2] Checking for existing template...');
+        logger.info('🌱 [SEED CHECKPOINT 2] Checking for existing template...');
         // Check if template already exists
         const existing = await GlobalInstantResponseTemplate.findOne({ version: 'v1.0.0-test' });
-        console.log('🌱 [SEED CHECKPOINT 3] Existing template found:', existing ? 'YES' : 'NO');
+        logger.info('🌱 [SEED CHECKPOINT 3] Existing template found:', existing ? 'YES' : 'NO');
         
         if (existing) {
-            console.log('🌱 [SEED CHECKPOINT 4] Template already exists, returning 409');
+            logger.info('🌱 [SEED CHECKPOINT 4] Template already exists, returning 409');
             return res.status(409).json({
                 success: false,
                 message: 'Test template already exists. Delete it first if you want to re-seed.'
             });
         }
         
-        console.log('🌱 [SEED CHECKPOINT 5] No existing template, proceeding to create...');
+        logger.info('🌱 [SEED CHECKPOINT 5] No existing template, proceeding to create...');
         
         // 8 essential categories
         const eightCategories = [
@@ -950,10 +950,10 @@ router.post('/seed', authenticateJWT, async (req, res) => {
             }
         ];
         
-        console.log('🌱 [SEED CHECKPOINT 6] Categories array created, total:', eightCategories.length);
+        logger.info('🌱 [SEED CHECKPOINT 6] Categories array created, total:', eightCategories.length);
         
         // Create the template
-        console.log('🌱 [SEED CHECKPOINT 7] Creating new GlobalInstantResponseTemplate document...');
+        logger.info('🌱 [SEED CHECKPOINT 7] Creating new GlobalInstantResponseTemplate document...');
         const template = new GlobalInstantResponseTemplate({
             version: 'v1.0.0-test',
             name: 'ClientVia.ai Global AI Brain (Testing)',
@@ -967,15 +967,15 @@ router.post('/seed', authenticateJWT, async (req, res) => {
             }]
         });
         
-        console.log('🌱 [SEED CHECKPOINT 8] Template document created, attempting to save to MongoDB...');
+        logger.info('🌱 [SEED CHECKPOINT 8] Template document created, attempting to save to MongoDB...');
         await template.save();
-        console.log('🌱 [SEED CHECKPOINT 9] ✅ Template saved successfully to database!');
-        console.log('🌱 [SEED CHECKPOINT 10] Template ID:', template._id);
-        console.log('🌱 [SEED CHECKPOINT 11] Stats - Categories:', template.stats.totalCategories, 'Scenarios:', template.stats.totalScenarios, 'Triggers:', template.stats.totalTriggers);
+        logger.info('🌱 [SEED CHECKPOINT 9] ✅ Template saved successfully to database!');
+        logger.info('🌱 [SEED CHECKPOINT 10] Template ID:', template._id);
+        logger.info('🌱 [SEED CHECKPOINT 11] Stats - Categories:', template.stats.totalCategories, 'Scenarios:', template.stats.totalScenarios, 'Triggers:', template.stats.totalTriggers);
         
-        console.log(`✅ Seeded 8-category template by ${adminUser}`);
+        logger.info(`✅ Seeded 8-category template by ${adminUser}`);
         
-        console.log('🌱 [SEED CHECKPOINT 12] Sending success response to client...');
+        logger.info('🌱 [SEED CHECKPOINT 12] Sending success response to client...');
         res.status(201).json({
             success: true,
             message: 'Global AI Brain seeded successfully!',
@@ -986,12 +986,12 @@ router.post('/seed', authenticateJWT, async (req, res) => {
                 triggers: template.stats.totalTriggers
             }
         });
-        console.log('🌱 [SEED CHECKPOINT 13] ✅ Success response sent!');
+        logger.info('🌱 [SEED CHECKPOINT 13] ✅ Success response sent!');
     } catch (error) {
-        console.error('❌ [SEED CHECKPOINT ERROR] Seeding failed at some point!');
-        console.error('❌ [SEED ERROR DETAILS] Message:', error.message);
-        console.error('❌ [SEED ERROR DETAILS] Stack:', error.stack);
-        console.error('❌ [SEED ERROR DETAILS] Full error object:', JSON.stringify(error, null, 2));
+        logger.error('❌ [SEED CHECKPOINT ERROR] Seeding failed at some point!');
+        logger.error('❌ [SEED ERROR DETAILS] Message:', error.message);
+        logger.error('❌ [SEED ERROR DETAILS] Stack:', error.stack);
+        logger.error('❌ [SEED ERROR DETAILS] Full error object:', JSON.stringify(error, null, 2));
         res.status(500).json({
             success: false,
             message: `Error seeding template: ${error.message}`
@@ -1095,7 +1095,7 @@ router.get('/:id/parent-updates', async (req, res) => {
         
         const updateInfo = await template.checkParentUpdates();
         
-        console.log(`🔍 Checked parent updates for ${template.name}: ${updateInfo.hasUpdates ? 'YES' : 'NO'}`);
+        logger.info(`🔍 Checked parent updates for ${template.name}: ${updateInfo.hasUpdates ? 'YES' : 'NO'}`);
         
         res.json({
             success: true,
@@ -1103,7 +1103,7 @@ router.get('/:id/parent-updates', async (req, res) => {
             ...updateInfo
         });
     } catch (error) {
-        console.error('❌ Error checking parent updates:', error.message);
+        logger.error('❌ Error checking parent updates:', error.message);
         res.status(500).json({
             success: false,
             message: `Error checking parent updates: ${error.message}`
@@ -1145,7 +1145,7 @@ router.get('/:id/compare-with-parent', async (req, res) => {
             });
         }
         
-        console.log(`🔍 Compared ${template.name} with parent:`, {
+        logger.info(`🔍 Compared ${template.name} with parent:`, {
             added: comparison.added.length,
             removed: comparison.removed.length,
             modified: comparison.modified.length,
@@ -1172,7 +1172,7 @@ router.get('/:id/compare-with-parent', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('❌ Error comparing with parent:', error.message);
+        logger.error('❌ Error comparing with parent:', error.message);
         res.status(500).json({
             success: false,
             message: `Error comparing with parent: ${error.message}`
@@ -1227,7 +1227,7 @@ router.get('/:id/lineage', async (req, res) => {
             parent: parentInfo
         });
     } catch (error) {
-        console.error('❌ Error fetching lineage:', error.message);
+        logger.error('❌ Error fetching lineage:', error.message);
         res.status(500).json({
             success: false,
             message: `Error fetching lineage: ${error.message}`
@@ -1245,8 +1245,8 @@ router.post('/:id/sync-from-parent', async (req, res) => {
     const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
 
     try {
-        console.log(`🔄 [SYNC] Starting sync for template ${id} by ${adminUser}`);
-        console.log(`📥 [SYNC] Scenarios to sync:`, scenariosToSync);
+        logger.debug(`🔄 [SYNC] Starting sync for template ${id} by ${adminUser}`);
+        logger.debug(`📥 [SYNC] Scenarios to sync:`, scenariosToSync);
 
         // Get child template
         const childTemplate = await GlobalInstantResponseTemplate.findById(id);
@@ -1297,7 +1297,7 @@ router.post('/:id/sync-from-parent', async (req, res) => {
             }
 
             if (!parentScenario || !parentCategory) {
-                console.log(`⚠️ [SYNC] Scenario ${scenarioId} not found in parent template, skipping`);
+                logger.info(`⚠️ [SYNC] Scenario ${scenarioId} not found in parent template, skipping`);
                 continue;
             }
 
@@ -1306,7 +1306,7 @@ router.post('/:id/sync-from-parent', async (req, res) => {
 
             if (!childCategory) {
                 // Category doesn't exist in child, create it
-                console.log(`➕ [SYNC] Creating new category: ${parentCategory.name}`);
+                logger.info(`➕ [SYNC] Creating new category: ${parentCategory.name}`);
                 childCategory = {
                     id: parentCategory.id,
                     name: parentCategory.name,
@@ -1322,11 +1322,11 @@ router.post('/:id/sync-from-parent', async (req, res) => {
 
             if (existingScenarioIndex >= 0) {
                 // Replace existing scenario
-                console.log(`🔄 [SYNC] Replacing existing scenario: ${parentScenario.name}`);
+                logger.info(`🔄 [SYNC] Replacing existing scenario: ${parentScenario.name}`);
                 childCategory.scenarios[existingScenarioIndex] = JSON.parse(JSON.stringify(parentScenario));
             } else {
                 // Add new scenario
-                console.log(`➕ [SYNC] Adding new scenario: ${parentScenario.name}`);
+                logger.info(`➕ [SYNC] Adding new scenario: ${parentScenario.name}`);
                 childCategory.scenarios.push(JSON.parse(JSON.stringify(parentScenario)));
             }
 
@@ -1361,7 +1361,7 @@ router.post('/:id/sync-from-parent', async (req, res) => {
 
         await childTemplate.save();
 
-        console.log(`✅ [SYNC] Successfully synced ${syncedCount} scenarios`);
+        logger.info(`✅ [SYNC] Successfully synced ${syncedCount} scenarios`);
 
         res.json({
             success: true,
@@ -1371,7 +1371,7 @@ router.post('/:id/sync-from-parent', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error syncing scenarios:', error.message, error.stack);
+        logger.error('❌ Error syncing scenarios:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error syncing scenarios: ${error.message}`
@@ -1391,7 +1391,7 @@ router.get('/:templateId/categories/:categoryId/scenarios/:scenarioId', async (r
     const { templateId, categoryId, scenarioId } = req.params;
     const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
     
-    console.log(`📖 [GET SCENARIO] ${adminUser} fetching scenario ${scenarioId} from category ${categoryId} in template ${templateId}`);
+    logger.debug(`📖 [GET SCENARIO] ${adminUser} fetching scenario ${scenarioId} from category ${categoryId} in template ${templateId}`);
     
     try {
         const template = await GlobalInstantResponseTemplate.findById(templateId);
@@ -1421,7 +1421,7 @@ router.get('/:templateId/categories/:categoryId/scenarios/:scenarioId', async (r
             });
         }
         
-        console.log(`✅ [GET SCENARIO] Found scenario: ${scenario.name}`);
+        logger.info(`✅ [GET SCENARIO] Found scenario: ${scenario.name}`);
         
         res.json({
             success: true,
@@ -1429,7 +1429,7 @@ router.get('/:templateId/categories/:categoryId/scenarios/:scenarioId', async (r
         });
         
     } catch (error) {
-        console.error('❌ [GET SCENARIO] Error:', error.message, error.stack);
+        logger.error('❌ [GET SCENARIO] Error:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error fetching scenario: ${error.message}`
@@ -1447,7 +1447,7 @@ router.post('/:templateId/categories/:categoryId/scenarios', async (req, res) =>
     const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
 
     try {
-        console.log(`➕ [SCENARIO CREATE] Template: ${templateId}, Category: ${categoryId}`);
+        logger.info(`➕ [SCENARIO CREATE] Template: ${templateId}, Category: ${categoryId}`);
         
         const template = await GlobalInstantResponseTemplate.findById(templateId);
         if (!template) {
@@ -1548,7 +1548,7 @@ router.post('/:templateId/categories/:categoryId/scenarios', async (req, res) =>
 
         await template.save();
 
-        console.log(`✅ [SCENARIO CREATE] Created: ${newScenario.name} (${newScenario.scenarioId})`);
+        logger.info(`✅ [SCENARIO CREATE] Created: ${newScenario.name} (${newScenario.scenarioId})`);
 
         res.json({
             success: true,
@@ -1557,7 +1557,7 @@ router.post('/:templateId/categories/:categoryId/scenarios', async (req, res) =>
         });
 
     } catch (error) {
-        console.error('❌ [SCENARIO CREATE] Error:', error.message, error.stack);
+        logger.error('❌ [SCENARIO CREATE] Error:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error creating scenario: ${error.message}`
@@ -1575,7 +1575,7 @@ router.patch('/:templateId/categories/:categoryId/scenarios/:scenarioId', async 
     const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
 
     try {
-        console.log(`✏️ [SCENARIO UPDATE] Scenario: ${scenarioId}`);
+        logger.info(`✏️ [SCENARIO UPDATE] Scenario: ${scenarioId}`);
         
         const template = await GlobalInstantResponseTemplate.findById(templateId);
         if (!template) {
@@ -1663,7 +1663,7 @@ router.patch('/:templateId/categories/:categoryId/scenarios/:scenarioId', async 
 
         await template.save();
 
-        console.log(`✅ [SCENARIO UPDATE] Updated: ${scenario.name}`);
+        logger.info(`✅ [SCENARIO UPDATE] Updated: ${scenario.name}`);
 
         res.json({
             success: true,
@@ -1672,7 +1672,7 @@ router.patch('/:templateId/categories/:categoryId/scenarios/:scenarioId', async 
         });
 
     } catch (error) {
-        console.error('❌ [SCENARIO UPDATE] Error:', error.message, error.stack);
+        logger.error('❌ [SCENARIO UPDATE] Error:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error updating scenario: ${error.message}`
@@ -1689,7 +1689,7 @@ router.delete('/:templateId/categories/:categoryId/scenarios/:scenarioId', async
     const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
 
     try {
-        console.log(`🗑️ [SCENARIO DELETE] Scenario: ${scenarioId}`);
+        logger.info(`🗑️ [SCENARIO DELETE] Scenario: ${scenarioId}`);
         
         const template = await GlobalInstantResponseTemplate.findById(templateId);
         if (!template) {
@@ -1736,7 +1736,7 @@ router.delete('/:templateId/categories/:categoryId/scenarios/:scenarioId', async
 
         await template.save();
 
-        console.log(`✅ [SCENARIO DELETE] Deleted: ${scenarioName}`);
+        logger.info(`✅ [SCENARIO DELETE] Deleted: ${scenarioName}`);
 
         res.json({
             success: true,
@@ -1744,7 +1744,7 @@ router.delete('/:templateId/categories/:categoryId/scenarios/:scenarioId', async
         });
 
     } catch (error) {
-        console.error('❌ [SCENARIO DELETE] Error:', error.message, error.stack);
+        logger.error('❌ [SCENARIO DELETE] Error:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error deleting scenario: ${error.message}`
@@ -1802,7 +1802,7 @@ router.get('/:templateId/scenarios', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error fetching scenarios:', error.message, error.stack);
+        logger.error('❌ Error fetching scenarios:', error.message, error.stack);
         res.status(500).json({
             success: false,
             message: `Error fetching scenarios: ${error.message}`
@@ -1834,9 +1834,9 @@ router.post('/seed-template', async (req, res) => {
     const { templateName, replaceExisting = true } = req.body;
     const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
     
-    console.log(`🌱 [SEED API] Template seed requested by ${adminUser}`);
-    console.log(`🌱 [SEED API] Template: ${templateName}`);
-    console.log(`🌱 [SEED API] Replace existing: ${replaceExisting}`);
+    logger.info(`🌱 [SEED API] Template seed requested by ${adminUser}`);
+    logger.info(`🌱 [SEED API] Template: ${templateName}`);
+    logger.info(`🌱 [SEED API] Replace existing: ${replaceExisting}`);
     
     try {
         // Validate template name
@@ -1858,7 +1858,7 @@ router.post('/seed-template', async (req, res) => {
         }
         
         const templateInfo = availableTemplates[templateName];
-        console.log(`✅ [SEED API] Valid template selected: ${templateInfo.name}`);
+        logger.info(`✅ [SEED API] Valid template selected: ${templateInfo.name}`);
         
         // Load template data
         const { ulid } = require('ulid');
@@ -1872,8 +1872,8 @@ router.post('/seed-template', async (req, res) => {
             });
             
             if (existingTemplate) {
-                console.log(`🔄 [SEED API] Found existing template: ${existingTemplate._id}`);
-                console.log(`💾 [SEED API] PRESERVING Twilio configuration...`);
+                logger.info(`🔄 [SEED API] Found existing template: ${existingTemplate._id}`);
+                logger.info(`💾 [SEED API] PRESERVING Twilio configuration...`);
                 
                 // ✅ WORLD-CLASS: Backup Twilio config before updating
                 const twilioBackup = existingTemplate.twilioTest ? {
@@ -1888,10 +1888,10 @@ router.post('/seed-template', async (req, res) => {
                 } : null;
                 
                 if (twilioBackup) {
-                    console.log(`📞 [SEED API] Twilio config backed up:`);
-                    console.log(`   - Enabled: ${twilioBackup.enabled}`);
-                    console.log(`   - Phone: ${twilioBackup.phoneNumber || 'Not set'}`);
-                    console.log(`   - Account SID: ${twilioBackup.accountSid || 'Not set'}`);
+                    logger.info(`📞 [SEED API] Twilio config backed up:`);
+                    logger.info(`   - Enabled: ${twilioBackup.enabled}`);
+                    logger.info(`   - Phone: ${twilioBackup.phoneNumber || 'Not set'}`);
+                    logger.info(`   - Account SID: ${twilioBackup.accountSid || 'Not set'}`);
                 }
                 
                 // ✅ UPDATE categories and scenarios (core content)
@@ -1920,39 +1920,39 @@ router.post('/seed-template', async (req, res) => {
                     totalTriggers
                 };
                 
-                console.log(`📊 [SEED API] Calculated stats: ${totalScenarios} scenarios, ${totalTriggers} triggers`);
+                logger.info(`📊 [SEED API] Calculated stats: ${totalScenarios} scenarios, ${totalTriggers} triggers`);
                 
                 // ✅ RESTORE Twilio config (preserve user settings)
                 if (twilioBackup) {
                     existingTemplate.twilioTest = twilioBackup;
-                    console.log(`✅ [SEED API] Twilio config RESTORED`);
+                    logger.info(`✅ [SEED API] Twilio config RESTORED`);
                 } else {
-                    console.log(`ℹ️  [SEED API] No Twilio config to restore (was empty)`);
+                    logger.info(`ℹ️  [SEED API] No Twilio config to restore (was empty)`);
                 }
                 
                 await existingTemplate.save();
                 template = existingTemplate;
                 
-                console.log(`✅ [SEED API] Template UPDATED (categories/scenarios refreshed, Twilio preserved)`);
+                logger.info(`✅ [SEED API] Template UPDATED (categories/scenarios refreshed, Twilio preserved)`);
             } else {
                 // No existing template found, create fresh
-                console.log(`📝 [SEED API] No existing template found, creating fresh...`);
+                logger.info(`📝 [SEED API] No existing template found, creating fresh...`);
                 template = new GlobalInstantResponseTemplate(templateData);
                 await template.save();
-                console.log(`✅ [SEED API] Template CREATED from scratch`);
+                logger.info(`✅ [SEED API] Template CREATED from scratch`);
             }
         } else {
             // replaceExisting = false, always create new
-            console.log(`📝 [SEED API] Creating new template (replaceExisting=false)...`);
+            logger.info(`📝 [SEED API] Creating new template (replaceExisting=false)...`);
             template = new GlobalInstantResponseTemplate(templateData);
             await template.save();
-            console.log(`✅ [SEED API] Template CREATED`);
+            logger.info(`✅ [SEED API] Template CREATED`);
         }
         
-        console.log(`✅ [SEED API] Template created successfully!`);
-        console.log(`📊 [SEED API] Template ID: ${template._id}`);
-        console.log(`📊 [SEED API] Categories: ${template.categories.length}`);
-        console.log(`📊 [SEED API] Scenarios: ${template.stats.totalScenarios}`);
+        logger.info(`✅ [SEED API] Template created successfully!`);
+        logger.info(`📊 [SEED API] Template ID: ${template._id}`);
+        logger.info(`📊 [SEED API] Categories: ${template.categories.length}`);
+        logger.info(`📊 [SEED API] Scenarios: ${template.stats.totalScenarios}`);
         
         // Return success with stats
         res.json({
@@ -1978,8 +1978,8 @@ router.post('/seed-template', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ [SEED API] Error seeding template:', error.message);
-        console.error(error.stack);
+        logger.error('❌ [SEED API] Error seeding template:', error.message);
+        logger.error(error.stack);
         res.status(500).json({
             success: false,
             message: `Failed to seed template: ${error.message}`,

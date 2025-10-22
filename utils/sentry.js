@@ -1,4 +1,6 @@
 const Sentry = require('@sentry/node');
+const logger = require('./logger.js');
+
 // ✅ PRODUCTION FIX: ProfilingIntegration disabled for compatibility
 // const { ProfilingIntegration } = require('@sentry/profiling-node');
 
@@ -6,7 +8,7 @@ const Sentry = require('@sentry/node');
 function initializeSentry() {
   // Only initialize Sentry if DSN is provided
   if (!process.env.SENTRY_DSN) {
-    console.warn('⚠️  SENTRY_DSN not configured. Error monitoring disabled.');
+    logger.warn('⚠️  SENTRY_DSN not configured. Error monitoring disabled.');
     return;
   }
 
@@ -56,7 +58,7 @@ function initializeSentry() {
     }
   });
 
-  console.log('✅ Sentry error monitoring initialized');
+  logger.debug('✅ Sentry error monitoring initialized');
 }
 
 // Middleware to capture Express requests
@@ -78,7 +80,7 @@ function getSentryErrorHandler() {
 // Helper function to capture custom errors with context
 function captureError(error, context = {}) {
   if (!process.env.SENTRY_DSN) {
-    console.error('Error (Sentry disabled):', error);
+    logger.error('Error (Sentry disabled):', error);
     return;
   }
 
@@ -116,7 +118,7 @@ function captureError(error, context = {}) {
 // Helper function to capture custom messages/warnings
 function captureMessage(message, level = 'info', context = {}) {
   if (!process.env.SENTRY_DSN) {
-    console.log(`Message (Sentry disabled) [${level}]:`, message);
+    logger.debug(`Message (Sentry disabled) [${level}]:`, message);
     return;
   }
 
@@ -137,7 +139,7 @@ function captureMessage(message, level = 'info', context = {}) {
 // Security-specific error capture
 function captureSecurityEvent(event, details = {}) {
   if (!process.env.SENTRY_DSN) {
-    console.warn('Security Event (Sentry disabled):', event, details);
+    logger.security('Security Event (Sentry disabled):', event, details);
     return;
   }
 

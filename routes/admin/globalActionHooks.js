@@ -19,6 +19,8 @@
  */
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const GlobalActionHook = require('../../models/GlobalActionHook');
 
@@ -39,7 +41,7 @@ router.get('/', async (req, res) => {
             data: hooks
         });
     } catch (error) {
-        console.error('Error fetching action hooks:', error);
+        logger.error('Error fetching action hooks:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch action hooks',
@@ -66,7 +68,7 @@ router.get('/:id', async (req, res) => {
             data: hook
         });
     } catch (error) {
-        console.error('Error fetching action hook:', error);
+        logger.error('Error fetching action hook:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch action hook',
@@ -119,7 +121,7 @@ router.post('/', async (req, res) => {
             data: newHook
         });
     } catch (error) {
-        console.error('Error creating action hook:', error);
+        logger.error('Error creating action hook:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to create action hook',
@@ -168,7 +170,7 @@ router.put('/:id', async (req, res) => {
             data: hook
         });
     } catch (error) {
-        console.error('Error updating action hook:', error);
+        logger.error('Error updating action hook:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to update action hook',
@@ -209,7 +211,7 @@ router.delete('/:id', async (req, res) => {
             message: 'Action hook deleted successfully'
         });
     } catch (error) {
-        console.error('Error deleting action hook:', error);
+        logger.error('Error deleting action hook:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to delete action hook',
@@ -274,7 +276,7 @@ router.post('/seed', async (req, res) => {
             count: defaultHooks.length
         });
     } catch (error) {
-        console.error('Error seeding action hooks:', error);
+        logger.error('Error seeding action hooks:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to seed action hooks',

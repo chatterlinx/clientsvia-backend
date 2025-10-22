@@ -1,4 +1,6 @@
 const express = require('express');
+const logger = require('../utils/logger.js');
+
 const { getAvailableVoices } = require('../services/v2elevenLabsService');
 const router = express.Router();
 const { getDB } = require('../db');
@@ -9,7 +11,7 @@ async function getVoices(req, res) {
     const params = req.method === 'GET' ? req.query : req.body;
     const { companyId, apiKey, provider = 'elevenlabs' } = params;
     
-    console.log(`TTS Voices Request - Method: ${req.method}, Provider: ${provider}, CompanyId: ${companyId}`);
+    logger.info(`TTS Voices Request - Method: ${req.method}, Provider: ${provider}, CompanyId: ${companyId}`);
 
     try {
         const db = getDB();
@@ -19,10 +21,10 @@ async function getVoices(req, res) {
         const companyKey = company?.aiSettings?.elevenLabs?.apiKey;
         const envKey = process.env.ELEVENLABS_API_KEY;
         
-        console.log(`API Key sources - Request: ${Boolean(apiKey)}, Company: ${Boolean(companyKey)}, Env: ${Boolean(envKey)}`);
+        logger.debug(`API Key sources - Request: ${Boolean(apiKey)}, Company: ${Boolean(companyKey)}, Env: ${Boolean(envKey)}`);
         
         if (!apiKey && !companyKey && !envKey) {
-            console.log('No ElevenLabs API key found from any source');
+            logger.debug('No ElevenLabs API key found from any source');
             return res.status(503).json({ 
                 message: 'ElevenLabs API key not configured. Please enter your API key to load voices.',
                 error: 'API_KEY_REQUIRED'
@@ -33,7 +35,7 @@ async function getVoices(req, res) {
         const formattedVoices = voices.map(v => ({ id: v.voice_id, displayName: `${v.name} (${v.labels?.gender || 'N/A'})` }));
         return res.status(200).json(formattedVoices);
     } catch (error) {
-        console.error('ElevenLabs API Error:', error.message);
+        logger.security('ElevenLabs API Error:', error.message);
         
         // Check if it's an authentication error
         if (error.message.includes('not configured') || error.message.includes('API key')) {
@@ -69,7 +71,7 @@ async function postVoices(req, res) {
         const formattedVoices = voices.map(v => ({ id: v.voice_id, displayName: `${v.name} (${v.labels?.gender || 'N/A'})` }));
         return res.status(200).json(formattedVoices);
     } catch (error) {
-        console.error('ElevenLabs API Error:', error.message);
+        logger.security('ElevenLabs API Error:', error.message);
         
         // Check if it's an authentication error
         if (error.message.includes('not configured') || error.message.includes('API key')) {

@@ -25,6 +25,8 @@
  */
 
 const Company = require('../models/v2Company');
+const logger = require('../utils/logger.js');
+
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 
 class ConfigurationReadinessService {
@@ -35,7 +37,7 @@ class ConfigurationReadinessService {
      * @returns {Object} Readiness report
      */
     static async calculateReadiness(company) {
-        console.log(`[READINESS] 🎯 Calculating readiness for: ${company.companyName}`);
+        logger.info(`[READINESS] 🎯 Calculating readiness for: ${company.companyName}`);
         
         const report = {
             calculatedAt: new Date(),
@@ -81,17 +83,17 @@ class ConfigurationReadinessService {
         const hasCriticalBlockers = report.blockers.some(b => b.severity === 'critical');
         report.canGoLive = report.score >= 80 && !hasCriticalBlockers;
         
-        console.log(`[READINESS] ✅ Score: ${report.score}/100 | Can Go Live: ${report.canGoLive}`);
-        console.log(`[READINESS] 📊 Components:`);
-        console.log(`   - Variables: ${report.components.variables.score}/100 (${report.components.variables.configured}/${report.components.variables.required})`);
-        console.log(`   - Filler Words: ${report.components.fillerWords.score}/100 (${report.components.fillerWords.active} active)`);
-        console.log(`   - Scenarios: ${report.components.scenarios.score}/100 (${report.components.scenarios.active} active)`);
-        console.log(`   - Voice: ${report.components.voice.score}/100 (${report.components.voice.configured ? 'configured' : 'not configured'})`);
-        console.log(`   - Test Calls: ${report.components.testCalls.score}/100 (${report.components.testCalls.made}/${report.components.testCalls.required})`);
+        logger.info(`[READINESS] ✅ Score: ${report.score}/100 | Can Go Live: ${report.canGoLive}`);
+        logger.info(`[READINESS] 📊 Components:`);
+        logger.info(`   - Variables: ${report.components.variables.score}/100 (${report.components.variables.configured}/${report.components.variables.required})`);
+        logger.info(`   - Filler Words: ${report.components.fillerWords.score}/100 (${report.components.fillerWords.active} active)`);
+        logger.info(`   - Scenarios: ${report.components.scenarios.score}/100 (${report.components.scenarios.active} active)`);
+        logger.info(`   - Voice: ${report.components.voice.score}/100 (${report.components.voice.configured ? 'configured' : 'not configured'})`);
+        logger.info(`   - Test Calls: ${report.components.testCalls.score}/100 (${report.components.testCalls.made}/${report.components.testCalls.required})`);
         
         if (report.blockers.length > 0) {
-            console.log(`[READINESS] 🚫 Blockers: ${report.blockers.length}`);
-            report.blockers.forEach(b => console.log(`   - ${b.code}: ${b.message}`));
+            logger.info(`[READINESS] 🚫 Blockers: ${report.blockers.length}`);
+            report.blockers.forEach(b => logger.info(`   - ${b.code}: ${b.message}`));
         }
         
         return report;
@@ -189,7 +191,7 @@ class ConfigurationReadinessService {
             }
             
         } catch (error) {
-            console.error(`[READINESS] ❌ Variables calculation error:`, error);
+            logger.error(`[READINESS] ❌ Variables calculation error:`, error);
             component.score = 0;
             report.blockers.push({
                 code: 'VARIABLES_ERROR',
@@ -248,7 +250,7 @@ class ConfigurationReadinessService {
             }
             
         } catch (error) {
-            console.error(`[READINESS] ❌ Filler words calculation error:`, error);
+            logger.error(`[READINESS] ❌ Filler words calculation error:`, error);
             component.score = 50;
         }
         
@@ -319,7 +321,7 @@ class ConfigurationReadinessService {
             }
             
         } catch (error) {
-            console.error(`[READINESS] ❌ Scenarios calculation error:`, error);
+            logger.error(`[READINESS] ❌ Scenarios calculation error:`, error);
             component.score = 0;
             report.blockers.push({
                 code: 'SCENARIOS_ERROR',
@@ -366,7 +368,7 @@ class ConfigurationReadinessService {
             }
             
         } catch (error) {
-            console.error(`[READINESS] ❌ Voice calculation error:`, error);
+            logger.error(`[READINESS] ❌ Voice calculation error:`, error);
             component.score = 0;
             report.blockers.push({
                 code: 'VOICE_ERROR',
@@ -418,7 +420,7 @@ class ConfigurationReadinessService {
             }
             
         } catch (error) {
-            console.error(`[READINESS] ❌ Test calls calculation error:`, error);
+            logger.error(`[READINESS] ❌ Test calls calculation error:`, error);
             component.score = 0;
         }
         
@@ -446,7 +448,7 @@ class ConfigurationReadinessService {
             component.status = status;
             component.isActive = (status === 'active');
             
-            console.log(`[READINESS] 🚨 GATEKEEPER: Account status = ${status}`);
+            logger.info(`[READINESS] 🚨 GATEKEEPER: Account status = ${status}`);
             
             // CRITICAL: Account must be ACTIVE to go live
             if (status === 'suspended') {
@@ -460,7 +462,7 @@ class ConfigurationReadinessService {
                     details: `Reason: ${accountStatus.reason || 'Not specified'}. Change status to ACTIVE in Configuration tab to go live.`
                 });
                 
-                console.log(`[READINESS] 🚫 BLOCKED: Account suspended`);
+                logger.security(`[READINESS] 🚫 BLOCKED: Account suspended`);
                 
             } else if (status === 'call_forward') {
                 component.score = 0;
@@ -473,11 +475,11 @@ class ConfigurationReadinessService {
                     details: `Currently forwarding to: ${accountStatus.callForwardNumber || 'unknown'}. Change status to ACTIVE in Configuration tab to enable AI Agent.`
                 });
                 
-                console.log(`[READINESS] 🚫 BLOCKED: Account in call forward mode`);
+                logger.security(`[READINESS] 🚫 BLOCKED: Account in call forward mode`);
                 
             } else if (status === 'active') {
                 component.score = 100;
-                console.log(`[READINESS] ✅ GATEKEEPER PASSED: Account is active`);
+                logger.security(`[READINESS] ✅ GATEKEEPER PASSED: Account is active`);
             } else {
                 // Unknown status - block as precaution
                 component.score = 0;
@@ -490,11 +492,11 @@ class ConfigurationReadinessService {
                     details: 'Please set account status to ACTIVE in Configuration tab.'
                 });
                 
-                console.log(`[READINESS] 🚫 BLOCKED: Unknown account status`);
+                logger.security(`[READINESS] 🚫 BLOCKED: Unknown account status`);
             }
             
         } catch (error) {
-            console.error(`[READINESS] ❌ Account status check error:`, error);
+            logger.security(`[READINESS] ❌ Account status check error:`, error);
             component.score = 0;
             report.blockers.push({
                 code: 'ACCOUNT_STATUS_ERROR',

@@ -268,7 +268,7 @@ router.post('/categories', async (req, res) => {
         const startTime = Date.now();
         const { name, description } = req.body;
 
-        console.log('🔍 CHECKPOINT 1: Category creation started', {
+        logger.debug('🔍 CHECKPOINT 1: Category creation started', {
             rawName: name,
             rawDescription: description,
             timestamp: new Date().toISOString()
@@ -282,7 +282,7 @@ router.post('/categories', async (req, res) => {
         // 🔍 Enhanced Validation
         const validationErrors = [];
         
-        console.log('🔍 CHECKPOINT 2: Starting validation', {
+        logger.debug('🔍 CHECKPOINT 2: Starting validation', {
             nameProvided: Boolean(name),
             nameLength: name ? name.trim().length : 0,
             descriptionProvided: Boolean(description),
@@ -291,21 +291,21 @@ router.post('/categories', async (req, res) => {
         
         if (!name || name.trim().length === 0) {
             validationErrors.push('Category name is required and cannot be empty');
-            console.log('🚨 VALIDATION ERROR: Name is required');
+            logger.info('🚨 VALIDATION ERROR: Name is required');
         } else if (name.trim().length < 2) {
             validationErrors.push('Category name must be at least 2 characters long');
-            console.log('🚨 VALIDATION ERROR: Name too short');
+            logger.info('🚨 VALIDATION ERROR: Name too short');
         } else if (name.trim().length > 50) {
             validationErrors.push('Category name cannot exceed 50 characters');
-            console.log('🚨 VALIDATION ERROR: Name too long');
+            logger.info('🚨 VALIDATION ERROR: Name too long');
         }
 
         if (description && description.trim().length > 200) {
             validationErrors.push('Description cannot exceed 200 characters');
-            console.log('🚨 VALIDATION ERROR: Description too long');
+            logger.info('🚨 VALIDATION ERROR: Description too long');
         }
 
-        console.log('🔍 CHECKPOINT 3: Basic validation complete', {
+        logger.info('🔍 CHECKPOINT 3: Basic validation complete', {
             validationErrors: validationErrors.length,
             errors: validationErrors
         });
@@ -316,7 +316,7 @@ router.post('/categories', async (req, res) => {
         const escapedName = searchName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const searchRegex = new RegExp(`^${escapedName}$`, 'i');
         
-        console.log('🔍 CHECKPOINT 4: Starting duplicate check', {
+        logger.debug('🔍 CHECKPOINT 4: Starting duplicate check', {
             originalName: name,
             trimmedName: searchName,
             escapedName,
@@ -340,7 +340,7 @@ router.post('/categories', async (req, res) => {
             isActive: true
         });
         
-        console.log('🔍 CHECKPOINT 5: Database query complete', {
+        logger.info('🔍 CHECKPOINT 5: Database query complete', {
             queryExecuted: true,
             foundExisting: Boolean(existingCategory),
             existingCategoryDetails: existingCategory ? {
@@ -364,7 +364,7 @@ router.post('/categories', async (req, res) => {
         
         // V2 DUPLICATE CHECK: Properly validate unique categories
         if (existingCategory) {
-            console.log('🚨 CHECKPOINT 6: DUPLICATE FOUND!', {
+            logger.info('🚨 CHECKPOINT 6: DUPLICATE FOUND!', {
                 attemptedName: searchName,
                 existingCategory: {
                     _id: existingCategory._id,
@@ -392,17 +392,17 @@ router.post('/categories', async (req, res) => {
             });
             validationErrors.push('A trade category with this name already exists');
         } else {
-            console.log('✅ CHECKPOINT 6: No duplicate found - proceeding with creation');
+            logger.info('✅ CHECKPOINT 6: No duplicate found - proceeding with creation');
         }
 
-        console.log('🔍 CHECKPOINT 7: Final validation check', {
+        logger.info('🔍 CHECKPOINT 7: Final validation check', {
             totalValidationErrors: validationErrors.length,
             allErrors: validationErrors,
             willProceed: validationErrors.length === 0
         });
 
         if (validationErrors.length > 0) {
-            console.log('🚫 CHECKPOINT 8: Validation failed - returning error response', {
+            logger.info('🚫 CHECKPOINT 8: Validation failed - returning error response', {
                 errors: validationErrors,
                 responseStatus: 400
             });
@@ -416,7 +416,7 @@ router.post('/categories', async (req, res) => {
             });
         }
 
-        console.log('✅ CHECKPOINT 9: Creating new category object', {
+        logger.info('✅ CHECKPOINT 9: Creating new category object', {
             name: name.trim(),
             description: description?.trim() || '',
             companyId: 'global'
@@ -1255,7 +1255,7 @@ router.get('/debug/test-duplicate/:name', authenticateJWT, requireRole('admin'),
         const searchName = name.trim();
         const searchRegex = new RegExp(`^${searchName}$`, 'i');
         
-        console.log('🧪 TESTING DUPLICATE CHECK:', {
+        logger.info('🧪 TESTING DUPLICATE CHECK:', {
             originalName: name,
             searchName,
             regexString: searchRegex.toString(),

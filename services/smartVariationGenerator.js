@@ -61,7 +61,7 @@ class SmartVariationGenerator {
       .filter(v => v && v.length > 0)
       .slice(0, count);
 
-    console.log(`[SmartVariationGenerator] Generated ${result.length} variations for: "${trigger}"`);
+    logger.info(`[SmartVariationGenerator] Generated ${result.length} variations for: "${trigger}"`);
     return result;
   }
 

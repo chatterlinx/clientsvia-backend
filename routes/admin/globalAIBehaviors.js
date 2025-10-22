@@ -19,6 +19,8 @@
  */
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const GlobalAIBehaviorTemplate = require('../../models/GlobalAIBehaviorTemplate');
 
@@ -36,7 +38,7 @@ router.get('/', async (req, res) => {
             data: behaviors
         });
     } catch (error) {
-        console.error('Error fetching behaviors:', error);
+        logger.error('Error fetching behaviors:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch behaviors',
@@ -64,7 +66,7 @@ router.get('/:id', async (req, res) => {
             data: behavior
         });
     } catch (error) {
-        console.error('Error fetching behavior:', error);
+        logger.error('Error fetching behavior:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch behavior',
@@ -110,7 +112,7 @@ router.post('/', async (req, res) => {
             data: newBehavior
         });
     } catch (error) {
-        console.error('Error creating behavior:', error);
+        logger.error('Error creating behavior:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to create behavior',
@@ -154,7 +156,7 @@ router.put('/:id', async (req, res) => {
             data: behavior
         });
     } catch (error) {
-        console.error('Error updating behavior:', error);
+        logger.error('Error updating behavior:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to update behavior',
@@ -192,7 +194,7 @@ router.delete('/:id', async (req, res) => {
             message: 'Behavior deleted successfully'
         });
     } catch (error) {
-        console.error('Error deleting behavior:', error);
+        logger.error('Error deleting behavior:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to delete behavior',
@@ -376,7 +378,7 @@ router.post('/seed', async (req, res) => {
             count: defaultBehaviors.length
         });
     } catch (error) {
-        console.error('Error seeding behaviors:', error);
+        logger.error('Error seeding behaviors:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to seed behaviors',

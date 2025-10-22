@@ -2,6 +2,8 @@
 // V2 Booking Handler - Production Ready
 
 const { getDB } = require('../db');
+const logger = require('../utils/logger.js');
+
 const { ObjectId } = require('mongodb');
 const crypto = require('crypto');
 
@@ -9,7 +11,7 @@ const crypto = require('crypto');
  * Get v2 booking schema for a specific company, trade, and service type
  */
 async function getV2BookingSchema(companyID, trade, serviceType) {
-    console.log(`[V2 Booking] Getting schema for ${companyID}/${trade}/${serviceType}`);
+    logger.info(`[V2 Booking] Getting schema for ${companyID}/${trade}/${serviceType}`);
     
     const db = getDB();
     if (!db) {throw new Error('Database not connected');}
@@ -24,13 +26,13 @@ async function getV2BookingSchema(companyID, trade, serviceType) {
         });
 
         if (schema) {
-            console.log(`[V2 Booking] Found v2 schema`);
+            logger.info(`[V2 Booking] Found v2 schema`);
             return schema;
         }
 
         return await getLegacyBookingFlow(companyID, trade, serviceType);
     } catch (error) {
-        console.error('[V2 Booking] Error:', error);
+        logger.error('[V2 Booking] Error:', error);
         throw error;
     }
 }
@@ -98,7 +100,7 @@ async function createOrResumeBookingSession({ companyID, trade, serviceType, ses
             expiresAt
         };
     } catch (error) {
-        console.error('[V2 Booking] Session error:', error);
+        logger.security('[V2 Booking] Session error:', error);
         throw error;
     }
 }
@@ -149,7 +151,7 @@ async function handleBookingFlow({ companyID, trade, serviceType, currentStep = 
             flowName: flow.name || `${trade} ${serviceType} Booking`
         };
     } catch (error) {
-        console.error('[Legacy Booking] Error:', error);
+        logger.error('[Legacy Booking] Error:', error);
         return {
             error: 'Internal error',
             message: 'Booking system temporarily unavailable.'
@@ -185,7 +187,7 @@ async function getAvailableBookingFlows(companyID) {
 
         return flows;
     } catch (error) {
-        console.error('[Booking Flows] Error:', error);
+        logger.error('[Booking Flows] Error:', error);
         return [];
     }
 }

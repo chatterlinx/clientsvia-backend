@@ -12,6 +12,8 @@
 // ============================================================================
 
 const BlockedCallLog = require('../models/BlockedCallLog');
+const logger = require('../utils/logger.js');
+
 const GlobalSpamDatabase = require('../models/GlobalSpamDatabase');
 const v2Company = require('../models/v2Company');
 const { redisClient } = require('../clients');
@@ -32,17 +34,17 @@ class SmartCallFilter {
             twilioCallSid
         } = callData;
 
-        console.log(`🔍 [SMART FILTER] CHECKPOINT 1: Checking call from ${callerPhone} to company ${companyId}`);
+        logger.debug(`🔍 [SMART FILTER] CHECKPOINT 1: Checking call from ${callerPhone} to company ${companyId}`);
 
         try {
             // ================================================================
             // STEP 1: Check Global Spam Database
             // ================================================================
-            console.log(`🔍 [SMART FILTER] CHECKPOINT 2: Checking global spam database...`);
+            logger.security(`🔍 [SMART FILTER] CHECKPOINT 2: Checking global spam database...`);
             const globalCheck = await this.checkGlobalSpamDatabase(callerPhone);
             
             if (globalCheck.shouldBlock) {
-                console.log(`🚫 [SMART FILTER] BLOCKED: Global spam database hit`);
+                logger.security(`🚫 [SMART FILTER] BLOCKED: Global spam database hit`);
                 await this.logBlock({
                     callerPhone,
                     companyId,
@@ -63,11 +65,11 @@ class SmartCallFilter {
             // ================================================================
             // STEP 2: Check Company Blacklist
             // ================================================================
-            console.log(`🔍 [SMART FILTER] CHECKPOINT 3: Checking company blacklist...`);
+            logger.security(`🔍 [SMART FILTER] CHECKPOINT 3: Checking company blacklist...`);
             const companyCheck = await this.checkCompanyBlacklist(callerPhone, companyId);
             
             if (companyCheck.shouldBlock) {
-                console.log(`🚫 [SMART FILTER] BLOCKED: Company blacklist hit`);
+                logger.security(`🚫 [SMART FILTER] BLOCKED: Company blacklist hit`);
                 await this.logBlock({
                     callerPhone,
                     companyId,
@@ -88,11 +90,11 @@ class SmartCallFilter {
             // ================================================================
             // STEP 3: Check Call Frequency (Rate Limiting)
             // ================================================================
-            console.log(`🔍 [SMART FILTER] CHECKPOINT 4: Checking call frequency...`);
+            logger.security(`🔍 [SMART FILTER] CHECKPOINT 4: Checking call frequency...`);
             const frequencyCheck = await this.checkCallFrequency(callerPhone, companyId);
             
             if (frequencyCheck.shouldBlock) {
-                console.log(`🚫 [SMART FILTER] BLOCKED: High frequency detected`);
+                logger.security(`🚫 [SMART FILTER] BLOCKED: High frequency detected`);
                 await this.logBlock({
                     callerPhone,
                     companyId,
@@ -113,11 +115,11 @@ class SmartCallFilter {
             // ================================================================
             // STEP 4: Check Robocall Patterns
             // ================================================================
-            console.log(`🔍 [SMART FILTER] CHECKPOINT 5: Checking robocall patterns...`);
+            logger.security(`🔍 [SMART FILTER] CHECKPOINT 5: Checking robocall patterns...`);
             const patternCheck = await this.checkRobocallPattern(callerPhone, companyId);
             
             if (patternCheck.shouldBlock) {
-                console.log(`🚫 [SMART FILTER] BLOCKED: Robocall pattern detected`);
+                logger.security(`🚫 [SMART FILTER] BLOCKED: Robocall pattern detected`);
                 await this.logBlock({
                     callerPhone,
                     companyId,
@@ -146,11 +148,11 @@ class SmartCallFilter {
             // ================================================================
             // STEP 5: Validate Phone Number Format
             // ================================================================
-            console.log(`🔍 [SMART FILTER] CHECKPOINT 6: Validating phone format...`);
+            logger.security(`🔍 [SMART FILTER] CHECKPOINT 6: Validating phone format...`);
             const formatCheck = this.validatePhoneFormat(callerPhone);
             
             if (!formatCheck.isValid) {
-                console.log(`🚫 [SMART FILTER] BLOCKED: Invalid phone format`);
+                logger.security(`🚫 [SMART FILTER] BLOCKED: Invalid phone format`);
                 await this.logBlock({
                     callerPhone,
                     companyId,
@@ -171,7 +173,7 @@ class SmartCallFilter {
             // ================================================================
             // ALL CHECKS PASSED - ALLOW CALL
             // ================================================================
-            console.log(`✅ [SMART FILTER] CHECKPOINT 7: All checks passed - call allowed`);
+            logger.security(`✅ [SMART FILTER] CHECKPOINT 7: All checks passed - call allowed`);
             return {
                 shouldBlock: false,
                 reason: null,
@@ -179,7 +181,7 @@ class SmartCallFilter {
             };
 
         } catch (error) {
-            console.error(`❌ [SMART FILTER] ERROR checking call:`, error);
+            logger.security(`❌ [SMART FILTER] ERROR checking call:`, error);
             // On error, allow call (fail open for availability)
             return {
                 shouldBlock: false,
@@ -210,7 +212,7 @@ class SmartCallFilter {
             return { shouldBlock: false };
 
         } catch (error) {
-            console.error(`❌ [SMART FILTER] Error checking global spam DB:`, error);
+            logger.error(`❌ [SMART FILTER] Error checking global spam DB:`, error);
             return { shouldBlock: false };
         }
     }
@@ -242,7 +244,7 @@ class SmartCallFilter {
             return { shouldBlock: false };
 
         } catch (error) {
-            console.error(`❌ [SMART FILTER] Error checking company blacklist:`, error);
+            logger.security(`❌ [SMART FILTER] Error checking company blacklist:`, error);
             return { shouldBlock: false };
         }
     }
@@ -279,7 +281,7 @@ class SmartCallFilter {
             return { shouldBlock: false, callCount: callCount + 1 };
 
         } catch (error) {
-            console.error(`❌ [SMART FILTER] Error checking frequency:`, error);
+            logger.error(`❌ [SMART FILTER] Error checking frequency:`, error);
             return { shouldBlock: false };
         }
     }
@@ -339,7 +341,7 @@ class SmartCallFilter {
             return { shouldBlock: false };
 
         } catch (error) {
-            console.error(`❌ [SMART FILTER] Error checking robocall pattern:`, error);
+            logger.error(`❌ [SMART FILTER] Error checking robocall pattern:`, error);
             return { shouldBlock: false };
         }
     }
@@ -382,9 +384,9 @@ class SmartCallFilter {
     static async logBlock(data) {
         try {
             await BlockedCallLog.logBlock(data);
-            console.log(`✅ [SMART FILTER] Block logged for ${data.callerPhone}`);
+            logger.security(`✅ [SMART FILTER] Block logged for ${data.callerPhone}`);
         } catch (error) {
-            console.error(`❌ [SMART FILTER] Error logging block:`, error);
+            logger.security(`❌ [SMART FILTER] Error logging block:`, error);
         }
     }
 
@@ -395,7 +397,7 @@ class SmartCallFilter {
      */
     static async reportSpam(phoneNumber, companyId, spamType = 'other') {
         try {
-            console.log(`📝 [SMART FILTER] Reporting spam: ${phoneNumber}`);
+            logger.info(`📝 [SMART FILTER] Reporting spam: ${phoneNumber}`);
             
             await GlobalSpamDatabase.reportSpam({
                 phoneNumber,
@@ -403,11 +405,11 @@ class SmartCallFilter {
                 companyId
             });
 
-            console.log(`✅ [SMART FILTER] Spam reported successfully`);
+            logger.info(`✅ [SMART FILTER] Spam reported successfully`);
             return { success: true };
 
         } catch (error) {
-            console.error(`❌ [SMART FILTER] Error reporting spam:`, error);
+            logger.error(`❌ [SMART FILTER] Error reporting spam:`, error);
             return { success: false, error: error.message };
         }
     }
@@ -419,15 +421,15 @@ class SmartCallFilter {
      */
     static async whitelistNumber(phoneNumber, reason) {
         try {
-            console.log(`✅ [SMART FILTER] Whitelisting: ${phoneNumber}`);
+            logger.security(`✅ [SMART FILTER] Whitelisting: ${phoneNumber}`);
             
             await GlobalSpamDatabase.whitelist(phoneNumber, reason);
 
-            console.log(`✅ [SMART FILTER] Number whitelisted successfully`);
+            logger.security(`✅ [SMART FILTER] Number whitelisted successfully`);
             return { success: true };
 
         } catch (error) {
-            console.error(`❌ [SMART FILTER] Error whitelisting:`, error);
+            logger.security(`❌ [SMART FILTER] Error whitelisting:`, error);
             return { success: false, error: error.message };
         }
     }
@@ -447,7 +449,7 @@ class SmartCallFilter {
                 return await GlobalSpamDatabase.getStats();
             
         } catch (error) {
-            console.error(`❌ [SMART FILTER] Error getting stats:`, error);
+            logger.error(`❌ [SMART FILTER] Error getting stats:`, error);
             return null;
         }
     }

@@ -2,6 +2,8 @@
 // Factory for creating per-company Twilio clients
 
 const twilio = require('twilio');
+const logger = require('./logger.js');
+
 
 /**
  * Create a Twilio client for a specific company
@@ -10,7 +12,7 @@ const twilio = require('twilio');
  */
 function createTwilioClient(company) {
     if (!company?.twilioConfig) {
-        console.log('[Twilio] No twilioConfig found for company:', company?.companyName);
+        logger.security('[Twilio] No twilioConfig found for company:', company?.companyName);
         return null;
     }
 
@@ -19,21 +21,21 @@ function createTwilioClient(company) {
     try {
         // Option 1: Use API Key + Secret (recommended for production)
         if (apiKey && apiSecret) {
-            console.log('[Twilio] Creating client with API Key for:', company.companyName);
+            logger.security('[Twilio] Creating client with API Key for:', company.companyName);
             return twilio(apiKey, apiSecret, { accountSid });
         }
         
         // Option 2: Use Account SID + Auth Token (basic auth)
         if (accountSid && authToken) {
-            console.log('[Twilio] Creating client with Auth Token for:', company.companyName);
+            logger.security('[Twilio] Creating client with Auth Token for:', company.companyName);
             return twilio(accountSid, authToken);
         }
 
-        console.log('[Twilio] Missing credentials for company:', company.companyName);
+        logger.security('[Twilio] Missing credentials for company:', company.companyName);
         return null;
 
     } catch (error) {
-        console.error('[Twilio] Failed to create client for company:', company.companyName, error.message);
+        logger.error('[Twilio] Failed to create client for company:', company.companyName, error.message);
         return null;
     }
 }

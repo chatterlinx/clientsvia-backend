@@ -28,6 +28,8 @@
  */
 
 const Company = require('../models/v2Company');
+const logger = require('./logger.js');
+
 
 // ============================================================================
 // REDIS CLIENT INITIALIZATION
@@ -41,12 +43,12 @@ try {
     redisClient = clients.redisClient;
     
     if (redisClient) {
-        console.log('✅ [CACHE HELPER] Redis client connected');
+        logger.debug('✅ [CACHE HELPER] Redis client connected');
     } else {
-        console.warn('⚠️  [CACHE HELPER] Redis client not available - cache operations will be no-ops');
+        logger.warn('⚠️  [CACHE HELPER] Redis client not available - cache operations will be no-ops');
     }
 } catch (error) {
-    console.warn('⚠️  [CACHE HELPER] Redis import failed:', error.message);
+    logger.warn('⚠️  [CACHE HELPER] Redis import failed:', error.message);
     redisClient = null;
 }
 
@@ -94,7 +96,7 @@ class CacheHelper {
     static async clearCompanyCache(companyId) {
         const client = getRedisClient();
         if (!client) {
-            console.log('ℹ️  [CACHE] Redis not available, skipping cache clear');
+            logger.debug('ℹ️  [CACHE] Redis not available, skipping cache clear');
             return;
         }
         
@@ -110,11 +112,11 @@ class CacheHelper {
                 keys.map(key => client.del(key))
             );
             
-            console.log(`✅ [CACHE] Cleared cache for company ${companyId}`);
+            logger.debug(`✅ [CACHE] Cleared cache for company ${companyId}`);
             
         } catch (error) {
             // Non-blocking error - cache miss is acceptable
-            console.error(`⚠️  [CACHE] Failed to clear company ${companyId}:`, error.message);
+            logger.error(`⚠️  [CACHE] Failed to clear company ${companyId}:`, error.message);
         }
     }
     
@@ -140,7 +142,7 @@ class CacheHelper {
     static async clearTemplateCache(templateId) {
         const client = getRedisClient();
         if (!client) {
-            console.log('ℹ️  [CACHE] Redis not available, skipping cache clear');
+            logger.debug('ℹ️  [CACHE] Redis not available, skipping cache clear');
             return;
         }
         
@@ -148,7 +150,7 @@ class CacheHelper {
             // 1. Clear template-level cache
             await client.del(`scenarios:${templateId}`);
             
-            console.log(`✅ [CACHE] Cleared template ${templateId} cache`);
+            logger.debug(`✅ [CACHE] Cleared template ${templateId} cache`);
             
             // 2. Find all companies using this template
             const companies = await Company.find({
@@ -156,7 +158,7 @@ class CacheHelper {
             }).select('_id');
             
             if (companies.length === 0) {
-                console.log(`ℹ️  [CACHE] No companies using template ${templateId}`);
+                logger.debug(`ℹ️  [CACHE] No companies using template ${templateId}`);
                 return;
             }
             
@@ -165,10 +167,10 @@ class CacheHelper {
                 companies.map(company => this.clearCompanyCache(company._id.toString()))
             );
             
-            console.log(`✅ [CACHE] Cleared template ${templateId} and ${companies.length} companies`);
+            logger.debug(`✅ [CACHE] Cleared template ${templateId} and ${companies.length} companies`);
             
         } catch (error) {
-            console.error(`⚠️  [CACHE] Failed to clear template ${templateId}:`, error.message);
+            logger.error(`⚠️  [CACHE] Failed to clear template ${templateId}:`, error.message);
         }
     }
     
@@ -197,16 +199,16 @@ class CacheHelper {
     static async clearAllCache() {
         const client = getRedisClient();
         if (!client) {
-            console.log('ℹ️  [CACHE] Redis not available, skipping cache clear');
+            logger.debug('ℹ️  [CACHE] Redis not available, skipping cache clear');
             return;
         }
         
         try {
             await client.flushDb();
-            console.log(`🔥 [CACHE] CLEARED ALL CACHE (nuclear option used)`);
+            logger.debug(`🔥 [CACHE] CLEARED ALL CACHE (nuclear option used)`);
             
         } catch (error) {
-            console.error(`❌ [CACHE] Failed to clear all cache:`, error.message);
+            logger.error(`❌ [CACHE] Failed to clear all cache:`, error.message);
             throw error; // Re-throw for this critical operation
         }
     }
@@ -246,7 +248,7 @@ class CacheHelper {
                 .lean();
             
             if (!company) {
-                console.warn(`⚠️  [CACHE] Company ${companyId} not found for warming`);
+                logger.warn(`⚠️  [CACHE] Company ${companyId} not found for warming`);
                 return;
             }
             
@@ -257,10 +259,10 @@ class CacheHelper {
                 JSON.stringify(company.aiAgentSettings)
             );
             
-            console.log(`🔥 [CACHE] Warmed cache for company ${companyId}`);
+            logger.debug(`🔥 [CACHE] Warmed cache for company ${companyId}`);
             
         } catch (error) {
-            console.error(`⚠️  [CACHE] Failed to warm cache for ${companyId}:`, error.message);
+            logger.error(`⚠️  [CACHE] Failed to warm cache for ${companyId}:`, error.message);
         }
     }
     
@@ -280,7 +282,7 @@ class CacheHelper {
      * 
      * @example
      * const isHealthy = await CacheHelper.healthCheck();
-     * console.log(`Redis: ${isHealthy ? 'OK' : 'DOWN'}`);
+     * logger.debug(`Redis: ${isHealthy ? 'OK' : 'DOWN'}`);
      */
     static async healthCheck() {
         const client = getRedisClient();
@@ -292,7 +294,7 @@ class CacheHelper {
             await client.ping();
             return true;
         } catch (error) {
-            console.error('❌ [CACHE] Redis health check failed:', error.message);
+            logger.error('❌ [CACHE] Redis health check failed:', error.message);
             return false;
         }
     }

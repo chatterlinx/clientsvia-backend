@@ -13,6 +13,8 @@
 // ============================================================================
 
 const express = require('express');
+const logger = require('../utils/logger.js');
+
 const router = express.Router();
 const mongoose = require('mongoose');
 const { redisClient } = require('../clients');
@@ -22,7 +24,7 @@ const { redisClient } = require('../clients');
 // ============================================================================
 router.get('/health', async (req, res) => {
     try {
-        console.log('🏥 [HEALTH CHECK] Starting comprehensive system check...');
+        logger.debug('🏥 [HEALTH CHECK] Starting comprehensive system check...');
 
         const health = {
             status: 'ok',
@@ -48,7 +50,7 @@ router.get('/health', async (req, res) => {
                     host: mongoose.connection.host,
                     database: mongoose.connection.name
                 };
-                console.log('✅ [HEALTH CHECK] MongoDB: Connected');
+                logger.info('✅ [HEALTH CHECK] MongoDB: Connected');
             } else {
                 health.systems.mongodb = 'error';
                 health.status = 'degraded';
@@ -56,13 +58,13 @@ router.get('/health', async (req, res) => {
                     status: 'disconnected',
                     readyState: mongoose.connection.readyState
                 };
-                console.error('❌ [HEALTH CHECK] MongoDB: Disconnected');
+                logger.error('❌ [HEALTH CHECK] MongoDB: Disconnected');
             }
         } catch (error) {
             health.systems.mongodb = 'error';
             health.status = 'degraded';
             health.details.mongodb = { error: error.message };
-            console.error('❌ [HEALTH CHECK] MongoDB error:', error);
+            logger.error('❌ [HEALTH CHECK] MongoDB error:', error);
         }
 
         // ================================================================
@@ -77,7 +79,7 @@ router.get('/health', async (req, res) => {
                     status: 'connected',
                     isOpen: redisClient.isOpen
                 };
-                console.log('✅ [HEALTH CHECK] Redis: Connected');
+                logger.info('✅ [HEALTH CHECK] Redis: Connected');
             } else {
                 health.systems.redis = 'error';
                 health.status = 'degraded';
@@ -85,13 +87,13 @@ router.get('/health', async (req, res) => {
                     status: 'disconnected',
                     isOpen: redisClient ? redisClient.isOpen : false
                 };
-                console.error('❌ [HEALTH CHECK] Redis: Disconnected');
+                logger.error('❌ [HEALTH CHECK] Redis: Disconnected');
             }
         } catch (error) {
             health.systems.redis = 'error';
             health.status = 'degraded';
             health.details.redis = { error: error.message };
-            console.error('❌ [HEALTH CHECK] Redis error:', error);
+            logger.error('❌ [HEALTH CHECK] Redis error:', error);
         }
 
         // ================================================================
@@ -106,12 +108,12 @@ router.get('/health', async (req, res) => {
                 hasData: Boolean(sampleMetric),
                 message: sampleMetric ? 'Model and data accessible' : 'Model ready, no data yet'
             };
-            console.log('✅ [HEALTH CHECK] AI Performance: Ready');
+            logger.info('✅ [HEALTH CHECK] AI Performance: Ready');
         } catch (error) {
             health.systems.aiPerformance = 'error';
             health.status = 'degraded';
             health.details.aiPerformance = { error: error.message };
-            console.error('❌ [HEALTH CHECK] AI Performance error:', error);
+            logger.error('❌ [HEALTH CHECK] AI Performance error:', error);
         }
 
         // ================================================================
@@ -139,15 +141,15 @@ router.get('/health', async (req, res) => {
             
             if (!hasTextIndex) {
                 health.status = 'degraded';
-                console.warn('⚠️ [HEALTH CHECK] Call Archives: Text index missing!');
+                logger.warn('⚠️ [HEALTH CHECK] Call Archives: Text index missing!');
             } else {
-                console.log('✅ [HEALTH CHECK] Call Archives: Ready with text index');
+                logger.info('✅ [HEALTH CHECK] Call Archives: Ready with text index');
             }
         } catch (error) {
             health.systems.callArchives = 'error';
             health.status = 'degraded';
             health.details.callArchives = { error: error.message };
-            console.error('❌ [HEALTH CHECK] Call Archives error:', error);
+            logger.error('❌ [HEALTH CHECK] Call Archives error:', error);
         }
 
         // ================================================================
@@ -168,12 +170,12 @@ router.get('/health', async (req, res) => {
                 hasBlockedCallLogs: Boolean(sampleBlockedCall),
                 message: 'Spam filter models ready'
             };
-            console.log('✅ [HEALTH CHECK] Spam Filter: Ready');
+            logger.security('✅ [HEALTH CHECK] Spam Filter: Ready');
         } catch (error) {
             health.systems.spamFilter = 'error';
             health.status = 'degraded';
             health.details.spamFilter = { error: error.message };
-            console.error('❌ [HEALTH CHECK] Spam Filter error:', error);
+            logger.error('❌ [HEALTH CHECK] Spam Filter error:', error);
         }
 
         // ================================================================
@@ -183,13 +185,13 @@ router.get('/health', async (req, res) => {
         
         if (failedSystems === 0) {
             health.status = 'ok';
-            console.log('🎉 [HEALTH CHECK] All systems operational!');
+            logger.info('🎉 [HEALTH CHECK] All systems operational!');
         } else if (failedSystems < 3) {
             health.status = 'degraded';
-            console.warn(`⚠️ [HEALTH CHECK] ${failedSystems} system(s) degraded`);
+            logger.warn(`⚠️ [HEALTH CHECK] ${failedSystems} system(s) degraded`);
         } else {
             health.status = 'error';
-            console.error(`❌ [HEALTH CHECK] ${failedSystems} system(s) down`);
+            logger.error(`❌ [HEALTH CHECK] ${failedSystems} system(s) down`);
         }
 
         // ================================================================
@@ -203,7 +205,7 @@ router.get('/health', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ [HEALTH CHECK] Critical error:', error);
+        logger.error('❌ [HEALTH CHECK] Critical error:', error);
         res.status(500).json({
             success: false,
             status: 'error',

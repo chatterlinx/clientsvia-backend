@@ -22,6 +22,8 @@
  */
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const v2Company = require('../../models/v2Company');
 const GlobalAIBehaviorTemplate = require('../../models/GlobalAIBehaviorTemplate');
@@ -34,7 +36,7 @@ const { redisClient } = require('../../clients/index');
 router.get('/company/:companyId/configuration/filler-filter', async (req, res) => {
     const { companyId } = req.params;
     
-    console.log(`🔇 [FILLER FILTER] GET for company: ${companyId}`);
+    logger.info(`🔇 [FILLER FILTER] GET for company: ${companyId}`);
     
     try {
         const company = await v2Company.findById(companyId);
@@ -45,7 +47,7 @@ router.get('/company/:companyId/configuration/filler-filter', async (req, res) =
         // Get active template IDs
         const activeTemplateIds = company.aiAgentSettings?.activeTemplates || [];
         
-        console.log(`🔇 [FILLER FILTER] Active templates: ${activeTemplateIds.length}`);
+        logger.debug(`🔇 [FILLER FILTER] Active templates: ${activeTemplateIds.length}`);
         
         let inheritedFillers = [];
         
@@ -55,7 +57,7 @@ router.get('/company/:companyId/configuration/filler-filter', async (req, res) =
                 _id: { $in: activeTemplateIds }
             }).select('fillerWords categories');
             
-            console.log(`🔇 [FILLER FILTER] Found ${templates.length} active templates`);
+            logger.info(`🔇 [FILLER FILTER] Found ${templates.length} active templates`);
             
             // Merge all filler words from all templates
             const allFillers = new Set();
@@ -74,19 +76,19 @@ router.get('/company/:companyId/configuration/filler-filter', async (req, res) =
                 // (Future enhancement: extract fillers from scenario trigger words)
             });
             
-            console.log(`🔇 [FILLER FILTER] Extracted ${allFillers.size} unique inherited fillers`);
+            logger.info(`🔇 [FILLER FILTER] Extracted ${allFillers.size} unique inherited fillers`);
             
             inheritedFillers = Array.from(allFillers).sort();
         }
         
         // Get custom filler words (company-specific)
-        console.log(`🔇 [FILLER FILTER DEBUG] company.aiAgentSettings:`, company.aiAgentSettings ? 'EXISTS' : 'NULL');
-        console.log(`🔇 [FILLER FILTER DEBUG] company.aiAgentSettings.fillerWords:`, company.aiAgentSettings?.fillerWords ? 'EXISTS' : 'NULL');
-        console.log(`🔇 [FILLER FILTER DEBUG] company.aiAgentSettings.fillerWords.custom:`, company.aiAgentSettings?.fillerWords?.custom);
+        logger.debug(`🔇 [FILLER FILTER DEBUG] company.aiAgentSettings:`, company.aiAgentSettings ? 'EXISTS' : 'NULL');
+        logger.debug(`🔇 [FILLER FILTER DEBUG] company.aiAgentSettings.fillerWords:`, company.aiAgentSettings?.fillerWords ? 'EXISTS' : 'NULL');
+        logger.debug(`🔇 [FILLER FILTER DEBUG] company.aiAgentSettings.fillerWords.custom:`, company.aiAgentSettings?.fillerWords?.custom);
         
         const customFillers = (company.aiAgentSettings?.fillerWords?.custom || []).sort();
         
-        console.log(`🔇 [FILLER FILTER DEBUG] Final customFillers array:`, customFillers);
+        logger.debug(`🔇 [FILLER FILTER DEBUG] Final customFillers array:`, customFillers);
         
         // Build detailed scan report
         const scanReport = [];
@@ -107,8 +109,8 @@ router.get('/company/:companyId/configuration/filler-filter', async (req, res) =
             });
         }
         
-        console.log(`✅ [FILLER FILTER] Inherited: ${inheritedFillers.length}, Custom: ${customFillers.length}`);
-        console.log(`📋 [FILLER FILTER] Scan report:`, scanReport);
+        logger.info(`✅ [FILLER FILTER] Inherited: ${inheritedFillers.length}, Custom: ${customFillers.length}`);
+        logger.info(`📋 [FILLER FILTER] Scan report:`, scanReport);
         
         res.json({
             success: true,
@@ -122,7 +124,7 @@ router.get('/company/:companyId/configuration/filler-filter', async (req, res) =
         });
         
     } catch (error) {
-        console.error('❌ [FILLER FILTER] Error:', error);
+        logger.error('❌ [FILLER FILTER] Error:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to fetch filler filter data',
@@ -139,13 +141,13 @@ router.post('/company/:companyId/configuration/filler-filter/scan', async (req, 
     const { companyId } = req.params;
     const scanStartTime = Date.now();
     
-    console.log(`🔇 [FILLER FILTER SCAN] ━━━ STARTING FORCE SCAN ━━━`);
-    console.log(`🔇 [FILLER FILTER SCAN] Company ID: ${companyId}`);
-    console.log(`🔇 [FILLER FILTER SCAN] Timestamp: ${new Date().toISOString()}`);
+    logger.debug(`🔇 [FILLER FILTER SCAN] ━━━ STARTING FORCE SCAN ━━━`);
+    logger.debug(`🔇 [FILLER FILTER SCAN] Company ID: ${companyId}`);
+    logger.debug(`🔇 [FILLER FILTER SCAN] Timestamp: ${new Date().toISOString()}`);
     
     try {
         // Step 1: Find company
-        console.log(`🔇 [SCAN STEP 1/6] Fetching company data...`);
+        logger.debug(`🔇 [SCAN STEP 1/6] Fetching company data...`);
         const company = await v2Company.findById(companyId);
         if (!company) {
             return res.status(404).json({ 
@@ -154,15 +156,15 @@ router.post('/company/:companyId/configuration/filler-filter/scan', async (req, 
                 scanLog: ['❌ Company not found in database']
             });
         }
-        console.log(`✅ [SCAN STEP 1/6] Company found: ${company.companyName}`);
+        logger.debug(`✅ [SCAN STEP 1/6] Company found: ${company.companyName}`);
         
         // Step 2: Get active templates
-        console.log(`🔇 [SCAN STEP 2/6] Checking active templates...`);
+        logger.debug(`🔇 [SCAN STEP 2/6] Checking active templates...`);
         const activeTemplateIds = company.aiAgentSettings?.activeTemplates || [];
-        console.log(`📊 [SCAN STEP 2/6] Active templates count: ${activeTemplateIds.length}`);
+        logger.debug(`📊 [SCAN STEP 2/6] Active templates count: ${activeTemplateIds.length}`);
         
         if (activeTemplateIds.length === 0) {
-            console.log(`⚠️ [SCAN STEP 2/6] NO ACTIVE TEMPLATES - Scan aborted`);
+            logger.debug(`⚠️ [SCAN STEP 2/6] NO ACTIVE TEMPLATES - Scan aborted`);
             
             // Record scan in history
             const scanHistoryEntry = {
@@ -188,10 +190,10 @@ router.post('/company/:companyId/configuration/filler-filter/scan', async (req, 
             try {
                 if (redisClient && redisClient.isOpen) {
                     await redisClient.del(`company:${companyId}`);
-                    console.log(`✅ [FILLER FILTER] Redis cache cleared for company:${companyId}`);
+                    logger.debug(`✅ [FILLER FILTER] Redis cache cleared for company:${companyId}`);
                 }
             } catch (cacheError) {
-                console.warn(`⚠️ [FILLER FILTER] Failed to clear cache:`, cacheError.message);
+                logger.warn(`⚠️ [FILLER FILTER] Failed to clear cache:`, cacheError.message);
             }
             
             return res.json({
@@ -216,28 +218,28 @@ router.post('/company/:companyId/configuration/filler-filter/scan', async (req, 
         }
         
         // Step 3: Fetch templates from database
-        console.log(`🔇 [SCAN STEP 3/6] Fetching template data from Global AI Brain...`);
+        logger.debug(`🔇 [SCAN STEP 3/6] Fetching template data from Global AI Brain...`);
         const templates = await GlobalAIBehaviorTemplate.find({
             _id: { $in: activeTemplateIds }
         }).select('name fillerWords categories');
         
-        console.log(`✅ [SCAN STEP 3/6] Retrieved ${templates.length} templates`);
+        logger.debug(`✅ [SCAN STEP 3/6] Retrieved ${templates.length} templates`);
         
         // Step 4: Extract filler words from all templates
-        console.log(`🔇 [SCAN STEP 4/6] Extracting filler words from templates...`);
+        logger.debug(`🔇 [SCAN STEP 4/6] Extracting filler words from templates...`);
         
         const templatesScanned = [];
         const allFillersFound = new Set();
         
         templates.forEach((template, index) => {
-            console.log(`   📄 [Template ${index + 1}/${templates.length}] Scanning: ${template.name}`);
+            logger.info(`   📄 [Template ${index + 1}/${templates.length}] Scanning: ${template.name}`);
             
             const templateFillers = template.fillerWords || [];
             const categoryCount = template.categories ? template.categories.length : 0;
             const scenarioCount = template.categories ? 
                 template.categories.reduce((sum, cat) => sum + (cat.scenarios ? cat.scenarios.length : 0), 0) : 0;
             
-            console.log(`      Categories: ${categoryCount} | Scenarios: ${scenarioCount} | Fillers: ${templateFillers.length}`);
+            logger.info(`      Categories: ${categoryCount} | Scenarios: ${scenarioCount} | Fillers: ${templateFillers.length}`);
             
             templateFillers.forEach(word => {
                 if (word && typeof word === 'string') {
@@ -255,26 +257,26 @@ router.post('/company/:companyId/configuration/filler-filter/scan', async (req, 
             });
         });
         
-        console.log(`✅ [SCAN STEP 4/6] Total unique fillers extracted: ${allFillersFound.size}`);
+        logger.debug(`✅ [SCAN STEP 4/6] Total unique fillers extracted: ${allFillersFound.size}`);
         
         // Step 5: Compare with existing inherited fillers
-        console.log(`🔇 [SCAN STEP 5/6] Analyzing changes...`);
+        logger.debug(`🔇 [SCAN STEP 5/6] Analyzing changes...`);
         const existingInherited = company.aiAgentSettings?.fillerWords?.inherited || [];
         const existingInheritedSet = new Set(existingInherited.map(w => w.toLowerCase().trim()));
         
         const newFillers = Array.from(allFillersFound).filter(word => !existingInheritedSet.has(word));
         
-        console.log(`   📊 Existing inherited fillers: ${existingInherited.length}`);
-        console.log(`   📊 New fillers found: ${newFillers.length}`);
+        logger.info(`   📊 Existing inherited fillers: ${existingInherited.length}`);
+        logger.info(`   📊 New fillers found: ${newFillers.length}`);
         
         if (newFillers.length > 0) {
-            console.log(`   🆕 New fillers: ${newFillers.join(', ')}`);
+            logger.info(`   🆕 New fillers: ${newFillers.join(', ')}`);
         } else {
-            console.log(`   ✅ No new fillers - all ${allFillersFound.size} fillers are already registered`);
+            logger.debug(`   ✅ No new fillers - all ${allFillersFound.size} fillers are already registered`);
         }
         
         // Step 6: Update company with new inherited fillers
-        console.log(`🔇 [SCAN STEP 6/6] Updating company record...`);
+        logger.debug(`🔇 [SCAN STEP 6/6] Updating company record...`);
         
         if (!company.aiAgentSettings) {company.aiAgentSettings = {};}
         if (!company.aiAgentSettings.fillerWords) {company.aiAgentSettings.fillerWords = {};}
@@ -312,15 +314,15 @@ router.post('/company/:companyId/configuration/filler-filter/scan', async (req, 
         try {
             if (redisClient && redisClient.isOpen) {
                 await redisClient.del(`company:${companyId}`);
-                console.log(`✅ [FILLER FILTER] Redis cache cleared for company:${companyId}`);
+                logger.debug(`✅ [FILLER FILTER] Redis cache cleared for company:${companyId}`);
             }
         } catch (cacheError) {
-            console.warn(`⚠️ [FILLER FILTER] Failed to clear cache:`, cacheError.message);
+            logger.warn(`⚠️ [FILLER FILTER] Failed to clear cache:`, cacheError.message);
         }
         
-        console.log(`✅ [SCAN STEP 6/6] Company record updated`);
-        console.log(`✅ [FILLER FILTER SCAN] ━━━ SCAN COMPLETE ━━━`);
-        console.log(`⏱️ [FILLER FILTER SCAN] Duration: ${Date.now() - scanStartTime}ms`);
+        logger.debug(`✅ [SCAN STEP 6/6] Company record updated`);
+        logger.debug(`✅ [FILLER FILTER SCAN] ━━━ SCAN COMPLETE ━━━`);
+        logger.debug(`⏱️ [FILLER FILTER SCAN] Duration: ${Date.now() - scanStartTime}ms`);
         
         // Build detailed scan log for UI
         const scanLog = [
@@ -370,8 +372,8 @@ router.post('/company/:companyId/configuration/filler-filter/scan', async (req, 
         });
         
     } catch (error) {
-        console.error('❌ [FILLER FILTER SCAN] Fatal error:', error);
-        console.error(error.stack);
+        logger.error('❌ [FILLER FILTER SCAN] Fatal error:', error);
+        logger.error(error.stack);
         
         res.status(500).json({
             success: false,
@@ -393,16 +395,16 @@ router.post('/company/:companyId/configuration/filler-filter/scan', async (req, 
  * Add a custom filler word
  */
 router.post('/company/:companyId/configuration/filler-filter/custom', async (req, res) => {
-    console.log(`🔥 [FILLER FILTER] ━━━ POST CUSTOM FILLER ROUTE HIT ━━━`);
-    console.log(`🔥 [FILLER FILTER] Full URL: ${req.originalUrl}`);
-    console.log(`🔥 [FILLER FILTER] Method: ${req.method}`);
-    console.log(`🔥 [FILLER FILTER] Params:`, req.params);
-    console.log(`🔥 [FILLER FILTER] Body:`, req.body);
+    logger.info(`🔥 [FILLER FILTER] ━━━ POST CUSTOM FILLER ROUTE HIT ━━━`);
+    logger.info(`🔥 [FILLER FILTER] Full URL: ${req.originalUrl}`);
+    logger.info(`🔥 [FILLER FILTER] Method: ${req.method}`);
+    logger.info(`🔥 [FILLER FILTER] Params:`, req.params);
+    logger.info(`🔥 [FILLER FILTER] Body:`, req.body);
     
     const { companyId } = req.params;
     const { word } = req.body;
     
-    console.log(`🔇 [FILLER FILTER] ADD custom filler for company: ${companyId} - "${word}"`);
+    logger.info(`🔇 [FILLER FILTER] ADD custom filler for company: ${companyId} - "${word}"`);
     
     try {
         if (!word || !word.trim()) {
@@ -437,16 +439,16 @@ router.post('/company/:companyId/configuration/filler-filter/custom', async (req
         company.markModified('aiAgentSettings');
         await company.save();
         
-        console.log(`✅ [FILLER FILTER] Added custom filler: "${cleanWord}"`);
+        logger.debug(`✅ [FILLER FILTER] Added custom filler: "${cleanWord}"`);
         
         // 🔥 CRITICAL: Clear Redis cache to force fresh data load
         try {
             if (redisClient) {
                 await redisClient.del(`company:${companyId}`);
-                console.log(`✅ [FILLER FILTER] Redis cache cleared for company:${companyId}`);
+                logger.debug(`✅ [FILLER FILTER] Redis cache cleared for company:${companyId}`);
             }
         } catch (redisError) {
-            console.error('⚠️ [FILLER FILTER] Redis cache clear failed (non-fatal):', redisError.message);
+            logger.error('⚠️ [FILLER FILTER] Redis cache clear failed (non-fatal):', redisError.message);
         }
         
         res.json({
@@ -456,7 +458,7 @@ router.post('/company/:companyId/configuration/filler-filter/custom', async (req
         });
         
     } catch (error) {
-        console.error('❌ [FILLER FILTER] Add error:', error);
+        logger.error('❌ [FILLER FILTER] Add error:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to add custom filler',
@@ -472,7 +474,7 @@ router.post('/company/:companyId/configuration/filler-filter/custom', async (req
 router.delete('/company/:companyId/configuration/filler-filter/custom/:word', async (req, res) => {
     const { companyId, word } = req.params;
     
-    console.log(`🔇 [FILLER FILTER] REMOVE custom filler for company: ${companyId} - "${word}"`);
+    logger.info(`🔇 [FILLER FILTER] REMOVE custom filler for company: ${companyId} - "${word}"`);
     
     try {
         const company = await v2Company.findById(companyId);
@@ -492,16 +494,16 @@ router.delete('/company/:companyId/configuration/filler-filter/custom/:word', as
         company.markModified('aiAgentSettings');
         await company.save();
         
-        console.log(`✅ [FILLER FILTER] Removed custom filler: "${word}"`);
+        logger.debug(`✅ [FILLER FILTER] Removed custom filler: "${word}"`);
         
         // 🔥 CRITICAL: Clear Redis cache to force fresh data load
         try {
             if (redisClient) {
                 await redisClient.del(`company:${companyId}`);
-                console.log(`✅ [FILLER FILTER] Redis cache cleared for company:${companyId}`);
+                logger.debug(`✅ [FILLER FILTER] Redis cache cleared for company:${companyId}`);
             }
         } catch (redisError) {
-            console.error('⚠️ [FILLER FILTER] Redis cache clear failed (non-fatal):', redisError.message);
+            logger.error('⚠️ [FILLER FILTER] Redis cache clear failed (non-fatal):', redisError.message);
         }
         
         res.json({
@@ -511,7 +513,7 @@ router.delete('/company/:companyId/configuration/filler-filter/custom/:word', as
         });
         
     } catch (error) {
-        console.error('❌ [FILLER FILTER] Remove error:', error);
+        logger.error('❌ [FILLER FILTER] Remove error:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to remove custom filler',

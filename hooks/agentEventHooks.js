@@ -5,6 +5,8 @@
 // V2 DELETED: NotificationService not in V2 system
 // const NotificationService = require('../services/notificationService');
 const NotificationLog = require('../models/v2NotificationLog');
+const logger = require('../utils/logger.js');
+
 const templates = require('../config/messageTemplates.json');
 const smsClient = require('../clients/smsClient');
 const emailClient = require('../clients/emailClient');
@@ -43,14 +45,14 @@ class AgentEventHooks {
       this.eventLog = this.eventLog.slice(-this.maxLogSize);
     }
 
-    console.log(`[EventHooks] ${eventType}:`, result.success ? '✅' : '❌', result.message || result.error);
+    logger.info(`[EventHooks] ${eventType}:`, result.success ? '✅' : '❌', result.message || result.error);
 
     // Log event to database for AI Agent Logic analytics
     try {
       // Ensure we have company context for AI Agent Logic isolation
       const companyId = data.companyId || process.env.DEFAULT_COMPANY_ID || null;
       if (!companyId) {
-        console.warn('[AI-AGENT-LOGIC] No company ID available for event hook logging');
+        logger.warn('[AI-AGENT-LOGIC] No company ID available for event hook logging');
       }
       
       const endTime = Date.now();
@@ -86,7 +88,7 @@ class AgentEventHooks {
         }
       });
     } catch (error) {
-      console.error('[AI-AGENT-LOGIC] Failed to log event to database:', error);
+      logger.error('[AI-AGENT-LOGIC] Failed to log event to database:', error);
       // Don't fail the event hook if logging fails
     }
   }
@@ -347,7 +349,7 @@ class AgentEventHooks {
    */
   setEnabled(enabled) {
     this.enabled = enabled;
-    console.log(`[EventHooks] Event hooks ${enabled ? 'enabled' : 'disabled'}`);
+    logger.info(`[EventHooks] Event hooks ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   /**
@@ -355,7 +357,7 @@ class AgentEventHooks {
    */
   clearEventLog() {
     this.eventLog = [];
-    console.log('[EventHooks] Event log cleared');
+    logger.info('[EventHooks] Event log cleared');
   }
 
   /**
@@ -365,7 +367,7 @@ class AgentEventHooks {
     this.eventLog = this.eventLog.filter(event => 
       new Date(event.timestamp) < new Date(Date.now() - 24 * 60 * 60 * 1000) // Keep events older than 24 hours
     );
-    console.log(`[EventHooks] Recent events cleared for company ${companyId}`);
+    logger.info(`[EventHooks] Recent events cleared for company ${companyId}`);
   }
 
   /**
@@ -373,7 +375,7 @@ class AgentEventHooks {
    */
   clearAllAnalytics(companyId) {
     this.eventLog = [];
-    console.log(`[EventHooks] All analytics data cleared for company ${companyId}`);
+    logger.info(`[EventHooks] All analytics data cleared for company ${companyId}`);
   }
 
   /**
@@ -383,7 +385,7 @@ class AgentEventHooks {
     this.eventLog = [];
     this.enabled = true;
     this.maxLogSize = 1000;
-    console.log(`[EventHooks] Reset to defaults for company ${companyId}`);
+    logger.info(`[EventHooks] Reset to defaults for company ${companyId}`);
   }
 
   /**
@@ -402,7 +404,7 @@ class AgentEventHooks {
    * Register a hook for an event type
    */
   registerHook(companyId, eventType, config) {
-    console.log(`[EventHooks] Registered hook for ${eventType} (company: ${companyId})`);
+    logger.info(`[EventHooks] Registered hook for ${eventType} (company: ${companyId})`);
     // In a real implementation, this would save to database
   }
 
@@ -410,7 +412,7 @@ class AgentEventHooks {
    * Unregister a hook
    */
   unregisterHook(companyId, eventType) {
-    console.log(`[EventHooks] Unregistered hook for ${eventType} (company: ${companyId})`);
+    logger.info(`[EventHooks] Unregistered hook for ${eventType} (company: ${companyId})`);
     // In a real implementation, this would remove from database
   }
 
@@ -541,7 +543,7 @@ class AgentEventHooks {
         }
       };
     } catch (error) {
-      console.error('Error getting AI Agent analytics:', error);
+      logger.error('Error getting AI Agent analytics:', error);
       return { error: error.message };
     }
   }
@@ -599,7 +601,7 @@ class AgentEventHooks {
         }
       };
     } catch (error) {
-      console.error('Error getting delivery analytics:', error);
+      logger.error('Error getting delivery analytics:', error);
       return { error: error.message };
     }
   }

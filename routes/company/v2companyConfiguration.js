@@ -26,6 +26,8 @@
  */
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const mongoose = require('mongoose');
 const Company = require('../../models/v2Company');
@@ -53,14 +55,14 @@ async function clearCompanyCache(companyId, context = '') {
     try {
         if (redisClient && redisClient.isOpen) {
             await redisClient.del(`company:${companyId}`);
-            console.log(`✅ [CACHE CLEAR] ${context} - Cleared Redis cache for company:${companyId}`);
+            logger.debug(`✅ [CACHE CLEAR] ${context} - Cleared Redis cache for company:${companyId}`);
             return true;
         } 
-            console.warn(`⚠️ [CACHE CLEAR] ${context} - Redis client not available`);
+            logger.warn(`⚠️ [CACHE CLEAR] ${context} - Redis client not available`);
             return false;
         
     } catch (error) {
-        console.error(`❌ [CACHE CLEAR] ${context} - Failed:`, error.message);
+        logger.error(`❌ [CACHE CLEAR] ${context} - Failed:`, error.message);
         // Non-fatal error - don't block the response
         return false;
     }
@@ -73,7 +75,7 @@ async function clearCompanyCache(companyId, context = '') {
  * ============================================================================
  */
 router.get('/:companyId/configuration', async (req, res) => {
-    console.log(`[COMPANY CONFIG] GET /configuration for company: ${req.params.companyId}`);
+    logger.info(`[COMPANY CONFIG] GET /configuration for company: ${req.params.companyId}`);
     
     try {
         // 🔧 FIX: Use .lean() to bypass Mongoose validation of corrupt data
@@ -83,13 +85,13 @@ router.get('/:companyId/configuration', async (req, res) => {
             return res.status(404).json({ error: 'Company not found' });
         }
         
-        console.log(`[COMPANY CONFIG] Company found: ${company.companyName}`);
-        console.log(`[COMPANY CONFIG] Has configuration:`, Boolean(company.configuration));
-        console.log(`[COMPANY CONFIG] Configuration type:`, typeof company.configuration);
+        logger.info(`[COMPANY CONFIG] Company found: ${company.companyName}`);
+        logger.info(`[COMPANY CONFIG] Has configuration:`, Boolean(company.configuration));
+        logger.debug(`[COMPANY CONFIG] Configuration type:`, typeof company.configuration);
         
         // FIX: Ensure configuration is an object (migration fix)
         if (!company.configuration || typeof company.configuration !== 'object' || Array.isArray(company.configuration)) {
-            console.log(`[COMPANY CONFIG] MIGRATION: Initializing configuration object`);
+            logger.debug(`[COMPANY CONFIG] MIGRATION: Initializing configuration object`);
             company.configuration = {};
         }
         
@@ -109,12 +111,12 @@ router.get('/:companyId/configuration', async (req, res) => {
             lastSyncedAt: company.configuration?.lastSyncedAt || null
         };
         
-        console.log(`[COMPANY CONFIG] Configuration loaded successfully`);
+        logger.debug(`[COMPANY CONFIG] Configuration loaded successfully`);
         res.json(config);
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error loading configuration:', error);
-        console.error('[COMPANY CONFIG] Error stack:', error.stack);
+        logger.error('[COMPANY CONFIG] Error loading configuration:', error);
+        logger.error('[COMPANY CONFIG] Error stack:', error.stack);
         res.status(500).json({ 
             error: 'Failed to load configuration',
             message: error.message
@@ -129,7 +131,7 @@ router.get('/:companyId/configuration', async (req, res) => {
  * ============================================================================
  */
 router.get('/:companyId/configuration/variables', async (req, res) => {
-    console.log(`[COMPANY CONFIG] GET /configuration/variables for company: ${req.params.companyId}`);
+    logger.info(`[COMPANY CONFIG] GET /configuration/variables for company: ${req.params.companyId}`);
     
     try {
         const company = await Company.findById(req.params.companyId);
@@ -157,7 +159,7 @@ router.get('/:companyId/configuration/variables', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error loading variables:', error);
+        logger.error('[COMPANY CONFIG] Error loading variables:', error);
         res.status(500).json({ error: 'Failed to load variables' });
     }
 });
@@ -169,7 +171,7 @@ router.get('/:companyId/configuration/variables', async (req, res) => {
  * ============================================================================
  */
 router.patch('/:companyId/configuration/variables', async (req, res) => {
-    console.log(`[COMPANY CONFIG] PATCH /configuration/variables for company: ${req.params.companyId}`);
+    logger.info(`[COMPANY CONFIG] PATCH /configuration/variables for company: ${req.params.companyId}`);
     
     try {
         const { variables } = req.body;
@@ -198,7 +200,7 @@ router.patch('/:companyId/configuration/variables', async (req, res) => {
         // Clear Redis cache
         await clearCompanyCache(req.params.companyId, 'Variables Updated');
         
-        console.log(`[COMPANY CONFIG] Variables updated for company: ${req.params.companyId}`);
+        logger.debug(`[COMPANY CONFIG] Variables updated for company: ${req.params.companyId}`);
         
         res.json({
             success: true,
@@ -207,7 +209,7 @@ router.patch('/:companyId/configuration/variables', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error updating variables:', error);
+        logger.error('[COMPANY CONFIG] Error updating variables:', error);
         res.status(500).json({ error: 'Failed to update variables' });
     }
 });
@@ -219,7 +221,7 @@ router.patch('/:companyId/configuration/variables', async (req, res) => {
  * ============================================================================
  */
 router.post('/:companyId/configuration/variables/preview', async (req, res) => {
-    console.log(`[COMPANY CONFIG] POST /configuration/variables/preview for company: ${req.params.companyId}`);
+    logger.info(`[COMPANY CONFIG] POST /configuration/variables/preview for company: ${req.params.companyId}`);
     
     try {
         const { variables } = req.body;
@@ -285,7 +287,7 @@ router.post('/:companyId/configuration/variables/preview', async (req, res) => {
         
         // Return validation errors if any
         if (validationErrors.length > 0) {
-            console.log(`[COMPANY CONFIG] ❌ Validation failed: ${validationErrors.length} errors`);
+            logger.info(`[COMPANY CONFIG] ❌ Validation failed: ${validationErrors.length} errors`);
             return res.status(400).json({
                 error: 'Validation failed',
                 validationErrors,
@@ -293,7 +295,7 @@ router.post('/:companyId/configuration/variables/preview', async (req, res) => {
             });
         }
         
-        console.log(`[COMPANY CONFIG] ✅ All variables validated successfully`);
+        logger.debug(`[COMPANY CONFIG] ✅ All variables validated successfully`);
         
         // ============================================
         // STEP 3: Build before/after comparisons
@@ -362,7 +364,7 @@ router.post('/:companyId/configuration/variables/preview', async (req, res) => {
             validatedVariables
         );
         
-        console.log(`[COMPANY CONFIG] ✅ Preview generated: ${changes.length} changes, ${scenariosAffected.length} scenarios affected`);
+        logger.security(`[COMPANY CONFIG] ✅ Preview generated: ${changes.length} changes, ${scenariosAffected.length} scenarios affected`);
         
         res.json({
             previewToken,
@@ -379,7 +381,7 @@ router.post('/:companyId/configuration/variables/preview', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error generating preview:', error);
+        logger.error('[COMPANY CONFIG] Error generating preview:', error);
         res.status(500).json({ error: 'Failed to generate preview' });
     }
 });
@@ -391,7 +393,7 @@ router.post('/:companyId/configuration/variables/preview', async (req, res) => {
  * ============================================================================
  */
 router.post('/:companyId/configuration/variables/apply', async (req, res) => {
-    console.log(`[COMPANY CONFIG] POST /configuration/variables/apply for company: ${req.params.companyId}`);
+    logger.security(`[COMPANY CONFIG] POST /configuration/variables/apply for company: ${req.params.companyId}`);
     
     try {
         const { variables, previewToken } = req.body;
@@ -425,7 +427,7 @@ router.post('/:companyId/configuration/variables/apply', async (req, res) => {
         );
         
         if (idempotencyCheck.isDuplicate) {
-            console.log(`[COMPANY CONFIG] ⚠️ Duplicate apply request (idempotency)`);
+            logger.security(`[COMPANY CONFIG] ⚠️ Duplicate apply request (idempotency)`);
             return res.status(idempotencyCheck.response.statusCode).json(idempotencyCheck.response.body);
         }
         
@@ -505,13 +507,13 @@ router.post('/:companyId/configuration/variables/apply', async (req, res) => {
             // Commit transaction
             await session.commitTransaction();
             
-            console.log(`[COMPANY CONFIG] ✅ Variables applied: ${changedKeys.length} changes`);
+            logger.security(`[COMPANY CONFIG] ✅ Variables applied: ${changedKeys.length} changes`);
             
             // Invalidate readiness cache
             try {
                 await redisClient.del(`readiness:${req.params.companyId}`);
             } catch (err) {
-                console.warn('[COMPANY CONFIG] Failed to invalidate cache:', err);
+                logger.warn('[COMPANY CONFIG] Failed to invalidate cache:', err);
             }
             
             const successResponse = {
@@ -542,7 +544,7 @@ router.post('/:companyId/configuration/variables/apply', async (req, res) => {
         }
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error applying variables:', error);
+        logger.security('[COMPANY CONFIG] Error applying variables:', error);
         res.status(500).json({ error: 'Failed to apply variables' });
     }
 });
@@ -554,7 +556,7 @@ router.post('/:companyId/configuration/variables/apply', async (req, res) => {
  * ============================================================================
  */
 router.get('/:companyId/configuration/variables/:key/usage', async (req, res) => {
-    console.log(`[COMPANY CONFIG] GET /configuration/variables/${req.params.key}/usage`);
+    logger.info(`[COMPANY CONFIG] GET /configuration/variables/${req.params.key}/usage`);
     
     try {
         const company = await Company.findById(req.params.companyId);
@@ -597,7 +599,7 @@ router.get('/:companyId/configuration/variables/:key/usage', async (req, res) =>
         });
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error loading variable usage:', error);
+        logger.error('[COMPANY CONFIG] Error loading variable usage:', error);
         res.status(500).json({ error: 'Failed to load variable usage' });
     }
 });
@@ -609,7 +611,7 @@ router.get('/:companyId/configuration/variables/:key/usage', async (req, res) =>
  * ============================================================================
  */
 router.get('/:companyId/configuration/filler-words', async (req, res) => {
-    console.log(`[COMPANY CONFIG] GET /configuration/filler-words for company: ${req.params.companyId}`);
+    logger.info(`[COMPANY CONFIG] GET /configuration/filler-words for company: ${req.params.companyId}`);
     
     try {
         const company = await Company.findById(req.params.companyId);
@@ -638,7 +640,7 @@ router.get('/:companyId/configuration/filler-words', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error loading filler words:', error);
+        logger.error('[COMPANY CONFIG] Error loading filler words:', error);
         res.status(500).json({ error: 'Failed to load filler words' });
     }
 });
@@ -650,7 +652,7 @@ router.get('/:companyId/configuration/filler-words', async (req, res) => {
  * ============================================================================
  */
 router.post('/:companyId/configuration/filler-words', async (req, res) => {
-    console.log(`[COMPANY CONFIG] POST /configuration/filler-words for company: ${req.params.companyId}`);
+    logger.info(`[COMPANY CONFIG] POST /configuration/filler-words for company: ${req.params.companyId}`);
     
     try {
         const { words } = req.body;
@@ -685,7 +687,7 @@ router.post('/:companyId/configuration/filler-words', async (req, res) => {
         // Clear Redis cache
         await clearCompanyCache(req.params.companyId, 'Filler Words Added');
         
-        console.log(`[COMPANY CONFIG] Added ${newWords.length} filler words for company: ${req.params.companyId}`);
+        logger.debug(`[COMPANY CONFIG] Added ${newWords.length} filler words for company: ${req.params.companyId}`);
         
         res.json({
             success: true,
@@ -694,7 +696,7 @@ router.post('/:companyId/configuration/filler-words', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error adding filler words:', error);
+        logger.error('[COMPANY CONFIG] Error adding filler words:', error);
         res.status(500).json({ error: 'Failed to add filler words' });
     }
 });
@@ -706,7 +708,7 @@ router.post('/:companyId/configuration/filler-words', async (req, res) => {
  * ============================================================================
  */
 router.delete('/:companyId/configuration/filler-words/:word', async (req, res) => {
-    console.log(`[COMPANY CONFIG] DELETE /configuration/filler-words/${req.params.word}`);
+    logger.info(`[COMPANY CONFIG] DELETE /configuration/filler-words/${req.params.word}`);
     
     try {
         const company = await Company.findById(req.params.companyId);
@@ -729,7 +731,7 @@ router.delete('/:companyId/configuration/filler-words/:word', async (req, res) =
         // Clear Redis cache
         await clearCompanyCache(req.params.companyId, 'Filler Word Deleted');
         
-        console.log(`[COMPANY CONFIG] Deleted filler word "${word}" for company: ${req.params.companyId}`);
+        logger.debug(`[COMPANY CONFIG] Deleted filler word "${word}" for company: ${req.params.companyId}`);
         
         res.json({
             success: true,
@@ -737,7 +739,7 @@ router.delete('/:companyId/configuration/filler-words/:word', async (req, res) =
         });
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error deleting filler word:', error);
+        logger.error('[COMPANY CONFIG] Error deleting filler word:', error);
         res.status(500).json({ error: 'Failed to delete filler word' });
     }
 });
@@ -749,7 +751,7 @@ router.delete('/:companyId/configuration/filler-words/:word', async (req, res) =
  * ============================================================================
  */
 router.post('/:companyId/configuration/filler-words/reset', async (req, res) => {
-    console.log(`[COMPANY CONFIG] POST /configuration/filler-words/reset for company: ${req.params.companyId}`);
+    logger.info(`[COMPANY CONFIG] POST /configuration/filler-words/reset for company: ${req.params.companyId}`);
     
     try {
         const company = await Company.findById(req.params.companyId);
@@ -768,7 +770,7 @@ router.post('/:companyId/configuration/filler-words/reset', async (req, res) => 
             await clearCompanyCache(req.params.companyId, 'Filler Words Reset');
         }
         
-        console.log(`[COMPANY CONFIG] Reset filler words for company: ${req.params.companyId}`);
+        logger.debug(`[COMPANY CONFIG] Reset filler words for company: ${req.params.companyId}`);
         
         res.json({
             success: true,
@@ -776,7 +778,7 @@ router.post('/:companyId/configuration/filler-words/reset', async (req, res) => 
         });
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error resetting filler words:', error);
+        logger.error('[COMPANY CONFIG] Error resetting filler words:', error);
         res.status(500).json({ error: 'Failed to reset filler words' });
     }
 });
@@ -789,7 +791,7 @@ router.post('/:companyId/configuration/filler-words/reset', async (req, res) => 
  * ============================================================================
  */
 router.get('/:companyId/configuration/urgency-keywords', async (req, res) => {
-    console.log(`[COMPANY CONFIG] GET /configuration/urgency-keywords for company: ${req.params.companyId}`);
+    logger.info(`[COMPANY CONFIG] GET /configuration/urgency-keywords for company: ${req.params.companyId}`);
     
     try {
         const company = await Company.findById(req.params.companyId);
@@ -816,7 +818,7 @@ router.get('/:companyId/configuration/urgency-keywords', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error loading urgency keywords:', error);
+        logger.error('[COMPANY CONFIG] Error loading urgency keywords:', error);
         res.status(500).json({ error: 'Failed to load urgency keywords' });
     }
 });
@@ -829,7 +831,7 @@ router.get('/:companyId/configuration/urgency-keywords', async (req, res) => {
  * ============================================================================
  */
 router.post('/:companyId/configuration/urgency-keywords/sync', async (req, res) => {
-    console.log(`[COMPANY CONFIG] POST /configuration/urgency-keywords/sync for company: ${req.params.companyId}`);
+    logger.info(`[COMPANY CONFIG] POST /configuration/urgency-keywords/sync for company: ${req.params.companyId}`);
     
     try {
         const company = await Company.findById(req.params.companyId);
@@ -867,7 +869,7 @@ router.post('/:companyId/configuration/urgency-keywords/sync', async (req, res) 
         // Clear Redis cache
         await clearCompanyCache(req.params.companyId, 'Urgency Keywords Synced');
         
-        console.log(`[COMPANY CONFIG] ✅ Synced ${company.configuration.urgencyKeywords.inherited.length} urgency keywords from template`);
+        logger.debug(`[COMPANY CONFIG] ✅ Synced ${company.configuration.urgencyKeywords.inherited.length} urgency keywords from template`);
         
         res.json({
             success: true,
@@ -877,7 +879,7 @@ router.post('/:companyId/configuration/urgency-keywords/sync', async (req, res) 
         });
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error syncing urgency keywords:', error);
+        logger.error('[COMPANY CONFIG] Error syncing urgency keywords:', error);
         res.status(500).json({ error: 'Failed to sync urgency keywords' });
     }
 });
@@ -889,7 +891,7 @@ router.post('/:companyId/configuration/urgency-keywords/sync', async (req, res) 
  * ============================================================================
  */
 router.get('/:companyId/configuration/scenarios', async (req, res) => {
-    console.log(`[COMPANY CONFIG] GET /configuration/scenarios for company: ${req.params.companyId}`);
+    logger.info(`[COMPANY CONFIG] GET /configuration/scenarios for company: ${req.params.companyId}`);
     
     try {
         const company = await Company.findById(req.params.companyId);
@@ -930,7 +932,7 @@ router.get('/:companyId/configuration/scenarios', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error loading scenarios:', error);
+        logger.error('[COMPANY CONFIG] Error loading scenarios:', error);
         res.status(500).json({ error: 'Failed to load scenarios' });
     }
 });
@@ -942,7 +944,7 @@ router.get('/:companyId/configuration/scenarios', async (req, res) => {
  * ============================================================================
  */
 router.get('/:companyId/configuration/template-info', async (req, res) => {
-    console.log(`[COMPANY CONFIG] GET /configuration/template-info for company: ${req.params.companyId}`);
+    logger.info(`[COMPANY CONFIG] GET /configuration/template-info for company: ${req.params.companyId}`);
     
     try {
         const company = await Company.findById(req.params.companyId);
@@ -995,7 +997,7 @@ router.get('/:companyId/configuration/template-info', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error loading template info:', error);
+        logger.error('[COMPANY CONFIG] Error loading template info:', error);
         res.status(500).json({ error: 'Failed to load template info' });
     }
 });
@@ -1007,7 +1009,7 @@ router.get('/:companyId/configuration/template-info', async (req, res) => {
  * ============================================================================
  */
 router.post('/:companyId/configuration/clone-template', async (req, res) => {
-    console.log(`[COMPANY CONFIG] POST /configuration/clone-template for company: ${req.params.companyId}`);
+    logger.debug(`[COMPANY CONFIG] POST /configuration/clone-template for company: ${req.params.companyId}`);
     
     try {
         const { templateId } = req.body;
@@ -1044,7 +1046,7 @@ router.post('/:companyId/configuration/clone-template', async (req, res) => {
             totalScenarios += cat.scenarios.length;
         });
         
-        console.log(`[COMPANY CONFIG] Cloning template "${template.name}" v${template.version} (${totalScenarios} scenarios)`);
+        logger.debug(`[COMPANY CONFIG] Cloning template "${template.name}" v${template.version} (${totalScenarios} scenarios)`);
         
         // Initialize configuration object
         if (!company.configuration) {
@@ -1097,12 +1099,12 @@ router.post('/:companyId/configuration/clone-template', async (req, res) => {
         // Save company
         await company.save();
         
-        console.log(`✅ [COMPANY CONFIG] Template cloned successfully for company ${req.params.companyId}`);
+        logger.debug(`✅ [COMPANY CONFIG] Template cloned successfully for company ${req.params.companyId}`);
         
         // Clear Redis cache
         if (redisClient && redisClient.isOpen) {
             await redisClient.del(`company:${company._id}`);
-            console.log(`[COMPANY CONFIG] Cleared Redis cache for company ${company._id}`);
+            logger.debug(`[COMPANY CONFIG] Cleared Redis cache for company ${company._id}`);
         }
         
         // ========================================================================
@@ -1113,7 +1115,7 @@ router.post('/:companyId/configuration/clone-template', async (req, res) => {
         // ========================================================================
         setImmediate(async () => {
             try {
-                console.log(`🔍 [AUTO-SCAN] Triggering placeholder scan for company ${req.params.companyId} after template clone`);
+                logger.info(`🔍 [AUTO-SCAN] Triggering placeholder scan for company ${req.params.companyId} after template clone`);
                 
                 // Add template reference to aiAgentSettings
                 if (!company.aiAgentSettings) {
@@ -1138,15 +1140,15 @@ router.post('/:companyId/configuration/clone-template', async (req, res) => {
                     // Clear Redis cache
                     await clearCompanyCache(req.params.companyId, 'Template Reference Added');
                     
-                    console.log(`✅ [AUTO-SCAN] Added template reference to aiAgentSettings`);
+                    logger.debug(`✅ [AUTO-SCAN] Added template reference to aiAgentSettings`);
                 }
                 
                 // Scan company for placeholders
                 const scanResult = await PlaceholderScanService.scanCompany(req.params.companyId);
-                console.log(`✅ [AUTO-SCAN] Placeholder scan complete: ${scanResult.newCount} placeholders detected`);
+                logger.info(`✅ [AUTO-SCAN] Placeholder scan complete: ${scanResult.newCount} placeholders detected`);
                 
             } catch (scanError) {
-                console.error(`❌ [AUTO-SCAN] Background scan failed for company ${req.params.companyId}:`, scanError.message);
+                logger.error(`❌ [AUTO-SCAN] Background scan failed for company ${req.params.companyId}:`, scanError.message);
                 // Non-critical error - don't block response
             }
         });
@@ -1191,7 +1193,7 @@ router.post('/:companyId/configuration/clone-template', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error cloning template:', error);
+        logger.error('[COMPANY CONFIG] Error cloning template:', error);
         res.status(500).json({ 
             error: 'Failed to clone template',
             message: error.message
@@ -1206,7 +1208,7 @@ router.post('/:companyId/configuration/clone-template', async (req, res) => {
  * ============================================================================
  */
 router.post('/:companyId/configuration/sync', async (req, res) => {
-    console.log(`[COMPANY CONFIG] POST /configuration/sync for company: ${req.params.companyId}`);
+    logger.info(`[COMPANY CONFIG] POST /configuration/sync for company: ${req.params.companyId}`);
     
     try {
         const company = await Company.findById(req.params.companyId);
@@ -1237,7 +1239,7 @@ router.post('/:companyId/configuration/sync', async (req, res) => {
         // Clear Redis cache
         await clearCompanyCache(req.params.companyId, 'Template Synced');
         
-        console.log(`[COMPANY CONFIG] Synced company ${req.params.companyId} with template ${template._id}`);
+        logger.debug(`[COMPANY CONFIG] Synced company ${req.params.companyId} with template ${template._id}`);
         
         res.json({
             success: true,
@@ -1246,7 +1248,7 @@ router.post('/:companyId/configuration/sync', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error syncing template:', error);
+        logger.error('[COMPANY CONFIG] Error syncing template:', error);
         res.status(500).json({ error: 'Failed to sync template' });
     }
 });
@@ -1258,7 +1260,7 @@ router.post('/:companyId/configuration/sync', async (req, res) => {
  * ============================================================================
  */
 router.get('/:companyId/configuration/readiness', async (req, res) => {
-    console.log(`[COMPANY CONFIG] GET /configuration/readiness for company: ${req.params.companyId}`);
+    logger.debug(`[COMPANY CONFIG] GET /configuration/readiness for company: ${req.params.companyId}`);
     
     try {
         const companyId = req.params.companyId;
@@ -1268,11 +1270,11 @@ router.get('/:companyId/configuration/readiness', async (req, res) => {
         try {
             const cached = await redisClient.get(cacheKey);
             if (cached) {
-                console.log(`[COMPANY CONFIG] ✅ Returning cached readiness for ${companyId}`);
+                logger.debug(`[COMPANY CONFIG] ✅ Returning cached readiness for ${companyId}`);
                 return res.json(JSON.parse(cached));
             }
         } catch (cacheError) {
-            console.warn('[COMPANY CONFIG] Redis cache miss or error:', cacheError.message);
+            logger.warn('[COMPANY CONFIG] Redis cache miss or error:', cacheError.message);
             // Continue without cache
         }
         
@@ -1298,22 +1300,22 @@ router.get('/:companyId/configuration/readiness', async (req, res) => {
                 components: report.components
             }
         }).catch(err => {
-            console.error('[COMPANY CONFIG] Error updating readiness in DB:', err);
+            logger.error('[COMPANY CONFIG] Error updating readiness in DB:', err);
         });
         
         // Cache for 30 seconds
         try {
             await redisClient.setex(cacheKey, 30, JSON.stringify(report));
         } catch (cacheError) {
-            console.warn('[COMPANY CONFIG] Failed to cache readiness:', cacheError.message);
+            logger.warn('[COMPANY CONFIG] Failed to cache readiness:', cacheError.message);
         }
         
-        console.log(`[COMPANY CONFIG] ✅ Readiness calculated: ${report.score}/100, Can Go Live: ${report.canGoLive}`);
+        logger.debug(`[COMPANY CONFIG] ✅ Readiness calculated: ${report.score}/100, Can Go Live: ${report.canGoLive}`);
         
         res.json(report);
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error calculating readiness:', error);
+        logger.error('[COMPANY CONFIG] Error calculating readiness:', error);
         res.status(500).json({ error: 'Failed to calculate readiness' });
     }
 });
@@ -1325,7 +1327,7 @@ router.get('/:companyId/configuration/readiness', async (req, res) => {
  * ============================================================================
  */
 router.post('/:companyId/configuration/go-live', async (req, res) => {
-    console.log(`[COMPANY CONFIG] POST /configuration/go-live for company: ${req.params.companyId}`);
+    logger.info(`[COMPANY CONFIG] POST /configuration/go-live for company: ${req.params.companyId}`);
     
     try {
         const companyId = req.params.companyId;
@@ -1367,10 +1369,10 @@ router.post('/:companyId/configuration/go-live', async (req, res) => {
         try {
             await redisClient.del(`readiness:${companyId}`);
         } catch (err) {
-            console.warn('[COMPANY CONFIG] Failed to invalidate cache:', err);
+            logger.warn('[COMPANY CONFIG] Failed to invalidate cache:', err);
         }
         
-        console.log(`[COMPANY CONFIG] 🚀 Company ${companyId} is now LIVE!`);
+        logger.debug(`[COMPANY CONFIG] 🚀 Company ${companyId} is now LIVE!`);
         
         res.json({
             success: true,
@@ -1380,7 +1382,7 @@ router.post('/:companyId/configuration/go-live', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error going live:', error);
+        logger.error('[COMPANY CONFIG] Error going live:', error);
         res.status(500).json({ error: 'Failed to go live' });
     }
 });
@@ -1392,7 +1394,7 @@ router.post('/:companyId/configuration/go-live', async (req, res) => {
  * ============================================================================
  */
 router.get('/:companyId/configuration/analytics', async (req, res) => {
-    console.log(`[COMPANY CONFIG] GET /configuration/analytics for company: ${req.params.companyId}`);
+    logger.info(`[COMPANY CONFIG] GET /configuration/analytics for company: ${req.params.companyId}`);
     
     try {
         // Placeholder - will be implemented in Phase 2
@@ -1404,7 +1406,7 @@ router.get('/:companyId/configuration/analytics', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[COMPANY CONFIG] Error loading analytics:', error);
+        logger.error('[COMPANY CONFIG] Error loading analytics:', error);
         res.status(500).json({ error: 'Failed to load analytics' });
     }
 });
@@ -1419,7 +1421,7 @@ const BackgroundVariableScanService = require('../../services/BackgroundVariable
 const CacheHelper = require('../../utils/cacheHelper');
 
 router.post('/:companyId/configuration/variables/scan', async (req, res) => {
-    console.log(`🔍 [VARIABLE SCAN] POST /configuration/variables/scan for company: ${req.params.companyId}`);
+    logger.debug(`🔍 [VARIABLE SCAN] POST /configuration/variables/scan for company: ${req.params.companyId}`);
     
     try {
         const companyId = req.params.companyId;
@@ -1439,12 +1441,12 @@ router.post('/:companyId/configuration/variables/scan', async (req, res) => {
             });
         }
         
-        console.log(`🔍 [VARIABLE SCAN] Scanning ${company.aiAgentSettings.templateReferences.length} template(s) for company ${companyId}`);
+        logger.info(`🔍 [VARIABLE SCAN] Scanning ${company.aiAgentSettings.templateReferences.length} template(s) for company ${companyId}`);
         
         // Run the scan for all templates
         const scanResult = await BackgroundVariableScanService.scanAllTemplatesForCompany(companyId);
         
-        console.log(`✅ [VARIABLE SCAN] Scan complete:`, scanResult);
+        logger.info(`✅ [VARIABLE SCAN] Scan complete:`, scanResult);
         
         // Reload company to get updated data
         const updatedCompany = await Company.findById(companyId);
@@ -1459,7 +1461,7 @@ router.post('/:companyId/configuration/variables/scan', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ [VARIABLE SCAN] Error scanning company:', error);
+        logger.error('❌ [VARIABLE SCAN] Error scanning company:', error);
         res.status(500).json({ 
             error: 'Failed to scan variables',
             message: error.message
@@ -1474,7 +1476,7 @@ router.post('/:companyId/configuration/variables/scan', async (req, res) => {
  * ============================================================================
  */
 router.get('/:companyId/configuration/variables/scan-status', async (req, res) => {
-    console.log(`📊 [VARIABLE SCAN STATUS] GET /configuration/variables/scan-status for company: ${req.params.companyId}`);
+    logger.info(`📊 [VARIABLE SCAN STATUS] GET /configuration/variables/scan-status for company: ${req.params.companyId}`);
     
     try {
         const company = await Company.findById(req.params.companyId);
@@ -1496,7 +1498,7 @@ router.get('/:companyId/configuration/variables/scan-status', async (req, res) =
         });
         
     } catch (error) {
-        console.error('❌ [VARIABLE SCAN STATUS] Error:', error);
+        logger.error('❌ [VARIABLE SCAN STATUS] Error:', error);
         res.status(500).json({ 
             error: 'Failed to get scan status',
             message: error.message
@@ -1511,7 +1513,7 @@ router.get('/:companyId/configuration/variables/scan-status', async (req, res) =
  * ============================================================================
  */
 router.post('/:companyId/configuration/variables/validate', async (req, res) => {
-    console.log(`🔍 [VALIDATION] POST /configuration/variables/validate for company: ${req.params.companyId}`);
+    logger.info(`🔍 [VALIDATION] POST /configuration/variables/validate for company: ${req.params.companyId}`);
     
     try {
         const companyId = req.params.companyId;
@@ -1526,7 +1528,7 @@ router.post('/:companyId/configuration/variables/validate', async (req, res) => 
         // Run validation
         const validation = await PlaceholderScanService.validateCompanyVariables(companyId);
         
-        console.log(`${validation.isValid ? '✅' : '⚠️ '} [VALIDATION] Company ${companyId}: ${validation.isValid ? 'VALID' : `Missing ${validation.missingRequired.length} required variables`}`);
+        logger.info(`${validation.isValid ? '✅' : '⚠️ '} [VALIDATION] Company ${companyId}: ${validation.isValid ? 'VALID' : `Missing ${validation.missingRequired.length} required variables`}`);
         
         res.json({
             success: true,
@@ -1540,7 +1542,7 @@ router.post('/:companyId/configuration/variables/validate', async (req, res) => 
         });
         
     } catch (error) {
-        console.error('❌ [VALIDATION] Error validating company:', error);
+        logger.error('❌ [VALIDATION] Error validating company:', error);
         res.status(500).json({ 
             error: 'Failed to validate variables',
             message: error.message
@@ -1584,7 +1586,7 @@ function calculateVariablesStatus(company) {
  * Get all loaded templates for this company
  */
 router.get('/:companyId/configuration/templates', async (req, res) => {
-    console.log(`[AICORE TEMPLATES] GET /configuration/templates for company: ${req.params.companyId}`);
+    logger.info(`[AICORE TEMPLATES] GET /configuration/templates for company: ${req.params.companyId}`);
     
     try {
         const company = await Company.findById(req.params.companyId);
@@ -1610,7 +1612,7 @@ router.get('/:companyId/configuration/templates', async (req, res) => {
             const template = await GlobalInstantResponseTemplate.findById(ref.templateId);
             
             if (!template) {
-                console.warn(`[AICORE TEMPLATES] Template ${ref.templateId} not found in Global AI Brain`);
+                logger.warn(`[AICORE TEMPLATES] Template ${ref.templateId} not found in Global AI Brain`);
                 continue;
             }
             
@@ -1646,7 +1648,7 @@ router.get('/:companyId/configuration/templates', async (req, res) => {
         res.json(templates);
         
     } catch (error) {
-        console.error('[AICORE TEMPLATES] Error fetching templates:', error);
+        logger.error('[AICORE TEMPLATES] Error fetching templates:', error);
         res.status(500).json({ error: 'Failed to fetch templates' });
     }
 });
@@ -1656,7 +1658,7 @@ router.get('/:companyId/configuration/templates', async (req, res) => {
  * Add a template reference to this company
  */
 router.post('/:companyId/configuration/templates', async (req, res) => {
-    console.log(`[AICORE TEMPLATES] POST /configuration/templates for company: ${req.params.companyId}`);
+    logger.info(`[AICORE TEMPLATES] POST /configuration/templates for company: ${req.params.companyId}`);
     
     try {
         const { templateId } = req.body;
@@ -1718,11 +1720,11 @@ router.post('/:companyId/configuration/templates', async (req, res) => {
         const BackgroundVariableScanService = require('../../services/BackgroundVariableScanService');
         setImmediate(async () => {
             try {
-                console.log(`🔍 [TEMPLATE ACTIVATED] Triggering background scan for template: ${templateId}`);
+                logger.info(`🔍 [TEMPLATE ACTIVATED] Triggering background scan for template: ${templateId}`);
                 const scanResult = await BackgroundVariableScanService.scanTemplateForCompany(req.params.companyId, templateId);
-                console.log(`✅ [TEMPLATE ACTIVATED] Background scan complete:`, scanResult);
+                logger.info(`✅ [TEMPLATE ACTIVATED] Background scan complete:`, scanResult);
             } catch (scanError) {
-                console.error(`❌ [TEMPLATE ACTIVATED] Background scan failed:`, scanError);
+                logger.error(`❌ [TEMPLATE ACTIVATED] Background scan failed:`, scanError);
             }
         });
         
@@ -1737,7 +1739,7 @@ router.post('/:companyId/configuration/templates', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[TEMPLATE HUB] Error adding template:', error);
+        logger.error('[TEMPLATE HUB] Error adding template:', error);
         res.status(500).json({ error: 'Failed to add template' });
     }
 });
@@ -1747,7 +1749,7 @@ router.post('/:companyId/configuration/templates', async (req, res) => {
  * Remove a template reference from this company
  */
 router.delete('/:companyId/configuration/templates/:templateId', async (req, res) => {
-    console.log(`[TEMPLATE HUB] DELETE /configuration/templates/${req.params.templateId} for company: ${req.params.companyId}`);
+    logger.info(`[TEMPLATE HUB] DELETE /configuration/templates/${req.params.templateId} for company: ${req.params.companyId}`);
     
     try {
         const company = await Company.findById(req.params.companyId);
@@ -1785,7 +1787,7 @@ router.delete('/:companyId/configuration/templates/:templateId', async (req, res
         });
         
     } catch (error) {
-        console.error('[TEMPLATE HUB] Error removing template:', error);
+        logger.error('[TEMPLATE HUB] Error removing template:', error);
         res.status(500).json({ error: 'Failed to remove template' });
     }
 });

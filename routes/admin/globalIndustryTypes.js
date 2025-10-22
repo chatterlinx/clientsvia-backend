@@ -17,6 +17,8 @@
  */
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const GlobalIndustryType = require('../../models/GlobalIndustryType');
 
@@ -33,7 +35,7 @@ router.get('/', async (req, res) => {
             data: industries
         });
     } catch (error) {
-        console.error('❌ Error fetching industry types:', error);
+        logger.error('❌ Error fetching industry types:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch industry types',
@@ -53,7 +55,7 @@ router.get('/active', async (req, res) => {
             data: industries
         });
     } catch (error) {
-        console.error('❌ Error fetching active industries:', error);
+        logger.error('❌ Error fetching active industries:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch active industries',
@@ -99,7 +101,7 @@ router.post('/', async (req, res) => {
         
         await newIndustry.save();
         
-        console.log(`✅ Created industry type: ${name}`);
+        logger.info(`✅ Created industry type: ${name}`);
         
         res.status(201).json({
             success: true,
@@ -107,7 +109,7 @@ router.post('/', async (req, res) => {
             data: newIndustry
         });
     } catch (error) {
-        console.error('❌ Error creating industry type:', error);
+        logger.error('❌ Error creating industry type:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to create industry type',
@@ -143,7 +145,7 @@ router.put('/:id', async (req, res) => {
         
         await industry.save();
         
-        console.log(`✅ Updated industry type: ${industry.name}`);
+        logger.info(`✅ Updated industry type: ${industry.name}`);
         
         res.json({
             success: true,
@@ -151,7 +153,7 @@ router.put('/:id', async (req, res) => {
             data: industry
         });
     } catch (error) {
-        console.error('❌ Error updating industry type:', error);
+        logger.error('❌ Error updating industry type:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to update industry type',
@@ -184,14 +186,14 @@ router.delete('/:id', async (req, res) => {
         
         await GlobalIndustryType.findByIdAndDelete(id);
         
-        console.log(`✅ Deleted industry type: ${industry.name}`);
+        logger.info(`✅ Deleted industry type: ${industry.name}`);
         
         res.json({
             success: true,
             message: 'Industry type deleted successfully'
         });
     } catch (error) {
-        console.error('❌ Error deleting industry type:', error);
+        logger.error('❌ Error deleting industry type:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to delete industry type',
@@ -277,7 +279,7 @@ router.post('/seed', async (req, res) => {
         
         await GlobalIndustryType.insertMany(defaultIndustries);
         
-        console.log(`✅ Seeded ${defaultIndustries.length} default industry types`);
+        logger.info(`✅ Seeded ${defaultIndustries.length} default industry types`);
         
         res.status(201).json({
             success: true,
@@ -285,7 +287,7 @@ router.post('/seed', async (req, res) => {
             count: defaultIndustries.length
         });
     } catch (error) {
-        console.error('❌ Error seeding industry types:', error);
+        logger.error('❌ Error seeding industry types:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to seed industry types',

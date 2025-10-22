@@ -10,6 +10,8 @@
 // ============================================================================
 
 const mongoose = require('mongoose');
+const logger = require('../utils/logger.js');
+
 const { ObjectId } = mongoose.Schema.Types;
 
 const blockedCallLogSchema = new mongoose.Schema({
@@ -157,7 +159,7 @@ blockedCallLogSchema.index(
  * Log a blocked call attempt
  */
 blockedCallLogSchema.statics.logBlock = async function(data) {
-    console.log(`🚫 [BLOCKED CALL] Logging block for ${data.callerPhone}`);
+    logger.security(`🚫 [BLOCKED CALL] Logging block for ${data.callerPhone}`);
     
     // Check previous attempts
     const previousCount = await this.countDocuments({
@@ -173,7 +175,7 @@ blockedCallLogSchema.statics.logBlock = async function(data) {
         }
     });
 
-    console.log(`✅ [BLOCKED CALL] Logged: ${blocked._id}`);
+    logger.security(`✅ [BLOCKED CALL] Logged: ${blocked._id}`);
     return blocked;
 };
 

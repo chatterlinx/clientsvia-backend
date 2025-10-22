@@ -12,6 +12,8 @@
 // ============================================================================
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const SmartCallFilter = require('../../services/SmartCallFilter');
 const BlockedCallLog = require('../../models/BlockedCallLog');
@@ -27,7 +29,7 @@ router.get('/admin/call-filtering/:companyId/blocked-calls', authenticateJWT, re
         const { companyId } = req.params;
         const { limit = 100 } = req.query;
 
-        console.log(`🚫 [CALL FILTERING] Fetching blocked calls for company: ${companyId}`);
+        logger.security(`🚫 [CALL FILTERING] Fetching blocked calls for company: ${companyId}`);
 
         const blockedCalls = await BlockedCallLog.getBlockedCallsForCompany(companyId, parseInt(limit));
 
@@ -38,7 +40,7 @@ router.get('/admin/call-filtering/:companyId/blocked-calls', authenticateJWT, re
         });
 
     } catch (error) {
-        console.error(`❌ [CALL FILTERING] ERROR:`, error);
+        logger.security(`❌ [CALL FILTERING] ERROR:`, error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch blocked calls',
@@ -54,7 +56,7 @@ router.get('/admin/call-filtering/stats', authenticateJWT, requireRole('admin'),
     try {
         const { companyId } = req.query;
 
-        console.log(`📊 [CALL FILTERING] Fetching spam stats${companyId ? ` for company: ${companyId}` : ' (global)'}`);
+        logger.security(`📊 [CALL FILTERING] Fetching spam stats${companyId ? ` for company: ${companyId}` : ' (global)'}`);
 
         const stats = await SmartCallFilter.getSpamStats(companyId || null);
 
@@ -64,7 +66,7 @@ router.get('/admin/call-filtering/stats', authenticateJWT, requireRole('admin'),
         });
 
     } catch (error) {
-        console.error(`❌ [CALL FILTERING] ERROR:`, error);
+        logger.error(`❌ [CALL FILTERING] ERROR:`, error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch spam statistics',
@@ -80,7 +82,7 @@ router.post('/admin/call-filtering/report-spam', authenticateJWT, requireRole('a
     try {
         const { phoneNumber, spamType, companyId } = req.body;
 
-        console.log(`📝 [CALL FILTERING] Reporting spam: ${phoneNumber}`);
+        logger.security(`📝 [CALL FILTERING] Reporting spam: ${phoneNumber}`);
 
         if (!phoneNumber) {
             return res.status(400).json({
@@ -94,7 +96,7 @@ router.post('/admin/call-filtering/report-spam', authenticateJWT, requireRole('a
         res.json(result);
 
     } catch (error) {
-        console.error(`❌ [CALL FILTERING] ERROR:`, error);
+        logger.error(`❌ [CALL FILTERING] ERROR:`, error);
         res.status(500).json({
             success: false,
             message: 'Failed to report spam',
@@ -110,7 +112,7 @@ router.post('/admin/call-filtering/whitelist', authenticateJWT, requireRole('adm
     try {
         const { phoneNumber, reason } = req.body;
 
-        console.log(`✅ [CALL FILTERING] Whitelisting: ${phoneNumber}`);
+        logger.security(`✅ [CALL FILTERING] Whitelisting: ${phoneNumber}`);
 
         if (!phoneNumber) {
             return res.status(400).json({
@@ -124,7 +126,7 @@ router.post('/admin/call-filtering/whitelist', authenticateJWT, requireRole('adm
         res.json(result);
 
     } catch (error) {
-        console.error(`❌ [CALL FILTERING] ERROR:`, error);
+        logger.security(`❌ [CALL FILTERING] ERROR:`, error);
         res.status(500).json({
             success: false,
             message: 'Failed to whitelist number',
@@ -141,7 +143,7 @@ router.post('/admin/call-filtering/:companyId/blacklist', authenticateJWT, requi
         const { companyId } = req.params;
         const { phoneNumber, reason } = req.body;
 
-        console.log(`🚫 [CALL FILTERING] Adding ${phoneNumber} to company ${companyId} blacklist`);
+        logger.security(`🚫 [CALL FILTERING] Adding ${phoneNumber} to company ${companyId} blacklist`);
 
         if (!phoneNumber) {
             return res.status(400).json({
@@ -196,9 +198,9 @@ router.post('/admin/call-filtering/:companyId/blacklist', authenticateJWT, requi
         const { redisClient } = require('../../clients');
         try {
             await redisClient.del(`company:${companyId}`);
-            console.log(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
+            logger.debug(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
         } catch (cacheError) {
-            console.warn(`⚠️ [CALL FILTERING] Failed to clear cache:`, cacheError);
+            logger.warn(`⚠️ [CALL FILTERING] Failed to clear cache:`, cacheError);
         }
 
         res.json({
@@ -207,7 +209,7 @@ router.post('/admin/call-filtering/:companyId/blacklist', authenticateJWT, requi
         });
 
     } catch (error) {
-        console.error(`❌ [CALL FILTERING] ERROR:`, error);
+        logger.security(`❌ [CALL FILTERING] ERROR:`, error);
         res.status(500).json({
             success: false,
             message: 'Failed to add to blacklist',
@@ -223,7 +225,7 @@ router.delete('/admin/call-filtering/:companyId/blacklist/:phoneNumber', authent
     try {
         const { companyId, phoneNumber } = req.params;
 
-        console.log(`✅ [CALL FILTERING] Removing ${phoneNumber} from company ${companyId} blacklist`);
+        logger.security(`✅ [CALL FILTERING] Removing ${phoneNumber} from company ${companyId} blacklist`);
 
         const company = await v2Company.findById(companyId);
         if (!company) {
@@ -259,9 +261,9 @@ router.delete('/admin/call-filtering/:companyId/blacklist/:phoneNumber', authent
         const { redisClient } = require('../../clients');
         try {
             await redisClient.del(`company:${companyId}`);
-            console.log(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
+            logger.debug(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
         } catch (cacheError) {
-            console.warn(`⚠️ [CALL FILTERING] Failed to clear cache:`, cacheError);
+            logger.warn(`⚠️ [CALL FILTERING] Failed to clear cache:`, cacheError);
         }
 
         res.json({
@@ -270,7 +272,7 @@ router.delete('/admin/call-filtering/:companyId/blacklist/:phoneNumber', authent
         });
 
     } catch (error) {
-        console.error(`❌ [CALL FILTERING] ERROR:`, error);
+        logger.security(`❌ [CALL FILTERING] ERROR:`, error);
         res.status(500).json({
             success: false,
             message: 'Failed to remove from blacklist',
@@ -287,7 +289,7 @@ router.post('/admin/call-filtering/whitelist/:companyId', authenticateJWT, requi
         const { companyId } = req.params;
         const { phoneNumber, reason } = req.body;
 
-        console.log(`✅ [CALL FILTERING] Adding ${phoneNumber} to company ${companyId} whitelist`);
+        logger.security(`✅ [CALL FILTERING] Adding ${phoneNumber} to company ${companyId} whitelist`);
 
         if (!phoneNumber) {
             return res.status(400).json({
@@ -342,9 +344,9 @@ router.post('/admin/call-filtering/whitelist/:companyId', authenticateJWT, requi
         const { redisClient } = require('../../clients');
         try {
             await redisClient.del(`company:${companyId}`);
-            console.log(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
+            logger.debug(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
         } catch (cacheError) {
-            console.warn(`⚠️ [CALL FILTERING] Failed to clear cache:`, cacheError);
+            logger.warn(`⚠️ [CALL FILTERING] Failed to clear cache:`, cacheError);
         }
 
         res.json({
@@ -353,7 +355,7 @@ router.post('/admin/call-filtering/whitelist/:companyId', authenticateJWT, requi
         });
 
     } catch (error) {
-        console.error(`❌ [CALL FILTERING] ERROR:`, error);
+        logger.security(`❌ [CALL FILTERING] ERROR:`, error);
         res.status(500).json({
             success: false,
             message: 'Failed to add to whitelist',
@@ -370,7 +372,7 @@ router.delete('/admin/call-filtering/whitelist/:companyId', authenticateJWT, req
         const { companyId } = req.params;
         const { phoneNumber } = req.body;
 
-        console.log(`❌ [CALL FILTERING] Removing ${phoneNumber} from company ${companyId} whitelist`);
+        logger.security(`❌ [CALL FILTERING] Removing ${phoneNumber} from company ${companyId} whitelist`);
 
         const company = await v2Company.findById(companyId);
         if (!company) {
@@ -406,9 +408,9 @@ router.delete('/admin/call-filtering/whitelist/:companyId', authenticateJWT, req
         const { redisClient } = require('../../clients');
         try {
             await redisClient.del(`company:${companyId}`);
-            console.log(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
+            logger.debug(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
         } catch (cacheError) {
-            console.warn(`⚠️ [CALL FILTERING] Failed to clear cache:`, cacheError);
+            logger.warn(`⚠️ [CALL FILTERING] Failed to clear cache:`, cacheError);
         }
 
         res.json({
@@ -417,7 +419,7 @@ router.delete('/admin/call-filtering/whitelist/:companyId', authenticateJWT, req
         });
 
     } catch (error) {
-        console.error(`❌ [CALL FILTERING] ERROR:`, error);
+        logger.security(`❌ [CALL FILTERING] ERROR:`, error);
         res.status(500).json({
             success: false,
             message: 'Failed to remove from whitelist',
@@ -453,7 +455,7 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
     try {
         const { companyId } = req.params;
 
-        console.log(`⚙️ [CALL FILTERING] Fetching settings for company: ${companyId}`);
+        logger.security(`⚙️ [CALL FILTERING] Fetching settings for company: ${companyId}`);
 
         const company = await v2Company.findById(companyId).lean();
         if (!company) {
@@ -464,13 +466,13 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
         }
 
         // 🔍 DEBUG: Log what's in the database
-        console.log(`🔍 [CALL FILTERING] Raw callFiltering from DB:`, {
+        logger.debug(`🔍 [CALL FILTERING] Raw callFiltering from DB:`, {
             exists: Boolean(company.callFiltering),
             enabled: company.callFiltering?.enabled,
             settings: company.callFiltering?.settings,
             settingsKeys: company.callFiltering?.settings ? Object.keys(company.callFiltering.settings) : []
         });
-        console.log(`🔍 [CALL FILTERING] Full settings object from MongoDB:`, JSON.stringify(company.callFiltering?.settings, null, 2));
+        logger.security(`🔍 [CALL FILTERING] Full settings object from MongoDB:`, JSON.stringify(company.callFiltering?.settings, null, 2));
 
         // ✅ FIX #2: Transform blacklist/whitelist to string arrays for frontend
         const callFiltering = company.callFiltering || {
@@ -517,11 +519,11 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
             enableRobocallDetection: oldSettings.blockRobocalls
         };
 
-        console.log(`🔧 [CALL FILTERING] Schema detected: ${hasNewSchema ? 'NEW' : 'OLD'}`);
+        logger.info(`🔧 [CALL FILTERING] Schema detected: ${hasNewSchema ? 'NEW' : 'OLD'}`);
         if (!hasNewSchema) {
-            console.log(`⚠️ [CALL FILTERING] Company ${companyId} still using OLD schema - will be migrated on next save`);
+            logger.info(`⚠️ [CALL FILTERING] Company ${companyId} still using OLD schema - will be migrated on next save`);
         }
-        console.log(`🔧 [CALL FILTERING] Migrated settings:`, migratedSettings);
+        logger.security(`🔧 [CALL FILTERING] Migrated settings:`, migratedSettings);
 
         const transformedData = {
             enabled: callFiltering.enabled,
@@ -539,7 +541,7 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
             stats: callFiltering.stats || {}
         };
 
-        console.log(`✅ [CALL FILTERING] Sending to frontend:`, {
+        logger.info(`✅ [CALL FILTERING] Sending to frontend:`, {
             enabled: transformedData.enabled,
             settings: transformedData.settings
         });
@@ -550,7 +552,7 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
         });
 
     } catch (error) {
-        console.error(`❌ [CALL FILTERING] ERROR:`, error);
+        logger.error(`❌ [CALL FILTERING] ERROR:`, error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch settings',
@@ -600,7 +602,7 @@ async function updateFilteringSettings(req, res) {
         const { companyId } = req.params;
         const { enabled, settings } = req.body;
 
-        console.log(`⚙️ [CALL FILTERING] Updating settings for company: ${companyId}`);
+        logger.info(`⚙️ [CALL FILTERING] Updating settings for company: ${companyId}`);
 
         const company = await v2Company.findById(companyId);
         if (!company) {
@@ -631,7 +633,7 @@ async function updateFilteringSettings(req, res) {
         // ========================================================================
         // Update settings if provided
         if (settings) {
-            console.log(`📝 [CALL FILTERING] Incoming settings:`, settings);
+            logger.info(`📝 [CALL FILTERING] Incoming settings:`, settings);
             
             // ⚠️ IMPORTANT: We REPLACE the entire settings object
             // This purges old schema keys (blockKnownSpam, etc) on save
@@ -648,21 +650,21 @@ async function updateFilteringSettings(req, res) {
             // Without this, Mongoose may not save changes to nested objects
             company.markModified('callFiltering.settings');
             
-            console.log(`✅ [CALL FILTERING] Settings replaced (old schema purged):`, company.callFiltering.settings);
-            console.log(`🔍 [CALL FILTERING] Mongoose detected as modified:`, company.isModified('callFiltering.settings'));
+            logger.info(`✅ [CALL FILTERING] Settings replaced (old schema purged):`, company.callFiltering.settings);
+            logger.info(`🔍 [CALL FILTERING] Mongoose detected as modified:`, company.isModified('callFiltering.settings'));
         }
 
-        console.log(`💾 [CALL FILTERING] About to save to MongoDB...`);
+        logger.debug(`💾 [CALL FILTERING] About to save to MongoDB...`);
         await company.save();
-        console.log(`✅ [CALL FILTERING] Successfully saved to MongoDB!`);
+        logger.debug(`✅ [CALL FILTERING] Successfully saved to MongoDB!`);
 
         // ✅ FIX #3: Clear Redis cache
         const { redisClient } = require('../../clients');
         try {
             await redisClient.del(`company:${companyId}`);
-            console.log(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
+            logger.debug(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
         } catch (cacheError) {
-            console.warn(`⚠️ [CALL FILTERING] Failed to clear cache:`, cacheError);
+            logger.warn(`⚠️ [CALL FILTERING] Failed to clear cache:`, cacheError);
         }
 
         res.json({
@@ -672,7 +674,7 @@ async function updateFilteringSettings(req, res) {
         });
 
     } catch (error) {
-        console.error(`❌ [CALL FILTERING] ERROR:`, error);
+        logger.error(`❌ [CALL FILTERING] ERROR:`, error);
         res.status(500).json({
             success: false,
             message: 'Failed to update settings',
@@ -694,7 +696,7 @@ router.get('/admin/call-filtering/global-spam-database', authenticateJWT, requir
     try {
         const { limit = 100 } = req.query;
 
-        console.log(`🌍 [CALL FILTERING] Fetching global spam database (limit: ${limit})`);
+        logger.security(`🌍 [CALL FILTERING] Fetching global spam database (limit: ${limit})`);
 
         const spamNumbers = await GlobalSpamDatabase.getTopSpamNumbers(parseInt(limit));
 
@@ -705,7 +707,7 @@ router.get('/admin/call-filtering/global-spam-database', authenticateJWT, requir
         });
 
     } catch (error) {
-        console.error(`❌ [CALL FILTERING] ERROR:`, error);
+        logger.error(`❌ [CALL FILTERING] ERROR:`, error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch global spam database',

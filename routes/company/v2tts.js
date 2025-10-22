@@ -9,6 +9,8 @@
  */
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const { ObjectId } = require('mongodb');
 const Company = require('../../models/v2Company');
@@ -24,8 +26,8 @@ router.post('/:companyId/v2-tts/generate', async (req, res) => {
         const { companyId } = req.params;
         const { text, voiceId, stability, similarity_boost, style, model_id } = req.body;
         
-        console.log(`🎤 [TTS] Generate request for company: ${companyId}`);
-        console.log(`🎤 [TTS] Voice: ${voiceId}, Text length: ${text?.length || 0} chars`);
+        logger.info(`🎤 [TTS] Generate request for company: ${companyId}`);
+        logger.info(`🎤 [TTS] Voice: ${voiceId}, Text length: ${text?.length || 0} chars`);
         
         // Validation
         if (!ObjectId.isValid(companyId)) {
@@ -58,7 +60,7 @@ router.post('/:companyId/v2-tts/generate', async (req, res) => {
             });
         }
         
-        console.log(`🎤 [TTS] Company: ${company.companyName}`);
+        logger.info(`🎤 [TTS] Company: ${company.companyName}`);
         
         // Prepare voice settings (use provided values or defaults)
         const voiceSettings = {
@@ -76,7 +78,7 @@ router.post('/:companyId/v2-tts/generate', async (req, res) => {
             output_format: 'mp3_44100_128'
         };
         
-        console.log(`🎤 [TTS] Generating audio with settings:`, {
+        logger.info(`🎤 [TTS] Generating audio with settings:`, {
             model: options.model_id,
             voiceSettings,
             textLength: text.length
@@ -85,7 +87,7 @@ router.post('/:companyId/v2-tts/generate', async (req, res) => {
         // Generate audio
         const audioBuffer = await synthesizeSpeech(options);
         
-        console.log(`✅ [TTS] Audio generated successfully: ${audioBuffer.length} bytes`);
+        logger.info(`✅ [TTS] Audio generated successfully: ${audioBuffer.length} bytes`);
         
         // Set headers for audio download
         res.set({
@@ -98,7 +100,7 @@ router.post('/:companyId/v2-tts/generate', async (req, res) => {
         res.send(audioBuffer);
         
     } catch (error) {
-        console.error('❌ [TTS] Error generating audio:', error);
+        logger.error('❌ [TTS] Error generating audio:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to generate audio',

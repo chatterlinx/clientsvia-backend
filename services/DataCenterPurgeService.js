@@ -8,6 +8,8 @@
  */
 
 const mongoose = require('mongoose');
+const logger = require('../utils/logger.js');
+
 const Company = require('../models/v2Company');
 const DataCenterAuditLog = require('../models/DataCenterAuditLog');
 const { redisClient } = require('../db');
@@ -21,7 +23,7 @@ class DataCenterPurgeService {
      * @returns {Object} Purge result with counts
      */
     static async hardPurge(companyId, user, options = {}) {
-        console.log('[PURGE SERVICE] Starting hard purge for company:', companyId);
+        logger.debug('[PURGE SERVICE] Starting hard purge for company:', companyId);
         
         const result = {
             success: false,
@@ -45,57 +47,57 @@ class DataCenterPurgeService {
             const companyName = company.companyName || company.businessName;
 
             // 2. Delete call logs
-            console.log('[PURGE SERVICE] Deleting call logs...');
+            logger.info('[PURGE SERVICE] Deleting call logs...');
             try {
                 const callsResult = await mongoose.connection.db.collection('v2aiagentcalllogs')
                     .deleteMany({ companyId: company._id });
                 result.documentsDeleted += callsResult.deletedCount;
                 result.collectionsAffected.push('v2aiagentcalllogs');
-                console.log(`[PURGE SERVICE] Deleted ${callsResult.deletedCount} call logs`);
+                logger.info(`[PURGE SERVICE] Deleted ${callsResult.deletedCount} call logs`);
             } catch (error) {
                 result.errors.push(`Call logs: ${error.message}`);
             }
 
             // 3. Delete contacts
-            console.log('[PURGE SERVICE] Deleting contacts...');
+            logger.info('[PURGE SERVICE] Deleting contacts...');
             try {
                 const contactsResult = await mongoose.connection.db.collection('v2contacts')
                     .deleteMany({ companyId: company._id });
                 result.documentsDeleted += contactsResult.deletedCount;
                 result.collectionsAffected.push('v2contacts');
-                console.log(`[PURGE SERVICE] Deleted ${contactsResult.deletedCount} contacts`);
+                logger.info(`[PURGE SERVICE] Deleted ${contactsResult.deletedCount} contacts`);
             } catch (error) {
                 result.errors.push(`Contacts: ${error.message}`);
             }
 
             // 4. Delete notification logs
-            console.log('[PURGE SERVICE] Deleting notification logs...');
+            logger.info('[PURGE SERVICE] Deleting notification logs...');
             try {
                 const notificationsResult = await mongoose.connection.db.collection('v2notificationlogs')
                     .deleteMany({ companyId: company._id });
                 result.documentsDeleted += notificationsResult.deletedCount;
                 result.collectionsAffected.push('v2notificationlogs');
-                console.log(`[PURGE SERVICE] Deleted ${notificationsResult.deletedCount} notifications`);
+                logger.info(`[PURGE SERVICE] Deleted ${notificationsResult.deletedCount} notifications`);
             } catch (error) {
                 result.errors.push(`Notifications: ${error.message}`);
             }
 
             // 5. Clear Redis cache
-            console.log('[PURGE SERVICE] Clearing Redis cache...');
+            logger.debug('[PURGE SERVICE] Clearing Redis cache...');
             try {
                 await redisClient.del(`company:${companyId}`);
                 await redisClient.del(`datacenter:inventory:${companyId}`);
-                console.log('[PURGE SERVICE] Redis cache cleared');
+                logger.debug('[PURGE SERVICE] Redis cache cleared');
             } catch (error) {
                 result.errors.push(`Redis: ${error.message}`);
             }
 
             // 6. Delete the company document (LAST STEP)
-            console.log('[PURGE SERVICE] Deleting company document...');
+            logger.info('[PURGE SERVICE] Deleting company document...');
             await Company.findByIdAndDelete(companyId).option({ includeDeleted: true });
             result.documentsDeleted += 1;
             result.collectionsAffected.push('companiesCollection');
-            console.log('[PURGE SERVICE] Company document deleted');
+            logger.info('[PURGE SERVICE] Company document deleted');
 
             result.success = true;
 
@@ -119,12 +121,12 @@ class DataCenterPurgeService {
                 }
             });
 
-            console.log('[PURGE SERVICE] ✅ Hard purge complete:', companyId);
+            logger.info('[PURGE SERVICE] ✅ Hard purge complete:', companyId);
 
             return result;
 
         } catch (error) {
-            console.error('[PURGE SERVICE] ❌ Hard purge failed:', error);
+            logger.error('[PURGE SERVICE] ❌ Hard purge failed:', error);
             result.errors.push(error.message);
 
             // Log failure
@@ -139,7 +141,7 @@ class DataCenterPurgeService {
                     errorMessage: error.message
                 });
             } catch (logError) {
-                console.error('[PURGE SERVICE] Failed to log error:', logError);
+                logger.error('[PURGE SERVICE] Failed to log error:', logError);
             }
 
             throw error;
@@ -154,7 +156,7 @@ class DataCenterPurgeService {
      * @returns {Object} Cleanup result
      */
     static async partialCleanup(companyId, collections, user) {
-        console.log('[PURGE SERVICE] Starting partial cleanup:', companyId, collections);
+        logger.debug('[PURGE SERVICE] Starting partial cleanup:', companyId, collections);
 
         const result = {
             success: false,
@@ -187,16 +189,16 @@ class DataCenterPurgeService {
                             .deleteMany({ companyId: companyObjId });
                         break;
                     default:
-                        console.warn(`[PURGE SERVICE] Unknown collection: ${collection}`);
+                        logger.warn(`[PURGE SERVICE] Unknown collection: ${collection}`);
                         continue;
                 }
 
                 result.documentsDeleted += deleteResult.deletedCount;
                 result.collectionsAffected.push(collection);
-                console.log(`[PURGE SERVICE] Deleted ${deleteResult.deletedCount} from ${collection}`);
+                logger.info(`[PURGE SERVICE] Deleted ${deleteResult.deletedCount} from ${collection}`);
 
             } catch (error) {
-                console.error(`[PURGE SERVICE] Error cleaning ${collection}:`, error);
+                logger.error(`[PURGE SERVICE] Error cleaning ${collection}:`, error);
             }
         }
 
@@ -205,7 +207,7 @@ class DataCenterPurgeService {
             await redisClient.del(`company:${companyId}`);
             await redisClient.del(`datacenter:inventory:${companyId}`);
         } catch (error) {
-            console.error('[PURGE SERVICE] Cache clear failed:', error);
+            logger.error('[PURGE SERVICE] Cache clear failed:', error);
         }
 
         // Create audit log

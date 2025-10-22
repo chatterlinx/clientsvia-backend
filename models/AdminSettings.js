@@ -29,6 +29,8 @@
  */
 
 const mongoose = require('mongoose');
+const logger = require('../utils/logger.js');
+
 
 // ============================================================================
 // SCHEMA DEFINITION
@@ -251,9 +253,9 @@ adminSettingsSchema.statics.getSettings = async function() {
     let settings = await this.findOne();
     
     if (!settings) {
-        console.log('📋 [ADMIN SETTINGS] No settings found, creating default...');
+        logger.info('📋 [ADMIN SETTINGS] No settings found, creating default...');
         settings = await this.create({});
-        console.log('✅ [ADMIN SETTINGS] Default settings created');
+        logger.info('✅ [ADMIN SETTINGS] Default settings created');
     }
     
     return settings;
@@ -263,18 +265,18 @@ adminSettingsSchema.statics.getSettings = async function() {
  * Update admin settings
  */
 adminSettingsSchema.statics.updateSettings = async function(updates) {
-    console.log('📝 [ADMIN SETTINGS] Updating settings...');
+    logger.info('📝 [ADMIN SETTINGS] Updating settings...');
     
     let settings = await this.findOne();
     
     if (!settings) {
         settings = await this.create(updates);
-        console.log('✅ [ADMIN SETTINGS] Settings created');
+        logger.info('✅ [ADMIN SETTINGS] Settings created');
     } else {
         Object.assign(settings, updates);
         settings.lastUpdated = new Date();
         await settings.save();
-        console.log('✅ [ADMIN SETTINGS] Settings updated');
+        logger.info('✅ [ADMIN SETTINGS] Settings updated');
     }
     
     return settings;

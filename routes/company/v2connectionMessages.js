@@ -80,7 +80,7 @@ const upload = multer({
  * ============================================================================
  */
 router.get('/:companyId/connection-messages/config', async (req, res) => {
-    console.log(`[CONNECTION MESSAGES] GET /config for company: ${req.params.companyId}`);
+    logger.info(`[CONNECTION MESSAGES] GET /config for company: ${req.params.companyId}`);
 
     try {
         const company = await Company.findById(req.params.companyId)
@@ -109,13 +109,13 @@ router.get('/:companyId/connection-messages/config', async (req, res) => {
             company.connectionMessages = defaultConfig;
         }
 
-        console.log(`[CONNECTION MESSAGES] 📤 Returning mode:`, company.connectionMessages?.voice?.mode);
-        console.log(`[CONNECTION MESSAGES] 📤 Voice config:`, JSON.stringify(company.connectionMessages?.voice || {}, null, 2));
+        logger.info(`[CONNECTION MESSAGES] 📤 Returning mode:`, company.connectionMessages?.voice?.mode);
+        logger.info(`[CONNECTION MESSAGES] 📤 Voice config:`, JSON.stringify(company.connectionMessages?.voice || {}, null, 2));
 
         res.json(company.connectionMessages);
 
     } catch (error) {
-        console.error('[CONNECTION MESSAGES] Error getting config:', error);
+        logger.error('[CONNECTION MESSAGES] Error getting config:', error);
         res.status(500).json({ error: 'Failed to get configuration' });
     }
 });
@@ -127,8 +127,8 @@ router.get('/:companyId/connection-messages/config', async (req, res) => {
  * ============================================================================
  */
 router.patch('/:companyId/connection-messages/config', async (req, res) => {
-    console.log(`[CONNECTION MESSAGES] PATCH /config for company: ${req.params.companyId}`);
-    console.log(`[CONNECTION MESSAGES] 📥 Received body:`, JSON.stringify(req.body, null, 2));
+    logger.info(`[CONNECTION MESSAGES] PATCH /config for company: ${req.params.companyId}`);
+    logger.info(`[CONNECTION MESSAGES] 📥 Received body:`, JSON.stringify(req.body, null, 2));
 
     try {
         const { voice, sms, webChat } = req.body;
@@ -146,15 +146,15 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
             company.connectionMessages = getDefaultConfig();
         }
 
-        console.log(`[CONNECTION MESSAGES] 📊 Current mode in DB:`, company.connectionMessages?.voice?.mode);
-        console.log(`[CONNECTION MESSAGES] 📥 Incoming voice.mode:`, voice?.mode);
+        logger.debug(`[CONNECTION MESSAGES] 📊 Current mode in DB:`, company.connectionMessages?.voice?.mode);
+        logger.info(`[CONNECTION MESSAGES] 📥 Incoming voice.mode:`, voice?.mode);
 
         // Update voice settings
         if (voice) {
             if (voice.mode) {
-                console.log(`[CONNECTION MESSAGES] ✏️ Updating mode from "${company.connectionMessages?.voice?.mode}" to "${voice.mode}"`);
+                logger.info(`[CONNECTION MESSAGES] ✏️ Updating mode from "${company.connectionMessages?.voice?.mode}" to "${voice.mode}"`);
                 company.connectionMessages.voice.mode = voice.mode;
-                console.log(`[CONNECTION MESSAGES] ✅ Mode updated in memory:`, company.connectionMessages?.voice?.mode);
+                logger.info(`[CONNECTION MESSAGES] ✅ Mode updated in memory:`, company.connectionMessages?.voice?.mode);
             }
             
             if (voice.text !== undefined) {
@@ -230,8 +230,8 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
 
         company.connectionMessages.lastUpdated = new Date();
 
-        console.log(`[CONNECTION MESSAGES] 💾 About to save with mode:`, company.connectionMessages?.voice?.mode);
-        console.log(`[CONNECTION MESSAGES] 💾 Full connectionMessages object:`, JSON.stringify(company.connectionMessages || {}, null, 2));
+        logger.info(`[CONNECTION MESSAGES] 💾 About to save with mode:`, company.connectionMessages?.voice?.mode);
+        logger.info(`[CONNECTION MESSAGES] 💾 Full connectionMessages object:`, JSON.stringify(company.connectionMessages || {}, null, 2));
 
         // 🔧 FIX: Convert Mongoose subdocument to plain object before saving
         // Mongoose subdocuments have special properties that don't work with $set
@@ -239,11 +239,11 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
             company.connectionMessages.toObject() : 
             JSON.parse(JSON.stringify(company.connectionMessages));
         
-        console.log(`[CONNECTION MESSAGES] 🔧 Converted to plain object, mode:`, plainConnectionMessages?.voice?.mode);
+        logger.info(`[CONNECTION MESSAGES] 🔧 Converted to plain object, mode:`, plainConnectionMessages?.voice?.mode);
 
         // 🔧 FIX: Use targeted update to avoid full document validation
         // This bypasses validation of corrupt data in OTHER fields
-        console.log(`[CONNECTION MESSAGES] 🔧 Using targeted update to bypass full validation`);
+        logger.info(`[CONNECTION MESSAGES] 🔧 Using targeted update to bypass full validation`);
         
         const updatedCompany = await Company.findByIdAndUpdate(
             req.params.companyId,
@@ -256,23 +256,23 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
         );
         
         if (!updatedCompany) {
-            console.error(`[CONNECTION MESSAGES] ❌ Company not found during update`);
+            logger.error(`[CONNECTION MESSAGES] ❌ Company not found during update`);
             return res.status(404).json({
                 error: 'Company not found'
             });
         }
         
-        console.log(`[CONNECTION MESSAGES] ✅ Saved! Mode in returned document:`, updatedCompany.connectionMessages?.voice?.mode);
+        logger.debug(`[CONNECTION MESSAGES] ✅ Saved! Mode in returned document:`, updatedCompany.connectionMessages?.voice?.mode);
 
         // Clear cache
         try {
             await redisClient.del(`company:${req.params.companyId}`);
-            console.log(`[CONNECTION MESSAGES] Cache cleared for company: ${req.params.companyId}`);
+            logger.debug(`[CONNECTION MESSAGES] Cache cleared for company: ${req.params.companyId}`);
         } catch (cacheError) {
-            console.warn('[CONNECTION MESSAGES] Cache clear failed:', cacheError.message);
+            logger.warn('[CONNECTION MESSAGES] Cache clear failed:', cacheError.message);
         }
 
-        console.log(`[CONNECTION MESSAGES] ✅ Configuration updated for company: ${req.params.companyId}`);
+        logger.debug(`[CONNECTION MESSAGES] ✅ Configuration updated for company: ${req.params.companyId}`);
 
         res.json({
             success: true,
@@ -281,12 +281,12 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[CONNECTION MESSAGES] ❌ Error updating config:', error);
-        console.error('[CONNECTION MESSAGES] ❌ Error stack:', error.stack);
-        console.error('[CONNECTION MESSAGES] ❌ Error name:', error.name);
-        console.error('[CONNECTION MESSAGES] ❌ Error message:', error.message);
+        logger.error('[CONNECTION MESSAGES] ❌ Error updating config:', error);
+        logger.error('[CONNECTION MESSAGES] ❌ Error stack:', error.stack);
+        logger.error('[CONNECTION MESSAGES] ❌ Error name:', error.name);
+        logger.error('[CONNECTION MESSAGES] ❌ Error message:', error.message);
         if (error.errors) {
-            console.error('[CONNECTION MESSAGES] ❌ Validation errors:', JSON.stringify(error.errors, null, 2));
+            logger.error('[CONNECTION MESSAGES] ❌ Validation errors:', JSON.stringify(error.errors, null, 2));
         }
         res.status(500).json({ 
             error: 'Failed to update configuration',
@@ -303,7 +303,7 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
  * ============================================================================
  */
 router.post('/:companyId/connection-messages/voice/upload', upload.single('audio'), async (req, res) => {
-    console.log(`[CONNECTION MESSAGES] POST /voice/upload for company: ${req.params.companyId}`);
+    logger.info(`[CONNECTION MESSAGES] POST /voice/upload for company: ${req.params.companyId}`);
 
     try {
         if (!req.file) {
@@ -338,7 +338,7 @@ router.post('/:companyId/connection-messages/voice/upload', upload.single('audio
             const oldFilePath = path.join(__dirname, '../../public', company.connectionMessages.voice.prerecorded.activeFileUrl);
             if (fs.existsSync(oldFilePath)) {
                 fs.unlinkSync(oldFilePath);
-                console.log(`[CONNECTION MESSAGES] Deleted old file: ${oldFilePath}`);
+                logger.info(`[CONNECTION MESSAGES] Deleted old file: ${oldFilePath}`);
             }
         }
 
@@ -358,10 +358,10 @@ router.post('/:companyId/connection-messages/voice/upload', upload.single('audio
         try {
             await redisClient.del(`company:${req.params.companyId}`);
         } catch (cacheError) {
-            console.warn('[CONNECTION MESSAGES] Cache clear failed:', cacheError.message);
+            logger.warn('[CONNECTION MESSAGES] Cache clear failed:', cacheError.message);
         }
 
-        console.log(`[CONNECTION MESSAGES] ✅ Audio uploaded: ${fileName}`);
+        logger.debug(`[CONNECTION MESSAGES] ✅ Audio uploaded: ${fileName}`);
 
         res.json({
             success: true,
@@ -375,7 +375,7 @@ router.post('/:companyId/connection-messages/voice/upload', upload.single('audio
         });
 
     } catch (error) {
-        console.error('[CONNECTION MESSAGES] Error uploading file:', error);
+        logger.error('[CONNECTION MESSAGES] Error uploading file:', error);
         res.status(500).json({ error: 'Failed to upload audio file' });
     }
 });
@@ -387,7 +387,7 @@ router.post('/:companyId/connection-messages/voice/upload', upload.single('audio
  * ============================================================================
  */
 router.delete('/:companyId/connection-messages/voice/remove', async (req, res) => {
-    console.log(`[CONNECTION MESSAGES] DELETE /voice/remove for company: ${req.params.companyId}`);
+    logger.info(`[CONNECTION MESSAGES] DELETE /voice/remove for company: ${req.params.companyId}`);
 
     try {
         const company = await Company.findById(req.params.companyId);
@@ -404,7 +404,7 @@ router.delete('/:companyId/connection-messages/voice/remove', async (req, res) =
         const filePath = path.join(__dirname, '../../public', company.connectionMessages.voice.prerecorded.activeFileUrl);
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
-            console.log(`[CONNECTION MESSAGES] Deleted file: ${filePath}`);
+            logger.info(`[CONNECTION MESSAGES] Deleted file: ${filePath}`);
         }
 
         // Clear prerecorded settings
@@ -425,10 +425,10 @@ router.delete('/:companyId/connection-messages/voice/remove', async (req, res) =
         try {
             await redisClient.del(`company:${req.params.companyId}`);
         } catch (cacheError) {
-            console.warn('[CONNECTION MESSAGES] Cache clear failed:', cacheError.message);
+            logger.warn('[CONNECTION MESSAGES] Cache clear failed:', cacheError.message);
         }
 
-        console.log(`[CONNECTION MESSAGES] ✅ Audio file removed`);
+        logger.debug(`[CONNECTION MESSAGES] ✅ Audio file removed`);
 
         res.json({
             success: true,
@@ -436,7 +436,7 @@ router.delete('/:companyId/connection-messages/voice/remove', async (req, res) =
         });
 
     } catch (error) {
-        console.error('[CONNECTION MESSAGES] Error removing file:', error);
+        logger.error('[CONNECTION MESSAGES] Error removing file:', error);
         res.status(500).json({ error: 'Failed to remove audio file' });
     }
 });
@@ -448,7 +448,7 @@ router.delete('/:companyId/connection-messages/voice/remove', async (req, res) =
  * ============================================================================
  */
 router.post('/:companyId/connection-messages/voice/generate', async (req, res) => {
-    console.log(`[CONNECTION MESSAGES] POST /voice/generate for company: ${req.params.companyId}`);
+    logger.info(`[CONNECTION MESSAGES] POST /voice/generate for company: ${req.params.companyId}`);
 
     try {
         const { text, voiceId } = req.body;
@@ -468,9 +468,9 @@ router.post('/:companyId/connection-messages/voice/generate', async (req, res) =
             return res.status(404).json({ error: 'Company not found' });
         }
 
-        console.log(`[CONNECTION MESSAGES] Generating audio with ElevenLabs for company: ${company.companyName}`);
-        console.log(`[CONNECTION MESSAGES] Text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
-        console.log(`[CONNECTION MESSAGES] Voice ID: ${voiceId}`);
+        logger.info(`[CONNECTION MESSAGES] Generating audio with ElevenLabs for company: ${company.companyName}`);
+        logger.info(`[CONNECTION MESSAGES] Text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
+        logger.info(`[CONNECTION MESSAGES] Voice ID: ${voiceId}`);
 
         // Import ElevenLabs service
         const { synthesizeSpeech } = require('../../services/v2elevenLabsService');
@@ -484,7 +484,7 @@ router.post('/:companyId/connection-messages/voice/generate', async (req, res) =
             output_format: 'mp3_44100_128'
         });
 
-        console.log(`[CONNECTION MESSAGES] ✅ Audio generated successfully (${audioBuffer.length} bytes)`);
+        logger.info(`[CONNECTION MESSAGES] ✅ Audio generated successfully (${audioBuffer.length} bytes)`);
 
         // Set headers for audio download
         res.setHeader('Content-Type', 'audio/mpeg');
@@ -495,7 +495,7 @@ router.post('/:companyId/connection-messages/voice/generate', async (req, res) =
         res.send(audioBuffer);
 
     } catch (error) {
-        console.error('[CONNECTION MESSAGES] Error generating audio:', error);
+        logger.error('[CONNECTION MESSAGES] Error generating audio:', error);
         res.status(500).json({ 
             error: 'Failed to generate audio',
             message: error.message,
@@ -513,7 +513,7 @@ router.post('/:companyId/connection-messages/voice/generate', async (req, res) =
  * ============================================================================
  */
 router.post('/:companyId/connection-messages/reset', async (req, res) => {
-    console.log(`[CONNECTION MESSAGES] POST /reset for company: ${req.params.companyId}`);
+    logger.info(`[CONNECTION MESSAGES] POST /reset for company: ${req.params.companyId}`);
 
     try {
         const company = await Company.findById(req.params.companyId);
@@ -527,7 +527,7 @@ router.post('/:companyId/connection-messages/reset', async (req, res) => {
             const filePath = path.join(__dirname, '../../public', company.connectionMessages.voice.prerecorded.activeFileUrl);
             if (fs.existsSync(filePath)) {
                 fs.unlinkSync(filePath);
-                console.log(`[CONNECTION MESSAGES] Deleted file: ${filePath}`);
+                logger.info(`[CONNECTION MESSAGES] Deleted file: ${filePath}`);
             }
         }
 
@@ -543,10 +543,10 @@ router.post('/:companyId/connection-messages/reset', async (req, res) => {
         try {
             await redisClient.del(`company:${req.params.companyId}`);
         } catch (cacheError) {
-            console.warn('[CONNECTION MESSAGES] Cache clear failed:', cacheError.message);
+            logger.warn('[CONNECTION MESSAGES] Cache clear failed:', cacheError.message);
         }
 
-        console.log(`[CONNECTION MESSAGES] ✅ Reset to defaults`);
+        logger.debug(`[CONNECTION MESSAGES] ✅ Reset to defaults`);
 
         res.json({
             success: true,
@@ -555,7 +555,7 @@ router.post('/:companyId/connection-messages/reset', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[CONNECTION MESSAGES] Error resetting:', error);
+        logger.error('[CONNECTION MESSAGES] Error resetting:', error);
         res.status(500).json({ error: 'Failed to reset configuration' });
     }
 });

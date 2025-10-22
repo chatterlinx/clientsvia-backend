@@ -4,6 +4,8 @@
  */
 
 const redis = require('redis');
+const logger = require('../utils/logger.js');
+
 const crypto = require('crypto');
 
 class RedisSessionStore {
@@ -22,15 +24,15 @@ class RedisSessionStore {
         });
 
         this.client.on('error', (err) => {
-            console.error('Redis Session Store Error:', err);
+            logger.security('Redis Session Store Error:', err);
         });
 
         this.client.on('connect', () => {
-            console.log('✅ Redis Session Store connected');
+            logger.security('✅ Redis Session Store connected');
         });
 
         this.client.on('ready', () => {
-            console.log('🔥 Redis Session Store ready for v2 operations');
+            logger.security('🔥 Redis Session Store ready for v2 operations');
         });
 
         // Connect to Redis
@@ -43,7 +45,7 @@ class RedisSessionStore {
                 await this.client.connect();
             }
         } catch (error) {
-            console.error('Redis connection failed:', error);
+            logger.error('Redis connection failed:', error);
         }
     }
 
@@ -55,10 +57,10 @@ class RedisSessionStore {
             await this.connect();
             const key = `session:${sessionId}`;
             await this.client.setEx(key, ttlSeconds, JSON.stringify(sessionData));
-            console.log(`💾 Session stored in Redis: ${sessionId} (TTL: ${ttlSeconds}s)`);
+            logger.security(`💾 Session stored in Redis: ${sessionId} (TTL: ${ttlSeconds}s)`);
             return true;
         } catch (error) {
-            console.error('Redis setSession error:', error);
+            logger.security('Redis setSession error:', error);
             return false;
         }
     }
@@ -81,7 +83,7 @@ class RedisSessionStore {
             
             return session;
         } catch (error) {
-            console.error('Redis getSession error:', error);
+            logger.security('Redis getSession error:', error);
             return null;
         }
     }
@@ -94,10 +96,10 @@ class RedisSessionStore {
             await this.connect();
             const key = `session:${sessionId}`;
             const result = await this.client.del(key);
-            console.log(`🗑️ Session deleted from Redis: ${sessionId}`);
+            logger.security(`🗑️ Session deleted from Redis: ${sessionId}`);
             return result > 0;
         } catch (error) {
-            console.error('Redis deleteSession error:', error);
+            logger.security('Redis deleteSession error:', error);
             return false;
         }
     }
@@ -119,14 +121,14 @@ class RedisSessionStore {
                     if (session.userId === userId) {
                         await this.client.del(key);
                         killedCount++;
-                        console.log(`💀 Killed Redis session: ${key} for user ${userId}`);
+                        logger.security(`💀 Killed Redis session: ${key} for user ${userId}`);
                     }
                 }
             }
 
             return killedCount;
         } catch (error) {
-            console.error('Redis killAllUserSessions error:', error);
+            logger.security('Redis killAllUserSessions error:', error);
             return 0;
         }
     }
@@ -159,7 +161,7 @@ class RedisSessionStore {
 
             return sessions;
         } catch (error) {
-            console.error('Redis getAllActiveSessions error:', error);
+            logger.security('Redis getAllActiveSessions error:', error);
             return [];
         }
     }
@@ -180,9 +182,9 @@ class RedisSessionStore {
             
             // Store log with 30-day TTL
             await this.client.setEx(logKey, 30 * 24 * 60 * 60, JSON.stringify(logData));
-            console.log(`🔍 Security event logged: ${event}`);
+            logger.security(`🔍 Security event logged: ${event}`);
         } catch (error) {
-            console.error('Redis security log error:', error);
+            logger.security('Redis security log error:', error);
         }
     }
 
@@ -222,7 +224,7 @@ class RedisSessionStore {
 
             return { suspicious: false };
         } catch (error) {
-            console.error('Suspicious activity check error:', error);
+            logger.security('Suspicious activity check error:', error);
             return { suspicious: false };
         }
     }

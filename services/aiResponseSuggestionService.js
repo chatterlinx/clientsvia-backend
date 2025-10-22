@@ -40,17 +40,17 @@ class AIResponseSuggestionService {
       count = 3
     } = context;
 
-    console.log(`[AI Suggest] Generating ${count} response variations for: "${mainTrigger}"`);
-    console.log(`[AI Suggest] Category: ${categoryName}`);
+    logger.info(`[AI Suggest] Generating ${count} response variations for: "${mainTrigger}"`);
+    logger.info(`[AI Suggest] Category: ${categoryName}`);
 
     // Detect intent from trigger and category
     const intent = this.detectIntent(mainTrigger, categoryName, categoryDescription);
-    console.log(`[AI Suggest] Detected intent: ${intent}`);
+    logger.info(`[AI Suggest] Detected intent: ${intent}`);
 
     // Generate multiple response variations
     const responses = this.generateResponseVariationsForIntent(intent, mainTrigger, categoryDescription, companyName, count);
 
-    console.log(`[AI Suggest] Generated ${responses.length} variations`);
+    logger.info(`[AI Suggest] Generated ${responses.length} variations`);
     return responses;
   }
 

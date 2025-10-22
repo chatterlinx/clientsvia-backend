@@ -22,6 +22,8 @@
  */
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const mongoose = require('mongoose');
 const { ObjectId } = require('mongodb');
@@ -53,7 +55,7 @@ router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
             });
         }
 
-        console.log(`🔍 [VOICE STATUS] Running comprehensive check for ${company.companyName}`);
+        logger.info(`🔍 [VOICE STATUS] Running comprehensive check for ${company.companyName}`);
 
         const status = {
             timestamp: new Date().toISOString(),
@@ -65,7 +67,7 @@ router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
         // ========================================
         // CHECK 1: DATABASE - Are settings saved?
         // ========================================
-        console.log(`🔍 [CHECK 1] Database check...`);
+        logger.info(`🔍 [CHECK 1] Database check...`);
         const voiceSettings = company.aiAgentLogic?.voiceSettings;
         
         status.checks.database = {
@@ -83,17 +85,17 @@ router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
                 similarityBoost: voiceSettings.similarityBoost,
                 lastUpdated: voiceSettings.lastUpdated
             };
-            console.log(`✅ [CHECK 1] Database: PASS - Voice ID: ${voiceSettings.voiceId}`);
+            logger.info(`✅ [CHECK 1] Database: PASS - Voice ID: ${voiceSettings.voiceId}`);
         } else {
             status.checks.database.details.error = 'No voice settings found in database';
             status.checks.database.details.solution = 'Go to AI Voice Settings tab and save a voice';
-            console.log(`❌ [CHECK 1] Database: FAIL - No voice settings`);
+            logger.info(`❌ [CHECK 1] Database: FAIL - No voice settings`);
         }
 
         // ========================================
         // CHECK 2: ELEVENLABS API - Can we connect?
         // ========================================
-        console.log(`🔍 [CHECK 2] ElevenLabs API check...`);
+        logger.info(`🔍 [CHECK 2] ElevenLabs API check...`);
         status.checks.elevenLabsApi = {
             name: 'ElevenLabs API Connection',
             passed: false,
@@ -108,11 +110,11 @@ router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
             if (!apiKey) {
                 status.checks.elevenLabsApi.details.error = 'No API key available';
                 status.checks.elevenLabsApi.details.apiSource = voiceSettings?.apiSource || 'not configured';
-                console.log(`❌ [CHECK 2] API: FAIL - No API key`);
+                logger.debug(`❌ [CHECK 2] API: FAIL - No API key`);
             } else {
                 // 🔧 WORLD-CLASS FIX: Test API with voices endpoint (doesn't require user_read permission)
                 // This is more reliable because TTS uses voices, not user info
-                console.log(`🔍 [CHECK 2] Testing API with voices endpoint...`);
+                logger.info(`🔍 [CHECK 2] Testing API with voices endpoint...`);
                 const voices = await getAvailableVoices({ company });
                 
                 if (voices && voices.length > 0) {
@@ -123,7 +125,7 @@ router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
                         connection: 'Active',
                         message: 'API key is valid and voices are accessible'
                     };
-                    console.log(`✅ [CHECK 2] API: PASS - ${voices.length} voices available`);
+                    logger.info(`✅ [CHECK 2] API: PASS - ${voices.length} voices available`);
                     
                     // Try to get user info for additional details (optional, won't fail if missing permissions)
                     try {
@@ -131,27 +133,27 @@ router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
                         status.checks.elevenLabsApi.details.subscription = userInfo.subscription?.tier || 'unknown';
                         status.checks.elevenLabsApi.details.charactersUsed = userInfo.subscription?.character_count || 0;
                         status.checks.elevenLabsApi.details.charactersLimit = userInfo.subscription?.character_limit || 0;
-                        console.log(`✅ [CHECK 2] API: Subscription info added - ${userInfo.subscription?.tier}`);
+                        logger.info(`✅ [CHECK 2] API: Subscription info added - ${userInfo.subscription?.tier}`);
                     } catch (userInfoError) {
                         // Non-critical: User info is just bonus data
-                        console.log(`⚠️ [CHECK 2] API: Could not get subscription info (non-critical): ${userInfoError.message}`);
+                        logger.info(`⚠️ [CHECK 2] API: Could not get subscription info (non-critical): ${userInfoError.message}`);
                         status.checks.elevenLabsApi.details.note = 'Subscription info unavailable (API key may have limited permissions, but TTS works)';
                     }
                 } else {
                     status.checks.elevenLabsApi.details.error = 'No voices returned from API';
-                    console.log(`❌ [CHECK 2] API: FAIL - No voices available`);
+                    logger.info(`❌ [CHECK 2] API: FAIL - No voices available`);
                 }
             }
         } catch (error) {
             status.checks.elevenLabsApi.details.error = error.message;
             status.checks.elevenLabsApi.details.solution = 'Verify ELEVENLABS_API_KEY environment variable is set correctly';
-            console.log(`❌ [CHECK 2] API: FAIL - ${error.message}`);
+            logger.info(`❌ [CHECK 2] API: FAIL - ${error.message}`);
         }
 
         // ========================================
         // CHECK 3: VOICE VALIDATION - Is voice ID valid?
         // ========================================
-        console.log(`🔍 [CHECK 3] Voice validation check...`);
+        logger.info(`🔍 [CHECK 3] Voice validation check...`);
         status.checks.voiceValidation = {
             name: 'Voice ID Validation',
             passed: false,
@@ -172,25 +174,25 @@ router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
                         category: voice.labels?.category || 'general',
                         previewUrl: voice.preview_url
                     };
-                    console.log(`✅ [CHECK 3] Voice: PASS - ${voice.name}`);
+                    logger.info(`✅ [CHECK 3] Voice: PASS - ${voice.name}`);
                 } else {
                     status.checks.voiceValidation.details.error = 'Voice ID not found in available voices';
                     status.checks.voiceValidation.details.voiceId = voiceSettings.voiceId;
-                    console.log(`❌ [CHECK 3] Voice: FAIL - Voice ID not found`);
+                    logger.info(`❌ [CHECK 3] Voice: FAIL - Voice ID not found`);
                 }
             } catch (error) {
                 status.checks.voiceValidation.details.error = error.message;
-                console.log(`❌ [CHECK 3] Voice: FAIL - ${error.message}`);
+                logger.info(`❌ [CHECK 3] Voice: FAIL - ${error.message}`);
             }
         } else {
             status.checks.voiceValidation.details.error = 'Cannot validate - no voice ID or API unavailable';
-            console.log(`⚠️ [CHECK 3] Voice: SKIP - No voice ID or API failed`);
+            logger.info(`⚠️ [CHECK 3] Voice: SKIP - No voice ID or API failed`);
         }
 
         // ========================================
         // CHECK 4: TWILIO INTEGRATION - What will be used on calls?
         // ========================================
-        console.log(`🔍 [CHECK 4] Twilio integration check...`);
+        logger.info(`🔍 [CHECK 4] Twilio integration check...`);
         status.checks.twilioIntegration = {
             name: 'Twilio Call Integration',
             passed: false,
@@ -211,7 +213,7 @@ router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
                 model: voiceSettings.aiModel,
                 quality: `Stability: ${voiceSettings.stability}, Similarity: ${voiceSettings.similarityBoost}`
             };
-            console.log(`✅ [CHECK 4] Twilio: PASS - Will use ElevenLabs`);
+            logger.info(`✅ [CHECK 4] Twilio: PASS - Will use ElevenLabs`);
         } else {
             status.checks.twilioIntegration.details = {
                 willUse: 'Twilio Default Voice (Alice)',
@@ -223,7 +225,7 @@ router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
             if (!status.checks.elevenLabsApi.passed) {status.checks.twilioIntegration.details.failedChecks.push('ElevenLabs API');}
             if (!status.checks.voiceValidation.passed) {status.checks.twilioIntegration.details.failedChecks.push('Voice Validation');}
             
-            console.log(`❌ [CHECK 4] Twilio: FAIL - Will fall back to Twilio voice`);
+            logger.info(`❌ [CHECK 4] Twilio: FAIL - Will fall back to Twilio voice`);
         }
 
         // ========================================
@@ -234,7 +236,7 @@ router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
             ? `✅ All systems operational - Calls will use ${status.checks.voiceValidation.details.voiceName} (ElevenLabs)`
             : `⚠️ System degraded - Calls will use Twilio's default voice (Alice)`;
 
-        console.log(`🔍 [STATUS] Overall: ${status.overallStatus}`);
+        logger.info(`🔍 [STATUS] Overall: ${status.overallStatus}`);
 
         res.json({
             success: true,
@@ -242,7 +244,7 @@ router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error running voice settings status check:', error);
+        logger.error('❌ Error running voice settings status check:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to run status check',
@@ -275,13 +277,13 @@ router.get('/:companyId/v2-voice-settings/voices', async (req, res) => {
             });
         }
 
-        console.log(`🎤 [VOICES] Loading ElevenLabs voices for ${company.companyName}`);
+        logger.debug(`🎤 [VOICES] Loading ElevenLabs voices for ${company.companyName}`);
 
         // Get voices from ElevenLabs API
         // Uses company's own API key if configured, otherwise uses global ClientsVia key
         const voices = await getAvailableVoices({ company });
 
-        console.log(`✅ [VOICES] Loaded ${voices.length} voices`);
+        logger.info(`✅ [VOICES] Loaded ${voices.length} voices`);
 
         res.json({
             success: true,
@@ -290,7 +292,7 @@ router.get('/:companyId/v2-voice-settings/voices', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ [VOICES] Error loading voices:', error);
+        logger.error('❌ [VOICES] Error loading voices:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to load voices',
@@ -324,10 +326,10 @@ router.get('/:companyId/v2-voice-settings', async (req, res) => {
         }
 
         // 🔍 DIAGNOSTIC: Log what we're getting from the database
-        console.log(`🔍 [GET VOICE] Company: ${company.companyName}`);
-        console.log(`🔍 [GET VOICE] Has aiAgentLogic:`, Boolean(company.aiAgentLogic));
-        console.log(`🔍 [GET VOICE] Has voiceSettings:`, Boolean(company.aiAgentLogic?.voiceSettings));
-        console.log(`🔍 [GET VOICE] Raw voiceSettings:`, JSON.stringify(company.aiAgentLogic?.voiceSettings, null, 2));
+        logger.info(`🔍 [GET VOICE] Company: ${company.companyName}`);
+        logger.info(`🔍 [GET VOICE] Has aiAgentLogic:`, Boolean(company.aiAgentLogic));
+        logger.info(`🔍 [GET VOICE] Has voiceSettings:`, Boolean(company.aiAgentLogic?.voiceSettings));
+        logger.info(`🔍 [GET VOICE] Raw voiceSettings:`, JSON.stringify(company.aiAgentLogic?.voiceSettings, null, 2));
 
         // Get voice settings from V2 aiAgentLogic system
         const voiceSettings = company.aiAgentLogic?.voiceSettings || {
@@ -359,7 +361,7 @@ router.get('/:companyId/v2-voice-settings', async (req, res) => {
             safeSettings.apiKey = '*****';
         }
 
-        console.log(`✅ V2 Voice settings loaded for company ${companyId}`);
+        logger.info(`✅ V2 Voice settings loaded for company ${companyId}`);
 
         res.json({
             success: true,
@@ -368,7 +370,7 @@ router.get('/:companyId/v2-voice-settings', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error getting V2 voice settings:', error);
+        logger.error('❌ Error getting V2 voice settings:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to get voice settings',
@@ -389,8 +391,8 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
         const { companyId } = req.params;
         const b = req.body || {};
         
-        console.log(`🔍 [SAVE-1] POST request for company: ${companyId}`);
-        console.log(`🔍 [SAVE-2] Raw body:`, JSON.stringify(b, null, 2));
+        logger.info(`🔍 [SAVE-1] POST request for company: ${companyId}`);
+        logger.info(`🔍 [SAVE-2] Raw body:`, JSON.stringify(b, null, 2));
 
         if (!ObjectId.isValid(companyId)) {
             return res.status(400).json({
@@ -415,7 +417,7 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
         const outputFormat = pick(b.outputFormat, b.provider?.outputFormat, 'mp3_44100_128');
         const streamingLatency = Number(pick(b.streamingLatency, b.provider?.streamingLatency, 0));
 
-        console.log(`🔍 [SAVE-3] Normalized values:`, {
+        logger.info(`🔍 [SAVE-3] Normalized values:`, {
             apiSource,
             voiceId,
             stability,
@@ -424,45 +426,45 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
         });
 
         // Validate required fields
-        console.log(`🔍 [SAVE-4] VALIDATION CHECK: voiceId = "${voiceId}" (type: ${typeof voiceId})`);
+        logger.info(`🔍 [SAVE-4] VALIDATION CHECK: voiceId = "${voiceId}" (type: ${typeof voiceId})`);
         if (!voiceId) {
-            console.log(`❌ [SAVE-4-FAIL] Voice ID is missing!`);
+            logger.debug(`❌ [SAVE-4-FAIL] Voice ID is missing!`);
             return res.status(400).json({
                 success: false,
                 message: 'Voice ID is required',
                 debug: { voiceId, receivedBody: b }
             });
         }
-        console.log(`✅ [SAVE-4-PASS] Voice ID validation passed`);
+        logger.debug(`✅ [SAVE-4-PASS] Voice ID validation passed`);
 
-        console.log(`🔍 [SAVE-5] VALIDATION CHECK: apiSource = "${apiSource}", apiKey = ${apiKey ? '(present)' : '(null)'}`);
+        logger.debug(`🔍 [SAVE-5] VALIDATION CHECK: apiSource = "${apiSource}", apiKey = ${apiKey ? '(present)' : '(null)'}`);
         if (apiSource === 'own' && !apiKey) {
-            console.log(`❌ [SAVE-5-FAIL] API key required for own source!`);
+            logger.debug(`❌ [SAVE-5-FAIL] API key required for own source!`);
             return res.status(400).json({
                 success: false,
                 message: 'API key is required when using own ElevenLabs account',
                 debug: { apiSource, hasApiKey: Boolean(apiKey) }
             });
         }
-        console.log(`✅ [SAVE-5-PASS] API source validation passed`);
+        logger.debug(`✅ [SAVE-5-PASS] API source validation passed`);
 
         // Fetch company
-        console.log(`🔍 [SAVE-7] Fetching company from database...`);
+        logger.debug(`🔍 [SAVE-7] Fetching company from database...`);
         const company = await Company.findById(companyId);
         
         if (!company) {
-            console.log(`❌ [SAVE-8] Company not found: ${companyId}`);
+            logger.debug(`❌ [SAVE-8] Company not found: ${companyId}`);
             return res.status(404).json({
                 success: false,
                 message: 'Company not found'
             });
         }
 
-        console.log(`🔍 [SAVE-9] Company found: ${company.companyName}`);
+        logger.debug(`🔍 [SAVE-9] Company found: ${company.companyName}`);
         
         // Initialize aiAgentLogic if not exists
         if (!company.aiAgentLogic) {
-            console.log(`🔍 [SAVE-10] Initializing aiAgentLogic`);
+            logger.debug(`🔍 [SAVE-10] Initializing aiAgentLogic`);
             company.aiAgentLogic = {};
         }
         
@@ -483,10 +485,10 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             version: '2.0'
         };
 
-        console.log(`🔍 [SAVE-13] Voice settings to save:`, JSON.stringify(newVoiceSettings, null, 2));
+        logger.info(`🔍 [SAVE-13] Voice settings to save:`, JSON.stringify(newVoiceSettings, null, 2));
         
         // Save using Mongoose (normal approach)
-        console.log(`🔍 [SAVE-14] Using targeted update to avoid full document validation`);
+        logger.info(`🔍 [SAVE-14] Using targeted update to avoid full document validation`);
         
         try {
             // Use findByIdAndUpdate with $set to update ONLY voiceSettings field
@@ -502,19 +504,19 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             );
             
             if (!updatedCompany) {
-                console.error(`❌ [SAVE-16-ERROR] Company not found during update`);
+                logger.error(`❌ [SAVE-16-ERROR] Company not found during update`);
                 return res.status(404).json({
                     success: false,
                     message: 'Company not found'
                 });
             }
             
-            console.log(`✅ [SAVE-16] Voice settings updated successfully via targeted update`);
+            logger.info(`✅ [SAVE-16] Voice settings updated successfully via targeted update`);
         } catch (saveError) {
-            console.error(`❌ [SAVE-16-ERROR] Mongoose update failed!`);
-            console.error(`❌ [SAVE-16-ERROR] Error name: ${saveError.name}`);
-            console.error(`❌ [SAVE-16-ERROR] Error message: ${saveError.message}`);
-            console.error(`❌ [SAVE-16-ERROR] Full error:`, saveError);
+            logger.error(`❌ [SAVE-16-ERROR] Mongoose update failed!`);
+            logger.error(`❌ [SAVE-16-ERROR] Error name: ${saveError.name}`);
+            logger.error(`❌ [SAVE-16-ERROR] Error message: ${saveError.message}`);
+            logger.error(`❌ [SAVE-16-ERROR] Full error:`, saveError);
             
             // Return specific validation error
             return res.status(400).json({
@@ -525,12 +527,12 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             });
         }
 
-        console.log(`✅ [SAVE-17] Voice settings saved successfully via Mongoose`);
+        logger.debug(`✅ [SAVE-17] Voice settings saved successfully via Mongoose`);
 
         // Clear Redis cache for immediate effect
         if (redisClient) {
             try {
-                console.log(`🔍 [SAVE-21] Clearing Redis cache...`);
+                logger.debug(`🔍 [SAVE-21] Clearing Redis cache...`);
                 const cacheKeys = [
                     `company:${companyId}`,
                     `voice:company:${companyId}`,
@@ -538,18 +540,18 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
                 ];
                 
                 await Promise.all(cacheKeys.map(key => redisClient.del(key).catch(err => {
-                    console.warn(`⚠️ Failed to delete cache key ${key}:`, err.message);
+                    logger.warn(`⚠️ Failed to delete cache key ${key}:`, err.message);
                     return null;
                 })));
-                console.log(`🗑️ [SAVE-22] Redis cache cleared: ${cacheKeys.join(', ')}`);
+                logger.debug(`🗑️ [SAVE-22] Redis cache cleared: ${cacheKeys.join(', ')}`);
             } catch (cacheError) {
-                console.warn(`⚠️ [SAVE-22-ERROR] Redis cache clear failed (non-fatal):`, cacheError.message);
+                logger.warn(`⚠️ [SAVE-22-ERROR] Redis cache clear failed (non-fatal):`, cacheError.message);
             }
         } else {
-            console.log(`⚠️ [SAVE-23] Redis client not available - skipping cache clear`);
+            logger.debug(`⚠️ [SAVE-23] Redis client not available - skipping cache clear`);
         }
 
-        console.log(`✅ [SAVE-24] Voice settings saved successfully`);
+        logger.debug(`✅ [SAVE-24] Voice settings saved successfully`);
 
         // Return safe response (mask API key)
         const safeSettings = { ...newVoiceSettings };
@@ -557,7 +559,7 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             safeSettings.apiKey = '*****';
         }
 
-        console.log(`🔍 [SAVE-25] Sending success response`);
+        logger.info(`🔍 [SAVE-25] Sending success response`);
 
         res.json({
             success: true,
@@ -567,7 +569,7 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ [SAVE-ERROR] Voice settings save error:', error);
+        logger.error('❌ [SAVE-ERROR] Voice settings save error:', error);
         // Return 400 instead of 500 for validation errors (more helpful to client)
         const statusCode = error.name === 'ValidationError' || error.name === 'CastError' ? 400 : 500;
         res.status(statusCode).json({
@@ -640,7 +642,7 @@ router.patch('/:companyId/v2-voice-settings', async (req, res) => {
                 await redisClient.del(`voice:company:${companyId}`);
             }
 
-            console.log(`✅ V2 Voice settings updated for company ${companyId}`);
+            logger.info(`✅ V2 Voice settings updated for company ${companyId}`);
         }
 
         // Return safe settings
@@ -657,7 +659,7 @@ router.patch('/:companyId/v2-voice-settings', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error updating V2 voice settings:', error);
+        logger.error('❌ Error updating V2 voice settings:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to update voice settings',
@@ -675,14 +677,14 @@ router.post('/cleanup-hardcoded-voice', async (req, res) => {
     try {
         const HARDCODED_VOICE_ID = 'pNInz6obpgDQGcFmaJgB';
         
-        console.log('🧹 Starting emergency cleanup of hardcoded voice settings...');
+        logger.debug('🧹 Starting emergency cleanup of hardcoded voice settings...');
         
         // Find companies with the hardcoded voice ID
         const companiesWithHardcodedVoice = await Company.find({
             'aiAgentLogic.voiceSettings.voiceId': HARDCODED_VOICE_ID
         });
 
-        console.log(`🔍 Found ${companiesWithHardcodedVoice.length} companies with hardcoded voice ID`);
+        logger.info(`🔍 Found ${companiesWithHardcodedVoice.length} companies with hardcoded voice ID`);
 
         if (companiesWithHardcodedVoice.length === 0) {
             return res.json({
@@ -730,11 +732,11 @@ router.post('/cleanup-hardcoded-voice', async (req, res) => {
                 }
                 
                 await Promise.all(cacheKeys.map(key => redisClient.del(key)));
-                console.log(`🗑️ Cache cleared for company ${company._id}: ${cacheKeys.join(', ')}`);
+                logger.debug(`🗑️ Cache cleared for company ${company._id}: ${cacheKeys.join(', ')}`);
             }
         }
 
-        console.log(`✅ Updated ${updateResult.modifiedCount} companies`);
+        logger.debug(`✅ Updated ${updateResult.modifiedCount} companies`);
 
         res.json({
             success: true,
@@ -747,7 +749,7 @@ router.post('/cleanup-hardcoded-voice', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Emergency cleanup failed:', error);
+        logger.error('❌ Emergency cleanup failed:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to cleanup hardcoded voice settings',

@@ -1,4 +1,6 @@
 const { getDB } = require('../db');
+const logger = require('./logger.js');
+
 
 async function logEscalationEvent(callSid, companyId, question) {
   try {
@@ -7,7 +9,7 @@ async function logEscalationEvent(callSid, companyId, question) {
     const collection = db.collection('escalationLogs');
     await collection.insertOne({ callSid, companyId, question, timestamp: new Date() });
   } catch (err) {
-    console.error('Error logging escalation event:', err.message);
+    logger.error('Error logging escalation event:', err.message);
   }
 }
 

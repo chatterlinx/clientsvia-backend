@@ -647,9 +647,9 @@ class PriorityDrivenKnowledgeRouter {
                 if (redisClient && redisClient.isReady) {
                     await redisClient.setEx(`knowledge:${companyId}`, 300, JSON.stringify(knowledge));
                 }
-                console.log(`🔄 Trade Q&A cache miss - loaded from MongoDB (${Date.now() - startTime}ms)`);
+                logger.debug(`🔄 Trade Q&A cache miss - loaded from MongoDB (${Date.now() - startTime}ms)`);
             } else {
-                console.log(`⚡ Trade Q&A cache hit - Redis lookup (${Date.now() - startTime}ms)`);
+                logger.debug(`⚡ Trade Q&A cache hit - Redis lookup (${Date.now() - startTime}ms)`);
                 // If knowledge was cached, still need to load company for placeholders
                 company = await Company.findById(companyId).select('aiAgentLogic.placeholders').lean();
             }
@@ -689,7 +689,7 @@ class PriorityDrivenKnowledgeRouter {
             bestMatch.metadata.responseTime = responseTime;
             bestMatch.metadata.cached = Boolean(knowledge.cachedAt);
             
-            console.log(`🎯 Trade Q&A query completed: ${responseTime}ms (confidence: ${bestMatch.confidence})`);
+            logger.debug(`🎯 Trade Q&A query completed: ${responseTime}ms (confidence: ${bestMatch.confidence})`);
             return bestMatch;
 
         } catch (error) {

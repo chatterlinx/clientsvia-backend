@@ -17,6 +17,8 @@
  */
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const Company = require('../../models/v2Company');
 const { authenticateJWT } = require('../../middleware/auth');
@@ -32,7 +34,7 @@ router.use(authenticateJWT);
  * ============================================================================
  */
 router.get('/:companyId/ai-agent-settings/diagnostics', async (req, res) => {
-    console.log(`[AI DIAGNOSTICS] GET /diagnostics for company: ${req.params.companyId}`);
+    logger.info(`[AI DIAGNOSTICS] GET /diagnostics for company: ${req.params.companyId}`);
 
     try {
         const company = await Company.findById(req.params.companyId)
@@ -92,12 +94,12 @@ router.get('/:companyId/ai-agent-settings/diagnostics', async (req, res) => {
             cache: cacheDiagnostics
         };
 
-        console.log(`[AI DIAGNOSTICS] ✅ Generated diagnostic report for ${company.companyName}`);
+        logger.debug(`[AI DIAGNOSTICS] ✅ Generated diagnostic report for ${company.companyName}`);
 
         res.json(diagnostics);
 
     } catch (error) {
-        console.error('[AI DIAGNOSTICS] Error generating diagnostics:', error);
+        logger.error('[AI DIAGNOSTICS] Error generating diagnostics:', error);
         res.status(500).json({ 
             error: 'Failed to generate diagnostics',
             message: error.message 
@@ -413,7 +415,7 @@ async function analyzeCacheStatus(companyId) {
         };
 
     } catch (error) {
-        console.warn('[CACHE DIAGNOSTIC] Redis error (non-critical):', error.message);
+        logger.warn('[CACHE DIAGNOSTIC] Redis error (non-critical):', error.message);
         
         // Redis error is non-critical - calls can still work
         return {

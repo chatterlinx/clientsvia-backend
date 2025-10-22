@@ -217,7 +217,7 @@ router.post('/refresh', authenticateJWT, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Token refresh error:', error);
+        logger.security('Token refresh error:', error);
         res.status(401).json({ 
             success: false, 
             message: 'Token refresh failed' 
@@ -260,7 +260,7 @@ router.post('/logout', async (req, res) => {
             }
         } catch (err) {
             // Ignore authentication errors during logout
-            console.log('Session cleanup during logout (non-critical):', err.message);
+            logger.security('Session cleanup during logout (non-critical):', err.message);
         }
 
         // Clear the HTTP-only cookie (always do this)
@@ -374,7 +374,7 @@ router.get('/sessions', authenticateSingleSession, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Get sessions error:', error);
+        logger.security('Get sessions error:', error);
         res.status(500).json({ error: 'Failed to get active sessions' });
     }
 });
@@ -402,7 +402,7 @@ router.post('/kill-all-sessions', authenticateSingleSession, async (req, res) =>
         });
 
     } catch (error) {
-        console.error('Kill sessions error:', error);
+        logger.security('Kill sessions error:', error);
         res.status(500).json({ error: 'Failed to kill sessions' });
     }
 });

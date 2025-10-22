@@ -5,6 +5,8 @@
  */
 
 const express = require('express');
+const logger = require('../utils/logger.js');
+
 const router = express.Router();
 const { getDB } = require('../db');
 const { ObjectId } = require('mongodb');
@@ -35,7 +37,7 @@ const validateCompanyAccess = async (req, res, next) => {
         req.company = company;
         next();
     } catch (error) {
-        console.error('[Notes API] Company validation error:', error);
+        logger.error('[Notes API] Company validation error:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Error validating company access' 
@@ -52,7 +54,7 @@ router.get('/:companyId', validateCompanyAccess, async (req, res) => {
         const { companyId } = req.params;
         const { search, category, priority, pinned, sort = 'updated-desc' } = req.query;
         
-        console.log(`[Notes API] GET request for company ${companyId} with filters:`, { search, category, priority, pinned, sort });
+        logger.info(`[Notes API] GET request for company ${companyId} with filters:`, { search, category, priority, pinned, sort });
         
         const company = await Company.findById(companyId);
         let notes = company.notes || [];
@@ -100,7 +102,7 @@ router.get('/:companyId', validateCompanyAccess, async (req, res) => {
             }
         });
         
-        console.log(`[Notes API] Retrieved ${notes.length} notes for company ${companyId}`);
+        logger.debug(`[Notes API] Retrieved ${notes.length} notes for company ${companyId}`);
         
         res.json({
             success: true,
@@ -110,7 +112,7 @@ router.get('/:companyId', validateCompanyAccess, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[Notes API] GET error:', error);
+        logger.error('[Notes API] GET error:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Error retrieving notes' 
@@ -127,7 +129,7 @@ router.post('/:companyId', validateCompanyAccess, async (req, res) => {
         const { companyId } = req.params;
         const { title, content, category = 'general', priority = 'normal', isPinned = false, tags = [] } = req.body;
         
-        console.log(`[Notes API] POST request for company ${companyId}:`, { title, content, category, priority, isPinned });
+        logger.info(`[Notes API] POST request for company ${companyId}:`, { title, content, category, priority, isPinned });
         
         // Validation
         if (!content || !content.trim()) {
@@ -161,7 +163,7 @@ router.post('/:companyId', validateCompanyAccess, async (req, res) => {
             { new: true }
         );
         
-        console.log(`[Notes API] Created note ${newNote.id} for company ${companyId}`);
+        logger.info(`[Notes API] Created note ${newNote.id} for company ${companyId}`);
         
         res.status(201).json({
             success: true,
@@ -170,7 +172,7 @@ router.post('/:companyId', validateCompanyAccess, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[Notes API] POST error:', error);
+        logger.error('[Notes API] POST error:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Error creating note' 
@@ -187,7 +189,7 @@ router.put('/:companyId/:noteId', validateCompanyAccess, async (req, res) => {
         const { companyId, noteId } = req.params;
         const { title, content, category, priority, isPinned, tags } = req.body;
         
-        console.log(`[Notes API] PUT request for note ${noteId} in company ${companyId}`);
+        logger.info(`[Notes API] PUT request for note ${noteId} in company ${companyId}`);
         
         // Validation
         if (!content || !content.trim()) {
@@ -228,7 +230,7 @@ router.put('/:companyId/:noteId', validateCompanyAccess, async (req, res) => {
         const company = await Company.findById(companyId);
         const updatedNote = company.notes.find(note => note.id == noteId);
         
-        console.log(`[Notes API] Updated note ${noteId} for company ${companyId}`);
+        logger.info(`[Notes API] Updated note ${noteId} for company ${companyId}`);
         
         res.json({
             success: true,
@@ -237,7 +239,7 @@ router.put('/:companyId/:noteId', validateCompanyAccess, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[Notes API] PUT error:', error);
+        logger.error('[Notes API] PUT error:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Error updating note' 
@@ -253,7 +255,7 @@ router.delete('/:companyId/:noteId', validateCompanyAccess, async (req, res) => 
     try {
         const { companyId, noteId } = req.params;
         
-        console.log(`[Notes API] DELETE request for note ${noteId} in company ${companyId}`);
+        logger.info(`[Notes API] DELETE request for note ${noteId} in company ${companyId}`);
         
         // Remove note from company
         const updateResult = await Company.updateOne(
@@ -271,7 +273,7 @@ router.delete('/:companyId/:noteId', validateCompanyAccess, async (req, res) => 
             });
         }
         
-        console.log(`[Notes API] Deleted note ${noteId} from company ${companyId}`);
+        logger.info(`[Notes API] Deleted note ${noteId} from company ${companyId}`);
         
         res.json({
             success: true,
@@ -279,7 +281,7 @@ router.delete('/:companyId/:noteId', validateCompanyAccess, async (req, res) => 
         });
         
     } catch (error) {
-        console.error('[Notes API] DELETE error:', error);
+        logger.error('[Notes API] DELETE error:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Error deleting note' 
@@ -295,7 +297,7 @@ router.patch('/:companyId/:noteId/pin', validateCompanyAccess, async (req, res) 
     try {
         const { companyId, noteId } = req.params;
         
-        console.log(`[Notes API] PATCH pin toggle for note ${noteId} in company ${companyId}`);
+        logger.info(`[Notes API] PATCH pin toggle for note ${noteId} in company ${companyId}`);
         
         // Get current note to toggle pin status
         const company = await Company.findById(companyId);
@@ -325,7 +327,7 @@ router.patch('/:companyId/:noteId/pin', validateCompanyAccess, async (req, res) 
             }
         );
         
-        console.log(`[Notes API] Note ${noteId} pin status changed to ${newPinStatus}`);
+        logger.info(`[Notes API] Note ${noteId} pin status changed to ${newPinStatus}`);
         
         res.json({
             success: true,
@@ -334,7 +336,7 @@ router.patch('/:companyId/:noteId/pin', validateCompanyAccess, async (req, res) 
         });
         
     } catch (error) {
-        console.error('[Notes API] PATCH pin error:', error);
+        logger.error('[Notes API] PATCH pin error:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Error updating pin status' 
@@ -378,7 +380,7 @@ router.get('/:companyId/stats', validateCompanyAccess, async (req, res) => {
             }
         });
         
-        console.log(`[Notes API] Generated stats for company ${companyId}:`, stats);
+        logger.info(`[Notes API] Generated stats for company ${companyId}:`, stats);
         
         res.json({
             success: true,
@@ -386,7 +388,7 @@ router.get('/:companyId/stats', validateCompanyAccess, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[Notes API] Stats error:', error);
+        logger.error('[Notes API] Stats error:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Error generating stats' 

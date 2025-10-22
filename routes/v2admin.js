@@ -4,6 +4,8 @@
  */
 
 const express = require('express');
+const logger = require('../utils/logger.js');
+
 const router = express.Router();
 
 // Import admin routes
@@ -22,9 +24,9 @@ router.post('/fix-user-company/:userId/:companyId', authenticateJWT, async (req,
     try {
         const { userId, companyId } = req.params;
         
-        console.log('🚨 EMERGENCY: Fixing user-company association');
-        console.log('🔍 Target user ID:', userId);
-        console.log('🔍 Target company ID:', companyId);
+        logger.security('🚨 EMERGENCY: Fixing user-company association');
+        logger.security('🔍 Target user ID:', userId);
+        logger.info('🔍 Target company ID:', companyId);
         
         // Find the user
         const user = await User.findById(userId);
@@ -46,13 +48,13 @@ router.post('/fix-user-company/:userId/:companyId', authenticateJWT, async (req,
             });
         }
         
-        console.log('✅ Found user:', {
+        logger.info('✅ Found user:', {
             id: user._id,
             email: user.email,
             currentCompanyId: user.companyId
         });
         
-        console.log('✅ Found company:', {
+        logger.info('✅ Found company:', {
             id: company._id,
             name: company.companyName
         });
@@ -79,12 +81,12 @@ router.post('/fix-user-company/:userId/:companyId', authenticateJWT, async (req,
             }
         };
         
-        console.log('🎉 SUCCESS: User-company association fixed!', result);
+        logger.info('🎉 SUCCESS: User-company association fixed!', result);
         
         res.json(result);
         
     } catch (error) {
-        console.error('❌ EMERGENCY: Fix user-company association failed:', error);
+        logger.error('❌ EMERGENCY: Fix user-company association failed:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to fix user-company association',
@@ -130,12 +132,12 @@ router.get('/check-user-company/:userId', authenticateJWT, async (req, res) => {
             }
         };
         
-        console.log('🔍 User-company diagnosis:', diagnosis);
+        logger.info('🔍 User-company diagnosis:', diagnosis);
         
         res.json(diagnosis);
         
     } catch (error) {
-        console.error('❌ User-company check failed:', error);
+        logger.error('❌ User-company check failed:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to check user-company association',
@@ -152,15 +154,15 @@ router.post('/clear-cache/:companyId', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
         
-        console.log('🚨 EMERGENCY: Clearing company cache');
-        console.log('🔍 Target company ID:', companyId);
+        logger.security('🚨 EMERGENCY: Clearing company cache');
+        logger.security('🔍 Target company ID:', companyId);
         
         const client = redis.createClient({
             url: process.env.REDIS_URL || 'redis://localhost:6379'
         });
 
         await client.connect();
-        console.log('✅ Connected to Redis');
+        logger.debug('✅ Connected to Redis');
 
         // Clear all possible cache keys for this company
         const keysToDelete = [
@@ -180,11 +182,11 @@ router.post('/clear-cache/:companyId', authenticateJWT, async (req, res) => {
             const result = await client.del(key);
             if (result) {deletedCount++;}
             results.push({ key, deleted: Boolean(result) });
-            console.log(`🗑️ Cache key: ${key} (${result ? 'deleted' : 'not found'})`);
+            logger.debug(`🗑️ Cache key: ${key} (${result ? 'deleted' : 'not found'})`);
         }
 
         await client.disconnect();
-        console.log(`✅ Cache cleared: ${deletedCount} keys deleted`);
+        logger.debug(`✅ Cache cleared: ${deletedCount} keys deleted`);
 
         res.json({
             success: true,
@@ -195,7 +197,7 @@ router.post('/clear-cache/:companyId', authenticateJWT, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Cache clear failed:', error);
+        logger.error('❌ Cache clear failed:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to clear company cache',

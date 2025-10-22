@@ -30,6 +30,8 @@
 // ============================================================================
 
 const mongoose = require('mongoose');
+const logger = require('../utils/logger.js');
+
 const { redisClient } = require('../clients');
 const smsClient = require('../clients/smsClient');
 const v2Company = require('../models/v2Company');
@@ -43,7 +45,7 @@ class PlatformHealthCheckService {
      * 🏥 RUN FULL PLATFORM HEALTH CHECK
      */
     static async runFullHealthCheck(triggeredBy = 'scheduled', triggeredByUser = null) {
-        console.log(`🏥 [HEALTH CHECK] Starting full platform health check (triggered by: ${triggeredBy})...`);
+        logger.debug(`🏥 [HEALTH CHECK] Starting full platform health check (triggered by: ${triggeredBy})...`);
         
         const startTime = Date.now();
         const results = {
@@ -115,8 +117,8 @@ class PlatformHealthCheckService {
             responseTime: slowest.responseTime
         };
         
-        console.log(`✅ [HEALTH CHECK] Completed in ${results.totalDuration}ms`);
-        console.log(`📊 [HEALTH CHECK] Results: ${results.summary.passed}/${results.summary.total} passed, ${results.summary.failed} failed, ${results.summary.warnings} warnings`);
+        logger.info(`✅ [HEALTH CHECK] Completed in ${results.totalDuration}ms`);
+        logger.info(`📊 [HEALTH CHECK] Results: ${results.summary.passed}/${results.summary.total} passed, ${results.summary.failed} failed, ${results.summary.warnings} warnings`);
         
         // ========================================================================
         // SEND SMS NOTIFICATION TO ADMINS (if issues or manual trigger)
@@ -674,7 +676,7 @@ View: https://app.clientsvia.com/admin-notification-center.html
             });
             
         } catch (error) {
-            console.error('❌ [HEALTH CHECK] Failed to send SMS:', error);
+            logger.error('❌ [HEALTH CHECK] Failed to send SMS:', error);
         }
     }
     
@@ -684,10 +686,10 @@ View: https://app.clientsvia.com/admin-notification-center.html
     static async saveHealthCheckResults(results) {
         try {
             const savedLog = await HealthCheckLog.create(results);
-            console.log(`✅ [HEALTH CHECK] Results saved to database: ${savedLog._id}`);
+            logger.info(`✅ [HEALTH CHECK] Results saved to database: ${savedLog._id}`);
             return savedLog;
         } catch (error) {
-            console.error('❌ [HEALTH CHECK] Failed to save results:', error);
+            logger.error('❌ [HEALTH CHECK] Failed to save results:', error);
             return null;
         }
     }

@@ -4,6 +4,8 @@
  */
 
 const crypto = require('crypto');
+const logger = require('../utils/logger.js');
+
 const os = require('os');
 
 class HardwareIDSecurityService {
@@ -45,7 +47,7 @@ class HardwareIDSecurityService {
             .update(JSON.stringify(hardwareData))
             .digest('hex');
 
-        console.log(`🖥️ Server Hardware ID: ${hardwareID.substring(0, 16)}...`);
+        logger.info(`🖥️ Server Hardware ID: ${hardwareID.substring(0, 16)}...`);
         return { hardwareID, hardwareData };
     }
 
@@ -89,7 +91,7 @@ class HardwareIDSecurityService {
         const trustedKey = `${userId}:${clientFingerprint}`;
         this.trustedHardwareIDs.add(trustedKey);
         
-        console.log(`🔐 New trusted device registered for ${userId}: ${clientFingerprint.substring(0, 16)}...`);
+        logger.info(`🔐 New trusted device registered for ${userId}: ${clientFingerprint.substring(0, 16)}...`);
         
         // Store device info for audit
         const deviceRecord = {
@@ -111,7 +113,7 @@ class HardwareIDSecurityService {
         const removed = this.trustedHardwareIDs.delete(trustedKey);
         
         if (removed) {
-            console.log(`🗑️ Trusted device removed for ${userId}: ${clientFingerprint.substring(0, 16)}...`);
+            logger.info(`🗑️ Trusted device removed for ${userId}: ${clientFingerprint.substring(0, 16)}...`);
         }
         
         return removed;
@@ -206,7 +208,7 @@ class HardwareIDSecurityService {
         }
 
         this.hardwareLockEnabled = false;
-        console.log('🚨 EMERGENCY HARDWARE UNLOCK ACTIVATED');
+        logger.debug('🚨 EMERGENCY HARDWARE UNLOCK ACTIVATED');
         
         return { 
             success: true, 

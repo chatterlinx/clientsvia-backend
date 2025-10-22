@@ -21,6 +21,8 @@
  */
 
 const jwt = require('jsonwebtoken');
+const logger = require('./logger.js');
+
 const crypto = require('crypto');
 
 /**
@@ -31,7 +33,7 @@ const crypto = require('crypto');
  * @returns {string} JWT token
  */
 function generatePreviewToken(companyId, userId, updates) {
-    console.log(`[PREVIEW TOKEN] 🔐 Generating token for company ${companyId}`);
+    logger.security(`[PREVIEW TOKEN] 🔐 Generating token for company ${companyId}`);
     
     try {
         // 1. Hash the updates with SHA256
@@ -41,7 +43,7 @@ function generatePreviewToken(companyId, userId, updates) {
             .update(updatesString)
             .digest('hex');
         
-        console.log(`[PREVIEW TOKEN] 🔐 Updates hash: ${updatesHash.substring(0, 16)}...`);
+        logger.security(`[PREVIEW TOKEN] 🔐 Updates hash: ${updatesHash.substring(0, 16)}...`);
         
         // 2. Create JWT payload
         const payload = {
@@ -57,12 +59,12 @@ function generatePreviewToken(companyId, userId, updates) {
             expiresIn: '10m' // 10 minutes
         });
         
-        console.log(`[PREVIEW TOKEN] ✅ Token generated (expires in 10 minutes)`);
+        logger.security(`[PREVIEW TOKEN] ✅ Token generated (expires in 10 minutes)`);
         
         return token;
         
     } catch (error) {
-        console.error(`[PREVIEW TOKEN] ❌ Generation failed:`, error);
+        logger.security(`[PREVIEW TOKEN] ❌ Generation failed:`, error);
         throw new Error(`Failed to generate preview token: ${error.message}`);
     }
 }
@@ -74,19 +76,19 @@ function generatePreviewToken(companyId, userId, updates) {
  * @returns {Object} { valid: boolean, error?: string, payload?: Object }
  */
 function verifyPreviewToken(token, updates) {
-    console.log(`[PREVIEW TOKEN] 🔍 Verifying token...`);
+    logger.security(`[PREVIEW TOKEN] 🔍 Verifying token...`);
     
     try {
         // 1. Verify JWT signature and expiry
         const payload = jwt.verify(token, process.env.JWT_SECRET);
         
-        console.log(`[PREVIEW TOKEN] ✅ JWT signature valid`);
-        console.log(`[PREVIEW TOKEN] 🔍 Token for company: ${payload.companyId}`);
-        console.log(`[PREVIEW TOKEN] 🔍 Token by user: ${payload.userId}`);
+        logger.security(`[PREVIEW TOKEN] ✅ JWT signature valid`);
+        logger.security(`[PREVIEW TOKEN] 🔍 Token for company: ${payload.companyId}`);
+        logger.security(`[PREVIEW TOKEN] 🔍 Token by user: ${payload.userId}`);
         
         // 2. Check token type
         if (payload.type !== 'preview') {
-            console.log(`[PREVIEW TOKEN] ❌ Invalid token type: ${payload.type}`);
+            logger.security(`[PREVIEW TOKEN] ❌ Invalid token type: ${payload.type}`);
             return {
                 valid: false,
                 error: 'Invalid token type'
@@ -100,19 +102,19 @@ function verifyPreviewToken(token, updates) {
             .update(updatesString)
             .digest('hex');
         
-        console.log(`[PREVIEW TOKEN] 🔍 Expected hash: ${payload.updatesHash.substring(0, 16)}...`);
-        console.log(`[PREVIEW TOKEN] 🔍 Received hash: ${updatesHash.substring(0, 16)}...`);
+        logger.security(`[PREVIEW TOKEN] 🔍 Expected hash: ${payload.updatesHash.substring(0, 16)}...`);
+        logger.security(`[PREVIEW TOKEN] 🔍 Received hash: ${updatesHash.substring(0, 16)}...`);
         
         // 4. Compare hashes
         if (payload.updatesHash !== updatesHash) {
-            console.log(`[PREVIEW TOKEN] ❌ Hash mismatch! Data was tampered or changed.`);
+            logger.security(`[PREVIEW TOKEN] ❌ Hash mismatch! Data was tampered or changed.`);
             return {
                 valid: false,
                 error: 'Preview data does not match. Please preview changes again before applying.'
             };
         }
         
-        console.log(`[PREVIEW TOKEN] ✅ Token valid and hash matches`);
+        logger.security(`[PREVIEW TOKEN] ✅ Token valid and hash matches`);
         
         return {
             valid: true,
@@ -122,7 +124,7 @@ function verifyPreviewToken(token, updates) {
     } catch (error) {
         // Handle JWT errors
         if (error.name === 'TokenExpiredError') {
-            console.log(`[PREVIEW TOKEN] ⏰ Token expired`);
+            logger.security(`[PREVIEW TOKEN] ⏰ Token expired`);
             return {
                 valid: false,
                 error: 'Preview token expired. Please preview changes again (tokens expire after 10 minutes).'
@@ -130,14 +132,14 @@ function verifyPreviewToken(token, updates) {
         }
         
         if (error.name === 'JsonWebTokenError') {
-            console.log(`[PREVIEW TOKEN] ❌ Invalid token: ${error.message}`);
+            logger.security(`[PREVIEW TOKEN] ❌ Invalid token: ${error.message}`);
             return {
                 valid: false,
                 error: 'Invalid preview token. Please preview changes again.'
             };
         }
         
-        console.error(`[PREVIEW TOKEN] ❌ Verification failed:`, error);
+        logger.security(`[PREVIEW TOKEN] ❌ Verification failed:`, error);
         return {
             valid: false,
             error: `Token verification failed: ${error.message}`

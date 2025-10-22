@@ -23,6 +23,8 @@
  */
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const v2Company = require('../../models/v2Company');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
@@ -35,7 +37,7 @@ const GlobalInstantResponseTemplate = require('../../models/GlobalInstantRespons
 router.get('/company/:companyId/live-scenarios', async (req, res) => {
     const { companyId } = req.params;
     
-    console.log(`🎭 [LIVE SCENARIOS API] Fetching scenarios for company: ${companyId}`);
+    logger.debug(`🎭 [LIVE SCENARIOS API] Fetching scenarios for company: ${companyId}`);
     
     try {
         // Get company with template references
@@ -55,7 +57,7 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
             .filter(ref => ref.enabled)
             .map(ref => ref.templateId);
         
-        console.log(`📊 [LIVE SCENARIOS API] Company has ${activeTemplateIds.length} active templates`);
+        logger.info(`📊 [LIVE SCENARIOS API] Company has ${activeTemplateIds.length} active templates`);
         
         if (activeTemplateIds.length === 0) {
             return res.json({
@@ -76,7 +78,7 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
             status: 'published'
         }).select('name tradeName categories scenarios stats').lean();
         
-        console.log(`📚 [LIVE SCENARIOS API] Loaded ${templates.length} templates`);
+        logger.info(`📚 [LIVE SCENARIOS API] Loaded ${templates.length} templates`);
         
         // Merge all scenarios from all templates
         const allScenarios = [];
@@ -113,7 +115,7 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
         
         const categories = Array.from(categoriesSet).sort();
         
-        console.log(`✅ [LIVE SCENARIOS API] Returning ${allScenarios.length} scenarios from ${categories.length} categories`);
+        logger.info(`✅ [LIVE SCENARIOS API] Returning ${allScenarios.length} scenarios from ${categories.length} categories`);
         
         res.json({
             success: true,
@@ -127,7 +129,7 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ [LIVE SCENARIOS API] Error fetching scenarios:', error);
+        logger.error('❌ [LIVE SCENARIOS API] Error fetching scenarios:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to fetch live scenarios',

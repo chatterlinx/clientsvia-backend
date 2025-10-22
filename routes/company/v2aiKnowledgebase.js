@@ -29,6 +29,8 @@
  */
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const v2AIAgentCallLog = require('../../models/v2AIAgentCallLog');
 const v2Company = require('../../models/v2Company');
@@ -41,7 +43,7 @@ const v2Company = require('../../models/v2Company');
 router.get('/company/:companyId/knowledgebase/action-items', async (req, res) => {
     const { companyId } = req.params;
     
-    console.log(`🧠 [KNOWLEDGEBASE API] Fetching action items for company: ${companyId}`);
+    logger.debug(`🧠 [KNOWLEDGEBASE API] Fetching action items for company: ${companyId}`);
     
     try {
         // Query call logs for problematic calls
@@ -55,7 +57,7 @@ router.get('/company/:companyId/knowledgebase/action-items', async (req, res) =>
             createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } // Last 30 days
         }).sort({ createdAt: -1 }).limit(500); // Cap at 500 for performance
         
-        console.log(`📊 [KNOWLEDGEBASE API] Found ${problemCalls.length} problem calls`);
+        logger.info(`📊 [KNOWLEDGEBASE API] Found ${problemCalls.length} problem calls`);
         
         // Group by similar questions (exact match for now, can enhance with fuzzy matching later)
         const grouped = {};
@@ -137,8 +139,8 @@ router.get('/company/:companyId/knowledgebase/action-items', async (req, res) =>
         // Filter out resolved issues
         actionItems = actionItems.filter(item => !resolvedQuestions.has(item.question.toLowerCase().trim()));
         
-        console.log(`✅ [KNOWLEDGEBASE API] Returning ${actionItems.length} action items`);
-        console.log(`📊 [KNOWLEDGEBASE API] Breakdown: ${actionItems.filter(i => i.urgency === 'high').length} high, ${actionItems.filter(i => i.urgency === 'medium').length} medium, ${actionItems.filter(i => i.urgency === 'low').length} low`);
+        logger.info(`✅ [KNOWLEDGEBASE API] Returning ${actionItems.length} action items`);
+        logger.info(`📊 [KNOWLEDGEBASE API] Breakdown: ${actionItems.filter(i => i.urgency === 'high').length} high, ${actionItems.filter(i => i.urgency === 'medium').length} medium, ${actionItems.filter(i => i.urgency === 'low').length} low`);
         
         res.json({
             success: true,
@@ -152,7 +154,7 @@ router.get('/company/:companyId/knowledgebase/action-items', async (req, res) =>
         });
         
     } catch (error) {
-        console.error('❌ [KNOWLEDGEBASE API] Error fetching action items:', error);
+        logger.error('❌ [KNOWLEDGEBASE API] Error fetching action items:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to fetch action items',
@@ -170,7 +172,7 @@ router.post('/company/:companyId/knowledgebase/action-items/:itemId/resolve', as
     const { companyId, itemId } = req.params;
     const { question, actionTaken } = req.body;
     
-    console.log(`✅ [KNOWLEDGEBASE API] Marking item ${itemId} as resolved for company: ${companyId}`);
+    logger.info(`✅ [KNOWLEDGEBASE API] Marking item ${itemId} as resolved for company: ${companyId}`);
     
     try {
         // Add to company's resolved issues
@@ -185,7 +187,7 @@ router.post('/company/:companyId/knowledgebase/action-items/:itemId/resolve', as
             }
         });
         
-        console.log(`✅ [KNOWLEDGEBASE API] Issue resolved successfully`);
+        logger.info(`✅ [KNOWLEDGEBASE API] Issue resolved successfully`);
         
         res.json({
             success: true,
@@ -193,7 +195,7 @@ router.post('/company/:companyId/knowledgebase/action-items/:itemId/resolve', as
         });
         
     } catch (error) {
-        console.error('❌ [KNOWLEDGEBASE API] Error resolving issue:', error);
+        logger.error('❌ [KNOWLEDGEBASE API] Error resolving issue:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to resolve issue',

@@ -19,6 +19,8 @@
  */
 
 const mongoose = require('mongoose');
+const logger = require('../utils/logger.js');
+
 
 const auditLogSchema = new mongoose.Schema({
     // Unique audit ID (for reference)
@@ -149,7 +151,7 @@ auditLogSchema.statics.createLog = async function(data) {
     
     await auditLog.save();
     
-    console.log(`[AUDIT LOG] ✅ Created: ${auditLog.auditId} (${data.action})`);
+    logger.info(`[AUDIT LOG] ✅ Created: ${auditLog.auditId} (${data.action})`);
     
     return auditLog;
 };

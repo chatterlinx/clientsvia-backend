@@ -1,4 +1,6 @@
 const winston = require('winston');
+const logger = require('./logger.js');
+
 const path = require('path');
 
 // Define log levels with colors
@@ -153,7 +155,7 @@ logger.error = function(message, meta = {}) {
     }
   } catch (sentryError) {
     // Don't fail if Sentry isn't available
-    console.warn('Failed to send error to Sentry:', sentryError.message);
+    logger.warn('Failed to send error to Sentry:', sentryError.message);
   }
 
   // Send CRITICAL/WARNING errors to Admin Notification Center
@@ -174,12 +176,12 @@ logger.error = function(message, meta = {}) {
           stackTrace: meta.stack || meta.error?.stack || null
         }).catch(notifError => {
           // Don't fail the original operation if notification fails
-          console.warn('[LOGGER] Failed to send admin notification:', notifError.message);
+          logger.warn('[LOGGER] Failed to send admin notification:', notifError.message);
         });
       });
     } catch (notifError) {
       // Don't fail if AdminNotificationService isn't available
-      console.warn('[LOGGER] AdminNotificationService not available:', notifError.message);
+      logger.warn('[LOGGER] AdminNotificationService not available:', notifError.message);
     }
   }
 };

@@ -26,8 +26,8 @@ class ResponseTraceLogger {
     this.selectionReason = '';
     this.selectedData = null;
     
-    console.log(`[TRACE] 🔍 Starting AI decision trace for: "${userQuery}"`);
-    console.log(`[TRACE] 📋 Extracted keywords: [${extractedKeywords.join(', ')}]`);
+    logger.debug(`[TRACE] 🔍 Starting AI decision trace for: "${userQuery}"`);
+    logger.debug(`[TRACE] 📋 Extracted keywords: [${extractedKeywords.join(', ')}]`);
   }
 
   /**
@@ -53,7 +53,7 @@ class ResponseTraceLogger {
     
     const statusIcon = step.matchResult.matched ? '✅' : '❌';
     const summary = this.generateMatchSummary(step.matchResult);
-    console.log(`[TRACE] ${statusIcon} ${step.stepNumber}. ${sourceName} → ${summary}`);
+    logger.info(`[TRACE] ${statusIcon} ${step.stepNumber}. ${sourceName} → ${summary}`);
     
     return step;
   }
@@ -67,15 +67,15 @@ class ResponseTraceLogger {
     this.selectionReason = reason;
     this.selectedData = matchedData;
     
-    console.log(`[TRACE] ✅ HARD FIX - Selected: ${sourceName} (${reason}) - Confidence: ${confidence}`);
-    console.log(`[TRACE] ✅ HARD FIX - Selected Data:`, {
+    logger.info(`[TRACE] ✅ HARD FIX - Selected: ${sourceName} (${reason}) - Confidence: ${confidence}`);
+    logger.info(`[TRACE] ✅ HARD FIX - Selected Data:`, {
       hasData: Boolean(matchedData),
       dataKeys: matchedData ? Object.keys(matchedData) : [],
       question: matchedData?.question || 'N/A',
       answer: matchedData?.answer || 'N/A',
       answerLength: matchedData?.answer?.length || 0
     });
-    console.log(`[TRACE] ✅ HARD FIX - Full Selected Data Object:`, matchedData);
+    logger.info(`[TRACE] ✅ HARD FIX - Full Selected Data Object:`, matchedData);
   }
 
   /**
@@ -234,7 +234,7 @@ class ResponseTraceLogger {
     
     const statusIcon = step.matchResult.matched ? '🧠' : '❌';
     const summary = response ? `Generated ${response.length} chars via ${model}` : 'Generation failed';
-    console.log(`[TRACE] ${statusIcon} ${step.stepNumber}. Offline Local LLM → ${summary}`);
+    logger.info(`[TRACE] ${statusIcon} ${step.stepNumber}. Offline Local LLM → ${summary}`);
     
     return step;
   }

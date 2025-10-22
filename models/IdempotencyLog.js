@@ -18,6 +18,8 @@
  */
 
 const mongoose = require('mongoose');
+const logger = require('../utils/logger.js');
+
 
 const idempotencyLogSchema = new mongoose.Schema({
     // Idempotency key (UUID from client)
@@ -92,7 +94,7 @@ idempotencyLogSchema.statics.checkOrStore = async function(key, companyId, userI
         const existing = await this.findOne({ key, companyId });
         
         if (existing) {
-            console.log(`[IDEMPOTENCY] ✅ Key already used: ${key.substring(0, 8)}...`);
+            logger.info(`[IDEMPOTENCY] ✅ Key already used: ${key.substring(0, 8)}...`);
             return {
                 isDuplicate: true,
                 response: existing.response
@@ -112,7 +114,7 @@ idempotencyLogSchema.statics.checkOrStore = async function(key, companyId, userI
         
         await log.save();
         
-        console.log(`[IDEMPOTENCY] ✨ New key stored: ${key.substring(0, 8)}...`);
+        logger.info(`[IDEMPOTENCY] ✨ New key stored: ${key.substring(0, 8)}...`);
         
         return {
             isDuplicate: false,
@@ -122,7 +124,7 @@ idempotencyLogSchema.statics.checkOrStore = async function(key, companyId, userI
     } catch (error) {
         // If duplicate key error (race condition), it's a duplicate
         if (error.code === 11000) {
-            console.log(`[IDEMPOTENCY] ✅ Key already used (race): ${key.substring(0, 8)}...`);
+            logger.debug(`[IDEMPOTENCY] ✅ Key already used (race): ${key.substring(0, 8)}...`);
             
             // Fetch the existing response
             const existing = await this.findOne({ key, companyId });

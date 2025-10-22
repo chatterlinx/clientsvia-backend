@@ -24,6 +24,8 @@
  */
 
 const { parsePhoneNumber, isValidPhoneNumber } = require('libphonenumber-js');
+const logger = require('./logger.js');
+
 
 /**
  * Main validation function
@@ -66,7 +68,7 @@ function validate(value, definition) {
         case 'multiline':
             return validateText(value, definition);
         default:
-            console.warn(`[VALIDATORS] Unknown type: ${type}, using text validation`);
+            logger.warn(`[VALIDATORS] Unknown type: ${type}, using text validation`);
             return validateText(value, definition);
     }
 }
@@ -190,7 +192,7 @@ function validatePhone(value, definition) {
         // Also get national format for display
         const national = phoneNumber.formatNational();
         
-        console.log(`[VALIDATORS] 📞 Phone: "${trimmed}" → E.164: "${e164}" (Display: "${national}")`);
+        logger.info(`[VALIDATORS] 📞 Phone: "${trimmed}" → E.164: "${e164}" (Display: "${national}")`);
         
         return {
             isValid: true,
@@ -199,7 +201,7 @@ function validatePhone(value, definition) {
         };
         
     } catch (error) {
-        console.error(`[VALIDATORS] ❌ Phone validation error:`, error);
+        logger.error(`[VALIDATORS] ❌ Phone validation error:`, error);
         return {
             isValid: false,
             errorMessage: 'Invalid phone number format'
@@ -309,7 +311,7 @@ function validateEnum(value, definition) {
     const trimmed = value.trim();
     
     if (!definition.enumValues || !Array.isArray(definition.enumValues)) {
-        console.error(`[VALIDATORS] ❌ Enum validation missing enumValues`);
+        logger.error(`[VALIDATORS] ❌ Enum validation missing enumValues`);
         return {
             isValid: false,
             errorMessage: 'Invalid configuration: no allowed values defined'
@@ -375,7 +377,7 @@ function validateBatch(variables, definitions) {
         const definition = defMap[key];
         
         if (!definition) {
-            console.warn(`[VALIDATORS] No definition found for variable: ${key}`);
+            logger.warn(`[VALIDATORS] No definition found for variable: ${key}`);
             formatted[key] = value;
             continue;
         }

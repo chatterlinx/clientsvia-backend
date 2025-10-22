@@ -12,6 +12,8 @@
 // ============================================================================
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const v2AIAgentCallLog = require('../../models/v2AIAgentCallLog');
 const v2Company = require('../../models/v2Company');
@@ -23,7 +25,7 @@ const mongoose = require('mongoose');
 // ============================================================================
 router.get('/admin/call-archives/search', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
-        console.log(`🔍 [CALL ARCHIVES] CHECKPOINT 1: Search request received`);
+        logger.security(`🔍 [CALL ARCHIVES] CHECKPOINT 1: Search request received`);
         
         const {
             query,           // Text search in transcripts
@@ -38,7 +40,7 @@ router.get('/admin/call-archives/search', authenticateJWT, requireRole('admin'),
             limit = 50       // Results per page
         } = req.query;
 
-        console.log(`🔍 [CALL ARCHIVES] CHECKPOINT 2: Query parameters:`, {
+        logger.debug(`🔍 [CALL ARCHIVES] CHECKPOINT 2: Query parameters:`, {
             query: query || 'none',
             companyId: companyId || 'all',
             startDate: startDate || 'none',
@@ -86,7 +88,7 @@ router.get('/admin/call-archives/search', authenticateJWT, requireRole('admin'),
             filter.$text = { $search: query };
         }
 
-        console.log(`✅ [CALL ARCHIVES] CHECKPOINT 3: Filter built:`, JSON.stringify(filter, null, 2));
+        logger.debug(`✅ [CALL ARCHIVES] CHECKPOINT 3: Filter built:`, JSON.stringify(filter, null, 2));
 
         // ================================================================
         // STEP 2: Execute search with pagination
@@ -103,7 +105,7 @@ router.get('/admin/call-archives/search', authenticateJWT, requireRole('admin'),
             v2AIAgentCallLog.countDocuments(filter)
         ]);
 
-        console.log(`✅ [CALL ARCHIVES] CHECKPOINT 4: Found ${calls.length} calls (${totalCount} total)`);
+        logger.debug(`✅ [CALL ARCHIVES] CHECKPOINT 4: Found ${calls.length} calls (${totalCount} total)`);
 
         // ================================================================
         // STEP 3: Format response
@@ -138,7 +140,7 @@ router.get('/admin/call-archives/search', authenticateJWT, requireRole('admin'),
             topics: call.searchMetadata?.topics?.slice(0, 3) || []
         }));
 
-        console.log(`✅ [CALL ARCHIVES] CHECKPOINT 5: Response formatted`);
+        logger.debug(`✅ [CALL ARCHIVES] CHECKPOINT 5: Response formatted`);
 
         // ================================================================
         // STEP 4: Return results with pagination metadata
@@ -166,11 +168,11 @@ router.get('/admin/call-archives/search', authenticateJWT, requireRole('admin'),
             }
         });
 
-        console.log(`✅ [CALL ARCHIVES] CHECKPOINT 6: Response sent successfully`);
+        logger.info(`✅ [CALL ARCHIVES] CHECKPOINT 6: Response sent successfully`);
 
     } catch (error) {
-        console.error(`❌ [CALL ARCHIVES] ERROR in search:`, error);
-        console.error(`❌ [CALL ARCHIVES] Stack:`, error.stack);
+        logger.error(`❌ [CALL ARCHIVES] ERROR in search:`, error);
+        logger.error(`❌ [CALL ARCHIVES] Stack:`, error.stack);
         res.status(500).json({
             success: false,
             message: 'Failed to search call archives',
@@ -184,7 +186,7 @@ router.get('/admin/call-archives/search', authenticateJWT, requireRole('admin'),
 // ============================================================================
 router.get('/admin/call-archives/stats', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
-        console.log(`📊 [CALL ARCHIVES] CHECKPOINT 1: Fetching statistics...`);
+        logger.security(`📊 [CALL ARCHIVES] CHECKPOINT 1: Fetching statistics...`);
 
         // ================================================================
         // STEP 1: Aggregate statistics
@@ -220,7 +222,7 @@ router.get('/admin/call-archives/stats', authenticateJWT, requireRole('admin'), 
             ])
         ]);
 
-        console.log(`✅ [CALL ARCHIVES] CHECKPOINT 2: Statistics calculated`);
+        logger.debug(`✅ [CALL ARCHIVES] CHECKPOINT 2: Statistics calculated`);
 
         // ================================================================
         // STEP 2: Format response
@@ -249,11 +251,11 @@ router.get('/admin/call-archives/stats', authenticateJWT, requireRole('admin'), 
             }
         });
 
-        console.log(`✅ [CALL ARCHIVES] CHECKPOINT 3: Response sent successfully`);
+        logger.info(`✅ [CALL ARCHIVES] CHECKPOINT 3: Response sent successfully`);
 
     } catch (error) {
-        console.error(`❌ [CALL ARCHIVES] ERROR in stats:`, error);
-        console.error(`❌ [CALL ARCHIVES] Stack:`, error.stack);
+        logger.error(`❌ [CALL ARCHIVES] ERROR in stats:`, error);
+        logger.error(`❌ [CALL ARCHIVES] Stack:`, error.stack);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch statistics',
@@ -269,7 +271,7 @@ router.get('/admin/call-archives/:callId', authenticateJWT, requireRole('admin')
     try {
         const { callId } = req.params;
         
-        console.log(`📞 [CALL ARCHIVES] CHECKPOINT 1: Fetching call: ${callId}`);
+        logger.security(`📞 [CALL ARCHIVES] CHECKPOINT 1: Fetching call: ${callId}`);
 
         // ================================================================
         // STEP 1: Find call with full details
@@ -279,14 +281,14 @@ router.get('/admin/call-archives/:callId', authenticateJWT, requireRole('admin')
             .lean();
 
         if (!call) {
-            console.log(`❌ [CALL ARCHIVES] Call not found: ${callId}`);
+            logger.info(`❌ [CALL ARCHIVES] Call not found: ${callId}`);
             return res.status(404).json({
                 success: false,
                 message: 'Call not found'
             });
         }
 
-        console.log(`✅ [CALL ARCHIVES] CHECKPOINT 2: Call found`);
+        logger.debug(`✅ [CALL ARCHIVES] CHECKPOINT 2: Call found`);
 
         // ================================================================
         // STEP 2: Format detailed response
@@ -344,18 +346,18 @@ router.get('/admin/call-archives/:callId', authenticateJWT, requireRole('admin')
             aiResponse: call.aiResponse
         };
 
-        console.log(`✅ [CALL ARCHIVES] CHECKPOINT 3: Response formatted`);
+        logger.info(`✅ [CALL ARCHIVES] CHECKPOINT 3: Response formatted`);
 
         res.json({
             success: true,
             data: response
         });
 
-        console.log(`✅ [CALL ARCHIVES] CHECKPOINT 4: Response sent successfully`);
+        logger.debug(`✅ [CALL ARCHIVES] CHECKPOINT 4: Response sent successfully`);
 
     } catch (error) {
-        console.error(`❌ [CALL ARCHIVES] ERROR fetching call:`, error);
-        console.error(`❌ [CALL ARCHIVES] Stack:`, error.stack);
+        logger.error(`❌ [CALL ARCHIVES] ERROR fetching call:`, error);
+        logger.error(`❌ [CALL ARCHIVES] Stack:`, error.stack);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch call details',
@@ -369,14 +371,14 @@ router.get('/admin/call-archives/:callId', authenticateJWT, requireRole('admin')
 // ============================================================================
 router.post('/admin/call-archives/export', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
-        console.log(`📤 [CALL ARCHIVES] CHECKPOINT 1: Export request received`);
+        logger.security(`📤 [CALL ARCHIVES] CHECKPOINT 1: Export request received`);
         
         const {
             format = 'csv',  // 'csv' or 'json'
             filters = {}     // Same filters as search endpoint
         } = req.body;
 
-        console.log(`📤 [CALL ARCHIVES] CHECKPOINT 2: Format: ${format}`);
+        logger.debug(`📤 [CALL ARCHIVES] CHECKPOINT 2: Format: ${format}`);
 
         // ================================================================
         // STEP 1: Build query (same as search)
@@ -392,7 +394,7 @@ router.post('/admin/call-archives/export', authenticateJWT, requireRole('admin')
         if (filters.source) {filter.finalMatchedSource = filters.source;}
         if (filters.sentiment) {filter['searchMetadata.sentiment'] = filters.sentiment;}
 
-        console.log(`✅ [CALL ARCHIVES] CHECKPOINT 3: Filter built`);
+        logger.debug(`✅ [CALL ARCHIVES] CHECKPOINT 3: Filter built`);
 
         // ================================================================
         // STEP 2: Fetch all matching calls (limit to 10,000 for safety)
@@ -403,7 +405,7 @@ router.post('/admin/call-archives/export', authenticateJWT, requireRole('admin')
             .populate('companyId', 'companyName')
             .lean();
 
-        console.log(`✅ [CALL ARCHIVES] CHECKPOINT 4: Found ${calls.length} calls to export`);
+        logger.debug(`✅ [CALL ARCHIVES] CHECKPOINT 4: Found ${calls.length} calls to export`);
 
         // ================================================================
         // STEP 3: Format based on export type
@@ -452,11 +454,11 @@ router.post('/admin/call-archives/export', authenticateJWT, requireRole('admin')
             res.send(csvContent);
         }
 
-        console.log(`✅ [CALL ARCHIVES] CHECKPOINT 5: Export sent successfully`);
+        logger.info(`✅ [CALL ARCHIVES] CHECKPOINT 5: Export sent successfully`);
 
     } catch (error) {
-        console.error(`❌ [CALL ARCHIVES] ERROR in export:`, error);
-        console.error(`❌ [CALL ARCHIVES] Stack:`, error.stack);
+        logger.error(`❌ [CALL ARCHIVES] ERROR in export:`, error);
+        logger.error(`❌ [CALL ARCHIVES] Stack:`, error.stack);
         res.status(500).json({
             success: false,
             message: 'Failed to export call archives',

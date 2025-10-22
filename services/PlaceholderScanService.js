@@ -37,6 +37,8 @@
  */
 
 const Company = require('../models/v2Company');
+const logger = require('../utils/logger.js');
+
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const CacheHelper = require('../utils/cacheHelper');
 const AdminNotificationService = require('./AdminNotificationService');
@@ -83,7 +85,7 @@ class PlaceholderScanService {
      * // }
      */
     static async scanCompany(companyId) {
-        console.log(`🔍 [PLACEHOLDER SCAN] Starting scan for company ${companyId}`);
+        logger.debug(`🔍 [PLACEHOLDER SCAN] Starting scan for company ${companyId}`);
         
         try {
             // 1. Load company
@@ -97,7 +99,7 @@ class PlaceholderScanService {
                 ?.map(ref => ref.templateId) || [];
             
             if (templateIds.length === 0) {
-                console.log(`ℹ️  [PLACEHOLDER SCAN] No templates for company ${companyId}`);
+                logger.info(`ℹ️  [PLACEHOLDER SCAN] No templates for company ${companyId}`);
                 return {
                     success: true,
                     placeholders: [],
@@ -114,7 +116,7 @@ class PlaceholderScanService {
                 .find({ _id: { $in: templateIds } })
                 .lean(); // Plain object for performance
             
-            console.log(`📋 [PLACEHOLDER SCAN] Loaded ${templates.length} template(s)`);
+            logger.info(`📋 [PLACEHOLDER SCAN] Loaded ${templates.length} template(s)`);
             
             // 4. Extract placeholders from all templates
             const combinedPlaceholderMap = new Map();
@@ -129,7 +131,7 @@ class PlaceholderScanService {
                 }
             }
             
-            console.log(`✅ [PLACEHOLDER SCAN] Found ${combinedPlaceholderMap.size} unique placeholders`);
+            logger.info(`✅ [PLACEHOLDER SCAN] Found ${combinedPlaceholderMap.size} unique placeholders`);
             
             // 5. Enrich placeholders with metadata
             const newDefinitions = [];
@@ -189,7 +191,7 @@ class PlaceholderScanService {
                 def.required && !currentVariables[def.key]
             );
             
-            console.log(`📊 [PLACEHOLDER SCAN] New: ${newPlaceholders.length}, Updated: ${updatedPlaceholders.length}, Missing: ${missingRequired.length}`);
+            logger.info(`📊 [PLACEHOLDER SCAN] New: ${newPlaceholders.length}, Updated: ${updatedPlaceholders.length}, Missing: ${missingRequired.length}`);
             
             // 8. Generate or clear alert
             if (missingRequired.length > 0) {
@@ -206,11 +208,11 @@ class PlaceholderScanService {
                     createdAt: new Date()
                 };
                 
-                console.log(`⚠️  [PLACEHOLDER SCAN] Alert generated for ${missingRequired.length} missing variables`);
+                logger.info(`⚠️  [PLACEHOLDER SCAN] Alert generated for ${missingRequired.length} missing variables`);
             } else {
                 // All required variables filled - clear alert
                 company.aiAgentSettings.configurationAlert = null;
-                console.log(`✅ [PLACEHOLDER SCAN] All required variables filled - alert cleared`);
+                logger.info(`✅ [PLACEHOLDER SCAN] All required variables filled - alert cleared`);
             }
             
             // 9. Save updated definitions and alert
@@ -244,12 +246,12 @@ class PlaceholderScanService {
                         });
                     } catch (notificationError) {
                         // Never let notification errors block the main flow
-                        console.error('❌ [PLACEHOLDER SCAN] Notification failed (non-critical):', notificationError.message);
+                        logger.error('❌ [PLACEHOLDER SCAN] Notification failed (non-critical):', notificationError.message);
                     }
                 });
             }
             
-            console.log(`✅ [PLACEHOLDER SCAN] Scan complete for company ${companyId}`);
+            logger.info(`✅ [PLACEHOLDER SCAN] Scan complete for company ${companyId}`);
             
             return {
                 success: true,
@@ -264,7 +266,7 @@ class PlaceholderScanService {
             };
             
         } catch (error) {
-            console.error(`❌ [PLACEHOLDER SCAN] Failed for company ${companyId}:`, error);
+            logger.error(`❌ [PLACEHOLDER SCAN] Failed for company ${companyId}:`, error);
             throw error;
         }
     }
@@ -288,7 +290,7 @@ class PlaceholderScanService {
      * await PlaceholderScanService.scanAllCompaniesForTemplate('64a1b2c3d4e5f6');
      */
     static async scanAllCompaniesForTemplate(templateId) {
-        console.log(`🔍 [BULK SCAN] Starting scan for template ${templateId}`);
+        logger.debug(`🔍 [BULK SCAN] Starting scan for template ${templateId}`);
         
         try {
             // 1. Find all companies using this template
@@ -297,7 +299,7 @@ class PlaceholderScanService {
             }).select('_id companyName');
             
             if (companies.length === 0) {
-                console.log(`ℹ️  [BULK SCAN] No companies using template ${templateId}`);
+                logger.info(`ℹ️  [BULK SCAN] No companies using template ${templateId}`);
                 return {
                     success: true,
                     companiesScanned: 0,
@@ -305,7 +307,7 @@ class PlaceholderScanService {
                 };
             }
             
-            console.log(`📋 [BULK SCAN] Found ${companies.length} companies to scan`);
+            logger.info(`📋 [BULK SCAN] Found ${companies.length} companies to scan`);
             
             // 2. Scan each company
             const results = {
@@ -326,7 +328,7 @@ class PlaceholderScanService {
                         results.companiesWithAlerts++;
                     }
                     
-                    console.log(`✅ [BULK SCAN] Scanned company ${company.companyName}`);
+                    logger.info(`✅ [BULK SCAN] Scanned company ${company.companyName}`);
                     
                 } catch (error) {
                     results.companiesFailed++;
@@ -336,16 +338,16 @@ class PlaceholderScanService {
                         error: error.message
                     });
                     
-                    console.error(`❌ [BULK SCAN] Failed to scan company ${company.companyName}:`, error.message);
+                    logger.error(`❌ [BULK SCAN] Failed to scan company ${company.companyName}:`, error.message);
                 }
             }
             
-            console.log(`✅ [BULK SCAN] Complete: ${results.companiesScanned} scanned, ${results.companiesWithAlerts} alerts, ${results.companiesFailed} failures`);
+            logger.info(`✅ [BULK SCAN] Complete: ${results.companiesScanned} scanned, ${results.companiesWithAlerts} alerts, ${results.companiesFailed} failures`);
             
             return results;
             
         } catch (error) {
-            console.error(`❌ [BULK SCAN] Failed for template ${templateId}:`, error);
+            logger.error(`❌ [BULK SCAN] Failed for template ${templateId}:`, error);
             throw error;
         }
     }
@@ -374,7 +376,7 @@ class PlaceholderScanService {
      * // ]
      */
     static async getConfigurationAlerts() {
-        console.log(`📋 [ALERTS] Fetching all configuration alerts`);
+        logger.debug(`📋 [ALERTS] Fetching all configuration alerts`);
         
         try {
             const companies = await Company.find({
@@ -390,12 +392,12 @@ class PlaceholderScanService {
                 missingCount: company.aiAgentSettings.configurationAlert.missingVariables?.length || 0
             }));
             
-            console.log(`✅ [ALERTS] Found ${alerts.length} configuration alerts`);
+            logger.info(`✅ [ALERTS] Found ${alerts.length} configuration alerts`);
             
             return alerts;
             
         } catch (error) {
-            console.error(`❌ [ALERTS] Failed to fetch alerts:`, error);
+            logger.error(`❌ [ALERTS] Failed to fetch alerts:`, error);
             throw error;
         }
     }
@@ -422,7 +424,7 @@ class PlaceholderScanService {
      * // }
      */
     static async validateCompanyVariables(companyId) {
-        console.log(`🔍 [VALIDATION] Checking variables for company ${companyId}`);
+        logger.info(`🔍 [VALIDATION] Checking variables for company ${companyId}`);
         
         try {
             const company = await Company.findById(companyId)
@@ -440,7 +442,7 @@ class PlaceholderScanService {
             
             const isValid = missingRequired.length === 0;
             
-            console.log(`${isValid ? '✅' : '⚠️ '} [VALIDATION] Company ${companyId}: ${isValid ? 'VALID' : `Missing ${missingRequired.length} required variables`}`);
+            logger.info(`${isValid ? '✅' : '⚠️ '} [VALIDATION] Company ${companyId}: ${isValid ? 'VALID' : `Missing ${missingRequired.length} required variables`}`);
             
             return {
                 isValid,
@@ -450,7 +452,7 @@ class PlaceholderScanService {
             };
             
         } catch (error) {
-            console.error(`❌ [VALIDATION] Failed for company ${companyId}:`, error);
+            logger.error(`❌ [VALIDATION] Failed for company ${companyId}:`, error);
             throw error;
         }
     }

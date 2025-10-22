@@ -1,4 +1,6 @@
 const express = require('express');
+const logger = require('../utils/logger.js');
+
 const router = express.Router();
 const path = require('path');
 const { getDB } = require('../db');
@@ -19,7 +21,7 @@ const CacheHelper = require('../utils/cacheHelper'); // Cache invalidation
 // const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
 // 
 // if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
-//     console.warn("🔴 Google OAuth credentials are not fully configured in .env. Google Calendar integration will likely fail.");
+//     logger.security("🔴 Google OAuth credentials are not fully configured in .env. Google Calendar integration will likely fail.");
 // }
 // 
 // const oauth2Client = new google.auth.OAuth2(
@@ -90,7 +92,7 @@ router.get('/company-profile.html', (req, res) => {
    
    ============================================================================ */
 router.post('/companies', async (req, res) => {
-    console.log('[API POST /api/companies] 📥 Received data:', JSON.stringify(req.body, null, 2));
+    logger.info('[API POST /api/companies] 📥 Received data:', JSON.stringify(req.body, null, 2));
     try {
         const {
             companyName,
@@ -115,10 +117,10 @@ router.post('/companies', async (req, res) => {
         
         if (isModernForm) {
             // ✨ MODERN FORM - International address format
-            console.log('[API POST /api/companies] 🌍 Modern form detected - International address');
+            logger.info('[API POST /api/companies] 🌍 Modern form detected - International address');
             
             if (!companyName || !address || !address.street || !address.city || !address.state || !address.zip || !address.country) {
-                console.warn('[API POST /api/companies] ❌ Modern form validation failed. Missing required fields:', {
+                logger.warn('[API POST /api/companies] ❌ Modern form validation failed. Missing required fields:', {
                     companyName: Boolean(companyName),
                     address: Boolean(address),
                     'address.street': address?.street,
@@ -161,14 +163,14 @@ router.post('/companies', async (req, res) => {
                 }
             };
 
-            console.log('[API POST /api/companies] ✅ Creating modern company with international address');
+            logger.info('[API POST /api/companies] ✅ Creating modern company with international address');
             
         } else if (isLegacySimplified) {
             // 📦 LEGACY SIMPLIFIED FORM - Single address field
-            console.log('[API POST /api/companies] 📦 Legacy simplified form detected');
+            logger.info('[API POST /api/companies] 📦 Legacy simplified form detected');
             
             if (!companyName || !companyPhone || !companyAddress) {
-                console.warn('[API POST /api/companies] ❌ Simplified form validation failed. Missing required fields:', {
+                logger.warn('[API POST /api/companies] ❌ Simplified form validation failed. Missing required fields:', {
                     companyName: Boolean(companyName),
                     companyPhone: Boolean(companyPhone),
                     companyAddress: Boolean(companyAddress)
@@ -205,15 +207,15 @@ router.post('/companies', async (req, res) => {
                 }
             };
 
-            console.log('[API POST /api/companies] ✅ Creating legacy simplified company');
+            logger.info('[API POST /api/companies] ✅ Creating legacy simplified company');
             
         } else {
             // 🗂️ FULL LEGACY FORM - All fields provided
-            console.log('[API POST /api/companies] 🗂️ Full legacy form detected');
+            logger.info('[API POST /api/companies] 🗂️ Full legacy form detected');
             
             if (!companyName || !ownerName || !ownerEmail || !contactPhone || !timezone ||
                 !address || !address.street || !address.city || !address.state || !address.zip || !address.country) {
-                console.warn('[API POST /api/companies] ❌ Legacy form validation failed. Missing or invalid required fields. Data received:', req.body);
+                logger.warn('[API POST /api/companies] ❌ Legacy form validation failed. Missing or invalid required fields. Data received:', req.body);
                 return res.status(400).json({ message: 'Missing required fields or timezone is missing.' });
             }
 
@@ -236,17 +238,17 @@ router.post('/companies', async (req, res) => {
                 }
             };
             
-            console.log('[API POST /api/companies] ✅ Creating full legacy company');
+            logger.info('[API POST /api/companies] ✅ Creating full legacy company');
         }
 
         // Use Mongoose model to create the company with all default values
         const newCompany = new Company(newCompanyData);
         const savedCompany = await newCompany.save();
         
-        console.log('[API POST /api/companies] 🎉 Company added successfully:', savedCompany.companyName, 'ID:', savedCompany._id);
+        logger.info('[API POST /api/companies] 🎉 Company added successfully:', savedCompany.companyName, 'ID:', savedCompany._id);
         res.status(201).json(savedCompany);
     } catch (error) {
-        console.error('[API POST /api/companies] ❌ Error:', error.message, error.stack);
+        logger.error('[API POST /api/companies] ❌ Error:', error.message, error.stack);
         res.status(500).json({ message: `Error adding company: ${error.message}` });
     }
 });
@@ -256,7 +258,7 @@ router.post('/companies', async (req, res) => {
 // Security: Requires valid JWT but not admin role (changed Oct 16, 2025)
 router.get('/companies', authenticateJWT, async (req, res) => {
     try {
-        console.log('[API GET /api/companies] Authenticated user requesting all companies:', req.user.email);
+        logger.security('[API GET /api/companies] Authenticated user requesting all companies:', req.user.email);
         
         // 📊 PRODUCTION-GRADE: Fetch companies with optimized field projection
         // 🔒 CRITICAL: Exclude deleted companies from directory (only Data Center shows deleted)
@@ -296,8 +298,8 @@ router.get('/companies', authenticateJWT, async (req, res) => {
             // 🔒 SECURITY: Sensitive fields excluded (API keys, tokens, passwords, etc.)
         }).lean();
         
-        console.log(`[API GET /api/companies] Found ${companies.length} companies in database`);
-        console.log(`[API GET /api/companies] Returning ${companies.length} companies to user: ${req.user.email}`);
+        logger.security(`[API GET /api/companies] Found ${companies.length} companies in database`);
+        logger.security(`[API GET /api/companies] Returning ${companies.length} companies to user: ${req.user.email}`);
         
         res.json({
             success: true,
@@ -307,7 +309,7 @@ router.get('/companies', authenticateJWT, async (req, res) => {
         });
         
     } catch (err) {
-        console.error('[API GET /api/companies] Error:', err);
+        logger.error('[API GET /api/companies] Error:', err);
         res.status(500).json({ 
             message: 'Server error retrieving companies',
             error: err.message 
@@ -319,20 +321,20 @@ router.get('/companies', authenticateJWT, async (req, res) => {
 async function checkCompanyCache(req, res, next) {
     const { id } = req.params;
     const cacheKey = `company:${id}`;
-    console.log(`🔍 [CACHE] Checking cache for: ${cacheKey}`);
+    logger.debug(`🔍 [CACHE] Checking cache for: ${cacheKey}`);
     try {
         const cachedData = await redisClient.get(cacheKey);
         if (cachedData) {
-            console.log(`✅ [CACHE] CACHE HIT for ${cacheKey} - returning cached data`);
+            logger.debug(`✅ [CACHE] CACHE HIT for ${cacheKey} - returning cached data`);
             const data = JSON.parse(cachedData);
-            console.log(`📋 [CACHE] Cached data companyName: ${data.companyName}, businessPhone: ${data.businessPhone}`);
+            logger.debug(`📋 [CACHE] Cached data companyName: ${data.companyName}, businessPhone: ${data.businessPhone}`);
             return res.status(200).json(data);
         } 
-            console.log(`❌ [CACHE] CACHE MISS for ${cacheKey} - loading from DB`);
+            logger.debug(`❌ [CACHE] CACHE MISS for ${cacheKey} - loading from DB`);
             next();
         
     } catch (error) {
-        console.error('❌ [CACHE] Redis error:', error);
+        logger.error('❌ [CACHE] Redis error:', error);
         next();
     }
 }
@@ -343,22 +345,22 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
         return res.status(400).json({ message: 'Invalid company ID format' });
     }
     try {
-        console.log(`📊 [DB] Loading company from database: ${companyId}`);
+        logger.debug(`📊 [DB] Loading company from database: ${companyId}`);
         // Explicitly include aiAgentLogic field in the query
         const company = await Company.findById(companyId).lean();
         if (!company) {return res.status(404).json({ message: 'Company not found' });}
 
-        console.log(`✅ [DB] Company loaded: ${company.companyName}, businessPhone: ${company.businessPhone}`);
-        console.log(`📝 [DB] Notes in company document:`, company.notes?.length || 0, 'notes');
+        logger.debug(`✅ [DB] Company loaded: ${company.companyName}, businessPhone: ${company.businessPhone}`);
+        logger.debug(`📝 [DB] Notes in company document:`, company.notes?.length || 0, 'notes');
 
         const cacheKey = `company:${companyId}`;
         await redisClient.setEx(cacheKey, 3600, JSON.stringify(company));
-        console.log(`✅ [CACHE] SAVED to cache: ${cacheKey} (TTL: 3600s)`);
+        logger.debug(`✅ [CACHE] SAVED to cache: ${cacheKey} (TTL: 3600s)`);
         
         // Debug: Log if aiAgentLogic exists
-        console.log(`🔍 DEBUG: aiAgentLogic exists in response: ${Boolean(company.aiAgentLogic)}`);
+        logger.debug(`🔍 DEBUG: aiAgentLogic exists in response: ${Boolean(company.aiAgentLogic)}`);
         if (company.aiAgentLogic) {
-            console.log(`🔍 DEBUG: aiAgentLogic thresholds:`, company.aiAgentLogic.thresholds);
+            logger.debug(`🔍 DEBUG: aiAgentLogic thresholds:`, company.aiAgentLogic.thresholds);
         }
 
         if (company.aiSettings?.elevenLabs?.apiKey) {
@@ -366,7 +368,7 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
         }
         res.json(company);
     } catch (error) {
-        console.error('[API GET /api/company/:id] Error:', error);
+        logger.error('[API GET /api/company/:id] Error:', error);
         res.status(500).json({ message: 'Error fetching company details' });
     }
 });
@@ -374,7 +376,7 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
 // Delete a company completely from the database
 router.delete('/company/:id', async (req, res) => {
     const companyId = req.params.id;
-    console.log(`[API DELETE /api/company/:id] Deleting company with ID: ${companyId}`);
+    logger.info(`[API DELETE /api/company/:id] Deleting company with ID: ${companyId}`);
     
     if (!ObjectId.isValid(companyId)) {
         return res.status(400).json({ message: 'Invalid company ID format' });
@@ -388,7 +390,7 @@ router.delete('/company/:id', async (req, res) => {
         }
         
         const companyName = company.companyName || company.name || 'Unknown Company';
-        console.log(`[API DELETE /api/company/:id] Found company to delete: ${companyName}`);
+        logger.info(`[API DELETE /api/company/:id] Found company to delete: ${companyName}`);
         
         // Delete the company from the database
         const deleteResult = await Company.findByIdAndDelete(companyId);
@@ -421,13 +423,13 @@ router.delete('/company/:id', async (req, res) => {
             for (const key of cacheKeys) {
                 if (key && !key.includes('undefined')) {
                     await redisClient.del(key);
-                    console.log(`[API DELETE /api/company/:id] 🗑️ Cleared cache: ${key}`);
+                    logger.debug(`[API DELETE /api/company/:id] 🗑️ Cleared cache: ${key}`);
                 }
             }
             
-            console.log(`[API DELETE /api/company/:id] ✅ Cleared ${cacheKeys.length} cache keys`);
+            logger.debug(`[API DELETE /api/company/:id] ✅ Cleared ${cacheKeys.length} cache keys`);
         } catch (cacheError) {
-            console.warn(`[API DELETE /api/company/:id] ⚠️ Failed to clear cache:`, cacheError.message);
+            logger.warn(`[API DELETE /api/company/:id] ⚠️ Failed to clear cache:`, cacheError.message);
             // Don't fail the request if cache clearing fails
         }
         
@@ -436,25 +438,25 @@ router.delete('/company/:id', async (req, res) => {
             // Delete Company Q&A categories and entries
             const CompanyQnACategory = require('../models/CompanyQnACategory');
             const deletedQnA = await CompanyQnACategory.deleteMany({ companyId });
-            console.log(`[API DELETE /api/company/:id] 🗑️ Deleted ${deletedQnA.deletedCount} Q&A categories`);
+            logger.info(`[API DELETE /api/company/:id] 🗑️ Deleted ${deletedQnA.deletedCount} Q&A categories`);
             
             // Delete Instant Response categories
             const InstantResponseCategory = require('../models/InstantResponseCategory');
             const deletedIR = await InstantResponseCategory.deleteMany({ companyId });
-            console.log(`[API DELETE /api/company/:id] 🗑️ Deleted ${deletedIR.deletedCount} Instant Response categories`);
+            logger.info(`[API DELETE /api/company/:id] 🗑️ Deleted ${deletedIR.deletedCount} Instant Response categories`);
             
             // Delete call logs (if you have a call log model)
             // const CallLog = require('../models/v2AIAgentCallLog');
             // const deletedLogs = await CallLog.deleteMany({ companyId: companyId });
-            // console.log(`[API DELETE /api/company/:id] 🗑️ Deleted ${deletedLogs.deletedCount} call logs`);
+            // logger.info(`[API DELETE /api/company/:id] 🗑️ Deleted ${deletedLogs.deletedCount} call logs`);
             
-            console.log(`[API DELETE /api/company/:id] ✅ Deleted all related documents`);
+            logger.info(`[API DELETE /api/company/:id] ✅ Deleted all related documents`);
         } catch (relatedDataError) {
-            console.warn(`[API DELETE /api/company/:id] ⚠️ Failed to delete related data:`, relatedDataError.message);
+            logger.warn(`[API DELETE /api/company/:id] ⚠️ Failed to delete related data:`, relatedDataError.message);
             // Don't fail the request if related data deletion fails
         }
         
-        console.log(`[API DELETE /api/company/:id] Successfully deleted company: ${companyName} (ID: ${companyId})`);
+        logger.info(`[API DELETE /api/company/:id] Successfully deleted company: ${companyName} (ID: ${companyId})`);
         
         res.json({ 
             success: true,
@@ -464,7 +466,7 @@ router.delete('/company/:id', async (req, res) => {
         });
         
     } catch (error) {
-        console.error(`[API DELETE /api/company/:id] Error deleting company ${companyId}:`, error.message, error.stack);
+        logger.error(`[API DELETE /api/company/:id] Error deleting company ${companyId}:`, error.message, error.stack);
         res.status(500).json({ 
             message: `Error deleting company: ${error.message}`,
             error: process.env.NODE_ENV === 'development' ? error.stack : undefined
@@ -473,15 +475,15 @@ router.delete('/company/:id', async (req, res) => {
 });
 
 router.patch('/company/:id', async (req, res) => {
-    console.log(`[API PATCH /api/company/:id] (Overview) Received update for ID: ${req.params.id} with data:`, JSON.stringify(req.body, null, 2));
+    logger.debug(`[API PATCH /api/company/:id] (Overview) Received update for ID: ${req.params.id} with data:`, JSON.stringify(req.body, null, 2));
     
     // GOLD STANDARD: Debug notes data specifically
     if (req.body.notes) {
-        console.log('📝 [NOTES DEBUG] Notes field received:', req.body.notes);
-        console.log('📝 [NOTES DEBUG] Notes is array:', Array.isArray(req.body.notes));
-        console.log('📝 [NOTES DEBUG] Notes length:', req.body.notes.length);
+        logger.debug('📝 [NOTES DEBUG] Notes field received:', req.body.notes);
+        logger.debug('📝 [NOTES DEBUG] Notes is array:', Array.isArray(req.body.notes));
+        logger.debug('📝 [NOTES DEBUG] Notes length:', req.body.notes.length);
     } else {
-        console.log('📝 [NOTES DEBUG] No notes field in request body');
+        logger.debug('📝 [NOTES DEBUG] No notes field in request body');
     }
     
     const companyId = req.params.id;
@@ -523,7 +525,7 @@ router.patch('/company/:id', async (req, res) => {
                         // 🎯 V2: Save to both legacy and new fields for compatibility
                         updateOperation.tradeTypes = updates[key];      // Legacy field
                         updateOperation.tradeCategories = updates[key]; // V2 field
-                        console.log(`💾 [TRADE CATEGORIES] Saving to both fields:`, updates[key]);
+                        logger.info(`💾 [TRADE CATEGORIES] Saving to both fields:`, updates[key]);
                     } else if (updates[key]) {
                         updateOperation.tradeTypes = [updates[key]];
                         updateOperation.tradeCategories = [updates[key]];
@@ -539,8 +541,8 @@ router.patch('/company/:id', async (req, res) => {
                     updateOperation[key] = updates[key];
                 } else if (key === 'notes' && Array.isArray(updates[key])) {
                     // GOLD STANDARD: Handle notes array properly
-                    console.log('📝 [NOTES DEBUG] Processing notes array for save:', updates[key].length, 'notes');
-                    console.log('📝 [NOTES DEBUG] First note:', updates[key][0]);
+                    logger.debug('📝 [NOTES DEBUG] Processing notes array for save:', updates[key].length, 'notes');
+                    logger.debug('📝 [NOTES DEBUG] First note:', updates[key][0]);
                     updateOperation[key] = updates[key];
                 }
                 else {
@@ -567,7 +569,7 @@ router.patch('/company/:id', async (req, res) => {
 
         // GOLD STANDARD: Debug notes after save
         if (updatedCompany.notes) {
-            console.log('📝 [NOTES DEBUG] Notes after save:', updatedCompany.notes.length, 'notes saved');
+            logger.debug('📝 [NOTES DEBUG] Notes after save:', updatedCompany.notes.length, 'notes saved');
         }
 
         // Clear cache using CacheHelper
@@ -577,12 +579,12 @@ router.patch('/company/:id', async (req, res) => {
         if (req.body.aiAgentLogic) {
             const aiLoader = require('../src/config/aiLoader');
             await aiLoader.invalidate(companyId);
-            console.log(`⚡ AI Agent Logic cache invalidated for company: ${companyId}`);
+            logger.debug(`⚡ AI Agent Logic cache invalidated for company: ${companyId}`);
         }
 
         res.json(updatedCompany);
     } catch (error) {
-        console.error(`[API PATCH /api/company/:id] (Overview) Error updating company ${companyId}:`, error.message, error.stack);
+        logger.error(`[API PATCH /api/company/:id] (Overview) Error updating company ${companyId}:`, error.message, error.stack);
         res.status(500).json({ message: `Error updating company: ${error.message}` });
     }
 });
@@ -592,7 +594,7 @@ router.patch('/company/:companyId/account-status', async (req, res) => {
     const { companyId } = req.params;
     const { status, callForwardNumber, callForwardMessage, suspendedMessage, reason, notes } = req.body;
     
-    console.log(`[API PATCH /company/${companyId}/account-status] Status change request:`, { status, callForwardNumber, callForwardMessage, reason });
+    logger.info(`[API PATCH /company/${companyId}/account-status] Status change request:`, { status, callForwardNumber, callForwardMessage, reason });
     
     if (!ObjectId.isValid(companyId)) {
         return res.status(400).json({ success: false, message: 'Invalid company ID format' });
@@ -672,14 +674,14 @@ router.patch('/company/:companyId/account-status', async (req, res) => {
         // Clear cache using CacheHelper
         await CacheHelper.clearCompanyCache(companyId);
         
-        console.log(`🚨 Account status changed for company ${company.companyName} (${companyId}): ${status}`);
-        console.log(`   Changed by: ${changedBy} at ${historyEntry.changedAt}`);
-        console.log(`   Reason: ${reason || 'Not specified'}`);
+        logger.debug(`🚨 Account status changed for company ${company.companyName} (${companyId}): ${status}`);
+        logger.debug(`   Changed by: ${changedBy} at ${historyEntry.changedAt}`);
+        logger.debug(`   Reason: ${reason || 'Not specified'}`);
         if (status === 'call_forward') {
-            console.log(`   Forward to: ${callForwardNumber}`);
-            console.log(`   Forward message: "${callForwardMessage || '(none - silent forward)'}"`);
+            logger.info(`   Forward to: ${callForwardNumber}`);
+            logger.info(`   Forward message: "${callForwardMessage || '(none - silent forward)'}"`);
         }
-        console.log(`   📝 Saved accountStatus object:`, JSON.stringify(company.accountStatus, null, 2));
+        logger.info(`   📝 Saved accountStatus object:`, JSON.stringify(company.accountStatus, null, 2));
         
         res.json({ 
             success: true, 
@@ -688,7 +690,7 @@ router.patch('/company/:companyId/account-status', async (req, res) => {
         });
         
     } catch (error) {
-        console.error(`[API PATCH /company/${companyId}/account-status] Error:`, error.message, error.stack);
+        logger.error(`[API PATCH /company/${companyId}/account-status] Error:`, error.message, error.stack);
         res.status(500).json({ 
             success: false, 
             message: `Error updating account status: ${error.message}` 
@@ -701,7 +703,7 @@ router.delete('/company/:companyId/account-status/history/:index', authenticateJ
     const { companyId, index } = req.params;
     const historyIndex = parseInt(index, 10);
     
-    console.log(`[API DELETE /company/${companyId}/account-status/history/${index}] Delete request`);
+    logger.security(`[API DELETE /company/${companyId}/account-status/history/${index}] Delete request`);
     
     if (!ObjectId.isValid(companyId)) {
         return res.status(400).json({ success: false, message: 'Invalid company ID format' });
@@ -749,10 +751,10 @@ router.delete('/company/:companyId/account-status/history/:index', authenticateJ
         
         for (const key of cacheKeys) {
             await redisClient.del(key);
-            console.log(`🗑️ Cleared cache: ${key}`);
+            logger.debug(`🗑️ Cleared cache: ${key}`);
         }
         
-        console.log(`✅ Deleted status history entry at index ${historyIndex} for company ${companyId}`);
+        logger.debug(`✅ Deleted status history entry at index ${historyIndex} for company ${companyId}`);
         
         res.json({ 
             success: true, 
@@ -760,7 +762,7 @@ router.delete('/company/:companyId/account-status/history/:index', authenticateJ
             remainingEntries: company.accountStatus.history.length
         });
     } catch (error) {
-        console.error(`[API DELETE /company/${companyId}/account-status/history/${index}] Error:`, error.message, error.stack);
+        logger.error(`[API DELETE /company/${companyId}/account-status/history/${index}] Error:`, error.message, error.stack);
         res.status(500).json({ 
             success: false, 
             message: `Error deleting history entry: ${error.message}` 
@@ -802,11 +804,11 @@ router.patch('/company/:companyId/configuration', async (req, res) => {
 
         const cacheKey = `company:${companyId}`;
         await redisClient.del(cacheKey);
-        console.log(`DELETED from cache: ${cacheKey}`);
+        logger.debug(`DELETED from cache: ${cacheKey}`);
 
         res.json(updatedCompany);
     } catch (error) {
-        console.error(`[API PATCH /api/company/${companyId}/configuration] Error:`, error.message, error.stack);
+        logger.error(`[API PATCH /api/company/${companyId}/configuration] Error:`, error.message, error.stack);
         res.status(500).json({ message: `Error updating configuration: ${error.message}` });
     }
 });
@@ -838,11 +840,11 @@ router.patch('/company/:companyId/integrations', async (req, res) => {
 
         const cacheKey = `company:${companyId}`;
         await redisClient.del(cacheKey);
-        console.log(`DELETED from cache: ${cacheKey}`);
+        logger.debug(`DELETED from cache: ${cacheKey}`);
 
         res.json(updatedCompany);
     } catch (error) {
-        console.error(`[API PATCH /api/company/${companyId}/integrations] Error:`, error.message, error.stack);
+        logger.error(`[API PATCH /api/company/${companyId}/integrations] Error:`, error.message, error.stack);
         res.status(500).json({ message: `Error updating integrations: ${error.message}` });
     }
 });
@@ -910,11 +912,11 @@ router.patch('/company/:companyId/aisettings', async (req, res) => {
 
         const cacheKey = `company:${companyId}`;
         await redisClient.del(cacheKey);
-        console.log(`DELETED from cache: ${cacheKey}`);
+        logger.debug(`DELETED from cache: ${cacheKey}`);
 
         res.json(updatedCompany);
     } catch (error) {
-        console.error(`[API PATCH /api/company/${companyId}/aisettings] Error:`, error.message, error.stack);
+        logger.error(`[API PATCH /api/company/${companyId}/aisettings] Error:`, error.message, error.stack);
         res.status(500).json({ message: `Error updating AI settings: ${error.message}` });
     }
 });
@@ -924,7 +926,7 @@ router.patch('/company/:companyId/voice-settings', async (req, res) => {
     const { companyId } = req.params;
     const settings = req.body;
     
-    console.log('[Voice Settings Debug] Received settings:', settings);
+    logger.debug('[Voice Settings Debug] Received settings:', settings);
     
     if (!ObjectId.isValid(companyId)) {
         return res.status(400).json({ message: 'Invalid company ID format' });
@@ -958,7 +960,7 @@ router.patch('/company/:companyId/voice-settings', async (req, res) => {
         
         voiceSettingsFields.forEach(field => {
             if (field in settings) {
-                console.log(`[Voice Settings Debug] Setting ${field} to:`, settings[field], `(type: ${typeof settings[field]})`);
+                logger.debug(`[Voice Settings Debug] Setting ${field} to:`, settings[field], `(type: ${typeof settings[field]})`);
                 company.aiSettings[field] = settings[field];
             }
         });
@@ -997,20 +999,20 @@ router.patch('/company/:companyId/voice-settings', async (req, res) => {
         // Clear cache to ensure Twilio gets fresh data
         const cacheKey = `company:${companyId}`;
         await redisClient.del(cacheKey);
-        console.log(`[Voice Settings] Cleared cache for key: ${cacheKey}`);
+        logger.debug(`[Voice Settings] Cleared cache for key: ${cacheKey}`);
         
         // ALSO clear phone-based cache used by Twilio
         if (company.twilioConfig?.phoneNumber) {
           const phoneCacheKey = `company-phone:${company.twilioConfig.phoneNumber}`;
           await redisClient.del(phoneCacheKey);
-          console.log(`[Voice Settings] Cleared phone cache for key: ${phoneCacheKey}`);
+          logger.debug(`[Voice Settings] Cleared phone cache for key: ${phoneCacheKey}`);
         }
         
-        console.log(`[API PATCH /api/company/${companyId}/voice-settings] Voice settings updated successfully`);
+        logger.debug(`[API PATCH /api/company/${companyId}/voice-settings] Voice settings updated successfully`);
         res.json({ message: 'Voice settings updated successfully', aiSettings: company.aiSettings });
         
     } catch (error) {
-        console.error(`[API PATCH /api/company/${companyId}/voice-settings] Error:`, error.message, error.stack);
+        logger.error(`[API PATCH /api/company/${companyId}/voice-settings] Error:`, error.message, error.stack);
         res.status(500).json({ message: `Error updating voice settings: ${error.message}` });
     }
 });
@@ -1023,7 +1025,7 @@ router.patch('/company/:companyId/profile', authenticateJWT, async (req, res) =>
     const { companyId } = req.params;
     const updateData = req.body;
 
-    console.log(`[API PATCH /api/company/${companyId}/profile] Received data:`, JSON.stringify(updateData, null, 2));
+    logger.security(`[API PATCH /api/company/${companyId}/profile] Received data:`, JSON.stringify(updateData, null, 2));
 
     if (!ObjectId.isValid(companyId)) {
         return res.status(400).json({ message: 'Invalid company ID format' });
@@ -1047,7 +1049,7 @@ router.patch('/company/:companyId/profile', authenticateJWT, async (req, res) =>
         // Always update lastUpdated
         updateFields['aiAgentLogic.lastUpdated'] = new Date();
 
-        console.log(`[Profile Update] Updating fields:`, updateFields);
+        logger.info(`[Profile Update] Updating fields:`, updateFields);
 
         const result = await Company.findByIdAndUpdate(
             companyId,
@@ -1063,20 +1065,20 @@ router.patch('/company/:companyId/profile', authenticateJWT, async (req, res) =>
         try {
             if (redisClient && redisClient.isReady) {
                 await redisClient.del(`company:${companyId}`);
-                console.log(`🗑️ Cache cleared for company ${companyId} after profile update`);
+                logger.debug(`🗑️ Cache cleared for company ${companyId} after profile update`);
             }
         } catch (cacheError) {
-            console.warn('⚠️ Cache clear failed after profile update:', cacheError.message);
+            logger.warn('⚠️ Cache clear failed after profile update:', cacheError.message);
         }
 
-        console.log(`✅ Company profile updated successfully for ${companyId}`);
+        logger.debug(`✅ Company profile updated successfully for ${companyId}`);
         res.json({ 
             message: 'Company profile updated successfully', 
             data: result 
         });
 
     } catch (error) {
-        console.error(`❌ Error updating company profile for ${companyId}:`, error);
+        logger.error(`❌ Error updating company profile for ${companyId}:`, error);
         res.status(500).json({ 
             message: 'Failed to update company profile', 
             error: error.message 
@@ -1088,7 +1090,7 @@ router.patch('/company/:companyId/agentsetup', async (req, res) => {
     const { companyId } = req.params;
     const { agentSetup, tradeTypes, timezone } = req.body;
 
-    console.log(`[API PATCH /api/company/${companyId}/agentsetup] Received data:`, JSON.stringify(req.body, null, 2));
+    logger.info(`[API PATCH /api/company/${companyId}/agentsetup] Received data:`, JSON.stringify(req.body, null, 2));
 
     const db = getDB();
     if (!db) {return res.status(500).json({ message: 'Database not connected' });}
@@ -1148,16 +1150,16 @@ router.patch('/company/:companyId/agentsetup', async (req, res) => {
 
         if (result.matchedCount === 0) {return res.status(404).json({ message: 'Company not found (during update)' });}
 
-        console.log(`[API PATCH /api/company/${companyId}/agentsetup] Agent Setup updated. Matched: ${result.matchedCount}, Modified: ${result.modifiedCount}`);
+        logger.debug(`[API PATCH /api/company/${companyId}/agentsetup] Agent Setup updated. Matched: ${result.matchedCount}, Modified: ${result.modifiedCount}`);
         const updatedCompany = await companiesCollection.findOne({ _id: new ObjectId(companyId) });
 
         const cacheKey = `company:${companyId}`;
         await redisClient.del(cacheKey);
-        console.log(`DELETED from cache: ${cacheKey}`);
+        logger.debug(`DELETED from cache: ${cacheKey}`);
 
         res.json(updatedCompany);
     } catch (error) {
-        console.error(`[API PATCH /api/company/${companyId}/agentsetup] Error updating agent setup:`, error.message, error.stack);
+        logger.error(`[API PATCH /api/company/${companyId}/agentsetup] Error updating agent setup:`, error.message, error.stack);
         res.status(500).json({ message: `Error updating agent setup: ${error.message}` });
     }
 });
@@ -1187,10 +1189,10 @@ router.get('/companies/:companyId/booking-flow', apiLimiter, async (req, res) =>
             { prompt: "What email should we use for booking confirmations?", name: "email" }
         ];
         
-        console.log(`[API] Loaded booking flow for company ${companyId}:`, company.bookingFlow || 'using defaults');
+        logger.debug(`[API] Loaded booking flow for company ${companyId}:`, company.bookingFlow || 'using defaults');
         res.json(company.bookingFlow || defaultBookingFlow);
     } catch (error) {
-        console.error('[API Error] Error fetching booking flow:', error);
+        logger.error('[API Error] Error fetching booking flow:', error);
         res.status(500).json({ error: 'Failed to fetch booking flow configuration' });
     }
 });
@@ -1254,7 +1256,7 @@ router.post('/companies/:companyId/booking-flow', apiLimiter, async (req, res) =
             return res.status(404).json({ error: 'Company not found' });
         }
         
-        console.log(`[API] Updated booking flow for company ${companyId} with ${bookingFlowFields.length} fields`);
+        logger.info(`[API] Updated booking flow for company ${companyId} with ${bookingFlowFields.length} fields`);
         res.json({ 
             success: true, 
             message: 'Booking flow configuration saved successfully',
@@ -1262,7 +1264,7 @@ router.post('/companies/:companyId/booking-flow', apiLimiter, async (req, res) =
             bookingFlow: result.bookingFlow
         });
     } catch (error) {
-        console.error('[API Error] Error saving booking flow:', error);
+        logger.error('[API Error] Error saving booking flow:', error);
         res.status(500).json({ error: 'Failed to save booking flow configuration' });
     }
 });
@@ -1282,10 +1284,10 @@ router.get('/companies/:companyId/trade-categories', apiLimiter, async (req, res
             return res.status(404).json({ error: 'Company not found' });
         }
         
-        console.log(`[API] Loaded trade categories for company ${companyId}:`, company.tradeTypes);
+        logger.debug(`[API] Loaded trade categories for company ${companyId}:`, company.tradeTypes);
         res.json({ tradeCategories: company.tradeTypes || [] });
     } catch (error) {
-        console.error('[API Error] Error fetching company trade categories:', error);
+        logger.error('[API Error] Error fetching company trade categories:', error);
         res.status(500).json({ error: 'Failed to fetch company trade categories' });
     }
 });
@@ -1341,12 +1343,12 @@ router.post('/companies/:companyId/trade-categories', apiLimiter, async (req, re
         try {
             const cacheKey = `company:${companyId}`;
             await redisClient.del(cacheKey);
-            console.log(`[Trade Categories] Cleared cache: ${cacheKey}`);
+            logger.debug(`[Trade Categories] Cleared cache: ${cacheKey}`);
         } catch (redisError) {
-            console.warn('[Trade Categories] Redis cache clear failed:', redisError.message);
+            logger.warn('[Trade Categories] Redis cache clear failed:', redisError.message);
         }
         
-        console.log(`[API] Updated trade categories for company ${companyId}:`, cleanedCategories);
+        logger.debug(`[API] Updated trade categories for company ${companyId}:`, cleanedCategories);
         res.json({ 
             success: true, 
             message: 'Trade categories updated successfully',
@@ -1354,7 +1356,7 @@ router.post('/companies/:companyId/trade-categories', apiLimiter, async (req, re
             count: cleanedCategories.length
         });
     } catch (error) {
-        console.error('[API Error] Error saving company trade categories:', error);
+        logger.error('[API Error] Error saving company trade categories:', error);
         res.status(500).json({ error: 'Failed to save company trade categories' });
     }
 });
@@ -1419,7 +1421,7 @@ router.post('/:companyId/voice-settings', async (req, res) => {
         // Save company
         await company.save();
 
-        console.log(`✅ ElevenLabs voice settings saved for company ${companyId}`);
+        logger.info(`✅ ElevenLabs voice settings saved for company ${companyId}`);
 
         res.json({
             success: true,
@@ -1428,7 +1430,7 @@ router.post('/:companyId/voice-settings', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error saving voice settings:', error);
+        logger.error('❌ Error saving voice settings:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to save voice settings',
@@ -1466,7 +1468,7 @@ router.get('/:companyId/voice-settings', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error getting voice settings:', error);
+        logger.error('❌ Error getting voice settings:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to get voice settings',
@@ -1487,7 +1489,7 @@ router.get('/companies/:companyId/agent-priority-config', async (req, res) => {
     try {
         const { companyId } = req.params;
         
-        console.log(`[Agent Priority] 📥 Loading priority config for company: ${companyId}`);
+        logger.debug(`[Agent Priority] 📥 Loading priority config for company: ${companyId}`);
         
         const company = await Company.findById(companyId);
         if (!company) {
@@ -1528,7 +1530,7 @@ router.get('/companies/:companyId/agent-priority-config', async (req, res) => {
             ]
         };
         
-        console.log(`[Agent Priority] ✅ Priority config loaded successfully`);
+        logger.info(`[Agent Priority] ✅ Priority config loaded successfully`);
         
         res.json({
             success: true,
@@ -1536,7 +1538,7 @@ router.get('/companies/:companyId/agent-priority-config', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[Agent Priority] ❌ Error loading priority config:', error);
+        logger.error('[Agent Priority] ❌ Error loading priority config:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to load agent priority configuration',
@@ -1551,7 +1553,7 @@ router.post('/companies/:companyId/agent-priority-config', async (req, res) => {
         const { companyId } = req.params;
         const { processingFlow, enabled } = req.body;
         
-        console.log(`[Agent Priority] 💾 Saving priority config for company: ${companyId}`);
+        logger.debug(`[Agent Priority] 💾 Saving priority config for company: ${companyId}`);
         
         const company = await Company.findById(companyId);
         if (!company) {
@@ -1576,7 +1578,7 @@ router.post('/companies/:companyId/agent-priority-config', async (req, res) => {
             { new: true }
         );
         
-        console.log(`[Agent Priority] ✅ Priority config saved successfully`);
+        logger.info(`[Agent Priority] ✅ Priority config saved successfully`);
         
         res.json({
             success: true,
@@ -1585,7 +1587,7 @@ router.post('/companies/:companyId/agent-priority-config', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[Agent Priority] ❌ Error saving priority config:', error);
+        logger.error('[Agent Priority] ❌ Error saving priority config:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to save agent priority configuration',
@@ -1616,7 +1618,7 @@ router.post('/companies/:companyId/agent-priority-config', async (req, res) => {
 // Piggyback strategy: Add to existing deployed file to avoid 404 errors
 // Data already exists in v2Company.agentBrain.instantResponses & responseTemplates
 
-console.log('[INIT] 🚀 Loading V3 AI Response System routes (Instant Responses + Templates)...');
+logger.security('[INIT] 🚀 Loading V3 AI Response System routes (Instant Responses + Templates)...');
 
 // ⚡ GET INSTANT RESPONSES
 router.get('/company/:companyId/instant-responses', authenticateJWT, async (req, res) => {
@@ -1624,14 +1626,14 @@ router.get('/company/:companyId/instant-responses', authenticateJWT, async (req,
     const { companyId } = req.params;
     
     try {
-        console.log(`[IR-GET-1] Loading instant responses for company: ${companyId}`);
+        logger.security(`[IR-GET-1] Loading instant responses for company: ${companyId}`);
         
         const company = await Company.findById(companyId)
             .select('agentBrain.instantResponses')
             .lean();
         
         if (!company) {
-            console.log(`[IR-GET-2] ❌ Company not found: ${companyId}`);
+            logger.info(`[IR-GET-2] ❌ Company not found: ${companyId}`);
             return res.status(404).json({ 
                 success: false, 
                 message: 'Company not found' 
@@ -1639,7 +1641,7 @@ router.get('/company/:companyId/instant-responses', authenticateJWT, async (req,
         }
         
         const instantResponses = company.agentBrain?.instantResponses || [];
-        console.log(`[IR-GET-3] ✅ Loaded ${instantResponses.length} instant responses`);
+        logger.info(`[IR-GET-3] ✅ Loaded ${instantResponses.length} instant responses`);
         
         res.json({
             success: true,
@@ -1648,7 +1650,7 @@ router.get('/company/:companyId/instant-responses', authenticateJWT, async (req,
         });
         
     } catch (error) {
-        console.error('[IR-GET-ERROR] Error loading instant responses:', error);
+        logger.error('[IR-GET-ERROR] Error loading instant responses:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Failed to load instant responses',
@@ -1664,8 +1666,8 @@ router.post('/company/:companyId/instant-responses', authenticateJWT, async (req
     const { trigger, response, category, priority } = req.body;
     
     try {
-        console.log(`[IR-POST-1] Creating instant response for company: ${companyId}`);
-        console.log(`[IR-POST-2] Data:`, { trigger, category, priority });
+        logger.debug(`[IR-POST-1] Creating instant response for company: ${companyId}`);
+        logger.info(`[IR-POST-2] Data:`, { trigger, category, priority });
         
         // Validation
         if (!trigger || !Array.isArray(trigger) || trigger.length === 0) {
@@ -1683,7 +1685,7 @@ router.post('/company/:companyId/instant-responses', authenticateJWT, async (req
         
         const company = await Company.findById(companyId);
         if (!company) {
-            console.log(`[IR-POST-3] ❌ Company not found: ${companyId}`);
+            logger.info(`[IR-POST-3] ❌ Company not found: ${companyId}`);
             return res.status(404).json({ 
                 success: false, 
                 message: 'Company not found' 
@@ -1718,12 +1720,12 @@ router.post('/company/:companyId/instant-responses', authenticateJWT, async (req
         // Clear cache
         try {
             await redisClient.del(`company:${companyId}`);
-            console.log(`[IR-POST-4] ✅ Cache cleared for company: ${companyId}`);
+            logger.debug(`[IR-POST-4] ✅ Cache cleared for company: ${companyId}`);
         } catch (cacheError) {
-            console.warn(`[IR-POST-5] ⚠️  Cache clear failed:`, cacheError.message);
+            logger.warn(`[IR-POST-5] ⚠️  Cache clear failed:`, cacheError.message);
         }
         
-        console.log(`[IR-POST-6] ✅ Instant response created: ${newInstantResponse.id}`);
+        logger.debug(`[IR-POST-6] ✅ Instant response created: ${newInstantResponse.id}`);
         
         res.json({
             success: true,
@@ -1733,7 +1735,7 @@ router.post('/company/:companyId/instant-responses', authenticateJWT, async (req
         });
         
     } catch (error) {
-        console.error('[IR-POST-ERROR] Error creating instant response:', error);
+        logger.error('[IR-POST-ERROR] Error creating instant response:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Failed to create instant response',
@@ -1749,7 +1751,7 @@ router.put('/company/:companyId/instant-responses/:responseId', authenticateJWT,
     const { trigger, response, category, priority, enabled } = req.body;
     
     try {
-        console.log(`[IR-PUT-1] Updating instant response: ${responseId}`);
+        logger.debug(`[IR-PUT-1] Updating instant response: ${responseId}`);
         
         const company = await Company.findById(companyId);
         if (!company) {
@@ -1761,7 +1763,7 @@ router.put('/company/:companyId/instant-responses/:responseId', authenticateJWT,
         
         const instantResponse = company.agentBrain?.instantResponses?.find(ir => ir.id === responseId);
         if (!instantResponse) {
-            console.log(`[IR-PUT-2] ❌ Instant response not found: ${responseId}`);
+            logger.info(`[IR-PUT-2] ❌ Instant response not found: ${responseId}`);
             return res.status(404).json({ 
                 success: false, 
                 message: 'Instant response not found' 
@@ -1783,10 +1785,10 @@ router.put('/company/:companyId/instant-responses/:responseId', authenticateJWT,
         try {
             await redisClient.del(`company:${companyId}`);
         } catch (cacheError) {
-            console.warn(`[IR-PUT-3] ⚠️  Cache clear failed:`, cacheError.message);
+            logger.warn(`[IR-PUT-3] ⚠️  Cache clear failed:`, cacheError.message);
         }
         
-        console.log(`[IR-PUT-4] ✅ Instant response updated: ${responseId}`);
+        logger.debug(`[IR-PUT-4] ✅ Instant response updated: ${responseId}`);
         
         res.json({
             success: true,
@@ -1796,7 +1798,7 @@ router.put('/company/:companyId/instant-responses/:responseId', authenticateJWT,
         });
         
     } catch (error) {
-        console.error('[IR-PUT-ERROR] Error updating instant response:', error);
+        logger.error('[IR-PUT-ERROR] Error updating instant response:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Failed to update instant response',
@@ -1811,7 +1813,7 @@ router.delete('/company/:companyId/instant-responses/:responseId', authenticateJ
     const { companyId, responseId } = req.params;
     
     try {
-        console.log(`[IR-DELETE-1] Deleting instant response: ${responseId}`);
+        logger.security(`[IR-DELETE-1] Deleting instant response: ${responseId}`);
         
         const company = await Company.findById(companyId);
         if (!company) {
@@ -1836,7 +1838,7 @@ router.delete('/company/:companyId/instant-responses/:responseId', authenticateJ
         const finalLength = company.agentBrain.instantResponses.length;
         
         if (initialLength === finalLength) {
-            console.log(`[IR-DELETE-2] ❌ Instant response not found: ${responseId}`);
+            logger.debug(`[IR-DELETE-2] ❌ Instant response not found: ${responseId}`);
             return res.status(404).json({ 
                 success: false, 
                 message: 'Instant response not found' 
@@ -1850,10 +1852,10 @@ router.delete('/company/:companyId/instant-responses/:responseId', authenticateJ
         try {
             await redisClient.del(`company:${companyId}`);
         } catch (cacheError) {
-            console.warn(`[IR-DELETE-3] ⚠️  Cache clear failed:`, cacheError.message);
+            logger.warn(`[IR-DELETE-3] ⚠️  Cache clear failed:`, cacheError.message);
         }
         
-        console.log(`[IR-DELETE-4] ✅ Instant response deleted: ${responseId}`);
+        logger.debug(`[IR-DELETE-4] ✅ Instant response deleted: ${responseId}`);
         
         res.json({
             success: true,
@@ -1862,7 +1864,7 @@ router.delete('/company/:companyId/instant-responses/:responseId', authenticateJ
         });
         
     } catch (error) {
-        console.error('[IR-DELETE-ERROR] Error deleting instant response:', error);
+        logger.error('[IR-DELETE-ERROR] Error deleting instant response:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Failed to delete instant response',
@@ -1877,14 +1879,14 @@ router.get('/company/:companyId/response-templates', authenticateJWT, async (req
     const { companyId } = req.params;
     
     try {
-        console.log(`[RT-GET-1] Loading response templates for company: ${companyId}`);
+        logger.security(`[RT-GET-1] Loading response templates for company: ${companyId}`);
         
         const company = await Company.findById(companyId)
             .select('agentBrain.responseTemplates')
             .lean();
         
         if (!company) {
-            console.log(`[RT-GET-2] ❌ Company not found: ${companyId}`);
+            logger.info(`[RT-GET-2] ❌ Company not found: ${companyId}`);
             return res.status(404).json({ 
                 success: false, 
                 message: 'Company not found' 
@@ -1892,7 +1894,7 @@ router.get('/company/:companyId/response-templates', authenticateJWT, async (req
         }
         
         const responseTemplates = company.agentBrain?.responseTemplates || [];
-        console.log(`[RT-GET-3] ✅ Loaded ${responseTemplates.length} response templates`);
+        logger.info(`[RT-GET-3] ✅ Loaded ${responseTemplates.length} response templates`);
         
         res.json({
             success: true,
@@ -1901,7 +1903,7 @@ router.get('/company/:companyId/response-templates', authenticateJWT, async (req
         });
         
     } catch (error) {
-        console.error('[RT-GET-ERROR] Error loading response templates:', error);
+        logger.error('[RT-GET-ERROR] Error loading response templates:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Failed to load response templates',
@@ -1917,8 +1919,8 @@ router.post('/company/:companyId/response-templates', authenticateJWT, async (re
     const { name, template, category, keywords, confidence } = req.body;
     
     try {
-        console.log(`[RT-POST-1] Creating response template for company: ${companyId}`);
-        console.log(`[RT-POST-2] Data:`, { name, category, confidence });
+        logger.debug(`[RT-POST-1] Creating response template for company: ${companyId}`);
+        logger.info(`[RT-POST-2] Data:`, { name, category, confidence });
         
         // Validation
         if (!name || name.trim().length === 0) {
@@ -1942,7 +1944,7 @@ router.post('/company/:companyId/response-templates', authenticateJWT, async (re
         
         const company = await Company.findById(companyId);
         if (!company) {
-            console.log(`[RT-POST-3] ❌ Company not found: ${companyId}`);
+            logger.info(`[RT-POST-3] ❌ Company not found: ${companyId}`);
             return res.status(404).json({ 
                 success: false, 
                 message: 'Company not found' 
@@ -1979,12 +1981,12 @@ router.post('/company/:companyId/response-templates', authenticateJWT, async (re
         // Clear cache
         try {
             await redisClient.del(`company:${companyId}`);
-            console.log(`[RT-POST-4] ✅ Cache cleared for company: ${companyId}`);
+            logger.debug(`[RT-POST-4] ✅ Cache cleared for company: ${companyId}`);
         } catch (cacheError) {
-            console.warn(`[RT-POST-5] ⚠️  Cache clear failed:`, cacheError.message);
+            logger.warn(`[RT-POST-5] ⚠️  Cache clear failed:`, cacheError.message);
         }
         
-        console.log(`[RT-POST-6] ✅ Response template created: ${newTemplate.id}`);
+        logger.debug(`[RT-POST-6] ✅ Response template created: ${newTemplate.id}`);
         
         res.json({
             success: true,
@@ -1994,7 +1996,7 @@ router.post('/company/:companyId/response-templates', authenticateJWT, async (re
         });
         
     } catch (error) {
-        console.error('[RT-POST-ERROR] Error creating response template:', error);
+        logger.error('[RT-POST-ERROR] Error creating response template:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Failed to create response template',
@@ -2010,7 +2012,7 @@ router.put('/company/:companyId/response-templates/:templateId', authenticateJWT
     const { name, template, category, keywords, confidence, enabled } = req.body;
     
     try {
-        console.log(`[RT-PUT-1] Updating response template: ${templateId}`);
+        logger.debug(`[RT-PUT-1] Updating response template: ${templateId}`);
         
         const company = await Company.findById(companyId);
         if (!company) {
@@ -2022,7 +2024,7 @@ router.put('/company/:companyId/response-templates/:templateId', authenticateJWT
         
         const responseTemplate = company.agentBrain?.responseTemplates?.find(rt => rt.id === templateId);
         if (!responseTemplate) {
-            console.log(`[RT-PUT-2] ❌ Response template not found: ${templateId}`);
+            logger.info(`[RT-PUT-2] ❌ Response template not found: ${templateId}`);
             return res.status(404).json({ 
                 success: false, 
                 message: 'Response template not found' 
@@ -2045,10 +2047,10 @@ router.put('/company/:companyId/response-templates/:templateId', authenticateJWT
         try {
             await redisClient.del(`company:${companyId}`);
         } catch (cacheError) {
-            console.warn(`[RT-PUT-3] ⚠️  Cache clear failed:`, cacheError.message);
+            logger.warn(`[RT-PUT-3] ⚠️  Cache clear failed:`, cacheError.message);
         }
         
-        console.log(`[RT-PUT-4] ✅ Response template updated: ${templateId}`);
+        logger.debug(`[RT-PUT-4] ✅ Response template updated: ${templateId}`);
         
         res.json({
             success: true,
@@ -2058,7 +2060,7 @@ router.put('/company/:companyId/response-templates/:templateId', authenticateJWT
         });
         
     } catch (error) {
-        console.error('[RT-PUT-ERROR] Error updating response template:', error);
+        logger.error('[RT-PUT-ERROR] Error updating response template:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Failed to update response template',
@@ -2073,7 +2075,7 @@ router.delete('/company/:companyId/response-templates/:templateId', authenticate
     const { companyId, templateId } = req.params;
     
     try {
-        console.log(`[RT-DELETE-1] Deleting response template: ${templateId}`);
+        logger.security(`[RT-DELETE-1] Deleting response template: ${templateId}`);
         
         const company = await Company.findById(companyId);
         if (!company) {
@@ -2098,7 +2100,7 @@ router.delete('/company/:companyId/response-templates/:templateId', authenticate
         const finalLength = company.agentBrain.responseTemplates.length;
         
         if (initialLength === finalLength) {
-            console.log(`[RT-DELETE-2] ❌ Response template not found: ${templateId}`);
+            logger.debug(`[RT-DELETE-2] ❌ Response template not found: ${templateId}`);
             return res.status(404).json({ 
                 success: false, 
                 message: 'Response template not found' 
@@ -2112,10 +2114,10 @@ router.delete('/company/:companyId/response-templates/:templateId', authenticate
         try {
             await redisClient.del(`company:${companyId}`);
         } catch (cacheError) {
-            console.warn(`[RT-DELETE-3] ⚠️  Cache clear failed:`, cacheError.message);
+            logger.warn(`[RT-DELETE-3] ⚠️  Cache clear failed:`, cacheError.message);
         }
         
-        console.log(`[RT-DELETE-4] ✅ Response template deleted: ${templateId}`);
+        logger.debug(`[RT-DELETE-4] ✅ Response template deleted: ${templateId}`);
         
         res.json({
             success: true,
@@ -2124,7 +2126,7 @@ router.delete('/company/:companyId/response-templates/:templateId', authenticate
         });
         
     } catch (error) {
-        console.error('[RT-DELETE-ERROR] Error deleting response template:', error);
+        logger.error('[RT-DELETE-ERROR] Error deleting response template:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Failed to delete response template',
@@ -2133,6 +2135,6 @@ router.delete('/company/:companyId/response-templates/:templateId', authenticate
     }
 });
 
-console.log('[INIT] ✅ V3 AI Response System routes added (Instant Responses + Templates piggybacked!)');
+logger.debug('[INIT] ✅ V3 AI Response System routes added (Instant Responses + Templates piggybacked!)');
 
 module.exports = router;

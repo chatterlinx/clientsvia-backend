@@ -3,6 +3,8 @@
 // Spartan Coder - Gold Standard Implementation
 
 const twilio = require('twilio');
+const logger = require('../utils/logger.js');
+
 const { createTwilioClient, getPrimaryPhoneNumber } = require('../utils/twilioClientFactory');
 
 class SMSClient {
@@ -23,12 +25,12 @@ class SMSClient {
     if (this.config.accountSid && this.config.authToken) {
       try {
         this.client = twilio(this.config.accountSid, this.config.authToken);
-        console.log('[SMS] ✅ Legacy global Twilio client initialized (deprecated)');
+        logger.security('[SMS] ✅ Legacy global Twilio client initialized (deprecated)');
       } catch (error) {
-        console.error('[SMS] ❌ Failed to initialize legacy Twilio client:', error.message);
+        logger.security('[SMS] ❌ Failed to initialize legacy Twilio client:', error.message);
       }
     } else {
-      console.log('[SMS] ⚠️  Legacy Twilio credentials not found, using per-company credentials');
+      logger.debug('[SMS] ⚠️  Legacy Twilio credentials not found, using per-company credentials');
     }
 
     // Message tracking
@@ -51,7 +53,7 @@ class SMSClient {
     // Validate input
     if (!to || !body) {
       const error = 'Missing required fields: to and body';
-      console.error('[SMS] ❌', error);
+      logger.error('[SMS] ❌', error);
       this.stats.failed++;
       return { success: false, error };
     }
@@ -60,7 +62,7 @@ class SMSClient {
     const normalizedTo = this.normalizePhoneNumber(to);
     if (!normalizedTo) {
       const error = `Invalid phone number format: ${to}`;
-      console.error('[SMS] ❌', error);
+      logger.error('[SMS] ❌', error);
       this.stats.failed++;
       return { success: false, error };
     }
@@ -87,7 +89,7 @@ class SMSClient {
       this.trackMessage(messageData, result, true);
       this.stats.sent++;
 
-      console.log(`[SMS] ✅ Message sent to ${normalizedTo}`);
+      logger.info(`[SMS] ✅ Message sent to ${normalizedTo}`);
       return { success: true, ...result };
 
     } catch (error) {
@@ -95,7 +97,7 @@ class SMSClient {
       this.trackMessage(messageData, null, false, error.message);
       this.stats.failed++;
 
-      console.error(`[SMS] ❌ Failed to send to ${normalizedTo}:`, error.message);
+      logger.error(`[SMS] ❌ Failed to send to ${normalizedTo}:`, error.message);
       return { success: false, error: error.message };
     }
   }
@@ -111,14 +113,14 @@ class SMSClient {
     // Validate input
     if (!to || !body) {
       const error = 'Missing required fields: to and body';
-      console.error('[SMS] ❌', error);
+      logger.error('[SMS] ❌', error);
       this.stats.failed++;
       return { success: false, error };
     }
 
     if (!company) {
       const error = 'Company object is required for per-company SMS';
-      console.error('[SMS] ❌', error);
+      logger.error('[SMS] ❌', error);
       this.stats.failed++;
       return { success: false, error };
     }
@@ -127,7 +129,7 @@ class SMSClient {
     const normalizedTo = this.normalizePhoneNumber(to);
     if (!normalizedTo) {
       const error = `Invalid phone number format: ${to}`;
-      console.error('[SMS] ❌', error);
+      logger.error('[SMS] ❌', error);
       this.stats.failed++;
       return { success: false, error };
     }
@@ -136,7 +138,7 @@ class SMSClient {
     const companyClient = createTwilioClient(company);
     if (!companyClient && !this.testMode) {
       const error = `No Twilio credentials configured for company: ${company.companyName}`;
-      console.error('[SMS] ❌', error);
+      logger.error('[SMS] ❌', error);
       this.stats.failed++;
       return { success: false, error };
     }
@@ -145,7 +147,7 @@ class SMSClient {
     const fromNumber = from || getPrimaryPhoneNumber(company) || this.config.fromNumber;
     if (!fromNumber) {
       const error = `No from phone number available for company: ${company.companyName}`;
-      console.error('[SMS] ❌', error);
+      logger.error('[SMS] ❌', error);
       this.stats.failed++;
       return { success: false, error };
     }
@@ -165,18 +167,18 @@ class SMSClient {
       if (this.testMode || !companyClient) {
         // Mock mode for development/testing
         result = await this.mockSend(messageData);
-        console.log(`[SMS] 📱 Mock SMS sent for company: ${company.companyName}`);
+        logger.info(`[SMS] 📱 Mock SMS sent for company: ${company.companyName}`);
       } else {
         // Production Twilio send with company-specific client
         result = await this.companyTwilioSend(messageData, companyClient);
-        console.log(`[SMS] ✅ SMS sent for company: ${company.companyName}`);
+        logger.info(`[SMS] ✅ SMS sent for company: ${company.companyName}`);
       }
 
       // Track successful message
       this.trackMessage(messageData, result, true);
       this.stats.sent++;
 
-      console.log(`[SMS] ✅ Company message sent to ${normalizedTo} from ${fromNumber}`);
+      logger.info(`[SMS] ✅ Company message sent to ${normalizedTo} from ${fromNumber}`);
       return { success: true, ...result };
 
     } catch (error) {
@@ -184,7 +186,7 @@ class SMSClient {
       this.trackMessage(messageData, null, false, error.message);
       this.stats.failed++;
 
-      console.error(`[SMS] ❌ Failed to send for company ${company.companyName}:`, error.message);
+      logger.error(`[SMS] ❌ Failed to send for company ${company.companyName}:`, error.message);
       return { success: false, error: error.message };
     }
   }
@@ -241,10 +243,10 @@ class SMSClient {
 
     const mockId = `mock_${  Date.now()  }_${  Math.random().toString(36).substr(2, 9)}`;
 
-    console.log('[SMS] 📱 MOCK MESSAGE:');
-    console.log(`   To: ${messageData.to}`);
-    console.log(`   Body: ${messageData.body}`);
-    console.log(`   ID: ${mockId}`);
+    logger.info('[SMS] 📱 MOCK MESSAGE:');
+    logger.info(`   To: ${messageData.to}`);
+    logger.info(`   Body: ${messageData.body}`);
+    logger.info(`   ID: ${mockId}`);
 
     return {
       messageId: mockId,

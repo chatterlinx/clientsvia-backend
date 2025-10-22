@@ -8,6 +8,8 @@
  */
 
 const cron = require('node-cron');
+const logger = require('../utils/logger.js');
+
 const Company = require('../models/v2Company');
 const DataCenterPurgeService = require('./DataCenterPurgeService');
 const AlertEscalationService = require('./AlertEscalationService');
@@ -24,7 +26,7 @@ const SYSTEM_USER = {
  * Run auto-purge job
  */
 async function runAutoPurge() {
-    console.log('[AUTO-PURGE] Starting scheduled auto-purge job...');
+    logger.debug('[AUTO-PURGE] Starting scheduled auto-purge job...');
 
     try {
         // Find companies past their auto-purge date
@@ -34,10 +36,10 @@ async function runAutoPurge() {
             autoPurgeAt: { $lte: now }
         }).option({ includeDeleted: true });
 
-        console.log(`[AUTO-PURGE] Found ${companiesToPurge.length} companies to purge`);
+        logger.info(`[AUTO-PURGE] Found ${companiesToPurge.length} companies to purge`);
 
         if (companiesToPurge.length === 0) {
-            console.log('[AUTO-PURGE] No companies to purge. Exiting.');
+            logger.info('[AUTO-PURGE] No companies to purge. Exiting.');
             return;
         }
 
@@ -49,7 +51,7 @@ async function runAutoPurge() {
         // Purge each company
         for (const company of companiesToPurge) {
             try {
-                console.log(`[AUTO-PURGE] Purging company: ${company._id} (${company.companyName || company.businessName})`);
+                logger.info(`[AUTO-PURGE] Purging company: ${company._id} (${company.companyName || company.businessName})`);
                 
                 const result = await DataCenterPurgeService.hardPurge(
                     company._id.toString(),
@@ -70,10 +72,10 @@ async function runAutoPurge() {
                     documentsDeleted: result.documentsDeleted
                 });
 
-                console.log(`[AUTO-PURGE] ✅ Successfully purged: ${company._id}`);
+                logger.info(`[AUTO-PURGE] ✅ Successfully purged: ${company._id}`);
 
             } catch (error) {
-                console.error(`[AUTO-PURGE] ❌ Failed to purge ${company._id}:`, error.message);
+                logger.error(`[AUTO-PURGE] ❌ Failed to purge ${company._id}:`, error.message);
                 results.failed.push({
                     companyId: company._id,
                     companyName: company.companyName || company.businessName,
@@ -85,15 +87,15 @@ async function runAutoPurge() {
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
-        console.log('[AUTO-PURGE] Job complete!');
-        console.log(`[AUTO-PURGE] Success: ${results.success.length}, Failed: ${results.failed.length}`);
+        logger.info('[AUTO-PURGE] Job complete!');
+        logger.info(`[AUTO-PURGE] Success: ${results.success.length}, Failed: ${results.failed.length}`);
 
         if (results.failed.length > 0) {
-            console.error('[AUTO-PURGE] Failed companies:', results.failed);
+            logger.error('[AUTO-PURGE] Failed companies:', results.failed);
         }
 
     } catch (error) {
-        console.error('[AUTO-PURGE] Critical error in auto-purge job:', error);
+        logger.error('[AUTO-PURGE] Critical error in auto-purge job:', error);
     }
 }
 
@@ -105,36 +107,36 @@ function initializeAutoPurgeCron() {
     // CRON JOB 1: AUTO-PURGE DELETED COMPANIES (Daily at 02:00 UTC)
     // ========================================================================
     cron.schedule('0 2 * * *', () => {
-        console.log('[AUTO-PURGE] Cron triggered at', new Date().toISOString());
+        logger.debug('[AUTO-PURGE] Cron triggered at', new Date().toISOString());
         runAutoPurge().catch(error => {
-            console.error('[AUTO-PURGE] Unhandled error in cron job:', error);
+            logger.error('[AUTO-PURGE] Unhandled error in cron job:', error);
         });
     }, {
         timezone: 'UTC'
     });
-    console.log('[AUTO-PURGE] ✅ Cron job initialized (runs daily at 02:00 UTC)');
+    logger.debug('[AUTO-PURGE] ✅ Cron job initialized (runs daily at 02:00 UTC)');
     
     // ========================================================================
     // CRON JOB 2: ALERT ESCALATION CHECK (Every 5 minutes)
     // ========================================================================
     cron.schedule('*/5 * * * *', () => {
-        console.log('[ALERT ESCALATION] Cron triggered at', new Date().toISOString());
+        logger.info('[ALERT ESCALATION] Cron triggered at', new Date().toISOString());
         AlertEscalationService.checkAndEscalate().catch(error => {
-            console.error('[ALERT ESCALATION] Unhandled error in cron job:', error);
+            logger.error('[ALERT ESCALATION] Unhandled error in cron job:', error);
         });
     });
-    console.log('[ALERT ESCALATION] ✅ Cron job initialized (runs every 5 minutes)');
+    logger.debug('[ALERT ESCALATION] ✅ Cron job initialized (runs every 5 minutes)');
     
     // ========================================================================
     // CRON JOB 3: PLATFORM HEALTH CHECK (Every 6 hours)
     // ========================================================================
     cron.schedule('0 */6 * * *', () => {
-        console.log('[HEALTH CHECK] Cron triggered at', new Date().toISOString());
+        logger.info('[HEALTH CHECK] Cron triggered at', new Date().toISOString());
         PlatformHealthCheckService.runFullHealthCheck('scheduled').catch(error => {
-            console.error('[HEALTH CHECK] Unhandled error in cron job:', error);
+            logger.error('[HEALTH CHECK] Unhandled error in cron job:', error);
         });
     });
-    console.log('[HEALTH CHECK] ✅ Cron job initialized (runs every 6 hours)');
+    logger.debug('[HEALTH CHECK] ✅ Cron job initialized (runs every 6 hours)');
 }
 
 module.exports = {

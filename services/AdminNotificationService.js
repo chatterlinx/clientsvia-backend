@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+ 
 // Console.log statements are intentional for monitoring and debugging notification delivery
 // ============================================================================
 // 🔔 ADMIN NOTIFICATION SERVICE
@@ -39,6 +39,8 @@
 // ============================================================================
 
 const v2Company = require('../models/v2Company');
+const logger = require('../utils/logger.js');
+
 const NotificationLog = require('../models/NotificationLog');
 const NotificationRegistry = require('../models/NotificationRegistry');
 const smsClient = require('../clients/smsClient');
@@ -61,7 +63,7 @@ class AdminNotificationService {
         const startTime = Date.now();
         
         try {
-            console.log(`🔔 [ADMIN NOTIFICATION] Starting alert: ${code} (${severity})`);
+            logger.debug(`🔔 [ADMIN NOTIFICATION] Starting alert: ${code} (${severity})`);
             
             // ================================================================
             // STEP 1: AUTO-REGISTER THIS NOTIFICATION POINT
@@ -80,7 +82,7 @@ class AdminNotificationService {
             const validationResult = await this.validateNotificationSystem();
             
             if (!validationResult.isValid) {
-                console.error(`❌ [ADMIN NOTIFICATION] Validation failed for ${code}:`, validationResult.errors);
+                logger.error(`❌ [ADMIN NOTIFICATION] Validation failed for ${code}:`, validationResult.errors);
                 // Continue anyway - we want the alert logged even if delivery fails
             }
             
@@ -100,7 +102,7 @@ class AdminNotificationService {
                 throw new Error('No admin contacts configured in Settings tab');
             }
             
-            console.log(`📋 [ADMIN NOTIFICATION] Found ${adminContacts.length} admin contacts from AdminSettings`);
+            logger.debug(`📋 [ADMIN NOTIFICATION] Found ${adminContacts.length} admin contacts from AdminSettings`);
             
             // ================================================================
             // STEP 4: CREATE NOTIFICATION LOG ENTRY
@@ -123,7 +125,7 @@ class AdminNotificationService {
                 }
             });
             
-            console.log(`✅ [ADMIN NOTIFICATION] Created log entry: ${notificationLog.alertId}`);
+            logger.debug(`✅ [ADMIN NOTIFICATION] Created log entry: ${notificationLog.alertId}`);
             
             // ================================================================
             // STEP 5: SEND SMS TO ALL ADMINS
@@ -176,9 +178,9 @@ class AdminNotificationService {
                 await registry.updateStats(allSuccess);
             }
             
-            console.log(`✅ [ADMIN NOTIFICATION] Alert ${notificationLog.alertId} sent successfully`);
-            console.log(`📊 [ADMIN NOTIFICATION] SMS: ${smsResults.filter(r => r.status === 'sent').length}/${smsResults.length} sent`);
-            console.log(`📊 [ADMIN NOTIFICATION] Email: ${emailResults.filter(r => r.status === 'sent').length}/${emailResults.length} sent`);
+            logger.info(`✅ [ADMIN NOTIFICATION] Alert ${notificationLog.alertId} sent successfully`);
+            logger.info(`📊 [ADMIN NOTIFICATION] SMS: ${smsResults.filter(r => r.status === 'sent').length}/${smsResults.length} sent`);
+            logger.info(`📊 [ADMIN NOTIFICATION] Email: ${emailResults.filter(r => r.status === 'sent').length}/${emailResults.length} sent`);
         
         return { 
             success: true, 
@@ -188,7 +190,7 @@ class AdminNotificationService {
         };
         
     } catch (error) {
-            console.error(`❌ [ADMIN NOTIFICATION] Failed to send alert ${code}:`, error);
+            logger.error(`❌ [ADMIN NOTIFICATION] Failed to send alert ${code}:`, error);
             
             // Even if sending fails, try to log the attempt
             try {
@@ -212,7 +214,7 @@ class AdminNotificationService {
                     }
                 });
             } catch (logError) {
-                console.error(`❌ [ADMIN NOTIFICATION] Failed to log error:`, logError);
+                logger.error(`❌ [ADMIN NOTIFICATION] Failed to log error:`, logError);
             }
             
         return { 
@@ -253,7 +255,7 @@ View: https://app.clientsvia.com/admin-notification-center.html
         
         for (const contact of smsContacts) {
             try {
-                console.log(`📱 [SMS] Sending to ${contact.name} (${contact.phone})...`);
+                logger.info(`📱 [SMS] Sending to ${contact.name} (${contact.phone})...`);
                 
                 const result = await smsClient.sendSMS({
                     to: contact.phone,
@@ -269,10 +271,10 @@ View: https://app.clientsvia.com/admin-notification-center.html
                     deliveredAt: null  // Will be updated by webhook
                 });
                 
-                console.log(`✅ [SMS] Sent to ${contact.name}: ${result.sid}`);
+                logger.info(`✅ [SMS] Sent to ${contact.name}: ${result.sid}`);
                 
             } catch (error) {
-                console.error(`❌ [SMS] Failed to send to ${contact.name}:`, error);
+                logger.error(`❌ [SMS] Failed to send to ${contact.name}:`, error);
                 
                 results.push({
                     recipient: contact.phone,
@@ -442,13 +444,13 @@ View: https://app.clientsvia.com/admin-notification-center.html
             }
             
             if (alert.acknowledgment.isAcknowledged) {
-                console.log(`⚠️ [ADMIN NOTIFICATION] Alert ${alertId} already acknowledged`);
+                logger.info(`⚠️ [ADMIN NOTIFICATION] Alert ${alertId} already acknowledged`);
                 return { success: false, message: 'Alert already acknowledged' };
             }
             
             await alert.acknowledge(acknowledgedBy, via, message);
             
-            console.log(`✅ [ADMIN NOTIFICATION] Alert ${alertId} acknowledged by ${acknowledgedBy} via ${via}`);
+            logger.info(`✅ [ADMIN NOTIFICATION] Alert ${alertId} acknowledged by ${acknowledgedBy} via ${via}`);
             
             // Update registry stats
             const registry = await NotificationRegistry.findOne({ code: alert.code });
@@ -462,7 +464,7 @@ View: https://app.clientsvia.com/admin-notification-center.html
             return { success: true, alert };
             
         } catch (error) {
-            console.error(`❌ [ADMIN NOTIFICATION] Failed to acknowledge alert ${alertId}:`, error);
+            logger.error(`❌ [ADMIN NOTIFICATION] Failed to acknowledge alert ${alertId}:`, error);
             throw error;
         }
     }
@@ -476,7 +478,7 @@ View: https://app.clientsvia.com/admin-notification-center.html
             const settings = await AdminSettings.findOne({});
             
             if (!settings) {
-                console.error('❌ AdminSettings not found');
+                logger.error('❌ AdminSettings not found');
                 return;
             }
             
@@ -499,12 +501,12 @@ To reopen: Text "REOPEN ${alert.alertId}"
                         message
                     });
                 } catch (error) {
-                    console.error(`❌ Failed to send confirmation to ${contact.name}:`, error);
+                    logger.error(`❌ Failed to send confirmation to ${contact.name}:`, error);
                 }
             }
         
     } catch (error) {
-            console.error('❌ Failed to send acknowledgment confirmation:', error);
+            logger.error('❌ Failed to send acknowledgment confirmation:', error);
         }
     }
 }

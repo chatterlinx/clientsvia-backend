@@ -11,6 +11,8 @@
 // ============================================================================
 
 const v2AIPerformanceMetric = require('../models/v2AIPerformanceMetric');
+const logger = require('../utils/logger.js');
+
 const mongoose = require('mongoose');
 
 class AIPerformanceTracker {
@@ -45,9 +47,9 @@ class AIPerformanceTracker {
         customerQuery
     }) {
         try {
-            console.log(`📊 [PERF TRACKER] CHECKPOINT 1: Starting lookup tracking for company: ${companyId}`);
-            console.log(`📊 [PERF TRACKER] CHECKPOINT 2: Timings:`, JSON.stringify(timings, null, 2));
-            console.log(`📊 [PERF TRACKER] CHECKPOINT 3: Source: ${source}, Confidence: ${confidence}, Cache Hit: ${cacheHit}`);
+            logger.debug(`📊 [PERF TRACKER] CHECKPOINT 1: Starting lookup tracking for company: ${companyId}`);
+            logger.debug(`📊 [PERF TRACKER] CHECKPOINT 2: Timings:`, JSON.stringify(timings, null, 2));
+            logger.debug(`📊 [PERF TRACKER] CHECKPOINT 3: Source: ${source}, Confidence: ${confidence}, Cache Hit: ${cacheHit}`);
 
             // ================================================================
             // STEP 1: Determine current interval
@@ -57,14 +59,14 @@ class AIPerformanceTracker {
             const intervalEnd = new Date(intervalStart.getTime() + this.INTERVAL_MINUTES * 60 * 1000);
             const bufferKey = `${companyId}:${intervalStart.toISOString()}`;
 
-            console.log(`📊 [PERF TRACKER] CHECKPOINT 4: Interval: ${intervalStart.toISOString()} to ${intervalEnd.toISOString()}`);
-            console.log(`📊 [PERF TRACKER] CHECKPOINT 5: Buffer key: ${bufferKey}`);
+            logger.debug(`📊 [PERF TRACKER] CHECKPOINT 4: Interval: ${intervalStart.toISOString()} to ${intervalEnd.toISOString()}`);
+            logger.debug(`📊 [PERF TRACKER] CHECKPOINT 5: Buffer key: ${bufferKey}`);
 
             // ================================================================
             // STEP 2: Get or create buffer entry
             // ================================================================
             if (!this.buffer.has(bufferKey)) {
-                console.log(`📊 [PERF TRACKER] CHECKPOINT 6: Creating new buffer entry`);
+                logger.debug(`📊 [PERF TRACKER] CHECKPOINT 6: Creating new buffer entry`);
                 this.buffer.set(bufferKey, {
                     companyId,
                     intervalStart,
@@ -102,12 +104,12 @@ class AIPerformanceTracker {
             }
 
             const buffer = this.buffer.get(bufferKey);
-            console.log(`📊 [PERF TRACKER] CHECKPOINT 7: Buffer entry retrieved`);
+            logger.debug(`📊 [PERF TRACKER] CHECKPOINT 7: Buffer entry retrieved`);
 
             // ================================================================
             // STEP 3: Update timing statistics
             // ================================================================
-            console.log(`📊 [PERF TRACKER] CHECKPOINT 8: Updating timing statistics`);
+            logger.debug(`📊 [PERF TRACKER] CHECKPOINT 8: Updating timing statistics`);
             
             this.updateTimingStat(buffer.lookupSpeed.mongoLookup, timings.mongoLookup || 0);
             this.updateTimingStat(buffer.lookupSpeed.redisCache, timings.redisCache || 0);
@@ -120,7 +122,7 @@ class AIPerformanceTracker {
             // ================================================================
             // STEP 4: Update source distribution
             // ================================================================
-            console.log(`📊 [PERF TRACKER] CHECKPOINT 9: Updating source distribution`);
+            logger.debug(`📊 [PERF TRACKER] CHECKPOINT 9: Updating source distribution`);
             
             buffer.sourceDistribution.totalLookups++;
             if (source === 'companyQnA') {buffer.sourceDistribution.companyQnA++;}
@@ -131,7 +133,7 @@ class AIPerformanceTracker {
             // ================================================================
             // STEP 5: Update cache statistics
             // ================================================================
-            console.log(`📊 [PERF TRACKER] CHECKPOINT 10: Updating cache statistics`);
+            logger.debug(`📊 [PERF TRACKER] CHECKPOINT 10: Updating cache statistics`);
             
             if (cacheHit) {
                 buffer.cacheStats.hits++;
@@ -144,7 +146,7 @@ class AIPerformanceTracker {
             // ================================================================
             // STEP 6: Update confidence distribution
             // ================================================================
-            console.log(`📊 [PERF TRACKER] CHECKPOINT 11: Updating confidence distribution`);
+            logger.debug(`📊 [PERF TRACKER] CHECKPOINT 11: Updating confidence distribution`);
             
             buffer.confidenceDistribution.confidenceSum += confidence;
             if (confidence >= 0.8) {buffer.confidenceDistribution.high++;}
@@ -154,10 +156,10 @@ class AIPerformanceTracker {
             // ================================================================
             // STEP 7: Track slow queries
             // ================================================================
-            console.log(`📊 [PERF TRACKER] CHECKPOINT 12: Checking for slow queries`);
+            logger.debug(`📊 [PERF TRACKER] CHECKPOINT 12: Checking for slow queries`);
             
             if (timings.total >= this.SLOW_QUERY_THRESHOLD) {
-                console.log(`⚠️ [PERF TRACKER] SLOW QUERY DETECTED: ${timings.total}ms`);
+                logger.debug(`⚠️ [PERF TRACKER] SLOW QUERY DETECTED: ${timings.total}ms`);
                 buffer.slowQueries.push({
                     queryType: source,
                     duration: timings.total,
@@ -171,20 +173,20 @@ class AIPerformanceTracker {
                 }
             }
 
-            console.log(`✅ [PERF TRACKER] CHECKPOINT 13: Lookup tracked successfully`);
-            console.log(`📊 [PERF TRACKER] Current buffer stats: ${buffer.sourceDistribution.totalLookups} lookups`);
+            logger.debug(`✅ [PERF TRACKER] CHECKPOINT 13: Lookup tracked successfully`);
+            logger.debug(`📊 [PERF TRACKER] Current buffer stats: ${buffer.sourceDistribution.totalLookups} lookups`);
 
             // ================================================================
             // STEP 8: Persist if interval ended
             // ================================================================
             if (now >= intervalEnd) {
-                console.log(`⏰ [PERF TRACKER] Interval ended, persisting metrics...`);
+                logger.debug(`⏰ [PERF TRACKER] Interval ended, persisting metrics...`);
                 await this.persistBuffer(bufferKey);
             }
 
         } catch (error) {
-            console.error(`❌ [PERF TRACKER] ERROR tracking lookup:`, error);
-            console.error(`❌ [PERF TRACKER] Stack:`, error.stack);
+            logger.error(`❌ [PERF TRACKER] ERROR tracking lookup:`, error);
+            logger.error(`❌ [PERF TRACKER] Stack:`, error.stack);
         }
     }
 
@@ -222,11 +224,11 @@ class AIPerformanceTracker {
      */
     static async persistBuffer(bufferKey) {
         try {
-            console.log(`💾 [PERF TRACKER] CHECKPOINT 14: Persisting buffer: ${bufferKey}`);
+            logger.info(`💾 [PERF TRACKER] CHECKPOINT 14: Persisting buffer: ${bufferKey}`);
             
             const buffer = this.buffer.get(bufferKey);
             if (!buffer) {
-                console.log(`⚠️ [PERF TRACKER] Buffer not found: ${bufferKey}`);
+                logger.info(`⚠️ [PERF TRACKER] Buffer not found: ${bufferKey}`);
                 return;
             }
 
@@ -325,24 +327,24 @@ class AIPerformanceTracker {
                 slowQueries: buffer.slowQueries
             };
 
-            console.log(`💾 [PERF TRACKER] CHECKPOINT 15: Saving to database...`);
-            console.log(`💾 [PERF TRACKER] Total lookups: ${buffer.sourceDistribution.totalLookups}`);
-            console.log(`💾 [PERF TRACKER] Avg speed: ${Math.round(calculateAvg(buffer.lookupSpeed.total))}ms`);
-            console.log(`💾 [PERF TRACKER] Cache hit rate: ${Math.round(cacheHitRate)}%`);
+            logger.debug(`💾 [PERF TRACKER] CHECKPOINT 15: Saving to database...`);
+            logger.debug(`💾 [PERF TRACKER] Total lookups: ${buffer.sourceDistribution.totalLookups}`);
+            logger.debug(`💾 [PERF TRACKER] Avg speed: ${Math.round(calculateAvg(buffer.lookupSpeed.total))}ms`);
+            logger.debug(`💾 [PERF TRACKER] Cache hit rate: ${Math.round(cacheHitRate)}%`);
 
             await v2AIPerformanceMetric.create(metricData);
 
-            console.log(`✅ [PERF TRACKER] CHECKPOINT 16: Metrics persisted successfully`);
+            logger.debug(`✅ [PERF TRACKER] CHECKPOINT 16: Metrics persisted successfully`);
 
             // ================================================================
             // Remove from buffer
             // ================================================================
             this.buffer.delete(bufferKey);
-            console.log(`🗑️ [PERF TRACKER] Buffer cleared: ${bufferKey}`);
+            logger.info(`🗑️ [PERF TRACKER] Buffer cleared: ${bufferKey}`);
 
         } catch (error) {
-            console.error(`❌ [PERF TRACKER] ERROR persisting buffer:`, error);
-            console.error(`❌ [PERF TRACKER] Stack:`, error.stack);
+            logger.error(`❌ [PERF TRACKER] ERROR persisting buffer:`, error);
+            logger.error(`❌ [PERF TRACKER] Stack:`, error.stack);
         }
     }
 
@@ -352,16 +354,16 @@ class AIPerformanceTracker {
      * ────────────────────────────────────────────────────────────────────────
      */
     static async flushAllBuffers() {
-        console.log(`🔄 [PERF TRACKER] Flushing all buffers...`);
+        logger.info(`🔄 [PERF TRACKER] Flushing all buffers...`);
         
         const bufferKeys = Array.from(this.buffer.keys());
-        console.log(`🔄 [PERF TRACKER] Found ${bufferKeys.length} buffers to flush`);
+        logger.info(`🔄 [PERF TRACKER] Found ${bufferKeys.length} buffers to flush`);
         
         for (const key of bufferKeys) {
             await this.persistBuffer(key);
         }
         
-        console.log(`✅ [PERF TRACKER] All buffers flushed`);
+        logger.info(`✅ [PERF TRACKER] All buffers flushed`);
     }
 }
 
@@ -369,7 +371,7 @@ class AIPerformanceTracker {
 // AUTO-FLUSH EVERY 15 MINUTES
 // ============================================================================
 setInterval(async () => {
-    console.log(`⏰ [PERF TRACKER] Auto-flush triggered`);
+    logger.info(`⏰ [PERF TRACKER] Auto-flush triggered`);
     
     const now = new Date();
     const currentIntervalStart = AIPerformanceTracker.getIntervalStart(now);
@@ -377,7 +379,7 @@ setInterval(async () => {
     // Flush all buffers from previous intervals
     for (const [key, buffer] of AIPerformanceTracker.buffer.entries()) {
         if (buffer.intervalEnd <= currentIntervalStart) {
-            console.log(`⏰ [PERF TRACKER] Flushing expired buffer: ${key}`);
+            logger.info(`⏰ [PERF TRACKER] Flushing expired buffer: ${key}`);
             await AIPerformanceTracker.persistBuffer(key);
         }
     }

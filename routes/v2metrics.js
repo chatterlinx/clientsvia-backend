@@ -5,6 +5,8 @@
 // ============================================================================
 
 const express = require('express');
+const logger = require('../utils/logger.js');
+
 const router = express.Router();
 const { getMetrics, resetMetrics } = require('../middleware/metricsCollector');
 const { authenticateJWT, requireRole } = require('../middleware/auth');
@@ -22,7 +24,7 @@ router.get('/metrics', authenticateJWT, requireRole('admin'), (req, res) => {
       metrics
     });
   } catch (error) {
-    console.error('Error retrieving metrics:', error);
+    logger.error('Error retrieving metrics:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve metrics',
@@ -49,7 +51,7 @@ router.get('/metrics/health', (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error retrieving health metrics:', error);
+    logger.error('Error retrieving health metrics:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve health metrics'
@@ -75,7 +77,7 @@ router.get('/metrics/performance', authenticateJWT, requireRole('admin'), (req, 
       }
     });
   } catch (error) {
-    console.error('Error retrieving performance metrics:', error);
+    logger.error('Error retrieving performance metrics:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve performance metrics'
@@ -96,7 +98,7 @@ router.post('/metrics/reset', authenticateJWT, requireRole('admin'), (req, res) 
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Error resetting metrics:', error);
+    logger.error('Error resetting metrics:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to reset metrics',
@@ -118,7 +120,7 @@ router.get('/metrics/errors', authenticateJWT, requireRole('admin'), (req, res) 
       errors: metrics.errors
     });
   } catch (error) {
-    console.error('Error retrieving error metrics:', error);
+    logger.error('Error retrieving error metrics:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve error metrics'

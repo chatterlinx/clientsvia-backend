@@ -29,6 +29,8 @@
  */
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const v2AIAgentCallLog = require('../../models/v2AIAgentCallLog');
 const v2Company = require('../../models/v2Company');
@@ -42,7 +44,7 @@ router.get('/company/:companyId/analytics/overview', async (req, res) => {
     const { companyId } = req.params;
     const { timeRange = '30d' } = req.query; // 7d, 30d, 90d
     
-    console.log(`📊 [ANALYTICS API] Fetching overview for company: ${companyId}, range: ${timeRange}`);
+    logger.debug(`📊 [ANALYTICS API] Fetching overview for company: ${companyId}, range: ${timeRange}`);
     
     try {
         // Calculate date range
@@ -50,7 +52,7 @@ router.get('/company/:companyId/analytics/overview', async (req, res) => {
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
         
-        console.log(`📊 [ANALYTICS API] Date range: ${startDate.toISOString()} to ${new Date().toISOString()}`);
+        logger.debug(`📊 [ANALYTICS API] Date range: ${startDate.toISOString()} to ${new Date().toISOString()}`);
         
         // Aggregate metrics from call logs
         const metrics = await v2AIAgentCallLog.aggregate([
@@ -163,7 +165,7 @@ router.get('/company/:companyId/analytics/overview', async (req, res) => {
             ? ((current.totalCalls - previous.totalCalls) / previous.totalCalls * 100)
             : 0;
         
-        console.log(`✅ [ANALYTICS API] Overview calculated:`, {
+        logger.info(`✅ [ANALYTICS API] Overview calculated:`, {
             matchRate: matchRate.toFixed(1),
             confidence: (current.avgConfidence * 100).toFixed(1),
             speed: Math.round(current.avgResponseTime),
@@ -204,7 +206,7 @@ router.get('/company/:companyId/analytics/overview', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ [ANALYTICS API] Error fetching overview:', error);
+        logger.error('❌ [ANALYTICS API] Error fetching overview:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to fetch analytics overview',
@@ -222,7 +224,7 @@ router.get('/company/:companyId/analytics/intelligence', async (req, res) => {
     const { companyId } = req.params;
     const { limit = 10 } = req.query;
     
-    console.log(`🧠 [ANALYTICS API] Fetching intelligence for company: ${companyId}`);
+    logger.debug(`🧠 [ANALYTICS API] Fetching intelligence for company: ${companyId}`);
     
     try {
         const thirtyDaysAgo = new Date();
@@ -278,7 +280,7 @@ router.get('/company/:companyId/analytics/intelligence', async (req, res) => {
             }
         ]);
         
-        console.log(`✅ [ANALYTICS API] Intelligence calculated:`, {
+        logger.info(`✅ [ANALYTICS API] Intelligence calculated:`, {
             topScenarios: topScenarios.length,
             knowledgeGaps: knowledgeGaps.length
         });
@@ -305,7 +307,7 @@ router.get('/company/:companyId/analytics/intelligence', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ [ANALYTICS API] Error fetching intelligence:', error);
+        logger.error('❌ [ANALYTICS API] Error fetching intelligence:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to fetch intelligence analytics',
@@ -322,7 +324,7 @@ router.get('/company/:companyId/analytics/intelligence', async (req, res) => {
 router.get('/company/:companyId/analytics/business', async (req, res) => {
     const { companyId } = req.params;
     
-    console.log(`💼 [ANALYTICS API] Fetching business intelligence for company: ${companyId}`);
+    logger.debug(`💼 [ANALYTICS API] Fetching business intelligence for company: ${companyId}`);
     
     try {
         const thirtyDaysAgo = new Date();
@@ -397,7 +399,7 @@ router.get('/company/:companyId/analytics/business', async (req, res) => {
         const totalCalls = callVolume.reduce((sum, day) => sum + day.count, 0);
         const avgCallsPerDay = totalCalls / 30;
         
-        console.log(`✅ [ANALYTICS API] Business intelligence calculated:`, {
+        logger.info(`✅ [ANALYTICS API] Business intelligence calculated:`, {
             totalCalls,
             avgCallsPerDay: avgCallsPerDay.toFixed(1),
             days: callVolume.length
@@ -429,7 +431,7 @@ router.get('/company/:companyId/analytics/business', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ [ANALYTICS API] Error fetching business intelligence:', error);
+        logger.error('❌ [ANALYTICS API] Error fetching business intelligence:', error);
         res.status(500).json({
             success: false,
             error: 'Failed to fetch business intelligence',

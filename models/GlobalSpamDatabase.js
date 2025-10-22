@@ -10,6 +10,8 @@
 // ============================================================================
 
 const mongoose = require('mongoose');
+const logger = require('../utils/logger.js');
+
 
 const globalSpamDatabaseSchema = new mongoose.Schema({
     // ────────────────────────────────────────────────────────────────────────
@@ -152,7 +154,7 @@ globalSpamDatabaseSchema.statics.isSpam = async function(phoneNumber) {
     });
 
     if (entry) {
-        console.log(`🚫 [SPAM DB] Number ${phoneNumber} found in spam database (score: ${entry.spamScore})`);
+        logger.info(`🚫 [SPAM DB] Number ${phoneNumber} found in spam database (score: ${entry.spamScore})`);
         return { isSpam: true, entry };
     }
 
@@ -165,7 +167,7 @@ globalSpamDatabaseSchema.statics.isSpam = async function(phoneNumber) {
 globalSpamDatabaseSchema.statics.reportSpam = async function(data) {
     const { phoneNumber, spamType, reportedBy, companyId } = data;
 
-    console.log(`📝 [SPAM DB] Reporting spam: ${phoneNumber}`);
+    logger.info(`📝 [SPAM DB] Reporting spam: ${phoneNumber}`);
 
     // Find existing entry
     let entry = await this.findOne({ phoneNumber });
@@ -183,7 +185,7 @@ globalSpamDatabaseSchema.statics.reportSpam = async function(data) {
         entry.spamScore = Math.min(100, entry.spamScore + 10);
 
         await entry.save();
-        console.log(`✅ [SPAM DB] Updated entry: ${entry._id} (new score: ${entry.spamScore})`);
+        logger.info(`✅ [SPAM DB] Updated entry: ${entry._id} (new score: ${entry.spamScore})`);
     } else {
         // Create new entry
         entry = await this.create({
@@ -197,7 +199,7 @@ globalSpamDatabaseSchema.statics.reportSpam = async function(data) {
                 reportedByCompanies: companyId ? [companyId] : []
             }
         });
-        console.log(`✅ [SPAM DB] Created new entry: ${entry._id}`);
+        logger.info(`✅ [SPAM DB] Created new entry: ${entry._id}`);
     }
 
     return entry;
@@ -207,7 +209,7 @@ globalSpamDatabaseSchema.statics.reportSpam = async function(data) {
  * Whitelist a number (remove from spam)
  */
 globalSpamDatabaseSchema.statics.whitelist = async function(phoneNumber, reason) {
-    console.log(`✅ [SPAM DB] Whitelisting: ${phoneNumber}`);
+    logger.security(`✅ [SPAM DB] Whitelisting: ${phoneNumber}`);
     
     const entry = await this.findOneAndUpdate(
         { phoneNumber },

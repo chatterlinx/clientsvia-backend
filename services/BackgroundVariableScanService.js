@@ -30,6 +30,8 @@
  */
 
 const Company = require('../models/v2Company');
+const logger = require('../utils/logger.js');
+
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const { getDB } = require('../db');
 
@@ -39,12 +41,12 @@ try {
     const clients = require('../clients/index');
     redisClient = clients.redisClient;
     if (redisClient) {
-        console.log('✅ [BACKGROUND SCAN] Redis client connected');
+        logger.debug('✅ [BACKGROUND SCAN] Redis client connected');
     } else {
-        console.warn('⚠️  [BACKGROUND SCAN] Redis client not available - cache operations will be no-ops');
+        logger.warn('⚠️  [BACKGROUND SCAN] Redis client not available - cache operations will be no-ops');
     }
 } catch (error) {
-    console.warn('⚠️  [BACKGROUND SCAN] Redis import failed:', error.message);
+    logger.warn('⚠️  [BACKGROUND SCAN] Redis import failed:', error.message);
     redisClient = null;
 }
 
@@ -54,11 +56,11 @@ class BackgroundVariableScanService {
      * Main entry point: Scan a template for a specific company
      */
     async scanTemplateForCompany(companyId, templateId) {
-        console.log(`🔍 [BG SCAN] Checkpoint 1: Starting scan for company ${companyId}, template ${templateId}`);
+        logger.debug(`🔍 [BG SCAN] Checkpoint 1: Starting scan for company ${companyId}, template ${templateId}`);
         
         try {
             // Mark as scanning
-            console.log(`🔍 [BG SCAN] Checkpoint 2: Marking company as scanning...`);
+            logger.debug(`🔍 [BG SCAN] Checkpoint 2: Marking company as scanning...`);
             await Company.updateOne(
                 { _id: companyId },
                 { 
@@ -68,24 +70,24 @@ class BackgroundVariableScanService {
                     'aiAgentSettings.variableScanStatus.scanProgress.currentTemplate': ''
                 }
             );
-            console.log(`✅ [BG SCAN] Checkpoint 3: Company marked as scanning`);
+            logger.debug(`✅ [BG SCAN] Checkpoint 3: Company marked as scanning`);
             
             // Load template from Global AI Brain
-            console.log(`🔍 [BG SCAN] Checkpoint 4: Loading template from Global AI Brain...`);
+            logger.debug(`🔍 [BG SCAN] Checkpoint 4: Loading template from Global AI Brain...`);
             const template = await GlobalInstantResponseTemplate.findById(templateId);
             
             if (!template) {
-                console.error(`❌ [BG SCAN] Checkpoint 5: Template not found: ${templateId}`);
+                logger.error(`❌ [BG SCAN] Checkpoint 5: Template not found: ${templateId}`);
                 throw new Error('Template not found');
             }
             
-            console.log(`✅ [BG SCAN] Checkpoint 5: Template loaded: ${template.name}`);
+            logger.info(`✅ [BG SCAN] Checkpoint 5: Template loaded: ${template.name}`);
             
             // Get all scenarios from template
             const scenarios = template.instantResponses || [];
             const totalScenarios = scenarios.length;
             
-            console.log(`📊 [BG SCAN] Checkpoint 6: Template has ${totalScenarios} scenarios`);
+            logger.info(`📊 [BG SCAN] Checkpoint 6: Template has ${totalScenarios} scenarios`);
             
             // Update progress total
             await Company.updateOne(
@@ -97,7 +99,7 @@ class BackgroundVariableScanService {
             );
             
             // Scan each scenario for {variables}
-            console.log(`🔍 [BG SCAN] Checkpoint 7: Starting scenario scan...`);
+            logger.debug(`🔍 [BG SCAN] Checkpoint 7: Starting scenario scan...`);
             const variableMap = new Map(); // { "companyName" => 147, "phoneNumber" => 89, ... }
             
             for (let i = 0; i < scenarios.length; i++) {
@@ -123,14 +125,14 @@ class BackgroundVariableScanService {
                         { _id: companyId },
                         { 'aiAgentSettings.variableScanStatus.scanProgress.current': i + 1 }
                     );
-                    console.log(`✅ [BG SCAN] Progress: ${i + 1}/${totalScenarios} scenarios scanned`);
+                    logger.info(`✅ [BG SCAN] Progress: ${i + 1}/${totalScenarios} scenarios scanned`);
                 }
             }
             
-            console.log(`✅ [BG SCAN] Checkpoint 8: Scenario scan complete - Found ${variableMap.size} unique variables`);
+            logger.info(`✅ [BG SCAN] Checkpoint 8: Scenario scan complete - Found ${variableMap.size} unique variables`);
             
             // Convert to variable definitions
-            console.log(`🔍 [BG SCAN] Checkpoint 9: Building variable definitions...`);
+            logger.info(`🔍 [BG SCAN] Checkpoint 9: Building variable definitions...`);
             const variableDefinitions = [];
             const details = [];
             
@@ -157,13 +159,13 @@ class BackgroundVariableScanService {
                     category
                 });
                 
-                console.log(`  📝 {${key}} - ${count} occurrences → ${category}`);
+                logger.info(`  📝 {${key}} - ${count} occurrences → ${category}`);
             }
             
-            console.log(`✅ [BG SCAN] Checkpoint 10: Variable definitions built`);
+            logger.info(`✅ [BG SCAN] Checkpoint 10: Variable definitions built`);
             
             // Merge with existing variables (don't overwrite values!)
-            console.log(`🔍 [BG SCAN] Checkpoint 11: Merging with existing variables...`);
+            logger.info(`🔍 [BG SCAN] Checkpoint 11: Merging with existing variables...`);
             const company = await Company.findById(companyId);
             const existingVars = company.aiAgentSettings?.variables || {};
             const existingDefs = company.aiAgentSettings?.variableDefinitions || [];
@@ -177,19 +179,19 @@ class BackgroundVariableScanService {
                     // New variable - add it
                     existingDefs.push(newDef);
                     newCount++;
-                    console.log(`  ➕ NEW: {${newDef.key}}`);
+                    logger.info(`  ➕ NEW: {${newDef.key}}`);
                 } else {
                     // Existing variable - update usage count only
                     existingDefs[existingIndex].usageCount = newDef.usageCount;
                     existingDefs[existingIndex].source = template.name;
-                    console.log(`  🔄 UPDATE: {${newDef.key}} - usage count: ${newDef.usageCount}`);
+                    logger.info(`  🔄 UPDATE: {${newDef.key}} - usage count: ${newDef.usageCount}`);
                 }
             });
             
-            console.log(`✅ [BG SCAN] Checkpoint 12: Merge complete - ${newCount} new variables added`);
+            logger.info(`✅ [BG SCAN] Checkpoint 12: Merge complete - ${newCount} new variables added`);
             
             // Save to MongoDB
-            console.log(`🔍 [BG SCAN] Checkpoint 13: Saving to MongoDB...`);
+            logger.info(`🔍 [BG SCAN] Checkpoint 13: Saving to MongoDB...`);
             await Company.findByIdAndUpdate(companyId, {
                 'aiAgentSettings.variableDefinitions': existingDefs,
                 'aiAgentSettings.variableScanStatus.isScanning': false,
@@ -211,19 +213,19 @@ class BackgroundVariableScanService {
                 }
             });
             
-            console.log(`✅ [BG SCAN] Checkpoint 14: Saved to MongoDB`);
+            logger.debug(`✅ [BG SCAN] Checkpoint 14: Saved to MongoDB`);
             
             // Clear Redis cache
-            console.log(`🔍 [BG SCAN] Checkpoint 15: Clearing Redis cache...`);
+            logger.debug(`🔍 [BG SCAN] Checkpoint 15: Clearing Redis cache...`);
             if (redisClient) {
                 await redisClient.del(`company:${companyId}`);
-                console.log(`✅ [BG SCAN] Checkpoint 16: Cache cleared`);
+                logger.debug(`✅ [BG SCAN] Checkpoint 16: Cache cleared`);
             } else {
-                console.log(`⚠️  [BG SCAN] Checkpoint 16: Redis not available - skipping cache clear`);
+                logger.debug(`⚠️  [BG SCAN] Checkpoint 16: Redis not available - skipping cache clear`);
             }
             
-            console.log(`✅ [BG SCAN] Checkpoint 17: SCAN COMPLETE!`);
-            console.log(`📊 [BG SCAN] Summary:
+            logger.debug(`✅ [BG SCAN] Checkpoint 17: SCAN COMPLETE!`);
+            logger.debug(`📊 [BG SCAN] Summary:
   Template: ${template.name}
   Scenarios Scanned: ${totalScenarios}
   Unique Variables Found: ${variableDefinitions.length}
@@ -241,7 +243,7 @@ class BackgroundVariableScanService {
             };
             
         } catch (error) {
-            console.error(`❌ [BG SCAN] Error at scan:`, error);
+            logger.error(`❌ [BG SCAN] Error at scan:`, error);
             
             // Mark as not scanning
             await Company.updateOne(
@@ -257,23 +259,23 @@ class BackgroundVariableScanService {
      * Scan all active templates for a company
      */
     async scanAllTemplatesForCompany(companyId) {
-        console.log(`🔍 [BG SCAN ALL] Starting full scan for company ${companyId}`);
+        logger.debug(`🔍 [BG SCAN ALL] Starting full scan for company ${companyId}`);
         
         try {
             const company = await Company.findById(companyId);
             const templateRefs = company.aiAgentSettings?.templateReferences || [];
             
-            console.log(`📊 [BG SCAN ALL] Company has ${templateRefs.length} active templates`);
+            logger.info(`📊 [BG SCAN ALL] Company has ${templateRefs.length} active templates`);
             
             const results = [];
             
             for (const ref of templateRefs) {
-                console.log(`🔍 [BG SCAN ALL] Scanning template: ${ref.templateId}`);
+                logger.info(`🔍 [BG SCAN ALL] Scanning template: ${ref.templateId}`);
                 const result = await this.scanTemplateForCompany(companyId, ref.templateId);
                 results.push(result);
             }
             
-            console.log(`✅ [BG SCAN ALL] Full scan complete for company ${companyId}`);
+            logger.info(`✅ [BG SCAN ALL] Full scan complete for company ${companyId}`);
             
             return {
                 success: true,
@@ -282,7 +284,7 @@ class BackgroundVariableScanService {
             };
             
         } catch (error) {
-            console.error(`❌ [BG SCAN ALL] Error:`, error);
+            logger.error(`❌ [BG SCAN ALL] Error:`, error);
             throw error;
         }
     }

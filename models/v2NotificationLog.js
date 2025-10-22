@@ -4,6 +4,8 @@
 // STRICTLY CONFINED TO AI AGENT LOGIC TAB
 
 const mongoose = require('mongoose');
+const logger = require('../utils/logger.js');
+
 
 const NotificationLogSchema = new mongoose.Schema({
   // Core notification data with strict validation
@@ -233,7 +235,7 @@ NotificationLogSchema.statics.getAIAgentStats = async function(since = new Date(
       minProcessingTime: Math.round(stats.minProcessingTime || 0)
     };
   } catch (error) {
-    console.error('[AI-AGENT-LOGIC] Error getting AI Agent stats:', error);
+    logger.error('[AI-AGENT-LOGIC] Error getting AI Agent stats:', error);
     return { 
       totalNotifications: 0, 
       successfulNotifications: 0, 
@@ -283,7 +285,7 @@ NotificationLogSchema.statics.getEventBreakdown = async function(since = new Dat
       avgProcessingTime: Math.round(r.avgProcessingTime || 0)
     }));
   } catch (error) {
-    console.error('[AI-AGENT-LOGIC] Error getting event breakdown:', error);
+    logger.error('[AI-AGENT-LOGIC] Error getting event breakdown:', error);
     return [];
   }
 };
@@ -339,7 +341,7 @@ NotificationLogSchema.statics.getPerformanceMetrics = async function(since = new
       totalProcessed: metrics.totalProcessed
     };
   } catch (error) {
-    console.error('[AI-AGENT-LOGIC] Error getting performance metrics:', error);
+    logger.error('[AI-AGENT-LOGIC] Error getting performance metrics:', error);
     return { 
       avgProcessingTime: 0, 
       minProcessingTime: 0, 
@@ -378,7 +380,7 @@ NotificationLogSchema.statics.getRecentActivity = async function(limit = 10, com
       source: log.aiAgentContext?.source || 'unknown'
     }));
   } catch (error) {
-    console.error('[AI-AGENT-LOGIC] Error getting recent activity:', error);
+    logger.error('[AI-AGENT-LOGIC] Error getting recent activity:', error);
     return [];
   }
 };
@@ -394,7 +396,7 @@ NotificationLogSchema.methods.markAsSent = async function(result = null) {
     }
     return await this.save();
   } catch (error) {
-    console.error('[AI-AGENT-LOGIC] Error marking as sent:', error);
+    logger.error('[AI-AGENT-LOGIC] Error marking as sent:', error);
     throw error;
   }
 };
@@ -407,7 +409,7 @@ NotificationLogSchema.methods.markAsFailed = async function(error) {
     this.errorMessage = (error && error.message) ? error.message : String(error);
     return await this.save();
   } catch (saveError) {
-    console.error('[AI-AGENT-LOGIC] Error marking as failed:', saveError);
+    logger.error('[AI-AGENT-LOGIC] Error marking as failed:', saveError);
     throw saveError;
   }
 };

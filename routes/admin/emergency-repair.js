@@ -9,6 +9,8 @@
  */
 
 const express = require('express');
+const logger = require('../../utils/logger.js');
+
 const router = express.Router();
 const mongoose = require('mongoose');
 
@@ -21,7 +23,7 @@ router.get('/inspect-company/:companyId', async (req, res) => {
     try {
         const { companyId } = req.params;
         
-        console.log('\n🔍 INSPECTING COMPANY:', companyId);
+        logger.info('\n🔍 INSPECTING COMPANY:', companyId);
         
         // Get direct MongoDB access
         const db = mongoose.connection.db;
@@ -53,7 +55,7 @@ router.get('/inspect-company/:companyId', async (req, res) => {
             }
         };
         
-        console.log('📊 Analysis:', JSON.stringify(analysis, null, 2));
+        logger.info('📊 Analysis:', JSON.stringify(analysis, null, 2));
         
         res.json({
             success: true,
@@ -61,7 +63,7 @@ router.get('/inspect-company/:companyId', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ INSPECTION ERROR:', error);
+        logger.error('❌ INSPECTION ERROR:', error);
         res.status(500).json({
             success: false,
             message: 'Inspection failed',
@@ -77,8 +79,8 @@ router.get('/inspect-company/:companyId', async (req, res) => {
  */
 router.post('/migrate-voice-schema', async (req, res) => {
     try {
-        console.log('\n🔧 VOICE SETTINGS SCHEMA MIGRATION (API)');
-        console.log('═'.repeat(80));
+        logger.info('\n🔧 VOICE SETTINGS SCHEMA MIGRATION (API)');
+        logger.info('═'.repeat(80));
         
         const db = mongoose.connection.db;
         const companies = db.collection('v2companies');
@@ -93,7 +95,7 @@ router.post('/migrate-voice-schema', async (req, res) => {
         };
         
         // A) Fix ai.voice.provider (if it's a string)
-        console.log('🔍 Checking ai.voice.provider...');
+        logger.info('🔍 Checking ai.voice.provider...');
         const fixA = await companies.updateMany(
             { "ai.voice.provider": { $type: "string" } },
             [
@@ -114,10 +116,10 @@ router.post('/migrate-voice-schema', async (req, res) => {
             ]
         );
         results.fixed.aiVoiceProvider = fixA.modifiedCount;
-        console.log(`   Fixed ${fixA.modifiedCount} documents`);
+        logger.info(`   Fixed ${fixA.modifiedCount} documents`);
         
         // B) Fix ai.voice (if it's a string)
-        console.log('🔍 Checking ai.voice...');
+        logger.info('🔍 Checking ai.voice...');
         const fixB = await companies.updateMany(
             { "ai.voice": { $type: "string" } },
             [
@@ -141,10 +143,10 @@ router.post('/migrate-voice-schema', async (req, res) => {
             ]
         );
         results.fixed.aiVoice = fixB.modifiedCount;
-        console.log(`   Fixed ${fixB.modifiedCount} documents`);
+        logger.info(`   Fixed ${fixB.modifiedCount} documents`);
         
         // C) Fix aiAgentLogic.voiceSettings (if it's a string)
-        console.log('🔍 Checking aiAgentLogic.voiceSettings...');
+        logger.info('🔍 Checking aiAgentLogic.voiceSettings...');
         const fixC = await companies.updateMany(
             { "aiAgentLogic.voiceSettings": { $type: "string" } },
             [
@@ -170,15 +172,15 @@ router.post('/migrate-voice-schema', async (req, res) => {
             ]
         );
         results.fixed.aiAgentLogicVoiceSettings = fixC.modifiedCount;
-        console.log(`   Fixed ${fixC.modifiedCount} documents`);
+        logger.info(`   Fixed ${fixC.modifiedCount} documents`);
         
         // Summary
         results.totalScanned = await companies.countDocuments({});
         const totalFixed = Object.values(results.fixed).reduce((a, b) => a + b, 0);
         
-        console.log('\n📊 Migration complete');
-        console.log(`   Total companies: ${results.totalScanned}`);
-        console.log(`   Total fixed: ${totalFixed}`);
+        logger.info('\n📊 Migration complete');
+        logger.info(`   Total companies: ${results.totalScanned}`);
+        logger.info(`   Total fixed: ${totalFixed}`);
         
         res.json({
             success: true,
@@ -187,7 +189,7 @@ router.post('/migrate-voice-schema', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ MIGRATION ERROR:', error);
+        logger.error('❌ MIGRATION ERROR:', error);
         res.status(500).json({
             success: false,
             message: 'Migration failed',
@@ -203,19 +205,19 @@ router.post('/migrate-voice-schema', async (req, res) => {
  */
 router.post('/repair-voice-settings', async (req, res) => {
     try {
-        console.log('\n🚨 EMERGENCY REPAIR: Voice Settings Corruption Fix');
-        console.log('═'.repeat(80));
+        logger.info('\n🚨 EMERGENCY REPAIR: Voice Settings Corruption Fix');
+        logger.info('═'.repeat(80));
         
         // Get direct MongoDB access (bypass Mongoose validation)
         const db = mongoose.connection.db;
         const companiesCollection = db.collection('v2companies');
         
-        console.log('🔍 Scanning for ALL companies...');
+        logger.info('🔍 Scanning for ALL companies...');
         
         // Get ALL companies to inspect their voiceSettings
         const allCompanies = await companiesCollection.find({}).toArray();
         
-        console.log(`📊 Found ${allCompanies.length} total companies`);
+        logger.info(`📊 Found ${allCompanies.length} total companies`);
         
         const corruptCompanies = [];
         const report = {
@@ -249,10 +251,10 @@ router.post('/repair-voice-settings', async (req, res) => {
             }
         }
         
-        console.log(`\n🔍 Found ${corruptCompanies.length} companies with corrupt voiceSettings`);
+        logger.info(`\n🔍 Found ${corruptCompanies.length} companies with corrupt voiceSettings`);
         
         if (corruptCompanies.length === 0) {
-            console.log('✅ No corruption found!');
+            logger.info('✅ No corruption found!');
             return res.json({
                 success: true,
                 message: 'No corruption found. All voiceSettings are valid.',
@@ -261,11 +263,11 @@ router.post('/repair-voice-settings', async (req, res) => {
         }
         
         // Repair each corrupt company
-        console.log('\n🔧 Starting repairs...');
+        logger.debug('\n🔧 Starting repairs...');
         
         for (const company of corruptCompanies) {
             try {
-                console.log(`🔧 Repairing: ${company.companyName} (${company._id})`);
+                logger.debug(`🔧 Repairing: ${company.companyName} (${company._id})`);
                 
                 const result = await companiesCollection.updateOne(
                     { _id: company._id },
@@ -304,10 +306,10 @@ router.post('/repair-voice-settings', async (req, res) => {
                     modifiedCount: result.modifiedCount
                 });
                 
-                console.log(`   ✅ Repaired`);
+                logger.info(`   ✅ Repaired`);
                 
             } catch (error) {
-                console.error(`   ❌ Failed:`, error.message);
+                logger.error(`   ❌ Failed:`, error.message);
                 report.repairResults.push({
                     companyId: company._id.toString(),
                     companyName: company.companyName,
@@ -318,7 +320,7 @@ router.post('/repair-voice-settings', async (req, res) => {
         }
         
         // Verify repairs
-        console.log('\n🔍 Verifying repairs...');
+        logger.info('\n🔍 Verifying repairs...');
         const stillCorrupt = [];
         
         for (const company of corruptCompanies) {
@@ -341,14 +343,14 @@ router.post('/repair-voice-settings', async (req, res) => {
         report.successfulRepairs = report.repairResults.filter(r => r.success).length;
         report.failedRepairs = report.repairResults.filter(r => !r.success).length;
         
-        console.log(`\n${  '═'.repeat(80)}`);
-        console.log('📊 REPAIR COMPLETE');
-        console.log(`   Total scanned: ${report.totalCompanies}`);
-        console.log(`   Found corrupt: ${report.corruptCompanies.length}`);
-        console.log(`   Successfully repaired: ${report.successfulRepairs}`);
-        console.log(`   Failed: ${report.failedRepairs}`);
-        console.log(`   Still corrupt: ${stillCorrupt.length}`);
-        console.log('═'.repeat(80));
+        logger.info(`\n${  '═'.repeat(80)}`);
+        logger.info('📊 REPAIR COMPLETE');
+        logger.info(`   Total scanned: ${report.totalCompanies}`);
+        logger.info(`   Found corrupt: ${report.corruptCompanies.length}`);
+        logger.info(`   Successfully repaired: ${report.successfulRepairs}`);
+        logger.info(`   Failed: ${report.failedRepairs}`);
+        logger.info(`   Still corrupt: ${stillCorrupt.length}`);
+        logger.info('═'.repeat(80));
         
         res.json({
             success: true,
@@ -357,7 +359,7 @@ router.post('/repair-voice-settings', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ EMERGENCY REPAIR ERROR:', error);
+        logger.error('❌ EMERGENCY REPAIR ERROR:', error);
         res.status(500).json({
             success: false,
             message: 'Emergency repair failed',
