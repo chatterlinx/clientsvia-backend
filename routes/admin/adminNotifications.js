@@ -1090,7 +1090,7 @@ const DependencyHealthMonitor = require('../../services/DependencyHealthMonitor'
 // GET /api/admin/notifications/root-cause-analysis
 // AI-powered pattern detection and root cause identification
 // ----------------------------------------------------------------------------
-router.get('/api/admin/notifications/root-cause-analysis', 
+router.get('/notifications/root-cause-analysis', 
     authenticateJWT, 
     requireRole('admin'), 
     async (req, res) => {
@@ -1146,7 +1146,7 @@ router.get('/api/admin/notifications/root-cause-analysis',
 // GET /api/admin/notifications/error-trends
 // Historical trend analysis and regression detection
 // ----------------------------------------------------------------------------
-router.get('/api/admin/notifications/error-trends', 
+router.get('/notifications/error-trends', 
     authenticateJWT, 
     requireRole('admin'), 
     async (req, res) => {
@@ -1203,7 +1203,7 @@ router.get('/api/admin/notifications/error-trends',
 // GET /api/admin/notifications/dependency-health
 // Real-time monitoring of all external services
 // ----------------------------------------------------------------------------
-router.get('/api/admin/notifications/dependency-health', 
+router.get('/notifications/dependency-health', 
     authenticateJWT, 
     requireRole('admin'), 
     async (req, res) => {
@@ -1277,7 +1277,7 @@ router.get('/api/admin/notifications/dependency-health',
 // GET /api/admin/notifications/service-status/:serviceName
 // Quick status check for specific service (MongoDB, Redis, Twilio, ElevenLabs)
 // ----------------------------------------------------------------------------
-router.get('/api/admin/notifications/service-status/:serviceName', 
+router.get('/notifications/service-status/:serviceName', 
     authenticateJWT, 
     requireRole('admin'), 
     async (req, res) => {
