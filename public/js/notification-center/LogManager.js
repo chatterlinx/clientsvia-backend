@@ -545,14 +545,29 @@ Paste this report to your AI assistant for instant root cause analysis!
             const response = await this.nc.apiPost(testEndpoint, {});
             
             if (response.success) {
-                this.nc.showSuccess(`✅ ${testName} passed! Issue may be resolved.`);
+                // Check the ACTUAL health check results, not just API success
+                const status = response.data?.overallStatus || 'UNKNOWN';
+                const passed = response.data?.summary?.passed || 0;
+                const total = response.data?.summary?.total || 0;
+                const failed = response.data?.summary?.failed || 0;
+                const warnings = response.data?.summary?.warnings || 0;
+                
+                if (status === 'HEALTHY' || status === 'PASS') {
+                    this.nc.showSuccess(`✅ ${testName} PASSED! All systems operational (${passed}/${total} checks passed)`);
+                } else if (status === 'WARNING') {
+                    this.nc.showWarning(`⚠️ ${testName} completed with WARNINGS: ${warnings} warning(s), ${failed} failure(s). Check details in new alert.`);
+                } else if (status === 'CRITICAL' || status === 'FAIL') {
+                    this.nc.showError(`🚨 ${testName} FAILED: ${failed} critical failure(s), ${warnings} warning(s). Check Alert Log for details!`);
+                } else {
+                    this.nc.showInfo(`ℹ️ ${testName} completed. Status: ${status}`);
+                }
                 
                 // Auto-refresh logs to show new test results
                 setTimeout(() => {
                     this.load();
                 }, 2000);
             } else {
-                this.nc.showWarning(`⚠️ ${testName} failed: ${response.message || 'Unknown error'}`);
+                this.nc.showError(`❌ ${testName} failed to run: ${response.message || 'Unknown error'}`);
             }
             
         } catch (error) {
