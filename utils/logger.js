@@ -132,13 +132,13 @@ const logger = winston.createLogger({
   ]
 });
 
-// Add Sentry integration for error levels
+// Add Sentry + AdminNotificationService integration for error levels
 const originalError = logger.error;
 logger.error = function(message, meta = {}) {
   // Call original Winston error logging
   originalError.call(this, message, meta);
   
-  // Also send to Sentry if available
+  // Send to Sentry if available
   try {
     const { captureError } = require('./sentry');
     if (meta && meta.stack) {
@@ -154,6 +154,33 @@ logger.error = function(message, meta = {}) {
   } catch (sentryError) {
     // Don't fail if Sentry isn't available
     console.warn('Failed to send error to Sentry:', sentryError.message);
+  }
+
+  // Send CRITICAL/WARNING errors to Admin Notification Center
+  // This ensures all production errors are visible in the dashboard
+  if (meta.notifyAdmin !== false && meta.severity && ['CRITICAL', 'WARNING'].includes(meta.severity)) {
+    try {
+      const AdminNotificationService = require('../services/AdminNotificationService');
+      
+      // Fire and forget - don't block on notification delivery
+      setImmediate(() => {
+        AdminNotificationService.sendAlert({
+          code: meta.code || 'SYSTEM_ERROR',
+          severity: meta.severity,
+          companyId: meta.companyId || null,
+          companyName: meta.companyName || 'System',
+          message,
+          details: meta.details || meta.error?.message || '',
+          stackTrace: meta.stack || meta.error?.stack || null
+        }).catch(notifError => {
+          // Don't fail the original operation if notification fails
+          console.warn('[LOGGER] Failed to send admin notification:', notifError.message);
+        });
+      });
+    } catch (notifError) {
+      // Don't fail if AdminNotificationService isn't available
+      console.warn('[LOGGER] AdminNotificationService not available:', notifError.message);
+    }
   }
 };
 
@@ -203,6 +230,55 @@ logger.auth = (action, userId, success, meta = {}) => {
     success,
     ...meta,
     category: 'authentication'
+  });
+};
+
+/**
+ * Log company-specific errors with automatic notification to admin dashboard
+ * 
+ * @param {Object} params
+ * @param {string} params.companyId - The company ID (MongoDB ObjectId)
+ * @param {string} params.companyName - The company name (optional, will be fetched if not provided)
+ * @param {string} params.code - Error code (e.g., 'TWILIO_GREETING_FAILURE')
+ * @param {string} params.message - Short error message
+ * @param {string} params.severity - 'CRITICAL' | 'WARNING' | 'INFO'
+ * @param {Error|string} params.error - Error object or details
+ * @param {Object} params.meta - Additional metadata
+ * 
+ * @example
+ * logger.companyError({
+ *   companyId: req.params.companyId,
+ *   companyName: company.companyName,
+ *   code: 'TWILIO_GREETING_FAILURE',
+ *   message: 'Failed to generate AI greeting',
+ *   severity: 'WARNING',
+ *   error: err,
+ *   meta: { callSid: req.body.CallSid }
+ * });
+ */
+logger.companyError = ({
+  companyId,
+  companyName,
+  code,
+  message,
+  severity = 'WARNING',
+  error,
+  meta = {}
+}) => {
+  const errorDetails = error instanceof Error ? error.message : String(error || '');
+  const stackTrace = error instanceof Error ? error.stack : null;
+
+  logger.error(`[COMPANY:${companyId}] ${message}`, {
+    companyId,
+    companyName,
+    code,
+    severity,
+    details: errorDetails,
+    stack: stackTrace,
+    error,
+    ...meta,
+    category: 'company-error',
+    notifyAdmin: true // Will trigger AdminNotificationService
   });
 };
 
