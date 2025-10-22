@@ -44,6 +44,7 @@ const logger = require('../utils/logger.js');
 const NotificationLog = require('../models/NotificationLog');
 const NotificationRegistry = require('../models/NotificationRegistry');
 const smsClient = require('../clients/smsClient');
+const emailClient = require('../clients/emailClient');
 const errorIntelligence = require('./ErrorIntelligenceService');
 
 class AdminNotificationService {
@@ -370,20 +371,140 @@ View: https://app.clientsvia.com/admin-notification-center.html
     static async sendEmailToAdmins({ alertId, code, severity, companyName, message, details, adminContacts }) {
         const results = [];
         
-        // Email implementation would go here
-        // For now, we'll return empty array since email client isn't set up yet
-        
         const emailContacts = adminContacts.filter(c => c.email && c.receiveEmail !== false);
         
-        for (const contact of emailContacts) {
-            // TODO: Implement email sending via SendGrid/AWS SES
-            results.push({
-                recipient: contact.email,
-                recipientName: contact.name,
-                status: 'pending',
-                provider: 'not-configured'
-            });
+        if (emailContacts.length === 0) {
+            logger.info('📧 [EMAIL] No admin contacts with email enabled');
+            return results;
         }
+        
+        const severityEmoji = {
+            'CRITICAL': '🚨',
+            'WARNING': '⚠️',
+            'INFO': 'ℹ️'
+        }[severity] || '📢';
+        
+        const subject = `${severityEmoji} [ClientsVia Alert] ${code}`;
+        const emailBody = `
+${severityEmoji} CLIENTSVIA ADMIN ALERT
+═══════════════════════════════════════════
+
+Alert ID: ${alertId}
+Code: ${code}
+Severity: ${severity}
+Company: ${companyName}
+
+MESSAGE:
+${message}
+
+DETAILS:
+${details}
+
+═══════════════════════════════════════════
+Timestamp: ${new Date().toISOString()}
+View full details: https://clientsvia-backend.onrender.com/admin-notification-center.html#logs
+        `.trim();
+        
+        const htmlBody = `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="padding: 20px; background: ${severity === 'CRITICAL' ? '#fee' : severity === 'WARNING' ? '#fffbeb' : '#eff6ff'}; border-left: 4px solid ${severity === 'CRITICAL' ? '#dc2626' : severity === 'WARNING' ? '#f59e0b' : '#3b82f6'}; border-radius: 8px;">
+                    <h2 style="margin: 0 0 15px 0; color: ${severity === 'CRITICAL' ? '#991b1b' : severity === 'WARNING' ? '#92400e' : '#1e40af'};">
+                        ${severityEmoji} ClientsVia Admin Alert
+                    </h2>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 8px 0; font-weight: bold; width: 120px;">Alert ID:</td>
+                            <td style="padding: 8px 0;">${alertId}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; font-weight: bold;">Code:</td>
+                            <td style="padding: 8px 0;"><code style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px;">${code}</code></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; font-weight: bold;">Severity:</td>
+                            <td style="padding: 8px 0;"><strong>${severity}</strong></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; font-weight: bold;">Company:</td>
+                            <td style="padding: 8px 0;">${companyName}</td>
+                        </tr>
+                    </table>
+                    
+                    <div style="margin: 20px 0; padding: 15px; background: white; border-radius: 6px;">
+                        <p style="margin: 0 0 10px 0; font-weight: bold;">Message:</p>
+                        <p style="margin: 0;">${message}</p>
+                    </div>
+                    
+                    ${details ? `
+                    <div style="margin: 20px 0; padding: 15px; background: white; border-radius: 6px;">
+                        <p style="margin: 0 0 10px 0; font-weight: bold;">Details:</p>
+                        <pre style="margin: 0; white-space: pre-wrap; font-size: 13px; color: #374151;">${details}</pre>
+                    </div>
+                    ` : ''}
+                    
+                    <div style="margin-top: 20px; text-align: center;">
+                        <a href="https://clientsvia-backend.onrender.com/admin-notification-center.html#logs" 
+                           style="display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">
+                            View in Notification Center →
+                        </a>
+                    </div>
+                </div>
+                
+                <p style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 12px; color: #6b7280;">
+                    ${new Date().toISOString()}<br>
+                    This is an automated alert from ClientsVia Platform
+                </p>
+            </div>
+        `;
+        
+        for (const contact of emailContacts) {
+            try {
+                logger.info(`📧 [EMAIL] Sending to ${contact.name} (${contact.email})...`);
+                
+                const result = await emailClient.send({
+                    to: contact.email,
+                    subject: subject,
+                    body: emailBody,
+                    html: htmlBody
+                });
+                
+                if (result.success) {
+                    logger.info(`✅ [EMAIL] Sent to ${contact.name} (${contact.email})`);
+                    results.push({
+                        recipient: contact.email,
+                        recipientName: contact.name,
+                        status: 'sent',
+                        messageId: result.messageId,
+                        provider: 'gmail',
+                        timestamp: new Date()
+                    });
+                } else {
+                    logger.error(`❌ [EMAIL] Failed to send to ${contact.name}: ${result.error}`);
+                    results.push({
+                        recipient: contact.email,
+                        recipientName: contact.name,
+                        status: 'failed',
+                        error: result.error,
+                        provider: 'gmail',
+                        timestamp: new Date()
+                    });
+                }
+                
+            } catch (error) {
+                logger.error(`❌ [EMAIL] Exception sending to ${contact.name}:`, error);
+                results.push({
+                    recipient: contact.email,
+                    recipientName: contact.name,
+                    status: 'failed',
+                    error: error.message,
+                    provider: 'gmail',
+                    timestamp: new Date()
+                });
+            }
+        }
+        
+        const successCount = results.filter(r => r.status === 'sent').length;
+        logger.info(`📧 [EMAIL] Sent ${successCount}/${results.length} admin emails`);
         
         return results;
     }
