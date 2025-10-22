@@ -31,6 +31,46 @@ class NotificationCenterManager {
         this.init();
     }
     
+    /**
+     * Generate a UUID v4 for Idempotency-Key and request correlation
+     */
+    generateUUID() {
+        // RFC4122 version 4 compliant (no external deps)
+        const getRandomByte = () => {
+            try {
+                if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+                    const buf = new Uint8Array(1);
+                    window.crypto.getRandomValues(buf);
+                    return buf[0];
+                }
+            } catch (_) { /* fallback below */ }
+            return Math.floor(Math.random() * 256);
+        };
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = getRandomByte() & 15;
+            const v = c === 'x' ? r : (r & 0x3) | 0x8;
+            return v.toString(16);
+        });
+    }
+
+    /**
+     * Create default headers with Authorization and JSON content type
+     * Optionally inject Idempotency-Key for mutation requests
+     */
+    buildHeaders({ includeIdempotency = false } = {}) {
+        const headers = {
+            'Authorization': `Bearer ${this.token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        };
+
+        if (includeIdempotency) {
+            headers['Idempotency-Key'] = this.generateUUID();
+        }
+
+        return headers;
+    }
+
     async init() {
         console.log('🔔 [NC MANAGER] Initializing Notification Center...');
         
@@ -154,10 +194,7 @@ class NotificationCenterManager {
     async apiGet(endpoint) {
         const response = await fetch(endpoint, {
             method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${this.token}`,
-                'Content-Type': 'application/json'
-            }
+            headers: this.buildHeaders()
         });
         
         if (!response.ok) {
@@ -173,10 +210,7 @@ class NotificationCenterManager {
     async apiPost(endpoint, data) {
         const response = await fetch(endpoint, {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${this.token}`,
-                'Content-Type': 'application/json'
-            },
+            headers: this.buildHeaders({ includeIdempotency: true }),
             body: JSON.stringify(data)
         });
         
@@ -193,11 +227,24 @@ class NotificationCenterManager {
     async apiPut(endpoint, data) {
         const response = await fetch(endpoint, {
             method: 'PUT',
-            headers: {
-                'Authorization': `Bearer ${this.token}`,
-                'Content-Type': 'application/json'
-            },
+            headers: this.buildHeaders({ includeIdempotency: true }),
             body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+        
+        return response.json();
+    }
+
+    /**
+     * API Helper - DELETE request
+     */
+    async apiDelete(endpoint) {
+        const response = await fetch(endpoint, {
+            method: 'DELETE',
+            headers: this.buildHeaders({ includeIdempotency: true })
         });
         
         if (!response.ok) {

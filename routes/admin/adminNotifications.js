@@ -30,6 +30,43 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
+const { captureAuditInfo, requireIdempotency, configWriteRateLimit } = require('../../middleware/configSecurity');
+const { redisClient } = require('../../clients');
+
+// ----------------------------------------------------------------------------
+// Idempotency helper: caches successful JSON responses for duplicate keys
+// ----------------------------------------------------------------------------
+async function respondWithIdempotency(req, res, handler, opts = {}) {
+    const userId = req.user?.userId || 'admin';
+    const key = req.idempotencyKey ? `admin:idemp:${userId}:${req.idempotencyKey}` : null;
+    const ttlSeconds = opts.ttlSeconds || 300; // 5 minutes default
+
+    try {
+        if (key && redisClient && redisClient.isReady) {
+            const cached = await redisClient.get(key);
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                // Return cached success response
+                return res.json(parsed);
+            }
+        }
+
+        const result = await handler();
+
+        if (key && redisClient && redisClient.isReady) {
+            try {
+                await redisClient.setEx(key, ttlSeconds, JSON.stringify(result));
+            } catch (cacheErr) {
+                console.warn('⚠️ [IDEMPOTENCY CACHE] Failed to store result:', cacheErr?.message);
+            }
+        }
+
+        return res.json(result);
+    } catch (err) {
+        // Do not cache errors
+        throw err;
+    }
+}
 
 const NotificationLog = require('../../models/NotificationLog');
 const NotificationRegistry = require('../../models/NotificationRegistry');
@@ -167,33 +204,30 @@ router.get('/admin/notifications/registry', authenticateJWT, requireRole('admin'
 // VALIDATE ALL NOTIFICATION POINTS
 // ============================================================================
 
-router.post('/admin/notifications/registry/validate', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.post('/admin/notifications/registry/validate', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     try {
-        const points = await NotificationRegistry.find({ isActive: true });
-        
-        const results = [];
-        
-        for (const point of points) {
-            await point.validateNotificationPoint();
-            results.push({
-                code: point.code,
-                isValid: point.validation.isValid,
-                errors: point.validation.errors,
-                warnings: point.validation.warnings
-            });
-        }
-        
-        const summary = await NotificationRegistry.getValidationSummary();
-        
-        res.json({
-            success: true,
-            data: {
-                validatedCount: results.length,
-                results,
-                summary
+        await respondWithIdempotency(req, res, async () => {
+            const points = await NotificationRegistry.find({ isActive: true });
+            const results = [];
+            for (const point of points) {
+                await point.validateNotificationPoint();
+                results.push({
+                    code: point.code,
+                    isValid: point.validation.isValid,
+                    errors: point.validation.errors,
+                    warnings: point.validation.warnings
+                });
             }
+            const summary = await NotificationRegistry.getValidationSummary();
+            return {
+                success: true,
+                data: {
+                    validatedCount: results.length,
+                    results,
+                    summary
+                }
+            };
         });
-        
     } catch (error) {
         console.error('❌ [NOTIFICATION VALIDATION] Error:', error);
         res.status(500).json({
@@ -296,25 +330,23 @@ router.get('/admin/notifications/logs/:alertId', authenticateJWT, requireRole('a
 // ACKNOWLEDGE ALERT
 // ============================================================================
 
-router.post('/admin/notifications/acknowledge', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.post('/admin/notifications/acknowledge', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     try {
         const { alertId, acknowledgedBy } = req.body;
-        
         if (!alertId || !acknowledgedBy) {
             return res.status(400).json({
                 success: false,
                 message: 'alertId and acknowledgedBy are required'
             });
         }
-        
-        const result = await AdminNotificationService.acknowledgeAlert(
-            alertId,
-            acknowledgedBy,
-            'WEB_UI'
-        );
-        
-        res.json(result);
-        
+        await respondWithIdempotency(req, res, async () => {
+            const result = await AdminNotificationService.acknowledgeAlert(
+                alertId,
+                acknowledgedBy,
+                'WEB_UI'
+            );
+            return result;
+        });
     } catch (error) {
         console.error('❌ [NOTIFICATION ACKNOWLEDGE] Error:', error);
         res.status(500).json({
@@ -328,25 +360,23 @@ router.post('/admin/notifications/acknowledge', authenticateJWT, requireRole('ad
 // SNOOZE ALERT
 // ============================================================================
 
-router.post('/admin/notifications/snooze', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.post('/admin/notifications/snooze', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     try {
         const { alertId, minutes, reason } = req.body;
-        
         if (!alertId || !minutes) {
             return res.status(400).json({
                 success: false,
                 message: 'alertId and minutes are required'
             });
         }
-        
-        const result = await AlertEscalationService.snoozeAlert(
-            alertId,
-            parseInt(minutes, 10),
-            reason || ''
-        );
-        
-        res.json(result);
-        
+        await respondWithIdempotency(req, res, async () => {
+            const result = await AlertEscalationService.snoozeAlert(
+                alertId,
+                parseInt(minutes, 10),
+                reason || ''
+            );
+            return result;
+        });
     } catch (error) {
         console.error('❌ [NOTIFICATION SNOOZE] Error:', error);
         res.status(500).json({
@@ -360,33 +390,29 @@ router.post('/admin/notifications/snooze', authenticateJWT, requireRole('admin')
 // RESOLVE ALERT
 // ============================================================================
 
-router.post('/admin/notifications/resolve', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.post('/admin/notifications/resolve', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     try {
         const { alertId, resolvedBy, action, notes } = req.body;
-        
         if (!alertId || !resolvedBy || !action) {
             return res.status(400).json({
                 success: false,
                 message: 'alertId, resolvedBy, and action are required'
             });
         }
-        
         const alert = await NotificationLog.findOne({ alertId });
-        
         if (!alert) {
             return res.status(404).json({
                 success: false,
                 message: 'Alert not found'
             });
         }
-        
-        await alert.resolve(resolvedBy, action, notes || '');
-        
-        res.json({
-            success: true,
-            data: alert
+        await respondWithIdempotency(req, res, async () => {
+            await alert.resolve(resolvedBy, action, notes || '');
+            return {
+                success: true,
+                data: alert
+            };
         });
-        
     } catch (error) {
         console.error('❌ [NOTIFICATION RESOLVE] Error:', error);
         res.status(500).json({
@@ -400,21 +426,18 @@ router.post('/admin/notifications/resolve', authenticateJWT, requireRole('admin'
 // RUN HEALTH CHECK
 // ============================================================================
 
-router.post('/admin/notifications/health-check', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.post('/admin/notifications/health-check', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     try {
         const { triggeredBy = 'manual' } = req.body;
         const triggeredByUser = req.user?.name || req.user?.email || 'admin';
-        
         console.log(`🏥 [HEALTH CHECK API] Starting health check (triggered by: ${triggeredByUser})...`);
-        
-        // Run health check (this will take a few seconds)
-        const results = await PlatformHealthCheckService.runFullHealthCheck(triggeredBy, triggeredByUser);
-        
-        res.json({
-            success: true,
-            data: results
-        });
-        
+        await respondWithIdempotency(req, res, async () => {
+            const results = await PlatformHealthCheckService.runFullHealthCheck(triggeredBy, triggeredByUser);
+            return {
+                success: true,
+                data: results
+            };
+        }, { ttlSeconds: 120 }); // cache health-check results briefly
     } catch (error) {
         console.error('❌ [HEALTH CHECK API] Error:', error);
         res.status(500).json({
@@ -525,7 +548,7 @@ router.get('/admin/notifications/settings', authenticateJWT, requireRole('admin'
 // UPDATE NOTIFICATION SETTINGS (Twilio + Admin Contacts)
 // ============================================================================
 
-router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     try {
         const AdminSettings = require('../../models/AdminSettings');
         const { twilio, twilioTest, adminContacts, escalation } = req.body;
@@ -610,7 +633,7 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
             console.log('✅ [NOTIFICATION SETTINGS] Redis cache cleared');
         }
         
-        res.json({
+        await respondWithIdempotency(req, res, async () => ({
             success: true,
             message: 'Notification settings updated successfully',
             data: {
@@ -618,7 +641,7 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
                 adminContacts: settings.notificationCenter?.adminContacts || [],
                 escalation: settings.notificationCenter?.escalation || {}
             }
-        });
+        }));
         
     } catch (error) {
         console.error('❌ [UPDATE NOTIFICATION SETTINGS] Error:', error);
@@ -633,7 +656,7 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
 // SEND TEST SMS TO ADMIN CONTACT
 // ============================================================================
 
-router.post('/admin/notifications/test-sms', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.post('/admin/notifications/test-sms', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     /* eslint-disable no-console */
     // Console logging intentional for SMS delivery testing
     
@@ -713,38 +736,38 @@ Reply STOP to unsubscribe.
         console.log(`   From: ${settings.notificationCenter.twilio.phoneNumber}`);
         console.log(`   To: ${recipientPhone}`);
         
-        const result = await twilioClient.messages.create({
-            body: testMessage,
-            from: settings.notificationCenter.twilio.phoneNumber,
-            to: recipientPhone
-        });
-        
-        console.log(`✅ [TEST SMS] Twilio API responded successfully!`);
-        console.log(`   Twilio SID: ${result.sid}`);
-        console.log(`   Status: ${result.status}`);
-        console.log(`   Date Created: ${result.dateCreated}`);
-        console.log(`   Price: ${result.price || 'pending'}`);
-        console.log(`   Error Code: ${result.errorCode || 'none'}`);
-        console.log(`   Error Message: ${result.errorMessage || 'none'}`);
-        
-        res.json({
-            success: true,
-            message: `Test SMS sent to ${recipientName}`,
-            twilioSid: result.sid,
-            status: result.status,
-            dateCreated: result.dateCreated,
-            price: result.price,
-            debug: {
+        await respondWithIdempotency(req, res, async () => {
+            const result = await twilioClient.messages.create({
+                body: testMessage,
                 from: settings.notificationCenter.twilio.phoneNumber,
-                to: recipientPhone,
-                messageLength: testMessage.length,
-                twilioResponse: {
-                    sid: result.sid,
-                    status: result.status,
-                    direction: result.direction,
-                    apiVersion: result.apiVersion
+                to: recipientPhone
+            });
+            console.log(`✅ [TEST SMS] Twilio API responded successfully!`);
+            console.log(`   Twilio SID: ${result.sid}`);
+            console.log(`   Status: ${result.status}`);
+            console.log(`   Date Created: ${result.dateCreated}`);
+            console.log(`   Price: ${result.price || 'pending'}`);
+            console.log(`   Error Code: ${result.errorCode || 'none'}`);
+            console.log(`   Error Message: ${result.errorMessage || 'none'}`);
+            return {
+                success: true,
+                message: `Test SMS sent to ${recipientName}`,
+                twilioSid: result.sid,
+                status: result.status,
+                dateCreated: result.dateCreated,
+                price: result.price,
+                debug: {
+                    from: settings.notificationCenter.twilio.phoneNumber,
+                    to: recipientPhone,
+                    messageLength: testMessage.length,
+                    twilioResponse: {
+                        sid: result.sid,
+                        status: result.status,
+                        direction: result.direction,
+                        apiVersion: result.apiVersion
+                    }
                 }
-            }
+            };
         });
         
     } catch (error) {

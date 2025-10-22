@@ -2056,34 +2056,43 @@ router.post('/sms', async (req, res) => {
         // ====================================================================
         if (message.match(/^(TEST|PING|HELLO|HI)$/i)) {
             console.log(`✅ [SMS WEBHOOK] Test command received from ${from}`);
+            console.log('📧 [SMS WEBHOOK] STARTING email notification process...');
             
             // 📧 Send email notification to admins (Gmail - clientsvia@gmail.com)
             // ARCHITECTURE: Admin notifications use Gmail, customer emails use SendGrid (future)
             try {
+                console.log('📧 [SMS WEBHOOK] Step 1: Requiring emailClient...');
                 const emailClient = require('../clients/emailClient');
+                console.log('📧 [SMS WEBHOOK] Step 2: emailClient loaded successfully');
+                
+                console.log('📧 [SMS WEBHOOK] Step 3: Creating timestamp...');
                 const timestamp = new Date().toLocaleString('en-US', { 
                     timeZone: 'America/New_York',
                     dateStyle: 'short',
                     timeStyle: 'long'
                 });
+                console.log(`📧 [SMS WEBHOOK] Step 4: Timestamp created: ${timestamp}`);
                 
-                // Use new sendAdminAlert() method for clean separation
+                console.log('📧 [SMS WEBHOOK] Step 5: Calling emailClient.sendAdminAlert()...');
                 const result = await emailClient.sendAdminAlert(
                     '✅ SMS Test Received',
                     `SMS Test Command Received!\n\nFrom: ${from}\nMessage: "${message}"\nTime: ${timestamp} ET\n\n✅ Webhook is working correctly!\n📱 SMS system is LIVE!`,
                     `<h2>✅ SMS Test Command Received!</h2><p><strong>From:</strong> ${from}</p><p><strong>Message:</strong> "${message}"</p><p><strong>Time:</strong> ${timestamp} ET</p><hr><p>✅ Webhook is working correctly!</p><p>📱 SMS system is LIVE!</p>`
                 );
+                console.log('📧 [SMS WEBHOOK] Step 6: sendAdminAlert() returned:', JSON.stringify(result));
                 
                 if (result.success) {
-                    console.log(`📧 [SMS WEBHOOK] ✅ Admin alert sent to ${result.recipients} recipient(s)`);
+                    console.log(`📧 [SMS WEBHOOK] ✅ SUCCESS! Admin alert sent to ${result.recipients} recipient(s)`);
                 } else {
-                    console.error(`❌ [SMS WEBHOOK] Failed to send admin alert: ${result.error}`);
+                    console.error(`❌ [SMS WEBHOOK] FAILED! Error: ${result.error}`);
                 }
                 
             } catch (emailError) {
-                console.error('⚠️ [SMS WEBHOOK] Failed to send email notification:', emailError);
+                console.error('⚠️ [SMS WEBHOOK] EXCEPTION caught:', emailError.message);
                 console.error('⚠️ [SMS WEBHOOK] Error stack:', emailError.stack);
             }
+            
+            console.log('📧 [SMS WEBHOOK] Email notification process COMPLETE');
             
             const twiml = new twilio.twiml.MessagingResponse();
             twiml.message(`✅ ClientsVia SMS System is LIVE!\n\n🚀 2-way SMS confirmed working.\n📱 Webhook connected.\n⏰ ${new Date().toLocaleString()}`);
