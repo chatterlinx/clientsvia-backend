@@ -1079,6 +1079,42 @@ Reply STOP to unsubscribe.
 });
 
 // ============================================================================
+// TEST FULL NOTIFICATION SYSTEM (SMS + EMAIL)
+// ============================================================================
+
+router.post('/admin/notifications/test-all', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        logger.info('🧪 [TEST ALL] Testing full notification system (SMS + Email)...');
+        
+        // Trigger a test alert using AdminNotificationService
+        // This will send both SMS and Email to all configured admin contacts
+        await AdminNotificationService.sendAlert({
+            code: 'NOTIFICATION_SYSTEM_TEST',
+            severity: 'INFO',
+            companyId: null,
+            companyName: 'Notification Center Test',
+            message: '🧪 Test Alert - Full System Check',
+            details: `This is a test message sent at ${new Date().toISOString()}\n\nIf you received this via both SMS AND email, your notification system is working perfectly!\n\n✅ SMS delivery: Working\n✅ Email delivery: Working\n✅ Notification logging: Working`
+        });
+        
+        logger.info('✅ [TEST ALL] Test alert sent successfully!');
+        
+        res.json({
+            success: true,
+            message: 'Test alert sent! Check your phone AND email inbox.',
+            note: 'This alert was also logged in the Alert Log tab.'
+        });
+        
+    } catch (error) {
+        logger.error('❌ [TEST ALL] Test failed:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============================================================================
 // PHASE 3: ADVANCED ERROR INTELLIGENCE ENDPOINTS
 // ============================================================================
 // TEMPORARILY DISABLED: Phase 3 services are causing server crashes

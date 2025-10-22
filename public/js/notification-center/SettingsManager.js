@@ -361,6 +361,38 @@ class SettingsManager {
         }
     }
     
+    async testFullSystem() {
+        if (!confirm('🧪 This will send a test alert to ALL configured admin contacts via BOTH SMS and Email.\n\nProceed?')) {
+            return;
+        }
+        
+        try {
+            this.nc.showToast('📤 Sending test notifications...', 'info');
+            
+            console.log('🧪 [TEST FULL SYSTEM] Triggering full notification test...');
+            
+            const data = await this.nc.apiPost('/api/admin/notifications/test-all', {});
+            
+            if (data.success) {
+                console.log('✅ [TEST FULL SYSTEM] Success!', data);
+                
+                this.nc.showSuccess(
+                    `✅ Test notifications sent!\n\n` +
+                    `📱 Check your phone for SMS\n` +
+                    `📧 Check your email inbox\n` +
+                    `📋 Check Alert Log tab for the test entry\n\n` +
+                    `${data.message || ''}`
+                );
+            } else {
+                this.nc.showError(`Failed to send test: ${data.error || 'Unknown error'}`);
+            }
+            
+        } catch (error) {
+            console.error('❌ [TEST FULL SYSTEM] Failed:', error);
+            this.nc.showError(`Test failed: ${error.message}`);
+        }
+    }
+    
     // ========================================================================
     // ESCALATION SETTINGS
     // ========================================================================
