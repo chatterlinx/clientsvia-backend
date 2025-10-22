@@ -154,6 +154,19 @@ router.get('/admin/notifications/dashboard', authenticateJWT, requireRole('admin
         .limit(10)
         .select('alertId code severity companyName message createdAt escalation');
         
+        // Heartbeat emit (non-blocking)
+        try { AdminNotificationService.sendAlert({
+            code: 'NOTIF_DASHBOARD_LOAD_OK',
+            severity: 'INFO',
+            message: 'ok',
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'DASHBOARD',
+            eventType: 'important_event'
+        }); } catch (_) {}
+
         res.json({
             success: true,
             data: {
@@ -167,6 +180,18 @@ router.get('/admin/notifications/dashboard', authenticateJWT, requireRole('admin
         
     } catch (error) {
         console.error('❌ [NOTIFICATION DASHBOARD] Error:', error);
+        try { AdminNotificationService.sendAlert({
+            code: 'NOTIF_DASHBOARD_LOAD_FAILURE',
+            severity: 'WARNING',
+            message: error.message,
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'DASHBOARD',
+            eventType: 'failure',
+            meta: { route: req.method + ' ' + req.originalUrl }
+        }); } catch (_) {}
         res.status(500).json({
             success: false,
             error: error.message
@@ -183,6 +208,19 @@ router.get('/admin/notifications/registry', authenticateJWT, requireRole('admin'
         const grouped = await NotificationRegistry.getAllGrouped();
         const summary = await NotificationRegistry.getValidationSummary();
         
+        // Heartbeat emit (non-blocking)
+        try { AdminNotificationService.sendAlert({
+            code: 'NOTIF_REGISTRY_VALIDATE_OK',
+            severity: 'INFO',
+            message: 'ok',
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'REGISTRY',
+            eventType: 'important_event'
+        }); } catch (_) {}
+
         res.json({
             success: true,
             data: {
@@ -193,6 +231,18 @@ router.get('/admin/notifications/registry', authenticateJWT, requireRole('admin'
         
     } catch (error) {
         console.error('❌ [NOTIFICATION REGISTRY] Error:', error);
+        try { AdminNotificationService.sendAlert({
+            code: 'NOTIF_REGISTRY_VALIDATE_FAILURE',
+            severity: 'WARNING',
+            message: error.message,
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'REGISTRY',
+            eventType: 'failure',
+            meta: { route: req.method + ' ' + req.originalUrl }
+        }); } catch (_) {}
         res.status(500).json({
             success: false,
             error: error.message
@@ -219,6 +269,19 @@ router.post('/admin/notifications/registry/validate', authenticateJWT, requireRo
                 });
             }
             const summary = await NotificationRegistry.getValidationSummary();
+
+            // Heartbeat emit (non-blocking)
+            try { AdminNotificationService.sendAlert({
+                code: 'NOTIF_REGISTRY_VALIDATE_OK',
+                severity: 'INFO',
+                message: 'ok',
+                companyId: null,
+                requestId: req.headers['x-request-id'] || null,
+                feature: 'notification-center',
+                tab: 'NOTIFICATION_CENTER',
+                module: 'REGISTRY',
+                eventType: 'important_event'
+            }); } catch (_) {}
             return {
                 success: true,
                 data: {
@@ -230,6 +293,18 @@ router.post('/admin/notifications/registry/validate', authenticateJWT, requireRo
         });
     } catch (error) {
         console.error('❌ [NOTIFICATION VALIDATION] Error:', error);
+        try { AdminNotificationService.sendAlert({
+            code: 'NOTIF_REGISTRY_VALIDATE_FAILURE',
+            severity: 'WARNING',
+            message: error.message,
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'REGISTRY',
+            eventType: 'failure',
+            meta: { route: req.method + ' ' + req.originalUrl }
+        }); } catch (_) {}
         res.status(500).json({
             success: false,
             error: error.message
@@ -273,6 +348,19 @@ router.get('/admin/notifications/logs', authenticateJWT, requireRole('admin'), a
             NotificationLog.countDocuments(filter)
         ]);
         
+        // Heartbeat: logs list OK (non-blocking)
+        try { AdminNotificationService.sendAlert({
+            code: 'NOTIF_LOGS_LIST_OK',
+            severity: 'INFO',
+            message: 'ok',
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'LOGS',
+            eventType: 'important_event'
+        }); } catch (_) {}
+
         res.json({
             success: true,
             data: {
@@ -288,6 +376,18 @@ router.get('/admin/notifications/logs', authenticateJWT, requireRole('admin'), a
         
     } catch (error) {
         console.error('❌ [NOTIFICATION LOGS] Error:', error);
+        try { AdminNotificationService.sendAlert({
+            code: 'NOTIF_LOGS_LIST_FAILURE',
+            severity: 'WARNING',
+            message: error.message,
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'LOGS',
+            eventType: 'failure',
+            meta: { route: req.method + ' ' + req.originalUrl }
+        }); } catch (_) {}
         res.status(500).json({
             success: false,
             error: error.message
@@ -312,6 +412,19 @@ router.get('/admin/notifications/logs/:alertId', authenticateJWT, requireRole('a
             });
         }
         
+        // Heartbeat: log detail OK
+        try { AdminNotificationService.sendAlert({
+            code: 'NOTIF_LOGS_LIST_OK',
+            severity: 'INFO',
+            message: 'ok',
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'LOGS',
+            eventType: 'important_event'
+        }); } catch (_) {}
+
         res.json({
             success: true,
             data: alert
@@ -319,6 +432,18 @@ router.get('/admin/notifications/logs/:alertId', authenticateJWT, requireRole('a
         
     } catch (error) {
         console.error('❌ [NOTIFICATION ALERT DETAILS] Error:', error);
+        try { AdminNotificationService.sendAlert({
+            code: 'NOTIF_LOGS_LIST_FAILURE',
+            severity: 'WARNING',
+            message: error.message,
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'LOGS',
+            eventType: 'failure',
+            meta: { route: req.method + ' ' + req.originalUrl }
+        }); } catch (_) {}
         res.status(500).json({
             success: false,
             error: error.message
@@ -345,10 +470,33 @@ router.post('/admin/notifications/acknowledge', authenticateJWT, requireRole('ad
                 acknowledgedBy,
                 'WEB_UI'
             );
+            try { AdminNotificationService.sendAlert({
+                code: 'NOTIF_ALERT_ACK_OK',
+                severity: 'INFO',
+                message: 'ok',
+                companyId: null,
+                requestId: req.headers['x-request-id'] || null,
+                feature: 'notification-center',
+                tab: 'NOTIFICATION_CENTER',
+                module: 'ALERT',
+                eventType: 'important_event'
+            }); } catch (_) {}
             return result;
         });
     } catch (error) {
         console.error('❌ [NOTIFICATION ACKNOWLEDGE] Error:', error);
+        try { AdminNotificationService.sendAlert({
+            code: 'NOTIF_ALERT_ACK_FAILURE',
+            severity: 'WARNING',
+            message: error.message,
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'ALERT',
+            eventType: 'failure',
+            meta: { route: req.method + ' ' + req.originalUrl }
+        }); } catch (_) {}
         res.status(500).json({
             success: false,
             error: error.message
@@ -375,10 +523,33 @@ router.post('/admin/notifications/snooze', authenticateJWT, requireRole('admin')
                 parseInt(minutes, 10),
                 reason || ''
             );
+            try { AdminNotificationService.sendAlert({
+                code: 'NOTIF_ALERT_SNOOZE_OK',
+                severity: 'INFO',
+                message: 'ok',
+                companyId: null,
+                requestId: req.headers['x-request-id'] || null,
+                feature: 'notification-center',
+                tab: 'NOTIFICATION_CENTER',
+                module: 'ALERT',
+                eventType: 'important_event'
+            }); } catch (_) {}
             return result;
         });
     } catch (error) {
         console.error('❌ [NOTIFICATION SNOOZE] Error:', error);
+        try { AdminNotificationService.sendAlert({
+            code: 'NOTIF_ALERT_SNOOZE_FAILURE',
+            severity: 'WARNING',
+            message: error.message,
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'ALERT',
+            eventType: 'failure',
+            meta: { route: req.method + ' ' + req.originalUrl }
+        }); } catch (_) {}
         res.status(500).json({
             success: false,
             error: error.message
@@ -408,6 +579,17 @@ router.post('/admin/notifications/resolve', authenticateJWT, requireRole('admin'
         }
         await respondWithIdempotency(req, res, async () => {
             await alert.resolve(resolvedBy, action, notes || '');
+            try { AdminNotificationService.sendAlert({
+                code: 'NOTIF_ALERT_RESOLVE_OK',
+                severity: 'INFO',
+                message: 'ok',
+                companyId: null,
+                requestId: req.headers['x-request-id'] || null,
+                feature: 'notification-center',
+                tab: 'NOTIFICATION_CENTER',
+                module: 'ALERT',
+                eventType: 'important_event'
+            }); } catch (_) {}
             return {
                 success: true,
                 data: alert
@@ -415,6 +597,18 @@ router.post('/admin/notifications/resolve', authenticateJWT, requireRole('admin'
         });
     } catch (error) {
         console.error('❌ [NOTIFICATION RESOLVE] Error:', error);
+        try { AdminNotificationService.sendAlert({
+            code: 'NOTIF_ALERT_RESOLVE_FAILURE',
+            severity: 'WARNING',
+            message: error.message,
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'ALERT',
+            eventType: 'failure',
+            meta: { route: req.method + ' ' + req.originalUrl }
+        }); } catch (_) {}
         res.status(500).json({
             success: false,
             error: error.message
@@ -428,11 +622,40 @@ router.post('/admin/notifications/resolve', authenticateJWT, requireRole('admin'
 
 router.post('/admin/notifications/health-check', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     try {
+        const t0 = Date.now();
         const { triggeredBy = 'manual' } = req.body;
         const triggeredByUser = req.user?.name || req.user?.email || 'admin';
         console.log(`🏥 [HEALTH CHECK API] Starting health check (triggered by: ${triggeredByUser})...`);
         await respondWithIdempotency(req, res, async () => {
             const results = await PlatformHealthCheckService.runFullHealthCheck(triggeredBy, triggeredByUser);
+            const latencyMs = Date.now() - t0;
+            // Heartbeat OK (non-blocking)
+            try { AdminNotificationService.sendAlert({
+                code: 'NOTIF_HEALTH_RUN_OK',
+                severity: 'INFO',
+                message: 'ok',
+                companyId: null,
+                requestId: req.headers['x-request-id'] || null,
+                feature: 'notification-center',
+                tab: 'NOTIFICATION_CENTER',
+                module: 'HEALTH',
+                eventType: 'important_event'
+            }); } catch (_) {}
+            // SLO breach (>600ms)
+            if (latencyMs > 600) {
+                try { AdminNotificationService.sendAlert({
+                    code: 'SLO_NOTIF_HEALTH_RUN_P95',
+                    severity: 'INFO',
+                    message: 'latency breach',
+                    companyId: null,
+                    requestId: req.headers['x-request-id'] || null,
+                    feature: 'notification-center',
+                    tab: 'NOTIFICATION_CENTER',
+                    module: 'HEALTH',
+                    eventType: 'slo_breach',
+                    latencyMs
+                }); } catch (_) {}
+            }
             return {
                 success: true,
                 data: results
@@ -440,6 +663,18 @@ router.post('/admin/notifications/health-check', authenticateJWT, requireRole('a
         }, { ttlSeconds: 120 }); // cache health-check results briefly
     } catch (error) {
         console.error('❌ [HEALTH CHECK API] Error:', error);
+        try { AdminNotificationService.sendAlert({
+            code: 'NOTIF_HEALTH_RUN_FAILURE',
+            severity: 'WARNING',
+            message: error.message,
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'HEALTH',
+            eventType: 'failure',
+            meta: { route: req.method + ' ' + req.originalUrl }
+        }); } catch (_) {}
         res.status(500).json({
             success: false,
             error: error.message
@@ -623,6 +858,16 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
             console.log('✅ [NOTIFICATION SETTINGS] Escalation intervals updated');
         }
         
+        // Emit missing Twilio credentials warnings (non-blocking)
+        try {
+            const sidMissing = !(settings.notificationCenter?.twilio?.accountSid);
+            const tokenMissing = !(settings.notificationCenter?.twilio?.authToken);
+            const numberMissing = !(settings.notificationCenter?.twilio?.phoneNumber);
+            if (sidMissing)   AdminNotificationService.sendAlert({ code: 'NOTIF_SETTINGS_TWILIO_MISSING_SID',    severity: 'WARNING', message: 'Twilio SID missing',    companyId: null, requestId: req.headers['x-request-id'] || null, feature: 'notification-center', tab: 'NOTIFICATION_CENTER', module: 'SETTINGS', eventType: 'failure', meta: { route: req.method + ' ' + req.originalUrl } });
+            if (tokenMissing) AdminNotificationService.sendAlert({ code: 'NOTIF_SETTINGS_TWILIO_MISSING_TOKEN',  severity: 'WARNING', message: 'Twilio token missing',  companyId: null, requestId: req.headers['x-request-id'] || null, feature: 'notification-center', tab: 'NOTIFICATION_CENTER', module: 'SETTINGS', eventType: 'failure', meta: { route: req.method + ' ' + req.originalUrl } });
+            if (numberMissing)AdminNotificationService.sendAlert({ code: 'NOTIF_SETTINGS_TWILIO_MISSING_NUMBER', severity: 'WARNING', message: 'Twilio number missing', companyId: null, requestId: req.headers['x-request-id'] || null, feature: 'notification-center', tab: 'NOTIFICATION_CENTER', module: 'SETTINGS', eventType: 'failure', meta: { route: req.method + ' ' + req.originalUrl } });
+        } catch (_) {}
+
         settings.markModified('notificationCenter');
         await settings.save();
         
@@ -642,9 +887,34 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
                 escalation: settings.notificationCenter?.escalation || {}
             }
         }));
+
+        // Heartbeat OK (non-blocking)
+        try { AdminNotificationService.sendAlert({
+            code: 'NOTIF_SETTINGS_SAVE_OK',
+            severity: 'INFO',
+            message: 'ok',
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'SETTINGS',
+            eventType: 'important_event'
+        }); } catch (_) {}
         
     } catch (error) {
         console.error('❌ [UPDATE NOTIFICATION SETTINGS] Error:', error);
+        try { AdminNotificationService.sendAlert({
+            code: 'NOTIF_SETTINGS_SAVE_FAILURE',
+            severity: 'WARNING',
+            message: error.message,
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'SETTINGS',
+            eventType: 'failure',
+            meta: { route: req.method + ' ' + req.originalUrl }
+        }); } catch (_) {}
         res.status(500).json({
             success: false,
             error: error.message
@@ -749,6 +1019,19 @@ Reply STOP to unsubscribe.
             console.log(`   Price: ${result.price || 'pending'}`);
             console.log(`   Error Code: ${result.errorCode || 'none'}`);
             console.log(`   Error Message: ${result.errorMessage || 'none'}`);
+            // Heartbeat OK (non-blocking)
+            try { AdminNotificationService.sendAlert({
+                code: 'NOTIF_SETTINGS_TEST_SMS_OK',
+                severity: 'INFO',
+                message: 'ok',
+                companyId: null,
+                requestId: req.headers['x-request-id'] || null,
+                feature: 'notification-center',
+                tab: 'NOTIFICATION_CENTER',
+                module: 'SETTINGS',
+                eventType: 'important_event'
+            }); } catch (_) {}
+
             return {
                 success: true,
                 message: `Test SMS sent to ${recipientName}`,
@@ -772,6 +1055,18 @@ Reply STOP to unsubscribe.
         
     } catch (error) {
         console.error('❌ [TEST SMS] Failed to send:', error);
+        try { AdminNotificationService.sendAlert({
+            code: 'NOTIF_SETTINGS_TEST_SMS_FAILURE',
+            severity: 'WARNING',
+            message: error.message,
+            companyId: null,
+            requestId: req.headers['x-request-id'] || null,
+            feature: 'notification-center',
+            tab: 'NOTIFICATION_CENTER',
+            module: 'SETTINGS',
+            eventType: 'failure',
+            meta: { route: req.method + ' ' + req.originalUrl }
+        }); } catch (_) {}
         res.status(500).json({
             success: false,
             error: error.message || 'Failed to send test SMS'
