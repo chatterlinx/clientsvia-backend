@@ -46,6 +46,7 @@ const NotificationRegistry = require('../models/NotificationRegistry');
 const smsClient = require('../clients/smsClient');
 const emailClient = require('../clients/emailClient');
 const errorIntelligence = require('./ErrorIntelligenceService');
+const SmartGroupingService = require('./SmartGroupingService');
 
 class AdminNotificationService {
     
@@ -161,6 +162,45 @@ class AdminNotificationService {
                 } else if (severity === 'WARNING') {
                     logger.info(`🌙 [QUIET HOURS] WARNING alert - sending (defer disabled)`);
                 }
+            }
+            
+            // ================================================================
+            // STEP 3.4: SMART GROUPING (Prevent Alert Storms)
+            // ================================================================
+            const smartGroupingPolicy = settings.notificationCenter?.notificationPolicy?.smartGrouping;
+            const groupCheck = await SmartGroupingService.shouldGroupError(
+                code.toUpperCase(),
+                severity,
+                smartGroupingPolicy
+            );
+            
+            if (groupCheck.shouldGroup) {
+                // Check if we've already sent a grouped alert recently
+                const recentCheck = await SmartGroupingService.hasRecentGroupedAlert(groupCheck.groupKey);
+                
+                if (recentCheck.alreadySent) {
+                    logger.info(`🔗 [SMART GROUPING] Skipping duplicate - grouped alert sent ${recentCheck.sentInfo.minutesAgo}min ago`);
+                    return { success: true, alertId: null, policyAction: 'grouped-duplicate' };
+                }
+                
+                // This is the first grouped alert - modify the message
+                const groupedMessage = SmartGroupingService.generateGroupedMessage(
+                    code.toUpperCase(),
+                    groupCheck.count,
+                    groupCheck.windowMinutes,
+                    smartGroupingPolicy?.groupMessage
+                );
+                
+                logger.info(`🔗 [SMART GROUPING] Sending grouped alert: ${groupedMessage}`);
+                
+                // Override the message with grouped version
+                message = groupedMessage;
+                details = `${details}\n\n🔗 GROUPED ALERT: ${groupCheck.count} occurrences of ${code.toUpperCase()} detected in ${groupCheck.windowMinutes} minutes.\n\nThis alert has been consolidated to prevent notification spam.`;
+                
+                // Mark that we've sent the grouped alert
+                await SmartGroupingService.markGroupedAlertSent(groupCheck.groupKey, groupCheck.count);
+            } else if (groupCheck.count > 0) {
+                logger.debug(`🔗 [SMART GROUPING] ${code.toUpperCase()}: ${groupCheck.count} occurrences (threshold not reached)`);
             }
             
             // ================================================================
