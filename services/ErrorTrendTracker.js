@@ -399,5 +399,18 @@ class ErrorTrendTracker {
     }
 }
 
-module.exports = new ErrorTrendTracker();
+// Export both the class and a lazy-initialized singleton
+let _instance = null;
+
+module.exports = {
+    // Get singleton instance (lazy initialization)
+    getInstance: function() {
+        if (!_instance) {
+            _instance = new ErrorTrendTracker();
+        }
+        return _instance;
+    },
+    // Also export the class itself for testing
+    ErrorTrendTracker
+};
 

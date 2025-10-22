@@ -1227,14 +1227,16 @@ router.post('/admin/notifications/send-digest', authenticateJWT, requireRole('ad
 // ============================================================================
 // PHASE 3: ADVANCED ERROR INTELLIGENCE ENDPOINTS
 // ============================================================================
-// ✅ RE-ENABLED: Fixed redisClient export bug in clients/index.js
-// Root cause: module.exports was capturing null value instead of using getter
+// ✅ RE-ENABLED: Fixed redisClient export bug + lazy initialization
+// Root cause 1: module.exports was capturing null value instead of using getter
+// Root cause 2: Services were instantiating on module load before Redis ready
+// Solution: Lazy initialization via getInstance() pattern
 // ============================================================================
 
-// Phase 3 services are already instantiated (singleton pattern)
-const rootCauseAnalyzer = require('../../services/RootCauseAnalyzer');
-const errorTrendTracker = require('../../services/ErrorTrendTracker');
-const dependencyHealthMonitor = require('../../services/DependencyHealthMonitor');
+// Phase 3 services use lazy initialization (singleton pattern)
+const RootCauseAnalyzerModule = require('../../services/RootCauseAnalyzer');
+const ErrorTrendTrackerModule = require('../../services/ErrorTrendTracker');
+const DependencyHealthMonitorModule = require('../../services/DependencyHealthMonitor');
 
 // Simple test route to verify Phase 3 routes are registered
 router.get('/notifications/_test', authenticateJWT, requireRole('admin'), (req, res) => {
@@ -1260,6 +1262,7 @@ router.get('/notifications/root-cause-analysis',
         
         logger.info(`🧠 [ROOT CAUSE API] Analyzing error patterns (${timeWindow}min window)`);
         
+        const rootCauseAnalyzer = RootCauseAnalyzerModule.getInstance();
         const analysis = await rootCauseAnalyzer.analyzeErrors(timeWindow);
         
         await AdminNotificationService.sendAlert({
@@ -1316,6 +1319,7 @@ router.get('/notifications/error-trends',
         
         logger.info(`📊 [TREND API] Fetching error trends (${periodHours}h period)`);
         
+        const errorTrendTracker = ErrorTrendTrackerModule.getInstance();
         const trends = await errorTrendTracker.getErrorTrends(periodHours);
         const baseline = await errorTrendTracker.compareWithBaseline();
         
@@ -1371,6 +1375,7 @@ router.get('/notifications/dependency-health',
     try {
         logger.info('🏥 [DEPENDENCY API] Checking all service dependencies');
         
+        const dependencyHealthMonitor = DependencyHealthMonitorModule.getInstance();
         const healthStatus = await dependencyHealthMonitor.getHealthStatus();
         
         // Send alert if any critical services are down
@@ -1447,6 +1452,7 @@ router.get('/notifications/service-status/:serviceName',
         
         logger.info(`🏥 [SERVICE STATUS API] Checking ${serviceName}`);
         
+        const dependencyHealthMonitor = DependencyHealthMonitorModule.getInstance();
         const status = await dependencyHealthMonitor.getDependencyStatus(serviceName);
         
         res.json({

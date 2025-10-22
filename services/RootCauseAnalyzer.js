@@ -293,5 +293,18 @@ class RootCauseAnalyzer {
     }
 }
 
-module.exports = new RootCauseAnalyzer();
+// Export both the class and a lazy-initialized singleton
+let _instance = null;
+
+module.exports = {
+    // Get singleton instance (lazy initialization)
+    getInstance: function() {
+        if (!_instance) {
+            _instance = new RootCauseAnalyzer();
+        }
+        return _instance;
+    },
+    // Also export the class itself for testing
+    RootCauseAnalyzer
+};
 

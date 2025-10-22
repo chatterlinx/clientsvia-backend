@@ -429,5 +429,18 @@ class DependencyHealthMonitor {
     }
 }
 
-module.exports = new DependencyHealthMonitor();
+// Export both the class and a lazy-initialized singleton
+let _instance = null;
+
+module.exports = {
+    // Get singleton instance (lazy initialization)
+    getInstance: function() {
+        if (!_instance) {
+            _instance = new DependencyHealthMonitor();
+        }
+        return _instance;
+    },
+    // Also export the class itself for testing
+    DependencyHealthMonitor
+};
 
