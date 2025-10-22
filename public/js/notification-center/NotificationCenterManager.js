@@ -292,6 +292,13 @@ class NotificationCenterManager {
     }
     
     /**
+     * Show info message
+     */
+    showInfo(message) {
+        this.showToast(message, 'info');
+    }
+    
+    /**
      * Show toast notification
      */
     showToast(message, type = 'info') {
