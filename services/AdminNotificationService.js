@@ -192,7 +192,37 @@ class AdminNotificationService {
     } catch (error) {
             logger.error(`❌ [ADMIN NOTIFICATION] Failed to send alert ${code}:`, error);
             
-            // Even if sending fails, try to log the attempt
+            // Log to notification center about the notification system failure
+            // (but prevent infinite recursion by checking the error code)
+            if (code !== 'NOTIFICATION_SYSTEM_FAILURE') {
+                try {
+                    // Self-report the failure to the notification center
+                    await NotificationLog.create({
+                        code: 'NOTIFICATION_SYSTEM_FAILURE',
+                        severity: 'CRITICAL',
+                        companyId,
+                        companyName,
+                        message: `Failed to send notification: ${code}`,
+                        details: error.message,
+                        stackTrace: error.stack,
+                        deliveryAttempts: [{
+                            attemptNumber: 1,
+                            timestamp: new Date(),
+                            sms: [],
+                            email: [],
+                            call: []
+                        }],
+                        escalation: {
+                            isEnabled: false  // Don't escalate notification system failures
+                        }
+                    });
+                } catch (logError) {
+                    // Last resort - just log to console/file
+                    logger.error(`❌ [ADMIN NOTIFICATION] Failed to log notification failure:`, logError);
+                }
+            }
+            
+            // Even if sending fails, try to log the original attempt
             try {
                 await NotificationLog.create({
                     code: code.toUpperCase(),
