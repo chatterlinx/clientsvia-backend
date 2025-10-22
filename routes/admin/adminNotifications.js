@@ -1239,7 +1239,7 @@ const ErrorTrendTrackerModule = require('../../services/ErrorTrendTracker');
 const DependencyHealthMonitorModule = require('../../services/DependencyHealthMonitor');
 
 // Simple test route to verify Phase 3 routes are registered
-router.get('/notifications/_test', authenticateJWT, requireRole('admin'), (req, res) => {
+router.get('/admin/notifications/_test', authenticateJWT, requireRole('admin'), (req, res) => {
     res.json({ 
         success: true, 
         message: '🎉 Phase 3 routes are registered and ENABLED!',
@@ -1253,7 +1253,7 @@ router.get('/notifications/_test', authenticateJWT, requireRole('admin'), (req, 
 // GET /api/admin/notifications/root-cause-analysis
 // AI-powered pattern detection and root cause identification
 // ----------------------------------------------------------------------------
-router.get('/notifications/root-cause-analysis', 
+router.get('/admin/notifications/root-cause-analysis', 
     authenticateJWT, 
     requireRole('admin'), 
     async (req, res) => {
@@ -1310,7 +1310,7 @@ router.get('/notifications/root-cause-analysis',
 // GET /api/admin/notifications/error-trends
 // Historical trend analysis and regression detection
 // ----------------------------------------------------------------------------
-router.get('/notifications/error-trends', 
+router.get('/admin/notifications/error-trends', 
     authenticateJWT, 
     requireRole('admin'), 
     async (req, res) => {
@@ -1368,7 +1368,7 @@ router.get('/notifications/error-trends',
 // GET /api/admin/notifications/dependency-health
 // Real-time monitoring of all external services
 // ----------------------------------------------------------------------------
-router.get('/notifications/dependency-health', 
+router.get('/admin/notifications/dependency-health', 
     authenticateJWT, 
     requireRole('admin'), 
     async (req, res) => {
@@ -1443,7 +1443,7 @@ router.get('/notifications/dependency-health',
 // GET /api/admin/notifications/service-status/:serviceName
 // Quick status check for specific service (MongoDB, Redis, Twilio, ElevenLabs)
 // ----------------------------------------------------------------------------
-router.get('/notifications/service-status/:serviceName', 
+router.get('/admin/notifications/service-status/:serviceName', 
     authenticateJWT, 
     requireRole('admin'), 
     async (req, res) => {
@@ -1473,7 +1473,7 @@ router.get('/notifications/service-status/:serviceName',
 // ============================================================================
 // DIAGNOSTIC: List all registered routes (for debugging 404s)
 // ============================================================================
-router.get('/notifications/_routes', authenticateJWT, requireRole('admin'), (req, res) => {
+router.get('/admin/notifications/_routes', authenticateJWT, requireRole('admin'), (req, res) => {
     const routes = [];
     router.stack.forEach((r) => {
         if (r.route) {
