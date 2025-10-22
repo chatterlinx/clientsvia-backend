@@ -64,7 +64,7 @@ const CompanyQnACategorySchema = new mongoose.Schema({
         required: true,
         index: true,
         validate: {
-            validator: function(v) {
+            validator(v) {
                 return mongoose.Types.ObjectId.isValid(v);
             },
             message: 'CompanyId must be a valid ObjectId'

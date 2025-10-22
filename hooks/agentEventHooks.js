@@ -31,8 +31,8 @@ class AgentEventHooks {
     const event = {
       timestamp: new Date().toISOString(),
       type: eventType,
-      data: data,
-      result: result,
+      data,
+      result,
       sessionId: data.sessionId || 'unknown'
     };
 
@@ -66,17 +66,17 @@ class AgentEventHooks {
         errorMessage: result.success ? null : (result.error || 'Unknown error'),
         metadata: {
           eventData: data,
-          result: result,
-          eventType: eventType,
+          result,
+          eventType,
           channels: result.channels || [],
           fromAgent: true, // Always true for AI Agent Logic
-          companyId: companyId,
+          companyId,
           sessionId: data.sessionId || `event_${Date.now()}`,
           traceId: data.traceId || `trace_${Date.now()}`
         },
         aiAgentContext: {
           source: 'agent_event_hooks',
-          eventType: eventType,
+          eventType,
           processingTime: endTime - startTime,
           success: result.success,
           sessionId: data.sessionId || `event_${Date.now()}`,
@@ -96,7 +96,7 @@ class AgentEventHooks {
    * @param {object} booking - includes phone, email, appointmentTime, companyName, customerName
    */
   async onBookingConfirmed(booking) {
-    if (!this.enabled) return { success: false, message: 'Event hooks disabled' };
+    if (!this.enabled) {return { success: false, message: 'Event hooks disabled' };}
 
     try {
       const data = {
@@ -122,7 +122,7 @@ class AgentEventHooks {
       if (booking.email) {
         const emailResult = await this.notify.sendEmail(
           booking.email, 
-          'Booking Confirmed - ' + data.companyName, 
+          `Booking Confirmed - ${  data.companyName}`, 
           'bookingConfirmation', 
           data
         );
@@ -134,7 +134,7 @@ class AgentEventHooks {
         success: successful > 0,
         message: `Booking confirmation sent via ${successful} channel(s)`,
         channels: results,
-        booking: booking
+        booking
       };
 
       await this.logEvent('booking_confirmed', booking, result);
@@ -144,7 +144,7 @@ class AgentEventHooks {
       const result = {
         success: false,
         error: error.message,
-        booking: booking
+        booking
       };
       
       await this.logEvent('booking_confirmed', booking, result);
@@ -157,7 +157,7 @@ class AgentEventHooks {
    * @param {object} fallback - includes to, message, company info
    */
   async onFallbackMessage(fallback) {
-    if (!this.enabled) return { success: false, message: 'Event hooks disabled' };
+    if (!this.enabled) {return { success: false, message: 'Event hooks disabled' };}
 
     try {
       const data = {
@@ -182,7 +182,7 @@ class AgentEventHooks {
       if (fallback.to?.email) {
         const emailResult = await this.notify.sendEmail(
           fallback.to.email, 
-          'Customer Message - ' + data.companyName, 
+          `Customer Message - ${  data.companyName}`, 
           'fallbackMessage', 
           data
         );
@@ -194,7 +194,7 @@ class AgentEventHooks {
         success: successful > 0,
         message: `Fallback message sent via ${successful} channel(s)`,
         channels: results,
-        fallback: fallback
+        fallback
       };
 
       await this.logEvent('fallback_message', fallback, result);
@@ -204,7 +204,7 @@ class AgentEventHooks {
       const result = {
         success: false,
         error: error.message,
-        fallback: fallback
+        fallback
       };
       
       await this.logEvent('fallback_message', fallback, result);
@@ -217,14 +217,14 @@ class AgentEventHooks {
    * @param {object} transfer - transfer details
    */
   async onTransferCompleted(transfer) {
-    if (!this.enabled) return { success: false, message: 'Event hooks disabled' };
+    if (!this.enabled) {return { success: false, message: 'Event hooks disabled' };}
 
     try {
       // Log transfer for analytics
       const result = {
         success: true,
         message: 'Transfer completed successfully',
-        transfer: transfer,
+        transfer,
         timestamp: new Date().toISOString()
       };
 
@@ -235,7 +235,7 @@ class AgentEventHooks {
       const result = {
         success: false,
         error: error.message,
-        transfer: transfer
+        transfer
       };
       
       await this.logEvent('transfer_completed', transfer, result);
@@ -248,7 +248,7 @@ class AgentEventHooks {
    * @param {object} emergency - emergency details
    */
   async onEmergencyRequest(emergency) {
-    if (!this.enabled) return { success: false, message: 'Event hooks disabled' };
+    if (!this.enabled) {return { success: false, message: 'Event hooks disabled' };}
 
     try {
       const data = {
@@ -288,7 +288,7 @@ class AgentEventHooks {
         message: `Emergency alerts sent to ${successful} channel(s)`,
         priority: 'HIGH',
         channels: results,
-        emergency: emergency
+        emergency
       };
 
       await this.logEvent('emergency_request', emergency, result);
@@ -299,7 +299,7 @@ class AgentEventHooks {
         success: false,
         error: error.message,
         priority: 'HIGH',
-        emergency: emergency
+        emergency
       };
       
       await this.logEvent('emergency_request', emergency, result);
@@ -440,9 +440,9 @@ class AgentEventHooks {
     const value = parseInt(timeframe.slice(0, -1));
     
     const multipliers = {
-      'm': 60 * 1000,           // minutes
-      'h': 60 * 60 * 1000,     // hours
-      'd': 24 * 60 * 60 * 1000 // days
+      m: 60 * 1000,           // minutes
+      h: 60 * 60 * 1000,     // hours
+      d: 24 * 60 * 60 * 1000 // days
     };
     
     return value * (multipliers[unit] || multipliers.h);

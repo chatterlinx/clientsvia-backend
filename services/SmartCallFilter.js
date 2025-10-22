@@ -224,7 +224,7 @@ class SmartCallFilter {
         try {
             const company = await v2Company.findById(companyId).lean();
             
-            if (!company) return { shouldBlock: false };
+            if (!company) {return { shouldBlock: false };}
 
             // Check company's blacklist (stored in company.callFiltering.blacklist)
             const blacklist = company.callFiltering?.blacklist || [];
@@ -442,10 +442,10 @@ class SmartCallFilter {
             if (companyId) {
                 // Company-specific stats
                 return await BlockedCallLog.getSpamStats(companyId);
-            } else {
+            } 
                 // Global stats
                 return await GlobalSpamDatabase.getStats();
-            }
+            
         } catch (error) {
             console.error(`❌ [SMART FILTER] Error getting stats:`, error);
             return null;

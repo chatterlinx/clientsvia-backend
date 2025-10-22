@@ -144,7 +144,7 @@ async function createIndexes() {
         // ========================================================================
         // SUMMARY
         // ========================================================================
-        console.log('\n' + '='.repeat(80));
+        console.log(`\n${  '='.repeat(80)}`);
         console.log('✅ ALL INDEXES CREATED SUCCESSFULLY');
         console.log('='.repeat(80));
 

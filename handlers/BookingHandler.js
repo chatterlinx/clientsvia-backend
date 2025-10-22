@@ -12,14 +12,14 @@ async function getV2BookingSchema(companyID, trade, serviceType) {
     console.log(`[V2 Booking] Getting schema for ${companyID}/${trade}/${serviceType}`);
     
     const db = getDB();
-    if (!db) throw new Error('Database not connected');
+    if (!db) {throw new Error('Database not connected');}
 
     try {
         const schemaId = `${trade}-${serviceType}`.toLowerCase().replace(/\s+/g, '-');
         
         const schema = await db.collection('v2BookingSchemas').findOne({
-            companyID: companyID,
-            schemaId: schemaId,
+            companyID,
+            schemaId,
             'metadata.isActive': true
         });
 
@@ -43,11 +43,11 @@ async function getLegacyBookingFlow(companyID, trade, serviceType) {
     const company = await db.collection('companiesCollection').findOne({ 
         $or: [
             { _id: ObjectId.isValid(companyID) ? new ObjectId(companyID) : null },
-            { companyID: companyID }
+            { companyID }
         ]
     });
 
-    if (!company?.bookingScripts?.length) return null;
+    if (!company?.bookingScripts?.length) {return null;}
 
     return company.bookingScripts.find(script => 
         (script.tradeType === trade || script.trade === trade) && script.serviceType === serviceType
@@ -59,11 +59,11 @@ async function getLegacyBookingFlow(companyID, trade, serviceType) {
  */
 async function createOrResumeBookingSession({ companyID, trade, serviceType, sessionId, idempotencyKey }) {
     const db = getDB();
-    if (!db) throw new Error('Database not connected');
+    if (!db) {throw new Error('Database not connected');}
 
     try {
         const schema = await getV2BookingSchema(companyID, trade, serviceType);
-        if (!schema) throw new Error(`No booking schema found`);
+        if (!schema) {throw new Error(`No booking schema found`);}
 
         const newSessionId = generateSessionId();
         const now = new Date();
@@ -71,18 +71,18 @@ async function createOrResumeBookingSession({ companyID, trade, serviceType, ses
 
         const newSession = {
             sessionId: newSessionId,
-            companyID: companyID,
+            companyID,
             schemaId: schema.schemaId || `${trade}-${serviceType}`,
             tradeCategory: trade,
-            serviceType: serviceType,
-            idempotencyKey: idempotencyKey,
+            serviceType,
+            idempotencyKey,
             currentStep: 0,
             collectedData: {},
             isActive: true,
             isCompleted: false,
             createdAt: now,
             updatedAt: now,
-            expiresAt: expiresAt,
+            expiresAt,
             features: schema.features || {},
             auditLog: []
         };
@@ -94,8 +94,8 @@ async function createOrResumeBookingSession({ companyID, trade, serviceType, ses
             isNew: true,
             currentStep: 0,
             collectedData: {},
-            schema: schema,
-            expiresAt: expiresAt
+            schema,
+            expiresAt
         };
     } catch (error) {
         console.error('[V2 Booking] Session error:', error);
@@ -104,7 +104,7 @@ async function createOrResumeBookingSession({ companyID, trade, serviceType, ses
 }
 
 function generateSessionId() {
-    return 'bs_' + crypto.randomBytes(16).toString('hex');
+    return `bs_${  crypto.randomBytes(16).toString('hex')}`;
 }
 
 // Legacy exports for backward compatibility
@@ -143,7 +143,7 @@ async function handleBookingFlow({ companyID, trade, serviceType, currentStep = 
             totalSteps: stepsArray.length,
             message: typeof currentStepData === 'string' ? currentStepData : 
                     (currentStepData.prompt || currentStepData.question || currentStepData),
-            isLastStep: isLastStep,
+            isLastStep,
             done: false,
             nextStep: isLastStep ? null : currentStep + 1,
             flowName: flow.name || `${trade} ${serviceType} Booking`
@@ -165,7 +165,7 @@ async function getAvailableBookingFlows(companyID) {
         const company = await db.collection('companiesCollection').findOne({ 
             $or: [
                 { _id: ObjectId.isValid(companyID) ? new ObjectId(companyID) : null },
-                { companyID: companyID }
+                { companyID }
             ]
         });
 
@@ -207,7 +207,7 @@ function validateBookingFlow(bookingScript) {
     
     return {
         isValid: errors.length === 0,
-        errors: errors
+        errors
     };
 }
 

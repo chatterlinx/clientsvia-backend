@@ -242,7 +242,7 @@ async function importFromGlobal(companyId, scenarioIds) {
             
             if (!companyCategory) {
                 // Create new category
-                if (!company.aiAgentLogic) company.aiAgentLogic = {};
+                if (!company.aiAgentLogic) {company.aiAgentLogic = {};}
                 if (!company.aiAgentLogic.instantResponseCategories) {
                     company.aiAgentLogic.instantResponseCategories = [];
                 }

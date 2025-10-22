@@ -476,7 +476,7 @@ class MatchDiagnostics {
         
         return {
             punctuation: punctuation.length > 0 ? punctuation : 'none',
-            caseChanged: caseChanged,
+            caseChanged,
             extraWhitespace: whitespaceDiff > 0 ? whitespaceDiff : 0,
             totalCharsRemoved: before.length - after.length
         };

@@ -238,7 +238,7 @@ const calculateErrorRate = () => {
 };
 
 const calculatePercentile = (percentile) => {
-  if (metrics.performance.responseTimes.length === 0) return 0;
+  if (metrics.performance.responseTimes.length === 0) {return 0;}
   
   const sorted = [...metrics.performance.responseTimes].sort((a, b) => a - b);
   const index = Math.ceil((percentile / 100) * sorted.length) - 1;
@@ -255,9 +255,9 @@ const determineHealthStatus = () => {
     return 'critical';
   } else if (errorRate > 5 || avgResponseTime > 200 || memoryUsage > 0.75) {
     return 'warning';
-  } else {
+  } 
     return 'healthy';
-  }
+  
 };
 
 const resetMetrics = () => {

@@ -190,7 +190,7 @@ router.get('/admin/notifications/dashboard', authenticateJWT, requireRole('admin
             tab: 'NOTIFICATION_CENTER',
             module: 'DASHBOARD',
             eventType: 'failure',
-            meta: { route: req.method + ' ' + req.originalUrl }
+            meta: { route: `${req.method  } ${  req.originalUrl}` }
         }); } catch (_) {}
         res.status(500).json({
             success: false,
@@ -241,7 +241,7 @@ router.get('/admin/notifications/registry', authenticateJWT, requireRole('admin'
             tab: 'NOTIFICATION_CENTER',
             module: 'REGISTRY',
             eventType: 'failure',
-            meta: { route: req.method + ' ' + req.originalUrl }
+            meta: { route: `${req.method  } ${  req.originalUrl}` }
         }); } catch (_) {}
         res.status(500).json({
             success: false,
@@ -303,7 +303,7 @@ router.post('/admin/notifications/registry/validate', authenticateJWT, requireRo
             tab: 'NOTIFICATION_CENTER',
             module: 'REGISTRY',
             eventType: 'failure',
-            meta: { route: req.method + ' ' + req.originalUrl }
+            meta: { route: `${req.method  } ${  req.originalUrl}` }
         }); } catch (_) {}
         res.status(500).json({
             success: false,
@@ -386,7 +386,7 @@ router.get('/admin/notifications/logs', authenticateJWT, requireRole('admin'), a
             tab: 'NOTIFICATION_CENTER',
             module: 'LOGS',
             eventType: 'failure',
-            meta: { route: req.method + ' ' + req.originalUrl }
+            meta: { route: `${req.method  } ${  req.originalUrl}` }
         }); } catch (_) {}
         res.status(500).json({
             success: false,
@@ -442,7 +442,7 @@ router.get('/admin/notifications/logs/:alertId', authenticateJWT, requireRole('a
             tab: 'NOTIFICATION_CENTER',
             module: 'LOGS',
             eventType: 'failure',
-            meta: { route: req.method + ' ' + req.originalUrl }
+            meta: { route: `${req.method  } ${  req.originalUrl}` }
         }); } catch (_) {}
         res.status(500).json({
             success: false,
@@ -495,7 +495,7 @@ router.post('/admin/notifications/acknowledge', authenticateJWT, requireRole('ad
             tab: 'NOTIFICATION_CENTER',
             module: 'ALERT',
             eventType: 'failure',
-            meta: { route: req.method + ' ' + req.originalUrl }
+            meta: { route: `${req.method  } ${  req.originalUrl}` }
         }); } catch (_) {}
         res.status(500).json({
             success: false,
@@ -548,7 +548,7 @@ router.post('/admin/notifications/snooze', authenticateJWT, requireRole('admin')
             tab: 'NOTIFICATION_CENTER',
             module: 'ALERT',
             eventType: 'failure',
-            meta: { route: req.method + ' ' + req.originalUrl }
+            meta: { route: `${req.method  } ${  req.originalUrl}` }
         }); } catch (_) {}
         res.status(500).json({
             success: false,
@@ -607,7 +607,7 @@ router.post('/admin/notifications/resolve', authenticateJWT, requireRole('admin'
             tab: 'NOTIFICATION_CENTER',
             module: 'ALERT',
             eventType: 'failure',
-            meta: { route: req.method + ' ' + req.originalUrl }
+            meta: { route: `${req.method  } ${  req.originalUrl}` }
         }); } catch (_) {}
         res.status(500).json({
             success: false,
@@ -673,7 +673,7 @@ router.post('/admin/notifications/health-check', authenticateJWT, requireRole('a
             tab: 'NOTIFICATION_CENTER',
             module: 'HEALTH',
             eventType: 'failure',
-            meta: { route: req.method + ' ' + req.originalUrl }
+            meta: { route: `${req.method  } ${  req.originalUrl}` }
         }); } catch (_) {}
         res.status(500).json({
             success: false,
@@ -863,9 +863,9 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
             const sidMissing = !(settings.notificationCenter?.twilio?.accountSid);
             const tokenMissing = !(settings.notificationCenter?.twilio?.authToken);
             const numberMissing = !(settings.notificationCenter?.twilio?.phoneNumber);
-            if (sidMissing)   AdminNotificationService.sendAlert({ code: 'NOTIF_SETTINGS_TWILIO_MISSING_SID',    severity: 'WARNING', message: 'Twilio SID missing',    companyId: null, requestId: req.headers['x-request-id'] || null, feature: 'notification-center', tab: 'NOTIFICATION_CENTER', module: 'SETTINGS', eventType: 'failure', meta: { route: req.method + ' ' + req.originalUrl } });
-            if (tokenMissing) AdminNotificationService.sendAlert({ code: 'NOTIF_SETTINGS_TWILIO_MISSING_TOKEN',  severity: 'WARNING', message: 'Twilio token missing',  companyId: null, requestId: req.headers['x-request-id'] || null, feature: 'notification-center', tab: 'NOTIFICATION_CENTER', module: 'SETTINGS', eventType: 'failure', meta: { route: req.method + ' ' + req.originalUrl } });
-            if (numberMissing)AdminNotificationService.sendAlert({ code: 'NOTIF_SETTINGS_TWILIO_MISSING_NUMBER', severity: 'WARNING', message: 'Twilio number missing', companyId: null, requestId: req.headers['x-request-id'] || null, feature: 'notification-center', tab: 'NOTIFICATION_CENTER', module: 'SETTINGS', eventType: 'failure', meta: { route: req.method + ' ' + req.originalUrl } });
+            if (sidMissing)   {AdminNotificationService.sendAlert({ code: 'NOTIF_SETTINGS_TWILIO_MISSING_SID',    severity: 'WARNING', message: 'Twilio SID missing',    companyId: null, requestId: req.headers['x-request-id'] || null, feature: 'notification-center', tab: 'NOTIFICATION_CENTER', module: 'SETTINGS', eventType: 'failure', meta: { route: `${req.method  } ${  req.originalUrl}` } });}
+            if (tokenMissing) {AdminNotificationService.sendAlert({ code: 'NOTIF_SETTINGS_TWILIO_MISSING_TOKEN',  severity: 'WARNING', message: 'Twilio token missing',  companyId: null, requestId: req.headers['x-request-id'] || null, feature: 'notification-center', tab: 'NOTIFICATION_CENTER', module: 'SETTINGS', eventType: 'failure', meta: { route: `${req.method  } ${  req.originalUrl}` } });}
+            if (numberMissing){AdminNotificationService.sendAlert({ code: 'NOTIF_SETTINGS_TWILIO_MISSING_NUMBER', severity: 'WARNING', message: 'Twilio number missing', companyId: null, requestId: req.headers['x-request-id'] || null, feature: 'notification-center', tab: 'NOTIFICATION_CENTER', module: 'SETTINGS', eventType: 'failure', meta: { route: `${req.method  } ${  req.originalUrl}` } });}
         } catch (_) {}
 
         settings.markModified('notificationCenter');
@@ -913,7 +913,7 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
             tab: 'NOTIFICATION_CENTER',
             module: 'SETTINGS',
             eventType: 'failure',
-            meta: { route: req.method + ' ' + req.originalUrl }
+            meta: { route: `${req.method  } ${  req.originalUrl}` }
         }); } catch (_) {}
         res.status(500).json({
             success: false,
@@ -979,7 +979,7 @@ router.post('/admin/notifications/test-sms', authenticateJWT, requireRole('admin
         }
         
         console.log(`✅ [TEST SMS] Twilio credentials found:`, {
-            accountSid: settings.notificationCenter.twilio.accountSid.substring(0, 10) + '...',
+            accountSid: `${settings.notificationCenter.twilio.accountSid.substring(0, 10)  }...`,
             phoneNumber: settings.notificationCenter.twilio.phoneNumber
         });
         
@@ -1065,7 +1065,7 @@ Reply STOP to unsubscribe.
             tab: 'NOTIFICATION_CENTER',
             module: 'SETTINGS',
             eventType: 'failure',
-            meta: { route: req.method + ' ' + req.originalUrl }
+            meta: { route: `${req.method  } ${  req.originalUrl}` }
         }); } catch (_) {}
         res.status(500).json({
             success: false,

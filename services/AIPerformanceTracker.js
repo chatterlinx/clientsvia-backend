@@ -123,10 +123,10 @@ class AIPerformanceTracker {
             console.log(`📊 [PERF TRACKER] CHECKPOINT 9: Updating source distribution`);
             
             buffer.sourceDistribution.totalLookups++;
-            if (source === 'companyQnA') buffer.sourceDistribution.companyQnA++;
-            else if (source === 'tradeQnA') buffer.sourceDistribution.tradeQnA++;
-            else if (source === 'templates') buffer.sourceDistribution.templates++;
-            else if (source === 'inHouseFallback') buffer.sourceDistribution.inHouseFallback++;
+            if (source === 'companyQnA') {buffer.sourceDistribution.companyQnA++;}
+            else if (source === 'tradeQnA') {buffer.sourceDistribution.tradeQnA++;}
+            else if (source === 'templates') {buffer.sourceDistribution.templates++;}
+            else if (source === 'inHouseFallback') {buffer.sourceDistribution.inHouseFallback++;}
 
             // ================================================================
             // STEP 5: Update cache statistics
@@ -147,9 +147,9 @@ class AIPerformanceTracker {
             console.log(`📊 [PERF TRACKER] CHECKPOINT 11: Updating confidence distribution`);
             
             buffer.confidenceDistribution.confidenceSum += confidence;
-            if (confidence >= 0.8) buffer.confidenceDistribution.high++;
-            else if (confidence >= 0.5) buffer.confidenceDistribution.medium++;
-            else buffer.confidenceDistribution.low++;
+            if (confidence >= 0.8) {buffer.confidenceDistribution.high++;}
+            else if (confidence >= 0.5) {buffer.confidenceDistribution.medium++;}
+            else {buffer.confidenceDistribution.low++;}
 
             // ================================================================
             // STEP 7: Track slow queries
@@ -196,8 +196,8 @@ class AIPerformanceTracker {
     static updateTimingStat(stat, value) {
         stat.sum += value;
         stat.count++;
-        if (value < stat.min) stat.min = value;
-        if (value > stat.max) stat.max = value;
+        if (value < stat.min) {stat.min = value;}
+        if (value > stat.max) {stat.max = value;}
     }
 
     /**

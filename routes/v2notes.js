@@ -83,8 +83,8 @@ router.get('/:companyId', validateCompanyAccess, async (req, res) => {
         // Sort notes
         notes.sort((a, b) => {
             // Always keep pinned notes at top
-            if (a.isPinned && !b.isPinned) return -1;
-            if (!a.isPinned && b.isPinned) return 1;
+            if (a.isPinned && !b.isPinned) {return -1;}
+            if (!a.isPinned && b.isPinned) {return 1;}
             
             switch (sort) {
                 case 'created-desc':
@@ -212,7 +212,7 @@ router.put('/:companyId/:noteId', validateCompanyAccess, async (req, res) => {
                     'notes.$.isPinned': isPinned || false,
                     'notes.$.tags': Array.isArray(tags) ? tags : [],
                     'notes.$.updatedAt': new Date(),
-                    'updatedAt': new Date()
+                    updatedAt: new Date()
                 }
             }
         );
@@ -320,7 +320,7 @@ router.patch('/:companyId/:noteId/pin', validateCompanyAccess, async (req, res) 
                 $set: {
                     'notes.$.isPinned': newPinStatus,
                     'notes.$.updatedAt': new Date(),
-                    'updatedAt': new Date()
+                    updatedAt: new Date()
                 }
             }
         );

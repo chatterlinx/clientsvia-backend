@@ -22,7 +22,7 @@ const NotificationLogSchema = new mongoose.Schema({
     required: [true, 'Recipient is required'],
     trim: true,
     validate: {
-      validator: function(v) {
+      validator(v) {
         return v && v.length > 0;
       },
       message: 'Recipient cannot be empty'
@@ -40,7 +40,7 @@ const NotificationLogSchema = new mongoose.Schema({
     required: [true, 'Message is required'],
     maxlength: [10000, 'Message cannot exceed 10,000 characters'],
     validate: {
-      validator: function(v) {
+      validator(v) {
         return v && v.length > 0;
       },
       message: 'Message cannot be empty'
@@ -160,17 +160,17 @@ NotificationLogSchema.index({
 NotificationLogSchema.index({ 
   'metadata.fromAgent': 1, 
   'aiAgentContext.source': 1, 
-  'createdAt': -1 
+  createdAt: -1 
 });
 
 // Pre-save middleware for data validation and defaults
 NotificationLogSchema.pre('save', function(next) {
   // Ensure this is marked as from AI Agent Logic
-  if (!this.metadata) this.metadata = {};
+  if (!this.metadata) {this.metadata = {};}
   this.metadata.fromAgent = true;
   
   // Set success status based on status field
-  if (!this.aiAgentContext) this.aiAgentContext = {};
+  if (!this.aiAgentContext) {this.aiAgentContext = {};}
   this.aiAgentContext.success = ['sent', 'completed'].includes(this.status);
   
   // Auto-set processing time if not provided
@@ -387,7 +387,7 @@ NotificationLogSchema.statics.getRecentActivity = async function(limit = 10, com
 NotificationLogSchema.methods.markAsSent = async function(result = null) {
   try {
     this.status = 'sent';
-    if (!this.aiAgentContext) this.aiAgentContext = {};
+    if (!this.aiAgentContext) {this.aiAgentContext = {};}
     this.aiAgentContext.success = true;
     if (result && this.metadata) {
       this.metadata.result = result;
@@ -402,7 +402,7 @@ NotificationLogSchema.methods.markAsSent = async function(result = null) {
 NotificationLogSchema.methods.markAsFailed = async function(error) {
   try {
     this.status = 'failed';
-    if (!this.aiAgentContext) this.aiAgentContext = {};
+    if (!this.aiAgentContext) {this.aiAgentContext = {};}
     this.aiAgentContext.success = false;
     this.errorMessage = (error && error.message) ? error.message : String(error);
     return await this.save();

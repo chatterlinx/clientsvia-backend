@@ -70,7 +70,7 @@ router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
         
         status.checks.database = {
             name: 'Database Storage',
-            passed: !!(voiceSettings && voiceSettings.voiceId),
+            passed: Boolean(voiceSettings && voiceSettings.voiceId),
             details: {}
         };
 
@@ -219,9 +219,9 @@ router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
                 failedChecks: []
             };
             
-            if (!status.checks.database.passed) status.checks.twilioIntegration.details.failedChecks.push('Database');
-            if (!status.checks.elevenLabsApi.passed) status.checks.twilioIntegration.details.failedChecks.push('ElevenLabs API');
-            if (!status.checks.voiceValidation.passed) status.checks.twilioIntegration.details.failedChecks.push('Voice Validation');
+            if (!status.checks.database.passed) {status.checks.twilioIntegration.details.failedChecks.push('Database');}
+            if (!status.checks.elevenLabsApi.passed) {status.checks.twilioIntegration.details.failedChecks.push('ElevenLabs API');}
+            if (!status.checks.voiceValidation.passed) {status.checks.twilioIntegration.details.failedChecks.push('Voice Validation');}
             
             console.log(`❌ [CHECK 4] Twilio: FAIL - Will fall back to Twilio voice`);
         }
@@ -285,7 +285,7 @@ router.get('/:companyId/v2-voice-settings/voices', async (req, res) => {
 
         res.json({
             success: true,
-            voices: voices,
+            voices,
             count: voices.length
         });
 
@@ -325,8 +325,8 @@ router.get('/:companyId/v2-voice-settings', async (req, res) => {
 
         // 🔍 DIAGNOSTIC: Log what we're getting from the database
         console.log(`🔍 [GET VOICE] Company: ${company.companyName}`);
-        console.log(`🔍 [GET VOICE] Has aiAgentLogic:`, !!company.aiAgentLogic);
-        console.log(`🔍 [GET VOICE] Has voiceSettings:`, !!company.aiAgentLogic?.voiceSettings);
+        console.log(`🔍 [GET VOICE] Has aiAgentLogic:`, Boolean(company.aiAgentLogic));
+        console.log(`🔍 [GET VOICE] Has voiceSettings:`, Boolean(company.aiAgentLogic?.voiceSettings));
         console.log(`🔍 [GET VOICE] Raw voiceSettings:`, JSON.stringify(company.aiAgentLogic?.voiceSettings, null, 2));
 
         // Get voice settings from V2 aiAgentLogic system
@@ -441,7 +441,7 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'API key is required when using own ElevenLabs account',
-                debug: { apiSource, hasApiKey: !!apiKey }
+                debug: { apiSource, hasApiKey: Boolean(apiKey) }
             });
         }
         console.log(`✅ [SAVE-5-PASS] API source validation passed`);

@@ -1,14 +1,14 @@
 function normalizePhoneNumber(number) {
-  if (!number) return null;
+  if (!number) {return null;}
   const digits = String(number).replace(/\D/g, '');
-  if (!digits) return null;
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  if (!digits) {return null;}
+  if (digits.length === 10) {return `+1${digits}`;}
+  if (digits.length === 11 && digits.startsWith('1')) {return `+${digits}`;}
   return digits.startsWith('+') ? digits : `+${digits}`;
 }
 
 function extractDigits(number) {
-  if (!number) return '';
+  if (!number) {return '';}
   return String(number).replace(/\D/g, '');
 }
 

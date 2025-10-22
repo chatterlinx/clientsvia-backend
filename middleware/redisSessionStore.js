@@ -72,7 +72,7 @@ class RedisSessionStore {
             const key = `session:${sessionId}`;
             const data = await this.client.get(key);
             
-            if (!data) return null;
+            if (!data) {return null;}
             
             const session = JSON.parse(data);
             // Update last activity timestamp
@@ -151,7 +151,7 @@ class RedisSessionStore {
                         userId: session.userId,
                         location: session.location,
                         lastActivity: session.lastActivity,
-                        ttl: ttl,
+                        ttl,
                         age: Date.now() - new Date(session.createdAt).getTime()
                     });
                 }
@@ -195,7 +195,7 @@ class RedisSessionStore {
             const pattern = `security_log:*`;
             const keys = await this.client.keys(pattern);
             
-            let recentLogins = [];
+            const recentLogins = [];
             const oneHourAgo = Date.now() - (60 * 60 * 1000);
 
             for (const key of keys) {

@@ -203,7 +203,7 @@ class CompanyKnowledgeService {
         responseTime,
         source: 'database',
         cacheHit: false,
-        query: query,
+        query,
         keywords: Array.from(new Set([...(queryKeywords.primary || [])])),
         keywordMatchCount: rankedResults[0]?.keywordMatches ?? 0,
         phoneticSimilarity: rankedResults[0]?.phoneticSimilarity ?? 0,
@@ -362,7 +362,7 @@ class CompanyKnowledgeService {
       console.log('🔍 CHECKPOINT: MongoDB query for Q&A entries:', query);
 
       // Add filters
-      if (category) query.category = category;
+      if (category) {query.category = category;}
       if (search) {
         query.$or = [
           { question: { $regex: search, $options: 'i' } },
@@ -515,7 +515,7 @@ class CompanyKnowledgeService {
   }
 
   async getCachedResult(cacheKey) {
-    if (!redisClient) return null;
+    if (!redisClient) {return null;}
     
     try {
       const cached = await redisClient.get(cacheKey);
@@ -527,7 +527,7 @@ class CompanyKnowledgeService {
   }
 
   async cacheResult(cacheKey, result, ttl = 3600) {
-    if (!redisClient) return;
+    if (!redisClient) {return;}
     
     try {
       await redisClient.setex(cacheKey, ttl, JSON.stringify(result));
@@ -537,7 +537,7 @@ class CompanyKnowledgeService {
   }
 
   async invalidateCompanyCaches(companyId) {
-    if (!redisClient) return;
+    if (!redisClient) {return;}
     
     try {
       const pattern = `company:${companyId}:qna:*`;
@@ -610,7 +610,7 @@ class CompanyKnowledgeService {
     const longer = str1.length > str2.length ? str1 : str2;
     const shorter = str1.length > str2.length ? str2 : str1;
     
-    if (longer.length === 0) return 1.0;
+    if (longer.length === 0) {return 1.0;}
     
     const editDistance = this.levenshteinDistance(longer, shorter);
     return (longer.length - editDistance) / longer.length;
@@ -628,9 +628,9 @@ class CompanyKnowledgeService {
       const meta = (w) => w.toLowerCase().trim();
       const setA = new Set(tok(a).map(meta));
       const setB = new Set(tok(b).map(meta));
-      if (setA.size === 0 || setB.size === 0) return 0;
+      if (setA.size === 0 || setB.size === 0) {return 0;}
       let inter = 0;
-      setA.forEach(v => { if (setB.has(v)) inter++; });
+      setA.forEach(v => { if (setB.has(v)) {inter++;} });
       const union = setA.size + setB.size - inter;
       return union === 0 ? 0 : inter / union;
     } catch (e) {
@@ -644,7 +644,7 @@ class CompanyKnowledgeService {
     if (redisClient) {
       try {
         const cached = await redisClient.get(cacheKey);
-        if (cached) return JSON.parse(cached);
+        if (cached) {return JSON.parse(cached);}
       } catch (_) {}
     }
 
@@ -660,17 +660,17 @@ class CompanyKnowledgeService {
       (q.keywords || []).forEach(kw => {
         // V2 SYSTEM: Simple lowercase key instead of metaphone
         const key = (kw || '').toLowerCase().trim();
-        if (!key) return;
-        if (!dict[key]) dict[key] = [];
-        if (!dict[key].includes(kw)) dict[key].push(kw);
+        if (!key) {return;}
+        if (!dict[key]) {dict[key] = [];}
+        if (!dict[key].includes(kw)) {dict[key].push(kw);}
       });
       // Include trade category labels as anchors
       (q.tradeCategories || []).forEach(tc => {
         // V2 SYSTEM: Simple lowercase key instead of metaphone
         const key = (tc || '').toLowerCase().trim();
-        if (!key) return;
-        if (!dict[key]) dict[key] = [];
-        if (!dict[key].includes(tc)) dict[key].push(tc);
+        if (!key) {return;}
+        if (!dict[key]) {dict[key] = [];}
+        if (!dict[key].includes(tc)) {dict[key].push(tc);}
       });
     });
 

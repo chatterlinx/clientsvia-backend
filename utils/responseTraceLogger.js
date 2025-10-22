@@ -69,7 +69,7 @@ class ResponseTraceLogger {
     
     console.log(`[TRACE] ✅ HARD FIX - Selected: ${sourceName} (${reason}) - Confidence: ${confidence}`);
     console.log(`[TRACE] ✅ HARD FIX - Selected Data:`, {
-      hasData: !!matchedData,
+      hasData: Boolean(matchedData),
       dataKeys: matchedData ? Object.keys(matchedData) : [],
       question: matchedData?.question || 'N/A',
       answer: matchedData?.answer || 'N/A',
@@ -103,7 +103,7 @@ class ResponseTraceLogger {
     return {
       query: this.userQuery,
       keywords: this.extractedKeywords,
-      totalTime: totalTime,
+      totalTime,
       steps: this.traceSteps,
       selectedSource: this.selectedSource || 'None',
       selectionReason: this.selectionReason || 'No matches found in any source',
@@ -215,13 +215,13 @@ class ResponseTraceLogger {
       source: 'Offline Local LLM',
       timestamp: Date.now(),
       details: {
-        model: model,
+        model,
         promptLength: prompt.length,
         responseLength: response?.length || 0,
-        processingTime: processingTime
+        processingTime
       },
       matchResult: {
-        matched: !!response,
+        matched: Boolean(response),
         matchedKeywords: this.extractedKeywords,
         totalMatches: this.extractedKeywords.length,
         totalAvailable: this.extractedKeywords.length,

@@ -66,7 +66,7 @@ class IntelligentFallbackHandler {
         try {
             // Step 1: Generate fallback voice audio
             result.voiceAudio = await this.generateFallbackVoice(company, fallbackConfig);
-            result.voiceAudioGenerated = !!result.voiceAudio;
+            result.voiceAudioGenerated = Boolean(result.voiceAudio);
 
             // Step 2: Send SMS to customer (if enabled)
             if (fallbackConfig.smsEnabled && callerPhone) {
@@ -187,7 +187,7 @@ class IntelligentFallbackHandler {
      * @returns {String} - Text with variables replaced
      */
     replaceVariables(text, company) {
-        if (!text) return text;
+        if (!text) {return text;}
 
         let processedText = text;
 

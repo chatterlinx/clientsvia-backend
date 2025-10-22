@@ -11,7 +11,7 @@ function auditLog(action, req) {
     method: req.method,
     action,
   };
-  fs.appendFileSync(path.join(__dirname, '../audit.log'), JSON.stringify(entry) + '\n');
+  fs.appendFileSync(path.join(__dirname, '../audit.log'), `${JSON.stringify(entry)  }\n`);
 }
 
 module.exports = { auditLog };

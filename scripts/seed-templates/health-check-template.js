@@ -139,7 +139,7 @@ class TemplateHealthChecker {
     }
 
     checkScenariosHaveTriggers() {
-        let scenariosWithoutTriggers = [];
+        const scenariosWithoutTriggers = [];
         
         this.template.categories.forEach((cat, catIdx) => {
             (cat.scenarios || []).forEach((scenario, scnIdx) => {
@@ -167,7 +167,7 @@ class TemplateHealthChecker {
     }
 
     checkScenariosHaveReplies() {
-        let scenariosWithoutReplies = [];
+        const scenariosWithoutReplies = [];
         
         this.template.categories.forEach((cat, catIdx) => {
             (cat.scenarios || []).forEach((scenario, scnIdx) => {
@@ -199,7 +199,7 @@ class TemplateHealthChecker {
 
     checkValidChannels() {
         const validChannels = ['voice', 'sms', 'chat', 'any'];
-        let invalidChannels = [];
+        const invalidChannels = [];
         
         this.template.categories.forEach((cat, catIdx) => {
             (cat.scenarios || []).forEach((scenario, scnIdx) => {
@@ -228,7 +228,7 @@ class TemplateHealthChecker {
     }
 
     checkValidPriorities() {
-        let invalidPriorities = [];
+        const invalidPriorities = [];
         
         this.template.categories.forEach((cat, catIdx) => {
             (cat.scenarios || []).forEach((scenario, scnIdx) => {
@@ -237,7 +237,7 @@ class TemplateHealthChecker {
                     invalidPriorities.push({
                         category: cat.name,
                         scenario: scenario.name,
-                        priority: priority,
+                        priority,
                         index: `${catIdx}.${scnIdx}`
                     });
                 }
@@ -258,7 +258,7 @@ class TemplateHealthChecker {
     }
 
     checkValidConfidence() {
-        let invalidConfidence = [];
+        const invalidConfidence = [];
         
         this.template.categories.forEach((cat, catIdx) => {
             (cat.scenarios || []).forEach((scenario, scnIdx) => {
@@ -301,7 +301,7 @@ class TemplateHealthChecker {
                     const normalized = trigger.toLowerCase().trim();
                     if (triggerMap.has(normalized)) {
                         duplicates.push({
-                            trigger: trigger,
+                            trigger,
                             scenarios: [triggerMap.get(normalized), scenario.name]
                         });
                     } else {
@@ -323,7 +323,7 @@ class TemplateHealthChecker {
     }
 
     checkEmptyCategories() {
-        let emptyCategories = [];
+        const emptyCategories = [];
         
         this.template.categories.forEach((cat, idx) => {
             if (!cat.scenarios || cat.scenarios.length === 0) {
@@ -362,7 +362,7 @@ class TemplateHealthChecker {
     // ========================================
 
     checkReplyVariations() {
-        let scenariosWithSingleReply = [];
+        const scenariosWithSingleReply = [];
         
         this.template.categories.forEach((cat) => {
             (cat.scenarios || []).forEach((scenario) => {
@@ -467,7 +467,7 @@ class TemplateHealthChecker {
     generateReport() {
         const totalIssues = this.issues.critical.length + this.issues.warnings.length + this.issues.optimizations.length;
         
-        console.log('\n' + '='.repeat(80));
+        console.log(`\n${  '='.repeat(80)}`);
         console.log('📊 TEMPLATE HEALTH REPORT');
         console.log('='.repeat(80));
         
@@ -534,7 +534,7 @@ class TemplateHealthChecker {
         
         // Health Score
         const healthScore = this.calculateHealthScore();
-        console.log('\n' + '='.repeat(80));
+        console.log(`\n${  '='.repeat(80)}`);
         console.log(`🏥 OVERALL HEALTH SCORE: ${healthScore}/100`);
         console.log('='.repeat(80));
         
@@ -614,7 +614,7 @@ async function runHealthCheck() {
         
         // Summary
         if (results.length > 1) {
-            console.log('\n' + '='.repeat(80));
+            console.log(`\n${  '='.repeat(80)}`);
             console.log('📊 SUMMARY ACROSS ALL TEMPLATES');
             console.log('='.repeat(80));
             

@@ -117,7 +117,7 @@ function getAPIConfig(company = null) {
     elevenLabs: {
       apiKey: company?.aiSettings?.elevenLabsApiKey || process.env.ELEVENLABS_API_KEY,
       voiceId: company?.aiSettings?.elevenLabsVoiceId || process.env.ELEVENLABS_VOICE_ID,
-      configured: !!(company?.aiSettings?.elevenLabsApiKey || process.env.ELEVENLABS_API_KEY)
+      configured: Boolean(company?.aiSettings?.elevenLabsApiKey || process.env.ELEVENLABS_API_KEY)
     }
   };
 }

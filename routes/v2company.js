@@ -119,8 +119,8 @@ router.post('/companies', async (req, res) => {
             
             if (!companyName || !address || !address.street || !address.city || !address.state || !address.zip || !address.country) {
                 console.warn('[API POST /api/companies] ❌ Modern form validation failed. Missing required fields:', {
-                    companyName: !!companyName,
-                    address: !!address,
+                    companyName: Boolean(companyName),
+                    address: Boolean(address),
                     'address.street': address?.street,
                     'address.city': address?.city,
                     'address.state': address?.state,
@@ -169,9 +169,9 @@ router.post('/companies', async (req, res) => {
             
             if (!companyName || !companyPhone || !companyAddress) {
                 console.warn('[API POST /api/companies] ❌ Simplified form validation failed. Missing required fields:', {
-                    companyName: !!companyName,
-                    companyPhone: !!companyPhone,
-                    companyAddress: !!companyAddress
+                    companyName: Boolean(companyName),
+                    companyPhone: Boolean(companyPhone),
+                    companyAddress: Boolean(companyAddress)
                 });
                 return res.status(400).json({ message: 'Missing required fields: Company Name, Phone Number, and Address are required.' });
             }
@@ -327,10 +327,10 @@ async function checkCompanyCache(req, res, next) {
             const data = JSON.parse(cachedData);
             console.log(`📋 [CACHE] Cached data companyName: ${data.companyName}, businessPhone: ${data.businessPhone}`);
             return res.status(200).json(data);
-        } else {
+        } 
             console.log(`❌ [CACHE] CACHE MISS for ${cacheKey} - loading from DB`);
             next();
-        }
+        
     } catch (error) {
         console.error('❌ [CACHE] Redis error:', error);
         next();
@@ -346,7 +346,7 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
         console.log(`📊 [DB] Loading company from database: ${companyId}`);
         // Explicitly include aiAgentLogic field in the query
         const company = await Company.findById(companyId).lean();
-        if (!company) return res.status(404).json({ message: 'Company not found' });
+        if (!company) {return res.status(404).json({ message: 'Company not found' });}
 
         console.log(`✅ [DB] Company loaded: ${company.companyName}, businessPhone: ${company.businessPhone}`);
         console.log(`📝 [DB] Notes in company document:`, company.notes?.length || 0, 'notes');
@@ -356,7 +356,7 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
         console.log(`✅ [CACHE] SAVED to cache: ${cacheKey} (TTL: 3600s)`);
         
         // Debug: Log if aiAgentLogic exists
-        console.log(`🔍 DEBUG: aiAgentLogic exists in response: ${!!company.aiAgentLogic}`);
+        console.log(`🔍 DEBUG: aiAgentLogic exists in response: ${Boolean(company.aiAgentLogic)}`);
         if (company.aiAgentLogic) {
             console.log(`🔍 DEBUG: aiAgentLogic thresholds:`, company.aiAgentLogic.thresholds);
         }
@@ -435,12 +435,12 @@ router.delete('/company/:id', async (req, res) => {
         try {
             // Delete Company Q&A categories and entries
             const CompanyQnACategory = require('../models/CompanyQnACategory');
-            const deletedQnA = await CompanyQnACategory.deleteMany({ companyId: companyId });
+            const deletedQnA = await CompanyQnACategory.deleteMany({ companyId });
             console.log(`[API DELETE /api/company/:id] 🗑️ Deleted ${deletedQnA.deletedCount} Q&A categories`);
             
             // Delete Instant Response categories
             const InstantResponseCategory = require('../models/InstantResponseCategory');
-            const deletedIR = await InstantResponseCategory.deleteMany({ companyId: companyId });
+            const deletedIR = await InstantResponseCategory.deleteMany({ companyId });
             console.log(`[API DELETE /api/company/:id] 🗑️ Deleted ${deletedIR.deletedCount} Instant Response categories`);
             
             // Delete call logs (if you have a call log model)
@@ -486,7 +486,7 @@ router.patch('/company/:id', async (req, res) => {
     
     const companyId = req.params.id;
 
-    if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid company ID format' });
+    if (!ObjectId.isValid(companyId)) {return res.status(400).json({ message: 'Invalid company ID format' });}
 
     try {
         const updates = req.body;
@@ -521,15 +521,15 @@ router.patch('/company/:id', async (req, res) => {
                 if (key === 'tradeTypes' || key === 'tradeCategories') {
                     if (Array.isArray(updates[key])) {
                         // 🎯 V2: Save to both legacy and new fields for compatibility
-                        updateOperation['tradeTypes'] = updates[key];      // Legacy field
-                        updateOperation['tradeCategories'] = updates[key]; // V2 field
+                        updateOperation.tradeTypes = updates[key];      // Legacy field
+                        updateOperation.tradeCategories = updates[key]; // V2 field
                         console.log(`💾 [TRADE CATEGORIES] Saving to both fields:`, updates[key]);
                     } else if (updates[key]) {
-                        updateOperation['tradeTypes'] = [updates[key]];
-                        updateOperation['tradeCategories'] = [updates[key]];
+                        updateOperation.tradeTypes = [updates[key]];
+                        updateOperation.tradeCategories = [updates[key]];
                     } else {
-                        updateOperation['tradeTypes'] = [];
-                        updateOperation['tradeCategories'] = [];
+                        updateOperation.tradeTypes = [];
+                        updateOperation.tradeCategories = [];
                     }
                 } else if (key === 'isActive' && typeof updates[key] !== 'boolean') {
                     updateOperation[key] = updates[key] === 'true' || updates[key] === true;
@@ -563,7 +563,7 @@ router.patch('/company/:id', async (req, res) => {
             { new: true, runValidators: true }
         );
 
-        if (!updatedCompany) return res.status(404).json({ message: 'Company not found.' });
+        if (!updatedCompany) {return res.status(404).json({ message: 'Company not found.' });}
 
         // GOLD STANDARD: Debug notes after save
         if (updatedCompany.notes) {
@@ -639,12 +639,12 @@ router.patch('/company/:companyId/account-status', async (req, res) => {
         
         // Create history entry BEFORE updating current status
         const historyEntry = {
-            status: status,
+            status,
             callForwardNumber: status === 'call_forward' ? callForwardNumber : null,
             callForwardMessage: status === 'call_forward' ? callForwardMessage : null,
             suspendedMessage: status === 'suspended' ? suspendedMessage : null,
             reason: reason || null,
-            changedBy: changedBy,
+            changedBy,
             changedAt: new Date()
         };
         
@@ -771,7 +771,7 @@ router.delete('/company/:companyId/account-status/history/:index', authenticateJ
 router.patch('/company/:companyId/configuration', async (req, res) => {
     const { companyId } = req.params;
     const { twilioConfig, smsSettings } = req.body;
-    if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid company ID format' });
+    if (!ObjectId.isValid(companyId)) {return res.status(400).json({ message: 'Invalid company ID format' });}
 
     try {
         const updateFields = {};
@@ -781,9 +781,9 @@ router.patch('/company/:companyId/configuration', async (req, res) => {
             updateFields['twilioConfig.phoneNumber'] = twilioConfig.phoneNumber ? normalizePhoneNumber(twilioConfig.phoneNumber) : null;
         }
         if (smsSettings && typeof smsSettings === 'object') {
-            updateFields['smsSettings.jobAlerts'] = !!smsSettings.jobAlerts;
-            updateFields['smsSettings.customerReplies'] = !!smsSettings.customerReplies;
-            updateFields['smsSettings.appointmentReminders'] = !!smsSettings.appointmentReminders;
+            updateFields['smsSettings.jobAlerts'] = Boolean(smsSettings.jobAlerts);
+            updateFields['smsSettings.customerReplies'] = Boolean(smsSettings.customerReplies);
+            updateFields['smsSettings.appointmentReminders'] = Boolean(smsSettings.appointmentReminders);
         }
 
         if (Object.keys(updateFields).length === 0) {
@@ -798,7 +798,7 @@ router.patch('/company/:companyId/configuration', async (req, res) => {
             { new: true, runValidators: true }
         );
         
-        if (!updatedCompany) return res.status(404).json({ message: 'Company not found' });
+        if (!updatedCompany) {return res.status(404).json({ message: 'Company not found' });}
 
         const cacheKey = `company:${companyId}`;
         await redisClient.del(cacheKey);
@@ -816,7 +816,7 @@ router.patch('/company/:companyId/configuration', async (req, res) => {
 router.patch('/company/:companyId/integrations', async (req, res) => {
     const { companyId } = req.params;
     const { integrations } = req.body; // Assuming this only sends highlevel data
-    if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid company ID format' });
+    if (!ObjectId.isValid(companyId)) {return res.status(400).json({ message: 'Invalid company ID format' });}
     if (!integrations || typeof integrations !== 'object') {
         return res.status(400).json({ message: 'Integrations data is required and must be an object.' });
     }
@@ -834,7 +834,7 @@ router.patch('/company/:companyId/integrations', async (req, res) => {
             { new: true, runValidators: true }
         );
         
-        if (!updatedCompany) return res.status(404).json({ message: 'Company not found' });
+        if (!updatedCompany) {return res.status(404).json({ message: 'Company not found' });}
 
         const cacheKey = `company:${companyId}`;
         await redisClient.del(cacheKey);
@@ -851,38 +851,38 @@ router.patch('/company/:companyId/integrations', async (req, res) => {
 router.patch('/company/:companyId/aisettings', async (req, res) => {
     const { companyId } = req.params;
     const { aiSettings } = req.body;
-    if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid company ID format' });
+    if (!ObjectId.isValid(companyId)) {return res.status(400).json({ message: 'Invalid company ID format' });}
     if (!aiSettings || typeof aiSettings !== 'object' || Object.keys(aiSettings).length === 0) {
         return res.status(400).json({ message: 'Invalid or missing aiSettings data' });
     }
 
     try {
         const currentCompany = await Company.findById(companyId);
-        if (!currentCompany) return res.status(404).json({ message: 'Company not found' });
+        if (!currentCompany) {return res.status(404).json({ message: 'Company not found' });}
         const currentAISettings = currentCompany.aiSettings || {};
 
         // Build the $set object carefully to preserve existing fields if not provided in the request
         const updatePayload = {};
-        if (aiSettings.model !== undefined) updatePayload['aiSettings.model'] = aiSettings.model;
-        if (aiSettings.personality !== undefined) updatePayload['aiSettings.personality'] = aiSettings.personality;
+        if (aiSettings.model !== undefined) {updatePayload['aiSettings.model'] = aiSettings.model;}
+        if (aiSettings.personality !== undefined) {updatePayload['aiSettings.personality'] = aiSettings.personality;}
         // V2 DELETED: Google voice provider - using ElevenLabs only
         // if (aiSettings.googleVoice !== undefined) updatePayload['aiSettings.googleVoice'] = aiSettings.googleVoice;
-        if (aiSettings.voicePitch !== undefined) updatePayload['aiSettings.voicePitch'] = Number(aiSettings.voicePitch);
-        if (aiSettings.voiceSpeed !== undefined) updatePayload['aiSettings.voiceSpeed'] = Number(aiSettings.voiceSpeed);
-        if (aiSettings.responseLength !== undefined) updatePayload['aiSettings.responseLength'] = aiSettings.responseLength;
-        if (aiSettings.knowledgeBaseSource !== undefined) updatePayload['aiSettings.knowledgeBaseSource'] = aiSettings.knowledgeBaseSource;
-        if (aiSettings.escalationKeywords !== undefined) updatePayload['aiSettings.escalationKeywords'] = aiSettings.escalationKeywords;
-        if (typeof aiSettings.sentimentAnalysis === 'boolean') updatePayload['aiSettings.sentimentAnalysis'] = aiSettings.sentimentAnalysis;
-        if (typeof aiSettings.dataLogging === 'boolean') updatePayload['aiSettings.dataLogging'] = aiSettings.dataLogging;
-        if (typeof aiSettings.bargeIn === 'boolean') updatePayload['aiSettings.bargeIn'] = aiSettings.bargeIn;
-        if (typeof aiSettings.proactiveOutreach === 'boolean') updatePayload['aiSettings.proactiveOutreach'] = aiSettings.proactiveOutreach;
-        if (typeof aiSettings.llmFallbackEnabled === 'boolean') updatePayload['aiSettings.llmFallbackEnabled'] = aiSettings.llmFallbackEnabled;
-        if (aiSettings.customEscalationMessage !== undefined) updatePayload['aiSettings.customEscalationMessage'] = aiSettings.customEscalationMessage;
+        if (aiSettings.voicePitch !== undefined) {updatePayload['aiSettings.voicePitch'] = Number(aiSettings.voicePitch);}
+        if (aiSettings.voiceSpeed !== undefined) {updatePayload['aiSettings.voiceSpeed'] = Number(aiSettings.voiceSpeed);}
+        if (aiSettings.responseLength !== undefined) {updatePayload['aiSettings.responseLength'] = aiSettings.responseLength;}
+        if (aiSettings.knowledgeBaseSource !== undefined) {updatePayload['aiSettings.knowledgeBaseSource'] = aiSettings.knowledgeBaseSource;}
+        if (aiSettings.escalationKeywords !== undefined) {updatePayload['aiSettings.escalationKeywords'] = aiSettings.escalationKeywords;}
+        if (typeof aiSettings.sentimentAnalysis === 'boolean') {updatePayload['aiSettings.sentimentAnalysis'] = aiSettings.sentimentAnalysis;}
+        if (typeof aiSettings.dataLogging === 'boolean') {updatePayload['aiSettings.dataLogging'] = aiSettings.dataLogging;}
+        if (typeof aiSettings.bargeIn === 'boolean') {updatePayload['aiSettings.bargeIn'] = aiSettings.bargeIn;}
+        if (typeof aiSettings.proactiveOutreach === 'boolean') {updatePayload['aiSettings.proactiveOutreach'] = aiSettings.proactiveOutreach;}
+        if (typeof aiSettings.llmFallbackEnabled === 'boolean') {updatePayload['aiSettings.llmFallbackEnabled'] = aiSettings.llmFallbackEnabled;}
+        if (aiSettings.customEscalationMessage !== undefined) {updatePayload['aiSettings.customEscalationMessage'] = aiSettings.customEscalationMessage;}
         
         // Agent Performance Controls
-        if (aiSettings.fuzzyMatchThreshold !== undefined) updatePayload['aiSettings.fuzzyMatchThreshold'] = Number(aiSettings.fuzzyMatchThreshold);
-        if (aiSettings.twilioSpeechConfidenceThreshold !== undefined) updatePayload['aiSettings.twilioSpeechConfidenceThreshold'] = Number(aiSettings.twilioSpeechConfidenceThreshold);
-        if (aiSettings.maxRepeats !== undefined) updatePayload['aiSettings.maxRepeats'] = Number(aiSettings.maxRepeats);
+        if (aiSettings.fuzzyMatchThreshold !== undefined) {updatePayload['aiSettings.fuzzyMatchThreshold'] = Number(aiSettings.fuzzyMatchThreshold);}
+        if (aiSettings.twilioSpeechConfidenceThreshold !== undefined) {updatePayload['aiSettings.twilioSpeechConfidenceThreshold'] = Number(aiSettings.twilioSpeechConfidenceThreshold);}
+        if (aiSettings.maxRepeats !== undefined) {updatePayload['aiSettings.maxRepeats'] = Number(aiSettings.maxRepeats);}
 
         // V2 DELETED: Google Calendar integration - calendar tab eliminated
         // if (typeof aiSettings.enableGoogleCalendarIntegration === 'boolean') {
@@ -906,7 +906,7 @@ router.patch('/company/:companyId/aisettings', async (req, res) => {
             { new: true, runValidators: true }
         );
 
-        if (!updatedCompany) return res.status(404).json({ message: 'Company not found (during update)' });
+        if (!updatedCompany) {return res.status(404).json({ message: 'Company not found (during update)' });}
 
         const cacheKey = `company:${companyId}`;
         await redisClient.del(cacheKey);
@@ -1091,9 +1091,9 @@ router.patch('/company/:companyId/agentsetup', async (req, res) => {
     console.log(`[API PATCH /api/company/${companyId}/agentsetup] Received data:`, JSON.stringify(req.body, null, 2));
 
     const db = getDB();
-    if (!db) return res.status(500).json({ message: 'Database not connected' });
-    if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid company ID format' });
-    if (!agentSetup || typeof agentSetup !== 'object') return res.status(400).json({ message: 'Agent Setup data is required.' });
+    if (!db) {return res.status(500).json({ message: 'Database not connected' });}
+    if (!ObjectId.isValid(companyId)) {return res.status(400).json({ message: 'Invalid company ID format' });}
+    if (!agentSetup || typeof agentSetup !== 'object') {return res.status(400).json({ message: 'Agent Setup data is required.' });}
 
     const companiesCollection = db.collection('companiesCollection');
     try {
@@ -1109,7 +1109,7 @@ router.patch('/company/:companyId/agentsetup', async (req, res) => {
             categories: (tradeTypes && Array.isArray(tradeTypes)) ? tradeTypes : (agentSetup.categories !== undefined ? agentSetup.categories : currentAgentSetup.categories || []),
             companySpecialties: agentSetup.companySpecialties !== undefined ? agentSetup.companySpecialties : currentAgentSetup.companySpecialties || '',
             timezone: timezone || (agentSetup.timezone !== undefined ? agentSetup.timezone : currentAgentSetup.timezone || 'America/New_York'),
-            operatingHours: agentSetup.operatingHours || currentAgentSetup.operatingHours || daysOfWeekForOperatingHours.map(day => ({day: day, enabled: !['Saturday', 'Sunday'].includes(day), start: '09:00', end: '17:00'})),
+            operatingHours: agentSetup.operatingHours || currentAgentSetup.operatingHours || daysOfWeekForOperatingHours.map(day => ({day, enabled: !['Saturday', 'Sunday'].includes(day), start: '09:00', end: '17:00'})),
             use247Routing: typeof agentSetup.use247Routing === 'boolean' ? agentSetup.use247Routing : currentAgentSetup.use247Routing || false,
             afterHoursAction: agentSetup.afterHoursAction !== undefined ? agentSetup.afterHoursAction : currentAgentSetup.afterHoursAction || 'message',
             onCallForwardingNumber: agentSetup.onCallForwardingNumber !== undefined ? agentSetup.onCallForwardingNumber : currentAgentSetup.onCallForwardingNumber ||'',
@@ -1146,7 +1146,7 @@ router.patch('/company/:companyId/agentsetup', async (req, res) => {
             { $set: updateFields }
         );
 
-        if (result.matchedCount === 0) return res.status(404).json({ message: 'Company not found (during update)' });
+        if (result.matchedCount === 0) {return res.status(404).json({ message: 'Company not found (during update)' });}
 
         console.log(`[API PATCH /api/company/${companyId}/agentsetup] Agent Setup updated. Matched: ${result.matchedCount}, Modified: ${result.modifiedCount}`);
         const updatedCompany = await companiesCollection.findOne({ _id: new ObjectId(companyId) });
@@ -1405,7 +1405,7 @@ router.post('/:companyId/voice-settings', async (req, res) => {
         // Update ElevenLabs settings
         company.aiSettings.elevenLabs = {
             apiKey: apiKey || company.aiSettings.elevenLabs.apiKey,
-            voiceId: voiceId,
+            voiceId,
             stability: parseFloat(stability) || 0.5,
             similarity_boost: parseFloat(similarity_boost) || 0.7,
             style: parseFloat(style) || 0.0,
@@ -1769,11 +1769,11 @@ router.put('/company/:companyId/instant-responses/:responseId', authenticateJWT,
         }
         
         // Update fields
-        if (trigger) instantResponse.trigger = trigger.map(t => t.trim().toLowerCase());
-        if (response) instantResponse.response = response.trim();
-        if (category) instantResponse.category = category;
-        if (priority !== undefined) instantResponse.priority = priority;
-        if (enabled !== undefined) instantResponse.enabled = enabled;
+        if (trigger) {instantResponse.trigger = trigger.map(t => t.trim().toLowerCase());}
+        if (response) {instantResponse.response = response.trim();}
+        if (category) {instantResponse.category = category;}
+        if (priority !== undefined) {instantResponse.priority = priority;}
+        if (enabled !== undefined) {instantResponse.enabled = enabled;}
         instantResponse.updatedAt = new Date();
         
         company.agentBrain.lastUpdated = new Date();
@@ -2030,12 +2030,12 @@ router.put('/company/:companyId/response-templates/:templateId', authenticateJWT
         }
         
         // Update fields
-        if (name) responseTemplate.name = name.trim();
-        if (template) responseTemplate.template = template.trim();
-        if (category) responseTemplate.category = category;
-        if (keywords) responseTemplate.keywords = keywords.map(k => k.trim().toLowerCase());
-        if (confidence !== undefined) responseTemplate.confidence = confidence;
-        if (enabled !== undefined) responseTemplate.enabled = enabled;
+        if (name) {responseTemplate.name = name.trim();}
+        if (template) {responseTemplate.template = template.trim();}
+        if (category) {responseTemplate.category = category;}
+        if (keywords) {responseTemplate.keywords = keywords.map(k => k.trim().toLowerCase());}
+        if (confidence !== undefined) {responseTemplate.confidence = confidence;}
+        if (enabled !== undefined) {responseTemplate.enabled = enabled;}
         responseTemplate.updatedAt = new Date();
         
         company.agentBrain.lastUpdated = new Date();

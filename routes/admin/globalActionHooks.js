@@ -148,15 +148,15 @@ router.put('/:id', async (req, res) => {
         
         const { name, icon, description, directory, functionName, parameters, triggerTiming, isActive, sortOrder } = req.body;
         
-        if (name) hook.name = name;
-        if (icon) hook.icon = icon;
-        if (description) hook.description = description;
-        if (directory) hook.directory = directory;
-        if (functionName !== undefined) hook.functionName = functionName;
-        if (parameters !== undefined) hook.parameters = parameters;
-        if (triggerTiming) hook.triggerTiming = triggerTiming;
-        if (isActive !== undefined) hook.isActive = isActive;
-        if (sortOrder !== undefined) hook.sortOrder = sortOrder;
+        if (name) {hook.name = name;}
+        if (icon) {hook.icon = icon;}
+        if (description) {hook.description = description;}
+        if (directory) {hook.directory = directory;}
+        if (functionName !== undefined) {hook.functionName = functionName;}
+        if (parameters !== undefined) {hook.parameters = parameters;}
+        if (triggerTiming) {hook.triggerTiming = triggerTiming;}
+        if (isActive !== undefined) {hook.isActive = isActive;}
+        if (sortOrder !== undefined) {hook.sortOrder = sortOrder;}
         
         hook.lastModifiedBy = 'Admin';
         

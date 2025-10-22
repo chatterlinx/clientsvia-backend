@@ -235,12 +235,12 @@ class PlaceholderScanService {
                 setImmediate(async () => {
                     try {
                         await AdminNotificationService.sendAlert({
-                            companyId: companyId,
+                            companyId,
                             companyName: company.companyName || 'Unknown Company',
                             alertType: 'missing_variables',
                             severity: 'warning',
                             message: `${missingRequired.length} required variable${missingRequired.length > 1 ? 's' : ''} need${missingRequired.length === 1 ? 's' : ''} values`,
-                            fixUrl: fixUrl
+                            fixUrl
                         });
                     } catch (notificationError) {
                         // Never let notification errors block the main flow

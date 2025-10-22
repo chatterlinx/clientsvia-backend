@@ -11,7 +11,7 @@ async function checkRedis() {
         console.log('✅ FOUND IN REDIS!');
         const company = JSON.parse(data);
         console.log('Company name:', company.companyName);
-        console.log('Has callFiltering:', !!company.callFiltering);
+        console.log('Has callFiltering:', Boolean(company.callFiltering));
         if (company.callFiltering) {
             console.log('callFiltering.settings:', JSON.stringify(company.callFiltering.settings, null, 2));
         }

@@ -118,9 +118,9 @@ class MetricsCollector {
   printReport() {
     const stats = this.getStats();
 
-    console.log('\n' + colors.blue + '='.repeat(80) + colors.reset);
-    console.log(colors.blue + 'LOAD TEST RESULTS' + colors.reset);
-    console.log(colors.blue + '='.repeat(80) + colors.reset + '\n');
+    console.log(`\n${  colors.blue  }${'='.repeat(80)  }${colors.reset}`);
+    console.log(`${colors.blue  }LOAD TEST RESULTS${  colors.reset}`);
+    console.log(`${colors.blue + '='.repeat(80) + colors.reset  }\n`);
 
     console.log(`${colors.cyan}Total Requests:${colors.reset}       ${stats.totalRequests}`);
     console.log(`${colors.green}Successful:${colors.reset}           ${stats.successfulRequests} (${(stats.successRate * 100).toFixed(2)}%)`);
@@ -137,22 +137,22 @@ class MetricsCollector {
     console.log();
 
     // Performance evaluation
-    console.log(colors.cyan + 'Performance Evaluation:' + colors.reset);
+    console.log(`${colors.cyan  }Performance Evaluation:${  colors.reset}`);
     
     const avgPass = stats.avgResponseTime <= CONFIG.thresholds.avgResponseTime;
     const maxPass = stats.maxResponseTime <= CONFIG.thresholds.maxResponseTime;
     const successPass = stats.successRate >= CONFIG.thresholds.successRate;
     const errorPass = stats.errorRate <= CONFIG.thresholds.errorRate;
 
-    console.log(`  Avg response time:    ${avgPass ? colors.green + '✅ PASS' : colors.red + '❌ FAIL'} ${colors.reset}(${stats.avgResponseTime.toFixed(2)}ms / ${CONFIG.thresholds.avgResponseTime}ms threshold)`);
-    console.log(`  Max response time:    ${maxPass ? colors.green + '✅ PASS' : colors.red + '❌ FAIL'} ${colors.reset}(${stats.maxResponseTime.toFixed(2)}ms / ${CONFIG.thresholds.maxResponseTime}ms threshold)`);
-    console.log(`  Success rate:         ${successPass ? colors.green + '✅ PASS' : colors.red + '❌ FAIL'} ${colors.reset}(${(stats.successRate * 100).toFixed(2)}% / ${CONFIG.thresholds.successRate * 100}% threshold)`);
-    console.log(`  Error rate:           ${errorPass ? colors.green + '✅ PASS' : colors.red + '❌ FAIL'} ${colors.reset}(${(stats.errorRate * 100).toFixed(2)}% / ${CONFIG.thresholds.errorRate * 100}% threshold)`);
+    console.log(`  Avg response time:    ${avgPass ? `${colors.green  }✅ PASS` : `${colors.red  }❌ FAIL`} ${colors.reset}(${stats.avgResponseTime.toFixed(2)}ms / ${CONFIG.thresholds.avgResponseTime}ms threshold)`);
+    console.log(`  Max response time:    ${maxPass ? `${colors.green  }✅ PASS` : `${colors.red  }❌ FAIL`} ${colors.reset}(${stats.maxResponseTime.toFixed(2)}ms / ${CONFIG.thresholds.maxResponseTime}ms threshold)`);
+    console.log(`  Success rate:         ${successPass ? `${colors.green  }✅ PASS` : `${colors.red  }❌ FAIL`} ${colors.reset}(${(stats.successRate * 100).toFixed(2)}% / ${CONFIG.thresholds.successRate * 100}% threshold)`);
+    console.log(`  Error rate:           ${errorPass ? `${colors.green  }✅ PASS` : `${colors.red  }❌ FAIL`} ${colors.reset}(${(stats.errorRate * 100).toFixed(2)}% / ${CONFIG.thresholds.errorRate * 100}% threshold)`);
 
     console.log();
 
     if (stats.errors.length > 0) {
-      console.log(colors.red + 'Errors:' + colors.reset);
+      console.log(`${colors.red  }Errors:${  colors.reset}`);
       const errorSummary = {};
       stats.errors.forEach(err => {
         const key = `${err.endpoint}: ${err.error}`;
@@ -164,17 +164,17 @@ class MetricsCollector {
       console.log();
     }
 
-    console.log(colors.blue + '='.repeat(80) + colors.reset + '\n');
+    console.log(`${colors.blue + '='.repeat(80) + colors.reset  }\n`);
 
     // Overall pass/fail
     const overallPass = avgPass && maxPass && successPass && errorPass;
     if (overallPass) {
-      console.log(colors.green + '🎉 LOAD TEST PASSED - System ready for production!' + colors.reset + '\n');
+      console.log(`${colors.green  }🎉 LOAD TEST PASSED - System ready for production!${  colors.reset  }\n`);
       return true;
-    } else {
-      console.log(colors.red + '❌ LOAD TEST FAILED - Performance issues detected' + colors.reset + '\n');
+    } 
+      console.log(`${colors.red  }❌ LOAD TEST FAILED - Performance issues detected${  colors.reset  }\n`);
       return false;
-    }
+    
   }
 }
 
@@ -266,7 +266,7 @@ class LoadTester {
         success = await this.testCompanyEndpoint(companyId);
       }
 
-      if (success) successCount++;
+      if (success) {successCount++;}
 
       // Small random delay between requests (10-100ms)
       await new Promise(resolve => setTimeout(resolve, Math.random() * 90 + 10));
@@ -277,7 +277,7 @@ class LoadTester {
   }
 
   async runLoadTest() {
-    console.log(colors.yellow + '\nStarting load test...' + colors.reset);
+    console.log(`${colors.yellow  }\nStarting load test...${  colors.reset}`);
     console.log(`Base URL: ${this.config.baseUrl}`);
     console.log(`Concurrent users: ${this.config.concurrentUsers}`);
     console.log(`Requests per user: ${this.config.requestsPerUser}`);
@@ -355,13 +355,13 @@ class LoadTester {
 // ============================================================================
 
 async function main() {
-  console.log(colors.blue + '\n' + '='.repeat(80) + colors.reset);
-  console.log(colors.blue + 'CLIENTSVIA LOAD TESTING TOOL' + colors.reset);
+  console.log(`${colors.blue  }\n${  '='.repeat(80)  }${colors.reset}`);
+  console.log(`${colors.blue  }CLIENTSVIA LOAD TESTING TOOL${  colors.reset}`);
   console.log(colors.blue + '='.repeat(80) + colors.reset);
 
   // Validate configuration
   if (!CONFIG.baseUrl) {
-    console.error(colors.red + 'Error: Base URL not configured' + colors.reset);
+    console.error(`${colors.red  }Error: Base URL not configured${  colors.reset}`);
     process.exit(1);
   }
 
@@ -374,8 +374,8 @@ async function main() {
     console.log(`${colors.cyan}MongoDB:${colors.reset} ${healthCheck.data.services.mongodb.status}`);
     console.log(`${colors.cyan}Redis:${colors.reset} ${healthCheck.data.services.redis.status}`);
   } catch (error) {
-    console.error(colors.red + `❌ Server unavailable: ${error.message}` + colors.reset);
-    console.error(colors.yellow + 'Please ensure the server is running before load testing' + colors.reset);
+    console.error(`${colors.red  }❌ Server unavailable: ${error.message}${  colors.reset}`);
+    console.error(`${colors.yellow  }Please ensure the server is running before load testing${  colors.reset}`);
     process.exit(1);
   }
 
@@ -391,7 +391,7 @@ async function main() {
     process.exit(passed ? 0 : 1);
     
   } catch (error) {
-    console.error(colors.red + '\nLoad test failed with error:' + colors.reset);
+    console.error(`${colors.red  }\nLoad test failed with error:${  colors.reset}`);
     console.error(error.message);
     console.error(error.stack);
     process.exit(1);

@@ -273,45 +273,45 @@ class KeywordGenerationService {
   getEnhancedSynonyms(token) {
     const enhancedSynonyms = {
       // Time/Schedule related
-      'hours': ['schedule', 'time', 'availability', 'open', 'operating', 'business'],
-      'open': ['available', 'operating', 'working', 'hours', 'schedule'],
-      'schedule': ['hours', 'time', 'availability', 'calendar', 'timing'],
-      'time': ['hours', 'schedule', 'when', 'availability'],
-      'when': ['hours', 'time', 'schedule', 'what time'],
+      hours: ['schedule', 'time', 'availability', 'open', 'operating', 'business'],
+      open: ['available', 'operating', 'working', 'hours', 'schedule'],
+      schedule: ['hours', 'time', 'availability', 'calendar', 'timing'],
+      time: ['hours', 'schedule', 'when', 'availability'],
+      when: ['hours', 'time', 'schedule', 'what time'],
       
       // Business related
-      'business': ['company', 'service', 'work', 'commercial', 'professional'],
-      'service': ['work', 'repair', 'fix', 'help', 'assistance'],
-      'company': ['business', 'service', 'firm', 'contractor'],
-      'work': ['service', 'job', 'repair', 'fix', 'help'],
+      business: ['company', 'service', 'work', 'commercial', 'professional'],
+      service: ['work', 'repair', 'fix', 'help', 'assistance'],
+      company: ['business', 'service', 'firm', 'contractor'],
+      work: ['service', 'job', 'repair', 'fix', 'help'],
       
       // Contact related
-      'phone': ['call', 'number', 'contact', 'reach', 'telephone'],
-      'call': ['phone', 'contact', 'reach', 'number'],
-      'contact': ['call', 'phone', 'reach', 'get hold'],
+      phone: ['call', 'number', 'contact', 'reach', 'telephone'],
+      call: ['phone', 'contact', 'reach', 'number'],
+      contact: ['call', 'phone', 'reach', 'get hold'],
       
       // Location related
-      'location': ['address', 'where', 'place', 'site', 'area'],
-      'address': ['location', 'where', 'place', 'directions'],
-      'where': ['location', 'address', 'place', 'directions'],
+      location: ['address', 'where', 'place', 'site', 'area'],
+      address: ['location', 'where', 'place', 'directions'],
+      where: ['location', 'address', 'place', 'directions'],
       
       // Cost related
-      'cost': ['price', 'charge', 'fee', 'rate', 'expense'],
-      'price': ['cost', 'charge', 'fee', 'rate', 'how much'],
-      'charge': ['cost', 'price', 'fee', 'rate'],
-      'fee': ['cost', 'price', 'charge', 'rate'],
+      cost: ['price', 'charge', 'fee', 'rate', 'expense'],
+      price: ['cost', 'charge', 'fee', 'rate', 'how much'],
+      charge: ['cost', 'price', 'fee', 'rate'],
+      fee: ['cost', 'price', 'charge', 'rate'],
       
       // Emergency related
-      'emergency': ['urgent', 'immediate', 'asap', 'rush', 'critical'],
-      'urgent': ['emergency', 'immediate', 'asap', 'rush'],
-      'immediate': ['urgent', 'emergency', 'asap', 'now'],
+      emergency: ['urgent', 'immediate', 'asap', 'rush', 'critical'],
+      urgent: ['emergency', 'immediate', 'asap', 'rush'],
+      immediate: ['urgent', 'emergency', 'asap', 'now'],
       
       // Common question words
-      'what': ['which', 'how', 'tell me'],
-      'how': ['what', 'which', 'tell me'],
-      'can': ['able', 'possible', 'do you'],
-      'do': ['can', 'will', 'able'],
-      'will': ['can', 'do', 'able']
+      what: ['which', 'how', 'tell me'],
+      how: ['what', 'which', 'tell me'],
+      can: ['able', 'possible', 'do you'],
+      do: ['can', 'will', 'able'],
+      will: ['can', 'do', 'able']
     };
     
     return enhancedSynonyms[token] || [];
@@ -323,14 +323,14 @@ class KeywordGenerationService {
    */
   getContextualVariations(token) {
     const contextualMaps = {
-      'hours': ['business hours', 'operating hours', 'open hours', 'work hours', 'service hours'],
-      'open': ['hours open', 'when open', 'open time', 'availability'],
-      'schedule': ['work schedule', 'business schedule', 'operating schedule'],
-      'service': ['services offered', 'what services', 'service types'],
-      'price': ['pricing', 'cost estimate', 'how much cost', 'rates'],
-      'location': ['where located', 'address', 'directions to'],
-      'contact': ['contact info', 'how to contact', 'reach you'],
-      'emergency': ['emergency service', 'urgent repair', 'after hours']
+      hours: ['business hours', 'operating hours', 'open hours', 'work hours', 'service hours'],
+      open: ['hours open', 'when open', 'open time', 'availability'],
+      schedule: ['work schedule', 'business schedule', 'operating schedule'],
+      service: ['services offered', 'what services', 'service types'],
+      price: ['pricing', 'cost estimate', 'how much cost', 'rates'],
+      location: ['where located', 'address', 'directions to'],
+      contact: ['contact info', 'how to contact', 'reach you'],
+      emergency: ['emergency service', 'urgent repair', 'after hours']
     };
     
     return contextualMaps[token] || [];
@@ -342,13 +342,13 @@ class KeywordGenerationService {
    */
   getQuestionVariations(token) {
     const questionMaps = {
-      'hours': ['what are your hours', 'when are you open', 'what time open', 'hours of operation'],
-      'open': ['are you open', 'when open', 'what time open', 'hours open'],
-      'service': ['what services', 'services offered', 'what do you do', 'types of service'],
-      'price': ['how much', 'what cost', 'pricing info', 'cost estimate'],
-      'location': ['where are you', 'your address', 'how to find you'],
-      'contact': ['how to contact', 'phone number', 'how to reach'],
-      'emergency': ['emergency service', 'after hours', 'urgent help']
+      hours: ['what are your hours', 'when are you open', 'what time open', 'hours of operation'],
+      open: ['are you open', 'when open', 'what time open', 'hours open'],
+      service: ['what services', 'services offered', 'what do you do', 'types of service'],
+      price: ['how much', 'what cost', 'pricing info', 'cost estimate'],
+      location: ['where are you', 'your address', 'how to find you'],
+      contact: ['how to contact', 'phone number', 'how to reach'],
+      emergency: ['emergency service', 'after hours', 'urgent help']
     };
     
     return questionMaps[token] || [];
@@ -484,9 +484,9 @@ class KeywordGenerationService {
 
   calculateSpecificityScore(keyword) {
     // Longer, more specific terms get higher scores
-    if (keyword.length >= 8) return 1.0;
-    if (keyword.length >= 6) return 0.8;
-    if (keyword.length >= 4) return 0.6;
+    if (keyword.length >= 8) {return 1.0;}
+    if (keyword.length >= 6) {return 0.8;}
+    if (keyword.length >= 4) {return 0.6;}
     return 0.4;
   }
 
@@ -608,16 +608,16 @@ class KeywordGenerationService {
     
     // Common business term mappings
     const businessTerms = {
-      'open': ['hours', 'schedule', 'available'],
-      'monday': ['weekday', 'business day'],
-      'address': ['location', 'directions', 'where'],
-      'phone': ['number', 'contact', 'call'],
-      'price': ['cost', 'pricing', 'rate'],
-      'service': ['work', 'job', 'repair'],
-      'emergency': ['urgent', 'immediate', 'asap'],
-      'fort': ['ft'],
-      'myers': ['florida', 'fl'],
-      'market': ['street', 'st']
+      open: ['hours', 'schedule', 'available'],
+      monday: ['weekday', 'business day'],
+      address: ['location', 'directions', 'where'],
+      phone: ['number', 'contact', 'call'],
+      price: ['cost', 'pricing', 'rate'],
+      service: ['work', 'job', 'repair'],
+      emergency: ['urgent', 'immediate', 'asap'],
+      fort: ['ft'],
+      myers: ['florida', 'fl'],
+      market: ['street', 'st']
     };
     
     return businessTerms[token] || [];
@@ -707,16 +707,16 @@ class KeywordGenerationService {
    */
   getFocusedIntentKeywords(intent, question, answer) {
     const focused = {
-      'pricing': ['cost', 'price', 'how much', 'charge', 'fee', 'rate', 'pricing'],
-      'hours': ['hours', 'open', 'schedule', 'time', 'when', 'availability'],
-      'location': ['where', 'location', 'address', 'area', 'service area'],
-      'emergency': ['emergency', 'urgent', '24/7', 'immediate', 'after hours'],
-      'plumbing': ['plumbing', 'water', 'leak', 'drain', 'pipe'],
-      'hvac': ['hvac', 'ac', 'air conditioning', 'heat', 'heating', 'cooling'],
-      'installation': ['install', 'installation', 'new', 'setup'],
-      'repair': ['repair', 'fix', 'broken', 'problem'],
-      'scheduling': ['appointment', 'schedule', 'book', 'available'],
-      'general': []
+      pricing: ['cost', 'price', 'how much', 'charge', 'fee', 'rate', 'pricing'],
+      hours: ['hours', 'open', 'schedule', 'time', 'when', 'availability'],
+      location: ['where', 'location', 'address', 'area', 'service area'],
+      emergency: ['emergency', 'urgent', '24/7', 'immediate', 'after hours'],
+      plumbing: ['plumbing', 'water', 'leak', 'drain', 'pipe'],
+      hvac: ['hvac', 'ac', 'air conditioning', 'heat', 'heating', 'cooling'],
+      installation: ['install', 'installation', 'new', 'setup'],
+      repair: ['repair', 'fix', 'broken', 'problem'],
+      scheduling: ['appointment', 'schedule', 'book', 'available'],
+      general: []
     };
     
     const keywords = new Set();
@@ -784,17 +784,17 @@ class KeywordGenerationService {
     
     for (const keyword of unique) {
       // Skip if empty or too short
-      if (!keyword || keyword.trim().length < 2) continue;
+      if (!keyword || keyword.trim().length < 2) {continue;}
       
       // Skip if it's a substring of another keyword already added
       const isSubstring = filtered.some(existing => 
         existing.includes(keyword) && existing !== keyword
       );
-      if (isSubstring) continue;
+      if (isSubstring) {continue;}
       
       // Skip generic pollutants
       const pollutants = ['what', 'how', 'can', 'you', 'your', 'our', 'are', 'the'];
-      if (pollutants.includes(keyword)) continue;
+      if (pollutants.includes(keyword)) {continue;}
       
       filtered.push(keyword.trim());
     }
@@ -811,13 +811,13 @@ class KeywordGenerationService {
       let score = 0;
       
       // Highest priority: appears in question
-      if (question.includes(keyword)) score += 10;
+      if (question.includes(keyword)) {score += 10;}
       
       // Medium priority: appears in answer
-      if (answer.includes(keyword)) score += 5;
+      if (answer.includes(keyword)) {score += 5;}
       
       // Phrase bonus: multi-word keywords are more specific
-      if (keyword.includes(' ')) score += 8;
+      if (keyword.includes(' ')) {score += 8;}
       
       // Length bonus: longer keywords are more specific
       score += Math.min(keyword.length / 2, 5);

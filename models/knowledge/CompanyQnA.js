@@ -194,10 +194,10 @@ companyQnASchema.pre('save', async function(next) {
     // Only generate keywords if question or answer changed
     if (this.isModified('question') || this.isModified('answer') || this.isNew) {
       
-      console.log('🧠 CHECKPOINT: Starting keyword generation for Q&A:', this.question.substring(0, 50) + '...');
+      console.log('🧠 CHECKPOINT: Starting keyword generation for Q&A:', `${this.question.substring(0, 50)  }...`);
       
       // Ensure required fields have defaults to prevent validation errors
-      if (!this.keywords) this.keywords = [];
+      if (!this.keywords) {this.keywords = [];}
       if (!this.keywordCategories) {
         this.keywordCategories = {
           entities: [],
@@ -302,7 +302,7 @@ companyQnASchema.methods.generateFallbackKeywords = function(question, answer) {
 };
 
 // 🎯 PERFORMANCE TRACKING MIDDLEWARE
-companyQnASchema.post('findOne', function(doc) {
+companyQnASchema.post('findOne', (doc) => {
   if (doc) {
     // Asynchronously update usage stats (don't block response)
     setImmediate(async () => {

@@ -136,13 +136,13 @@ router.put('/:id', async (req, res) => {
         // Update fields
         const { name, icon, instructions, bestFor, examples, isActive, sortOrder } = req.body;
         
-        if (name) behavior.name = name;
-        if (icon) behavior.icon = icon;
-        if (instructions) behavior.instructions = instructions;
-        if (bestFor !== undefined) behavior.bestFor = bestFor;
-        if (examples) behavior.examples = examples;
-        if (isActive !== undefined) behavior.isActive = isActive;
-        if (sortOrder !== undefined) behavior.sortOrder = sortOrder;
+        if (name) {behavior.name = name;}
+        if (icon) {behavior.icon = icon;}
+        if (instructions) {behavior.instructions = instructions;}
+        if (bestFor !== undefined) {behavior.bestFor = bestFor;}
+        if (examples) {behavior.examples = examples;}
+        if (isActive !== undefined) {behavior.isActive = isActive;}
+        if (sortOrder !== undefined) {behavior.sortOrder = sortOrder;}
         
         behavior.lastModifiedBy = 'Admin';
         

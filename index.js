@@ -323,7 +323,7 @@ app.use('/api/twilio', (req, res, next) => {
         ip: req.ip || req.connection.remoteAddress,
         userAgent: req.headers['user-agent'],
         twilioSignature: req.headers['x-twilio-signature'],
-        hasBody: !!req.body,
+        hasBody: Boolean(req.body),
         bodySize: JSON.stringify(req.body || {}).length
     });
     next();
@@ -340,9 +340,9 @@ app.use((req, res, next) => {
             originalUrl: req.originalUrl,
             ip: req.ip || req.connection.remoteAddress,
             userAgent: req.headers['user-agent'],
-            referer: req.headers['referer'],
+            referer: req.headers.referer,
             isTwilio: req.headers['user-agent']?.includes('TwilioProxy') || req.headers['x-twilio-signature'],
-            hasCallSid: !!(req.body && req.body.CallSid)
+            hasCallSid: Boolean(req.body && req.body.CallSid)
         });
     }
     next();
@@ -623,7 +623,7 @@ async function startServer() {
         console.error('[Server Startup] Environment variables check:');
         console.error('  - PORT:', process.env.PORT);
         console.error('  - NODE_ENV:', process.env.NODE_ENV);
-        console.error('  - MONGODB_URI present:', !!process.env.MONGODB_URI);
+        console.error('  - MONGODB_URI present:', Boolean(process.env.MONGODB_URI));
         throw err;
     }
 }

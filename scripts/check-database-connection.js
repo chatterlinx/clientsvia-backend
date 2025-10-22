@@ -40,7 +40,7 @@ async function checkDatabase() {
                     console.log(`\n📄 Sample company from "${name}":`);
                     console.log(`   _id: ${firstCompany._id}`);
                     console.log(`   companyName: ${firstCompany.companyName}`);
-                    console.log(`   Has aiAgentLogic: ${!!firstCompany.aiAgentLogic}`);
+                    console.log(`   Has aiAgentLogic: ${Boolean(firstCompany.aiAgentLogic)}`);
                     if (firstCompany.aiAgentLogic) {
                         console.log(`   voiceSettings type: ${typeof firstCompany.aiAgentLogic.voiceSettings}`);
                         console.log(`   voiceSettings value:`, firstCompany.aiAgentLogic.voiceSettings);

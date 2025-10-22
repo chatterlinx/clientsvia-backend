@@ -62,20 +62,18 @@ router.get('/:companyId/twilio-control/status', async (req, res) => {
 
         // DIAGNOSTIC: Log what we're seeing
         console.log(`[TWILIO CONTROL] 🔍 DIAGNOSTIC for ${company.companyName}:`);
-        console.log(`   - twilioConfig exists:`, !!twilioConfig);
-        console.log(`   - accountSid exists:`, !!twilioConfig.accountSid);
-        console.log(`   - authToken exists:`, !!twilioConfig.authToken);
+        console.log(`   - twilioConfig exists:`, Boolean(twilioConfig));
+        console.log(`   - accountSid exists:`, Boolean(twilioConfig.accountSid));
+        console.log(`   - authToken exists:`, Boolean(twilioConfig.authToken));
         console.log(`   - phoneNumber (legacy):`, twilioConfig.phoneNumber || 'NOT SET');
         console.log(`   - phoneNumbers (modern):`, twilioConfig.phoneNumbers?.length || 0, 'numbers');
         console.log(`   - voiceSettings.voiceId:`, voiceSettings.voiceId || 'NOT SET');
 
         // Check if Twilio is configured (support both legacy and modern phone number structure)
-        const hasAccountSid = !!(twilioConfig.accountSid && twilioConfig.accountSid.trim());
-        const hasAuthToken = !!(twilioConfig.authToken && twilioConfig.authToken.trim());
-        const hasPhoneNumber = !!(
-            twilioConfig.phoneNumber || 
-            (twilioConfig.phoneNumbers && twilioConfig.phoneNumbers.length > 0)
-        );
+        const hasAccountSid = Boolean(twilioConfig.accountSid && twilioConfig.accountSid.trim());
+        const hasAuthToken = Boolean(twilioConfig.authToken && twilioConfig.authToken.trim());
+        const hasPhoneNumber = Boolean(twilioConfig.phoneNumber || 
+            (twilioConfig.phoneNumbers && twilioConfig.phoneNumbers.length > 0));
 
         const isConfigured = hasAccountSid && hasAuthToken && hasPhoneNumber;
 
@@ -138,8 +136,8 @@ router.get('/:companyId/twilio-control/status', async (req, res) => {
         } else {
             // Partially configured - missing some fields
             const missing = [];
-            if (!hasAccountSid) missing.push('Account SID');
-            if (!hasAuthToken) missing.push('Auth Token');
+            if (!hasAccountSid) {missing.push('Account SID');}
+            if (!hasAuthToken) {missing.push('Auth Token');}
             errorMessage = `Incomplete configuration - missing: ${missing.join(', ')}. Using global ClientsVia account.`;
             usingGlobalAccount = true;
             isConnected = true;
@@ -162,7 +160,7 @@ router.get('/:companyId/twilio-control/status', async (req, res) => {
             accountSid: twilioConfig.accountSid ? 
                 `${twilioConfig.accountSid.substring(0, 8)}••••${twilioConfig.accountSid.slice(-4)}` : 
                 'Using Global Account',
-            phoneNumber: phoneNumber,
+            phoneNumber,
             phoneNumbersCount: twilioConfig.phoneNumbers?.length || 0
         });
 
@@ -276,10 +274,10 @@ router.patch('/:companyId/twilio-control/routing', async (req, res) => {
         }
 
         // Update call routing settings
-        if (mode) company.twilioConfig.callRoutingMode = mode;
-        if (forwardNumber !== undefined) company.twilioConfig.forwardNumber = forwardNumber;
-        if (recordingEnabled !== undefined) company.twilioConfig.recordingEnabled = recordingEnabled;
-        if (whisperMessage !== undefined) company.twilioConfig.whisperMessage = whisperMessage;
+        if (mode) {company.twilioConfig.callRoutingMode = mode;}
+        if (forwardNumber !== undefined) {company.twilioConfig.forwardNumber = forwardNumber;}
+        if (recordingEnabled !== undefined) {company.twilioConfig.recordingEnabled = recordingEnabled;}
+        if (whisperMessage !== undefined) {company.twilioConfig.whisperMessage = whisperMessage;}
         
         company.twilioConfig.lastUpdated = new Date();
 
@@ -513,8 +511,8 @@ router.get('/:companyId/twilio-control/health', async (req, res) => {
 
         // Determine overall status
         let status = 'error';
-        if (healthScore >= 80) status = 'operational';
-        else if (healthScore >= 60) status = 'degraded';
+        if (healthScore >= 80) {status = 'operational';}
+        else if (healthScore >= 60) {status = 'degraded';}
 
         res.json({
             healthScore,
@@ -541,9 +539,9 @@ router.get('/:companyId/twilio-control/health', async (req, res) => {
 function getTimeAgo(date) {
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);
     
-    if (seconds < 60) return `${seconds}s ago`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 60) {return `${seconds}s ago`;}
+    if (seconds < 3600) {return `${Math.floor(seconds / 60)}m ago`;}
+    if (seconds < 86400) {return `${Math.floor(seconds / 3600)}h ago`;}
     return `${Math.floor(seconds / 86400)}d ago`;
 }
 

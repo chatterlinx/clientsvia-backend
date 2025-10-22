@@ -132,13 +132,13 @@ router.put('/:id', async (req, res) => {
         }
         
         // Update fields
-        if (name) industry.name = name;
-        if (displayLabel) industry.displayLabel = displayLabel;
-        if (icon) industry.icon = icon;
-        if (description !== undefined) industry.description = description;
-        if (color) industry.color = color;
-        if (sortOrder !== undefined) industry.sortOrder = sortOrder;
-        if (isActive !== undefined) industry.isActive = isActive;
+        if (name) {industry.name = name;}
+        if (displayLabel) {industry.displayLabel = displayLabel;}
+        if (icon) {industry.icon = icon;}
+        if (description !== undefined) {industry.description = description;}
+        if (color) {industry.color = color;}
+        if (sortOrder !== undefined) {industry.sortOrder = sortOrder;}
+        if (isActive !== undefined) {industry.isActive = isActive;}
         industry.lastModifiedBy = 'Admin';
         
         await industry.save();

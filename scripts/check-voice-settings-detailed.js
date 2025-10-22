@@ -28,7 +28,7 @@ async function inspectVoiceSettings() {
         
         companies.forEach((company, index) => {
             console.log(`\n${index + 1}. ${company.companyName} (${company._id})`);
-            console.log(`   Has aiAgentLogic: ${!!company.aiAgentLogic}`);
+            console.log(`   Has aiAgentLogic: ${Boolean(company.aiAgentLogic)}`);
             
             if (company.aiAgentLogic) {
                 const vs = company.aiAgentLogic.voiceSettings;
@@ -47,7 +47,7 @@ async function inspectVoiceSettings() {
             }
         });
         
-        console.log('\n' + '═'.repeat(80));
+        console.log(`\n${  '═'.repeat(80)}`);
         await mongoose.disconnect();
         console.log('✅ Done');
         process.exit(0);

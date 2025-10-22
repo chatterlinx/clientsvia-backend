@@ -49,26 +49,26 @@ class CompanyHealthService {
         let score = 0;
 
         // Phone number configured: +20
-        if (hasPhone) score += 20;
+        if (hasPhone) {score += 20;}
 
         // Has scenarios: +20
-        if (hasScenarios) score += 20;
+        if (hasScenarios) {score += 20;}
 
         // Has calls: +30
-        if (hasCalls) score += 30;
+        if (hasCalls) {score += 30;}
 
         // Recent activity: +20
         const daysSinceActivity = health.metrics.lastActivity
             ? Math.floor((Date.now() - new Date(health.metrics.lastActivity)) / (1000 * 60 * 60 * 24))
             : Infinity;
         
-        if (daysSinceActivity < 7) score += 20;
-        else if (daysSinceActivity < 30) score += 10;
-        else if (daysSinceActivity < 60) score += 5;
+        if (daysSinceActivity < 7) {score += 20;}
+        else if (daysSinceActivity < 30) {score += 10;}
+        else if (daysSinceActivity < 60) {score += 5;}
 
         // Readiness score: +10
-        if (health.metrics.readinessScore >= 80) score += 10;
-        else if (health.metrics.readinessScore >= 50) score += 5;
+        if (health.metrics.readinessScore >= 80) {score += 10;}
+        else if (health.metrics.readinessScore >= 50) {score += 5;}
 
         health.score = Math.min(100, score);
 
@@ -216,10 +216,10 @@ class CompanyHealthService {
      * Format data size for display
      */
     static formatDataSize(bytes) {
-        if (!bytes || bytes === 0) return '0 B';
-        if (bytes < 1024) return `${bytes} B`;
-        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-        if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        if (!bytes || bytes === 0) {return '0 B';}
+        if (bytes < 1024) {return `${bytes} B`;}
+        if (bytes < 1024 * 1024) {return `${(bytes / 1024).toFixed(1)} KB`;}
+        if (bytes < 1024 * 1024 * 1024) {return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;}
         return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
     }
 
@@ -227,7 +227,7 @@ class CompanyHealthService {
      * Format last activity for display
      */
     static formatLastActivity(date) {
-        if (!date) return 'Never';
+        if (!date) {return 'Never';}
         
         const now = new Date();
         const activity = new Date(date);
@@ -236,12 +236,12 @@ class CompanyHealthService {
         const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
         const diffMinutes = Math.floor(diffMs / (1000 * 60));
 
-        if (diffMinutes < 60) return `${diffMinutes}m ago`;
-        if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays === 1) return 'Yesterday';
-        if (diffDays < 7) return `${diffDays}d ago`;
-        if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-        if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
+        if (diffMinutes < 60) {return `${diffMinutes}m ago`;}
+        if (diffHours < 24) {return `${diffHours}h ago`;}
+        if (diffDays === 1) {return 'Yesterday';}
+        if (diffDays < 7) {return `${diffDays}d ago`;}
+        if (diffDays < 30) {return `${Math.floor(diffDays / 7)}w ago`;}
+        if (diffDays < 365) {return `${Math.floor(diffDays / 30)}mo ago`;}
         return `${Math.floor(diffDays / 365)}y ago`;
     }
 }

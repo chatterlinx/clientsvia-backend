@@ -279,8 +279,8 @@ class HybridScenarioSelector {
             // This prevents "60% = NO MATCH" nonsense when caller says the exact phrase.
             const exactMatchStart = Date.now();
             for (const scenario of safeScenarios) {
-                if (!scenario || typeof scenario !== 'object') continue;
-                if (scenario.status !== 'live' || scenario.isActive === false) continue;
+                if (!scenario || typeof scenario !== 'object') {continue;}
+                if (scenario.status !== 'live' || scenario.isActive === false) {continue;}
                 
                 const triggers = this.toArr(scenario.triggers);
                 for (const trigger of triggers) {
@@ -340,7 +340,7 @@ class HybridScenarioSelector {
             trace.intents = {
                 detected: detectedIntents,
                 primaryIntent: detectedIntents[0] || null,
-                problemTopics: problemTopics,
+                problemTopics,
                 hasEmergency: detectedIntents.includes('EMERGENCY'),
                 hasBookIntent: detectedIntents.includes('BOOK'),
                 hasQuestionIntent: detectedIntents.includes('QUESTION')
@@ -459,7 +459,7 @@ class HybridScenarioSelector {
             const scoreDelta = Math.abs(problemScore - actionScore);
             
             // Resolution decision
-            let resolverDecision = {
+            const resolverDecision = {
                 problemScore: problemScore.toFixed(3),
                 actionScore: actionScore.toFixed(3),
                 delta: scoreDelta.toFixed(3),
@@ -817,7 +817,7 @@ class HybridScenarioSelector {
      * @returns {Number} - BM25 score (0-1 normalized)
      */
     calculateBM25Score(phraseTerms, triggers, k1, b) {
-        if (phraseTerms.length === 0 || triggers.length === 0) return 0;
+        if (phraseTerms.length === 0 || triggers.length === 0) {return 0;}
         
         // Normalize triggers
         const normalizedTriggers = triggers.map(t => {
@@ -828,12 +828,12 @@ class HybridScenarioSelector {
         let bestScore = 0;
         
         for (const triggerTerms of normalizedTriggers) {
-            if (triggerTerms.length === 0) continue;
+            if (triggerTerms.length === 0) {continue;}
             
             // Count matching terms
             let matchingTerms = 0;
-            let triggerTermSet = new Set(triggerTerms);
-            let phraseTermSet = new Set(phraseTerms);
+            const triggerTermSet = new Set(triggerTerms);
+            const phraseTermSet = new Set(phraseTerms);
             
             // Term overlap (how many trigger words appear in phrase)
             for (const triggerTerm of triggerTermSet) {
@@ -874,7 +874,7 @@ class HybridScenarioSelector {
      * @returns {Number} - Regex score (0-1)
      */
     calculateRegexScore(normalizedPhrase, regexTriggers) {
-        if (!regexTriggers || regexTriggers.length === 0) return 0;
+        if (!regexTriggers || regexTriggers.length === 0) {return 0;}
         
         for (const pattern of regexTriggers) {
             try {
@@ -941,7 +941,7 @@ class HybridScenarioSelector {
         try {
             // Simple key-value matching
             // In production, would use more sophisticated logic engine
-            if (typeof preconditions !== 'object') return true;
+            if (typeof preconditions !== 'object') {return true;}
             
             for (const [key, expectedValue] of Object.entries(preconditions)) {
                 if (conversationState[key] !== expectedValue) {
@@ -966,7 +966,7 @@ class HybridScenarioSelector {
      * @returns {String} - Normalized phrase
      */
     normalizePhrase(phrase) {
-        if (!phrase) return '';
+        if (!phrase) {return '';}
         
         return phrase
             .toLowerCase()
@@ -994,7 +994,7 @@ class HybridScenarioSelector {
      * @returns {Number} - Best window score
      */
     bestWindowScore(tokens, scoreFn, windowSize = 10) {
-        if (!tokens || tokens.length === 0) return 0;
+        if (!tokens || tokens.length === 0) {return 0;}
         
         // If phrase is shorter than window, score the whole thing
         if (tokens.length <= windowSize) {
@@ -1037,7 +1037,7 @@ class HybridScenarioSelector {
      * @returns {Array} - Array of terms
      */
     extractTerms(normalizedPhrase) {
-        if (!normalizedPhrase) return [];
+        if (!normalizedPhrase) {return [];}
         
         const words = normalizedPhrase.split(' ');
         
@@ -1063,7 +1063,7 @@ class HybridScenarioSelector {
         
         // Check each intent type
         for (const [intentType, keywords] of Object.entries(this.intentKeywords)) {
-            if (intentType === 'PROBLEM_TOPICS') continue; // Skip problem topics
+            if (intentType === 'PROBLEM_TOPICS') {continue;} // Skip problem topics
             
             for (const keyword of keywords) {
                 if (normalizedPhrase.includes(keyword)) {
@@ -1123,12 +1123,12 @@ class HybridScenarioSelector {
         
         // Map intent types to scenario keywords
         const intentMappings = {
-            'EMERGENCY': ['emergency', 'urgent'],
-            'BOOK': ['appointment', 'schedule', 'visit', 'booking', 'request'],
-            'RESCHEDULE': ['reschedule', 'cancel', 'change'],
-            'STATUS': ['status', 'billing', 'hours', 'pricing', 'cost'],
-            'QUESTION': ['question', 'inquiry', 'q&a', 'qna', 'trade'],
-            'SMALLTALK': ['smalltalk', 'gratitude', 'goodbye', 'greeting']
+            EMERGENCY: ['emergency', 'urgent'],
+            BOOK: ['appointment', 'schedule', 'visit', 'booking', 'request'],
+            RESCHEDULE: ['reschedule', 'cancel', 'change'],
+            STATUS: ['status', 'billing', 'hours', 'pricing', 'cost'],
+            QUESTION: ['question', 'inquiry', 'q&a', 'qna', 'trade'],
+            SMALLTALK: ['smalltalk', 'gratitude', 'goodbye', 'greeting']
         };
         
         const keywords = intentMappings[intentType] || [];
@@ -1182,7 +1182,7 @@ class HybridScenarioSelector {
         const problemKeywords = this.intentKeywords.PROBLEM_TOPICS || [];
         
         let matchCount = 0;
-        let totalKeywords = emergencyKeywords.length + problemKeywords.length;
+        const totalKeywords = emergencyKeywords.length + problemKeywords.length;
         
         // Check for emergency keywords
         emergencyKeywords.forEach(keyword => {
@@ -1224,7 +1224,7 @@ class HybridScenarioSelector {
         const rescheduleKeywords = this.intentKeywords.RESCHEDULE || [];
         
         let matchCount = 0;
-        let totalKeywords = bookingKeywords.length + rescheduleKeywords.length;
+        const totalKeywords = bookingKeywords.length + rescheduleKeywords.length;
         
         // Check for booking keywords
         bookingKeywords.forEach(keyword => {
@@ -1259,7 +1259,7 @@ class HybridScenarioSelector {
      * @returns {Boolean}
      */
     isEmergencyScenario(scenario) {
-        if (!scenario) return false;
+        if (!scenario) {return false;}
         const name = (scenario.name || '').toLowerCase();
         const categories = this.toArr(scenario.categories).map(c => c.toLowerCase());
         
@@ -1274,7 +1274,7 @@ class HybridScenarioSelector {
      * @returns {Boolean}
      */
     isBookingScenario(scenario) {
-        if (!scenario) return false;
+        if (!scenario) {return false;}
         const name = (scenario.name || '').toLowerCase();
         const categories = this.toArr(scenario.categories).map(c => c.toLowerCase());
         

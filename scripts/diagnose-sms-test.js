@@ -4,9 +4,9 @@
 
 require('dotenv').config();
 
-console.log('\n' + '='.repeat(80));
+console.log(`\n${  '='.repeat(80)}`);
 console.log('SMS TEST DIAGNOSTIC REPORT');
-console.log('='.repeat(80) + '\n');
+console.log(`${'='.repeat(80)  }\n`);
 
 // ============================================================================
 // 1. ENVIRONMENT VARIABLES CHECK
@@ -15,13 +15,13 @@ console.log('📋 STEP 1: Checking Environment Variables\n');
 
 const checks = {
     gmail: {
-        user: !!process.env.GMAIL_USER,
-        password: !!process.env.GMAIL_APP_PASSWORD
+        user: Boolean(process.env.GMAIL_USER),
+        password: Boolean(process.env.GMAIL_APP_PASSWORD)
     },
     twilio: {
-        accountSid: !!process.env.TWILIO_ACCOUNT_SID,
-        authToken: !!process.env.TWILIO_AUTH_TOKEN,
-        phoneNumber: !!process.env.TWILIO_PHONE_NUMBER
+        accountSid: Boolean(process.env.TWILIO_ACCOUNT_SID),
+        authToken: Boolean(process.env.TWILIO_AUTH_TOKEN),
+        phoneNumber: Boolean(process.env.TWILIO_PHONE_NUMBER)
     }
 };
 
@@ -37,7 +37,7 @@ console.log(`  ${checks.twilio.phoneNumber ? '✅' : '❌'} TWILIO_PHONE_NUMBER:
 // ============================================================================
 // 2. DATABASE CONNECTION CHECK
 // ============================================================================
-console.log('\n' + '='.repeat(80));
+console.log(`\n${  '='.repeat(80)}`);
 console.log('📋 STEP 2: Checking Database Connection\n');
 
 (async () => {
@@ -56,7 +56,7 @@ console.log('📋 STEP 2: Checking Database Connection\n');
         // ============================================================================
         // 3. ADMIN SETTINGS CHECK
         // ============================================================================
-        console.log('\n' + '='.repeat(80));
+        console.log(`\n${  '='.repeat(80)}`);
         console.log('📋 STEP 3: Checking Admin Settings & Contacts\n');
         
         const AdminSettings = require('../models/AdminSettings');
@@ -104,7 +104,7 @@ console.log('📋 STEP 2: Checking Database Connection\n');
             }
             
             // Twilio Test Config
-            console.log('\n' + '='.repeat(80));
+            console.log(`\n${  '='.repeat(80)}`);
             console.log('📞 Twilio Test Configuration:\n');
             
             const twilioTest = settings?.notificationCenter?.twilioTest;
@@ -121,7 +121,7 @@ console.log('📋 STEP 2: Checking Database Connection\n');
         // ============================================================================
         // 4. EMAIL CLIENT CHECK
         // ============================================================================
-        console.log('\n' + '='.repeat(80));
+        console.log(`\n${  '='.repeat(80)}`);
         console.log('📋 STEP 4: Testing Email Client\n');
         
         const emailClient = require('../clients/emailClient');
@@ -137,7 +137,7 @@ console.log('📋 STEP 2: Checking Database Connection\n');
         // ============================================================================
         // 5. SUMMARY & RECOMMENDATIONS
         // ============================================================================
-        console.log('\n' + '='.repeat(80));
+        console.log(`\n${  '='.repeat(80)}`);
         console.log('📊 SUMMARY & RECOMMENDATIONS\n');
         
         const issues = [];
@@ -201,7 +201,7 @@ console.log('📋 STEP 2: Checking Database Connection\n');
             console.log('4. Test again with SMS "TEST"');
         }
         
-        console.log('\n' + '='.repeat(80));
+        console.log(`\n${  '='.repeat(80)}`);
         
         process.exit(0);
         

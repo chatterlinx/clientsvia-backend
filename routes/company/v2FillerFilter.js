@@ -176,9 +176,9 @@ router.post('/company/:companyId/configuration/filler-filter/scan', async (req, 
                 triggeredBy: 'manual'
             };
             
-            if (!company.aiAgentSettings) company.aiAgentSettings = {};
-            if (!company.aiAgentSettings.fillerWords) company.aiAgentSettings.fillerWords = {};
-            if (!company.aiAgentSettings.fillerWords.scanHistory) company.aiAgentSettings.fillerWords.scanHistory = [];
+            if (!company.aiAgentSettings) {company.aiAgentSettings = {};}
+            if (!company.aiAgentSettings.fillerWords) {company.aiAgentSettings.fillerWords = {};}
+            if (!company.aiAgentSettings.fillerWords.scanHistory) {company.aiAgentSettings.fillerWords.scanHistory = [];}
             
             company.aiAgentSettings.fillerWords.scanHistory.push(scanHistoryEntry);
             company.markModified('aiAgentSettings');
@@ -207,10 +207,10 @@ router.post('/company/:companyId/configuration/filler-filter/scan', async (req, 
                 },
                 scanLog: [
                     '🔍 Starting filler word scan...',
-                    '✅ Company found: ' + company.companyName,
+                    `✅ Company found: ${  company.companyName}`,
                     '⚠️ No active templates found',
                     '📋 Scan Status: NO TEMPLATES',
-                    '⏱️ Scan completed in ' + (Date.now() - scanStartTime) + 'ms'
+                    `⏱️ Scan completed in ${  Date.now() - scanStartTime  }ms`
                 ]
             });
         }
@@ -276,9 +276,9 @@ router.post('/company/:companyId/configuration/filler-filter/scan', async (req, 
         // Step 6: Update company with new inherited fillers
         console.log(`🔇 [SCAN STEP 6/6] Updating company record...`);
         
-        if (!company.aiAgentSettings) company.aiAgentSettings = {};
-        if (!company.aiAgentSettings.fillerWords) company.aiAgentSettings.fillerWords = {};
-        if (!company.aiAgentSettings.fillerWords.scanHistory) company.aiAgentSettings.fillerWords.scanHistory = [];
+        if (!company.aiAgentSettings) {company.aiAgentSettings = {};}
+        if (!company.aiAgentSettings.fillerWords) {company.aiAgentSettings.fillerWords = {};}
+        if (!company.aiAgentSettings.fillerWords.scanHistory) {company.aiAgentSettings.fillerWords.scanHistory = [];}
         
         // Update inherited fillers list
         company.aiAgentSettings.fillerWords.inherited = Array.from(allFillersFound).sort();
@@ -382,7 +382,7 @@ router.post('/company/:companyId/configuration/filler-filter/scan', async (req, 
                 '🔍 Starting filler word scan...',
                 '❌ Error occurred during scan',
                 `Error: ${error.message}`,
-                '⏱️ Scan aborted after ' + (Date.now() - scanStartTime) + 'ms'
+                `⏱️ Scan aborted after ${  Date.now() - scanStartTime  }ms`
             ]
         });
     }

@@ -41,9 +41,9 @@ router.get('/inspect-company/:companyId', async (req, res) => {
         const analysis = {
             companyId: company._id.toString(),
             companyName: company.companyName,
-            hasAiAgentLogic: !!company.aiAgentLogic,
+            hasAiAgentLogic: Boolean(company.aiAgentLogic),
             aiAgentLogicType: typeof company.aiAgentLogic,
-            hasVoiceSettings: !!company.aiAgentLogic?.voiceSettings,
+            hasVoiceSettings: Boolean(company.aiAgentLogic?.voiceSettings),
             voiceSettingsType: typeof company.aiAgentLogic?.voiceSettings,
             voiceSettingsIsArray: Array.isArray(company.aiAgentLogic?.voiceSettings),
             voiceSettingsIsNull: company.aiAgentLogic?.voiceSettings === null,
@@ -341,7 +341,7 @@ router.post('/repair-voice-settings', async (req, res) => {
         report.successfulRepairs = report.repairResults.filter(r => r.success).length;
         report.failedRepairs = report.repairResults.filter(r => !r.success).length;
         
-        console.log('\n' + '═'.repeat(80));
+        console.log(`\n${  '═'.repeat(80)}`);
         console.log('📊 REPAIR COMPLETE');
         console.log(`   Total scanned: ${report.totalCompanies}`);
         console.log(`   Found corrupt: ${report.corruptCompanies.length}`);

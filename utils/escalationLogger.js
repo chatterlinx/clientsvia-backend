@@ -3,7 +3,7 @@ const { getDB } = require('../db');
 async function logEscalationEvent(callSid, companyId, question) {
   try {
     const db = getDB();
-    if (!db) return;
+    if (!db) {return;}
     const collection = db.collection('escalationLogs');
     await collection.insertOne({ callSid, companyId, question, timestamp: new Date() });
   } catch (err) {

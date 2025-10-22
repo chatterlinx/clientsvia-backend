@@ -239,15 +239,15 @@ class V2SingleSessionManager {
     calculateSecurityLevel(geoValidation, hardwareValidation) {
         let score = 100;
 
-        if (geoValidation.risk === 'high') score -= 40;
-        else if (geoValidation.risk === 'medium') score -= 20;
+        if (geoValidation.risk === 'high') {score -= 40;}
+        else if (geoValidation.risk === 'medium') {score -= 20;}
 
-        if (geoValidation.location.isVPN || geoValidation.location.isProxy) score -= 15;
-        if (!hardwareValidation.valid) score -= 25;
-        if (geoValidation.warnings.length > 0) score -= 10;
+        if (geoValidation.location.isVPN || geoValidation.location.isProxy) {score -= 15;}
+        if (!hardwareValidation.valid) {score -= 25;}
+        if (geoValidation.warnings.length > 0) {score -= 10;}
 
-        if (score >= 85) return 'high';
-        if (score >= 70) return 'medium';
+        if (score >= 85) {return 'high';}
+        if (score >= 70) {return 'medium';}
         return 'low';
     }
 

@@ -1,5 +1,5 @@
 function stripMarkdown(text) {
-  if (!text) return '';
+  if (!text) {return '';}
   return text
     .replace(/\*\*|__|_|#|\n-|\n\*|\n\d\./g, '')
     .replace(/\s+/g, ' ')
@@ -7,7 +7,7 @@ function stripMarkdown(text) {
 }
 
 function cleanTextForTTS(text) {
-  if (!text) return '';
+  if (!text) {return '';}
   
   // First decode HTML entities
   text = text.replace(/&amp;/g, '&')

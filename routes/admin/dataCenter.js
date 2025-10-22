@@ -265,7 +265,7 @@ router.get('/companies', async (req, res) => {
                 companyName: mergedCompanies[0].companyName,
                 businessName: mergedCompanies[0].businessName,
                 calls: mergedCompanies[0].calls,
-                hasCallsAgg: !!mergedCompanies[0].callsAgg
+                hasCallsAgg: Boolean(mergedCompanies[0].callsAgg)
             });
         }
 
@@ -374,15 +374,15 @@ router.get('/companies', async (req, res) => {
  */
 function buildSortObject(sortStr) {
     const sortMap = {
-        'name': { companyName: 1 },
+        name: { companyName: 1 },
         '-name': { companyName: -1 },
-        'created': { createdAt: 1 },
+        created: { createdAt: 1 },
         '-created': { createdAt: -1 },
-        'calls': { calls: 1 },
+        calls: { calls: 1 },
         '-calls': { calls: -1 },
-        'lastActivity': { lastActivity: 1 },
+        lastActivity: { lastActivity: 1 },
         '-lastActivity': { lastActivity: -1 },
-        'health': { healthScore: 1 },
+        health: { healthScore: 1 },
         '-health': { healthScore: -1 }
     };
 
@@ -561,7 +561,7 @@ router.patch('/companies/:id/soft-delete', async (req, res) => {
                 targetId: id,
                 targetName: rawCompany.companyName || rawCompany.businessName || null,
                 userId: userId || null,
-                userEmail: userEmail,
+                userEmail,
                 metadata: { reason: reason || null, notes: notes || null },
                 success: true
             });
@@ -649,7 +649,7 @@ router.post('/companies/:id/restore', async (req, res) => {
                 targetId: id,
                 targetName: rawRestore2.companyName || rawRestore2.businessName || null,
                 userId: userId || null,
-                userEmail: userEmail,
+                userEmail,
                 success: true
             });
         } catch (auditErr) {
@@ -777,7 +777,7 @@ router.delete('/companies/:id/hard-delete', async (req, res) => {
                 targetId: id,
                 targetName: companyName,
                 userId: userId || null,
-                userEmail: userEmail,
+                userEmail,
                 metadata: {
                     relatedRecordsDeleted: totalRecordsDeleted,
                     warning: 'PERMANENT DELETION - CANNOT BE UNDONE'
@@ -793,7 +793,7 @@ router.delete('/companies/:id/hard-delete', async (req, res) => {
         res.json({
             success: true,
             message: 'Company and all related data permanently deleted',
-            companyName: companyName,
+            companyName,
             companyId: id,
             deletedRecords: {
                 company: deletedCount,
@@ -895,8 +895,8 @@ router.get('/companies/:id/transcripts', async (req, res) => {
         const query = { companyId: new mongoose.Types.ObjectId(id) };
         if (startDate || endDate) {
             query.timestamp = {};
-            if (startDate) query.timestamp.$gte = new Date(startDate);
-            if (endDate) query.timestamp.$lte = new Date(endDate);
+            if (startDate) {query.timestamp.$gte = new Date(startDate);}
+            if (endDate) {query.timestamp.$lte = new Date(endDate);}
         }
 
         // Legacy-aware call logs collection
@@ -1270,8 +1270,8 @@ router.get('/companies/:id/deletion-debug', async (req, res) => {
         const collectionsMap = buildCollectionsMap(names);
 
         const objectId = new mongoose.Types.ObjectId(id);
-        let usedCollection = collectionsMap.companies;
-        let doc = await db.collection(usedCollection).findOne(
+        const usedCollection = collectionsMap.companies;
+        const doc = await db.collection(usedCollection).findOne(
             { _id: objectId },
             { projection: { companyName: 1, businessName: 1, isDeleted: 1, deleted: 1, deletedAt: 1, accountStatus: 1 } }
         );

@@ -35,7 +35,7 @@ async function hardSearch(searchTerm) {
             const collectionName = collectionInfo.name;
             
             // Skip system collections
-            if (collectionName.startsWith('system.')) continue;
+            if (collectionName.startsWith('system.')) {continue;}
 
             const collection = db.collection(collectionName);
 

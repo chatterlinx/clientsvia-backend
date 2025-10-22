@@ -31,7 +31,7 @@ async function diagnoseCompanies() {
             console.log(`  deletedAt: ${company.deletedAt || 'N/A'}`);
         }
         
-        console.log('\n' + '='.repeat(80));
+        console.log(`\n${  '='.repeat(80)}`);
         console.log('\n📊 SUMMARY:');
         
         const total = companies.length;

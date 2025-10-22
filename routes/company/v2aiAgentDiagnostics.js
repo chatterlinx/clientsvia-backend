@@ -123,7 +123,7 @@ function analyzeGreetingSystem(company) {
     let activeSource = null;
     let activeText = null;
     let activeMode = null;
-    let lastUpdated = connectionMessages?.lastUpdated;
+    const lastUpdated = connectionMessages?.lastUpdated;
 
     // Check greeting configuration
     if (mode === 'prerecorded' && voiceConfig?.prerecorded?.activeFileUrl) {
@@ -152,14 +152,14 @@ function analyzeGreetingSystem(company) {
             status: voiceConfig ? 'CONFIGURED' : 'NOT_CONFIGURED',
             mode: mode || 'NOT_SET',
             active: activeSource.includes('connectionMessages'),
-            preview: activeText ? activeText.substring(0, 60) + '...' : null
+            preview: activeText ? `${activeText.substring(0, 60)  }...` : null
         },
         {
             priority: 2,
             source: 'Fallback System',
             status: voiceConfig?.fallback?.enabled ? 'ENABLED' : 'DISABLED',
             active: activeMode === 'fallback',
-            preview: voiceConfig?.fallback?.voiceMessage ? voiceConfig.fallback.voiceMessage.substring(0, 60) + '...' : null
+            preview: voiceConfig?.fallback?.voiceMessage ? `${voiceConfig.fallback.voiceMessage.substring(0, 60)  }...` : null
         }
     ];
 
@@ -194,7 +194,7 @@ function verifyDataPaths(company) {
     // ✅ CHECK NEW SYSTEM: connectionMessages at ROOT LEVEL (AI Agent Settings)
     checks.push({
         path: 'connectionMessages',
-        exists: !!company.connectionMessages,
+        exists: Boolean(company.connectionMessages),
         status: company.connectionMessages ? 'OK' : 'MISSING',
         critical: true,
         hint: 'Configure in AI Agent Settings > Messages & Greetings tab'
@@ -203,7 +203,7 @@ function verifyDataPaths(company) {
     // Check voice config
     checks.push({
         path: 'connectionMessages.voice',
-        exists: !!company.connectionMessages?.voice,
+        exists: Boolean(company.connectionMessages?.voice),
         status: company.connectionMessages?.voice ? 'OK' : 'MISSING',
         critical: true
     });
@@ -211,7 +211,7 @@ function verifyDataPaths(company) {
     // Check voice mode
     checks.push({
         path: 'connectionMessages.voice.mode',
-        exists: !!company.connectionMessages?.voice?.mode,
+        exists: Boolean(company.connectionMessages?.voice?.mode),
         status: company.connectionMessages?.voice?.mode ? 'OK' : 'NOT_SET',
         value: company.connectionMessages?.voice?.mode || null,
         critical: true
@@ -220,7 +220,7 @@ function verifyDataPaths(company) {
     // Check voice text (for realtime TTS)
     checks.push({
         path: 'connectionMessages.voice.text',
-        exists: !!company.connectionMessages?.voice?.text,
+        exists: Boolean(company.connectionMessages?.voice?.text),
         status: company.connectionMessages?.voice?.text ? 'OK' : 'NOT_SET',
         value: company.connectionMessages?.voice?.text ? `"${company.connectionMessages.voice.text.substring(0, 40)}..."` : null
     });
@@ -228,7 +228,7 @@ function verifyDataPaths(company) {
     // Check prerecorded audio
     checks.push({
         path: 'connectionMessages.voice.prerecorded.activeFileUrl',
-        exists: !!company.connectionMessages?.voice?.prerecorded?.activeFileUrl,
+        exists: Boolean(company.connectionMessages?.voice?.prerecorded?.activeFileUrl),
         status: company.connectionMessages?.voice?.prerecorded?.activeFileUrl ? 'OK' : 'NOT_SET',
         value: company.connectionMessages?.voice?.prerecorded?.activeFileName || null
     });
@@ -244,21 +244,21 @@ function verifyDataPaths(company) {
     // Check aiAgentLogic (legacy, but still used for voiceSettings)
     checks.push({
         path: 'aiAgentLogic',
-        exists: !!company.aiAgentLogic,
+        exists: Boolean(company.aiAgentLogic),
         status: company.aiAgentLogic ? 'OK' : 'MISSING'
     });
 
     // Check voiceSettings
     checks.push({
         path: 'aiAgentLogic.voiceSettings',
-        exists: !!company.aiAgentLogic?.voiceSettings,
+        exists: Boolean(company.aiAgentLogic?.voiceSettings),
         status: company.aiAgentLogic?.voiceSettings ? 'OK' : 'MISSING'
     });
 
     // Check voiceId
     checks.push({
         path: 'aiAgentLogic.voiceSettings.voiceId',
-        exists: !!company.aiAgentLogic?.voiceSettings?.voiceId,
+        exists: Boolean(company.aiAgentLogic?.voiceSettings?.voiceId),
         status: company.aiAgentLogic?.voiceSettings?.voiceId ? 'OK' : 'NOT_SET',
         value: company.aiAgentLogic?.voiceSettings?.voiceId || null
     });
@@ -266,7 +266,7 @@ function verifyDataPaths(company) {
     // Check twilioConfig
     checks.push({
         path: 'twilioConfig',
-        exists: !!company.twilioConfig,
+        exists: Boolean(company.twilioConfig),
         status: company.twilioConfig ? 'OK' : 'MISSING'
     });
 
@@ -294,8 +294,8 @@ function detectConfigurationConflicts(company) {
     // ✅ FIX: Check ROOT LEVEL connectionMessages (AI Agent Settings)
     const connectionMessages = company.connectionMessages;
     const voiceMode = connectionMessages?.voice?.mode;
-    const hasText = !!connectionMessages?.voice?.text;
-    const hasPrerecorded = !!connectionMessages?.voice?.prerecorded?.activeFileUrl;
+    const hasText = Boolean(connectionMessages?.voice?.text);
+    const hasPrerecorded = Boolean(connectionMessages?.voice?.prerecorded?.activeFileUrl);
 
     // Check if connectionMessages is not configured at all
     if (!connectionMessages || !connectionMessages.voice) {
@@ -394,7 +394,7 @@ async function analyzeCacheStatus(companyId) {
         
         // Check if company data is cached
         const cachedData = await redisClient.get(cacheKey);
-        const isCached = !!cachedData;
+        const isCached = Boolean(cachedData);
         
         // Get TTL (time to live)
         let ttl = null;

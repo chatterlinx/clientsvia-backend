@@ -227,7 +227,7 @@ router.use((req, res, next) => {
     userAgent: req.headers['user-agent'],
     contentType: req.headers['content-type'],
     bodyKeys: Object.keys(req.body || {}),
-    hasCallSid: !!(req.body && req.body.CallSid)
+    hasCallSid: Boolean(req.body && req.body.CallSid)
   });
   next();
 });
@@ -307,7 +307,7 @@ function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I ca
 
 // Helper function to escape text for TwiML Say verb
 function escapeTwiML(text) {
-  if (!text) return '';
+  if (!text) {return '';}
   
   // For TTS, we want clean text without HTML entities
   // Only do minimal escaping for XML structure
@@ -482,7 +482,7 @@ router.post('/voice', async (req, res) => {
     const callerNumber = normalizePhoneNumber(req.body.From);
     console.log(`[PHONE LOOKUP] [SEARCH] Searching for company with phone: ${calledNumber}`);
     
-    let company = await getCompanyByPhoneNumber(calledNumber);
+    const company = await getCompanyByPhoneNumber(calledNumber);
 
     const twiml = new twilio.twiml.VoiceResponse();
 
@@ -661,7 +661,7 @@ router.post('/voice', async (req, res) => {
       // DOUBLE-CHECK: Reload company to verify voiceSettings are in DB
       console.log(`🔍 [CALL-4] Double-checking voice settings from database...`);
       const freshCompany = await Company.findById(company._id);
-      console.log(`🔍 [CALL-5] Fresh company.aiAgentLogic exists:`, !!freshCompany.aiAgentLogic);
+      console.log(`🔍 [CALL-5] Fresh company.aiAgentLogic exists:`, Boolean(freshCompany.aiAgentLogic));
       console.log(`🔍 [CALL-6] Fresh company.aiAgentLogic.voiceSettings:`, JSON.stringify(freshCompany.aiAgentLogic?.voiceSettings, null, 2));
       
       console.log(`[V2 AGENT] Call initialized, greeting: "${initResult.greeting}"`);
@@ -683,10 +683,10 @@ router.post('/voice', async (req, res) => {
       // Use V2 Voice Settings for TTS
       const elevenLabsVoice = initResult.voiceSettings?.voiceId;
       console.log(`🔍 [CALL-7] Extracted voice ID from initResult: ${elevenLabsVoice || 'NOT SET'}`);
-      console.log(`🔍 [CALL-8] Has greeting: ${!!initResult.greeting}`);
-      console.log(`🔍 [CALL-9] Will use ElevenLabs: ${!!(elevenLabsVoice && initResult.greeting)}`);
+      console.log(`🔍 [CALL-8] Has greeting: ${Boolean(initResult.greeting)}`);
+      console.log(`🔍 [CALL-9] Will use ElevenLabs: ${Boolean(elevenLabsVoice && initResult.greeting)}`);
       console.log(`[V2 VOICE CHECK] ElevenLabs Voice ID: ${elevenLabsVoice || 'NOT SET'}`);
-      console.log(`[V2 VOICE CHECK] Has greeting: ${!!initResult.greeting}`);
+      console.log(`[V2 VOICE CHECK] Has greeting: ${Boolean(initResult.greeting)}`);
       
       if (elevenLabsVoice && initResult.greeting) {
         try {
@@ -709,7 +709,7 @@ router.post('/voice', async (req, res) => {
           
           const fileName = `ai_greet_${Date.now()}.mp3`;
           const audioDir = path.join(__dirname, '../public/audio');
-          if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
+          if (!fs.existsSync(audioDir)) {fs.mkdirSync(audioDir, { recursive: true });}
           const filePath = path.join(audioDir, fileName);
           fs.writeFileSync(filePath, buffer);
           gather.play(`${req.protocol}://${req.get('host')}/audio/${fileName}`);
@@ -817,7 +817,7 @@ router.post('/handle-speech', async (req, res) => {
 
     const calledNumber = normalizePhoneNumber(req.body.To);
     console.log(`[COMPANY LOOKUP] [SEARCH] Looking up company for phone: ${calledNumber}`);
-    let company = await getCompanyByPhoneNumber(calledNumber);
+    const company = await getCompanyByPhoneNumber(calledNumber);
     if (!company) {
       console.log(`[COMPANY ERROR] [ERROR] No company found for phone: ${calledNumber} during speech processing`);
       // Legacy personality system removed - using configuration error message
@@ -956,7 +956,7 @@ router.post('/handle-speech', async (req, res) => {
         // Generate a clarification response instead of repeating
         const clarificationResponses = [
           "I've already shared that information with you. Is there something specific you'd like to know more about?",
-          "As I mentioned, " + cachedAnswer.substring(0, 100) + "... Is there another way I can help you?",
+          `As I mentioned, ${  cachedAnswer.substring(0, 100)  }... Is there another way I can help you?`,
           "I provided those details already. Do you have any other questions I can help with?",
           "We covered that just now. What else would you like to know about our services?"
         ];
@@ -1142,12 +1142,12 @@ router.post('/handle-speech', async (req, res) => {
         console.error('ElevenLabs synthesis failed, falling back to native TTS:', err.message);
         // Use Twilio's enhanced TTS with voice settings to maintain consistency
         const voice = company.aiSettings?.twilioVoice || 'alice';
-        gather.say({ voice: voice }, escapeTwiML(strippedAnswer));
+        gather.say({ voice }, escapeTwiML(strippedAnswer));
       }
     } else {
       // Use consistent voice even when ElevenLabs is not configured
       const voice = company.aiSettings?.twilioVoice || 'alice';
-      gather.say({ voice: voice }, escapeTwiML(strippedAnswer));
+      gather.say({ voice }, escapeTwiML(strippedAnswer));
     }
 
     res.type('text/xml');
@@ -1363,7 +1363,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     
     console.log('🎯 CHECKPOINT 13: Initializing call state');
     // Get or initialize call state
-    let callState = req.session?.callState || {
+    const callState = req.session?.callState || {
       callId: callSid,
       from: fromNumber,
       consecutiveSilences: 0,
@@ -1414,9 +1414,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const company = await Company.findById(companyID);
       
       // 🔍 DIAGNOSTIC: Log voice settings check
-      console.log('🔍 V2 VOICE CHECK: Company loaded:', !!company);
-      console.log('🔍 V2 VOICE CHECK: aiAgentLogic exists:', !!company?.aiAgentLogic);
-      console.log('🔍 V2 VOICE CHECK: voiceSettings exists:', !!company?.aiAgentLogic?.voiceSettings);
+      console.log('🔍 V2 VOICE CHECK: Company loaded:', Boolean(company));
+      console.log('🔍 V2 VOICE CHECK: aiAgentLogic exists:', Boolean(company?.aiAgentLogic));
+      console.log('🔍 V2 VOICE CHECK: voiceSettings exists:', Boolean(company?.aiAgentLogic?.voiceSettings));
       console.log('🔍 V2 VOICE CHECK: Full voiceSettings:', JSON.stringify(company?.aiAgentLogic?.voiceSettings, null, 2));
       
       const elevenLabsVoice = company?.aiAgentLogic?.voiceSettings?.voiceId;
@@ -1424,7 +1424,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       
       const responseText = result.response || result.text || "I understand. How can I help you?";
       console.log('🔍 V2 VOICE CHECK: Response text:', responseText);
-      console.log('🔍 V2 VOICE CHECK: Will use ElevenLabs:', !!(elevenLabsVoice && responseText));
+      console.log('🔍 V2 VOICE CHECK: Will use ElevenLabs:', Boolean(elevenLabsVoice && responseText));
       
       if (elevenLabsVoice && responseText) {
         try {
@@ -1559,7 +1559,7 @@ router.all('/webhook-test', (req, res) => {
   });
   
   // Return both JSON and TwiML for testing
-  if (req.headers['accept'] && req.headers['accept'].includes('application/json')) {
+  if (req.headers.accept && req.headers.accept.includes('application/json')) {
     res.json({
       success: true,
       message: 'Webhook connectivity test successful',
@@ -1607,7 +1607,7 @@ router.post('/test-respond/:templateId', async (req, res) => {
     
     if (!template || !template.twilioTest?.enabled) {
       console.log(`🧠 [CHECKPOINT 3] ❌ Template not found or testing disabled`);
-      console.log(`🧠 [CHECKPOINT 3] Template exists: ${!!template}`);
+      console.log(`🧠 [CHECKPOINT 3] Template exists: ${Boolean(template)}`);
       console.log(`🧠 [CHECKPOINT 3] Testing enabled: ${template?.twilioTest?.enabled}`);
       const twiml = new twilio.twiml.VoiceResponse();
       twiml.say('Test template not found or testing is disabled.');
@@ -1640,7 +1640,7 @@ router.post('/test-respond/:templateId', async (req, res) => {
     console.log(`🧠 [CHECKPOINT 5] Total scenarios to match: ${allScenarios.length}`);
     const result = await selector.selectScenario(speechText, allScenarios);
     console.log(`🧠 [CHECKPOINT 5] ✅ Matching complete`);
-    console.log(`🧠 [CHECKPOINT 5] Match found: ${!!result.match}`);
+    console.log(`🧠 [CHECKPOINT 5] Match found: ${Boolean(result.match)}`);
     console.log(`🧠 [CHECKPOINT 5] Confidence: ${(result.confidence * 100).toFixed(1)}%`);
     
     console.log(`🧠 [CHECKPOINT 6] Building TwiML response...`);
@@ -1714,7 +1714,7 @@ router.post('/test-respond/:templateId', async (req, res) => {
     const testResult = {
       timestamp: new Date().toISOString(),
       phrase: speechText,
-      matched: !!result.scenario,  // FIXED: was result.match, should be result.scenario
+      matched: Boolean(result.scenario),  // FIXED: was result.match, should be result.scenario
       confidence: result.confidence || 0,
       threshold: result.trace?.threshold || 0.45,
       scenario: result.scenario ? {
@@ -1755,7 +1755,7 @@ router.post('/test-respond/:templateId', async (req, res) => {
     // CRITICAL: If confidence ≥ threshold but NO scenario, this is an ENGINE BUG
     const threshold = testResult.threshold || 0.45;
     const confidence = testResult.confidence || 0;
-    const hasScenario = !!result.scenario;
+    const hasScenario = Boolean(result.scenario);
     
     if (confidence >= threshold && !hasScenario) {
       // 🚨 RED ALERT: Decision contract violation
@@ -1775,8 +1775,8 @@ router.post('/test-respond/:templateId', async (req, res) => {
         ],
         debugInfo: {
           resultKeys: Object.keys(result),
-          hasScenario: hasScenario,
-          hasTrace: !!result.trace,
+          hasScenario,
+          hasTrace: Boolean(result.trace),
           topCandidates: result.trace?.topCandidates || []
         }
       };
@@ -2139,7 +2139,7 @@ router.all('*', (req, res) => {
     fullUrl: req.originalUrl,
     path: req.path,
     params: req.params,
-    hasCallSid: !!(req.body?.CallSid)
+    hasCallSid: Boolean(req.body?.CallSid)
   });
   
   // CRITICAL: Always return TwiML for Twilio requests, NEVER JSON!

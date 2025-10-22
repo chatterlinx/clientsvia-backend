@@ -99,7 +99,7 @@ class BackupManager {
           
           backupData.collections[collectionName] = {
             document_count: count,
-            has_sample: !!sampleDoc,
+            has_sample: Boolean(sampleDoc),
             last_modified: sampleDoc?.updatedAt || sampleDoc?.createdAt || 'unknown'
           };
           
@@ -195,7 +195,7 @@ class BackupManager {
    */
   getBackupStrategy() {
     const isProduction = process.env.NODE_ENV === 'production';
-    const hasMongoUri = !!process.env.MONGODB_URI;
+    const hasMongoUri = Boolean(process.env.MONGODB_URI);
     
     return {
       environment: process.env.NODE_ENV || 'development',

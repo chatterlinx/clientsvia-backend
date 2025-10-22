@@ -18,7 +18,7 @@ async function searchAll() {
             if (doc) {
                 console.log(`✅ FOUND IN: ${name}`);
                 console.log(`   Company Name: ${doc.companyName || 'N/A'}`);
-                console.log(`   Has callFiltering: ${!!doc.callFiltering}`);
+                console.log(`   Has callFiltering: ${Boolean(doc.callFiltering)}`);
                 if (doc.callFiltering) {
                     console.log(`   callFiltering.settings:`, JSON.stringify(doc.callFiltering.settings, null, 2));
                 }

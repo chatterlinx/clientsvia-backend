@@ -192,7 +192,7 @@ router.get('/statistics', async (req, res) => {
         // 🚀 Get comprehensive statistics
         const categories = await TradeCategory.find({ companyId: 'global', isActive: true }).lean();
         
-        let totalCategories = categories.length;
+        const totalCategories = categories.length;
         let totalQnAs = 0;
         let totalKeywords = 0;
         let categoriesWithQnAs = 0;
@@ -283,9 +283,9 @@ router.post('/categories', async (req, res) => {
         const validationErrors = [];
         
         console.log('🔍 CHECKPOINT 2: Starting validation', {
-            nameProvided: !!name,
+            nameProvided: Boolean(name),
             nameLength: name ? name.trim().length : 0,
-            descriptionProvided: !!description,
+            descriptionProvided: Boolean(description),
             descriptionLength: description ? description.trim().length : 0
         });
         
@@ -319,7 +319,7 @@ router.post('/categories', async (req, res) => {
         console.log('🔍 CHECKPOINT 4: Starting duplicate check', {
             originalName: name,
             trimmedName: searchName,
-            escapedName: escapedName,
+            escapedName,
             regexPattern: searchRegex.toString(),
             searchCriteria: {
                 companyId: 'global',
@@ -342,7 +342,7 @@ router.post('/categories', async (req, res) => {
         
         console.log('🔍 CHECKPOINT 5: Database query complete', {
             queryExecuted: true,
-            foundExisting: !!existingCategory,
+            foundExisting: Boolean(existingCategory),
             existingCategoryDetails: existingCategory ? {
                 _id: existingCategory._id,
                 name: existingCategory.name,
@@ -353,7 +353,7 @@ router.post('/categories', async (req, res) => {
         });
         
         logger.info(`🔍 V2 DUPLICATE CHECK: Result`, {
-            found: !!existingCategory,
+            found: Boolean(existingCategory),
             existingCategory: existingCategory ? {
                 _id: existingCategory._id,
                 name: existingCategory.name,
@@ -517,7 +517,7 @@ router.post('/categories/:categoryId/qna', async (req, res) => {
         const startTime = Date.now();
 
         logger.info(`🤖 V2 GLOBAL TRADE CATEGORIES: Adding Q&A to category ${categoryId}`, {
-            question: question?.substring(0, 50) + '...',
+            question: `${question?.substring(0, 50)  }...`,
             hasManualKeywords: manualKeywords.length > 0
         });
 
@@ -687,7 +687,7 @@ router.put('/categories/:categoryId/qna/:qnaId', async (req, res) => {
         const startTime = Date.now();
 
         logger.info(`✏️ V2 GLOBAL TRADE CATEGORIES: Updating Q&A ${qnaId} in category ${categoryId}`, {
-            question: question?.substring(0, 50) + '...',
+            question: `${question?.substring(0, 50)  }...`,
             hasManualKeywords: manualKeywords.length > 0
         });
 
@@ -1279,8 +1279,8 @@ router.get('/debug/test-duplicate/:name', authenticateJWT, requireRole('admin'),
         res.json({
             success: true,
             testName: searchName,
-            regexMatch: !!existingCategory,
-            simpleMatch: !!simpleMatch,
+            regexMatch: Boolean(existingCategory),
+            simpleMatch: Boolean(simpleMatch),
             regexDetails: {
                 pattern: searchRegex.toString(),
                 source: searchRegex.source,

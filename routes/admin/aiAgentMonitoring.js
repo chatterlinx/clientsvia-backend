@@ -60,7 +60,7 @@ router.get('/health/:companyId', authenticateJWT, async (req, res) => {
                     details: {
                         companyFound: true,
                         companyName: company.companyName,
-                        aiAgentConfigured: !!company.aiAgentLogic
+                        aiAgentConfigured: Boolean(company.aiAgentLogic)
                     }
                 };
             } else {
@@ -89,7 +89,7 @@ router.get('/health/:companyId', authenticateJWT, async (req, res) => {
             try {
                 const testKey = `health:test:${companyId}`;
                 const cached = await redisClient.get(testKey);
-                if (cached) cacheTest = JSON.parse(cached);
+                if (cached) {cacheTest = JSON.parse(cached);}
                 await redisClient.setex(testKey, 60, JSON.stringify({ test: true, timestamp: Date.now() }));
             } catch (error) {
                 logger.warn(`⚠️ V2 Cache test failed`, { error: error.message });
@@ -111,7 +111,7 @@ router.get('/health/:companyId', authenticateJWT, async (req, res) => {
                 error: error.message
             };
             healthStatus.issues.push('Redis cache not available - performance may be slower');
-            if (healthStatus.overall === 'healthy') healthStatus.overall = 'degraded';
+            if (healthStatus.overall === 'healthy') {healthStatus.overall = 'degraded';}
         }
 
         // 3. Knowledge Sources Health
@@ -136,7 +136,7 @@ router.get('/health/:companyId', authenticateJWT, async (req, res) => {
             if (companyQnACount === 0 && tradeQnACount === 0) {
                 healthStatus.issues.push('No Q&A entries found - AI agent may not provide specific answers');
                 healthStatus.recommendations.push('Add Company Q&A entries in Knowledge Management tab');
-                if (healthStatus.overall === 'healthy') healthStatus.overall = 'degraded';
+                if (healthStatus.overall === 'healthy') {healthStatus.overall = 'degraded';}
             }
         } catch (error) {
             healthStatus.components.knowledgeSources = {
@@ -172,7 +172,7 @@ router.get('/health/:companyId', authenticateJWT, async (req, res) => {
                 if (!hasThresholds || !hasPriorities) {
                     healthStatus.issues.push('AI agent configuration incomplete');
                     healthStatus.recommendations.push('Configure Knowledge Source Priorities in AI Agent Logic tab');
-                    if (healthStatus.overall === 'healthy') healthStatus.overall = 'degraded';
+                    if (healthStatus.overall === 'healthy') {healthStatus.overall = 'degraded';}
                 }
             } else {
                 healthStatus.components.aiConfiguration = {
@@ -204,7 +204,7 @@ router.get('/health/:companyId', authenticateJWT, async (req, res) => {
                 message: 'Priority-driven knowledge router operational',
                 details: {
                     testQuery: 'health check test',
-                    responseReceived: !!testResult,
+                    responseReceived: Boolean(testResult),
                     source: testResult?.source || 'none',
                     confidence: testResult?.confidence || 0
                 }
@@ -261,7 +261,7 @@ router.get('/metrics/:companyId', authenticateJWT, async (req, res) => {
         let metrics = null;
         try {
             const cached = await redisClient.get(cacheKey);
-            if (cached) metrics = JSON.parse(cached);
+            if (cached) {metrics = JSON.parse(cached);}
         } catch (error) {
             logger.warn(`⚠️ V2 Cache check failed for metrics`, { error: error.message });
         }
@@ -353,14 +353,14 @@ router.get('/diagnostics/:companyId', authenticateJWT, async (req, res) => {
                 name: 'Company Configuration',
                 status: company ? 'pass' : 'fail',
                 details: {
-                    exists: !!company,
+                    exists: Boolean(company),
                     name: company?.companyName,
-                    hasAiLogic: !!company?.aiAgentLogic,
+                    hasAiLogic: Boolean(company?.aiAgentLogic),
                     configuredAt: company?.aiAgentLogic?.lastUpdated
                 }
             };
             diagnostics.summary.totalTests++;
-            if (company) diagnostics.summary.passed++; else diagnostics.summary.failed++;
+            if (company) {diagnostics.summary.passed++;} else {diagnostics.summary.failed++;}
         } catch (error) {
             diagnostics.tests.companyConfiguration = {
                 name: 'Company Configuration',
@@ -381,7 +381,7 @@ router.get('/diagnostics/:companyId', authenticateJWT, async (req, res) => {
                 status: 'pass',
                 details: {
                     companyQnACollection: companyQnAs.length > 0,
-                    embeddedKnowledge: !!company?.aiAgentLogic?.knowledgeManagement,
+                    embeddedKnowledge: Boolean(company?.aiAgentLogic?.knowledgeManagement),
                     totalSources: companyQnAs.length + (company?.aiAgentLogic?.knowledgeManagement?.tradeQnA?.length || 0)
                 }
             };
@@ -407,13 +407,13 @@ router.get('/diagnostics/:companyId', authenticateJWT, async (req, res) => {
                 status: config ? 'pass' : 'warning',
                 details: {
                     canInstantiate: true,
-                    hasConfiguration: !!config,
+                    hasConfiguration: Boolean(config),
                     priorityCount: config?.priorityFlow?.length || 0,
                     enabled: config?.enabled || false
                 }
             };
             diagnostics.summary.totalTests++;
-            if (config) diagnostics.summary.passed++; else diagnostics.summary.warnings++;
+            if (config) {diagnostics.summary.passed++;} else {diagnostics.summary.warnings++;}
         } catch (error) {
             diagnostics.tests.priorityRouter = {
                 name: 'Priority Router System',
@@ -442,12 +442,12 @@ router.get('/diagnostics/:companyId', authenticateJWT, async (req, res) => {
                 status: retrieved ? 'pass' : 'warning',
                 details: {
                     canWrite: true,
-                    canRead: !!retrieved,
-                    testKey: testKey
+                    canRead: Boolean(retrieved),
+                    testKey
                 }
             };
             diagnostics.summary.totalTests++;
-            if (retrieved) diagnostics.summary.passed++; else diagnostics.summary.warnings++;
+            if (retrieved) {diagnostics.summary.passed++;} else {diagnostics.summary.warnings++;}
         } catch (error) {
             diagnostics.tests.cacheSystem = {
                 name: 'Redis Cache System',
@@ -514,7 +514,7 @@ router.get('/test-flow/:companyId', authenticateJWT, async (req, res) => {
             query,
             timestamp: new Date().toISOString(),
             result: {
-                success: !!result,
+                success: Boolean(result),
                 source: result?.source || 'none',
                 confidence: result?.confidence || 0,
                 response: result?.response || 'No response generated',

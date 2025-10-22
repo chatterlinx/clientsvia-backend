@@ -60,15 +60,15 @@ router.get('/admin/call-archives/search', authenticateJWT, requireRole('admin'),
         // Date range filter
         if (startDate || endDate) {
             filter.createdAt = {};
-            if (startDate) filter.createdAt.$gte = new Date(startDate);
-            if (endDate) filter.createdAt.$lte = new Date(endDate);
+            if (startDate) {filter.createdAt.$gte = new Date(startDate);}
+            if (endDate) {filter.createdAt.$lte = new Date(endDate);}
         }
 
         // Confidence score filter
         if (minConfidence !== undefined || maxConfidence !== undefined) {
             filter.finalConfidenceScore = {};
-            if (minConfidence) filter.finalConfidenceScore.$gte = parseFloat(minConfidence);
-            if (maxConfidence) filter.finalConfidenceScore.$lte = parseFloat(maxConfidence);
+            if (minConfidence) {filter.finalConfidenceScore.$gte = parseFloat(minConfidence);}
+            if (maxConfidence) {filter.finalConfidenceScore.$lte = parseFloat(maxConfidence);}
         }
 
         // Source filter
@@ -123,12 +123,12 @@ router.get('/admin/call-archives/search', authenticateJWT, requireRole('admin'),
             responseTime: call.responseTime,
             
             // Transcript
-            hasTranscript: !!call.conversation?.fullTranscript?.plainText,
+            hasTranscript: Boolean(call.conversation?.fullTranscript?.plainText),
             transcriptPreview: call.conversation?.fullTranscript?.plainText?.substring(0, 150) || '',
             turnCount: call.conversation?.turns?.length || 0,
             
             // Recording
-            hasRecording: !!call.conversation?.recordingUrl,
+            hasRecording: Boolean(call.conversation?.recordingUrl),
             recordingUrl: call.conversation?.recordingUrl,
             recordingDuration: call.conversation?.recordingDuration,
             
@@ -383,14 +383,14 @@ router.post('/admin/call-archives/export', authenticateJWT, requireRole('admin')
         // ================================================================
         const filter = {};
         
-        if (filters.companyId) filter.companyId = filters.companyId;
+        if (filters.companyId) {filter.companyId = filters.companyId;}
         if (filters.startDate || filters.endDate) {
             filter.createdAt = {};
-            if (filters.startDate) filter.createdAt.$gte = new Date(filters.startDate);
-            if (filters.endDate) filter.createdAt.$lte = new Date(filters.endDate);
+            if (filters.startDate) {filter.createdAt.$gte = new Date(filters.startDate);}
+            if (filters.endDate) {filter.createdAt.$lte = new Date(filters.endDate);}
         }
-        if (filters.source) filter.finalMatchedSource = filters.source;
-        if (filters.sentiment) filter['searchMetadata.sentiment'] = filters.sentiment;
+        if (filters.source) {filter.finalMatchedSource = filters.source;}
+        if (filters.sentiment) {filter['searchMetadata.sentiment'] = filters.sentiment;}
 
         console.log(`✅ [CALL ARCHIVES] CHECKPOINT 3: Filter built`);
 
@@ -421,7 +421,7 @@ router.post('/admin/call-archives/export', authenticateJWT, requireRole('admin')
 
             // Helper to properly escape CSV values
             const escapeCSV = (value) => {
-                if (value === null || value === undefined) return '';
+                if (value === null || value === undefined) {return '';}
                 const str = String(value);
                 // If contains comma, quote, or newline, wrap in quotes and escape quotes
                 if (str.includes(',') || str.includes('"') || str.includes('\n')) {

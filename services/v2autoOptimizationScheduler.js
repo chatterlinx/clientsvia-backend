@@ -202,7 +202,7 @@ class AutoOptimizationScheduler {
     async scheduleNextRun(company) {
         const settings = company.aiAgentLogic.autoOptimization;
         const now = new Date();
-        let nextRun = new Date(now);
+        const nextRun = new Date(now);
 
         switch (settings.frequency) {
             case 'daily':

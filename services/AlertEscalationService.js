@@ -181,9 +181,9 @@ class AlertEscalationService {
         const results = [];
         
         const severityEmoji = {
-            'CRITICAL': '🚨',
-            'WARNING': '⚠️',
-            'INFO': 'ℹ️'
+            CRITICAL: '🚨',
+            WARNING: '⚠️',
+            INFO: 'ℹ️'
         };
         
         const smsMessage = `
@@ -316,9 +316,9 @@ Time: ${new Date().toLocaleTimeString()}
      */
     static generateCallTwiML(alert, attemptNumber) {
         const severityText = {
-            'CRITICAL': 'critical',
-            'WARNING': 'warning',
-            'INFO': 'informational'
+            CRITICAL: 'critical',
+            WARNING: 'warning',
+            INFO: 'informational'
         };
         
         const message = `
@@ -346,9 +346,9 @@ Time: ${new Date().toLocaleTimeString()}
         const now = new Date();
         
         const intervals = {
-            'CRITICAL': [30, 30, 30, 15, 15],  // minutes: 30, 30, 30, 15, 15
-            'WARNING': [60, 60, 60],           // minutes: 1hr, 1hr, 1hr
-            'INFO': []                         // No escalation
+            CRITICAL: [30, 30, 30, 15, 15],  // minutes: 30, 30, 30, 15, 15
+            WARNING: [60, 60, 60],           // minutes: 1hr, 1hr, 1hr
+            INFO: []                         // No escalation
         };
         
         const levelIntervals = intervals[severity] || [];
@@ -476,7 +476,7 @@ To cancel snooze: Text "UNSNOOZE ${alertId}"
                 try {
                     await smsClient.sendSMS({
                         to: contact.phoneNumber,
-                        message: message
+                        message
                     });
                 } catch (error) {
                     console.error(`❌ Failed to send snooze confirmation to ${contact.name}:`, error);

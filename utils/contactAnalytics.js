@@ -9,25 +9,25 @@ function calculateLeadScore(contact) {
   let score = 0;
   
   // Base score for having contact info
-  if (contact.firstName && contact.lastName) score += 10;
-  if (contact.email) score += 5;
-  if (contact.primaryAddress) score += 5;
+  if (contact.firstName && contact.lastName) {score += 10;}
+  if (contact.email) {score += 5;}
+  if (contact.primaryAddress) {score += 5;}
   
   // Interaction frequency scoring
   const totalInteractions = contact.interactions?.length || 0;
-  if (totalInteractions >= 5) score += 20;
-  else if (totalInteractions >= 3) score += 15;
-  else if (totalInteractions >= 2) score += 10;
-  else if (totalInteractions >= 1) score += 5;
+  if (totalInteractions >= 5) {score += 20;}
+  else if (totalInteractions >= 3) {score += 15;}
+  else if (totalInteractions >= 2) {score += 10;}
+  else if (totalInteractions >= 1) {score += 5;}
   
   // Recent activity scoring
   const daysSinceLastContact = contact.lastContactDate ? 
     Math.floor((Date.now() - new Date(contact.lastContactDate)) / (1000 * 60 * 60 * 24)) : 999;
   
-  if (daysSinceLastContact <= 1) score += 20;
-  else if (daysSinceLastContact <= 7) score += 15;
-  else if (daysSinceLastContact <= 30) score += 10;
-  else if (daysSinceLastContact <= 90) score += 5;
+  if (daysSinceLastContact <= 1) {score += 20;}
+  else if (daysSinceLastContact <= 7) {score += 15;}
+  else if (daysSinceLastContact <= 30) {score += 10;}
+  else if (daysSinceLastContact <= 90) {score += 5;}
   
   // Service request scoring
   const pendingRequests = contact.serviceRequests?.filter(req => req.status === 'pending') || [];
@@ -37,17 +37,17 @@ function calculateLeadScore(contact) {
   score += completedRequests.length * 15; // Value for past customers
   
   // Emergency/urgency scoring
-  if (contact.extractedData?.hasEmergency) score += 30;
+  if (contact.extractedData?.hasEmergency) {score += 30;}
   
   // Sentiment scoring
-  if (contact.extractedData?.sentimentScore > 0) score += 10;
-  else if (contact.extractedData?.sentimentScore < -2) score += 20; // Negative sentiment needs attention
+  if (contact.extractedData?.sentimentScore > 0) {score += 10;}
+  else if (contact.extractedData?.sentimentScore < -2) {score += 20;} // Negative sentiment needs attention
   
   // Customer type scoring
-  if (contact.customerType === 'commercial') score += 15; // Higher value typically
+  if (contact.customerType === 'commercial') {score += 15;} // Higher value typically
   
   // Repeat customer bonus
-  if (contact.status === 'customer') score += 25;
+  if (contact.status === 'customer') {score += 25;}
   
   return Math.min(score, 100); // Cap at 100
 }
@@ -60,10 +60,10 @@ function getContactPriority(contact) {
   const hasEmergency = contact.extractedData?.hasEmergency;
   const hasPendingRequest = contact.serviceRequests?.some(req => req.status === 'pending');
   
-  if (hasEmergency) return 'emergency';
-  if (score >= 80 || hasPendingRequest) return 'high';
-  if (score >= 60) return 'medium';
-  if (score >= 30) return 'low';
+  if (hasEmergency) {return 'emergency';}
+  if (score >= 80 || hasPendingRequest) {return 'high';}
+  if (score >= 60) {return 'medium';}
+  if (score >= 30) {return 'low';}
   return 'follow_up';
 }
 

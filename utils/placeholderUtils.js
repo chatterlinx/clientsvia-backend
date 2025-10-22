@@ -66,7 +66,7 @@ function extractPlaceholdersFromTemplate(template) {
      * @param {string} text - Text to scan
      */
     const scanText = (text) => {
-        if (!text || typeof text !== 'string') return;
+        if (!text || typeof text !== 'string') {return;}
         
         const matches = text.matchAll(regex);
         
@@ -241,7 +241,7 @@ function enrichPlaceholder(key, usageCount = 0) {
  * humanizeKey('phoneNumber') // 'Phone Number'
  */
 function humanizeKey(key) {
-    if (!key) return '';
+    if (!key) {return '';}
     
     // Insert space before capital letters
     let humanized = key.replace(/([A-Z])/g, ' $1');

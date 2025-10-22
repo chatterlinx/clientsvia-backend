@@ -22,19 +22,19 @@ function validateEnvironment() {
   // ============================================================================
   
   const criticalVars = {
-    'MONGODB_URI': {
+    MONGODB_URI: {
       validator: (val) => val && (val.startsWith('mongodb://') || val.startsWith('mongodb+srv://')),
       message: 'Must be a valid MongoDB connection string'
     },
-    'JWT_SECRET': {
+    JWT_SECRET: {
       validator: (val) => val && val.length >= 32,
       message: 'Must be at least 32 characters for security'
     },
-    'SESSION_SECRET': {
+    SESSION_SECRET: {
       validator: (val) => val && val.length >= 32,
       message: 'Must be at least 32 characters for security'
     },
-    'NODE_ENV': {
+    NODE_ENV: {
       validator: (val) => ['development', 'staging', 'production'].includes(val),
       message: 'Must be one of: development, staging, production'
     }
@@ -58,27 +58,27 @@ function validateEnvironment() {
   // ============================================================================
   
   const importantVars = {
-    'REDIS_URL': {
+    REDIS_URL: {
       validator: (val) => !val || val.startsWith('redis://') || val.startsWith('rediss://'),
       message: 'Must be a valid Redis connection string',
       fallback: 'Will use REDIS_HOST and REDIS_PORT if available'
     },
-    'TWILIO_ACCOUNT_SID': {
+    TWILIO_ACCOUNT_SID: {
       validator: (val) => !val || (val.length >= 30 && val.startsWith('AC')),
       message: 'Must be a valid Twilio Account SID (starts with AC)',
       fallback: 'Phone calls will not work'
     },
-    'TWILIO_AUTH_TOKEN': {
+    TWILIO_AUTH_TOKEN: {
       validator: (val) => !val || val.length >= 30,
       message: 'Must be a valid Twilio Auth Token',
       fallback: 'Phone calls will not work'
     },
-    'ELEVENLABS_API_KEY': {
+    ELEVENLABS_API_KEY: {
       validator: (val) => !val || val.length >= 20,
       message: 'Must be a valid ElevenLabs API key',
       fallback: 'Voice synthesis will not work'
     },
-    'SENDGRID_API_KEY': {
+    SENDGRID_API_KEY: {
       validator: (val) => !val || (val.startsWith('SG.') && val.length >= 50),
       message: 'Must be a valid SendGrid API key (starts with SG.)',
       fallback: 'Email notifications will not work'
@@ -154,7 +154,7 @@ function validateEnvironment() {
   // REPORT RESULTS
   // ============================================================================
   
-  console.log('\n' + '='.repeat(80));
+  console.log(`\n${  '='.repeat(80)}`);
   console.log('ENVIRONMENT VALIDATION RESULTS');
   console.log('='.repeat(80));
   
@@ -173,7 +173,7 @@ function validateEnvironment() {
     }
   }
   
-  console.log('='.repeat(80) + '\n');
+  console.log(`${'='.repeat(80)  }\n`);
   
   // ============================================================================
   // THROW ERROR IF CRITICAL ISSUES FOUND
@@ -187,7 +187,7 @@ function validateEnvironment() {
       logger.error(errorMessage, { errors, warnings });
     }
     
-    throw new Error(errorMessage + '\n\nPlease fix the errors above and restart the server.\nSee env.example for configuration details.');
+    throw new Error(`${errorMessage  }\n\nPlease fix the errors above and restart the server.\nSee env.example for configuration details.`);
   }
   
   // Log warnings to file
@@ -208,8 +208,8 @@ function validateEnvironment() {
  */
 function getEnvironmentSummary() {
   const maskValue = (value) => {
-    if (!value) return '[NOT SET]';
-    if (value.length <= 4) return '****';
+    if (!value) {return '[NOT SET]';}
+    if (value.length <= 4) {return '****';}
     return `${value.substring(0, 4)}...${value.substring(value.length - 4)}`;
   };
   

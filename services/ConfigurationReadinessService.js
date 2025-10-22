@@ -350,7 +350,7 @@ class ConfigurationReadinessService {
             
             component.voiceId = voiceSettings.voiceId || null;
             component.apiSource = voiceSettings.apiSource || null;
-            component.configured = !!voiceSettings.voiceId;
+            component.configured = Boolean(voiceSettings.voiceId);
             
             if (!component.configured) {
                 component.score = 0;

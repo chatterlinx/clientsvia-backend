@@ -24,7 +24,7 @@ const REGISTRY = [
 const requiredCodes = new Set();
 for (const e of REGISTRY) {
   e.failures.forEach(c => requiredCodes.add(c));
-  if (e.ok) requiredCodes.add(e.ok);
+  if (e.ok) {requiredCodes.add(e.ok);}
 }
 
 function grepCodes() {
@@ -38,7 +38,7 @@ function grepCodes() {
     const regex = /code\s*:\s*['`"]([A-Z0-9_]+)['`"]/;
     for (const line of lines) {
       const m = line.match(regex);
-      if (m) found.add(m[1]);
+      if (m) {found.add(m[1]);}
     }
     return { found, lines };
   } catch {
@@ -52,7 +52,7 @@ const missingInCode = [...requiredCodes].filter(c => !found.has(c)).sort();
 const extraInCode = [...found].filter(c => !requiredCodes.has(c) && !c.startsWith('SLO_')).sort();
 
 console.log('Found sendAlert call-sites:', lines.length);
-if (lines.length) console.log(lines.slice(0, 20).join('\n') + (lines.length > 20 ? `\n... (+${lines.length - 20} more)` : ''));
+if (lines.length) {console.log(lines.slice(0, 20).join('\n') + (lines.length > 20 ? `\n... (+${lines.length - 20} more)` : ''));}
 
 let failed = false;
 if (missingInCode.length) {

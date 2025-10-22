@@ -48,7 +48,7 @@ class V2AIAgentRuntime {
             
             // 🔍 DIAGNOSTIC: Log voice settings from database
             console.log(`🔍 V2 VOICE DEBUG: Raw voiceSettings from DB:`, JSON.stringify(company.aiAgentLogic?.voiceSettings, null, 2));
-            console.log(`🔍 V2 VOICE DEBUG: Has voiceSettings: ${!!company.aiAgentLogic?.voiceSettings}`);
+            console.log(`🔍 V2 VOICE DEBUG: Has voiceSettings: ${Boolean(company.aiAgentLogic?.voiceSettings)}`);
             console.log(`🔍 V2 VOICE DEBUG: Voice ID: ${company.aiAgentLogic?.voiceSettings?.voiceId || 'NOT SET'}`);
             console.log(`🔍 V2 VOICE DEBUG: API Source: ${company.aiAgentLogic?.voiceSettings?.apiSource || 'NOT SET'}`);
 
@@ -119,11 +119,11 @@ class V2AIAgentRuntime {
                     fileName: voiceConfig.prerecorded.activeFileName,
                     duration: voiceConfig.prerecorded.activeDuration
                 };
-            } else {
+            } 
                 console.warn(`⚠️ V2 GREETING: Pre-recorded mode selected but no file uploaded`);
                 // Trigger fallback
                 return this.triggerFallback(company, 'Pre-recorded audio file missing');
-            }
+            
         }
 
         // MODE 2: REAL-TIME TTS (ELEVENLABS)
@@ -138,11 +138,11 @@ class V2AIAgentRuntime {
                     text: processedText,
                     voiceId: voiceConfig.realtime?.voiceId || company.voiceSettings?.selectedVoiceId
                 };
-            } else {
+            } 
                 console.warn(`⚠️ V2 GREETING: Real-time mode selected but no text configured`);
                 // Trigger fallback
                 return this.triggerFallback(company, 'Real-time TTS text missing');
-            }
+            
         }
 
         // MODE 3: DISABLED (SKIP GREETING - GO STRAIGHT TO AI)
@@ -193,7 +193,7 @@ class V2AIAgentRuntime {
         return {
             mode: 'fallback',
             text: processedText,
-            reason: reason,
+            reason,
             voiceId: company.voiceSettings?.selectedVoiceId
         };
     }
@@ -209,12 +209,12 @@ class V2AIAgentRuntime {
             const intelligentFallbackHandler = require('./intelligentFallbackHandler');
             
             await intelligentFallbackHandler.executeFallback({
-                company: company,
+                company,
                 companyId: company._id,
                 companyName: company.companyName || company.businessName,
                 callerPhone: null, // Will be set by Twilio handler
                 failureReason: reason,
-                fallbackConfig: fallbackConfig
+                fallbackConfig
             });
         } catch (error) {
             console.error(`❌ FALLBACK ACTIONS: Error:`, error);
@@ -229,7 +229,7 @@ class V2AIAgentRuntime {
      * @returns {string} Response with placeholders replaced
      */
     static buildPureResponse(text, company) {
-        if (!text) return text;
+        if (!text) {return text;}
 
         let processedText = text;
         
@@ -374,7 +374,7 @@ class V2AIAgentRuntime {
                     source: routingResult.source,
                     metadata: {
                         ...routingResult.metadata,
-                        aiAgentRoleApplied: !!routingResult.metadata?.aiAgentRole
+                        aiAgentRoleApplied: Boolean(routingResult.metadata?.aiAgentRole)
                     }
                 };
             }
@@ -430,7 +430,7 @@ class V2AIAgentRuntime {
      * @returns {string} Tone-adjusted response
      */
     static applyV2PersonalityTone(response, personality) {
-        if (!personality.corePersonality) return response;
+        if (!personality.corePersonality) {return response;}
 
         const tone = personality.corePersonality.voiceTone;
         const formality = personality.corePersonality.formalityLevel;
@@ -450,7 +450,7 @@ class V2AIAgentRuntime {
             // V2 PURE SYSTEM: No dynamic string insertion - responses should be pre-built
             // Empathetic responses should be configured in Agent Personality settings
             if (!response.startsWith('I understand') && !response.startsWith('I hear')) {
-                response = "I understand. " + response; // Simple concatenation, no template literals
+                response = `I understand. ${  response}`; // Simple concatenation, no template literals
             }
         }
 

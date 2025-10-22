@@ -585,7 +585,7 @@ module.exports = {
   },
 
   // Helper function to get all variations for a concept
-  getAllVariations: function(concept) {
+  getAllVariations(concept) {
     if (this[concept] && this[concept].variations) {
       return this[concept].variations;
     }
@@ -593,7 +593,7 @@ module.exports = {
   },
 
   // Helper function to find canonical form for a given term
-  findCanonical: function(term) {
+  findCanonical(term) {
     const lowerTerm = term.toLowerCase().trim();
     for (const [key, value] of Object.entries(this)) {
       if (typeof value === 'object' && value.variations) {
@@ -606,14 +606,14 @@ module.exports = {
   },
 
   // Helper function to check if two terms are variations of the same concept
-  areRelated: function(term1, term2) {
+  areRelated(term1, term2) {
     const canonical1 = this.findCanonical(term1);
     const canonical2 = this.findCanonical(term2);
     return canonical1 && canonical2 && canonical1 === canonical2;
   },
 
   // Get all concepts
-  getAllConcepts: function() {
+  getAllConcepts() {
     return Object.keys(this).filter(key => 
       typeof this[key] === 'object' && this[key].canonical
     );

@@ -10,9 +10,9 @@ const dataCenterRouter = require('../routes/admin/dataCenter');
 
 async function test() {
     try {
-        console.log('\n' + '='.repeat(80));
+        console.log(`\n${  '='.repeat(80)}`);
         console.log('🧪 TESTING /api/admin/data-center/companies ENDPOINT');
-        console.log('='.repeat(80) + '\n');
+        console.log(`${'='.repeat(80)  }\n`);
 
         await mongoose.connect(process.env.MONGODB_URI);
         console.log('✅ Connected to MongoDB\n');
@@ -75,7 +75,7 @@ async function test() {
 
         console.log('='.repeat(80));
         console.log('✅ All tests complete');
-        console.log('='.repeat(80) + '\n');
+        console.log(`${'='.repeat(80)  }\n`);
 
         server.close();
         await mongoose.disconnect();

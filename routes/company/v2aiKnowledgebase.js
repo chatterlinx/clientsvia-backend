@@ -67,7 +67,7 @@ router.get('/company/:companyId/knowledgebase/action-items', async (req, res) =>
             if (!grouped[key]) {
                 grouped[key] = {
                     _id: `action-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                    question: question,
+                    question,
                     count: 0,
                     avgConfidence: 0,
                     confidenceSum: 0,

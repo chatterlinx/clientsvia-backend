@@ -249,7 +249,7 @@ function validateURL(value, definition) {
     } catch (error) {
         // Try adding https:// if missing protocol
         if (!trimmed.startsWith('http')) {
-            return validateURL('https://' + trimmed, definition);
+            return validateURL(`https://${  trimmed}`, definition);
         }
         
         return {
@@ -294,7 +294,7 @@ function validateCurrency(value, definition) {
     }
     
     // Format to $XX.XX
-    const formatted = '$' + amount.toFixed(2);
+    const formatted = `$${  amount.toFixed(2)}`;
     
     return {
         isValid: true,

@@ -796,13 +796,13 @@ globalInstantResponseTemplateSchema.methods.hasParent = function() {
 };
 
 globalInstantResponseTemplateSchema.methods.getParent = async function() {
-    if (!this.hasParent()) return null;
+    if (!this.hasParent()) {return null;}
     return await this.constructor.findById(this.lineage.clonedFrom);
 };
 
 globalInstantResponseTemplateSchema.methods.checkParentUpdates = async function() {
     const parent = await this.getParent();
-    if (!parent) return { hasUpdates: false };
+    if (!parent) {return { hasUpdates: false };}
     
     const parentUpdated = parent.updatedAt;
     const lastSync = this.lineage.parentLastUpdatedAt;
@@ -816,7 +816,7 @@ globalInstantResponseTemplateSchema.methods.checkParentUpdates = async function(
 
 globalInstantResponseTemplateSchema.methods.compareWithParent = async function() {
     const parent = await this.getParent();
-    if (!parent) return null;
+    if (!parent) {return null;}
     
     // Build scenario maps for comparison
     const parentScenarios = new Map();

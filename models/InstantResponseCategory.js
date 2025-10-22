@@ -39,7 +39,7 @@ const QnASchema = new mongoose.Schema({
     type: [String],
     required: true,
     validate: {
-      validator: function(arr) {
+      validator(arr) {
         return arr && arr.length > 0 && arr.length <= 20;
       },
       message: 'Must have between 1 and 20 trigger variations'
@@ -52,7 +52,7 @@ const QnASchema = new mongoose.Schema({
     type: [String],
     required: false, // Made optional since we now use quickReply/fullReply
     validate: {
-      validator: function(arr) {
+      validator(arr) {
         return !arr || arr.length === 0 || (arr.length > 0 && arr.length <= 10 &&
                arr.every(r => r && r.trim().length >= 5 && r.trim().length <= 500));
       },
@@ -423,7 +423,7 @@ InstantResponseCategorySchema.methods.addQnA = function(qnaData) {
  */
 InstantResponseCategorySchema.methods.updateQnA = function(qnaId, updates) {
   const qna = this.findQnAById(qnaId);
-  if (!qna) return null;
+  if (!qna) {return null;}
   
   Object.assign(qna, updates);
   qna.updatedAt = new Date();
@@ -435,7 +435,7 @@ InstantResponseCategorySchema.methods.updateQnA = function(qnaId, updates) {
  */
 InstantResponseCategorySchema.methods.deleteQnA = function(qnaId) {
   const index = this.qnas.findIndex(q => q.id === qnaId);
-  if (index === -1) return false;
+  if (index === -1) {return false;}
   
   this.qnas.splice(index, 1);
   return true;

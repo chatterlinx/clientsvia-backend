@@ -119,12 +119,12 @@ class SmartVariationGenerator {
   addPunctuationVariations(trigger, variations) {
     // Add with question mark (if not already there)
     if (!trigger.includes('?')) {
-      variations.add(trigger + '?');
+      variations.add(`${trigger  }?`);
     }
 
     // Add with exclamation (for short phrases)
     if (trigger.split(' ').length <= 3 && !trigger.includes('!')) {
-      variations.add(trigger + '!');
+      variations.add(`${trigger  }!`);
     }
 
     // Add without punctuation
@@ -142,7 +142,7 @@ class SmartVariationGenerator {
     
     // Only for 2-word phrases to avoid nonsense
     if (words.length === 2) {
-      variations.add(words[1] + ' ' + words[0]);
+      variations.add(`${words[1]  } ${  words[0]}`);
     }
   }
 
@@ -155,7 +155,7 @@ class SmartVariationGenerator {
     
     let modified = trigger;
     for (const filler of fillers) {
-      modified = modified.replace(new RegExp('\\b' + filler + '\\b', 'gi'), '').replace(/\s+/g, ' ').trim();
+      modified = modified.replace(new RegExp(`\\b${  filler  }\\b`, 'gi'), '').replace(/\s+/g, ' ').trim();
     }
     
     if (modified !== trigger && modified.length > 0) {
@@ -164,7 +164,7 @@ class SmartVariationGenerator {
 
     // Add "please" if not present (for polite variations)
     if (!trigger.includes('please') && trigger.split(' ').length <= 4) {
-      variations.add('please ' + trigger);
+      variations.add(`please ${  trigger}`);
     }
   }
 
@@ -179,8 +179,8 @@ class SmartVariationGenerator {
     // Simple -ing transformation
     if (lastWord.length > 3 && !lastWord.endsWith('ing')) {
       const ingForm = lastWord.endsWith('e') 
-        ? lastWord.slice(0, -1) + 'ing'
-        : lastWord + 'ing';
+        ? `${lastWord.slice(0, -1)  }ing`
+        : `${lastWord  }ing`;
       
       words[words.length - 1] = ingForm;
       variations.add(words.join(' '));
@@ -189,7 +189,7 @@ class SmartVariationGenerator {
     // -ing -> base form
     if (lastWord.endsWith('ing')) {
       const baseForm = lastWord.endsWith('eing')
-        ? lastWord.slice(0, -3) + 'e'
+        ? `${lastWord.slice(0, -3)  }e`
         : lastWord.slice(0, -3);
       
       words[words.length - 1] = baseForm;
@@ -219,11 +219,11 @@ class SmartVariationGenerator {
     for (const rule of formalityRules) {
       // Informal -> Formal
       if (trigger.includes(rule.informal)) {
-        variations.add(trigger.replace(new RegExp('\\b' + rule.informal + '\\b', 'gi'), rule.formal));
+        variations.add(trigger.replace(new RegExp(`\\b${  rule.informal  }\\b`, 'gi'), rule.formal));
       }
       // Formal -> Informal
       if (trigger.includes(rule.formal)) {
-        variations.add(trigger.replace(new RegExp('\\b' + rule.formal + '\\b', 'gi'), rule.informal));
+        variations.add(trigger.replace(new RegExp(`\\b${  rule.formal  }\\b`, 'gi'), rule.informal));
       }
     }
   }

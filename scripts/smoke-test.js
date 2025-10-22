@@ -106,7 +106,7 @@ async function runTests() {
             };
             
             if (endpoint.requiresAuth && adminToken) {
-                headers['Authorization'] = `Bearer ${adminToken}`;
+                headers.Authorization = `Bearer ${adminToken}`;
             }
             
             const response = await fetch(url, {

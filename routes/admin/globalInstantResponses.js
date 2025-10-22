@@ -581,9 +581,9 @@ router.patch('/:id', async (req, res) => {
             console.log(`🔧 [TWILIO UPDATE] Saving:`, {
                 enabled: twilioUpdate['twilioTest.enabled'],
                 phoneNumber: twilioUpdate['twilioTest.phoneNumber'] ? twilioUpdate['twilioTest.phoneNumber'] : 'NULL',
-                accountSid: twilioUpdate['twilioTest.accountSid'] ? twilioUpdate['twilioTest.accountSid'].substring(0, 10) + '...' : 'NULL',
+                accountSid: twilioUpdate['twilioTest.accountSid'] ? `${twilioUpdate['twilioTest.accountSid'].substring(0, 10)  }...` : 'NULL',
                 authToken: twilioUpdate['twilioTest.authToken'] ? '***' : 'NULL',
-                greeting: twilioUpdate['twilioTest.greeting'] ? twilioUpdate['twilioTest.greeting'].substring(0, 50) + '...' : 'DEFAULT',
+                greeting: twilioUpdate['twilioTest.greeting'] ? `${twilioUpdate['twilioTest.greeting'].substring(0, 50)  }...` : 'DEFAULT',
                 notes: twilioUpdate['twilioTest.notes']
             });
             
@@ -1339,9 +1339,9 @@ router.post('/:id/sync-from-parent', async (req, res) => {
             // Record modification in lineage
             childTemplate.lineage.modifications.push({
                 type: existingScenarioIndex >= 0 ? 'scenario_modified' : 'scenario_added',
-                categoryId: categoryId,
+                categoryId,
                 categoryName: parentCategory.name,
-                scenarioId: scenarioId,
+                scenarioId,
                 scenarioName: parentScenario.name,
                 description: `Synced from parent template`,
                 modifiedBy: adminUser,

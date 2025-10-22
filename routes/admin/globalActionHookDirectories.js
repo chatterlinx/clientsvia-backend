@@ -148,12 +148,12 @@ router.put('/:id', async (req, res) => {
         
         const { name, icon, description, color, sortOrder, isActive } = req.body;
         
-        if (name) directory.name = name;
-        if (icon) directory.icon = icon;
-        if (description !== undefined) directory.description = description;
-        if (color) directory.color = color;
-        if (sortOrder !== undefined) directory.sortOrder = sortOrder;
-        if (isActive !== undefined) directory.isActive = isActive;
+        if (name) {directory.name = name;}
+        if (icon) {directory.icon = icon;}
+        if (description !== undefined) {directory.description = description;}
+        if (color) {directory.color = color;}
+        if (sortOrder !== undefined) {directory.sortOrder = sortOrder;}
+        if (isActive !== undefined) {directory.isActive = isActive;}
         
         directory.lastModifiedBy = 'Admin';
         

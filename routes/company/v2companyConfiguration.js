@@ -55,10 +55,10 @@ async function clearCompanyCache(companyId, context = '') {
             await redisClient.del(`company:${companyId}`);
             console.log(`✅ [CACHE CLEAR] ${context} - Cleared Redis cache for company:${companyId}`);
             return true;
-        } else {
+        } 
             console.warn(`⚠️ [CACHE CLEAR] ${context} - Redis client not available`);
             return false;
-        }
+        
     } catch (error) {
         console.error(`❌ [CACHE CLEAR] ${context} - Failed:`, error.message);
         // Non-fatal error - don't block the response
@@ -84,7 +84,7 @@ router.get('/:companyId/configuration', async (req, res) => {
         }
         
         console.log(`[COMPANY CONFIG] Company found: ${company.companyName}`);
-        console.log(`[COMPANY CONFIG] Has configuration:`, !!company.configuration);
+        console.log(`[COMPANY CONFIG] Has configuration:`, Boolean(company.configuration));
         console.log(`[COMPANY CONFIG] Configuration type:`, typeof company.configuration);
         
         // FIX: Ensure configuration is an object (migration fix)
@@ -237,9 +237,9 @@ router.post('/:companyId/configuration/variables/preview', async (req, res) => {
         // ============================================
         // STEP 1: Load template and variable definitions
         // ============================================
-        let scenariosAffected = [];
+        const scenariosAffected = [];
         let template = null;
-        let variableDefinitions = {};
+        const variableDefinitions = {};
         
         if (company.configuration?.clonedFrom) {
             template = await GlobalInstantResponseTemplate.findById(company.configuration.clonedFrom);
@@ -564,7 +564,7 @@ router.get('/:companyId/configuration/variables/:key/usage', async (req, res) =>
         }
         
         // Get template to find scenarios using this variable
-        let scenarios = [];
+        const scenarios = [];
         
         if (company.configuration?.clonedFrom) {
             const template = await GlobalInstantResponseTemplate.findById(company.configuration.clonedFrom);
@@ -898,8 +898,8 @@ router.get('/:companyId/configuration/scenarios', async (req, res) => {
             return res.status(404).json({ error: 'Company not found' });
         }
         
-        let scenarios = [];
-        let categories = [];
+        const scenarios = [];
+        const categories = [];
         
         if (company.configuration?.clonedFrom) {
             const template = await GlobalInstantResponseTemplate.findById(company.configuration.clonedFrom);
@@ -963,7 +963,7 @@ router.get('/:companyId/configuration/template-info', async (req, res) => {
         
         // Calculate stats
         let totalScenarios = 0;
-        let totalCategories = template.categories.length;
+        const totalCategories = template.categories.length;
         
         template.categories.forEach(cat => {
             totalScenarios += cat.scenarios.length;
@@ -1126,7 +1126,7 @@ router.post('/:companyId/configuration/clone-template', async (req, res) => {
                 // Add reference if not already present
                 if (!company.aiAgentSettings.templateReferences.find(ref => ref.templateId === templateId)) {
                     company.aiAgentSettings.templateReferences.push({
-                        templateId: templateId,
+                        templateId,
                         enabled: true,
                         priority: 1,
                         clonedAt: new Date()
@@ -1605,7 +1605,7 @@ router.get('/:companyId/configuration/templates', async (req, res) => {
         const templates = [];
         
         for (const ref of templateRefs) {
-            if (!ref.enabled) continue; // Skip disabled templates
+            if (!ref.enabled) {continue;} // Skip disabled templates
             
             const template = await GlobalInstantResponseTemplate.findById(ref.templateId);
             
@@ -1703,7 +1703,7 @@ router.post('/:companyId/configuration/templates', async (req, res) => {
         
         // Add template reference
         company.aiAgentSettings.templateReferences.push({
-            templateId: templateId,
+            templateId,
             enabled: true,
             priority: company.aiAgentSettings.templateReferences.length + 1,
             clonedAt: new Date()
@@ -1733,7 +1733,7 @@ router.post('/:companyId/configuration/templates', async (req, res) => {
         res.json({ 
             success: true, 
             message: 'Template added successfully',
-            templateId: templateId
+            templateId
         });
         
     } catch (error) {

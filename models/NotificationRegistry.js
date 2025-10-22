@@ -168,8 +168,8 @@ notificationRegistrySchema.statics.registerOrUpdate = async function(data) {
     if (existing) {
         // Update existing registration
         existing.location = {
-            file: file,
-            line: line,
+            file,
+            line,
             lastDetected: new Date()
         };
         existing.stats.lastTriggered = new Date();
@@ -180,17 +180,17 @@ notificationRegistrySchema.statics.registerOrUpdate = async function(data) {
         }
         
         return existing.save();
-    } else {
+    } 
         // Create new registration
         return this.create({
-            code: code,
+            code,
             location: {
-                file: file,
-                line: line,
+                file,
+                line,
                 lastDetected: new Date()
             },
             config: {
-                severity: severity
+                severity
             },
             stats: {
                 totalTriggered: 1,
@@ -198,7 +198,7 @@ notificationRegistrySchema.statics.registerOrUpdate = async function(data) {
                 lastTriggered: new Date()
             }
         });
-    }
+    
 };
 
 /**
@@ -315,11 +315,11 @@ notificationRegistrySchema.methods.validateNotificationPoint = async function() 
     
     // Update validation status
     this.validation = {
-        isValid: isValid,
+        isValid,
         lastChecked: new Date(),
-        errors: errors,
-        warnings: warnings,
-        checks: checks
+        errors,
+        warnings,
+        checks
     };
     
     return this.save();

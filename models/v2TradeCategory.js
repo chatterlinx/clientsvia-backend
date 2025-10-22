@@ -77,7 +77,7 @@ const TradeCategorySchema = new mongoose.Schema({
         index: true,
         // 'global' for shared categories, actual ObjectId for company-specific
         validate: {
-            validator: function(v) {
+            validator(v) {
                 return v === 'global' || mongoose.Types.ObjectId.isValid(v);
             },
             message: 'CompanyId must be "global" or a valid ObjectId'

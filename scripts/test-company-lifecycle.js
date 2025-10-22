@@ -18,9 +18,9 @@ const Company = require('../models/v2Company');
 
 async function testLifecycle() {
     try {
-        console.log('\n' + '='.repeat(80));
+        console.log(`\n${  '='.repeat(80)}`);
         console.log('🧪 TESTING COMPLETE COMPANY LIFECYCLE');
-        console.log('='.repeat(80) + '\n');
+        console.log(`${'='.repeat(80)  }\n`);
 
         await mongoose.connect(process.env.MONGODB_URI);
         console.log('✅ Connected to MongoDB:', mongoose.connection.db.databaseName);
@@ -33,7 +33,7 @@ async function testLifecycle() {
         // ================================================================
         console.log('─'.repeat(80));
         console.log('📝 PHASE 1: Create Test Company');
-        console.log('─'.repeat(80) + '\n');
+        console.log(`${'─'.repeat(80)  }\n`);
 
         const testCompany = new Company({
             companyName: 'Lifecycle Test Company',
@@ -86,13 +86,13 @@ async function testLifecycle() {
         // ================================================================
         console.log('─'.repeat(80));
         console.log('📊 PHASE 2: Populate Related Data');
-        console.log('─'.repeat(80) + '\n');
+        console.log(`${'─'.repeat(80)  }\n`);
 
         // Add contacts
         const contactsColl = db.collection('v2contacts');
         await contactsColl.insertMany([
             {
-                companyId: companyId,
+                companyId,
                 firstName: 'John',
                 lastName: 'Doe',
                 phone: '+15559876543',
@@ -100,7 +100,7 @@ async function testLifecycle() {
                 createdAt: new Date()
             },
             {
-                companyId: companyId,
+                companyId,
                 firstName: 'Jane',
                 lastName: 'Smith',
                 phone: '+15559876544',
@@ -114,7 +114,7 @@ async function testLifecycle() {
         const callsColl = db.collection('v2aiagentcalllogs');
         await callsColl.insertMany([
             {
-                companyId: companyId,
+                companyId,
                 from: '+15559876543',
                 to: '+15551234567',
                 timestamp: new Date(),
@@ -123,7 +123,7 @@ async function testLifecycle() {
                 transcript: 'Test call transcript 1'
             },
             {
-                companyId: companyId,
+                companyId,
                 from: '+15559876544',
                 to: '+15551234567',
                 timestamp: new Date(),
@@ -137,7 +137,7 @@ async function testLifecycle() {
         // Add notification logs
         const notificationsColl = db.collection('v2notificationlogs');
         await notificationsColl.insertOne({
-            companyId: companyId,
+            companyId,
             type: 'sms',
             to: '+15559876543',
             message: 'Test notification',
@@ -152,7 +152,7 @@ async function testLifecycle() {
         // ================================================================
         console.log('─'.repeat(80));
         console.log('🔍 PHASE 3: Verify Data Retrieval');
-        console.log('─'.repeat(80) + '\n');
+        console.log(`${'─'.repeat(80)  }\n`);
 
         const contactsCount = await contactsColl.countDocuments({ companyId });
         const callsCount = await callsColl.countDocuments({ companyId });
@@ -168,7 +168,7 @@ async function testLifecycle() {
         // ================================================================
         console.log('─'.repeat(80));
         console.log('🗑️  PHASE 4: Soft Delete Company');
-        console.log('─'.repeat(80) + '\n');
+        console.log(`${'─'.repeat(80)  }\n`);
 
         const autoPurgeDate = new Date();
         autoPurgeDate.setDate(autoPurgeDate.getDate() + 30);
@@ -204,7 +204,7 @@ async function testLifecycle() {
         // ================================================================
         console.log('─'.repeat(80));
         console.log('♻️  PHASE 5: Restore From Trash');
-        console.log('─'.repeat(80) + '\n');
+        console.log(`${'─'.repeat(80)  }\n`);
 
         await Company.findByIdAndUpdate(companyId, {
             $set: {
@@ -234,7 +234,7 @@ async function testLifecycle() {
         // ================================================================
         console.log('─'.repeat(80));
         console.log('💀 PHASE 6: Hard Delete (Permanent)');
-        console.log('─'.repeat(80) + '\n');
+        console.log(`${'─'.repeat(80)  }\n`);
 
         // Delete company
         await Company.findByIdAndDelete(companyId);
@@ -255,7 +255,7 @@ async function testLifecycle() {
         // ================================================================
         console.log('─'.repeat(80));
         console.log('🔍 PHASE 7: Verify Complete Removal');
-        console.log('─'.repeat(80) + '\n');
+        console.log(`${'─'.repeat(80)  }\n`);
 
         const checkCompany = await Company.findById(companyId);
         const checkContacts = await contactsColl.countDocuments({ companyId });
@@ -268,7 +268,7 @@ async function testLifecycle() {
             console.log('✅ Verified: No traces left in database');
         } else {
             console.log('❌ ERROR: Incomplete removal!');
-            console.log(`   Company exists: ${!!checkCompany}`);
+            console.log(`   Company exists: ${Boolean(checkCompany)}`);
             console.log(`   Contacts remaining: ${checkContacts}`);
             console.log(`   Calls remaining: ${checkCalls}`);
             console.log(`   Notifications remaining: ${checkNotifications}`);

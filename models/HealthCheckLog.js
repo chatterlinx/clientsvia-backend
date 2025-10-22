@@ -205,9 +205,9 @@ healthCheckLogSchema.statics.getComponentSummary = async function(hours = 24) {
             const stats = componentStats[component.name];
             stats.total += 1;
             
-            if (component.status === 'PASS') stats.passed += 1;
-            if (component.status === 'FAIL') stats.failed += 1;
-            if (component.status === 'WARNING') stats.warnings += 1;
+            if (component.status === 'PASS') {stats.passed += 1;}
+            if (component.status === 'FAIL') {stats.failed += 1;}
+            if (component.status === 'WARNING') {stats.warnings += 1;}
             
             if (component.responseTime) {
                 stats.responseTimes.push(component.responseTime);

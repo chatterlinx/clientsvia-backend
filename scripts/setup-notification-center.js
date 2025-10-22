@@ -77,7 +77,7 @@ async function setupNotificationCenter() {
                 email: adminEmail || null,
                 type: 'admin-alert',
                 smsNotifications: true,
-                emailNotifications: !!adminEmail,
+                emailNotifications: Boolean(adminEmail),
                 phoneCallAlerts: true,  // For CRITICAL level 4+
                 addedAt: new Date()
             }],
@@ -147,7 +147,7 @@ async function updateAdminContacts(company) {
         email: adminEmail || null,
         type: 'admin-alert',
         smsNotifications: true,
-        emailNotifications: !!adminEmail,
+        emailNotifications: Boolean(adminEmail),
         phoneCallAlerts: true,
         addedAt: new Date()
     });

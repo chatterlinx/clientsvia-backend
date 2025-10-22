@@ -162,7 +162,7 @@ async function streamSynthesis(req, res) {
       'Content-Type': 'audio/mpeg',
       'Transfer-Encoding': 'chunked',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive'
+      Connection: 'keep-alive'
     });
 
     // Stream the audio data

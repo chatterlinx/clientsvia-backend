@@ -19,7 +19,7 @@ async function getVoices(req, res) {
         const companyKey = company?.aiSettings?.elevenLabs?.apiKey;
         const envKey = process.env.ELEVENLABS_API_KEY;
         
-        console.log(`API Key sources - Request: ${!!apiKey}, Company: ${!!companyKey}, Env: ${!!envKey}`);
+        console.log(`API Key sources - Request: ${Boolean(apiKey)}, Company: ${Boolean(companyKey)}, Env: ${Boolean(envKey)}`);
         
         if (!apiKey && !companyKey && !envKey) {
             console.log('No ElevenLabs API key found from any source');

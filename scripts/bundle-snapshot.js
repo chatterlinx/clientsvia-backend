@@ -22,7 +22,7 @@ const report = {
 };
 
 const outDir = path.join('scripts');
-if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+if (!fs.existsSync(outDir)) {fs.mkdirSync(outDir, { recursive: true });}
 const outPath = path.join(outDir, 'bundle-baseline.json');
 fs.writeFileSync(outPath, JSON.stringify(report, null, 2));
 console.log('Baseline saved:', report);

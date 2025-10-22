@@ -29,8 +29,8 @@ async function checkCustomFillers() {
         console.log(JSON.stringify(company.aiAgentSettings, null, 2));
         
         console.log('\n🔍 FILLER WORDS SPECIFIC:');
-        console.log('aiAgentSettings exists?', !!company.aiAgentSettings);
-        console.log('aiAgentSettings.fillerWords exists?', !!company.aiAgentSettings?.fillerWords);
+        console.log('aiAgentSettings exists?', Boolean(company.aiAgentSettings));
+        console.log('aiAgentSettings.fillerWords exists?', Boolean(company.aiAgentSettings?.fillerWords));
         console.log('aiAgentSettings.fillerWords.custom:', company.aiAgentSettings?.fillerWords?.custom);
         console.log('aiAgentSettings.fillerWords.inherited:', company.aiAgentSettings?.fillerWords?.inherited);
         

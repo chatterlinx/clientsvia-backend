@@ -9,10 +9,10 @@ function getElevenLabsApiKey(company) {
   
   // V2 VOICE SETTINGS: Check new aiAgentLogic.voiceSettings path first
   const v2VoiceSettings = company?.aiAgentLogic?.voiceSettings;
-  console.log(`🔍 [API KEY CHECK] Has voiceSettings: ${!!v2VoiceSettings}`);
+  console.log(`🔍 [API KEY CHECK] Has voiceSettings: ${Boolean(v2VoiceSettings)}`);
   console.log(`🔍 [API KEY CHECK] API Source: ${v2VoiceSettings?.apiSource || 'NOT SET'}`);
-  console.log(`🔍 [API KEY CHECK] Has company API key: ${!!(v2VoiceSettings?.apiKey)}`);
-  console.log(`🔍 [API KEY CHECK] Has global ELEVENLABS_API_KEY env: ${!!process.env.ELEVENLABS_API_KEY}`);
+  console.log(`🔍 [API KEY CHECK] Has company API key: ${Boolean(v2VoiceSettings?.apiKey)}`);
+  console.log(`🔍 [API KEY CHECK] Has global ELEVENLABS_API_KEY env: ${Boolean(process.env.ELEVENLABS_API_KEY)}`);
   
   if (v2VoiceSettings) {
     const useOwnApi = v2VoiceSettings.apiSource === 'own';
@@ -29,9 +29,9 @@ function getElevenLabsApiKey(company) {
         const globalKey = process.env.ELEVENLABS_API_KEY.trim();
         console.log(`🏢 V2: Using ClientsVia GLOBAL ElevenLabs API for company ${company?._id || 'global'} (last 4: ...${globalKey.slice(-4)})`);
         return globalKey;
-      } else {
+      } 
         console.error(`❌ V2: API Source is 'clientsvia' but ELEVENLABS_API_KEY env variable is NOT SET!`);
-      }
+      
     }
   }
   
@@ -56,7 +56,7 @@ function getApiKey({ apiKey, company } = {}) {
   
   // Otherwise use company-aware key logic
   const key = getElevenLabsApiKey(company);
-  if (!key) throw new Error('ElevenLabs API key not configured. Please add ELEVENLABS_API_KEY to environment variables or configure company-specific API key.');
+  if (!key) {throw new Error('ElevenLabs API key not configured. Please add ELEVENLABS_API_KEY to environment variables or configure company-specific API key.');}
   return key;
 }
 
@@ -70,7 +70,7 @@ function createClient({ apiKey, company } = {}) {
  */
 async function getAvailableVoices({ apiKey, company } = {}) {
   console.log('🎙️ getAvailableVoices called with:', { 
-    hasApiKey: !!apiKey, 
+    hasApiKey: Boolean(apiKey), 
     companyId: company?._id,
     useOwnApi: company?.aiSettings?.elevenLabs?.useOwnApiKey 
   });
@@ -324,7 +324,7 @@ async function generateStaticPrompt({
   });
   
   const audioDir = path.join(__dirname, '../public/audio');
-  if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
+  if (!fs.existsSync(audioDir)) {fs.mkdirSync(audioDir, { recursive: true });}
   
   const extension = output_format?.includes('mp3') ? 'mp3' : 'wav';
   const name = fileName || `prompt_${Date.now()}.${extension}`;

@@ -68,7 +68,7 @@ async function testReadinessCalculation(companyId) {
                           colors.red;
         
         console.log(`${colors.bright}Overall Score:${colors.reset} ${scoreColor}${readiness.score}/100${colors.reset}`);
-        console.log(`${colors.bright}Can Go Live:${colors.reset} ${readiness.canGoLive ? colors.green + '✅ YES' : colors.red + '❌ NO'}${colors.reset}\n`);
+        console.log(`${colors.bright}Can Go Live:${colors.reset} ${readiness.canGoLive ? `${colors.green  }✅ YES` : `${colors.red  }❌ NO`}${colors.reset}\n`);
         
         // Components Breakdown
         console.log(`${colors.bright}📊 Components Breakdown:${colors.reset}\n`);
@@ -93,7 +93,7 @@ async function testReadinessCalculation(companyId) {
             if (comp.name === 'Account Status') {
                 const statusColor = comp.data.isActive ? colors.green : colors.red;
                 console.log(`    Status: ${statusColor}${comp.data.status}${colors.reset}`);
-                console.log(`    Active: ${comp.data.isActive ? colors.green + '✅' : colors.red + '❌'}${colors.reset}`);
+                console.log(`    Active: ${comp.data.isActive ? `${colors.green  }✅` : `${colors.red  }❌`}${colors.reset}`);
             }
             else if (comp.name === 'Variables') {
                 console.log(`    Configured: ${comp.data.configured}/${comp.data.required}`);
@@ -169,7 +169,7 @@ async function testReadinessCalculation(companyId) {
             },
             {
                 name: 'Gatekeeper Logic',
-                pass: readiness.components.accountStatus?.status ? true : false,
+                pass: Boolean(readiness.components.accountStatus?.status),
                 expected: 'Account status checked',
                 actual: readiness.components.accountStatus?.status || 'Not checked'
             },
@@ -191,13 +191,13 @@ async function testReadinessCalculation(companyId) {
         let failed = 0;
         
         tests.forEach(test => {
-            const status = test.pass ? colors.green + '✅ PASS' : colors.red + '❌ FAIL';
+            const status = test.pass ? `${colors.green  }✅ PASS` : `${colors.red  }❌ FAIL`;
             console.log(`${status}${colors.reset} - ${test.name}`);
             console.log(`  Expected: ${test.expected}`);
             console.log(`  Actual: ${test.actual}\n`);
             
-            if (test.pass) passed++;
-            else failed++;
+            if (test.pass) {passed++;}
+            else {failed++;}
         });
         
         console.log(`${'='.repeat(80)}`);

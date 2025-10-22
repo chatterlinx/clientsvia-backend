@@ -206,7 +206,7 @@ async function seedV2TradeCategories() {
             console.warn('⚠️  Cache clear failed:', cacheError.message);
         }
 
-        console.log('\n' + '=' .repeat(50));
+        console.log(`\n${  '=' .repeat(50)}`);
         console.log('🎉 V2 TRADE CATEGORIES SEEDED SUCCESSFULLY!');
         console.log(`📊 Created ${createdCount} categories`);
         console.log('🔍 You can now test the V2 Global Trade Categories system');

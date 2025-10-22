@@ -7,7 +7,7 @@ function getTokenFromRequest(req) {
   const cookies = req.cookies || {};
   const authHeader =
     typeof req.headers?.authorization === 'string' ? req.headers.authorization : '';
-  if (cookies.token) return cookies.token;
+  if (cookies.token) {return cookies.token;}
   if (authHeader.toLowerCase().startsWith('bearer ')) {
     return authHeader.slice(7).trim();
   }
@@ -17,7 +17,7 @@ function getTokenFromRequest(req) {
 // Middleware to validate JWT and attach user info
 function verifyToken(req, res, next) {
   const token = getTokenFromRequest(req);
-  if (!token) return res.status(401).json({ message: 'Unauthorized' });
+  if (!token) {return res.status(401).json({ message: 'Unauthorized' });}
   try {
     req.user = jwt.verify(token, process.env.JWT_SECRET);
     next();
@@ -40,7 +40,7 @@ async function authenticateJWT(req, res, next) {
     console.log('🔍 AUTH CHECKPOINT: JWT decoded successfully, userId:', decoded.userId);
     
     const user = await User.findById(decoded.userId).populate('companyId');
-    console.log('🔍 AUTH CHECKPOINT: User found:', !!user);
+    console.log('🔍 AUTH CHECKPOINT: User found:', Boolean(user));
     console.log('🔍 AUTH CHECKPOINT: User companyId field:', user?.companyId);
     console.log('🔍 AUTH CHECKPOINT: User companyId type:', typeof user?.companyId);
     console.log('🔍 AUTH CHECKPOINT: User status:', user?.status);
@@ -60,9 +60,9 @@ async function authenticateJWT(req, res, next) {
     console.error('❌ JWT Error details:', {
       name: error.name,
       message: error.message,
-      hasToken: !!token,
+      hasToken: Boolean(token),
       tokenLength: token ? token.length : 0,
-      hasJWTSecret: !!process.env.JWT_SECRET
+      hasJWTSecret: Boolean(process.env.JWT_SECRET)
     });
     return res.status(401).json({ 
       message: 'Invalid token',

@@ -465,7 +465,7 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
 
         // 🔍 DEBUG: Log what's in the database
         console.log(`🔍 [CALL FILTERING] Raw callFiltering from DB:`, {
-            exists: !!company.callFiltering,
+            exists: Boolean(company.callFiltering),
             enabled: company.callFiltering?.enabled,
             settings: company.callFiltering?.settings,
             settingsKeys: company.callFiltering?.settings ? Object.keys(company.callFiltering.settings) : []

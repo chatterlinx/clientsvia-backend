@@ -32,7 +32,7 @@ router.post('/fix-user-company/:userId/:companyId', authenticateJWT, async (req,
             return res.status(404).json({
                 success: false,
                 error: 'User not found',
-                userId: userId
+                userId
             });
         }
         
@@ -42,7 +42,7 @@ router.post('/fix-user-company/:userId/:companyId', authenticateJWT, async (req,
             return res.status(404).json({
                 success: false,
                 error: 'Company not found',
-                companyId: companyId
+                companyId
             });
         }
         
@@ -68,14 +68,14 @@ router.post('/fix-user-company/:userId/:companyId', authenticateJWT, async (req,
             success: true,
             message: 'User-company association fixed successfully',
             before: {
-                userId: userId,
-                hadCompanyId: !!user.companyId
+                userId,
+                hadCompanyId: Boolean(user.companyId)
             },
             after: {
                 userId: verifyUser._id,
                 companyId: verifyUser.companyId?._id,
                 companyName: verifyUser.companyId?.companyName,
-                associationWorking: !!verifyUser.companyId
+                associationWorking: Boolean(verifyUser.companyId)
             }
         };
         
@@ -121,11 +121,11 @@ router.get('/check-user-company/:userId', authenticateJWT, async (req, res) => {
             company: {
                 id: user.companyId?._id || null,
                 name: user.companyId?.companyName || null,
-                populated: !!user.companyId
+                populated: Boolean(user.companyId)
             },
             diagnosis: {
-                hasCompanyId: !!user.companyId,
-                canAccessKnowledge: !!user.companyId,
+                hasCompanyId: Boolean(user.companyId),
+                canAccessKnowledge: Boolean(user.companyId),
                 needsFix: !user.companyId
             }
         };
@@ -178,8 +178,8 @@ router.post('/clear-cache/:companyId', authenticateJWT, async (req, res) => {
         
         for (const key of keysToDelete) {
             const result = await client.del(key);
-            if (result) deletedCount++;
-            results.push({ key, deleted: !!result });
+            if (result) {deletedCount++;}
+            results.push({ key, deleted: Boolean(result) });
             console.log(`🗑️ Cache key: ${key} (${result ? 'deleted' : 'not found'})`);
         }
 

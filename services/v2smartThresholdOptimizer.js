@@ -69,7 +69,7 @@ class SmartThresholdOptimizer {
             logger.error('❌ Smart threshold optimization failed', { companyId, error: error.message });
             return {
                 success: false,
-                message: 'Optimization failed: ' + error.message,
+                message: `Optimization failed: ${  error.message}`,
                 error: error.message
             };
         }
@@ -228,7 +228,7 @@ class SmartThresholdOptimizer {
             improvements[source] = {
                 oldThreshold: oldValue,
                 newThreshold: newValue,
-                change: change,
+                change,
                 changePercent: Math.round((change / oldValue) * 100),
                 expectedImprovement: this.predictImprovement(source, change)
             };
@@ -248,9 +248,9 @@ class SmartThresholdOptimizer {
         
         if (thresholdChange < 0) {
             return `${Math.abs(Math.round(thresholdChange * 100))}% more queries will match - better coverage`;
-        } else {
+        } 
             return `${Math.round(thresholdChange * 100)}% higher accuracy - fewer false positives`;
-        }
+        
     }
 
     /**

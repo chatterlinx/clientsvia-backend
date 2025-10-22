@@ -85,7 +85,7 @@ class InstantResponseMatcher {
           response: response.response,
           trigger: response.trigger,
           category: response.category,
-          score: score,
+          score,
           responseId: response._id || response.trigger,
           matchedAt: new Date()
         };
@@ -109,7 +109,7 @@ class InstantResponseMatcher {
    * @returns {String} - Normalized query
    */
   normalizeQuery(query) {
-    if (!query) return '';
+    if (!query) {return '';}
 
     return query
       .toLowerCase()
@@ -125,7 +125,7 @@ class InstantResponseMatcher {
    * @returns {Array} - Array of key terms
    */
   extractKeyTerms(normalizedQuery) {
-    if (!normalizedQuery) return [];
+    if (!normalizedQuery) {return [];}
 
     // Split into words
     const words = normalizedQuery.split(' ');
@@ -146,7 +146,7 @@ class InstantResponseMatcher {
    */
   calculateScore(queryTerms, triggerTerms, normalizedQuery, normalizedTrigger) {
     let score = 0;
-    let weights = {
+    const weights = {
       exactMatch: 1.0,
       variationMatch: 0.9,
       fuzzyMatch: 0.8,
@@ -195,7 +195,7 @@ class InstantResponseMatcher {
     let matchCount = 0;
     const totalTerms = Math.max(queryTerms.length, triggerTerms.length);
 
-    if (totalTerms === 0) return 0;
+    if (totalTerms === 0) {return 0;}
 
     for (const queryTerm of queryTerms) {
       for (const triggerTerm of triggerTerms) {
@@ -220,7 +220,7 @@ class InstantResponseMatcher {
     const distance = this.levenshteinDistance(str1, str2);
     const maxLength = Math.max(str1.length, str2.length);
     
-    if (maxLength === 0) return 1.0;
+    if (maxLength === 0) {return 1.0;}
     
     return 1 - (distance / maxLength);
   }
@@ -279,7 +279,7 @@ class InstantResponseMatcher {
 
     const union = new Set([...querySet, ...triggerSet]).size;
     
-    if (union === 0) return 0;
+    if (union === 0) {return 0;}
     
     return intersection / union;
   }

@@ -282,8 +282,8 @@ router.post('/logout', async (req, res) => {
         // Log successful logout if we have user info
         if (userId || sessionId) {
             logger.info('User logged out - session terminated', {
-                userId: userId,
-                sessionId: sessionId
+                userId,
+                sessionId
             });
         } else {
             logger.info('Logout request processed - cleared cookies and session');

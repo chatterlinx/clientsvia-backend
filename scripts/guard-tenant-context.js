@@ -19,24 +19,24 @@ const dbPatterns = [
 ];
 
 function walk(dir, acc=[]) {
-  if (!fs.existsSync(dir)) return acc;
+  if (!fs.existsSync(dir)) {return acc;}
   for (const e of fs.readdirSync(dir)) {
     const p = path.join(dir, e);
     const s = fs.statSync(p);
-    if (s.isDirectory()) walk(p, acc);
-    else if (p.endsWith('.js')) acc.push(p);
+    if (s.isDirectory()) {walk(p, acc);}
+    else if (p.endsWith('.js')) {acc.push(p);}
   }
   return acc;
 }
 
 const files = roots.flatMap(r => walk(r, []));
-let failures = [];
+const failures = [];
 
 for (const file of files) {
   const src = fs.readFileSync(file, 'utf8').split('\n');
   for (let i = 0; i < src.length; i++) {
     const line = src[i];
-    if (!dbPatterns.some(rx => rx.test(line))) continue;
+    if (!dbPatterns.some(rx => rx.test(line))) {continue;}
     const start = Math.max(0, i - 8), end = Math.min(src.length, i + 9);
     const windowText = src.slice(start, end).join('\n');
     const hasCompanyId = /companyId/.test(windowText) || /tenantContext/.test(windowText);

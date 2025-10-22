@@ -22,9 +22,9 @@ function question(query) {
 
 async function cleanSlate() {
     try {
-        console.log('\n' + '='.repeat(80));
+        console.log(`\n${  '='.repeat(80)}`);
         console.log('🧹 CLEAN SLATE - PURGE OLD TEST COMPANIES');
-        console.log('='.repeat(80) + '\n');
+        console.log(`${'='.repeat(80)  }\n`);
 
         await mongoose.connect(process.env.MONGODB_URI);
         const dbName = mongoose.connection.db.databaseName;

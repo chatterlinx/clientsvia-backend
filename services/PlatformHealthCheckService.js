@@ -48,8 +48,8 @@ class PlatformHealthCheckService {
         const startTime = Date.now();
         const results = {
             timestamp: new Date(),
-            triggeredBy: triggeredBy,
-            triggeredByUser: triggeredByUser,
+            triggeredBy,
+            triggeredByUser,
             overallStatus: 'HEALTHY',
             checks: [],
             summary: {
@@ -511,8 +511,8 @@ class PlatformHealthCheckService {
             
             check.responseTime = Date.now() - startTime;
             check.details = {
-                liveCompanies: liveCompanies,
-                totalCompanies: totalCompanies
+                liveCompanies,
+                totalCompanies
             };
             
         } catch (error) {
@@ -561,7 +561,7 @@ class PlatformHealthCheckService {
                     name: c.name,
                     phone: c.phoneNumber,
                     smsEnabled: c.smsNotifications !== false,
-                    emailEnabled: !!c.email
+                    emailEnabled: Boolean(c.email)
                 }))
             };
             
@@ -621,10 +621,10 @@ class PlatformHealthCheckService {
     static async sendHealthCheckSMS(results) {
         try {
             const statusEmoji = {
-                'HEALTHY': '✅',
-                'WARNING': '⚠️',
-                'CRITICAL': '🚨',
-                'OFFLINE': '⚫'
+                HEALTHY: '✅',
+                WARNING: '⚠️',
+                CRITICAL: '🚨',
+                OFFLINE: '⚫'
             };
             
             // Build failure details

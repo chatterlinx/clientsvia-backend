@@ -326,11 +326,11 @@ class BackgroundVariableScanService {
     inferType(key) {
         const lowerKey = key.toLowerCase();
         
-        if (lowerKey.includes('email')) return 'email';
-        if (lowerKey.includes('phone')) return 'phone';
-        if (lowerKey.includes('url') || lowerKey.includes('website')) return 'url';
-        if (lowerKey.includes('price') || lowerKey.includes('cost') || lowerKey.includes('fee')) return 'currency';
-        if (lowerKey.includes('count') || lowerKey.includes('number') || lowerKey.includes('year')) return 'number';
+        if (lowerKey.includes('email')) {return 'email';}
+        if (lowerKey.includes('phone')) {return 'phone';}
+        if (lowerKey.includes('url') || lowerKey.includes('website')) {return 'url';}
+        if (lowerKey.includes('price') || lowerKey.includes('cost') || lowerKey.includes('fee')) {return 'currency';}
+        if (lowerKey.includes('count') || lowerKey.includes('number') || lowerKey.includes('year')) {return 'number';}
         
         return 'text';
     }
@@ -341,13 +341,13 @@ class BackgroundVariableScanService {
     getExample(key) {
         const lowerKey = key.toLowerCase();
         
-        if (lowerKey.includes('company') || lowerKey.includes('business')) return 'e.g., Atlas Air Conditioning';
-        if (lowerKey.includes('phone')) return 'e.g., (239) 555-0100';
-        if (lowerKey.includes('email')) return 'e.g., info@company.com';
-        if (lowerKey.includes('address')) return 'e.g., 123 Main St, Naples, FL';
-        if (lowerKey.includes('hour')) return 'e.g., Mon-Fri 8AM-5PM';
-        if (lowerKey.includes('price') || lowerKey.includes('cost')) return 'e.g., $89';
-        if (lowerKey.includes('website')) return 'e.g., https://company.com';
+        if (lowerKey.includes('company') || lowerKey.includes('business')) {return 'e.g., Atlas Air Conditioning';}
+        if (lowerKey.includes('phone')) {return 'e.g., (239) 555-0100';}
+        if (lowerKey.includes('email')) {return 'e.g., info@company.com';}
+        if (lowerKey.includes('address')) {return 'e.g., 123 Main St, Naples, FL';}
+        if (lowerKey.includes('hour')) {return 'e.g., Mon-Fri 8AM-5PM';}
+        if (lowerKey.includes('price') || lowerKey.includes('cost')) {return 'e.g., $89';}
+        if (lowerKey.includes('website')) {return 'e.g., https://company.com';}
         
         return `Enter ${this.humanize(key)}`;
     }

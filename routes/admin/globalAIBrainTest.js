@@ -33,14 +33,14 @@ router.post('/:templateId/config', authenticateJWT, async (req, res) => {
             templateId,
             enabled,
             phoneNumber,
-            hasAccountSid: !!accountSid,
-            hasAuthToken: !!authToken
+            hasAccountSid: Boolean(accountSid),
+            hasAuthToken: Boolean(authToken)
         });
         
         logger.info(`📞 [TEST CONFIG] Updating test config for template ${templateId}`, {
             enabled,
             phoneNumber,
-            accountSid: accountSid ? accountSid.substring(0, 10) + '...' : 'none',
+            accountSid: accountSid ? `${accountSid.substring(0, 10)  }...` : 'none',
             authToken: authToken ? '***' : 'none',
             user: req.user?.email
         });

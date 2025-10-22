@@ -25,7 +25,7 @@ const TemplateSchema = new mongoose.Schema({
     type: [String], 
     default: [],
     validate: {
-      validator: function(arr) {
+      validator(arr) {
         return arr.every(v => v.startsWith('{{') && v.endsWith('}}'));
       },
       message: 'Variables must be in {{variableName}} format'

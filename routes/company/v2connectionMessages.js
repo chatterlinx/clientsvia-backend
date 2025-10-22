@@ -37,7 +37,7 @@ router.use(authenticateJWT);
 
 // Configure multer for audio file uploads
 const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
+    destination (req, file, cb) {
         const uploadDir = path.join(__dirname, '../../public/uploads/greetings');
         
         // Create directory if it doesn't exist
@@ -47,7 +47,7 @@ const storage = multer.diskStorage({
         
         cb(null, uploadDir);
     },
-    filename: function (req, file, cb) {
+    filename (req, file, cb) {
         const companyId = req.params.companyId;
         const timestamp = Date.now();
         const ext = path.extname(file.originalname);
@@ -56,20 +56,20 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({
-    storage: storage,
+    storage,
     limits: {
         fileSize: 5 * 1024 * 1024 // 5MB max
     },
-    fileFilter: function (req, file, cb) {
+    fileFilter (req, file, cb) {
         const allowedTypes = /mp3|wav|m4a/;
         const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
         const mimetype = allowedTypes.test(file.mimetype) || file.mimetype === 'audio/mp4';
         
         if (extname && mimetype) {
             return cb(null, true);
-        } else {
+        } 
             cb(new Error('Only .mp3, .wav, and .m4a files are allowed'));
-        }
+        
     }
 });
 
@@ -100,7 +100,7 @@ router.get('/:companyId/connection-messages/config', async (req, res) => {
                 req.params.companyId,
                 {
                     $set: {
-                        'connectionMessages': defaultConfig  // 🔧 FIX: Save to ROOT level!
+                        connectionMessages: defaultConfig  // 🔧 FIX: Save to ROOT level!
                     }
                 },
                 { runValidators: false }
@@ -207,8 +207,8 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
 
         // Update SMS settings
         if (sms) {
-            if (sms.enabled !== undefined) company.connectionMessages.sms.enabled = sms.enabled;
-            if (sms.text) company.connectionMessages.sms.text = sms.text;
+            if (sms.enabled !== undefined) {company.connectionMessages.sms.enabled = sms.enabled;}
+            if (sms.text) {company.connectionMessages.sms.text = sms.text;}
             if (sms.businessHours) {
                 if (sms.businessHours.enabled !== undefined) {
                     company.connectionMessages.sms.businessHours.enabled = sms.businessHours.enabled;
@@ -224,8 +224,8 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
 
         // Update Web Chat settings (future)
         if (webChat) {
-            if (webChat.enabled !== undefined) company.connectionMessages.webChat.enabled = webChat.enabled;
-            if (webChat.text) company.connectionMessages.webChat.text = webChat.text;
+            if (webChat.enabled !== undefined) {company.connectionMessages.webChat.enabled = webChat.enabled;}
+            if (webChat.text) {company.connectionMessages.webChat.text = webChat.text;}
         }
 
         company.connectionMessages.lastUpdated = new Date();
@@ -249,7 +249,7 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
             req.params.companyId,
             {
                 $set: {
-                    'connectionMessages': plainConnectionMessages  // 🔧 FIX: Save to ROOT level, not aiAgentLogic!
+                    connectionMessages: plainConnectionMessages  // 🔧 FIX: Save to ROOT level, not aiAgentLogic!
                 }
             },
             { new: true, runValidators: false } // Skip full validation

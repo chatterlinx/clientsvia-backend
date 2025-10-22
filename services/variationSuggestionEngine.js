@@ -25,29 +25,29 @@ class VariationSuggestionEngine {
   constructor() {
     // Common misspelling patterns
     this.misspellingPatterns = {
-      'hours': ['hrs', 'ours', 'houres', 'housr'],
-      'location': ['lokation', 'locaton', 'loaction'],
-      'pricing': ['pricng', 'prcing', 'prcing'],
-      'services': ['servics', 'servises', 'srvices'],
-      'available': ['availble', 'availabe', 'avaliable'],
-      'appointment': ['apointment', 'appointmnt', 'appt'],
-      'emergency': ['emergancy', 'emrgency', 'emergeny']
+      hours: ['hrs', 'ours', 'houres', 'housr'],
+      location: ['lokation', 'locaton', 'loaction'],
+      pricing: ['pricng', 'prcing', 'prcing'],
+      services: ['servics', 'servises', 'srvices'],
+      available: ['availble', 'availabe', 'avaliable'],
+      appointment: ['apointment', 'appointmnt', 'appt'],
+      emergency: ['emergancy', 'emrgency', 'emergeny']
     };
 
     // Common abbreviations
     this.abbreviations = {
-      'hrs': 'hours',
-      'appt': 'appointment',
-      'asap': 'as soon as possible',
-      'info': 'information',
-      'loc': 'location',
-      'addr': 'address',
-      'tel': 'telephone',
-      'ph': 'phone',
-      'approx': 'approximately',
-      'est': 'estimate',
-      'min': 'minimum',
-      'max': 'maximum'
+      hrs: 'hours',
+      appt: 'appointment',
+      asap: 'as soon as possible',
+      info: 'information',
+      loc: 'location',
+      addr: 'address',
+      tel: 'telephone',
+      ph: 'phone',
+      approx: 'approximately',
+      est: 'estimate',
+      min: 'minimum',
+      max: 'maximum'
     };
   }
 
@@ -432,7 +432,7 @@ class VariationSuggestionEngine {
    */
   calculateOverallCoverage(analysis) {
     const scores = Object.values(analysis).map(a => a.coverage);
-    if (scores.length === 0) return 0;
+    if (scores.length === 0) {return 0;}
     return scores.reduce((sum, score) => sum + score, 0) / scores.length;
   }
 }

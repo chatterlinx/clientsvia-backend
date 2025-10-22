@@ -17,7 +17,7 @@ async function listAll() {
         console.log(`\n${i + 1}. ${c.companyName || 'Unnamed'}`);
         console.log(`   ID: ${c._id}`);
         console.log(`   Status: ${c.status || 'unknown'}`);
-        console.log(`   Has callFiltering: ${!!c.callFiltering}`);
+        console.log(`   Has callFiltering: ${Boolean(c.callFiltering)}`);
         if (c.callFiltering?.settings) {
             console.log(`   callFiltering.settings:`, Object.keys(c.callFiltering.settings));
         }
@@ -33,7 +33,7 @@ async function listAll() {
         console.log(`\n${i + 1}. ${c.companyName || 'Unnamed'}`);
         console.log(`   ID: ${c._id}`);
         console.log(`   Status: ${c.status || 'unknown'}`);
-        console.log(`   Has callFiltering: ${!!c.callFiltering}`);
+        console.log(`   Has callFiltering: ${Boolean(c.callFiltering)}`);
         if (c.callFiltering?.settings) {
             console.log(`   callFiltering.settings:`, Object.keys(c.callFiltering.settings));
         }
@@ -49,7 +49,7 @@ async function listAll() {
         console.log(`\n${i + 1}. ${c.companyName || 'Unnamed'}`);
         console.log(`   ID: ${c._id}`);
         console.log(`   Status: ${c.status || 'unknown'}`);
-        console.log(`   Has callFiltering: ${!!c.callFiltering}`);
+        console.log(`   Has callFiltering: ${Boolean(c.callFiltering)}`);
         if (c.callFiltering?.settings) {
             console.log(`   callFiltering.settings:`, Object.keys(c.callFiltering.settings));
         }

@@ -205,11 +205,11 @@ async function verifyAndFixIndexes() {
     console.log(`${colors.green}✅ All missing indexes have been created${colors.reset}`);
     console.log(`${colors.green}🎉 Database is now production-ready${colors.reset}\n`);
     return true;
-  } else {
+  } 
     console.log(`${colors.red}⚠️  Some indexes could not be created${colors.reset}`);
     console.log(`${colors.yellow}Please review the errors above and create indexes manually${colors.reset}\n`);
     return false;
-  }
+  
 }
 
 /**

@@ -19,7 +19,7 @@ async function regenerateKeywords(companyId) {
         
         // Find all active Q&A entries for the company
         const qnas = await CompanyKnowledgeQnA.find({ 
-            companyId: companyId, 
+            companyId, 
             status: 'active' 
         });
         

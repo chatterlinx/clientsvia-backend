@@ -576,7 +576,7 @@ class PriorityDrivenKnowledgeRouter {
                 logger.info(`🤖 AI Agent Role loaded for response`, {
                     routingId: context.routingId,
                     category: bestMatch.metadata.category,
-                    rolePreview: bestMatch.metadata.aiAgentRole.substring(0, 100) + '...'
+                    rolePreview: `${bestMatch.metadata.aiAgentRole.substring(0, 100)  }...`
                 });
             }
 
@@ -627,7 +627,7 @@ class PriorityDrivenKnowledgeRouter {
                 if (redisClient && redisClient.isReady) {
                     const cacheKey = `company:${companyId}:knowledge`;
                     const cached = await redisClient.get(cacheKey);
-                    if (cached) knowledge = JSON.parse(cached);
+                    if (cached) {knowledge = JSON.parse(cached);}
                 }
             } catch (error) {
                 logger.warn(`⚠️ V2 Cache check failed for trade knowledge`, { error: error.message });
@@ -687,7 +687,7 @@ class PriorityDrivenKnowledgeRouter {
             // Add performance metrics
             const responseTime = Date.now() - startTime;
             bestMatch.metadata.responseTime = responseTime;
-            bestMatch.metadata.cached = knowledge.cachedAt ? true : false;
+            bestMatch.metadata.cached = Boolean(knowledge.cachedAt);
             
             console.log(`🎯 Trade Q&A query completed: ${responseTime}ms (confidence: ${bestMatch.confidence})`);
             return bestMatch;
@@ -764,7 +764,7 @@ class PriorityDrivenKnowledgeRouter {
             
             for (const category of categories) {
                 const categoryConfig = fallbackConfig[category];
-                if (!categoryConfig || !categoryConfig.keywords) continue;
+                if (!categoryConfig || !categoryConfig.keywords) {continue;}
 
                 const confidence = this.calculateKeywordMatch(query, categoryConfig.keywords);
                 
@@ -858,7 +858,7 @@ class PriorityDrivenKnowledgeRouter {
     }
 
     calculateKeywordMatch(query, keywords) {
-        if (!keywords || keywords.length === 0) return 0;
+        if (!keywords || keywords.length === 0) {return 0;}
         
         const queryWords = query.toLowerCase().split(/\s+/);
         let matches = 0;
@@ -874,7 +874,7 @@ class PriorityDrivenKnowledgeRouter {
     }
 
     getMatchedKeywords(query, keywords = []) {
-        if (!keywords || keywords.length === 0) return [];
+        if (!keywords || keywords.length === 0) {return [];}
         
         const queryLower = query.toLowerCase();
         return keywords.filter(keyword => 
@@ -893,7 +893,7 @@ class PriorityDrivenKnowledgeRouter {
                 if (redisClient && redisClient.isReady) {
                     const cacheKey = `company:${companyId}:priorities`;
                     const cached = await redisClient.get(cacheKey);
-                    if (cached) return JSON.parse(cached);
+                    if (cached) {return JSON.parse(cached);}
                 }
             } catch (error) {
                 logger.warn(`⚠️ V2 Cache check failed for priorities`, { error: error.message });
@@ -1216,7 +1216,7 @@ class PriorityDrivenKnowledgeRouter {
                 if (redisClient && redisClient.isReady) {
                     const cacheKey = `company:${companyId}:personality`;
                     const cached = await redisClient.get(cacheKey);
-                    if (cached) personalityConfig = JSON.parse(cached);
+                    if (cached) {personalityConfig = JSON.parse(cached);}
                 }
             } catch (error) {
                 logger.warn(`⚠️ V2 Cache check failed for personality`, { error: error.message });

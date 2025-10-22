@@ -12,7 +12,7 @@ const stringSimilarity = require('string-similarity');
  * @returns {String|null} Matching answer or null
  */
 function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.4) {
-  if (!entries || !Array.isArray(entries) || !userQuestion) return null;
+  if (!entries || !Array.isArray(entries) || !userQuestion) {return null;}
   
   const qNorm = userQuestion.trim().toLowerCase();
   const userWords = qNorm.split(/\s+/).filter(w => w.length > 2); // Words longer than 2 chars
@@ -103,13 +103,13 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.4) {
         
         if (isPricingQuestion) {
           // Give higher scores for more specific matches
-          if (qNorm.includes('service call') && entry.question.includes('service call')) contextScore += 0.3;
-          if ((qNorm.includes('serviced') || qNorm.includes('tune-up') || qNorm.includes('maintenance')) && entry.question.includes('ac service')) contextScore += 0.3;
-          if ((qNorm.includes('repair') || qNorm.includes('fix')) && entry.question.includes('repair')) contextScore += 0.3;
+          if (qNorm.includes('service call') && entry.question.includes('service call')) {contextScore += 0.3;}
+          if ((qNorm.includes('serviced') || qNorm.includes('tune-up') || qNorm.includes('maintenance')) && entry.question.includes('ac service')) {contextScore += 0.3;}
+          if ((qNorm.includes('repair') || qNorm.includes('fix')) && entry.question.includes('repair')) {contextScore += 0.3;}
           
           // Penalize less specific matches
-          if (qNorm.includes('serviced') && entry.question.includes('service call')) contextScore -= 0.2;
-          if (qNorm.includes('repair') && entry.question.includes('service call')) contextScore -= 0.2;
+          if (qNorm.includes('serviced') && entry.question.includes('service call')) {contextScore -= 0.2;}
+          if (qNorm.includes('repair') && entry.question.includes('service call')) {contextScore -= 0.2;}
         }
         
         if (contextScore > entryScore) {
@@ -122,7 +122,7 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.4) {
       const variantWords = variant.split(/\s+/).filter(w => w.length > 2);
       const requestWords = (hasNegativeContext ? actualRequest : qNorm).split(/\s+/).filter(w => w.length > 2);
       
-      if (requestWords.length === 0 || variantWords.length === 0) continue;
+      if (requestWords.length === 0 || variantWords.length === 0) {continue;}
       
       // For negative context, also check that we're not matching rejected terms
       if (hasNegativeContext) {
@@ -137,24 +137,24 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.4) {
       // Find words that match exactly or with high similarity
       const matchingWords = requestWords.filter(userWord => 
         variantWords.some(variantWord => {
-          if (userWord === variantWord) return true;
+          if (userWord === variantWord) {return true;}
           
           // Handle common word variations (leaking/leakage, heating/heat, etc.)
           const userRoot = userWord.replace(/(ing|age|ed|er|ly)$/i, '');
           const variantRoot = variantWord.replace(/(ing|age|ed|er|ly)$/i, '');
-          if (userRoot.length > 3 && variantRoot.length > 3 && userRoot === variantRoot) return true;
+          if (userRoot.length > 3 && variantRoot.length > 3 && userRoot === variantRoot) {return true;}
           
           // Special handling for thermostat-related keywords
           const thermostatKeywords = ['thermostat', 'blank', 'display', 'screen', 'dead', 'frozen', 'reset'];
-          if (thermostatKeywords.includes(userWord) && thermostatKeywords.includes(variantWord)) return true;
+          if (thermostatKeywords.includes(userWord) && thermostatKeywords.includes(variantWord)) {return true;}
           
           // Special handling for water-related keywords
           const waterKeywords = ['water', 'leak', 'leaking', 'leakage', 'drip', 'dripping', 'wet', 'moisture'];
-          if (waterKeywords.includes(userWord) && waterKeywords.includes(variantWord)) return true;
+          if (waterKeywords.includes(userWord) && waterKeywords.includes(variantWord)) {return true;}
           
           // Special handling for HVAC-related keywords  
           const hvacKeywords = ['ac', 'air', 'conditioning', 'heat', 'heating', 'cool', 'cooling', 'repair', 'broken', 'fix'];
-          if (hvacKeywords.includes(userWord) && hvacKeywords.includes(variantWord)) return true;
+          if (hvacKeywords.includes(userWord) && hvacKeywords.includes(variantWord)) {return true;}
           
           // Special handling for pricing-related keywords to improve specificity
           const pricingKeywords = ['cost', 'price', 'charge', 'fee', 'much', 'money', 'bill', 'estimate', 'quote'];
@@ -163,11 +163,11 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.4) {
           const repairKeywords = ['repair', 'fix', 'fixing', 'broken', 'replace', 'replacement'];
           
           // Enhanced pricing context matching
-          if (pricingKeywords.includes(userWord) && pricingKeywords.includes(variantWord)) return true;
+          if (pricingKeywords.includes(userWord) && pricingKeywords.includes(variantWord)) {return true;}
           
           // For longer words, allow substring matching
           if (userWord.length > 4 && variantWord.length > 4) {
-            if (userWord.includes(variantWord) || variantWord.includes(userWord)) return true;
+            if (userWord.includes(variantWord) || variantWord.includes(userWord)) {return true;}
           }
           
           // High word-level similarity for near-matches (lowered threshold for better matching)
@@ -198,13 +198,13 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.4) {
         const baseScore = matchingWords.length / requestWords.length;
         let contextMultiplier = 1;
         
-        if (entry.question.includes('service call') && hasServiceCallTerms) contextMultiplier += 0.5;
-        if (entry.question.includes('ac service') && hasMaintenanceTerms) contextMultiplier += 0.5;
-        if (entry.question.includes('repair') && hasRepairTerms) contextMultiplier += 0.5;
+        if (entry.question.includes('service call') && hasServiceCallTerms) {contextMultiplier += 0.5;}
+        if (entry.question.includes('ac service') && hasMaintenanceTerms) {contextMultiplier += 0.5;}
+        if (entry.question.includes('repair') && hasRepairTerms) {contextMultiplier += 0.5;}
         
         // Penalize wrong context
-        if (entry.question.includes('service call') && (hasMaintenanceTerms || hasRepairTerms)) contextMultiplier -= 0.3;
-        if (entry.question.includes('ac service') && hasServiceCallTerms && !hasMaintenanceTerms) contextMultiplier -= 0.3;
+        if (entry.question.includes('service call') && (hasMaintenanceTerms || hasRepairTerms)) {contextMultiplier -= 0.3;}
+        if (entry.question.includes('ac service') && hasServiceCallTerms && !hasMaintenanceTerms) {contextMultiplier -= 0.3;}
         
         wordScore = baseScore * contextMultiplier;
       } else {

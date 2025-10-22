@@ -69,8 +69,8 @@ router.post('/:companyId/v2-tts/generate', async (req, res) => {
         
         const options = {
             text: text.trim(),
-            voiceId: voiceId,
-            company: company,
+            voiceId,
+            company,
             model_id: model_id || 'eleven_turbo_v2_5',
             voice_settings: voiceSettings,
             output_format: 'mp3_44100_128'
@@ -78,7 +78,7 @@ router.post('/:companyId/v2-tts/generate', async (req, res) => {
         
         console.log(`🎤 [TTS] Generating audio with settings:`, {
             model: options.model_id,
-            voiceSettings: voiceSettings,
+            voiceSettings,
             textLength: text.length
         });
         

@@ -12,7 +12,7 @@ const twilio = require('twilio');
 
 describe('Twilio Integration Tests', () => {
   let testCompanyId;
-  let testPhoneNumber = '+15555551234';
+  const testPhoneNumber = '+15555551234';
   let twilioSignature;
 
   beforeAll(async () => {

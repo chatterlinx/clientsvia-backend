@@ -322,10 +322,10 @@ aiAgentCallLogSchema.pre('save', function(next) {
     
     // Auto-detect time of day
     const hour = this.createdAt.getHours();
-    if (hour >= 6 && hour < 12) this.timeOfDay = 'morning';
-    else if (hour >= 12 && hour < 17) this.timeOfDay = 'afternoon';
-    else if (hour >= 17 && hour < 21) this.timeOfDay = 'evening';
-    else this.timeOfDay = 'night';
+    if (hour >= 6 && hour < 12) {this.timeOfDay = 'morning';}
+    else if (hour >= 12 && hour < 17) {this.timeOfDay = 'afternoon';}
+    else if (hour >= 17 && hour < 21) {this.timeOfDay = 'evening';}
+    else {this.timeOfDay = 'night';}
     
     // Auto-detect day of week
     const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];

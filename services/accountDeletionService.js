@@ -157,8 +157,8 @@ class AccountDeletionService {
 
             // Calculate total data points and risk level
             const totalDataPoints = Object.values(analysis.dataScope).reduce((sum, item) => {
-                if (typeof item === 'number') return sum + item;
-                if (typeof item === 'object' && item.total) return sum + item.total;
+                if (typeof item === 'number') {return sum + item;}
+                if (typeof item === 'object' && item.total) {return sum + item.total;}
                 return sum;
             }, 0);
 
@@ -548,9 +548,9 @@ class AccountDeletionService {
     }
 
     assessRiskLevel(dataPoints, company) {
-        if (dataPoints > 10000) return 'high';
-        if (dataPoints > 1000) return 'medium';
-        if (company.aiAgentLogic && Object.keys(company.aiAgentLogic).length > 0) return 'medium';
+        if (dataPoints > 10000) {return 'high';}
+        if (dataPoints > 1000) {return 'medium';}
+        if (company.aiAgentLogic && Object.keys(company.aiAgentLogic).length > 0) {return 'medium';}
         return 'low';
     }
 

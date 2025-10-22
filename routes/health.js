@@ -103,7 +103,7 @@ router.get('/health', async (req, res) => {
             health.systems.aiPerformance = 'ok';
             health.details.aiPerformance = {
                 status: 'ready',
-                hasData: !!sampleMetric,
+                hasData: Boolean(sampleMetric),
                 message: sampleMetric ? 'Model and data accessible' : 'Model ready, no data yet'
             };
             console.log('✅ [HEALTH CHECK] AI Performance: Ready');
@@ -131,7 +131,7 @@ router.get('/health', async (req, res) => {
             health.systems.callArchives = 'ok';
             health.details.callArchives = {
                 status: 'ready',
-                hasData: !!sampleCall,
+                hasData: Boolean(sampleCall),
                 textIndexExists: hasTextIndex,
                 totalIndexes: Object.keys(indexes).length,
                 message: hasTextIndex ? 'Search ready' : 'Warning: Text index missing'
@@ -158,14 +158,14 @@ router.get('/health', async (req, res) => {
             const BlockedCallLog = require('../models/BlockedCallLog');
             
             // Check if spam filter schema exists in companies
-            const sampleCompany = await v2Company.findOne({ 'callFiltering': { $exists: true } }).limit(1);
+            const sampleCompany = await v2Company.findOne({ callFiltering: { $exists: true } }).limit(1);
             const sampleBlockedCall = await BlockedCallLog.findOne().limit(1);
             
             health.systems.spamFilter = 'ok';
             health.details.spamFilter = {
                 status: 'ready',
-                companiesWithSpamFilter: !!sampleCompany,
-                hasBlockedCallLogs: !!sampleBlockedCall,
+                companiesWithSpamFilter: Boolean(sampleCompany),
+                hasBlockedCallLogs: Boolean(sampleBlockedCall),
                 message: 'Spam filter models ready'
             };
             console.log('✅ [HEALTH CHECK] Spam Filter: Ready');

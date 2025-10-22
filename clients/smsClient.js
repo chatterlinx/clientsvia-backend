@@ -239,7 +239,7 @@ class SMSClient {
       throw new Error('Mock network error');
     }
 
-    const mockId = 'mock_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    const mockId = `mock_${  Date.now()  }_${  Math.random().toString(36).substr(2, 9)}`;
 
     console.log('[SMS] 📱 MOCK MESSAGE:');
     console.log(`   To: ${messageData.to}`);
@@ -259,7 +259,7 @@ class SMSClient {
    * Normalize phone number to E.164 format
    */
   normalizePhoneNumber(phone) {
-    if (!phone) return null;
+    if (!phone) {return null;}
 
     // Remove all non-digit characters
     const digits = phone.replace(/\D/g, '');
@@ -338,7 +338,7 @@ class SMSClient {
    * Check if SMS client is properly configured
    */
   isConfigured() {
-    return !!(this.client || this.testMode);
+    return Boolean(this.client || this.testMode);
   }
 
   /**
@@ -349,7 +349,7 @@ class SMSClient {
       configured: this.isConfigured(),
       provider: this.client ? 'twilio' : 'mock',
       testMode: this.testMode,
-      hasCredentials: !!(this.config.accountSid && this.config.authToken),
+      hasCredentials: Boolean(this.config.accountSid && this.config.authToken),
       fromNumber: this.config.fromNumber || 'Not configured'
     };
   }

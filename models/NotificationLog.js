@@ -227,8 +227,8 @@ notificationLogSchema.pre('save', function(next) {
     
     this.deliveryAttempts.forEach(attempt => {
         attempt.sms.forEach(sms => {
-            if (sms.status === 'delivered') successful++;
-            if (sms.status === 'failed' || sms.status === 'undelivered') failed++;
+            if (sms.status === 'delivered') {successful++;}
+            if (sms.status === 'failed' || sms.status === 'undelivered') {failed++;}
         });
     });
     
@@ -300,7 +300,7 @@ notificationLogSchema.methods.acknowledge = function(acknowledgedBy, via = 'WEB_
     this.acknowledgment = {
         isAcknowledged: true,
         acknowledgedAt: new Date(),
-        acknowledgedBy: acknowledgedBy,
+        acknowledgedBy,
         acknowledgedVia: via,
         acknowledgedMessage: message
     };
@@ -317,7 +317,7 @@ notificationLogSchema.methods.resolve = function(resolvedBy, action, notes = '')
     this.resolution = {
         isResolved: true,
         resolvedAt: new Date(),
-        resolvedBy: resolvedBy,
+        resolvedBy,
         resolutionAction: action,
         resolutionNotes: notes
     };

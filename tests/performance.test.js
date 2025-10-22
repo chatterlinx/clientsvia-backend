@@ -358,14 +358,14 @@ describe('Performance Tests - Sub-25ms Target', () => {
     it('should generate performance report', async () => {
       const metrics = router.getPerformanceMetrics();
 
-      console.log('\n' + '='.repeat(80));
+      console.log(`\n${  '='.repeat(80)}`);
       console.log('PERFORMANCE TEST SUMMARY');
       console.log('='.repeat(80));
       console.log(`Total queries executed: ${metrics.totalQueries}`);
       console.log(`Average response time: ${metrics.avgResponseTime.toFixed(2)}ms`);
       console.log(`Success rate: ${(metrics.successRate * 100).toFixed(2)}%`);
       console.log(`Cache size: ${metrics.cacheSize} entries`);
-      console.log('='.repeat(80) + '\n');
+      console.log(`${'='.repeat(80)  }\n`);
 
       expect(metrics.avgResponseTime).toBeLessThan(50);
       expect(metrics.successRate).toBeGreaterThan(0.8);
