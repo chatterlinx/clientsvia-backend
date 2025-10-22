@@ -651,6 +651,7 @@ Paste this report to your AI assistant for instant root cause analysis!
             await this.nc.apiPost('/api/admin/notifications/resolve', {
                 alertId: alertId,
                 resolvedBy: 'Admin (Web UI)',
+                action: 'manual_resolve',
                 notes: 'Manually resolved from Alert Log'
             });
             
@@ -659,6 +660,7 @@ Paste this report to your AI assistant for instant root cause analysis!
             
         } catch (error) {
             this.nc.showError('Failed to resolve alert');
+            console.error('❌ [LOG] Resolve failed:', error);
         }
     }
 }
