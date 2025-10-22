@@ -26,7 +26,7 @@ const notificationLogSchema = new mongoose.Schema({
     // ========================================================================
     alertId: { 
         type: String, 
-        required: true, 
+        required: false,  // Auto-generated in pre-save hook
         unique: true,
         index: true
     }, // 'ALT-20251020-001' (auto-generated)
