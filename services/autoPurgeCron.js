@@ -14,6 +14,7 @@ const Company = require('../models/v2Company');
 const DataCenterPurgeService = require('./DataCenterPurgeService');
 const AlertEscalationService = require('./AlertEscalationService');
 const PlatformHealthCheckService = require('./PlatformHealthCheckService');
+const NotificationPurgeService = require('./NotificationPurgeService');
 
 // System user for automated operations
 const SYSTEM_USER = {
@@ -137,6 +138,19 @@ function initializeAutoPurgeCron() {
         });
     });
     logger.debug('[HEALTH CHECK] ✅ Cron job initialized (runs every 6 hours)');
+    
+    // ========================================================================
+    // CRON JOB 4: NOTIFICATION LOG PURGE (Daily at 03:00 UTC)
+    // ========================================================================
+    cron.schedule('0 3 * * *', () => {
+        logger.info('[NOTIFICATION PURGE] Cron triggered at', new Date().toISOString());
+        NotificationPurgeService.runPurge().catch(error => {
+            logger.error('[NOTIFICATION PURGE] Unhandled error in cron job:', error);
+        });
+    }, {
+        timezone: 'UTC'
+    });
+    logger.debug('[NOTIFICATION PURGE] ✅ Cron job initialized (runs daily at 03:00 UTC)');
 }
 
 module.exports = {
