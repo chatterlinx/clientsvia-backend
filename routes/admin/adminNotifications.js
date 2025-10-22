@@ -768,7 +768,8 @@ router.get('/admin/notifications/settings', authenticateJWT, requireRole('admin'
                     CRITICAL: [30, 30, 30, 15, 15],
                     WARNING: [60, 60, 60],
                     INFO: [120]
-                }
+                },
+                notificationPolicy: settings.notificationCenter?.notificationPolicy || AdminSettings.getDefaultNotificationPolicy()
             }
         });
         
@@ -917,6 +918,76 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
             eventType: 'failure',
             meta: { route: `${req.method  } ${  req.originalUrl}` }
         }); } catch (_) {}
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============================================================================
+// NOTIFICATION POLICY ROUTES
+// ============================================================================
+
+// Get default notification policy
+router.get('/admin/notifications/policy/defaults', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const AdminSettings = require('../../models/AdminSettings');
+        const defaults = AdminSettings.getDefaultNotificationPolicy();
+        
+        res.json({
+            success: true,
+            data: defaults
+        });
+        
+    } catch (error) {
+        logger.error('❌ [GET POLICY DEFAULTS] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Save notification policy
+router.put('/admin/notifications/policy', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
+    try {
+        const { notificationPolicy } = req.body;
+        
+        if (!notificationPolicy) {
+            return res.status(400).json({
+                success: false,
+                error: 'Notification policy data required'
+            });
+        }
+        
+        logger.info('💾 [SAVE NOTIFICATION POLICY] Updating policy...');
+        
+        const AdminSettings = require('../../models/AdminSettings');
+        const settings = await AdminSettings.findOne({}) || new AdminSettings({});
+        
+        // Update notification policy
+        if (!settings.notificationCenter) {
+            settings.notificationCenter = {};
+        }
+        settings.notificationCenter.notificationPolicy = notificationPolicy;
+        settings.lastUpdated = new Date();
+        settings.updatedBy = req.user?.username || 'Admin';
+        
+        await settings.save();
+        
+        logger.info('✅ [SAVE NOTIFICATION POLICY] Policy saved successfully');
+        
+        await respondWithIdempotency(req, res, async () => {
+            return {
+                success: true,
+                message: 'Notification policy updated successfully',
+                data: notificationPolicy
+            };
+        });
+        
+    } catch (error) {
+        logger.error('❌ [SAVE NOTIFICATION POLICY] Error:', error);
         res.status(500).json({
             success: false,
             error: error.message

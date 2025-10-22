@@ -17,7 +17,8 @@ class SettingsManager {
             this.loadTwilioCredentials(),
             this.loadTestCallConfig(),
             this.loadAdminContacts(),
-            this.loadEscalationSettings()
+            this.loadEscalationSettings(),
+            this.loadNotificationPolicy()
         ]);
         
         this.attachEventHandlers();
@@ -460,6 +461,183 @@ class SettingsManager {
     }
     
     // ========================================================================
+    // NOTIFICATION POLICY (Smart Alert Management)
+    // ========================================================================
+    
+    async loadNotificationPolicy() {
+        try {
+            const response = await this.nc.apiGet('/api/admin/notifications/settings');
+            
+            if (response.success && response.data && response.data.notificationPolicy) {
+                const policy = response.data.notificationPolicy;
+                
+                // Severity Rules
+                if (policy.severityRules) {
+                    // CRITICAL
+                    document.getElementById('policy-critical-sms').checked = policy.severityRules.CRITICAL?.sendSMS ?? true;
+                    document.getElementById('policy-critical-email').checked = policy.severityRules.CRITICAL?.sendEmail ?? true;
+                    document.getElementById('policy-critical-logonly').checked = policy.severityRules.CRITICAL?.logOnly ?? false;
+                    
+                    // WARNING
+                    document.getElementById('policy-warning-sms').checked = policy.severityRules.WARNING?.sendSMS ?? false;
+                    document.getElementById('policy-warning-email').checked = policy.severityRules.WARNING?.sendEmail ?? true;
+                    document.getElementById('policy-warning-logonly').checked = policy.severityRules.WARNING?.logOnly ?? false;
+                    
+                    // INFO
+                    document.getElementById('policy-info-sms').checked = policy.severityRules.INFO?.sendSMS ?? false;
+                    document.getElementById('policy-info-email').checked = policy.severityRules.INFO?.sendEmail ?? false;
+                    document.getElementById('policy-info-logonly').checked = policy.severityRules.INFO?.logOnly ?? true;
+                }
+                
+                // Daily Digest
+                if (policy.dailyDigest) {
+                    document.getElementById('policy-digest-enabled').checked = policy.dailyDigest.enabled ?? true;
+                    document.getElementById('policy-digest-time').value = policy.dailyDigest.time || '08:00';
+                    document.getElementById('policy-digest-timezone').value = policy.dailyDigest.timezone || 'America/New_York';
+                }
+                
+                // Quiet Hours
+                if (policy.quietHours) {
+                    document.getElementById('policy-quiet-enabled').checked = policy.quietHours.enabled ?? true;
+                    document.getElementById('policy-quiet-start').value = policy.quietHours.startTime || '22:00';
+                    document.getElementById('policy-quiet-end').value = policy.quietHours.endTime || '07:00';
+                    document.getElementById('policy-quiet-timezone').value = policy.quietHours.timezone || 'America/New_York';
+                    document.getElementById('policy-quiet-allow-critical').checked = policy.quietHours.allowCritical ?? true;
+                    document.getElementById('policy-quiet-defer-warnings').checked = policy.quietHours.deferWarnings ?? true;
+                }
+                
+                // Smart Grouping
+                if (policy.smartGrouping) {
+                    document.getElementById('policy-grouping-enabled').checked = policy.smartGrouping.enabled ?? true;
+                    document.getElementById('policy-grouping-threshold').value = policy.smartGrouping.threshold || 3;
+                    document.getElementById('policy-grouping-window').value = policy.smartGrouping.windowMinutes || 15;
+                }
+                
+                console.log('✅ [SETTINGS] Notification policy loaded');
+            } else {
+                console.log('ℹ️ [SETTINGS] No notification policy configured, using defaults');
+            }
+            
+        } catch (error) {
+            console.error('❌ [SETTINGS] Failed to load notification policy:', error);
+        }
+    }
+    
+    async saveNotificationPolicy() {
+        try {
+            this.nc.showToast('Saving notification policy...', 'info');
+            
+            const policy = {
+                severityRules: {
+                    CRITICAL: {
+                        sendSMS: document.getElementById('policy-critical-sms').checked,
+                        sendEmail: document.getElementById('policy-critical-email').checked,
+                        logOnly: document.getElementById('policy-critical-logonly').checked
+                    },
+                    WARNING: {
+                        sendSMS: document.getElementById('policy-warning-sms').checked,
+                        sendEmail: document.getElementById('policy-warning-email').checked,
+                        logOnly: document.getElementById('policy-warning-logonly').checked
+                    },
+                    INFO: {
+                        sendSMS: document.getElementById('policy-info-sms').checked,
+                        sendEmail: document.getElementById('policy-info-email').checked,
+                        logOnly: document.getElementById('policy-info-logonly').checked
+                    }
+                },
+                dailyDigest: {
+                    enabled: document.getElementById('policy-digest-enabled').checked,
+                    time: document.getElementById('policy-digest-time').value,
+                    timezone: document.getElementById('policy-digest-timezone').value
+                },
+                quietHours: {
+                    enabled: document.getElementById('policy-quiet-enabled').checked,
+                    startTime: document.getElementById('policy-quiet-start').value,
+                    endTime: document.getElementById('policy-quiet-end').value,
+                    timezone: document.getElementById('policy-quiet-timezone').value,
+                    allowCritical: document.getElementById('policy-quiet-allow-critical').checked,
+                    deferWarnings: document.getElementById('policy-quiet-defer-warnings').checked
+                },
+                smartGrouping: {
+                    enabled: document.getElementById('policy-grouping-enabled').checked,
+                    threshold: parseInt(document.getElementById('policy-grouping-threshold').value),
+                    windowMinutes: parseInt(document.getElementById('policy-grouping-window').value)
+                }
+            };
+            
+            console.log('💾 [SETTINGS] Saving policy:', policy);
+            
+            const data = await this.nc.apiPut('/api/admin/notifications/policy', { notificationPolicy: policy });
+            
+            if (data.success) {
+                this.nc.showSuccess('✅ Notification policy saved successfully!');
+            } else {
+                this.nc.showError(`Failed to save policy: ${data.error || 'Unknown error'}`);
+            }
+            
+        } catch (error) {
+            console.error('❌ [SETTINGS] Failed to save notification policy:', error);
+            this.nc.showError(`Error: ${error.message}`);
+        }
+    }
+    
+    async resetNotificationPolicy() {
+        if (!confirm('Reset notification policy to recommended defaults?\n\nThis will:\n- CRITICAL: SMS + Email\n- WARNING: Email only\n- INFO: Log only\n- Daily digest at 8 AM ET\n- Quiet hours 10 PM - 7 AM ET\n- Smart grouping enabled')) {
+            return;
+        }
+        
+        try {
+            this.nc.showToast('Resetting to defaults...', 'info');
+            
+            const response = await this.nc.apiGet('/api/admin/notifications/policy/defaults');
+            
+            if (response.success && response.data) {
+                const defaults = response.data;
+                
+                // Apply defaults to form
+                // CRITICAL
+                document.getElementById('policy-critical-sms').checked = defaults.severityRules.CRITICAL.sendSMS;
+                document.getElementById('policy-critical-email').checked = defaults.severityRules.CRITICAL.sendEmail;
+                document.getElementById('policy-critical-logonly').checked = defaults.severityRules.CRITICAL.logOnly;
+                
+                // WARNING
+                document.getElementById('policy-warning-sms').checked = defaults.severityRules.WARNING.sendSMS;
+                document.getElementById('policy-warning-email').checked = defaults.severityRules.WARNING.sendEmail;
+                document.getElementById('policy-warning-logonly').checked = defaults.severityRules.WARNING.logOnly;
+                
+                // INFO
+                document.getElementById('policy-info-sms').checked = defaults.severityRules.INFO.sendSMS;
+                document.getElementById('policy-info-email').checked = defaults.severityRules.INFO.sendEmail;
+                document.getElementById('policy-info-logonly').checked = defaults.severityRules.INFO.logOnly;
+                
+                // Daily Digest
+                document.getElementById('policy-digest-enabled').checked = defaults.dailyDigest.enabled;
+                document.getElementById('policy-digest-time').value = defaults.dailyDigest.time;
+                document.getElementById('policy-digest-timezone').value = defaults.dailyDigest.timezone;
+                
+                // Quiet Hours
+                document.getElementById('policy-quiet-enabled').checked = defaults.quietHours.enabled;
+                document.getElementById('policy-quiet-start').value = defaults.quietHours.startTime;
+                document.getElementById('policy-quiet-end').value = defaults.quietHours.endTime;
+                document.getElementById('policy-quiet-timezone').value = defaults.quietHours.timezone;
+                document.getElementById('policy-quiet-allow-critical').checked = defaults.quietHours.allowCritical;
+                document.getElementById('policy-quiet-defer-warnings').checked = defaults.quietHours.deferWarnings;
+                
+                // Smart Grouping
+                document.getElementById('policy-grouping-enabled').checked = defaults.smartGrouping.enabled;
+                document.getElementById('policy-grouping-threshold').value = defaults.smartGrouping.threshold;
+                document.getElementById('policy-grouping-window').value = defaults.smartGrouping.windowMinutes;
+                
+                this.nc.showSuccess('✅ Reset to defaults! Click "Save" to apply.');
+            }
+            
+        } catch (error) {
+            console.error('❌ [SETTINGS] Failed to reset policy:', error);
+            this.nc.showError(`Error: ${error.message}`);
+        }
+    }
+    
+    // ========================================================================
     // EVENT HANDLERS
     // ========================================================================
     
@@ -486,6 +664,12 @@ class SettingsManager {
         const escalationBtn = document.getElementById('save-escalation-btn');
         if (escalationBtn) {
             escalationBtn.addEventListener('click', () => this.saveEscalationSettings());
+        }
+        
+        // Notification Policy save button
+        const policyBtn = document.getElementById('save-policy-btn');
+        if (policyBtn) {
+            policyBtn.addEventListener('click', () => this.saveNotificationPolicy());
         }
         
         // Make this instance globally accessible for remove buttons
