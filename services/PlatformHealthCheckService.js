@@ -36,8 +36,11 @@ const { redisClient } = require('../clients');
 const smsClient = require('../clients/smsClient');
 const v2Company = require('../models/v2Company');
 const HealthCheckLog = require('../models/HealthCheckLog');
+const SystemHealthSnapshot = require('../models/SystemHealthSnapshot');
 const AdminNotificationService = require('./AdminNotificationService');
+const errorIntelligence = require('./ErrorIntelligenceService');
 const os = require('os');
+const crypto = require('crypto');
 
 class PlatformHealthCheckService {
     
@@ -141,7 +144,214 @@ class PlatformHealthCheckService {
             await savedLog.compareWithPrevious();
         }
         
+        // ========================================================================
+        // CREATE SYSTEM HEALTH SNAPSHOT (for comparative analysis)
+        // ========================================================================
+        
+        await this.createHealthSnapshot(results);
+        
         return results;
+    }
+    
+    /**
+     * 📸 CREATE HEALTH SNAPSHOT FOR COMPARATIVE ANALYSIS
+     */
+    static async createHealthSnapshot(healthCheckResults) {
+        try {
+            logger.debug('📸 [HEALTH CHECK] Creating system health snapshot...');
+            
+            // Get latest error counts (last 5 minutes)
+            const NotificationLog = require('../models/NotificationLog');
+            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+            
+            const recentErrors = await NotificationLog.aggregate([
+                {
+                    $match: {
+                        createdAt: { $gte: fiveMinutesAgo },
+                        'acknowledgment.isAcknowledged': false
+                    }
+                },
+                {
+                    $group: {
+                        _id: '$severity',
+                        count: { $sum: 1 }
+                    }
+                }
+            ]);
+            
+            const errorCounts = {
+                CRITICAL: recentErrors.find(e => e._id === 'CRITICAL')?.count || 0,
+                WARNING: recentErrors.find(e => e._id === 'WARNING')?.count || 0,
+                INFO: recentErrors.find(e => e._id === 'INFO')?.count || 0
+            };
+            
+            // Get top errors
+            const topErrors = await NotificationLog.aggregate([
+                {
+                    $match: {
+                        createdAt: { $gte: fiveMinutesAgo }
+                    }
+                },
+                {
+                    $group: {
+                        _id: '$code',
+                        count: { $sum: 1 },
+                        lastOccurred: { $max: '$createdAt' }
+                    }
+                },
+                {
+                    $sort: { count: -1 }
+                },
+                {
+                    $limit: 5
+                }
+            ]);
+            
+            // Get company counts
+            const totalCompanies = await v2Company.countDocuments();
+            const liveCompanies = await v2Company.countDocuments({ status: 'LIVE' });
+            
+            // Create configuration checksums
+            const envVarsChecksum = this.hashConfig({
+                MONGODB_URI: process.env.MONGODB_URI ? 'set' : 'unset',
+                REDIS_URL: process.env.REDIS_URL ? 'set' : 'unset',
+                TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID ? 'set' : 'unset',
+                NODE_ENV: process.env.NODE_ENV
+            });
+            
+            // Create snapshot
+            const snapshot = await SystemHealthSnapshot.create({
+                timestamp: new Date(),
+                snapshotType: 'SCHEDULED',
+                overallStatus: healthCheckResults.overallStatus,
+                
+                infrastructure: {
+                    mongodb: {
+                        status: healthCheckResults.checks.find(c => c.name === 'MongoDB Connection')?.status === 'PASS' ? 'UP' : 'DOWN',
+                        latency: healthCheckResults.checks.find(c => c.name === 'MongoDB Connection')?.responseTime,
+                        details: healthCheckResults.checks.find(c => c.name === 'MongoDB Connection')?.message
+                    },
+                    redis: {
+                        status: healthCheckResults.checks.find(c => c.name === 'Redis Cache')?.status === 'PASS' ? 'UP' : 'DOWN',
+                        latency: healthCheckResults.checks.find(c => c.name === 'Redis Cache')?.responseTime,
+                        details: healthCheckResults.checks.find(c => c.name === 'Redis Cache')?.message
+                    },
+                    twilio: {
+                        status: healthCheckResults.checks.find(c => c.name === 'Twilio API')?.status === 'PASS' ? 'UP' : 
+                               healthCheckResults.checks.find(c => c.name === 'Twilio API')?.message.includes('not configured') ? 'UNCONFIGURED' : 'DOWN',
+                        configured: !healthCheckResults.checks.find(c => c.name === 'Twilio API')?.message.includes('not configured'),
+                        details: healthCheckResults.checks.find(c => c.name === 'Twilio API')?.message
+                    },
+                    elevenlabs: {
+                        status: 'UNCONFIGURED',
+                        configured: false,
+                        details: 'Not checked in basic health check'
+                    }
+                },
+                
+                data: {
+                    totalCompanies,
+                    liveCompanies,
+                    totalContacts: 0, // TODO: Add contact count
+                    totalTemplates: 0, // TODO: Add template count
+                    totalQnAEntries: 0 // TODO: Add Q&A count
+                },
+                
+                errors: {
+                    criticalCount: errorCounts.CRITICAL,
+                    warningCount: errorCounts.WARNING,
+                    infoCount: errorCounts.INFO,
+                    totalCount: errorCounts.CRITICAL + errorCounts.WARNING + errorCounts.INFO,
+                    topErrors: topErrors.map(e => ({
+                        code: e._id,
+                        count: e.count,
+                        lastOccurred: e.lastOccurred
+                    }))
+                },
+                
+                performance: {
+                    avgDbQueryTime: healthCheckResults.checks.find(c => c.name === 'MongoDB Connection')?.responseTime || 0,
+                    avgRedisQueryTime: healthCheckResults.checks.find(c => c.name === 'Redis Cache')?.responseTime || 0,
+                    avgApiResponseTime: healthCheckResults.avgResponseTime || 0,
+                    errorRate: (errorCounts.CRITICAL + errorCounts.WARNING) / (healthCheckResults.summary.total || 1) * 100
+                },
+                
+                configChecksums: {
+                    envVarsChecksum
+                },
+                
+                activeAlerts: {
+                    total: await NotificationLog.countDocuments({ 'acknowledgment.isAcknowledged': false }),
+                    critical: errorCounts.CRITICAL,
+                    warning: errorCounts.WARNING,
+                    unacknowledged: await NotificationLog.countDocuments({ 'acknowledgment.isAcknowledged': false })
+                },
+                
+                duration: healthCheckResults.totalDuration,
+                version: require('../package.json').version,
+                nodeVersion: process.version,
+                environment: process.env.NODE_ENV || 'production'
+            });
+            
+            // ================================================================
+            // COMPARATIVE ANALYSIS - Compare with last known good
+            // ================================================================
+            
+            const lastKnownGood = await SystemHealthSnapshot.getLastKnownGood();
+            
+            if (lastKnownGood && snapshot.overallStatus !== 'HEALTHY') {
+                const comparison = SystemHealthSnapshot.compareSnapshots(snapshot, lastKnownGood);
+                
+                if (comparison.isRegression) {
+                    logger.warn(`⚠️ [HEALTH CHECK] ${comparison.regressions.length} regression(s) detected since last known good state`);
+                    
+                    // Send regression alert with comparative context
+                    await AdminNotificationService.sendAlert({
+                        code: 'SYSTEM_REGRESSION_DETECTED',
+                        severity: 'WARNING',
+                        message: `System regression detected: ${comparison.regressions.join(', ')}`,
+                        details: `
+Regressions Detected: ${comparison.regressions.length}
+Time Since Last Good: ${Math.round(comparison.timeSinceLastGood)} minutes ago
+
+Changes Detected:
+${comparison.changes.map(c => `- ${c.component}: ${c.before} → ${c.after}`).join('\n')}
+
+Last Known Good State:
+- Status: ${lastKnownGood.overallStatus}
+- Timestamp: ${lastKnownGood.timestamp}
+- Companies: ${lastKnownGood.data.liveCompanies}
+- Error Rate: ${lastKnownGood.performance.errorRate}%
+
+Current State:
+- Status: ${snapshot.overallStatus}
+- Timestamp: ${snapshot.timestamp}
+- Companies: ${snapshot.data.liveCompanies}
+- Error Rate: ${snapshot.performance.errorRate}%
+
+Suggested Actions:
+1. Review recent deployments or configuration changes
+2. Check if environment variables were modified
+3. Investigate the ${comparison.changes.length} detected changes
+4. Roll back recent changes if necessary
+                        `.trim()
+                    });
+                }
+            }
+            
+            logger.info(`✅ [HEALTH CHECK] Snapshot created successfully`);
+            
+        } catch (error) {
+            logger.error('❌ [HEALTH CHECK] Failed to create snapshot:', error);
+        }
+    }
+    
+    /**
+     * 🔐 HASH CONFIGURATION FOR CHANGE DETECTION
+     */
+    static hashConfig(config) {
+        const json = JSON.stringify(config, Object.keys(config).sort());
+        return crypto.createHash('sha256').update(json).digest('hex').substring(0, 16);
     }
     
     // ========================================================================
