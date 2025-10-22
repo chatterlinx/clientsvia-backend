@@ -1231,14 +1231,10 @@ router.post('/admin/notifications/send-digest', authenticateJWT, requireRole('ad
 // Root cause: module.exports was capturing null value instead of using getter
 // ============================================================================
 
-const RootCauseAnalyzer = require('../../services/RootCauseAnalyzer');
-const ErrorTrendTracker = require('../../services/ErrorTrendTracker');
-const DependencyHealthMonitor = require('../../services/DependencyHealthMonitor');
-
-// Initialize Phase 3 services (all use instance methods)
-const rootCauseAnalyzer = new RootCauseAnalyzer();
-const errorTrendTracker = new ErrorTrendTracker();
-const dependencyHealthMonitor = new DependencyHealthMonitor();
+// Phase 3 services are already instantiated (singleton pattern)
+const rootCauseAnalyzer = require('../../services/RootCauseAnalyzer');
+const errorTrendTracker = require('../../services/ErrorTrendTracker');
+const dependencyHealthMonitor = require('../../services/DependencyHealthMonitor');
 
 // Simple test route to verify Phase 3 routes are registered
 router.get('/notifications/_test', authenticateJWT, requireRole('admin'), (req, res) => {
