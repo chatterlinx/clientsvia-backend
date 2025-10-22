@@ -92,21 +92,18 @@ class AlertEscalationService {
         logger.info(`🔺 [ESCALATION] Escalating alert ${alert.alertId} to level ${nextLevel} (${alert.severity})`);
         
         try {
-            // Get admin contacts
-            const notificationCenter = await v2Company.findOne({
-                'metadata.isNotificationCenter': true
-            });
+            // Get admin contacts from AdminSettings
+            const AdminSettings = require('../models/AdminSettings');
+            const settings = await AdminSettings.findOne({});
             
-            if (!notificationCenter) {
-                throw new Error('Notification Center company not found');
+            if (!settings) {
+                throw new Error('AdminSettings not found - initialize first');
             }
             
-            const adminContacts = notificationCenter.contacts?.filter(
-                c => c.type === 'admin-alert'
-            ) || [];
+            const adminContacts = settings.notificationCenter?.adminContacts || [];
             
             if (adminContacts.length === 0) {
-                throw new Error('No admin contacts configured');
+                throw new Error('No admin contacts configured in Settings tab');
             }
             
             // Create new delivery attempt
@@ -205,22 +202,45 @@ Company: ${alert.companyName}
 Time: ${new Date().toLocaleTimeString()}
         `.trim();
         
-        const smsContacts = adminContacts.filter(c => c.smsNotifications !== false);
+        // Get Twilio credentials from AdminSettings
+        const AdminSettings = require('../models/AdminSettings');
+        const settings = await AdminSettings.findOne({});
+        
+        if (!settings?.notificationCenter?.twilio?.accountSid || 
+            !settings?.notificationCenter?.twilio?.authToken ||
+            !settings?.notificationCenter?.twilio?.phoneNumber) {
+            logger.error('❌ [ESCALATION SMS] Twilio credentials not configured');
+            return [{
+                status: 'failed',
+                error: 'Twilio credentials not configured in Settings tab'
+            }];
+        }
+        
+        // Create Twilio client with AdminSettings credentials
+        const twilio = require('twilio');
+        const twilioClient = twilio(
+            settings.notificationCenter.twilio.accountSid,
+            settings.notificationCenter.twilio.authToken
+        );
+        
+        // Use receiveSMS filter (matches AdminNotificationService)
+        const smsContacts = adminContacts.filter(c => c.receiveSMS !== false);
         
         for (const contact of smsContacts) {
             try {
-                logger.info(`📱 [ESCALATION SMS] Sending to ${contact.name} (${contact.phoneNumber})...`);
+                logger.info(`📱 [ESCALATION SMS] Sending to ${contact.name} (${contact.phone})...`);
                 
-                const result = await smsClient.sendSMS({
-                    to: contact.phoneNumber,
-                    message: smsMessage
+                const result = await twilioClient.messages.create({
+                    to: contact.phone,
+                    from: settings.notificationCenter.twilio.phoneNumber,
+                    body: smsMessage
                 });
                 
                 results.push({
-                    recipient: contact.phoneNumber,
+                    recipient: contact.phone,
                     recipientName: contact.name,
                     status: 'sent',
-                    twilioSid: result.sid || result.message_sid,
+                    twilioSid: result.sid,
                     twilioStatus: result.status
                 });
                 
@@ -230,7 +250,7 @@ Time: ${new Date().toLocaleTimeString()}
                 logger.error(`❌ [ESCALATION SMS] Failed to send to ${contact.name}:`, error);
                 
                 results.push({
-                    recipient: contact.phoneNumber,
+                    recipient: contact.phone,
                     recipientName: contact.name,
                     status: 'failed',
                     error: error.message
@@ -458,30 +478,43 @@ Time: ${new Date().toLocaleTimeString()}
             logger.info(`🔕 [ESCALATION] Alert ${alertId} snoozed for ${minutes} minutes until ${snoozeUntil}`);
             
             // Send confirmation SMS
-            const notificationCenter = await v2Company.findOne({
-                'metadata.isNotificationCenter': true
-            });
+            const AdminSettings = require('../models/AdminSettings');
+            const settings = await AdminSettings.findOne({});
             
-            const adminContacts = notificationCenter?.contacts?.filter(
-                c => c.type === 'admin-alert' && c.smsNotifications !== false
-            ) || [];
-            
-            const message = `
+            if (settings?.notificationCenter?.twilio?.accountSid && 
+                settings?.notificationCenter?.twilio?.authToken &&
+                settings?.notificationCenter?.twilio?.phoneNumber) {
+                
+                // Create Twilio client with AdminSettings credentials
+                const twilio = require('twilio');
+                const twilioClient = twilio(
+                    settings.notificationCenter.twilio.accountSid,
+                    settings.notificationCenter.twilio.authToken
+                );
+                
+                const adminContacts = settings.notificationCenter?.adminContacts?.filter(
+                    c => c.receiveSMS !== false
+                ) || [];
+                
+                const message = `
 🔕 Alert ${alertId} snoozed for ${minutes} minutes.
 
 Will resume at ${snoozeUntil.toLocaleTimeString()}.
 
 To cancel snooze: Text "UNSNOOZE ${alertId}"
-            `.trim();
-            
-            for (const contact of adminContacts) {
-                try {
-                    await smsClient.sendSMS({
-                        to: contact.phoneNumber,
-                        message
-                    });
-                } catch (error) {
-                    logger.error(`❌ Failed to send snooze confirmation to ${contact.name}:`, error);
+                `.trim();
+                
+                for (const contact of adminContacts) {
+                    try {
+                        await twilioClient.messages.create({
+                            to: contact.phone,
+                            from: settings.notificationCenter.twilio.phoneNumber,
+                            body: message
+                        });
+                        logger.info(`✅ [SMS] Sent snooze confirmation to ${contact.name}`);
+                    } catch (error) {
+                        logger.error(`❌ Failed to send snooze confirmation to ${contact.name}:`, error);
+                    }
                 }
             }
             

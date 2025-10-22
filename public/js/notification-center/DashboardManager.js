@@ -20,11 +20,17 @@ class DashboardManager {
         console.log('📊 [DASHBOARD] Loading dashboard...');
         
         try {
+            // Load main dashboard data
             const data = await this.nc.apiGet('/api/admin/notifications/dashboard');
             
             if (data.success) {
                 this.renderDashboard(data.data);
             }
+            
+            // Load intelligence widgets in parallel
+            this.loadServiceHealth();
+            this.loadRootCauseAnalysis();
+            this.loadErrorTrends();
             
         } catch (error) {
             console.error('❌ [DASHBOARD] Load failed:', error);
@@ -157,6 +163,210 @@ class DashboardManager {
             this.nc.showError('Health check failed');
             console.error('❌ [DASHBOARD] Health check failed:', error);
         }
+    }
+    
+    // ========================================================================
+    // 🧠 INTELLIGENCE WIDGETS
+    // ========================================================================
+    
+    async loadServiceHealth() {
+        try {
+            const result = await this.nc.apiGet('/api/admin/notifications/dependency-health');
+            if (result.success) {
+                this.renderServiceHealth(result.services, result.overallStatus);
+            }
+        } catch (error) {
+            console.error('❌ [DASHBOARD] Service health load failed:', error);
+        }
+    }
+    
+    renderServiceHealth(services, overallStatus) {
+        const container = document.getElementById('service-health-widget');
+        if (!container) return;
+        
+        const statusEmoji = {
+            'HEALTHY': '🟢',
+            'DEGRADED': '🟡',
+            'DOWN': '🔴',
+            'CRITICAL': '🚨'
+        };
+        
+        const statusColors = {
+            'HEALTHY': 'text-green-600',
+            'DEGRADED': 'text-yellow-600',
+            'DOWN': 'text-red-600',
+            'CRITICAL': 'text-red-700 font-bold'
+        };
+        
+        const html = `
+            <div class="bg-white rounded-lg shadow p-4 border-2 ${overallStatus === 'HEALTHY' ? 'border-green-500' : overallStatus === 'DEGRADED' ? 'border-yellow-500' : 'border-red-500'}">
+                <h3 class="text-lg font-semibold mb-3 flex items-center justify-between">
+                    <span>🔧 Service Health</span>
+                    <span class="${statusColors[overallStatus]}">${statusEmoji[overallStatus]} ${overallStatus}</span>
+                </h3>
+                <div class="space-y-2">
+                    ${services.map(service => `
+                        <div class="flex items-center justify-between p-2 rounded ${service.status === 'PASS' ? 'bg-green-50' : service.status === 'DEGRADED' ? 'bg-yellow-50' : 'bg-red-50'}">
+                            <div class="flex items-center">
+                                <span class="text-xl mr-2">${service.icon}</span>
+                                <span class="font-medium">${service.name}</span>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-sm ${service.status === 'PASS' ? 'text-green-700' : service.status === 'DEGRADED' ? 'text-yellow-700' : 'text-red-700'} font-semibold">
+                                    ${service.status === 'PASS' ? '✓' : service.status === 'DEGRADED' ? '⚠' : '✗'} ${service.status}
+                                </span>
+                                ${service.responseTime ? `<span class="text-xs text-gray-500 ml-2">${service.responseTime}ms</span>` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="mt-3 text-xs text-gray-500 text-right">
+                    Auto-refreshes every 30s
+                </div>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+    }
+    
+    async loadRootCauseAnalysis() {
+        try {
+            const result = await this.nc.apiGet('/api/admin/notifications/root-cause-analysis?timeWindow=15');
+            if (result.success) {
+                this.renderRootCauseAnalysis(result);
+            }
+        } catch (error) {
+            console.error('❌ [DASHBOARD] Root cause analysis load failed:', error);
+        }
+    }
+    
+    renderRootCauseAnalysis(analysis) {
+        const container = document.getElementById('root-cause-widget');
+        if (!container) return;
+        
+        if (!analysis.detectedPattern) {
+            container.innerHTML = `
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h3 class="text-lg font-semibold mb-3">🧠 Root Cause Analysis</h3>
+                    <div class="text-center py-6 text-gray-500">
+                        <i class="fas fa-check-circle text-green-500 text-3xl mb-2"></i>
+                        <p>No cascade patterns detected</p>
+                        <p class="text-xs mt-1">All errors appear isolated</p>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+        
+        const pattern = analysis.detectedPattern;
+        const html = `
+            <div class="bg-white rounded-lg shadow p-4 border-l-4 ${pattern.confidence >= 0.9 ? 'border-red-500' : 'border-yellow-500'}">
+                <h3 class="text-lg font-semibold mb-3">🧠 Root Cause Analysis</h3>
+                <div class="bg-yellow-50 border border-yellow-200 rounded p-3 mb-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-semibold text-yellow-900">⚠️ PATTERN DETECTED: ${pattern.name}</span>
+                        <span class="text-sm text-yellow-700">Confidence: ${(pattern.confidence * 100).toFixed(0)}%</span>
+                    </div>
+                    <p class="text-sm text-yellow-800 mb-2">
+                        <strong>Root Cause:</strong> <span class="font-mono">${pattern.rootCause}</span>
+                    </p>
+                    <p class="text-sm text-yellow-800 mb-2">
+                        <strong>Fix Priority:</strong> ${pattern.fixPriority}
+                    </p>
+                </div>
+                <div class="bg-blue-50 border border-blue-200 rounded p-3">
+                    <p class="text-sm font-semibold text-blue-900 mb-1">💡 Recommended Actions:</p>
+                    <ol class="text-sm text-blue-800 space-y-1 ml-4 list-decimal">
+                        ${pattern.recommendation.map(step => `<li>${step}</li>`).join('')}
+                    </ol>
+                </div>
+                <div class="mt-3 text-xs text-gray-500">
+                    Analyzing last ${analysis.timeWindow} minutes of errors
+                </div>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+    }
+    
+    async loadErrorTrends() {
+        try {
+            const result = await this.nc.apiGet('/api/admin/notifications/error-trends?periodHours=24');
+            if (result.success) {
+                this.renderErrorTrends(result);
+            }
+        } catch (error) {
+            console.error('❌ [DASHBOARD] Error trends load failed:', error);
+        }
+    }
+    
+    renderErrorTrends(trends) {
+        const container = document.getElementById('error-trends-widget');
+        if (!container) return;
+        
+        const trendIcon = trends.trend === 'INCREASING' ? '↗️' : trends.trend === 'DECREASING' ? '↘️' : '→';
+        const trendColor = trends.trend === 'INCREASING' ? 'text-red-600' : trends.trend === 'DECREASING' ? 'text-green-600' : 'text-gray-600';
+        
+        // Generate sparkline
+        const maxCount = Math.max(...trends.hourlyBreakdown.map(h => h.count), 1);
+        const sparkline = trends.hourlyBreakdown.map(h => {
+            const height = (h.count / maxCount) * 40;
+            return `<div class="w-1 bg-blue-500 rounded-t" style="height: ${height}px;" title="${h.hour}: ${h.count} errors"></div>`;
+        }).join('');
+        
+        const html = `
+            <div class="bg-white rounded-lg shadow p-4">
+                <h3 class="text-lg font-semibold mb-3">📈 Error Trends (24h)</h3>
+                
+                <!-- Summary Stats -->
+                <div class="grid grid-cols-3 gap-4 mb-4">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-red-600">${trends.totalErrors}</div>
+                        <div class="text-xs text-gray-500">Total Errors</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold ${trendColor}">${trendIcon} ${trends.trend}</div>
+                        <div class="text-xs text-gray-500">Trend</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-yellow-600">${trends.newErrors.length}</div>
+                        <div class="text-xs text-gray-500">New Errors</div>
+                    </div>
+                </div>
+                
+                <!-- Sparkline Chart -->
+                <div class="mb-4">
+                    <div class="flex items-end justify-between h-10 gap-1">
+                        ${sparkline}
+                    </div>
+                    <div class="text-xs text-gray-500 text-center mt-1">Last 24 hours (hourly)</div>
+                </div>
+                
+                <!-- Top Errors -->
+                <div class="mt-4">
+                    <p class="text-sm font-semibold text-gray-700 mb-2">🔥 Top Errors:</p>
+                    <div class="space-y-1">
+                        ${trends.topErrors.slice(0, 5).map(err => `
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="font-mono text-xs truncate flex-1">${err._id || 'UNKNOWN'}</span>
+                                <span class="ml-2 px-2 py-1 bg-gray-100 rounded font-semibold">${err.count}×</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                
+                ${trends.anomalies.length > 0 ? `
+                    <div class="mt-4 bg-red-50 border border-red-200 rounded p-2">
+                        <p class="text-sm font-semibold text-red-900">🚨 Anomalies Detected:</p>
+                        <ul class="text-xs text-red-800 mt-1 space-y-1">
+                            ${trends.anomalies.map(a => `<li>• ${a}</li>`).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+        
+        container.innerHTML = html;
     }
 }
 

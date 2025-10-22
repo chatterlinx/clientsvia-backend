@@ -302,6 +302,29 @@ ${details ? `Details: ${details}` : ''}
 View: https://app.clientsvia.com/admin-notification-center.html
         `.trim();
         
+        // Get Twilio credentials from AdminSettings
+        const AdminSettings = require('../models/AdminSettings');
+        const settings = await AdminSettings.findOne({});
+        
+        if (!settings?.notificationCenter?.twilio?.accountSid || 
+            !settings?.notificationCenter?.twilio?.authToken ||
+            !settings?.notificationCenter?.twilio?.phoneNumber) {
+            logger.error('❌ [SMS] Twilio credentials not configured in AdminSettings');
+            return [{
+                status: 'failed',
+                error: 'Twilio credentials not configured in Settings tab'
+            }];
+        }
+        
+        // Create Twilio client with AdminSettings credentials
+        const twilio = require('twilio');
+        const twilioClient = twilio(
+            settings.notificationCenter.twilio.accountSid,
+            settings.notificationCenter.twilio.authToken
+        );
+        
+        logger.info(`✅ [SMS] Using Twilio credentials from AdminSettings (SID: ...${settings.notificationCenter.twilio.accountSid.slice(-4)})`);
+        
         // Send to all admin contacts with SMS enabled
         const smsContacts = adminContacts.filter(c => c.receiveSMS !== false);
         
@@ -309,8 +332,9 @@ View: https://app.clientsvia.com/admin-notification-center.html
             try {
                 logger.info(`📱 [SMS] Sending to ${contact.name} (${contact.phone})...`);
                 
-                const result = await smsClient.send({
+                const result = await twilioClient.messages.create({
                     to: contact.phone,
+                    from: settings.notificationCenter.twilio.phoneNumber,
                     body: smsMessage
                 });
                 
@@ -318,7 +342,7 @@ View: https://app.clientsvia.com/admin-notification-center.html
                     recipient: contact.phone,
                     recipientName: contact.name,
                     status: 'sent',
-                    twilioSid: result.sid || result.message_sid,
+                    twilioSid: result.sid,
                     twilioStatus: result.status,
                     deliveredAt: null  // Will be updated by webhook
                 });
@@ -534,6 +558,20 @@ View: https://app.clientsvia.com/admin-notification-center.html
                 return;
             }
             
+            if (!settings?.notificationCenter?.twilio?.accountSid || 
+                !settings?.notificationCenter?.twilio?.authToken ||
+                !settings?.notificationCenter?.twilio?.phoneNumber) {
+                logger.error('❌ [SMS] Twilio credentials not configured');
+                return;
+            }
+            
+            // Create Twilio client with AdminSettings credentials
+            const twilio = require('twilio');
+            const twilioClient = twilio(
+                settings.notificationCenter.twilio.accountSid,
+                settings.notificationCenter.twilio.authToken
+            );
+            
             const adminContacts = settings.notificationCenter?.adminContacts?.filter(
                 c => c.receiveSMS !== false
             ) || [];
@@ -548,10 +586,12 @@ To reopen: Text "REOPEN ${alert.alertId}"
             
             for (const contact of adminContacts) {
                 try {
-                    await smsClient.send({
+                    await twilioClient.messages.create({
                         to: contact.phone,
+                        from: settings.notificationCenter.twilio.phoneNumber,
                         body: message
                     });
+                    logger.info(`✅ [SMS] Sent ACK confirmation to ${contact.name}`);
                 } catch (error) {
                     logger.error(`❌ Failed to send confirmation to ${contact.name}:`, error);
                 }
