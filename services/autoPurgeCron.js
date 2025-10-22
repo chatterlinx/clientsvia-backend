@@ -15,6 +15,7 @@ const DataCenterPurgeService = require('./DataCenterPurgeService');
 const AlertEscalationService = require('./AlertEscalationService');
 const PlatformHealthCheckService = require('./PlatformHealthCheckService');
 const NotificationPurgeService = require('./NotificationPurgeService');
+const DailyDigestService = require('./DailyDigestService');
 
 // System user for automated operations
 const SYSTEM_USER = {
@@ -151,6 +152,54 @@ function initializeAutoPurgeCron() {
         timezone: 'UTC'
     });
     logger.debug('[NOTIFICATION PURGE] ✅ Cron job initialized (runs daily at 03:00 UTC)');
+    
+    // ========================================================================
+    // CRON JOB 5: DAILY DIGEST EMAIL (Runs hourly, checks configured time)
+    // ========================================================================
+    cron.schedule('0 * * * *', async () => {
+        try {
+            logger.debug('[DAILY DIGEST] Hourly check triggered');
+            
+            // Get admin settings to check configured time
+            const AdminSettings = require('../models/AdminSettings');
+            const settings = await AdminSettings.findOne({});
+            
+            if (!settings?.notificationCenter?.notificationPolicy?.dailyDigest) {
+                return;
+            }
+            
+            const digestConfig = settings.notificationCenter.notificationPolicy.dailyDigest;
+            
+            if (!digestConfig.enabled) {
+                return;
+            }
+            
+            // Check if current time matches configured time in specified timezone
+            const now = new Date();
+            const timezone = digestConfig.timezone || 'America/New_York';
+            const configuredTime = digestConfig.time || '08:00';
+            
+            const nowInTz = now.toLocaleTimeString('en-US', {
+                timeZone: timezone,
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            logger.debug(`[DAILY DIGEST] Current time in ${timezone}: ${nowInTz} | Configured: ${configuredTime}`);
+            
+            if (nowInTz === configuredTime) {
+                logger.info(`[DAILY DIGEST] ⏰ Configured time reached! Sending daily digest...`);
+                DailyDigestService.sendDailyDigest().catch(error => {
+                    logger.error('[DAILY DIGEST] Unhandled error:', error);
+                });
+            }
+            
+        } catch (error) {
+            logger.error('[DAILY DIGEST] Error in cron check:', error);
+        }
+    });
+    logger.debug('[DAILY DIGEST] ✅ Cron job initialized (checks hourly for configured time)');
 }
 
 module.exports = {

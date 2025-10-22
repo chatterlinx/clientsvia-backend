@@ -1186,6 +1186,45 @@ router.post('/admin/notifications/test-all', authenticateJWT, requireRole('admin
 });
 
 // ============================================================================
+// SEND DAILY DIGEST EMAIL (Manual Trigger for Testing)
+// ============================================================================
+
+router.post('/admin/notifications/send-digest', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        logger.info('📧 [SEND DIGEST] Manually triggering daily digest...');
+        
+        const DailyDigestService = require('../../services/DailyDigestService');
+        const result = await DailyDigestService.sendDailyDigest();
+        
+        if (result.success) {
+            logger.info(`✅ [SEND DIGEST] Sent to ${result.recipients.length} recipients`);
+            
+            res.json({
+                success: true,
+                message: 'Daily digest sent successfully!',
+                data: {
+                    recipients: result.recipients,
+                    stats: result.stats,
+                    duration: result.duration
+                }
+            });
+        } else {
+            res.status(400).json({
+                success: false,
+                error: result.reason || result.error || 'Failed to send digest'
+            });
+        }
+        
+    } catch (error) {
+        logger.error('❌ [SEND DIGEST] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============================================================================
 // PHASE 3: ADVANCED ERROR INTELLIGENCE ENDPOINTS
 // ============================================================================
 // TEMPORARILY DISABLED: Phase 3 services are causing server crashes
