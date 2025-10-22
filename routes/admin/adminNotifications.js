@@ -1227,25 +1227,29 @@ router.post('/admin/notifications/send-digest', authenticateJWT, requireRole('ad
 // ============================================================================
 // PHASE 3: ADVANCED ERROR INTELLIGENCE ENDPOINTS
 // ============================================================================
-// TEMPORARILY DISABLED: Phase 3 services are causing server crashes
-// Will re-enable after investigating the "Instance failed" error
+// ✅ RE-ENABLED: Fixed redisClient export bug in clients/index.js
+// Root cause: module.exports was capturing null value instead of using getter
 // ============================================================================
 
-// Simple test route to verify Phase 3 routes are being registered
+const RootCauseAnalyzer = require('../../services/RootCauseAnalyzer');
+const ErrorTrendTracker = require('../../services/ErrorTrendTracker');
+const DependencyHealthMonitor = require('../../services/DependencyHealthMonitor');
+
+// Initialize Phase 3 services (all use instance methods)
+const rootCauseAnalyzer = new RootCauseAnalyzer();
+const errorTrendTracker = new ErrorTrendTracker();
+const dependencyHealthMonitor = new DependencyHealthMonitor();
+
+// Simple test route to verify Phase 3 routes are registered
 router.get('/notifications/_test', authenticateJWT, requireRole('admin'), (req, res) => {
     res.json({ 
         success: true, 
-        message: '🎉 Phase 3 routes are registered!',
+        message: '🎉 Phase 3 routes are registered and ENABLED!',
         timestamp: new Date().toISOString(),
         server: 'Render production',
-        status: 'Phase 3 temporarily disabled for debugging'
+        status: 'Phase 3 fully operational'
     });
 });
-
-// TEMPORARILY COMMENTED OUT - CAUSING SERVER CRASHES
-// const RootCauseAnalyzer = require('../../services/RootCauseAnalyzer');
-// const ErrorTrendTracker = require('../../services/ErrorTrendTracker');
-// const DependencyHealthMonitor = require('../../services/DependencyHealthMonitor');
 
 // ----------------------------------------------------------------------------
 // GET /api/admin/notifications/root-cause-analysis
@@ -1260,7 +1264,7 @@ router.get('/notifications/root-cause-analysis',
         
         logger.info(`🧠 [ROOT CAUSE API] Analyzing error patterns (${timeWindow}min window)`);
         
-        const analysis = await RootCauseAnalyzer.analyzeErrors(timeWindow);
+        const analysis = await rootCauseAnalyzer.analyzeErrors(timeWindow);
         
         await AdminNotificationService.sendAlert({
             code: "NOTIF_ROOT_CAUSE_ANALYSIS_OK",
@@ -1316,8 +1320,8 @@ router.get('/notifications/error-trends',
         
         logger.info(`📊 [TREND API] Fetching error trends (${periodHours}h period)`);
         
-        const trends = await ErrorTrendTracker.getErrorTrends(periodHours);
-        const baseline = await ErrorTrendTracker.compareWithBaseline();
+        const trends = await errorTrendTracker.getErrorTrends(periodHours);
+        const baseline = await errorTrendTracker.compareWithBaseline();
         
         await AdminNotificationService.sendAlert({
             code: "NOTIF_ERROR_TRENDS_OK",
@@ -1371,7 +1375,7 @@ router.get('/notifications/dependency-health',
     try {
         logger.info('🏥 [DEPENDENCY API] Checking all service dependencies');
         
-        const healthStatus = await DependencyHealthMonitor.getHealthStatus();
+        const healthStatus = await dependencyHealthMonitor.getHealthStatus();
         
         // Send alert if any critical services are down
         if (healthStatus.overallStatus === 'CRITICAL' || healthStatus.overallStatus === 'DOWN') {
@@ -1447,7 +1451,7 @@ router.get('/notifications/service-status/:serviceName',
         
         logger.info(`🏥 [SERVICE STATUS API] Checking ${serviceName}`);
         
-        const status = await DependencyHealthMonitor.getDependencyStatus(serviceName);
+        const status = await dependencyHealthMonitor.getDependencyStatus(serviceName);
         
         res.json({
             success: true,

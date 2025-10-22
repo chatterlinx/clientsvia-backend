@@ -64,6 +64,8 @@ initializeRedis().catch(err => {
 });
 
 module.exports = {
-  redisClient,
+  get redisClient() {
+    return redisClient;
+  },
   initializeRedis
 };

@@ -76,5 +76,8 @@ const getDB = () => {
     return mongoose.connection.db; // Return the native Db instance from Mongoose
 };
 
-// Export both functions
-module.exports = { connectDB, getDB };
+// Import redisClient from clients module
+const { redisClient } = require('./clients');
+
+// Export both functions + redisClient
+module.exports = { connectDB, getDB, redisClient };

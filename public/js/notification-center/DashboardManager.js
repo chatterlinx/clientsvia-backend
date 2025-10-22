@@ -28,10 +28,10 @@ class DashboardManager {
             }
             
             // Load intelligence widgets in parallel
-            // TEMPORARILY DISABLED: Phase 3 routes causing server crashes
-            // this.loadServiceHealth();
-            // this.loadRootCauseAnalysis();
-            // this.loadErrorTrends();
+            // ✅ RE-ENABLED: Fixed redisClient export bug
+            this.loadServiceHealth();
+            this.loadRootCauseAnalysis();
+            this.loadErrorTrends();
             
         } catch (error) {
             console.error('❌ [DASHBOARD] Load failed:', error);

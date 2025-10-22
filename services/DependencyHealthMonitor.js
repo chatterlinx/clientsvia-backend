@@ -13,7 +13,7 @@
 // ============================================================================
 
 const mongoose = require('mongoose');
-const { redisClient } = require('../clients');
+const { redisClient } = require('../db');
 const logger = require('../utils/logger.js');
 
 class DependencyHealthMonitor {
