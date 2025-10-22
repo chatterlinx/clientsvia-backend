@@ -171,6 +171,12 @@ class LogManager {
     }
     
     getSuggestedActions(log) {
+        // Use intelligence data if available (new error intelligence system)
+        if (log.intelligence?.fix?.reproduceSteps && log.intelligence.fix.reproduceSteps.length > 0) {
+            return log.intelligence.fix.reproduceSteps.join(' ');
+        }
+        
+        // Fallback to hardcoded actions for backward compatibility
         const actions = {
             'NOTIFICATION_SYSTEM_FAILURE': '1. Check Settings tab for Twilio credentials. 2. Verify SMS client is configured. 3. Check Render logs for detailed error.',
             'TWILIO_API_FAILURE': '1. Verify Twilio Account SID and Auth Token in Settings. 2. Check Twilio Console for account status. 3. Ensure phone numbers are valid.',
@@ -214,7 +220,8 @@ class LogManager {
                 return;
             }
             
-            // Build comprehensive debug report
+            // Build comprehensive debug report with ERROR INTELLIGENCE
+            const intel = log.intelligence || {};
             const debugInfo = `
 ═══════════════════════════════════════════════════════
 🐛 CLIENTSVIA ALERT DEBUG REPORT
@@ -236,6 +243,100 @@ TIMELINE:
 - Created: ${log.createdAt}
 - Updated: ${log.updatedAt}
 ${log.acknowledgment?.isAcknowledged ? `- Acknowledged: ${log.acknowledgment.acknowledgedAt} by ${log.acknowledgment.acknowledgedBy}` : ''}
+
+${intel.source ? `
+═══════════════════════════════════════════════════════
+🎯 ERROR SOURCE
+═══════════════════════════════════════════════════════
+- File: ${intel.source.file || 'Unknown'}
+- Line: ${intel.source.line || 'Unknown'}
+- Function: ${intel.source.function || 'Unknown'}
+${intel.source.query ? `- Query: ${intel.source.query}` : ''}
+` : ''}
+
+${intel.dependencies ? `
+═══════════════════════════════════════════════════════
+🔗 DEPENDENCY ANALYSIS
+═══════════════════════════════════════════════════════
+${intel.dependencies.rootCause && intel.dependencies.rootCause !== log.code ? `
+⚠️ THIS IS A CASCADE FAILURE!
+Root Cause: ${intel.dependencies.rootCause}
+Fix the root cause first, and this error will resolve automatically.
+` : `✅ This is the ROOT CAUSE - fix this directly.`}
+
+${intel.dependencies.cascadeFailures?.length > 0 ? `
+Cascade Failures (will auto-resolve when this is fixed):
+${intel.dependencies.cascadeFailures.map(f => `  - ${f}`).join('\n')}
+` : ''}
+
+${intel.dependencies.affectsServices?.length > 0 ? `
+Affected Services:
+${intel.dependencies.affectsServices.map(s => `  - ${s}`).join('\n')}
+` : ''}
+` : ''}
+
+${intel.impact ? `
+═══════════════════════════════════════════════════════
+💥 IMPACT ASSESSMENT
+═══════════════════════════════════════════════════════
+Priority: ${intel.impact.priority}
+Revenue Impact: ${intel.impact.revenue}
+Customer Facing: ${intel.related?.customerFacing ? 'YES - Affects end users' : 'NO - Internal only'}
+Companies Affected: ${intel.impact.companies}
+Features Affected:
+${intel.impact.features?.map(f => `  - ${f}`).join('\n') || '  - Unknown'}
+` : ''}
+
+${intel.fix?.reproduceSteps?.length > 0 ? `
+═══════════════════════════════════════════════════════
+🔧 HOW TO FIX
+═══════════════════════════════════════════════════════
+
+REPRODUCTION STEPS:
+${intel.fix.reproduceSteps.map((step, idx) => `${idx + 1}. ${step}`).join('\n')}
+
+${intel.fix.verifySteps?.length > 0 ? `
+VERIFICATION STEPS (after fix):
+${intel.fix.verifySteps.map((step, idx) => `${idx + 1}. ${step}`).join('\n')}
+` : ''}
+
+${intel.fix.envVars?.length > 0 ? `
+REQUIRED ENVIRONMENT VARIABLES:
+${intel.fix.envVars.map(v => `  - ${v}`).join('\n')}
+Location: ${intel.fix.configFile || 'Render Dashboard → Environment Variables'}
+` : ''}
+
+${intel.fix.fixUrl ? `
+DIRECT FIX LINK: ${intel.fix.fixUrl}
+` : ''}
+
+${intel.fix.uiFixUrl ? `
+UI FIX LINK: ${intel.fix.uiFixUrl}
+` : ''}
+
+${intel.fix.externalDocs ? `
+EXTERNAL DOCUMENTATION: ${intel.fix.externalDocs}
+` : ''}
+` : `
+═══════════════════════════════════════════════════════
+🔧 SUGGESTED ACTIONS
+═══════════════════════════════════════════════════════
+${this.getSuggestedActions(log) || 'Review Render logs and check system configuration.'}
+`}
+
+${intel.related?.commonCauses?.length > 0 ? `
+═══════════════════════════════════════════════════════
+🤔 COMMON CAUSES
+═══════════════════════════════════════════════════════
+${intel.related.commonCauses.map(c => `  - ${c}`).join('\n')}
+` : ''}
+
+${intel.related?.errors?.length > 0 ? `
+═══════════════════════════════════════════════════════
+🔗 RELATED ERRORS
+═══════════════════════════════════════════════════════
+${intel.related.errors.map(e => `  - ${e}`).join('\n')}
+` : ''}
 
 DELIVERY ATTEMPTS: ${log.deliveryAttempts?.length || 0}
 ${log.deliveryAttempts?.map((attempt, idx) => `
@@ -259,16 +360,13 @@ STACK TRACE:
 ${log.stackTrace}
 ` : ''}
 
-SUGGESTED ACTIONS:
-${this.getSuggestedActions(log) || 'Review Render logs and check system configuration.'}
-
 ═══════════════════════════════════════════════════════
 Generated: ${new Date().toISOString()}
 Platform: ClientsVia Multi-Tenant Backend
 Environment: Production
 ═══════════════════════════════════════════════════════
 
-Paste this report to your AI assistant for debugging help.
+Paste this report to your AI assistant for instant root cause analysis!
             `.trim();
             
             // Copy to clipboard

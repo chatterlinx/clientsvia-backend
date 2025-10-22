@@ -44,6 +44,7 @@ const logger = require('../utils/logger.js');
 const NotificationLog = require('../models/NotificationLog');
 const NotificationRegistry = require('../models/NotificationRegistry');
 const smsClient = require('../clients/smsClient');
+const errorIntelligence = require('./ErrorIntelligenceService');
 
 class AdminNotificationService {
     
@@ -105,7 +106,25 @@ class AdminNotificationService {
             logger.debug(`📋 [ADMIN NOTIFICATION] Found ${adminContacts.length} admin contacts from AdminSettings`);
             
             // ================================================================
-            // STEP 4: CREATE NOTIFICATION LOG ENTRY
+            // STEP 3.5: ENHANCE ERROR WITH INTELLIGENCE
+            // ================================================================
+            const errorAnalysis = errorIntelligence.enhanceError({
+                code: code.toUpperCase(),
+                error: stackTrace ? { message, stack: stackTrace } : { message },
+                companyId,
+                context: {
+                    sourceFile: callerInfo.file,
+                    sourceLine: callerInfo.line
+                }
+            });
+            
+            logger.debug(`🧠 [ADMIN NOTIFICATION] Enhanced error with intelligence:`, {
+                rootCause: errorAnalysis.intelligence.dependencies.rootCause,
+                cascadeFailures: errorAnalysis.intelligence.dependencies.cascadeFailures
+            });
+            
+            // ================================================================
+            // STEP 4: CREATE NOTIFICATION LOG ENTRY (with intelligence)
             // ================================================================
             const notificationLog = await NotificationLog.create({
                 code: code.toUpperCase(),
@@ -115,6 +134,9 @@ class AdminNotificationService {
                 message,
                 details,
                 stackTrace,
+                
+                // Add error intelligence to log
+                intelligence: errorAnalysis.intelligence,
                 
                 // Set escalation schedule based on severity
                 escalation: {
