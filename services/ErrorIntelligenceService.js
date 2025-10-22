@@ -172,6 +172,119 @@ class ErrorIntelligenceService {
                 }
             },
 
+            'AI_AGENT_PROCESSING_FAILURE': {
+                title: 'AI Agent Failed to Process User Input',
+                category: 'AI_PROCESSING',
+                severity: 'WARNING',
+                customerFacing: true,
+                fixUrl: '/company-profile.html?tab=ai-agent',
+                uiFixUrl: '/ai-agent-monitoring.html',
+                sourceFile: 'services/v2AIAgentRuntime.js',
+                sourceLine: 306,
+                reproduceSteps: [
+                    '1. Review AI Agent Monitoring tab for failed calls',
+                    '2. Check call logs for specific error details',
+                    '3. Verify company knowledge base is populated',
+                    '4. Test AI responses with sample queries'
+                ],
+                verifySteps: [
+                    '1. Send test message to company number',
+                    '2. Check AI Agent Monitoring for success',
+                    '3. Verify response quality and latency'
+                ],
+                relatedErrors: ['AI_AGENT_INIT_FAILURE', 'KNOWLEDGE_ROUTER_FAILURE'],
+                commonCauses: [
+                    'Knowledge base empty or misconfigured',
+                    'AI router thresholds too strict',
+                    'Template formatting errors',
+                    'Memory overflow during processing',
+                    'External AI service timeout'
+                ],
+                impact: {
+                    features: ['AI call handling', 'Smart routing', 'Knowledge responses'],
+                    companies: 'SPECIFIC',
+                    revenue: 'MEDIUM - Degraded AI quality',
+                    priority: 'P1 - HIGH'
+                }
+            },
+
+            'ELEVENLABS_VOICE_FETCH_FAILURE': {
+                title: 'Failed to Fetch ElevenLabs Voices',
+                category: 'EXTERNAL_SERVICE',
+                severity: 'WARNING',
+                customerFacing: false,
+                fixUrl: 'https://dashboard.render.com/web/srv-YOUR_SERVICE/env',
+                uiFixUrl: '/company-profile.html?tab=voice-settings',
+                envVars: ['ELEVENLABS_API_KEY'],
+                sourceFile: 'services/v2elevenLabsService.js',
+                sourceLine: 130,
+                reproduceSteps: [
+                    '1. Go to Render Dashboard → Environment Variables',
+                    '2. Check if ELEVENLABS_API_KEY is set',
+                    '3. Verify API key is valid at elevenlabs.io',
+                    '4. Check API usage limits not exceeded'
+                ],
+                verifySteps: [
+                    '1. Go to Company Profile → Voice Settings',
+                    '2. Voice dropdown should populate with options',
+                    '3. Test voice preview should play successfully'
+                ],
+                externalDocs: 'https://docs.elevenlabs.io/api-reference/quick-start/authentication',
+                relatedErrors: ['ELEVENLABS_TTS_FAILURE', 'TWILIO_GREETING_FAILURE'],
+                commonCauses: [
+                    'Missing ELEVENLABS_API_KEY environment variable',
+                    'Invalid or expired API key',
+                    'API rate limit exceeded',
+                    'ElevenLabs service outage',
+                    'Network connectivity issues'
+                ],
+                impact: {
+                    features: ['Voice selection', 'Greeting configuration'],
+                    companies: 'SPECIFIC (if using own API key) or ALL (if global key)',
+                    revenue: 'LOW - Admin UI degraded but calls still work',
+                    priority: 'P2 - MEDIUM'
+                }
+            },
+
+            'ELEVENLABS_TTS_FAILURE': {
+                title: 'Text-to-Speech Synthesis Failed',
+                category: 'EXTERNAL_SERVICE',
+                severity: 'CRITICAL',
+                customerFacing: true,
+                fixUrl: 'https://dashboard.render.com/web/srv-YOUR_SERVICE/env',
+                uiFixUrl: '/company-profile.html?tab=voice-settings',
+                envVars: ['ELEVENLABS_API_KEY'],
+                sourceFile: 'services/v2elevenLabsService.js',
+                sourceLine: 236,
+                reproduceSteps: [
+                    '1. Check if ELEVENLABS_VOICE_FETCH_FAILURE exists',
+                    '2. Verify company voice ID is valid',
+                    '3. Check ElevenLabs API status page',
+                    '4. Test with different text/voice combination'
+                ],
+                verifySteps: [
+                    '1. Call company Twilio number',
+                    '2. Should hear AI greeting',
+                    '3. Check call logs for TTS success',
+                    '4. Monitor ElevenLabs usage dashboard'
+                ],
+                externalDocs: 'https://docs.elevenlabs.io/api-reference/text-to-speech',
+                relatedErrors: ['ELEVENLABS_VOICE_FETCH_FAILURE', 'TWILIO_GREETING_FAILURE'],
+                commonCauses: [
+                    'Invalid voice ID selected',
+                    'Text exceeds character limits',
+                    'API quota exceeded',
+                    'ElevenLabs service degraded',
+                    'Invalid voice settings parameters'
+                ],
+                impact: {
+                    features: ['AI voice greetings', 'Real-time TTS', 'Call handling'],
+                    companies: 'SPECIFIC (or ALL if global API)',
+                    revenue: 'HIGH - Customers hear silence or errors',
+                    priority: 'P0 - CRITICAL'
+                }
+            },
+
             // ===== DATABASE ERRORS =====
             'DB_CONNECTION_ERROR': {
                 title: 'Database Connection Failed',
@@ -445,6 +558,23 @@ class ErrorIntelligenceService {
             'NOTIFICATION_SYSTEM_FAILURE': {
                 causedBy: ['TWILIO_API_FAILURE', 'SMS_DELIVERY_FAILURE'],
                 requiredFor: ['Admin alerts', 'Error notifications']
+            },
+            'AI_AGENT_INIT_FAILURE': {
+                causes: ['AI_AGENT_PROCESSING_FAILURE'],
+                requiredFor: ['AI call handling', 'Knowledge routing']
+            },
+            'AI_AGENT_PROCESSING_FAILURE': {
+                causedBy: ['AI_AGENT_INIT_FAILURE', 'DB_CONNECTION_ERROR'],
+                requiredFor: ['AI responses', 'Smart routing']
+            },
+            'ELEVENLABS_VOICE_FETCH_FAILURE': {
+                causes: ['ELEVENLABS_TTS_FAILURE'],
+                requiredFor: ['Voice configuration', 'TTS setup']
+            },
+            'ELEVENLABS_TTS_FAILURE': {
+                causedBy: ['ELEVENLABS_VOICE_FETCH_FAILURE'],
+                causes: ['TWILIO_GREETING_FAILURE', 'AI_AGENT_PROCESSING_FAILURE'],
+                requiredFor: ['Voice greetings', 'AI voice responses', 'Call handling']
             }
         };
     }

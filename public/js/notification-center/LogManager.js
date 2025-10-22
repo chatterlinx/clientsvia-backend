@@ -159,6 +159,36 @@ class LogManager {
                             class="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700">
                         📋 Copy Debug Info
                     </button>
+                    ${log.intelligence?.fix?.fixUrl ? `
+                        <a href="${log.intelligence.fix.fixUrl}" target="_blank"
+                           class="px-3 py-1 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 inline-block">
+                            ⚙️ Open Config
+                        </a>
+                    ` : ''}
+                    ${log.intelligence?.fix?.uiFixUrl ? `
+                        <a href="${log.intelligence.fix.uiFixUrl}" target="_blank"
+                           class="px-3 py-1 bg-teal-600 text-white text-sm rounded hover:bg-teal-700 inline-block">
+                            🛠️ Fix in UI
+                        </a>
+                    ` : ''}
+                    ${log.intelligence?.fix?.externalDocs ? `
+                        <a href="${log.intelligence.fix.externalDocs}" target="_blank"
+                           class="px-3 py-1 bg-cyan-600 text-white text-sm rounded hover:bg-cyan-700 inline-block">
+                            📚 View Docs
+                        </a>
+                    ` : ''}
+                    ${(log.intelligence?.fix?.reproduceSteps && log.intelligence.fix.reproduceSteps.length > 0) || (log.intelligence?.fix?.verifySteps && log.intelligence.fix.verifySteps.length > 0) ? `
+                        <button onclick="notificationCenter.logManager.showFixGuide('${log.alertId}')" 
+                                class="px-3 py-1 bg-orange-600 text-white text-sm rounded hover:bg-orange-700">
+                            🔧 Fix Guide
+                        </button>
+                    ` : ''}
+                    ${log.code.includes('HEALTH') || log.code.includes('TWILIO') || log.code.includes('SMS') ? `
+                        <button onclick="notificationCenter.logManager.testFix('${log.alertId}', '${log.code}')" 
+                                class="px-3 py-1 bg-pink-600 text-white text-sm rounded hover:bg-pink-700">
+                            🧪 Test Fix
+                        </button>
+                    ` : ''}
                     ${log.companyId ? `
                         <a href="/company-profile.html?id=${log.companyId}" target="_blank"
                            class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 inline-block">
@@ -378,6 +408,184 @@ Paste this report to your AI assistant for instant root cause analysis!
             console.error('Copy failed:', error);
             this.nc.showError('Failed to copy debug info');
         }
+    }
+    
+    async showFixGuide(alertId) {
+        try {
+            const log = this.logs.find(l => l.alertId === alertId);
+            if (!log || !log.intelligence) {
+                this.nc.showError('Fix guide not available for this alert');
+                return;
+            }
+            
+            const intel = log.intelligence;
+            let guideHtml = `
+                <div class="space-y-4">
+                    <div class="bg-gradient-to-r from-red-50 to-orange-50 border-l-4 border-red-500 p-4 rounded">
+                        <h3 class="font-bold text-lg text-gray-900 mb-2">🔧 Fix Guide: ${log.code}</h3>
+                        <p class="text-gray-700">${log.message}</p>
+                    </div>
+            `;
+            
+            // Root Cause
+            if (intel.dependencies?.rootCause) {
+                guideHtml += `
+                    <div class="bg-red-50 border border-red-200 p-4 rounded">
+                        <h4 class="font-semibold text-red-900 mb-2">🎯 Root Cause</h4>
+                        <p class="text-gray-800">${intel.dependencies.rootCause}</p>
+                    </div>
+                `;
+            }
+            
+            // Impact
+            if (intel.impact) {
+                guideHtml += `
+                    <div class="bg-orange-50 border border-orange-200 p-4 rounded">
+                        <h4 class="font-semibold text-orange-900 mb-2">⚠️ Impact Assessment</h4>
+                        <ul class="list-disc list-inside text-gray-800 space-y-1">
+                            ${intel.impact.priority ? `<li><strong>Priority:</strong> ${intel.impact.priority}</li>` : ''}
+                            ${intel.impact.companies ? `<li><strong>Affected Companies:</strong> ${intel.impact.companies}</li>` : ''}
+                            ${intel.impact.revenue ? `<li><strong>Revenue Impact:</strong> ${intel.impact.revenue}</li>` : ''}
+                            ${intel.impact.features?.length > 0 ? `<li><strong>Affected Features:</strong> ${intel.impact.features.join(', ')}</li>` : ''}
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            // Reproduce Steps
+            if (intel.fix?.reproduceSteps && intel.fix.reproduceSteps.length > 0) {
+                guideHtml += `
+                    <div class="bg-blue-50 border border-blue-200 p-4 rounded">
+                        <h4 class="font-semibold text-blue-900 mb-2">🔍 How to Reproduce</h4>
+                        <ol class="list-decimal list-inside text-gray-800 space-y-2">
+                            ${intel.fix.reproduceSteps.map(step => `<li>${step}</li>`).join('')}
+                        </ol>
+                    </div>
+                `;
+            }
+            
+            // Fix Instructions
+            if (intel.fix?.verifySteps && intel.fix.verifySteps.length > 0) {
+                guideHtml += `
+                    <div class="bg-green-50 border border-green-200 p-4 rounded">
+                        <h4 class="font-semibold text-green-900 mb-2">✅ How to Verify Fix</h4>
+                        <ol class="list-decimal list-inside text-gray-800 space-y-2">
+                            ${intel.fix.verifySteps.map(step => `<li>${step}</li>`).join('')}
+                        </ol>
+                    </div>
+                `;
+            }
+            
+            // Related Errors
+            if (intel.related?.errors && intel.related.errors.length > 0) {
+                guideHtml += `
+                    <div class="bg-purple-50 border border-purple-200 p-4 rounded">
+                        <h4 class="font-semibold text-purple-900 mb-2">🔗 Related Errors</h4>
+                        <ul class="list-disc list-inside text-gray-800 space-y-1">
+                            ${intel.related.errors.map(err => `<li><code class="font-mono text-sm">${err}</code></li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            // External Links
+            const hasLinks = intel.fix?.fixUrl || intel.fix?.uiFixUrl || intel.fix?.externalDocs;
+            if (hasLinks) {
+                guideHtml += `
+                    <div class="bg-indigo-50 border border-indigo-200 p-4 rounded">
+                        <h4 class="font-semibold text-indigo-900 mb-2">🔗 Quick Links</h4>
+                        <div class="flex flex-wrap gap-2">
+                            ${intel.fix?.fixUrl ? `<a href="${intel.fix.fixUrl}" target="_blank" class="px-3 py-1 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700">⚙️ Open Config</a>` : ''}
+                            ${intel.fix?.uiFixUrl ? `<a href="${intel.fix.uiFixUrl}" target="_blank" class="px-3 py-1 bg-teal-600 text-white text-sm rounded hover:bg-teal-700">🛠️ Fix in UI</a>` : ''}
+                            ${intel.fix?.externalDocs ? `<a href="${intel.fix.externalDocs}" target="_blank" class="px-3 py-1 bg-cyan-600 text-white text-sm rounded hover:bg-cyan-700">📚 View Docs</a>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            guideHtml += '</div>';
+            
+            // Show in modal
+            this.showModal('Fix Guide', guideHtml);
+            
+        } catch (error) {
+            console.error('❌ [LOG] Error showing fix guide:', error);
+            this.nc.showError('Failed to load fix guide');
+        }
+    }
+    
+    async testFix(alertId, errorCode) {
+        try {
+            this.nc.showInfo('🧪 Running test...');
+            
+            // Determine what test to run based on error code
+            let testEndpoint = null;
+            let testName = '';
+            
+            if (errorCode.includes('HEALTH') || errorCode.includes('PLATFORM')) {
+                testEndpoint = '/api/admin/notifications/health-check';
+                testName = 'Platform Health Check';
+            } else if (errorCode.includes('TWILIO') || errorCode.includes('SMS')) {
+                testEndpoint = '/api/admin/notifications/test-sms';
+                testName = 'SMS Delivery Test';
+            }
+            
+            if (!testEndpoint) {
+                this.nc.showError('No test available for this error type');
+                return;
+            }
+            
+            console.log(`🧪 [LOG] Running ${testName}...`);
+            const response = await this.nc.apiPost(testEndpoint, {});
+            
+            if (response.success) {
+                this.nc.showSuccess(`✅ ${testName} passed! Issue may be resolved.`);
+                
+                // Auto-refresh logs to show new test results
+                setTimeout(() => {
+                    this.load();
+                }, 2000);
+            } else {
+                this.nc.showWarning(`⚠️ ${testName} failed: ${response.message || 'Unknown error'}`);
+            }
+            
+        } catch (error) {
+            console.error('❌ [LOG] Test failed:', error);
+            this.nc.showError(`Test failed: ${error.message}`);
+        }
+    }
+    
+    showModal(title, contentHtml) {
+        // Create modal overlay
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+        modal.innerHTML = `
+            <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                <div class="flex justify-between items-center p-4 border-b">
+                    <h2 class="text-xl font-bold text-gray-900">${title}</h2>
+                    <button onclick="this.closest('.fixed').remove()" class="text-gray-500 hover:text-gray-700 text-2xl font-bold">
+                        ×
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto flex-1">
+                    ${contentHtml}
+                </div>
+                <div class="flex justify-end p-4 border-t">
+                    <button onclick="this.closest('.fixed').remove()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
+                        Close
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Close on overlay click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
     }
     
     renderPagination(pagination) {

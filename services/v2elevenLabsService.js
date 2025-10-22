@@ -128,7 +128,23 @@ async function getAvailableVoices({ apiKey, company } = {}) {
       };
     });
   } catch (error) {
-    logger.error('❌ ElevenLabs getAvailableVoices error:', error);
+    // Enhanced error reporting with company context
+    if (company) {
+      logger.companyError({
+        companyId: company._id,
+        companyName: company.businessName || company.companyName || 'Unknown',
+        code: 'ELEVENLABS_VOICE_FETCH_FAILURE',
+        message: 'Failed to fetch ElevenLabs voices',
+        severity: error.statusCode === 401 ? 'WARNING' : 'CRITICAL',
+        error,
+        meta: {
+          apiSource: company?.aiAgentLogic?.voiceSettings?.apiSource,
+          hasApiKey: Boolean(apiKey)
+        }
+      });
+    } else {
+      logger.error('❌ ElevenLabs getAvailableVoices error:', error);
+    }
     
     // Check if it's an API key error - use mock data for testing
     if (error.statusCode === 401 || 
@@ -218,7 +234,25 @@ async function synthesizeSpeech({
     
     return Buffer.concat(chunks);
   } catch (error) {
-    logger.error('❌ ElevenLabs synthesizeSpeech error:', error);
+    // Enhanced error reporting with company context
+    if (company) {
+      logger.companyError({
+        companyId: company._id,
+        companyName: company.businessName || company.companyName || 'Unknown',
+        code: 'ELEVENLABS_TTS_FAILURE',
+        message: 'Text-to-speech synthesis failed',
+        severity: 'CRITICAL',
+        error,
+        meta: {
+          voiceId,
+          textLength: text?.length || 0,
+          modelId: model_id
+        }
+      });
+    } else {
+      logger.error('❌ ElevenLabs synthesizeSpeech error:', error);
+    }
+    
     throw new Error(`Failed to synthesize speech: ${error.message}`);
   }
 }

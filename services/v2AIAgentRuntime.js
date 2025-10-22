@@ -77,7 +77,21 @@ class V2AIAgentRuntime {
             };
 
         } catch (error) {
-            logger.error(`❌ V2 AGENT: Error initializing call:`, error);
+            // Enhanced error reporting with company context
+            logger.companyError({
+                companyId: companyID,
+                companyName: 'Unknown',
+                code: 'AI_AGENT_INIT_FAILURE',
+                message: `AI Agent failed to initialize call ${callId}`,
+                severity: 'CRITICAL',
+                error,
+                meta: {
+                    callId,
+                    from,
+                    to
+                }
+            });
+            
             return {
                 greeting: `System error: Unable to initialize V2 Agent for this call`,
                 callState: { callId, from, to, stage: 'system_error' }
@@ -304,7 +318,22 @@ class V2AIAgentRuntime {
             };
 
         } catch (error) {
-            logger.error(`❌ V2 AGENT: Error processing user input:`, error);
+            // Enhanced error reporting with company context
+            logger.companyError({
+                companyId: companyID,
+                companyName: callState.companyName || 'Unknown',
+                code: 'AI_AGENT_PROCESSING_FAILURE',
+                message: `AI Agent failed to process user input for call ${callId}`,
+                severity: 'WARNING',
+                error,
+                meta: {
+                    callId,
+                    userInput: userInput?.substring(0, 100), // Truncate for privacy
+                    callStage: callState.stage,
+                    turnCount: callState.turnCount || 0
+                }
+            });
+            
             return {
                 response: "I'm experiencing a technical issue. Let me connect you to our support team.",
                 action: 'transfer',
