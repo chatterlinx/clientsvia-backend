@@ -18,7 +18,10 @@
     "seed-global-ai-brain": "node scripts/seed-global-ai-brain.js",
     "check:routes": "node scripts/check-routes.js",
     "smoke-test": "node scripts/smoke-test.js",
-    "validate": "npm run check:routes && npm run smoke-test"
+    "validate": "npm run check:routes && npm run smoke-test",
+    "bundle:snapshot": "node scripts/bundle-snapshot.js",
+    "bundle:check": "node scripts/bundle-check.js",
+    "dead": "echo 'dead-code scan placeholder (knip/ts-prune not installed)' && exit 0"
   },
   "keywords": [],
   "author": "",

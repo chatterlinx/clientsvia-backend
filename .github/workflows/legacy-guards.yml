@@ -1,0 +1,12 @@
+name: Legacy Guards
+
+on: [pull_request]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ban legacy endpoints and feature references
+        run: rg -nI "/api/admin/configuration-todos|configuration[-_ ]?todos|admin[-_ ]?alert[-_ ]?center" -S -g "!node_modules" | (! grep .)
+
