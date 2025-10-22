@@ -1161,11 +1161,11 @@ router.post('/admin/notifications/test-all', authenticateJWT, requireRole('admin
         // This will send both SMS and Email to all configured admin contacts
         await AdminNotificationService.sendAlert({
             code: 'NOTIFICATION_SYSTEM_TEST',
-            severity: 'INFO',
+            severity: 'WARNING',  // Changed from INFO to WARNING so you actually get notified (INFO is log-only by default)
             companyId: null,
             companyName: 'Notification Center Test',
             message: '🧪 Test Alert - Full System Check',
-            details: `This is a test message sent at ${new Date().toISOString()}\n\nIf you received this via both SMS AND email, your notification system is working perfectly!\n\n✅ SMS delivery: Working\n✅ Email delivery: Working\n✅ Notification logging: Working`
+            details: `This is a test message sent at ${new Date().toISOString()}\n\nIf you received this via EMAIL (not SMS), your notification policy is working correctly!\n\n✅ Email delivery: Working\n✅ Notification logging: Working\n\nBy default:\n- WARNING = Email only\n- CRITICAL = SMS + Email\n- INFO = Log only`
         });
         
         logger.info('✅ [TEST ALL] Test alert sent successfully!');
