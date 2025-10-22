@@ -210,31 +210,7 @@ router.post('/clear-cache/:companyId', authenticateJWT, async (req, res) => {
  * Get all companies with configuration alerts (Dashboard TO-DO widget)
  * ============================================================================
  */
-const PlaceholderScanService = require('../services/PlaceholderScanService');
-
-router.get('/configuration-todos', authenticateJWT, async (req, res) => {
-    console.log('📋 [ADMIN] GET /configuration-todos');
-    
-    try {
-        // Get all configuration alerts
-        const alerts = await PlaceholderScanService.getConfigurationAlerts();
-        
-        console.log(`✅ [ADMIN] Found ${alerts.length} configuration alerts`);
-        
-        res.json({
-            success: true,
-            totalAlerts: alerts.length,
-            alerts
-        });
-        
-    } catch (error) {
-        console.error('❌ [ADMIN] Error fetching configuration todos:', error);
-        res.status(500).json({ 
-            error: 'Failed to fetch configuration todos',
-            message: error.message
-        });
-    }
-});
+// Legacy /configuration-todos endpoint removed (Admin Alert Center decommissioned)
 
 // Mount admin routes
 router.use('/account-deletion', accountDeletionRoutes);
