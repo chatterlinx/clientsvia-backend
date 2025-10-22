@@ -139,7 +139,7 @@ function captureMessage(message, level = 'info', context = {}) {
 // Security-specific error capture
 function captureSecurityEvent(event, details = {}) {
   if (!process.env.SENTRY_DSN) {
-    logger.security('Security Event (Sentry disabled):', event, details);
+    logger.warn(`[SECURITY] Security Event (Sentry disabled): ${event}`, { details, category: 'security' });
     return;
   }
 
