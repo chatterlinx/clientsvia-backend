@@ -475,23 +475,29 @@ Suggested Actions:
         const startTime = Date.now();
         
         try {
-            if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+            // Load Twilio credentials from AdminSettings (multi-tenant system)
+            const AdminSettings = require('../models/AdminSettings');
+            const settings = await AdminSettings.findOne({});
+            
+            if (!settings?.notificationCenter?.twilio?.accountSid || 
+                !settings?.notificationCenter?.twilio?.authToken) {
                 throw new Error('Twilio credentials not configured');
             }
             
             const twilioClient = require('twilio')(
-                process.env.TWILIO_ACCOUNT_SID,
-                process.env.TWILIO_AUTH_TOKEN
+                settings.notificationCenter.twilio.accountSid,
+                settings.notificationCenter.twilio.authToken
             );
             
             // Test API by fetching account info
-            const account = await twilioClient.api.accounts(process.env.TWILIO_ACCOUNT_SID).fetch();
+            const account = await twilioClient.api.accounts(settings.notificationCenter.twilio.accountSid).fetch();
             
             check.responseTime = Date.now() - startTime;
             check.message = `API operational (Account: ${account.friendlyName})`;
             check.details = {
                 accountSid: account.sid,
-                status: account.status
+                status: account.status,
+                phoneNumber: settings.notificationCenter.twilio.phoneNumber
             };
             
             // Warn if response time is slow
@@ -579,11 +585,15 @@ Suggested Actions:
         
         try {
             // Verify SMS client is configured (don't actually send SMS to avoid spam)
-            if (!smsClient || !smsClient.sendSMS) {
+            if (!smsClient || !smsClient.send) {
                 throw new Error('SMS client not configured');
             }
             
-            if (!process.env.TWILIO_PHONE_NUMBER) {
+            // Load Twilio phone number from AdminSettings (multi-tenant system)
+            const AdminSettings = require('../models/AdminSettings');
+            const settings = await AdminSettings.findOne({});
+            
+            if (!settings?.notificationCenter?.twilio?.phoneNumber) {
                 throw new Error('Twilio phone number not configured');
             }
             
@@ -591,7 +601,8 @@ Suggested Actions:
             check.message = `SMS client configured and ready`;
             check.details = {
                 configured: true,
-                provider: 'Twilio'
+                provider: 'Twilio',
+                phoneNumber: settings.notificationCenter.twilio.phoneNumber
             };
             
         } catch (error) {
@@ -620,30 +631,29 @@ Suggested Actions:
         const startTime = Date.now();
         
         try {
-            // Check Notification Center company exists
-            const notificationCenter = await v2Company.findOne({
-                'metadata.isNotificationCenter': true
-            });
+            // Check AdminSettings for admin contacts (primary location in multi-tenant system)
+            const AdminSettings = require('../models/AdminSettings');
+            const settings = await AdminSettings.findOne({});
             
-            if (!notificationCenter) {
-                throw new Error('Notification Center company not found');
-            }
-            
-            // Check admin contacts
-            const adminContacts = notificationCenter.contacts?.filter(
-                c => c.type === 'admin-alert' && c.smsNotifications !== false
-            ) || [];
+            const adminContacts = settings?.notificationCenter?.adminContacts || [];
             
             if (adminContacts.length === 0) {
                 throw new Error('No admin contacts configured');
             }
             
+            // Verify at least one contact has SMS enabled
+            const smsEnabled = adminContacts.filter(c => c.smsEnabled !== false);
+            
+            if (smsEnabled.length === 0) {
+                throw new Error('No admin contacts have SMS notifications enabled');
+            }
+            
             check.responseTime = Date.now() - startTime;
-            check.message = `Operational (${adminContacts.length} admin contacts)`;
+            check.message = `Operational (${adminContacts.length} admin contacts, ${smsEnabled.length} SMS-enabled)`;
             check.details = {
-                notificationCenterId: notificationCenter._id,
                 adminContactCount: adminContacts.length,
-                adminPhones: adminContacts.map(c => c.phoneNumber)
+                smsEnabledCount: smsEnabled.length,
+                adminPhones: smsEnabled.map(c => c.phoneNumber)
             };
             
         } catch (error) {
@@ -753,13 +763,11 @@ Suggested Actions:
         const startTime = Date.now();
         
         try {
-            const notificationCenter = await v2Company.findOne({
-                'metadata.isNotificationCenter': true
-            });
+            // Load admin contacts from AdminSettings (multi-tenant system)
+            const AdminSettings = require('../models/AdminSettings');
+            const settings = await AdminSettings.findOne({});
             
-            const adminContacts = notificationCenter?.contacts?.filter(
-                c => c.type === 'admin-alert'
-            ) || [];
+            const adminContacts = settings?.notificationCenter?.adminContacts || [];
             
             if (adminContacts.length === 0) {
                 throw new Error('No admin contacts configured');
@@ -772,7 +780,7 @@ Suggested Actions:
                 contacts: adminContacts.map(c => ({
                     name: c.name,
                     phone: c.phoneNumber,
-                    smsEnabled: c.smsNotifications !== false,
+                    smsEnabled: c.smsEnabled !== false,
                     emailEnabled: Boolean(c.email)
                 }))
             };
