@@ -424,6 +424,227 @@
                 </div>
             </div>
             
+            <!-- NOTIFICATION POLICY (Smart Alert Management) -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-semibold text-gray-700">
+                        <i class="fas fa-bell-slash mr-2"></i>
+                        Notification Policy (Smart Alert Management)
+                    </h3>
+                    <button 
+                        onclick="window.settingsManager.resetNotificationPolicy()"
+                        class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded transition text-sm"
+                        title="Reset all settings to recommended defaults"
+                    >
+                        <i class="fas fa-undo mr-2"></i>
+                        Reset to Defaults
+                    </button>
+                </div>
+                
+                <p class="text-sm text-gray-600 mb-6">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    Control which alerts generate SMS/Email notifications vs. log-only. Prevents notification spam while ensuring critical issues reach you immediately.
+                </p>
+                
+                <!-- SEVERITY RULES -->
+                <div class="mb-6">
+                    <h4 class="font-semibold text-gray-700 mb-3">
+                        <i class="fas fa-layer-group mr-2"></i>
+                        Severity-Based Rules
+                    </h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- CRITICAL -->
+                        <div class="border-2 border-red-300 rounded-lg p-4 bg-red-50">
+                            <div class="flex items-center mb-2">
+                                <span class="text-2xl mr-2">🚨</span>
+                                <h5 class="font-bold text-red-900">CRITICAL</h5>
+                            </div>
+                            <p class="text-xs text-gray-600 mb-3">System down, database offline, payment failures</p>
+                            <div class="space-y-2">
+                                <label class="flex items-center text-sm">
+                                    <input type="checkbox" id="policy-critical-sms" class="mr-2" checked>
+                                    📱 Send SMS
+                                </label>
+                                <label class="flex items-center text-sm">
+                                    <input type="checkbox" id="policy-critical-email" class="mr-2" checked>
+                                    📧 Send Email
+                                </label>
+                                <label class="flex items-center text-sm">
+                                    <input type="checkbox" id="policy-critical-logonly" class="mr-2">
+                                    📋 Log Only (No Alerts)
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- WARNING -->
+                        <div class="border-2 border-yellow-300 rounded-lg p-4 bg-yellow-50">
+                            <div class="flex items-center mb-2">
+                                <span class="text-2xl mr-2">⚠️</span>
+                                <h5 class="font-bold text-yellow-900">WARNING</h5>
+                            </div>
+                            <p class="text-xs text-gray-600 mb-3">Degraded performance, non-critical failures</p>
+                            <div class="space-y-2">
+                                <label class="flex items-center text-sm">
+                                    <input type="checkbox" id="policy-warning-sms" class="mr-2">
+                                    📱 Send SMS
+                                </label>
+                                <label class="flex items-center text-sm">
+                                    <input type="checkbox" id="policy-warning-email" class="mr-2" checked>
+                                    📧 Send Email
+                                </label>
+                                <label class="flex items-center text-sm">
+                                    <input type="checkbox" id="policy-warning-logonly" class="mr-2">
+                                    📋 Log Only (No Alerts)
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- INFO -->
+                        <div class="border-2 border-blue-300 rounded-lg p-4 bg-blue-50">
+                            <div class="flex items-center mb-2">
+                                <span class="text-2xl mr-2">ℹ️</span>
+                                <h5 class="font-bold text-blue-900">INFO</h5>
+                            </div>
+                            <p class="text-xs text-gray-600 mb-3">Successful operations, health checks passing</p>
+                            <div class="space-y-2">
+                                <label class="flex items-center text-sm">
+                                    <input type="checkbox" id="policy-info-sms" class="mr-2">
+                                    📱 Send SMS
+                                </label>
+                                <label class="flex items-center text-sm">
+                                    <input type="checkbox" id="policy-info-email" class="mr-2">
+                                    📧 Send Email
+                                </label>
+                                <label class="flex items-center text-sm">
+                                    <input type="checkbox" id="policy-info-logonly" class="mr-2" checked>
+                                    📋 Log Only (No Alerts)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- DAILY DIGEST -->
+                <div class="mb-6 border-t pt-6">
+                    <h4 class="font-semibold text-gray-700 mb-3">
+                        <i class="fas fa-calendar-day mr-2"></i>
+                        Daily Health Digest
+                    </h4>
+                    <p class="text-xs text-gray-600 mb-4">
+                        Get ONE daily email with system health, stats, and warnings. Know everything is running without being spammed.
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <label class="flex items-center text-sm">
+                            <input type="checkbox" id="policy-digest-enabled" class="mr-2" checked>
+                            ✅ Enable Daily Digest
+                        </label>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Delivery Time</label>
+                            <input type="time" id="policy-digest-time" value="08:00" class="border border-gray-300 rounded px-3 py-2 w-full">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                            <select id="policy-digest-timezone" class="border border-gray-300 rounded px-3 py-2 w-full">
+                                <option value="America/New_York">Eastern (ET)</option>
+                                <option value="America/Chicago">Central (CT)</option>
+                                <option value="America/Denver">Mountain (MT)</option>
+                                <option value="America/Los_Angeles">Pacific (PT)</option>
+                                <option value="America/Phoenix">Arizona (MST)</option>
+                                <option value="America/Anchorage">Alaska (AKT)</option>
+                                <option value="Pacific/Honolulu">Hawaii (HST)</option>
+                                <option value="Europe/London">London (GMT)</option>
+                                <option value="Europe/Paris">Paris (CET)</option>
+                                <option value="Asia/Tokyo">Tokyo (JST)</option>
+                                <option value="Asia/Shanghai">Shanghai (CST)</option>
+                                <option value="Australia/Sydney">Sydney (AEDT)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- QUIET HOURS -->
+                <div class="mb-6 border-t pt-6">
+                    <h4 class="font-semibold text-gray-700 mb-3">
+                        <i class="fas fa-moon mr-2"></i>
+                        Quiet Hours (Respect Sleep)
+                    </h4>
+                    <p class="text-xs text-gray-600 mb-4">
+                        During these hours, WARNING alerts are queued for morning. CRITICAL alerts still send immediately (configurable).
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <label class="flex items-center text-sm">
+                            <input type="checkbox" id="policy-quiet-enabled" class="mr-2" checked>
+                            🌙 Enable Quiet Hours
+                        </label>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                            <input type="time" id="policy-quiet-start" value="22:00" class="border border-gray-300 rounded px-3 py-2 w-full">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                            <input type="time" id="policy-quiet-end" value="07:00" class="border border-gray-300 rounded px-3 py-2 w-full">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                            <select id="policy-quiet-timezone" class="border border-gray-300 rounded px-3 py-2 w-full">
+                                <option value="America/New_York">Eastern (ET)</option>
+                                <option value="America/Chicago">Central (CT)</option>
+                                <option value="America/Denver">Mountain (MT)</option>
+                                <option value="America/Los_Angeles">Pacific (PT)</option>
+                                <option value="America/Phoenix">Arizona (MST)</option>
+                                <option value="America/Anchorage">Alaska (AKT)</option>
+                                <option value="Pacific/Honolulu">Hawaii (HST)</option>
+                                <option value="Europe/London">London (GMT)</option>
+                                <option value="Europe/Paris">Paris (CET)</option>
+                                <option value="Asia/Tokyo">Tokyo (JST)</option>
+                                <option value="Asia/Shanghai">Shanghai (CST)</option>
+                                <option value="Australia/Sydney">Sydney (AEDT)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <label class="flex items-center text-sm">
+                            <input type="checkbox" id="policy-quiet-allow-critical" class="mr-2" checked>
+                            🚨 Always send CRITICAL alerts (even during quiet hours)
+                        </label>
+                        <label class="flex items-center text-sm">
+                            <input type="checkbox" id="policy-quiet-defer-warnings" class="mr-2" checked>
+                            ⏰ Defer WARNING alerts to morning digest
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- SMART GROUPING -->
+                <div class="mb-6 border-t pt-6">
+                    <h4 class="font-semibold text-gray-700 mb-3">
+                        <i class="fas fa-layer-group mr-2"></i>
+                        Smart Grouping (Prevent Alert Storms)
+                    </h4>
+                    <p class="text-xs text-gray-600 mb-4">
+                        Group repeated errors into ONE alert. Example: 5 SMS failures → "🚨 5 SMS_DELIVERY_FAILURE errors in 15 minutes"
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <label class="flex items-center text-sm">
+                            <input type="checkbox" id="policy-grouping-enabled" class="mr-2" checked>
+                            ✅ Enable Smart Grouping
+                        </label>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Threshold (errors to group)</label>
+                            <input type="number" id="policy-grouping-threshold" value="3" min="2" max="10" class="border border-gray-300 rounded px-3 py-2 w-full">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Time Window (minutes)</label>
+                            <input type="number" id="policy-grouping-window" value="15" min="5" max="60" class="border border-gray-300 rounded px-3 py-2 w-full">
+                        </div>
+                    </div>
+                </div>
+                
+                <button id="save-policy-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded transition">
+                    <i class="fas fa-save mr-2"></i>
+                    Save Notification Policy
+                </button>
+            </div>
+            
             <!-- ESCALATION SETTINGS -->
             <div class="bg-white rounded-lg shadow-md p-6">
                 <h3 class="text-xl font-semibold text-gray-700 mb-6">

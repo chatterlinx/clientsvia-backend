@@ -227,6 +227,59 @@ const adminSettingsSchema = new mongoose.Schema({
                 trim: true,
                 description: 'Admin notes about testing'
             }
+        },
+        
+        // 🔔 NOTIFICATION POLICY - Smart Alert Management
+        notificationPolicy: {
+            // Severity-based delivery rules
+            severityRules: {
+                CRITICAL: {
+                    sendSMS: { type: Boolean, default: true },
+                    sendEmail: { type: Boolean, default: true },
+                    logOnly: { type: Boolean, default: false },
+                    description: 'System down, database offline, payment failures'
+                },
+                WARNING: {
+                    sendSMS: { type: Boolean, default: false },
+                    sendEmail: { type: Boolean, default: true },
+                    logOnly: { type: Boolean, default: false },
+                    description: 'Degraded performance, non-critical failures'
+                },
+                INFO: {
+                    sendSMS: { type: Boolean, default: false },
+                    sendEmail: { type: Boolean, default: false },
+                    logOnly: { type: Boolean, default: true },
+                    description: 'Successful operations, health checks passing'
+                }
+            },
+            
+            // Daily digest email (industry standard)
+            dailyDigest: {
+                enabled: { type: Boolean, default: true },
+                time: { type: String, default: '08:00', description: 'Time in 24hr format (HH:MM)' },
+                timezone: { type: String, default: 'America/New_York', description: 'IANA timezone' },
+                includeStats: { type: Boolean, default: true },
+                includeWarnings: { type: Boolean, default: true },
+                includeCritical: { type: Boolean, default: true }
+            },
+            
+            // Quiet hours (respect sleep)
+            quietHours: {
+                enabled: { type: Boolean, default: true },
+                startTime: { type: String, default: '22:00', description: '10 PM' },
+                endTime: { type: String, default: '07:00', description: '7 AM' },
+                timezone: { type: String, default: 'America/New_York' },
+                allowCritical: { type: Boolean, default: true, description: 'Always send CRITICAL even during quiet hours' },
+                deferWarnings: { type: Boolean, default: true, description: 'Queue WARNING alerts for morning digest' }
+            },
+            
+            // Smart grouping (prevent alert storms)
+            smartGrouping: {
+                enabled: { type: Boolean, default: true },
+                threshold: { type: Number, default: 3, description: 'Group if 3+ same errors' },
+                windowMinutes: { type: Number, default: 15, description: 'Within 15 minute window' },
+                groupMessage: { type: String, default: '🚨 {count} {errorCode} failures detected in {window} minutes' }
+            }
         }
     },
     
@@ -308,6 +361,121 @@ adminSettingsSchema.statics.shouldNotify = async function(alertType) {
         default:
             return false;
     }
+};
+
+/**
+ * Get default notification policy
+ * Used for "Reset to Defaults" button
+ */
+adminSettingsSchema.statics.getDefaultNotificationPolicy = function() {
+    return {
+        severityRules: {
+            CRITICAL: {
+                sendSMS: true,
+                sendEmail: true,
+                logOnly: false,
+                description: 'System down, database offline, payment failures'
+            },
+            WARNING: {
+                sendSMS: false,
+                sendEmail: true,
+                logOnly: false,
+                description: 'Degraded performance, non-critical failures'
+            },
+            INFO: {
+                sendSMS: false,
+                sendEmail: false,
+                logOnly: true,
+                description: 'Successful operations, health checks passing'
+            }
+        },
+        dailyDigest: {
+            enabled: true,
+            time: '08:00',
+            timezone: 'America/New_York',
+            includeStats: true,
+            includeWarnings: true,
+            includeCritical: true
+        },
+        quietHours: {
+            enabled: true,
+            startTime: '22:00',
+            endTime: '07:00',
+            timezone: 'America/New_York',
+            allowCritical: true,
+            deferWarnings: true
+        },
+        smartGrouping: {
+            enabled: true,
+            threshold: 3,
+            windowMinutes: 15,
+            groupMessage: '🚨 {count} {errorCode} failures detected in {window} minutes'
+        }
+    };
+};
+
+/**
+ * Check if notification should be sent based on severity and policy
+ * @param {string} severity - CRITICAL, WARNING, or INFO
+ * @returns {Object} { sendSMS: boolean, sendEmail: boolean, logOnly: boolean }
+ */
+adminSettingsSchema.statics.shouldSendNotification = async function(severity) {
+    const settings = await this.getSettings();
+    const policy = settings.notificationCenter?.notificationPolicy?.severityRules;
+    
+    if (!policy || !policy[severity]) {
+        // Fallback to conservative defaults if policy not configured
+        return {
+            sendSMS: severity === 'CRITICAL',
+            sendEmail: severity !== 'INFO',
+            logOnly: severity === 'INFO'
+        };
+    }
+    
+    return {
+        sendSMS: policy[severity].sendSMS,
+        sendEmail: policy[severity].sendEmail,
+        logOnly: policy[severity].logOnly
+    };
+};
+
+/**
+ * Check if we're currently in quiet hours
+ * @returns {boolean}
+ */
+adminSettingsSchema.statics.isQuietHours = async function() {
+    const settings = await this.getSettings();
+    const quietHours = settings.notificationCenter?.notificationPolicy?.quietHours;
+    
+    if (!quietHours || !quietHours.enabled) {
+        return false;
+    }
+    
+    const now = new Date();
+    const timezone = quietHours.timezone || 'America/New_York';
+    
+    // Convert current time to configured timezone
+    const timeStr = now.toLocaleTimeString('en-US', { 
+        timeZone: timezone, 
+        hour12: false, 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+    
+    const [startHour, startMin] = quietHours.startTime.split(':').map(Number);
+    const [endHour, endMin] = quietHours.endTime.split(':').map(Number);
+    const [nowHour, nowMin] = timeStr.split(':').map(Number);
+    
+    const nowMinutes = nowHour * 60 + nowMin;
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    
+    // Handle overnight quiet hours (e.g., 22:00 - 07:00)
+    if (startMinutes > endMinutes) {
+        return nowMinutes >= startMinutes || nowMinutes < endMinutes;
+    }
+    
+    return nowMinutes >= startMinutes && nowMinutes < endMinutes;
 };
 
 // ============================================================================
