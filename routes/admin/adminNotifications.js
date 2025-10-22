@@ -1082,6 +1082,16 @@ Reply STOP to unsubscribe.
 // PHASE 3: ADVANCED ERROR INTELLIGENCE ENDPOINTS
 // ============================================================================
 
+// Simple test route to verify Phase 3 routes are being registered
+router.get('/notifications/_test', authenticateJWT, requireRole('admin'), (req, res) => {
+    res.json({ 
+        success: true, 
+        message: '🎉 Phase 3 routes are registered!',
+        timestamp: new Date().toISOString(),
+        server: 'Render production'
+    });
+});
+
 const RootCauseAnalyzer = require('../../services/RootCauseAnalyzer');
 const ErrorTrendTracker = require('../../services/ErrorTrendTracker');
 const DependencyHealthMonitor = require('../../services/DependencyHealthMonitor');
