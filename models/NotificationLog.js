@@ -207,7 +207,7 @@ const notificationLogSchema = new mongoose.Schema({
         resolutionNotes: String,
         resolutionAction: {
             type: String,
-            enum: ['fixed', 'false-positive', 'known-issue', 'wont-fix', 'duplicate']
+            enum: ['fixed', 'false-positive', 'known-issue', 'wont-fix', 'duplicate', 'manual_resolve']
         }
     },
     
