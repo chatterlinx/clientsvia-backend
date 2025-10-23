@@ -254,21 +254,33 @@ class LogManager {
     }
     
     renderLogCard(log) {
+        // Check if resolved
+        const isResolved = log.resolution?.isResolved === true;
+        
         const severityColors = {
             'CRITICAL': 'border-red-500 bg-red-50',
             'WARNING': 'border-yellow-500 bg-yellow-50',
             'INFO': 'border-blue-500 bg-blue-50'
         };
         
-        const statusBadge = log.acknowledgment?.isAcknowledged
-            ? '<span class="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">✅ Acknowledged</span>'
-            : '<span class="px-2 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">⏳ Waiting</span>';
+        // Status badge
+        let statusBadge = '';
+        if (isResolved) {
+            statusBadge = '<span class="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">✔️ Resolved</span>';
+        } else if (log.acknowledgment?.isAcknowledged) {
+            statusBadge = '<span class="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">✅ Acknowledged</span>';
+        } else {
+            statusBadge = '<span class="px-2 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">⏳ Waiting</span>';
+        }
         
         // Generate suggested actions based on error code
         const suggestedActions = this.getSuggestedActions(log);
         
+        // Add grayed-out styling for resolved alerts
+        const resolvedStyle = isResolved ? 'opacity-50 bg-gray-50' : '';
+        
         return `
-            <div class="border-l-4 ${severityColors[log.severity]} p-4 rounded-r-lg shadow">
+            <div class="border-l-4 ${severityColors[log.severity]} p-4 rounded-r-lg shadow ${resolvedStyle}">
                 <div class="flex items-start gap-3 mb-2">
                     <div class="pt-1">
                         <input type="checkbox" 
@@ -313,7 +325,11 @@ class LogManager {
                     ` : `<div>Created: ${this.nc.formatDateTime(log.createdAt)}</div>`}
                     <div>Delivery Attempts: ${log.deliveryAttempts?.length || 0} | Escalation Level: ${log.escalation?.currentLevel || 1}/${log.escalation?.maxLevel || 3}</div>
                     ${log.acknowledgment?.isAcknowledged ? `
-                        <div class="text-green-600">Acknowledged by ${log.acknowledgment.acknowledgedBy} at ${this.nc.formatDateTime(log.acknowledgment.acknowledgedAt)}</div>
+                        <div class="text-green-600">✅ Acknowledged by ${log.acknowledgment.acknowledgedBy} at ${this.nc.formatDateTime(log.acknowledgment.acknowledgedAt)}</div>
+                    ` : ''}
+                    ${isResolved ? `
+                        <div class="text-purple-600 font-semibold">✔️ RESOLVED by ${log.resolution.resolvedBy || 'Admin'} at ${this.nc.formatDateTime(log.resolution.resolvedAt)}</div>
+                        ${log.resolution.resolutionNotes ? `<div class="text-sm text-gray-600 italic">Note: ${log.resolution.resolutionNotes}</div>` : ''}
                     ` : ''}
                 </div>
                 

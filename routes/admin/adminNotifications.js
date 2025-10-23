@@ -344,7 +344,11 @@ router.get('/admin/notifications/logs', authenticateJWT, requireRole('admin'), a
         
         const [logs, total] = await Promise.all([
             NotificationLog.find(filter)
-                .sort({ createdAt: -1 })
+                .sort({ 
+                    'resolution.isResolved': 1,    // Unresolved (false=0) first, resolved (true=1) last
+                    'acknowledgment.isAcknowledged': 1,  // Unacknowledged first
+                    createdAt: -1                   // Then newest first within each group
+                })
                 .skip(skip)
                 .limit(parseInt(limit, 10)),
             NotificationLog.countDocuments(filter)
