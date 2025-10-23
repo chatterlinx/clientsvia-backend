@@ -222,33 +222,140 @@ class AdminNotificationService {
             });
             
             // ================================================================
-            // STEP 4: CREATE NOTIFICATION LOG ENTRY (with intelligence)
+            // STEP 4: SMART DEDUPLICATION - Check for Recent Similar Alert
             // ================================================================
-            const notificationLog = await NotificationLog.create({
+            const DEDUP_WINDOW_MINUTES = 15;
+            const dedupCutoff = new Date(Date.now() - DEDUP_WINDOW_MINUTES * 60 * 1000);
+            
+            const recentSimilarAlert = await NotificationLog.findOne({
                 code: code.toUpperCase(),
-                severity,
-                companyId,
-                companyName,
-                message,
-                details,
-                stackTrace,
-                
-                // Add error intelligence to log
-                intelligence: errorAnalysis.intelligence,
-                
-                // Set escalation schedule based on severity
-                escalation: {
-                    isEnabled: severity !== 'INFO',  // No escalation for INFO
-                    currentLevel: 1,
-                    maxLevel: severity === 'CRITICAL' ? 5 : 3,
-                    nextEscalationAt: this.calculateNextEscalation(severity, 1)
-                }
-            });
+                companyId: companyId,
+                severity: severity,
+                'acknowledgment.isAcknowledged': false,
+                'resolution.isResolved': false,
+                createdAt: { $gte: dedupCutoff }
+            }).sort({ createdAt: -1 });
             
-            logger.debug(`✅ [ADMIN NOTIFICATION] Created log entry: ${notificationLog.alertId}`);
+            let notificationLog;
+            let isNewAlert = true;
+            
+            if (recentSimilarAlert) {
+                // DUPLICATE DETECTED - Update existing alert
+                logger.info(`🔄 [DEDUP] Found recent similar alert ${recentSimilarAlert.alertId} - updating occurrence count`);
+                
+                isNewAlert = false;
+                const occurrenceNum = (recentSimilarAlert.occurrenceCount || 1) + 1;
+                
+                notificationLog = await NotificationLog.findByIdAndUpdate(
+                    recentSimilarAlert._id,
+                    {
+                        $set: {
+                            lastOccurredAt: new Date(),
+                            updatedAt: new Date(),
+                            message: message,  // Update to latest message
+                            details: details,
+                            stackTrace: stackTrace,
+                            intelligence: errorAnalysis.intelligence  // Update intelligence
+                        },
+                        $inc: {
+                            occurrenceCount: 1
+                        },
+                        $push: {
+                            occurrences: {
+                                timestamp: new Date(),
+                                message: message,
+                                details: details,
+                                stackTrace: stackTrace,
+                                meta: { dedupWindowMinutes: DEDUP_WINDOW_MINUTES }
+                            }
+                        }
+                    },
+                    { new: true }
+                );
+                
+                logger.info(`✅ [DEDUP] Updated ${notificationLog.alertId} - Occurrence #${occurrenceNum} (${DEDUP_WINDOW_MINUTES}min window)`);
+                
+            } else {
+                // NO DUPLICATE - Create new alert
+                logger.debug(`🆕 [DEDUP] No recent similar alert found - creating new`);
+                
+                notificationLog = await NotificationLog.create({
+                    code: code.toUpperCase(),
+                    severity,
+                    companyId,
+                    companyName,
+                    message,
+                    details,
+                    stackTrace,
+                    
+                    // Initialize occurrence tracking
+                    occurrenceCount: 1,
+                    firstOccurredAt: new Date(),
+                    lastOccurredAt: new Date(),
+                    occurrences: [{
+                        timestamp: new Date(),
+                        message: message,
+                        details: details,
+                        stackTrace: stackTrace,
+                        meta: { firstOccurrence: true }
+                    }],
+                    
+                    // Add error intelligence to log
+                    intelligence: errorAnalysis.intelligence,
+                    
+                    // Set escalation schedule based on severity
+                    escalation: {
+                        isEnabled: severity !== 'INFO',  // No escalation for INFO
+                        currentLevel: 1,
+                        maxLevel: severity === 'CRITICAL' ? 5 : 3,
+                        nextEscalationAt: this.calculateNextEscalation(severity, 1)
+                    }
+                });
+            }
+            
+            logger.debug(`✅ [ADMIN NOTIFICATION] ${isNewAlert ? 'Created' : 'Updated'} log entry: ${notificationLog.alertId}`);
             
             // ================================================================
-            // STEP 5: SEND SMS TO ALL ADMINS (if policy allows)
+            // STEP 5: SMART NOTIFICATION THROTTLING
+            // ================================================================
+            const currentOccurrence = notificationLog.occurrenceCount || 1;
+            const shouldNotify = this.shouldSendNotification(currentOccurrence, isNewAlert);
+            
+            if (!isNewAlert && !shouldNotify) {
+                logger.info(`🔕 [THROTTLE] Skipping SMS/Email for occurrence #${currentOccurrence} (throttled)`);
+                
+                // Still update delivery attempts to track that this occurred
+                await NotificationLog.findByIdAndUpdate(notificationLog._id, {
+                    $push: {
+                        deliveryAttempts: {
+                            attemptNumber: currentOccurrence,
+                            timestamp: new Date(),
+                            sms: [],
+                            email: [],
+                            call: [],
+                            status: 'throttled',
+                            note: `Occurrence #${currentOccurrence} - notification throttled (will notify at 1, 5, 10, 25, 50)`
+                        }
+                    }
+                });
+                
+                return { 
+                    success: true, 
+                    alertId: notificationLog.alertId, 
+                    isNewAlert: false,
+                    occurrenceCount: currentOccurrence,
+                    notificationSent: false,
+                    throttled: true,
+                    nextNotificationAt: this.getNextNotificationOccurrence(currentOccurrence)
+                };
+            }
+            
+            if (!isNewAlert && shouldNotify) {
+                logger.warn(`🔥 [THROTTLE] Alert firing rapidly! Occurrence #${currentOccurrence} - SENDING notification`);
+            }
+            
+            // ================================================================
+            // STEP 6: SEND SMS TO ALL ADMINS (if policy allows)
             // ================================================================
             let smsResults = [];
             if (policy.sendSMS) {
@@ -830,6 +937,58 @@ To reopen: Text "REOPEN ${alert.alertId}"
     } catch (error) {
             logger.error('❌ Failed to send acknowledgment confirmation:', error);
         }
+    }
+    
+    /**
+     * 🔕 SMART NOTIFICATION THROTTLING
+     * Determine if we should send SMS/Email for this occurrence
+     * 
+     * Notification Schedule:
+     * - Occurrence #1: Always notify (first alert)
+     * - Occurrences #2-4: Silent (throttled)
+     * - Occurrence #5: Notify (alert still firing)
+     * - Occurrences #6-9: Silent
+     * - Occurrence #10: Notify (persistent issue)
+     * - Occurrences #11-24: Silent
+     * - Occurrence #25: Notify (critical spam)
+     * - Occurrences #26-49: Silent
+     * - Occurrence #50: Notify (emergency escalation)
+     * - Every 50 after: Notify
+     */
+    static shouldSendNotification(occurrenceCount, isNewAlert) {
+        // Always notify on first occurrence
+        if (isNewAlert || occurrenceCount === 1) {
+            return true;
+        }
+        
+        // Throttling thresholds: 5, 10, 25, 50, 100, 150, 200...
+        const notificationThresholds = [1, 5, 10, 25, 50];
+        
+        // After 50, notify every 50 occurrences
+        if (occurrenceCount >= 50 && occurrenceCount % 50 === 0) {
+            return true;
+        }
+        
+        // Check if this occurrence matches a threshold
+        return notificationThresholds.includes(occurrenceCount);
+    }
+    
+    /**
+     * 📊 GET NEXT NOTIFICATION OCCURRENCE
+     * Tell user when they'll be notified next
+     */
+    static getNextNotificationOccurrence(currentOccurrence) {
+        const thresholds = [1, 5, 10, 25, 50];
+        
+        // Find next threshold after current occurrence
+        for (const threshold of thresholds) {
+            if (threshold > currentOccurrence) {
+                return threshold;
+            }
+        }
+        
+        // After 50, next is the next multiple of 50
+        return Math.ceil((currentOccurrence + 1) / 50) * 50;
     }
 }
 

@@ -279,7 +279,15 @@ class LogManager {
                     <div class="flex-1">
                         <div class="flex justify-between items-start">
                             <div class="flex-1">
-                                <h5 class="font-mono text-sm font-semibold text-gray-900">${log.alertId}</h5>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <h5 class="font-mono text-sm font-semibold text-gray-900">${log.alertId}</h5>
+                                    ${log.occurrenceCount > 1 ? `
+                                        <span class="px-2 py-1 rounded-full text-xs font-bold ${log.occurrenceCount >= 10 ? 'bg-red-200 text-red-900 animate-pulse' : log.occurrenceCount >= 5 ? 'bg-orange-200 text-orange-900' : 'bg-yellow-200 text-yellow-900'}">
+                                            🔔 ${log.occurrenceCount}x
+                                        </span>
+                                        ${log.occurrenceCount >= 10 ? '<span class="text-xs font-semibold text-red-600">🔥 HOT ALERT</span>' : ''}
+                                    ` : ''}
+                                </div>
                                 <p class="text-gray-700 font-medium">${log.message}</p>
                                 <p class="text-xs text-gray-500 mt-1">Code: <span class="font-mono">${log.code}</span></p>
                             </div>
@@ -295,7 +303,15 @@ class LogManager {
                 <div class="text-sm text-gray-600 space-y-1">
                     <div>Company: ${log.companyName} ${log.companyId ? `<span class="text-xs font-mono text-gray-400">(${log.companyId})</span>` : ''}</div>
                     <div>Created: ${this.nc.formatDateTime(log.createdAt)}</div>
-                    <div>Attempts: ${log.deliveryAttempts?.length || 0} | Level: ${log.escalation?.currentLevel || 1}/${log.escalation?.maxLevel || 3}</div>
+                    ${log.occurrenceCount > 1 ? `
+                        <div class="font-semibold text-blue-700">
+                            ⏰ First: ${this.nc.formatDateTime(log.firstOccurredAt || log.createdAt)} | Latest: ${this.nc.formatDateTime(log.lastOccurredAt || log.updatedAt)}
+                        </div>
+                        <div class="text-sm">
+                            📊 Occurred <strong>${log.occurrenceCount} times</strong> in ${this.getTimeDiff(log.firstOccurredAt || log.createdAt, log.lastOccurredAt || log.updatedAt)}
+                        </div>
+                    ` : `<div>Created: ${this.nc.formatDateTime(log.createdAt)}</div>`}
+                    <div>Delivery Attempts: ${log.deliveryAttempts?.length || 0} | Escalation Level: ${log.escalation?.currentLevel || 1}/${log.escalation?.maxLevel || 3}</div>
                     ${log.acknowledgment?.isAcknowledged ? `
                         <div class="text-green-600">Acknowledged by ${log.acknowledgment.acknowledgedBy} at ${this.nc.formatDateTime(log.acknowledgment.acknowledgedAt)}</div>
                     ` : ''}
@@ -309,11 +325,30 @@ class LogManager {
                     </div>
                 ` : ''}
                 
+                <!-- Occurrence History (if multiple) -->
+                ${log.occurrenceCount > 1 && log.occurrences && log.occurrences.length > 0 ? `
+                    <div class="mt-3 border-t pt-3">
+                        <button onclick="notificationCenter.logManager.toggleOccurrences('${log.alertId}')" 
+                                class="text-sm text-purple-600 hover:text-purple-800 font-semibold">
+                            ▶ Show All ${log.occurrenceCount} Occurrences
+                        </button>
+                        <div id="occurrences-${log.alertId}" class="hidden mt-2 space-y-2">
+                            ${log.occurrences.map((occ, idx) => `
+                                <div class="p-2 bg-purple-50 border-l-2 border-purple-300 rounded text-xs">
+                                    <div class="font-semibold text-purple-900">#${idx + 1}: ${this.nc.formatDateTime(occ.timestamp)}</div>
+                                    ${occ.message ? `<div class="text-gray-700 mt-1">${this.escapeHtml(occ.message)}</div>` : ''}
+                                    ${occ.details ? `<div class="text-gray-600 mt-1 text-xs italic">${this.escapeHtml(occ.details.substring(0, 150))}...</div>` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
                 <!-- Expandable Details -->
                 <div class="mt-3">
                     <button onclick="notificationCenter.logManager.toggleDetails('${log.alertId}')" 
                             class="text-sm text-blue-600 hover:text-blue-800 font-medium">
-                        ▶ Show Details
+                        ▶ Show Technical Details
                     </button>
                     <div id="details-${log.alertId}" class="hidden mt-2 p-3 bg-gray-100 rounded text-xs font-mono">
                         ${log.details ? `<div class="mb-2"><strong>Details:</strong><br>${this.escapeHtml(log.details)}</div>` : ''}
@@ -977,6 +1012,44 @@ Paste this report to your AI assistant for instant root cause analysis!
         } catch (error) {
             this.nc.showError('Failed to clear all alerts');
             console.error('❌ [CLEAR ALL] Error:', error);
+        }
+    }
+    
+    // ============================================================================
+    // HELPER METHODS
+    // ============================================================================
+    
+    toggleOccurrences(alertId) {
+        const elem = document.getElementById(`occurrences-${alertId}`);
+        const button = event.target;
+        
+        if (elem.classList.contains('hidden')) {
+            elem.classList.remove('hidden');
+            button.textContent = button.textContent.replace('▶', '▼');
+        } else {
+            elem.classList.add('hidden');
+            button.textContent = button.textContent.replace('▼', '▶');
+        }
+    }
+    
+    getTimeDiff(start, end) {
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+        const diffMs = endDate - startDate;
+        
+        const seconds = Math.floor(diffMs / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const hours = Math.floor(minutes / 60);
+        const days = Math.floor(hours / 24);
+        
+        if (days > 0) {
+            return `${days} day${days > 1 ? 's' : ''}`;
+        } else if (hours > 0) {
+            return `${hours} hour${hours > 1 ? 's' : ''}`;
+        } else if (minutes > 0) {
+            return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+        } else {
+            return `${seconds} second${seconds > 1 ? 's' : ''}`;
         }
     }
 }
