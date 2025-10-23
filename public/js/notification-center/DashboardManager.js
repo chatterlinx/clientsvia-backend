@@ -174,7 +174,9 @@ class DashboardManager {
         try {
             const result = await this.nc.apiGet('/api/admin/notifications/dependency-health');
             if (result.success) {
-                this.renderServiceHealth(result.services, result.overallStatus);
+                // Convert services object to array
+                const servicesArray = Object.values(result.services || {});
+                this.renderServiceHealth(servicesArray, result.overallStatus);
             }
         } catch (error) {
             console.error('❌ [DASHBOARD] Service health load failed:', error);
@@ -184,6 +186,14 @@ class DashboardManager {
     renderServiceHealth(services, overallStatus) {
         const container = document.getElementById('service-health-widget');
         if (!container) return;
+        
+        // Map service names to icons
+        const serviceIcons = {
+            'MongoDB': '🍃',
+            'Redis': '🔴',
+            'Twilio': '📞',
+            'ElevenLabs': '🎙️'
+        };
         
         const statusEmoji = {
             'HEALTHY': '🟢',
@@ -207,14 +217,14 @@ class DashboardManager {
                 </h3>
                 <div class="space-y-2">
                     ${services.map(service => `
-                        <div class="flex items-center justify-between p-2 rounded ${service.status === 'PASS' ? 'bg-green-50' : service.status === 'DEGRADED' ? 'bg-yellow-50' : 'bg-red-50'}">
+                        <div class="flex items-center justify-between p-2 rounded ${service.status === 'HEALTHY' ? 'bg-green-50' : service.status === 'DEGRADED' ? 'bg-yellow-50' : 'bg-red-50'}">
                             <div class="flex items-center">
-                                <span class="text-xl mr-2">${service.icon}</span>
+                                <span class="text-xl mr-2">${serviceIcons[service.name] || '🔧'}</span>
                                 <span class="font-medium">${service.name}</span>
                             </div>
                             <div class="text-right">
-                                <span class="text-sm ${service.status === 'PASS' ? 'text-green-700' : service.status === 'DEGRADED' ? 'text-yellow-700' : 'text-red-700'} font-semibold">
-                                    ${service.status === 'PASS' ? '✓' : service.status === 'DEGRADED' ? '⚠' : '✗'} ${service.status}
+                                <span class="text-sm ${service.status === 'HEALTHY' ? 'text-green-700' : service.status === 'DEGRADED' ? 'text-yellow-700' : 'text-red-700'} font-semibold">
+                                    ${service.status === 'HEALTHY' ? '✓' : service.status === 'DEGRADED' ? '⚠' : '✗'} ${service.status}
                                 </span>
                                 ${service.responseTime ? `<span class="text-xs text-gray-500 ml-2">${service.responseTime}ms</span>` : ''}
                             </div>
@@ -294,7 +304,8 @@ class DashboardManager {
         try {
             const result = await this.nc.apiGet('/api/admin/notifications/error-trends?periodHours=24');
             if (result.success) {
-                this.renderErrorTrends(result);
+                // Pass the trends object from the response
+                this.renderErrorTrends(result.trends || result);
             }
         } catch (error) {
             console.error('❌ [DASHBOARD] Error trends load failed:', error);
@@ -305,12 +316,29 @@ class DashboardManager {
         const container = document.getElementById('error-trends-widget');
         if (!container) return;
         
+        // Handle empty or insufficient data
+        if (!trends || trends.totalErrors === 0 || !trends.hourlyBreakdown) {
+            container.innerHTML = `
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h3 class="text-lg font-semibold mb-3">📈 Error Trends (24h)</h3>
+                    <div class="text-center text-gray-500 py-8">
+                        ✨ No errors detected in the last 24 hours!
+                    </div>
+                </div>
+            `;
+            return;
+        }
+        
         const trendIcon = trends.trend === 'INCREASING' ? '↗️' : trends.trend === 'DECREASING' ? '↘️' : '→';
         const trendColor = trends.trend === 'INCREASING' ? 'text-red-600' : trends.trend === 'DECREASING' ? 'text-green-600' : 'text-gray-600';
         
         // Generate sparkline
-        const maxCount = Math.max(...trends.hourlyBreakdown.map(h => h.count), 1);
-        const sparkline = trends.hourlyBreakdown.map(h => {
+        const hourlyData = Object.entries(trends.hourlyBreakdown).map(([hour, data]) => ({
+            hour,
+            count: data.count || 0
+        }));
+        const maxCount = Math.max(...hourlyData.map(h => h.count), 1);
+        const sparkline = hourlyData.map(h => {
             const height = (h.count / maxCount) * 40;
             return `<div class="w-1 bg-blue-500 rounded-t" style="height: ${height}px;" title="${h.hour}: ${h.count} errors"></div>`;
         }).join('');
