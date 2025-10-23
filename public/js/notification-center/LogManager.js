@@ -328,7 +328,7 @@ class LogManager {
                 <!-- Occurrence History (if multiple) -->
                 ${log.occurrenceCount > 1 && log.occurrences && log.occurrences.length > 0 ? `
                     <div class="mt-3 border-t pt-3">
-                        <button onclick="notificationCenter.logManager.toggleOccurrences('${log.alertId}')" 
+                        <button onclick="notificationCenter.logManager.toggleOccurrences('${log.alertId}', event)" 
                                 class="text-sm text-purple-600 hover:text-purple-800 font-semibold">
                             ▶ Show All ${log.occurrenceCount} Occurrences
                         </button>
@@ -1019,7 +1019,7 @@ Paste this report to your AI assistant for instant root cause analysis!
     // HELPER METHODS
     // ============================================================================
     
-    toggleOccurrences(alertId) {
+    toggleOccurrences(alertId, event) {
         const elem = document.getElementById(`occurrences-${alertId}`);
         const button = event.target;
         
@@ -1033,9 +1033,24 @@ Paste this report to your AI assistant for instant root cause analysis!
     }
     
     getTimeDiff(start, end) {
+        if (!start || !end) {
+            return 'Unknown';
+        }
+        
         const startDate = new Date(start);
         const endDate = new Date(end);
+        
+        // Check for invalid dates
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+            return 'Unknown';
+        }
+        
         const diffMs = endDate - startDate;
+        
+        // Handle negative diff (end before start)
+        if (diffMs < 0) {
+            return '0 seconds';
+        }
         
         const seconds = Math.floor(diffMs / 1000);
         const minutes = Math.floor(seconds / 60);
