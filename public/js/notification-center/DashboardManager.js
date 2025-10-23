@@ -358,7 +358,7 @@ class DashboardManager {
                         <div class="text-xs text-gray-500">Trend</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-yellow-600">${trends.newErrors.length}</div>
+                        <div class="text-2xl font-bold text-yellow-600">${trends.newErrors?.count || 0}</div>
                         <div class="text-xs text-gray-500">New Errors</div>
                     </div>
                 </div>
@@ -377,14 +377,14 @@ class DashboardManager {
                     <div class="space-y-1">
                         ${trends.topErrors.slice(0, 5).map(err => `
                             <div class="flex justify-between items-center text-sm">
-                                <span class="font-mono text-xs truncate flex-1">${err._id || 'UNKNOWN'}</span>
+                                <span class="font-mono text-xs truncate flex-1">${err.code || err._id || 'UNKNOWN'}</span>
                                 <span class="ml-2 px-2 py-1 bg-gray-100 rounded font-semibold">${err.count}×</span>
                             </div>
                         `).join('')}
                     </div>
                 </div>
                 
-                ${trends.anomalies.length > 0 ? `
+                ${trends.anomalies?.hasAnomalies && trends.anomalies?.anomalies?.length > 0 ? `
                     <div class="mt-4 bg-red-50 border border-red-200 rounded p-2">
                         <p class="text-sm font-semibold text-red-900">🚨 Anomalies Detected:</p>
                         <ul class="text-xs text-red-800 mt-1 space-y-1">
