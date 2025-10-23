@@ -388,7 +388,9 @@ class DashboardManager {
                     <div class="mt-4 bg-red-50 border border-red-200 rounded p-2">
                         <p class="text-sm font-semibold text-red-900">🚨 Anomalies Detected:</p>
                         <ul class="text-xs text-red-800 mt-1 space-y-1">
-                            ${trends.anomalies.map(a => `<li>• ${a}</li>`).join('')}
+                            ${trends.anomalies.anomalies.map(a => `
+                                <li>• Hour ${a.hour}: ${a.errorCount} errors (${a.deviation}% above average)</li>
+                            `).join('')}
                         </ul>
                     </div>
                 ` : ''}
