@@ -9,24 +9,13 @@ class LogManager {
         this.logs = []; // Store current logs for copyDebugInfo
         this.allLogs = []; // Store all loaded logs for filtering
         this.selectedAlerts = new Set(); // Track selected alert IDs
+        this.currentFilter = 'all'; // Track active filter badge
         this.setupEventListeners();
     }
     
     setupEventListeners() {
-        // Filter handlers
-        const severityFilter = document.getElementById('log-filter-severity');
-        const acknowledgedFilter = document.getElementById('log-filter-acknowledged');
-        const searchInput = document.getElementById('log-search-input');
-        const selectAllCheckbox = document.getElementById('select-all-checkbox');
-        
-        if (severityFilter) {
-            severityFilter.addEventListener('change', () => this.load());
-        }
-        if (acknowledgedFilter) {
-            acknowledgedFilter.addEventListener('change', () => this.load());
-        }
-        
         // Real-time search
+        const searchInput = document.getElementById('log-search-input');
         if (searchInput) {
             searchInput.addEventListener('input', (e) => {
                 this.filterLogs(e.target.value);
@@ -34,6 +23,7 @@ class LogManager {
         }
         
         // Select all checkbox
+        const selectAllCheckbox = document.getElementById('select-all-checkbox');
         if (selectAllCheckbox) {
             selectAllCheckbox.addEventListener('change', (e) => {
                 this.toggleSelectAll(e.target.checked);
@@ -44,22 +34,32 @@ class LogManager {
     filterLogs(searchTerm) {
         const term = searchTerm.toLowerCase().trim();
         
-        if (!term) {
-            // No search term - show all logs
-            this.renderLogs(this.allLogs, null);
-            return;
+        // Start with badge-filtered logs
+        let filtered = this.allLogs;
+        
+        // Apply badge filter first
+        if (this.currentFilter !== 'all') {
+            if (this.currentFilter === 'CRITICAL' || this.currentFilter === 'WARNING' || this.currentFilter === 'INFO') {
+                filtered = filtered.filter(log => log.severity === this.currentFilter);
+            } else if (this.currentFilter === 'acknowledged') {
+                filtered = filtered.filter(log => log.acknowledgment?.isAcknowledged === true);
+            } else if (this.currentFilter === 'resolved') {
+                filtered = filtered.filter(log => log.resolution?.isResolved === true);
+            }
         }
         
-        // Filter logs by search term
-        const filtered = this.allLogs.filter(log => {
-            return (
-                log.alertId.toLowerCase().includes(term) ||
-                log.code.toLowerCase().includes(term) ||
-                log.message.toLowerCase().includes(term) ||
-                log.companyName.toLowerCase().includes(term) ||
-                (log.details && log.details.toLowerCase().includes(term))
-            );
-        });
+        // Then apply search filter if search term exists
+        if (term) {
+            filtered = filtered.filter(log => {
+                return (
+                    log.alertId.toLowerCase().includes(term) ||
+                    log.code.toLowerCase().includes(term) ||
+                    log.message.toLowerCase().includes(term) ||
+                    log.companyName.toLowerCase().includes(term) ||
+                    (log.details && log.details.toLowerCase().includes(term))
+                );
+            });
+        }
         
         this.renderLogs(filtered, null);
     }
@@ -111,24 +111,100 @@ class LogManager {
         console.log('📜 [LOG] Loading alert logs...');
         
         try {
-            const severity = document.getElementById('log-filter-severity')?.value || '';
-            const acknowledged = document.getElementById('log-filter-acknowledged')?.value || '';
-            
             let url = `/api/admin/notifications/logs?page=${this.currentPage}&limit=100`; // Load more for better search
-            if (severity) url += `&severity=${severity}`;
-            if (acknowledged) url += `&acknowledged=${acknowledged}`;
             
             const data = await this.nc.apiGet(url);
             
             if (data.success) {
                 this.allLogs = data.data.logs; // Store for filtering
                 this.logs = data.data.logs; // Store for copyDebugInfo
-                this.renderLogs(data.data.logs, data.data.pagination);
+                this.updateCounts(); // Calculate and display counts
+                this.applyCurrentFilter(); // Apply current filter
             }
             
         } catch (error) {
             console.error('❌ [LOG] Load failed:', error);
         }
+    }
+    
+    updateCounts() {
+        // Calculate counts from allLogs
+        const counts = {
+            all: this.allLogs.length,
+            CRITICAL: 0,
+            WARNING: 0,
+            INFO: 0,
+            acknowledged: 0,
+            resolved: 0
+        };
+        
+        this.allLogs.forEach(log => {
+            // Count by severity
+            if (log.severity === 'CRITICAL') counts.CRITICAL++;
+            if (log.severity === 'WARNING') counts.WARNING++;
+            if (log.severity === 'INFO') counts.INFO++;
+            
+            // Count by status
+            if (log.acknowledgment?.isAcknowledged) counts.acknowledged++;
+            if (log.resolution?.isResolved) counts.resolved++;
+        });
+        
+        // Update badge counts
+        document.getElementById('count-all').textContent = counts.all;
+        document.getElementById('count-CRITICAL').textContent = counts.CRITICAL;
+        document.getElementById('count-WARNING').textContent = counts.WARNING;
+        document.getElementById('count-INFO').textContent = counts.INFO;
+        document.getElementById('count-acknowledged').textContent = counts.acknowledged;
+        document.getElementById('count-resolved').textContent = counts.resolved;
+    }
+    
+    filterByBadge(filterType) {
+        console.log('📊 [FILTER] Badge clicked:', filterType);
+        
+        // Update current filter
+        this.currentFilter = filterType;
+        
+        // Update active state visually
+        this.updateActiveBadge(filterType);
+        
+        // Apply filter
+        this.applyCurrentFilter();
+    }
+    
+    updateActiveBadge(activeFilter) {
+        // Remove active state from all badges
+        document.querySelectorAll('.filter-badge').forEach(badge => {
+            badge.classList.remove('ring-4', 'ring-offset-2', 'scale-105');
+            badge.classList.add('hover:scale-105');
+        });
+        
+        // Add active state to selected badge
+        const activeBadge = document.getElementById(`badge-${activeFilter}`);
+        if (activeBadge) {
+            activeBadge.classList.add('ring-4', 'ring-offset-2', 'scale-105');
+            activeBadge.classList.remove('hover:scale-105');
+        }
+    }
+    
+    applyCurrentFilter() {
+        let filtered = this.allLogs;
+        
+        // Apply badge filter
+        if (this.currentFilter !== 'all') {
+            if (this.currentFilter === 'CRITICAL' || this.currentFilter === 'WARNING' || this.currentFilter === 'INFO') {
+                // Filter by severity
+                filtered = filtered.filter(log => log.severity === this.currentFilter);
+            } else if (this.currentFilter === 'acknowledged') {
+                // Filter by acknowledged
+                filtered = filtered.filter(log => log.acknowledgment?.isAcknowledged === true);
+            } else if (this.currentFilter === 'resolved') {
+                // Filter by resolved
+                filtered = filtered.filter(log => log.resolution?.isResolved === true);
+            }
+        }
+        
+        // Render filtered logs
+        this.renderLogs(filtered, null);
     }
     
     renderLogs(logs, pagination) {

@@ -237,20 +237,53 @@
                     </div>
                 </div>
                 
-                <!-- Filters Row -->
-                <div class="flex justify-between items-center mb-4">
-                    <div class="flex space-x-2">
-                        <select id="log-filter-severity" class="border border-gray-300 rounded px-3 py-2 text-sm">
-                            <option value="">All Severities</option>
-                            <option value="CRITICAL">Critical</option>
-                            <option value="WARNING">Warning</option>
-                            <option value="INFO">Info</option>
-                        </select>
-                        <select id="log-filter-acknowledged" class="border border-gray-300 rounded px-3 py-2 text-sm">
-                            <option value="">All Status</option>
-                            <option value="false">Unacknowledged</option>
-                            <option value="true">Acknowledged</option>
-                        </select>
+                <!-- Interactive Stats Bar -->
+                <div class="mb-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg p-4 border border-gray-200">
+                    <div class="flex flex-wrap gap-3 justify-center items-center">
+                        <!-- Total Count -->
+                        <button onclick="logManager.filterByBadge('all')" 
+                                id="badge-all"
+                                class="filter-badge px-4 py-2 rounded-lg font-semibold transition-all hover:scale-105 bg-gray-200 text-gray-800 border-2 border-gray-300">
+                            <i class="fas fa-list mr-2"></i>
+                            All: <span id="count-all">0</span>
+                        </button>
+                        
+                        <!-- Severity Counts -->
+                        <button onclick="logManager.filterByBadge('CRITICAL')" 
+                                id="badge-CRITICAL"
+                                class="filter-badge px-4 py-2 rounded-lg font-semibold transition-all hover:scale-105 bg-red-100 text-red-800 border-2 border-red-300">
+                            <i class="fas fa-exclamation-circle mr-2"></i>
+                            Critical: <span id="count-CRITICAL">0</span>
+                        </button>
+                        
+                        <button onclick="logManager.filterByBadge('WARNING')" 
+                                id="badge-WARNING"
+                                class="filter-badge px-4 py-2 rounded-lg font-semibold transition-all hover:scale-105 bg-yellow-100 text-yellow-800 border-2 border-yellow-300">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                            Warning: <span id="count-WARNING">0</span>
+                        </button>
+                        
+                        <button onclick="logManager.filterByBadge('INFO')" 
+                                id="badge-INFO"
+                                class="filter-badge px-4 py-2 rounded-lg font-semibold transition-all hover:scale-105 bg-blue-100 text-blue-800 border-2 border-blue-300">
+                            <i class="fas fa-info-circle mr-2"></i>
+                            Info: <span id="count-INFO">0</span>
+                        </button>
+                        
+                        <!-- Status Counts -->
+                        <button onclick="logManager.filterByBadge('acknowledged')" 
+                                id="badge-acknowledged"
+                                class="filter-badge px-4 py-2 rounded-lg font-semibold transition-all hover:scale-105 bg-green-100 text-green-800 border-2 border-green-300">
+                            <i class="fas fa-check-circle mr-2"></i>
+                            Acknowledged: <span id="count-acknowledged">0</span>
+                        </button>
+                        
+                        <button onclick="logManager.filterByBadge('resolved')" 
+                                id="badge-resolved"
+                                class="filter-badge px-4 py-2 rounded-lg font-semibold transition-all hover:scale-105 bg-purple-100 text-purple-800 border-2 border-purple-300">
+                            <i class="fas fa-check-double mr-2"></i>
+                            Resolved: <span id="count-resolved">0</span>
+                        </button>
                     </div>
                 </div>
                 
