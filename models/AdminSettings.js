@@ -233,31 +233,31 @@ const adminSettingsSchema = new mongoose.Schema({
         notificationPolicy: {
             // Severity-based delivery rules
             severityRules: {
+                // System down, database offline, payment failures
                 CRITICAL: {
                     sendSMS: { type: Boolean, default: true },
                     sendEmail: { type: Boolean, default: true },
                     logOnly: { type: Boolean, default: false }
-                    // System down, database offline, payment failures
                 },
+                // Degraded performance, non-critical failures
                 WARNING: {
                     sendSMS: { type: Boolean, default: false },
                     sendEmail: { type: Boolean, default: true },
                     logOnly: { type: Boolean, default: false }
-                    // Degraded performance, non-critical failures
                 },
+                // Successful operations, health checks passing
                 INFO: {
                     sendSMS: { type: Boolean, default: false },
                     sendEmail: { type: Boolean, default: false },
                     logOnly: { type: Boolean, default: true }
-                    // Successful operations, health checks passing
                 }
             },
             
             // Daily digest email (industry standard)
             dailyDigest: {
                 enabled: { type: Boolean, default: true },
-                time: { type: String, default: '08:00', description: 'Time in 24hr format (HH:MM)' },
-                timezone: { type: String, default: 'America/New_York', description: 'IANA timezone' },
+                time: { type: String, default: '08:00' },
+                timezone: { type: String, default: 'America/New_York' },
                 includeStats: { type: Boolean, default: true },
                 includeWarnings: { type: Boolean, default: true },
                 includeCritical: { type: Boolean, default: true }
@@ -266,18 +266,18 @@ const adminSettingsSchema = new mongoose.Schema({
             // Quiet hours (respect sleep)
             quietHours: {
                 enabled: { type: Boolean, default: true },
-                startTime: { type: String, default: '22:00', description: '10 PM' },
-                endTime: { type: String, default: '07:00', description: '7 AM' },
+                startTime: { type: String, default: '22:00' },
+                endTime: { type: String, default: '07:00' },
                 timezone: { type: String, default: 'America/New_York' },
-                allowCritical: { type: Boolean, default: true, description: 'Always send CRITICAL even during quiet hours' },
-                deferWarnings: { type: Boolean, default: true, description: 'Queue WARNING alerts for morning digest' }
+                allowCritical: { type: Boolean, default: true },
+                deferWarnings: { type: Boolean, default: true }
             },
             
             // Smart grouping (prevent alert storms)
             smartGrouping: {
                 enabled: { type: Boolean, default: true },
-                threshold: { type: Number, default: 3, description: 'Group if 3+ same errors' },
-                windowMinutes: { type: Number, default: 15, description: 'Within 15 minute window' },
+                threshold: { type: Number, default: 3 },
+                windowMinutes: { type: Number, default: 15 },
                 groupMessage: { type: String, default: '🚨 {count} {errorCode} failures detected in {window} minutes' }
             }
         }
