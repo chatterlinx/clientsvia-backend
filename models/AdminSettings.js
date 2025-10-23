@@ -236,20 +236,20 @@ const adminSettingsSchema = new mongoose.Schema({
                 CRITICAL: {
                     sendSMS: { type: Boolean, default: true },
                     sendEmail: { type: Boolean, default: true },
-                    logOnly: { type: Boolean, default: false },
-                    description: 'System down, database offline, payment failures'
+                    logOnly: { type: Boolean, default: false }
+                    // System down, database offline, payment failures
                 },
                 WARNING: {
                     sendSMS: { type: Boolean, default: false },
                     sendEmail: { type: Boolean, default: true },
-                    logOnly: { type: Boolean, default: false },
-                    description: 'Degraded performance, non-critical failures'
+                    logOnly: { type: Boolean, default: false }
+                    // Degraded performance, non-critical failures
                 },
                 INFO: {
                     sendSMS: { type: Boolean, default: false },
                     sendEmail: { type: Boolean, default: false },
-                    logOnly: { type: Boolean, default: true },
-                    description: 'Successful operations, health checks passing'
+                    logOnly: { type: Boolean, default: true }
+                    // Successful operations, health checks passing
                 }
             },
             
