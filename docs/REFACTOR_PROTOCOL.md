@@ -64,38 +64,440 @@
 
 ---
 
-## 🔔 NOTIFICATION CENTER INTEGRATION
+## 🔔 NOTIFICATION CENTER – PLATFORM HEALTH CORE
 
-### Required per Modal/Service
+> **CRITICAL**: This is the **heart of platform stability**. All errors, dependency failures, and system anomalies MUST flow through this system. Perfect implementation prevents downtime and data loss.
+
+---
+
+### 📊 ARCHITECTURE OVERVIEW
+
+The Notification Center is a **4-tab admin dashboard** for monitoring, managing, and resolving platform-wide alerts:
+
+1. **Dashboard** – Real-time stats, recent alerts, trend analysis
+2. **Alert Log** – Searchable, filterable list of all alerts with bulk actions
+3. **Settings** – SMS/Email configuration, escalation rules, retention policies
+4. **Registry** – Catalog of all registered notification types and their rules
+
+**Access**: `https://clientsvia-backend.onrender.com/admin-notification-center.html`
+
+---
+
+### 🚨 SEVERITY RULES & NOTIFICATIONS
+
+| Severity | SMS | Email | Auto-Purge | Action Required? | Use Cases |
+|----------|-----|-------|------------|------------------|-----------|
+| **🔴 CRITICAL** | ✅ Yes | ✅ Yes | 90 days after resolve | **YES** - Must acknowledge & resolve | System down, DB offline, payment failures, auth broken |
+| **⚠️ WARNING** | ❌ No | ✅ Yes | 90 days after resolve | **YES** - Must acknowledge & resolve | Degraded performance, non-critical API failures |
+| **ℹ️ INFO** | ❌ No | ❌ No | **60 days (auto, no action needed)** | **NO** - Just logs | Successful operations, health checks passing, audit logs |
+
+**Key Rules:**
+- **CRITICAL**: Wakes you up at 3 AM via SMS + Email
+- **WARNING**: Email only, review during work hours
+- **INFO**: Dashboard logs only, auto-cleans after 60 days (even if not resolved)
+
+---
+
+### 🔧 REQUIRED INTEGRATION (All Services/Routes)
+
+**EVERY catch block** must send alerts:
 
 ```js
 const AdminNotificationService = require('../services/AdminNotificationService');
-catch (error) {
+
+try {
+  // Your risky operation
+  await company.save();
+} catch (error) {
+  // 🚨 REQUIRED: Send alert BEFORE throwing
   await AdminNotificationService.sendAlert({
-    code:'AI_AGENT_ROUTING_FAILED',
-    severity:'CRITICAL',
-    companyId:company._id,
-    message:error.message
+    code: 'AI_AGENT_ROUTING_FAILED',        // Uppercase, underscore-separated
+    severity: 'CRITICAL',                    // CRITICAL | WARNING | INFO
+    companyId: company._id,                  // Tenant ID (or null for platform-wide)
+    companyName: company.companyName,        // Human-readable name
+    message: error.message,                  // Short error summary
+    details: error.stack,                    // Full stack trace
+    stackTrace: error.stack                  // For Error Intelligence analysis
   });
-  throw error;
+  
+  throw error; // Re-throw after logging
 }
 ```
 
-### Severity
+**Checklist for Integration**:
+- [ ] Import `AdminNotificationService` at top of file
+- [ ] Wrap risky operations in try-catch
+- [ ] Call `sendAlert()` with all 7 required fields
+- [ ] Use correct severity (CRITICAL = system down, WARNING = degraded, INFO = log only)
+- [ ] Include `companyId` for tenant-specific errors (null for platform-wide)
+- [ ] Pass full `error.stack` for intelligent diagnostics
 
-| Level    | Meaning                     | Action         |
-| -------- | --------------------------- | -------------- |
-| CRITICAL | Down / data loss / security | SMS + email    |
-| WARNING  | Degraded performance        | Slack alert    |
-| INFO     | Recoverable event           | Dashboard only |
+---
 
-### Health Rules
+### 🧠 SMART ALERT GROUPING (Prevents Spam)
 
-* Non-blocking emission (fire-and-forget).
-* Redis Streams/PubSub channel `notifications:events`.
-* Dedup key: `notif:dedup:{companyID}:{feature}:{errorCode}` (TTL 60 s).
-* Circuit breaker key: `notif:circuit:open` on lag or >5 % failures.
-* Overhead ≤ 5 ms per call.
+**Problem**: Same error firing 100x creates 100 alerts = chaos
+
+**Solution**: Smart deduplication groups duplicates within a 15-minute window
+
+**Rules**:
+- **Deduplication Window**: 15 minutes
+- **Grouping Criteria**: Same `code`, `companyId`, `severity`, unresolved/unacknowledged
+- **Behavior**:
+  - 1st occurrence: Create new alert
+  - 2nd-Nth occurrence (within 15 min): Update existing alert
+    - Increment `occurrenceCount`
+    - Update `lastOccurredAt`
+    - Push to `occurrences[]` array (keeps ALL data, nothing deleted)
+
+**Notification Throttling**:
+To prevent SMS/Email spam, notifications only send on:
+- **1st occurrence** (initial alert)
+- **5th occurrence** (rapid fire detected)
+- **10th occurrence** (escalating)
+- **25th occurrence** (critical pattern)
+- **50th occurrence** (severe issue)
+- **Every 50 thereafter** (100, 150, 200...)
+
+**Visual Indicators**:
+- `🔔 2-4x` = Yellow badge
+- `🔔 5-9x` = Orange badge (starting to escalate)
+- `🔔 10+x` = Red badge + pulse animation + "🔥 HOT ALERT" label
+
+**Example**:
+```js
+// Same error fires 12 times in 10 minutes
+// Result: 1 alert with occurrenceCount=12
+// Notifications sent: 1st, 5th, 10th (3 SMS total instead of 12)
+```
+
+**Implementation**:
+- Service: `services/AdminNotificationService.js` (lines ~150-220)
+- Model: `models/NotificationLog.js` (occurrenceCount, firstOccurredAt, lastOccurredAt, occurrences[])
+
+---
+
+### 🗑️ AUTO-PURGE RULES (Keeps Database Clean)
+
+**Problem**: Old alerts pile up forever, clog database
+
+**Solution**: Automated purge cron job (runs daily at 3:00 AM UTC)
+
+| Severity | Status | Auto-Purge After |
+|----------|--------|------------------|
+| CRITICAL/WARNING | Resolved | 90 days |
+| CRITICAL/WARNING | Unresolved | **Never** (must manually resolve) |
+| INFO | Resolved | 30 days |
+| INFO | Unresolved | **60 days** (auto-purge even if ignored) |
+
+**Key Insight**: INFO alerts auto-clean in 60 days whether you touch them or not. CRITICAL/WARNING alerts require manual resolution before purge timer starts.
+
+**Implementation**:
+- Service: `services/NotificationPurgeService.js`
+- Cron: `services/autoPurgeCron.js` (runs daily at 03:00 UTC)
+
+---
+
+### 🎛️ FRONTEND ARCHITECTURE
+
+**Manager Classes** (Parent → Child pattern):
+
+1. **`NotificationCenterManager`** (Parent)
+   - Manages 4 tabs: Dashboard, Logs, Settings, Registry
+   - Provides shared helpers: `apiGet()`, `apiPost()`, `apiPut()`, `showSuccess()`, `showError()`
+   - Auto-refresh every 30 seconds
+   - Global stats in top banner (unresolved count)
+
+2. **`DashboardManager`** (Child)
+   - Recent alerts widget
+   - Severity breakdown chart
+   - Trend analysis (24h, 7d, 30d)
+   - Top error codes
+
+3. **`LogManager`** (Child)
+   - **Enhanced search bar**: Real-time filtering by ID, code, message, company
+   - **Interactive stats bar**: Click badges to filter (All, Critical, Warning, Info, Acknowledged, Resolved)
+   - **Priority-based sorting**: Unresolved → Acknowledged → Resolved (newest first)
+   - **Bulk actions**: Delete selected, Purge resolved, Purge old (90d), Clear all
+   - **Visual indicators**: Resolved alerts grayed out + 50% opacity
+   - **Occurrence history**: Expandable list of all grouped occurrences
+
+4. **`SettingsManager`** (Child)
+   - SMS/Email delivery settings
+   - Twilio/SendGrid credentials
+   - Escalation schedules
+   - Retention policies
+
+5. **`RegistryManager`** (Child)
+   - List of all registered notification codes
+   - Rules for each code (severity, channels, escalation)
+
+**Global Exposure**:
+```js
+// In NotificationCenterManager.js
+window.logManager = this.logManager; // For onclick handlers in HTML
+```
+
+**Files**:
+- `public/admin-notification-center.html` (4-tab UI)
+- `public/js/notification-center/NotificationCenterManager.js`
+- `public/js/notification-center/DashboardManager.js`
+- `public/js/notification-center/LogManager.js`
+- `public/js/notification-center/SettingsManager.js`
+- `public/js/notification-center/RegistryManager.js`
+
+---
+
+### 🔀 ALERT WORKFLOW
+
+**Lifecycle States**:
+1. **🆕 New** → Alert created, delivery attempts start
+2. **✅ Acknowledged** → Admin aware, stops escalation
+3. **✔️ Resolved** → Issue fixed, starts 90-day purge countdown, grays out, moves to bottom
+4. **🗑️ Purged** → Auto-deleted after retention period
+
+**Recommended Admin Workflow**:
+1. Open Alert Log (unresolved alerts at top)
+2. Click "Acknowledge" (stops escalation, shows you're aware)
+3. Investigate and fix the issue
+4. Click "Resolve" with notes (alert grays out, moves to bottom, starts purge timer)
+5. INFO alerts: Ignore them, they auto-clean in 60 days
+
+---
+
+### 📡 BACKEND API ROUTES
+
+**Base Path**: `/api/admin/notifications` (mounted in `index.js` at `/api`)
+
+**Route File**: `routes/admin/adminNotifications.js`
+
+**Critical Routes**:
+```js
+GET    /admin/notifications/status          // Top banner stats (unresolved count)
+GET    /admin/notifications/dashboard       // Dashboard widgets
+GET    /admin/notifications/logs            // Alert log list (paginated, filtered, sorted)
+GET    /admin/notifications/registry        // Registered notification types
+GET    /admin/notifications/settings        // Current settings from AdminSettings singleton
+PUT    /admin/notifications/settings        // Update settings (Twilio, SendGrid, etc)
+POST   /admin/notifications/acknowledge     // Mark alert as acknowledged
+POST   /admin/notifications/resolve         // Mark alert as resolved (starts purge timer)
+POST   /admin/notifications/bulk-delete     // Delete multiple alerts (requires confirmDelete=true)
+POST   /admin/notifications/purge-resolved  // Delete ALL resolved alerts (requires confirmPurge=true)
+POST   /admin/notifications/purge-old       // Delete alerts older than X days (requires confirmPurge=true)
+POST   /admin/notifications/clear-all       // NUCLEAR: Delete ALL alerts (requires confirmDelete=true + password)
+```
+
+**Security**:
+- [ ] All routes use `authenticateJWT` middleware
+- [ ] All routes use `requireRole('admin')` middleware
+- [ ] All write routes use `captureAuditInfo` middleware
+- [ ] All write routes use `requireIdempotency` middleware
+- [ ] All write routes use `configWriteRateLimit` middleware
+
+**Idempotency** (Critical for bulk actions):
+```js
+// Client must send unique key per request
+headers: {
+  'Idempotency-Key': `bulk-delete-${Date.now()}-${Math.random()}`
+}
+
+// Server caches result for 5 minutes
+// Duplicate requests return cached result (prevents double-delete)
+```
+
+---
+
+### 🧪 ERROR INTELLIGENCE SYSTEM INTEGRATION
+
+**Feature**: Automatic root cause analysis + fix suggestions
+
+**How It Works**:
+1. Error occurs → `sendAlert()` called with `stackTrace`
+2. `ErrorIntelligenceService.analyzeError()` runs
+3. Adds `intelligence` object to alert:
+   - **Root Cause**: What dependency is down (MongoDB, Redis, Twilio, ElevenLabs)
+   - **Impact Assessment**: Affected features, customer-facing?, revenue impact
+   - **Fix Guide**: Step-by-step reproduction + verification steps
+   - **UI Fix URL**: Direct link to settings page if fixable via UI
+
+**Example Intelligence**:
+```json
+{
+  "intelligence": {
+    "dependencies": {
+      "isRootCause": true,
+      "dependencyName": "MongoDB",
+      "status": "DOWN"
+    },
+    "impact": {
+      "priority": "P0",
+      "customerFacing": true,
+      "features": ["Call Routing", "Company Lookup"]
+    },
+    "fix": {
+      "title": "MongoDB Connection Failed",
+      "steps": ["Check MongoDB Atlas status", "Verify connection string", "Restart server"],
+      "uiFixUrl": null
+    }
+  }
+}
+```
+
+**Service**: `services/ErrorIntelligenceService.js`
+**Docs**: `docs/ERROR-INTELLIGENCE-SYSTEM.md`
+
+---
+
+### 🏥 DEPENDENCY HEALTH MONITORING
+
+**Critical Dependencies** (checked every 5 minutes):
+- **MongoDB**: Connection status, query latency
+- **Redis**: Connection status, command latency
+- **Twilio**: SMS sending capability (live test)
+- **ElevenLabs**: Voice generation API (live test)
+
+**Health Check Cron**:
+```js
+// Runs every 5 minutes via autoPurgeCron.js
+await DependencyHealthMonitor.checkAllDependencies();
+
+// If any dependency DOWN or DEGRADED:
+await AdminNotificationService.sendAlert({
+  code: 'DEPENDENCY_HEALTH_CRITICAL',
+  severity: 'CRITICAL',
+  message: 'MongoDB connection failed',
+  details: '...'
+});
+```
+
+**Service**: `services/DependencyHealthMonitor.js`
+
+**Alert**: `DEPENDENCY_HEALTH_CRITICAL` (auto-fired when MongoDB/Redis/Twilio/ElevenLabs fails)
+
+---
+
+### 📋 NOTIFICATION CENTER CHECKLIST (For All Refactors)
+
+**Integration**:
+- [ ] All catch blocks call `AdminNotificationService.sendAlert()`
+- [ ] Correct severity used (CRITICAL = down, WARNING = degraded, INFO = log)
+- [ ] `companyId` included for tenant-specific errors
+- [ ] Full `error.stack` passed for intelligence analysis
+
+**Frontend**:
+- [ ] All admin pages include Notification Center tab in navigation
+- [ ] Stats badge in top-right shows unresolved count (updates every 30s)
+- [ ] Alert Log sorts: Unresolved → Acknowledged → Resolved
+- [ ] Resolved alerts visually distinct (grayed out, 50% opacity)
+- [ ] Bulk actions include idempotency keys
+
+**Backend**:
+- [ ] All routes registered in `index.js` (not `app.js`)
+- [ ] Routes use correct prefix: `/admin/notifications/*` (becomes `/api/admin/notifications/*`)
+- [ ] All write routes require idempotency
+- [ ] All routes use JWT auth + admin role
+- [ ] Mongoose enum values match frontend (e.g., `manual_resolve` in resolution.resolutionAction)
+
+**Testing**:
+- [ ] Trigger test error → alert appears in Alert Log
+- [ ] Acknowledge alert → escalation stops, badge updates
+- [ ] Resolve alert → grays out, moves to bottom, starts purge timer
+- [ ] Bulk delete → selected alerts deleted, stats update
+- [ ] Smart grouping → duplicate errors group under one alert with occurrence count
+
+**Performance**:
+- [ ] `sendAlert()` overhead ≤ 5ms (fire-and-forget)
+- [ ] Alert Log loads in ≤ 500ms (paginated, indexed queries)
+- [ ] Dashboard loads in ≤ 1000ms (cached aggregations)
+
+**Documentation**:
+- [ ] New notification codes added to Registry
+- [ ] Severity rules documented in `AdminSettings` or code comments
+- [ ] Protocol modal updated if rules change
+
+---
+
+### 🚀 NOTIFICATION CENTER INFO MODAL
+
+**Feature**: Blue info icon (ℹ️) next to "Alert Log" title
+
+**Shows**:
+1. **Severity table** with SMS/Email/Auto-Purge rules
+2. **Smart grouping guide** (2-4x, 5-9x, 10+x badges)
+3. **Recommended workflow** (Acknowledge → Fix → Resolve)
+
+**Why**: Admins forget the rules. One-click reference prevents confusion.
+
+**Location**: `admin-notification-center.html` (lines 237-355)
+
+---
+
+### ⚠️ COMMON PITFALLS
+
+**DON'T**:
+- ❌ Send CRITICAL for non-critical issues (SMS spam = ignored alerts)
+- ❌ Forget `companyId` (can't trace to tenant)
+- ❌ Skip `stackTrace` (no intelligence analysis)
+- ❌ Hardcode alert IDs or skip deduplication
+- ❌ Ignore INFO alerts in logs (they auto-clean, no action needed)
+
+**DO**:
+- ✅ Use WARNING for degraded performance (email, not SMS)
+- ✅ Use INFO for audit logs and successful operations
+- ✅ Always pass full error object to `sendAlert()`
+- ✅ Test alerts fire correctly after integration
+- ✅ Rely on smart grouping to prevent spam
+
+---
+
+### 🎯 PERFORMANCE TARGETS
+
+| Metric | Target | Why |
+|--------|--------|-----|
+| `sendAlert()` overhead | ≤ 5ms | Non-blocking, fire-and-forget |
+| Alert Log page load | ≤ 500ms | Paginated queries + indexes |
+| Dashboard load | ≤ 1000ms | Cached aggregations |
+| Deduplication check | ≤ 10ms | Indexed query on code+companyId+createdAt |
+| Bulk delete (100 alerts) | ≤ 2000ms | Batched MongoDB deleteMany |
+
+**Monitoring**: Track via `NotificationCenterManager` console logs
+
+---
+
+### 🔐 SECURITY & ACCESS CONTROL
+
+**Access Levels**:
+- **Admin Only**: Full access to all tabs, bulk actions, settings
+- **Super Admin**: Can use "Clear All" (requires password confirmation)
+
+**Audit Trail**:
+- All write operations logged via `captureAuditInfo` middleware
+- Who acknowledged/resolved each alert (stored in alert document)
+- Settings changes logged to audit log
+
+**Rate Limiting**:
+- Write routes: 100 requests/15 minutes per IP
+- Prevents accidental bulk action spam
+
+---
+
+### 📚 RELATED DOCUMENTATION
+
+- **Full Architecture**: `docs/ERROR-INTELLIGENCE-SYSTEM.md`
+- **API Routes**: `routes/admin/adminNotifications.js` (comments)
+- **Service Layer**: `services/AdminNotificationService.js` (inline docs)
+- **Frontend Managers**: `public/js/notification-center/*.js` (JSDoc comments)
+
+---
+
+### 🎓 TRAINING PROTOCOL
+
+**Before Touching Notification Center**:
+1. Read this section (REFACTOR_PROTOCOL.md)
+2. Read `ERROR-INTELLIGENCE-SYSTEM.md`
+3. Open Alert Log → click info icon (ℹ️) → read protocol table
+4. Test in local: Trigger error → see alert → acknowledge → resolve
+5. Understand smart grouping by triggering same error 10x quickly
 
 ---
 
