@@ -221,10 +221,137 @@
             <div class="bg-white rounded-lg shadow-md p-6">
                 <!-- Header with Title -->
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-xl font-semibold text-gray-700">
-                        <i class="fas fa-history mr-2"></i>
-                        Alert Log
-                    </h3>
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-xl font-semibold text-gray-700">
+                            <i class="fas fa-history mr-2"></i>
+                            Alert Log
+                        </h3>
+                        <button onclick="document.getElementById('notification-protocol-modal').classList.remove('hidden')" 
+                                class="text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-full p-1"
+                                title="View Notification Protocol">
+                            <i class="fas fa-info-circle text-lg"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Notification Protocol Modal -->
+                <div id="notification-protocol-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full m-4 max-h-[90vh] overflow-auto">
+                        <div class="p-6">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-2xl font-bold text-gray-900">
+                                    <i class="fas fa-book-open mr-2 text-blue-600"></i>
+                                    Notification Protocol Guide
+                                </h3>
+                                <button onclick="document.getElementById('notification-protocol-modal').classList.add('hidden')" 
+                                        class="text-gray-500 hover:text-gray-700">
+                                    <i class="fas fa-times text-xl"></i>
+                                </button>
+                            </div>
+                            
+                            <!-- Severity Rules Table -->
+                            <div class="mb-6">
+                                <h4 class="text-lg font-semibold text-gray-800 mb-3">📊 Severity Rules & Notifications</h4>
+                                <table class="w-full border-collapse border border-gray-300">
+                                    <thead class="bg-gray-100">
+                                        <tr>
+                                            <th class="border border-gray-300 px-4 py-2 text-left">Severity</th>
+                                            <th class="border border-gray-300 px-4 py-2 text-center">SMS</th>
+                                            <th class="border border-gray-300 px-4 py-2 text-center">Email</th>
+                                            <th class="border border-gray-300 px-4 py-2 text-left">Auto-Purge</th>
+                                            <th class="border border-gray-300 px-4 py-2 text-left">Action Required?</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="bg-red-50">
+                                            <td class="border border-gray-300 px-4 py-3">
+                                                <div class="font-bold text-red-800">🔴 CRITICAL</div>
+                                                <div class="text-xs text-gray-600">System down, DB offline, payment failures</div>
+                                            </td>
+                                            <td class="border border-gray-300 px-4 py-3 text-center">✅ <span class="text-green-700 font-semibold">Yes</span></td>
+                                            <td class="border border-gray-300 px-4 py-3 text-center">✅ <span class="text-green-700 font-semibold">Yes</span></td>
+                                            <td class="border border-gray-300 px-4 py-3 text-sm">
+                                                <div class="font-semibold text-purple-700">90 days</div>
+                                                <div class="text-xs text-gray-600">after you resolve</div>
+                                            </td>
+                                            <td class="border border-gray-300 px-4 py-3">
+                                                <div class="font-bold text-red-700">YES</div>
+                                                <div class="text-xs text-gray-600">Acknowledge & Resolve</div>
+                                            </td>
+                                        </tr>
+                                        <tr class="bg-yellow-50">
+                                            <td class="border border-gray-300 px-4 py-3">
+                                                <div class="font-bold text-yellow-800">⚠️ WARNING</div>
+                                                <div class="text-xs text-gray-600">Degraded performance, non-critical failures</div>
+                                            </td>
+                                            <td class="border border-gray-300 px-4 py-3 text-center">❌ <span class="text-gray-500">No</span></td>
+                                            <td class="border border-gray-300 px-4 py-3 text-center">✅ <span class="text-green-700 font-semibold">Yes</span></td>
+                                            <td class="border border-gray-300 px-4 py-3 text-sm">
+                                                <div class="font-semibold text-purple-700">90 days</div>
+                                                <div class="text-xs text-gray-600">after you resolve</div>
+                                            </td>
+                                            <td class="border border-gray-300 px-4 py-3">
+                                                <div class="font-bold text-yellow-700">YES</div>
+                                                <div class="text-xs text-gray-600">Acknowledge & Resolve</div>
+                                            </td>
+                                        </tr>
+                                        <tr class="bg-blue-50">
+                                            <td class="border border-gray-300 px-4 py-3">
+                                                <div class="font-bold text-blue-800">ℹ️ INFO</div>
+                                                <div class="text-xs text-gray-600">Successful operations, health checks passing</div>
+                                            </td>
+                                            <td class="border border-gray-300 px-4 py-3 text-center">❌ <span class="text-gray-500">No</span></td>
+                                            <td class="border border-gray-300 px-4 py-3 text-center">❌ <span class="text-gray-500">No</span></td>
+                                            <td class="border border-gray-300 px-4 py-3 text-sm">
+                                                <div class="font-semibold text-blue-700">60 days</div>
+                                                <div class="text-xs text-red-600 font-semibold">auto (even if not resolved!)</div>
+                                            </td>
+                                            <td class="border border-gray-300 px-4 py-3">
+                                                <div class="font-bold text-green-700">NO</div>
+                                                <div class="text-xs text-gray-600">Just logs, auto-cleans</div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Smart Grouping Info -->
+                            <div class="mb-6 p-4 bg-purple-50 border-l-4 border-purple-500 rounded">
+                                <h4 class="text-lg font-semibold text-purple-900 mb-2">
+                                    <i class="fas fa-layer-group mr-2"></i>
+                                    Smart Alert Grouping
+                                </h4>
+                                <ul class="text-sm text-gray-700 space-y-1">
+                                    <li><strong>🔔 2-4x:</strong> Duplicate alerts grouped (yellow badge)</li>
+                                    <li><strong>🔔 5-9x:</strong> Rapid fire detected (orange badge)</li>
+                                    <li><strong>🔔 10+x:</strong> HOT ALERT! (red badge + pulse animation)</li>
+                                    <li><strong>🔕 Notifications:</strong> Only sent on 1st, 5th, 10th, 25th, 50th occurrences (prevents spam)</li>
+                                </ul>
+                            </div>
+                            
+                            <!-- Workflow Tips -->
+                            <div class="mb-4 p-4 bg-green-50 border-l-4 border-green-500 rounded">
+                                <h4 class="text-lg font-semibold text-green-900 mb-2">
+                                    <i class="fas fa-tasks mr-2"></i>
+                                    Recommended Workflow
+                                </h4>
+                                <ol class="text-sm text-gray-700 space-y-1 list-decimal list-inside">
+                                    <li><strong>Unresolved alerts show at top</strong> - Work on these first</li>
+                                    <li><strong>Click "Acknowledge"</strong> - Stops escalation, shows you're aware</li>
+                                    <li><strong>Fix the issue</strong> - Take action to resolve the problem</li>
+                                    <li><strong>Click "Resolve"</strong> - Alert grays out, moves to bottom, starts 90-day purge timer</li>
+                                    <li><strong>INFO alerts:</strong> Ignore them - they auto-clean in 60 days</li>
+                                </ol>
+                            </div>
+                            
+                            <div class="text-center">
+                                <button onclick="document.getElementById('notification-protocol-modal').classList.add('hidden')" 
+                                        class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-semibold">
+                                    Got it!
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Enhanced Search Bar -->
