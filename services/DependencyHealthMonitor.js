@@ -45,7 +45,7 @@ class DependencyHealthMonitor {
             // Calculate overall status
             const allServices = [mongoHealth, redisHealth, twilioHealth, elevenLabsHealth];
             const criticalDown = allServices.filter(s => s.status === 'DOWN' && s.critical).length;
-            const anyDown = allServices.filter(s => s.status === 'DOWN').length;
+            const anyDown = allServices.filter(s => s.status === 'DOWN' && s.critical !== false).length; // Exclude NOT_CONFIGURED
             const anyDegraded = allServices.filter(s => s.status === 'DEGRADED').length;
 
             let overallStatus;
@@ -222,30 +222,45 @@ class DependencyHealthMonitor {
     }
 
     // ========================================================================
-    // TWILIO HEALTH CHECK
+    // TWILIO HEALTH CHECK (Per-Company Credentials)
     // ========================================================================
     async checkTwilio() {
         const startTime = Date.now();
 
         try {
-            const accountSid = process.env.TWILIO_ACCOUNT_SID;
-            const authToken = process.env.TWILIO_AUTH_TOKEN;
-            const phoneNumber = process.env.TWILIO_PHONE_NUMBER;
+            // Check global credentials first (legacy/admin)
+            let accountSid = process.env.TWILIO_ACCOUNT_SID;
+            let authToken = process.env.TWILIO_AUTH_TOKEN;
+            let phoneNumber = process.env.TWILIO_PHONE_NUMBER;
+            let credentialSource = 'global';
 
-            // Check if credentials are configured
-            if (!accountSid || !authToken || !phoneNumber) {
+            // If no global credentials, check if ANY company has Twilio configured
+            if (!accountSid || !authToken) {
+                const v2Company = require('../models/v2Company');
+                const companyWithTwilio = await v2Company.findOne({
+                    'twilioConfig.accountSid': { $exists: true, $ne: null, $ne: '' },
+                    'twilioConfig.authToken': { $exists: true, $ne: null, $ne: '' }
+                }).select('twilioConfig.accountSid twilioConfig.authToken twilioConfig.phoneNumber companyName');
+
+                if (companyWithTwilio) {
+                    accountSid = companyWithTwilio.twilioConfig.accountSid;
+                    authToken = companyWithTwilio.twilioConfig.authToken;
+                    phoneNumber = companyWithTwilio.twilioConfig.phoneNumber;
+                    credentialSource = `company:${companyWithTwilio.companyName}`;
+                }
+            }
+
+            // If still no credentials found, Twilio is not configured at all
+            if (!accountSid || !authToken) {
                 return {
                     name: 'Twilio',
-                    status: 'DOWN',
-                    critical: true,
-                    message: 'Twilio credentials not configured',
+                    status: 'NOT_CONFIGURED',
+                    critical: false, // Not critical if not configured
+                    message: 'Twilio not configured (per-company credentials system)',
                     responseTime: Date.now() - startTime,
-                    missingVars: [
-                        !accountSid && 'TWILIO_ACCOUNT_SID',
-                        !authToken && 'TWILIO_AUTH_TOKEN',
-                        !phoneNumber && 'TWILIO_PHONE_NUMBER'
-                    ].filter(Boolean),
-                    impact: 'CRITICAL - SMS and call handling unavailable'
+                    details: {
+                        note: 'Configure Twilio per-company in Company Profile → Configuration tab'
+                    }
                 };
             }
 
@@ -263,22 +278,75 @@ class DependencyHealthMonitor {
                 };
             }
 
-            // Can't do actual API call without importing Twilio client here
-            // Instead, verify credentials are present and formatted correctly
-            const responseTime = Date.now() - startTime;
+            // ================================================================
+            // REAL API TEST - Check Twilio account status
+            // ================================================================
+            try {
+                const twilio = require('twilio');
+                const client = twilio(accountSid, authToken);
+                
+                // Fetch account details (lightweight API call)
+                const account = await client.api.accounts(accountSid).fetch();
+                const responseTime = Date.now() - startTime;
+                
+                // Check account status
+                if (account.status !== 'active') {
+                    return {
+                        name: 'Twilio',
+                        status: 'DOWN',
+                        critical: true,
+                        message: `Twilio account ${account.status}`,
+                        responseTime,
+                        impact: 'CRITICAL - SMS and call handling unavailable',
+                        details: {
+                            accountStatus: account.status,
+                            accountSid: `${accountSid.substring(0, 10)}...`
+                        }
+                    };
+                }
+                
+                // Check response time for degraded status
+                let status = 'HEALTHY';
+                let message = 'Twilio API operational';
+                if (responseTime > 2000) {
+                    status = 'DEGRADED';
+                    message = `Twilio API slow (${responseTime}ms)`;
+                }
 
-            return {
-                name: 'Twilio',
-                status: 'HEALTHY',
-                critical: true,
-                message: 'Twilio credentials configured',
-                responseTime,
-                details: {
-                    accountSid: `${accountSid.substring(0, 10)}...`,
-                    phoneNumber: phoneNumber
-                },
-                note: 'Full API test requires SMS send'
-            };
+                return {
+                    name: 'Twilio',
+                    status,
+                    critical: true,
+                    message,
+                    responseTime,
+                    details: {
+                        accountStatus: account.status,
+                        accountType: account.type,
+                        accountSid: `${accountSid.substring(0, 10)}...`,
+                        phoneNumber: phoneNumber,
+                        credentialSource: credentialSource,
+                        apiVersion: 'v1'
+                    }
+                };
+                
+            } catch (apiError) {
+                // API call failed - this is a real issue
+                const responseTime = Date.now() - startTime;
+                
+                // Check if it's an auth error (wrong credentials) vs network error
+                const isAuthError = apiError.code === 20003 || apiError.status === 401;
+                
+                return {
+                    name: 'Twilio',
+                    status: 'DOWN',
+                    critical: true,
+                    message: isAuthError ? 'Twilio authentication failed' : `Twilio API error: ${apiError.message}`,
+                    responseTime,
+                    impact: 'CRITICAL - SMS and call handling unavailable',
+                    error: apiError.message,
+                    errorCode: apiError.code
+                };
+            }
 
         } catch (error) {
             return {
