@@ -64,9 +64,22 @@ class AdminNotificationService {
         stackTrace = null
     }) {
         const startTime = Date.now();
+        const requestId = `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
         try {
-            logger.debug(`🔔 [ADMIN NOTIFICATION] Starting alert: ${code} (${severity})`);
+            // ================================================================
+            // STRUCTURED LOGGING (per REFACTOR_PROTOCOL.md)
+            // ================================================================
+            logger.info('🔔 [ADMIN NOTIFICATION] Starting alert', {
+                companyId,
+                requestId,
+                feature: 'notification',
+                module: 'AdminNotificationService',
+                event: 'alert_start',
+                code,
+                severity,
+                companyName
+            });
             
             // ================================================================
             // STEP 1: AUTO-REGISTER THIS NOTIFICATION POINT
@@ -417,19 +430,57 @@ class AdminNotificationService {
                 await registry.updateStats(allSuccess);
             }
             
-            logger.info(`✅ [ADMIN NOTIFICATION] Alert ${notificationLog.alertId} sent successfully`);
-            logger.info(`📊 [ADMIN NOTIFICATION] SMS: ${smsResults.filter(r => r.status === 'sent').length}/${smsResults.length} sent`);
-            logger.info(`📊 [ADMIN NOTIFICATION] Email: ${emailResults.filter(r => r.status === 'sent').length}/${emailResults.length} sent`);
+            // ================================================================
+            // SUCCESS LOGGING (Structured per REFACTOR_PROTOCOL.md)
+            // ================================================================
+            const durationMs = Date.now() - startTime;
+            const smsSuccessCount = smsResults.filter(r => r.status === 'sent').length;
+            const emailSuccessCount = emailResults.filter(r => r.status === 'sent').length;
+            
+            logger.info('✅ [ADMIN NOTIFICATION] Alert sent successfully', {
+                companyId,
+                requestId,
+                feature: 'notification',
+                module: 'AdminNotificationService',
+                event: 'alert_success',
+                alertId: notificationLog.alertId,
+                code,
+                severity,
+                durationMs,
+                status: 'success',
+                smsSuccess: smsSuccessCount,
+                smsTotal: smsResults.length,
+                emailSuccess: emailSuccessCount,
+                emailTotal: emailResults.length,
+                performance: durationMs <= 5 ? 'MEETS_SLO' : 'EXCEEDS_SLO'  // Protocol: ≤5ms target
+            });
         
         return { 
             success: true, 
                 alertId: notificationLog.alertId,
                 smsResults,
-                emailResults
+                emailResults,
+                durationMs
         };
         
     } catch (error) {
-            logger.error(`❌ [ADMIN NOTIFICATION] Failed to send alert ${code}:`, error);
+            // ================================================================
+            // ERROR LOGGING (Structured per REFACTOR_PROTOCOL.md)
+            // ================================================================
+            const durationMs = Date.now() - startTime;
+            logger.error('❌ [ADMIN NOTIFICATION] Failed to send alert', {
+                companyId,
+                requestId,
+                feature: 'notification',
+                module: 'AdminNotificationService',
+                event: 'alert_failure',
+                code,
+                severity,
+                durationMs,
+                status: 'error',
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
             
             // Log to notification center about the notification system failure
             // (but prevent infinite recursion by checking the error code)

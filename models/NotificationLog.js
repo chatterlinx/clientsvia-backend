@@ -264,12 +264,36 @@ const notificationLogSchema = new mongoose.Schema({
 });
 
 // ============================================================================
-// INDEXES FOR PERFORMANCE
+// INDEXES FOR PERFORMANCE (per REFACTOR_PROTOCOL.md)
 // ============================================================================
 
+// Basic timestamp index (queries by date range)
 notificationLogSchema.index({ createdAt: -1 });
+
+// Multi-tenant safety index (per protocol requirement)
+notificationLogSchema.index({ companyId: 1, updatedAt: -1 });
+
+// Alert Log page sorting index (unresolved → acknowledged → resolved, newest first)
+// Supports query: sort by resolution.isResolved, acknowledgment.isAcknowledged, createdAt
+notificationLogSchema.index({ 
+    'resolution.isResolved': 1, 
+    'acknowledgment.isAcknowledged': 1, 
+    createdAt: -1 
+});
+
+// Deduplication query index (CRITICAL - must be ≤10ms per protocol)
+// Supports: findOne({ code, companyId, severity, acknowledgment.isAcknowledged: false, resolution.isResolved: false, createdAt: { $gte: cutoff } })
+notificationLogSchema.index({ 
+    code: 1, 
+    companyId: 1, 
+    severity: 1,
+    'acknowledgment.isAcknowledged': 1,
+    'resolution.isResolved': 1,
+    createdAt: -1
+});
+
+// Legacy indexes (kept for backward compatibility)
 notificationLogSchema.index({ 'acknowledgment.isAcknowledged': 1, severity: 1 });
-notificationLogSchema.index({ companyId: 1, createdAt: -1 });
 notificationLogSchema.index({ code: 1, createdAt: -1 });
 
 // ============================================================================

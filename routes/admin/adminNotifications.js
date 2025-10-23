@@ -36,6 +36,58 @@ const { captureAuditInfo, requireIdempotency, configWriteRateLimit } = require('
 const { redisClient } = require('../../clients');
 
 // ----------------------------------------------------------------------------
+// Redis caching helper: Read flow: Redis → Mongo → Redis → Return (per REFACTOR_PROTOCOL.md)
+// ----------------------------------------------------------------------------
+async function withCache(cacheKey, handler, opts = {}) {
+    const ttlSeconds = opts.ttlSeconds || 30; // 30 seconds default for notification data (real-time)
+    
+    try {
+        // Try Redis first
+        if (redisClient && redisClient.isReady) {
+            const cached = await redisClient.get(cacheKey);
+            if (cached) {
+                logger.debug(`✅ [REDIS CACHE HIT] ${cacheKey}`);
+                return JSON.parse(cached);
+            }
+            logger.debug(`⚠️ [REDIS CACHE MISS] ${cacheKey}`);
+        }
+        
+        // Cache miss or Redis down → Query Mongo
+        const result = await handler();
+        
+        // Cache the result
+        if (redisClient && redisClient.isReady) {
+            try {
+                await redisClient.setEx(cacheKey, ttlSeconds, JSON.stringify(result));
+                logger.debug(`✅ [REDIS CACHE SET] ${cacheKey} (TTL: ${ttlSeconds}s)`);
+            } catch (cacheErr) {
+                logger.warn('⚠️ [REDIS CACHE] Failed to store result:', cacheErr?.message);
+            }
+        }
+        
+        return result;
+    } catch (err) {
+        logger.error(`❌ [REDIS CACHE] Error in withCache for ${cacheKey}:`, err);
+        throw err;
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Clear notification caches after write operations (per REFACTOR_PROTOCOL.md)
+// ----------------------------------------------------------------------------
+async function clearNotificationCaches() {
+    if (redisClient && redisClient.isReady) {
+        try {
+            // Clear dashboard cache (most critical for performance)
+            await redisClient.del('notif:dashboard:latest');
+            logger.debug('✅ [REDIS CACHE INVALIDATE] Cleared notification caches');
+        } catch (err) {
+            logger.warn('⚠️ [REDIS CACHE] Failed to clear caches:', err?.message);
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
 // Idempotency helper: caches successful JSON responses for duplicate keys
 // ----------------------------------------------------------------------------
 async function respondWithIdempotency(req, res, handler, opts = {}) {
@@ -142,19 +194,34 @@ router.get('/admin/notifications/status', authenticateJWT, requireRole('admin'),
 // ============================================================================
 
 router.get('/admin/notifications/dashboard', authenticateJWT, requireRole('admin'), async (req, res) => {
+    const startTime = Date.now();
     try {
-        const counts = await NotificationLog.getUnacknowledgedCount();
-        const validationSummary = await NotificationRegistry.getValidationSummary();
-        const latestHealthCheck = await HealthCheckLog.getLatest();
-        const healthTrend = await HealthCheckLog.getTrend();
-        
-        // Get recent alerts (last 10)
-        const recentAlerts = await NotificationLog.find({
-            'acknowledgment.isAcknowledged': false
-        })
-        .sort({ createdAt: -1 })
-        .limit(10)
-        .select('alertId code severity companyName message createdAt escalation');
+        // ================================================================
+        // REDIS CACHING (per REFACTOR_PROTOCOL.md)
+        // Cache dashboard data for 30 seconds (real-time but reduces DB load)
+        // ================================================================
+        const dashboardData = await withCache('notif:dashboard:latest', async () => {
+            const counts = await NotificationLog.getUnacknowledgedCount();
+            const validationSummary = await NotificationRegistry.getValidationSummary();
+            const latestHealthCheck = await HealthCheckLog.getLatest();
+            const healthTrend = await HealthCheckLog.getTrend();
+            
+            // Get recent alerts (last 10)
+            const recentAlerts = await NotificationLog.find({
+                'acknowledgment.isAcknowledged': false
+            })
+            .sort({ createdAt: -1 })
+            .limit(10)
+            .select('alertId code severity companyName message createdAt escalation');
+            
+            return {
+                unacknowledgedAlerts: counts,
+                notificationPointsValidation: validationSummary,
+                latestHealthCheck,
+                healthTrend24h: healthTrend,
+                recentAlerts
+            };
+        }, { ttlSeconds: 30 }); // 30s cache
         
         // Heartbeat emit (non-blocking)
         try { AdminNotificationService.sendAlert({
@@ -169,15 +236,21 @@ router.get('/admin/notifications/dashboard', authenticateJWT, requireRole('admin
             eventType: 'important_event'
         }); } catch (_) {}
 
+        const durationMs = Date.now() - startTime;
+        
+        // Log performance (per REFACTOR_PROTOCOL.md SLO: ≤1000ms)
+        logger.info('📊 [DASHBOARD] Load complete', {
+            feature: 'notification',
+            module: 'adminNotifications',
+            event: 'dashboard_load',
+            durationMs,
+            status: 'success',
+            performance: durationMs <= 1000 ? 'MEETS_SLO' : 'EXCEEDS_SLO'
+        });
+
         res.json({
             success: true,
-            data: {
-                unacknowledgedAlerts: counts,
-                notificationPointsValidation: validationSummary,
-                latestHealthCheck,
-                healthTrend24h: healthTrend,
-                recentAlerts
-            }
+            data: dashboardData
         });
         
     } catch (error) {
@@ -476,6 +549,10 @@ router.post('/admin/notifications/acknowledge', authenticateJWT, requireRole('ad
                 acknowledgedBy,
                 'WEB_UI'
             );
+            
+            // Clear cache after write (per REFACTOR_PROTOCOL.md)
+            await clearNotificationCaches();
+            
             try { AdminNotificationService.sendAlert({
                 code: 'NOTIF_ALERT_ACK_OK',
                 severity: 'INFO',
@@ -585,6 +662,9 @@ router.post('/admin/notifications/resolve', authenticateJWT, requireRole('admin'
         }
         await respondWithIdempotency(req, res, async () => {
             await alert.resolve(resolvedBy, action, notes || '');
+            
+            // Clear cache after write (per REFACTOR_PROTOCOL.md)
+            await clearNotificationCaches();
             try { AdminNotificationService.sendAlert({
                 code: 'NOTIF_ALERT_RESOLVE_OK',
                 severity: 'INFO',
@@ -1504,6 +1584,9 @@ router.post('/admin/notifications/bulk-delete', authenticateJWT, requireRole('ad
                 alertId: { $in: alertIds }
             });
             
+            // Clear cache after write (per REFACTOR_PROTOCOL.md)
+            await clearNotificationCaches();
+            
             logger.info(`✅ [BULK DELETE] Deleted ${result.deletedCount} alerts`);
             
             return {
@@ -1540,6 +1623,9 @@ router.post('/admin/notifications/purge-resolved', authenticateJWT, requireRole(
             const result = await NotificationLog.deleteMany({
                 'resolution.isResolved': true
             });
+            
+            // Clear cache after write (per REFACTOR_PROTOCOL.md)
+            await clearNotificationCaches();
             
             logger.info(`✅ [PURGE RESOLVED] Deleted ${result.deletedCount} resolved alerts`);
             
@@ -1588,6 +1674,9 @@ router.post('/admin/notifications/purge-old', authenticateJWT, requireRole('admi
                 createdAt: { $lt: cutoffDate }
             });
             
+            // Clear cache after write (per REFACTOR_PROTOCOL.md)
+            await clearNotificationCaches();
+            
             logger.info(`✅ [PURGE OLD] Deleted ${result.deletedCount} old alerts`);
             
             return {
@@ -1626,6 +1715,9 @@ router.post('/admin/notifications/clear-all', authenticateJWT, requireRole('admi
             
             // Delete all
             const result = await NotificationLog.deleteMany({});
+            
+            // Clear cache after write (per REFACTOR_PROTOCOL.md)
+            await clearNotificationCaches();
             
             logger.warn(`⚠️  [CLEAR ALL] Deleted ${result.deletedCount} alerts (total: ${count})`);
             
