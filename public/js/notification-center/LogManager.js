@@ -7,6 +7,8 @@ class LogManager {
         this.nc = notificationCenter;
         this.currentPage = 1;
         this.logs = []; // Store current logs for copyDebugInfo
+        this.allLogs = []; // Store all loaded logs for filtering
+        this.selectedAlerts = new Set(); // Track selected alert IDs
         this.setupEventListeners();
     }
     
@@ -14,12 +16,94 @@ class LogManager {
         // Filter handlers
         const severityFilter = document.getElementById('log-filter-severity');
         const acknowledgedFilter = document.getElementById('log-filter-acknowledged');
+        const searchInput = document.getElementById('log-search-input');
+        const selectAllCheckbox = document.getElementById('select-all-checkbox');
         
         if (severityFilter) {
             severityFilter.addEventListener('change', () => this.load());
         }
         if (acknowledgedFilter) {
             acknowledgedFilter.addEventListener('change', () => this.load());
+        }
+        
+        // Real-time search
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.filterLogs(e.target.value);
+            });
+        }
+        
+        // Select all checkbox
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', (e) => {
+                this.toggleSelectAll(e.target.checked);
+            });
+        }
+    }
+    
+    filterLogs(searchTerm) {
+        const term = searchTerm.toLowerCase().trim();
+        
+        if (!term) {
+            // No search term - show all logs
+            this.renderLogs(this.allLogs, null);
+            return;
+        }
+        
+        // Filter logs by search term
+        const filtered = this.allLogs.filter(log => {
+            return (
+                log.alertId.toLowerCase().includes(term) ||
+                log.code.toLowerCase().includes(term) ||
+                log.message.toLowerCase().includes(term) ||
+                log.companyName.toLowerCase().includes(term) ||
+                (log.details && log.details.toLowerCase().includes(term))
+            );
+        });
+        
+        this.renderLogs(filtered, null);
+    }
+    
+    toggleSelectAll(checked) {
+        const checkboxes = document.querySelectorAll('.alert-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = checked;
+            const alertId = checkbox.dataset.alertId;
+            if (checked) {
+                this.selectedAlerts.add(alertId);
+            } else {
+                this.selectedAlerts.delete(alertId);
+            }
+        });
+        this.updateBulkActionsBar();
+    }
+    
+    toggleAlertSelection(alertId, checked) {
+        if (checked) {
+            this.selectedAlerts.add(alertId);
+        } else {
+            this.selectedAlerts.delete(alertId);
+        }
+        this.updateBulkActionsBar();
+    }
+    
+    updateBulkActionsBar() {
+        const bulkBar = document.getElementById('bulk-actions-bar');
+        const selectedCount = document.getElementById('selected-count');
+        const selectAllCheckbox = document.getElementById('select-all-checkbox');
+        
+        if (this.selectedAlerts.size > 0) {
+            bulkBar.classList.remove('hidden');
+            selectedCount.textContent = `${this.selectedAlerts.size} selected`;
+            
+            // Update select-all checkbox state
+            const totalCheckboxes = document.querySelectorAll('.alert-checkbox').length;
+            selectAllCheckbox.checked = this.selectedAlerts.size === totalCheckboxes;
+            selectAllCheckbox.indeterminate = this.selectedAlerts.size > 0 && this.selectedAlerts.size < totalCheckboxes;
+        } else {
+            bulkBar.classList.add('hidden');
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
         }
     }
     
@@ -30,13 +114,15 @@ class LogManager {
             const severity = document.getElementById('log-filter-severity')?.value || '';
             const acknowledged = document.getElementById('log-filter-acknowledged')?.value || '';
             
-            let url = `/api/admin/notifications/logs?page=${this.currentPage}&limit=20`;
+            let url = `/api/admin/notifications/logs?page=${this.currentPage}&limit=100`; // Load more for better search
             if (severity) url += `&severity=${severity}`;
             if (acknowledged) url += `&acknowledged=${acknowledged}`;
             
             const data = await this.nc.apiGet(url);
             
             if (data.success) {
+                this.allLogs = data.data.logs; // Store for filtering
+                this.logs = data.data.logs; // Store for copyDebugInfo
                 this.renderLogs(data.data.logs, data.data.pagination);
             }
             
@@ -70,11 +156,25 @@ class LogManager {
         html += '</div>';
         
         // Add pagination
-        if (pagination.pages > 1) {
+        if (pagination && pagination.pages > 1) {
             html += this.renderPagination(pagination);
         }
         
         container.innerHTML = html;
+        
+        // Restore checkbox states
+        this.restoreCheckboxStates();
+    }
+    
+    restoreCheckboxStates() {
+        // Restore selected checkboxes after re-render
+        this.selectedAlerts.forEach(alertId => {
+            const checkbox = document.querySelector(`.alert-checkbox[data-alert-id="${alertId}"]`);
+            if (checkbox) {
+                checkbox.checked = true;
+            }
+        });
+        this.updateBulkActionsBar();
     }
     
     renderLogCard(log) {
@@ -93,17 +193,27 @@ class LogManager {
         
         return `
             <div class="border-l-4 ${severityColors[log.severity]} p-4 rounded-r-lg shadow">
-                <div class="flex justify-between items-start mb-2">
-                    <div class="flex-1">
-                        <h5 class="font-mono text-sm font-semibold text-gray-900">${log.alertId}</h5>
-                        <p class="text-gray-700 font-medium">${log.message}</p>
-                        <p class="text-xs text-gray-500 mt-1">Code: <span class="font-mono">${log.code}</span></p>
+                <div class="flex items-start gap-3 mb-2">
+                    <div class="pt-1">
+                        <input type="checkbox" 
+                               class="alert-checkbox w-4 h-4 text-blue-600 rounded" 
+                               data-alert-id="${log.alertId}"
+                               onchange="logManager.toggleAlertSelection('${log.alertId}', this.checked)">
                     </div>
-                    <div class="flex space-x-2">
-                        <span class="px-2 py-1 rounded-full text-xs font-semibold ${log.severity === 'CRITICAL' ? 'bg-red-100 text-red-800' : log.severity === 'WARNING' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}">
-                            ${log.severity}
-                        </span>
-                        ${statusBadge}
+                    <div class="flex-1">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <h5 class="font-mono text-sm font-semibold text-gray-900">${log.alertId}</h5>
+                                <p class="text-gray-700 font-medium">${log.message}</p>
+                                <p class="text-xs text-gray-500 mt-1">Code: <span class="font-mono">${log.code}</span></p>
+                            </div>
+                            <div class="flex space-x-2">
+                                <span class="px-2 py-1 rounded-full text-xs font-semibold ${log.severity === 'CRITICAL' ? 'bg-red-100 text-red-800' : log.severity === 'WARNING' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}">
+                                    ${log.severity}
+                                </span>
+                                ${statusBadge}
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="text-sm text-gray-600 space-y-1">
@@ -676,6 +786,121 @@ Paste this report to your AI assistant for instant root cause analysis!
         } catch (error) {
             this.nc.showError('Failed to resolve alert');
             console.error('❌ [LOG] Resolve failed:', error);
+        }
+    }
+    
+    // ============================================================================
+    // BULK ACTIONS
+    // ============================================================================
+    
+    async deleteSelected() {
+        if (this.selectedAlerts.size === 0) {
+            this.nc.showError('No alerts selected');
+            return;
+        }
+        
+        const count = this.selectedAlerts.size;
+        if (!confirm(`⚠️ Delete ${count} selected alert(s)?\n\nThis cannot be undone.`)) return;
+        
+        try {
+            const alertIds = Array.from(this.selectedAlerts);
+            
+            const result = await this.nc.apiPost('/api/admin/notifications/bulk-delete', {
+                alertIds: alertIds,
+                confirmDelete: true
+            });
+            
+            if (result.success) {
+                this.nc.showSuccess(`✅ Deleted ${result.deleted} alert(s)`);
+                this.selectedAlerts.clear();
+                this.load();
+            }
+            
+        } catch (error) {
+            this.nc.showError('Failed to delete selected alerts');
+            console.error('❌ [BULK DELETE] Error:', error);
+        }
+    }
+    
+    async purgeResolved() {
+        if (!confirm('⚠️ Purge ALL resolved alerts?\n\nThis will permanently delete all resolved alerts from the database.\n\nThis cannot be undone.')) return;
+        
+        try {
+            const result = await this.nc.apiPost('/api/admin/notifications/purge-resolved', {
+                confirmPurge: true
+            });
+            
+            if (result.success) {
+                this.nc.showSuccess(`✅ Purged ${result.deleted} resolved alert(s)`);
+                this.selectedAlerts.clear();
+                this.load();
+            }
+            
+        } catch (error) {
+            this.nc.showError('Failed to purge resolved alerts');
+            console.error('❌ [PURGE RESOLVED] Error:', error);
+        }
+    }
+    
+    async purgeOld() {
+        const days = prompt('⏰ Delete alerts older than how many days?\n\nMinimum: 7 days\nDefault: 90 days', '90');
+        
+        if (!days) return; // User cancelled
+        
+        const daysNum = parseInt(days, 10);
+        
+        if (isNaN(daysNum) || daysNum < 7) {
+            this.nc.showError('Invalid input. Minimum 7 days required.');
+            return;
+        }
+        
+        if (!confirm(`⚠️ Purge ALL alerts older than ${daysNum} days?\n\nThis cannot be undone.`)) return;
+        
+        try {
+            const result = await this.nc.apiPost('/api/admin/notifications/purge-old', {
+                days: daysNum,
+                confirmPurge: true
+            });
+            
+            if (result.success) {
+                this.nc.showSuccess(`✅ Purged ${result.deleted} old alert(s)`);
+                this.selectedAlerts.clear();
+                this.load();
+            }
+            
+        } catch (error) {
+            this.nc.showError('Failed to purge old alerts');
+            console.error('❌ [PURGE OLD] Error:', error);
+        }
+    }
+    
+    async clearAll() {
+        const step1 = confirm('🚨 DANGER ZONE 🚨\n\nYou are about to DELETE ALL NOTIFICATION LOGS.\n\nThis will:\n- Permanently delete EVERY alert in the system\n- Cannot be undone or recovered\n- Lose all historical alert data\n\nAre you absolutely sure you want to continue?');
+        
+        if (!step1) return;
+        
+        const confirmation = prompt('⚠️ FINAL CONFIRMATION\n\nType exactly: DELETE ALL ALERTS\n\n(This action is logged and cannot be reversed)');
+        
+        if (confirmation !== 'DELETE ALL ALERTS') {
+            this.nc.showError('Confirmation text did not match. Operation cancelled.');
+            return;
+        }
+        
+        try {
+            const result = await this.nc.apiPost('/api/admin/notifications/clear-all', {
+                confirmClearAll: true,
+                confirmationText: 'DELETE ALL ALERTS'
+            });
+            
+            if (result.success) {
+                this.nc.showSuccess(`⚠️ Cleared ALL ${result.deleted} alerts from database`);
+                this.selectedAlerts.clear();
+                this.load();
+            }
+            
+        } catch (error) {
+            this.nc.showError('Failed to clear all alerts');
+            console.error('❌ [CLEAR ALL] Error:', error);
         }
     }
 }

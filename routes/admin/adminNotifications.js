@@ -1471,6 +1471,188 @@ router.get('/admin/notifications/service-status/:serviceName',
 });
 
 // ============================================================================
+// BULK DELETE OPERATIONS (with safety checks)
+// ============================================================================
+
+// DELETE SELECTED ALERTS
+router.post('/admin/notifications/bulk-delete', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
+    try {
+        const { alertIds, confirmDelete } = req.body;
+        
+        if (!alertIds || !Array.isArray(alertIds) || alertIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'alertIds array is required and must not be empty'
+            });
+        }
+        
+        if (!confirmDelete) {
+            return res.status(400).json({
+                success: false,
+                message: 'confirmDelete must be true to proceed'
+            });
+        }
+        
+        logger.info(`🗑️  [BULK DELETE] Deleting ${alertIds.length} alerts...`);
+        
+        await respondWithIdempotency(req, res, async () => {
+            const result = await NotificationLog.deleteMany({
+                alertId: { $in: alertIds }
+            });
+            
+            logger.info(`✅ [BULK DELETE] Deleted ${result.deletedCount} alerts`);
+            
+            return {
+                success: true,
+                deleted: result.deletedCount,
+                message: `Successfully deleted ${result.deletedCount} alert(s)`
+            };
+        });
+        
+    } catch (error) {
+        logger.error('❌ [BULK DELETE] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// PURGE RESOLVED ALERTS
+router.post('/admin/notifications/purge-resolved', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
+    try {
+        const { confirmPurge } = req.body;
+        
+        if (!confirmPurge) {
+            return res.status(400).json({
+                success: false,
+                message: 'confirmPurge must be true to proceed'
+            });
+        }
+        
+        logger.info('🗑️  [PURGE RESOLVED] Purging all resolved alerts...');
+        
+        await respondWithIdempotency(req, res, async () => {
+            const result = await NotificationLog.deleteMany({
+                'resolution.isResolved': true
+            });
+            
+            logger.info(`✅ [PURGE RESOLVED] Deleted ${result.deletedCount} resolved alerts`);
+            
+            return {
+                success: true,
+                deleted: result.deletedCount,
+                message: `Successfully purged ${result.deletedCount} resolved alert(s)`
+            };
+        });
+        
+    } catch (error) {
+        logger.error('❌ [PURGE RESOLVED] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// PURGE OLD ALERTS (older than X days)
+router.post('/admin/notifications/purge-old', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
+    try {
+        const { days = 90, confirmPurge } = req.body;
+        
+        if (!confirmPurge) {
+            return res.status(400).json({
+                success: false,
+                message: 'confirmPurge must be true to proceed'
+            });
+        }
+        
+        if (days < 7) {
+            return res.status(400).json({
+                success: false,
+                message: 'Minimum retention period is 7 days for safety'
+            });
+        }
+        
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - days);
+        
+        logger.info(`🗑️  [PURGE OLD] Purging alerts older than ${days} days (before ${cutoffDate.toISOString()})...`);
+        
+        await respondWithIdempotency(req, res, async () => {
+            const result = await NotificationLog.deleteMany({
+                createdAt: { $lt: cutoffDate }
+            });
+            
+            logger.info(`✅ [PURGE OLD] Deleted ${result.deletedCount} old alerts`);
+            
+            return {
+                success: true,
+                deleted: result.deletedCount,
+                message: `Successfully purged ${result.deletedCount} alert(s) older than ${days} days`
+            };
+        });
+        
+    } catch (error) {
+        logger.error('❌ [PURGE OLD] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// CLEAR ALL ALERTS (nuclear option - requires double confirmation)
+router.post('/admin/notifications/clear-all', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
+    try {
+        const { confirmClearAll, confirmationText } = req.body;
+        
+        if (!confirmClearAll || confirmationText !== 'DELETE ALL ALERTS') {
+            return res.status(400).json({
+                success: false,
+                message: 'Double confirmation required: confirmClearAll must be true AND confirmationText must be "DELETE ALL ALERTS"'
+            });
+        }
+        
+        logger.warn('🚨 [CLEAR ALL] DELETING ALL NOTIFICATION LOGS!');
+        
+        await respondWithIdempotency(req, res, async () => {
+            // Count first for logging
+            const count = await NotificationLog.countDocuments();
+            
+            // Delete all
+            const result = await NotificationLog.deleteMany({});
+            
+            logger.warn(`⚠️  [CLEAR ALL] Deleted ${result.deletedCount} alerts (total: ${count})`);
+            
+            // Send alert about this action
+            try {
+                AdminNotificationService.sendAlert({
+                    code: 'NOTIF_ALL_LOGS_CLEARED',
+                    severity: 'WARNING',
+                    message: `Admin cleared ALL notification logs (${result.deletedCount} alerts deleted)`,
+                    companyId: null,
+                    details: `User: ${req.user?.email || 'admin'}`
+                });
+            } catch (_) {}
+            
+            return {
+                success: true,
+                deleted: result.deletedCount,
+                message: `⚠️ Successfully deleted ALL ${result.deletedCount} alerts`
+            };
+        });
+        
+    } catch (error) {
+        logger.error('❌ [CLEAR ALL] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============================================================================
 // DIAGNOSTIC: List all registered routes (for debugging 404s)
 // ============================================================================
 router.get('/admin/notifications/_routes', authenticateJWT, requireRole('admin'), (req, res) => {

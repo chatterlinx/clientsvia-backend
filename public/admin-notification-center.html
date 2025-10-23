@@ -219,25 +219,69 @@
         <!-- ALERT LOG TAB -->
         <div id="logs-tab" class="subtab-content hidden">
             <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex justify-between items-center mb-6">
+                <!-- Header with Title -->
+                <div class="flex justify-between items-center mb-4">
                     <h3 class="text-xl font-semibold text-gray-700">
                         <i class="fas fa-history mr-2"></i>
                         Alert Log
                     </h3>
+                </div>
+                
+                <!-- Enhanced Search Bar -->
+                <div class="mb-4">
+                    <div class="relative">
+                        <input type="text" id="log-search-input" 
+                               placeholder="🔍 Search alerts by ID, code, message, company..." 
+                               class="w-full border border-gray-300 rounded-lg px-4 py-3 pl-10 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <i class="fas fa-search absolute left-3 top-4 text-gray-400"></i>
+                    </div>
+                </div>
+                
+                <!-- Filters Row -->
+                <div class="flex justify-between items-center mb-4">
                     <div class="flex space-x-2">
-                        <select id="log-filter-severity" class="border border-gray-300 rounded px-3 py-2">
+                        <select id="log-filter-severity" class="border border-gray-300 rounded px-3 py-2 text-sm">
                             <option value="">All Severities</option>
                             <option value="CRITICAL">Critical</option>
                             <option value="WARNING">Warning</option>
                             <option value="INFO">Info</option>
                         </select>
-                        <select id="log-filter-acknowledged" class="border border-gray-300 rounded px-3 py-2">
+                        <select id="log-filter-acknowledged" class="border border-gray-300 rounded px-3 py-2 text-sm">
                             <option value="">All Status</option>
                             <option value="false">Unacknowledged</option>
                             <option value="true">Acknowledged</option>
                         </select>
                     </div>
                 </div>
+                
+                <!-- Bulk Actions Bar (hidden by default) -->
+                <div id="bulk-actions-bar" class="hidden bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" id="select-all-checkbox" class="w-4 h-4 text-blue-600 rounded">
+                            <span id="selected-count" class="text-sm font-semibold text-gray-700">0 selected</span>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button onclick="logManager.deleteSelected()" 
+                                    class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm">
+                                <i class="fas fa-trash mr-1"></i> Delete Selected
+                            </button>
+                            <button onclick="logManager.purgeResolved()" 
+                                    class="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm">
+                                <i class="fas fa-broom mr-1"></i> Purge Resolved
+                            </button>
+                            <button onclick="logManager.purgeOld()" 
+                                    class="px-3 py-1 bg-orange-500 text-white rounded hover:bg-orange-600 text-sm">
+                                <i class="fas fa-calendar-minus mr-1"></i> Purge Old (90d)
+                            </button>
+                            <button onclick="logManager.clearAll()" 
+                                    class="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm font-bold">
+                                <i class="fas fa-exclamation-triangle mr-1"></i> Clear All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
                 <div id="logs-container">
                     <div class="text-center py-8 text-gray-500">
                         <i class="fas fa-spinner fa-spin text-3xl mb-2"></i>
