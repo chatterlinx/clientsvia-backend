@@ -342,13 +342,25 @@ const scenarioSchema = new Schema({
     // VOICE & TTS CONTROL
     // ============================================
     
+    // 🎭 BEHAVIOR: AI personality for this scenario
+    // Selected from GlobalAIBehaviorTemplate (dropdown)
+    // Controls tone, pace, volume, emotion intensity, and instructions
+    behavior: {
+        type: String,
+        trim: true,
+        default: null
+        // References GlobalAIBehaviorTemplate.behaviorId
+        // If null, inherits from parent category's behavior
+    },
+    
     toneLevel: {
         type: Number,
         min: 1,
         max: 5,
         default: 2
+        // DEPRECATED: Use 'behavior' field instead
         // 1=flat, 2=calm, 3=warm, 4=excited, 5=urgent
-        // Maps to TTS preset parameters
+        // Kept for backwards compatibility with existing scenarios
     },
     
     ttsOverride: {

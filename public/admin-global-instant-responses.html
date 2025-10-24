@@ -1889,15 +1889,15 @@ can't hold"></textarea>
                             </div>
                             <div>
                                 <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
-                                    <i class="fas fa-smile text-pink-600 mr-2"></i>Tone Level
+                                    <i class="fas fa-theater-masks text-purple-600 mr-2"></i>🎭 Behavior <span style="color: #e74c3c;">*</span>
                                 </label>
-                                <select id="scenario-tone-level" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
-                                    <option value="1">1 – Formal / Reserved</option>
-                                    <option value="2" selected>2 – Calm / Polite</option>
-                                    <option value="3">3 – Warm / Friendly</option>
-                                    <option value="4">4 – Enthusiastic</option>
-                                    <option value="5">5 – Excited / Urgent</option>
+                                <select id="scenario-behavior" required style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
+                                    <option value="">Select behavior...</option>
+                                    <!-- Populated dynamically from GlobalAIBehaviorTemplate -->
                                 </select>
+                                <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">
+                                    AI personality: tone, pace, volume, emotion
+                                </p>
                             </div>
                         </div>
 
@@ -8487,7 +8487,7 @@ Timestamp: ${new Date(timestamp).toISOString()}
         /**
          * Open scenario modal for adding a new scenario
          */
-        function openAddScenarioModal(categoryId, categoryName) {
+        async function openAddScenarioModal(categoryId, categoryName) {
             console.log(`🎨 [ADD SCENARIO] Opening modal for category: ${categoryName} (${categoryId})`);
             
             currentScenarioEditMode = 'add';
@@ -8499,6 +8499,10 @@ Timestamp: ${new Date(timestamp).toISOString()}
             
             // Reset form
             document.getElementById('scenario-form').reset();
+            
+            // Populate behavior dropdown dynamically from database
+            await fetchBehaviors(); // Refresh from DB
+            populateBehaviorDropdown('scenario-behavior');
             
             // Switch to first tab
             switchScenarioTab('basic');
@@ -8519,6 +8523,10 @@ Timestamp: ${new Date(timestamp).toISOString()}
             // Update modal title
             document.getElementById('scenario-modal-action').textContent = 'Edit';
             document.getElementById('scenario-category-name').textContent = categoryName;
+            
+            // Populate behavior dropdown dynamically from database (must do before fetching scenario data)
+            await fetchBehaviors(); // Refresh from DB
+            populateBehaviorDropdown('scenario-behavior');
             
             // Fetch scenario data
             try {
@@ -8563,7 +8571,7 @@ Timestamp: ${new Date(timestamp).toISOString()}
             const confidencePercent = ((data.contextWeight || 0.7) * 100).toFixed(0);
             document.getElementById('confidence-value').textContent = confidencePercent + '%';
             
-            document.getElementById('scenario-tone-level').value = data.toneLevel || 2;
+            document.getElementById('scenario-behavior').value = data.behavior || '';
             document.getElementById('scenario-channel').value = data.channel || 'any';
             document.getElementById('scenario-language').value = data.language || 'auto';
             
@@ -8751,7 +8759,7 @@ Timestamp: ${new Date(timestamp).toISOString()}
                 negativeTriggers: document.getElementById('scenario-negative-triggers').value.split('\n').filter(t => t.trim()),
                 regexTriggers: document.getElementById('scenario-regex-triggers').value.split('\n').filter(t => t.trim()), // NEW: Regex patterns
                 contextWeight: parseFloat(document.getElementById('scenario-context-weight').value) || 0.7,
-                toneLevel: parseInt(document.getElementById('scenario-tone-level').value) || 2,
+                behavior: document.getElementById('scenario-behavior').value || null,
                 channel: document.getElementById('scenario-channel').value || 'any',
                 language: document.getElementById('scenario-language').value || 'auto',
                 
