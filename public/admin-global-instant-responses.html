@@ -7399,6 +7399,10 @@ Continue?`;
                     console.log('🎨 [SWITCH TEMPLATE] About to render categories...');
                     renderCategories();
                     
+                    // CRITICAL: Load Twilio test config for this template
+                    console.log('📞 [SWITCH TEMPLATE] Loading Twilio test config for new template...');
+                    await loadTwilioTestConfig();
+                    
                     showNotification(`✅ Loaded: ${template.name}`, 'success');
                 } else {
                     console.error('❌ [SWITCH TEMPLATE] Failed to load:', result.message || 'No template data found');
