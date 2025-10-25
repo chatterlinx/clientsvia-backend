@@ -473,11 +473,13 @@ const categorySchema = new Schema({
     },
     
     // 🎭 BEHAVIOR: Default AI behavior for scenarios in this category
-    // Selected from GlobalAIBehaviorTemplate (dropdown)
+    // DEPRECATED: Scenarios control their own behavior (more flexible)
+    // Kept for backward compatibility with existing categories
     behavior: {
         type: String,
-        required: true,
-        trim: true
+        required: false,  // FIX: Made optional (scenarios control their own behavior)
+        trim: true,
+        default: null
     },
     
     // Scenarios array (maintains current structure for now)
