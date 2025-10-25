@@ -690,6 +690,38 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Quick Paste Loader Card -->
+                    <div class="bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-lg p-6">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-3 mb-3">
+                                    <div class="w-12 h-12 bg-gradient-to-br from-emerald-600 to-teal-600 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-paste text-white text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-lg font-bold text-gray-900">Quick Paste & Submit</h4>
+                                        <p class="text-sm text-gray-600">Copy AI output → Paste → Submit (No CSV files!)</p>
+                                    </div>
+                                </div>
+                                <div class="space-y-2 text-sm text-gray-700">
+                                    <p><i class="fas fa-check-circle text-emerald-600 mr-2"></i>Copy CSV from AI partner</p>
+                                    <p><i class="fas fa-check-circle text-emerald-600 mr-2"></i>Paste directly into form</p>
+                                    <p><i class="fas fa-check-circle text-emerald-600 mr-2"></i>Auto-validation & load</p>
+                                    <p class="text-emerald-700 font-semibold mt-3 bg-emerald-100 px-3 py-2 rounded border border-emerald-300">
+                                        <i class="fas fa-rocket mr-1"></i>
+                                        No file management required - just paste and go!
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="ml-4 flex flex-col gap-2">
+                                <button onclick="openQuickPasteModal()" class="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                                    <i class="fas fa-paste"></i>
+                                    Quick Paste
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2507,6 +2539,115 @@ Just checking in..."></textarea>
                     </div>
                     <div style="background: #e9ecef; border-radius: 8px; height: 12px; overflow: hidden;">
                         <div id="progress-bar" style="background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- QUICK PASTE LOADER MODAL -->
+    <!-- ============================================ -->
+    <div id="quick-paste-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 16px; max-width: 1200px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+            
+            <!-- Header -->
+            <div style="display: flex; align-items: center; justify-between; margin-bottom: 20px;">
+                <h2 style="font-size: 28px; font-weight: 700; color: #2c3e50; margin: 0;">
+                    <i class="fas fa-paste text-emerald-600 mr-2"></i>
+                    Quick Paste & Submit
+                </h2>
+                <button onclick="closeQuickPasteModal()" style="background: none; border: none; font-size: 32px; color: #95a5a6; cursor: pointer;">
+                    &times;
+                </button>
+            </div>
+
+            <!-- Info Box -->
+            <div style="background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%); color: white; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                <div style="display: flex; align-items: start; gap: 16px;">
+                    <i class="fas fa-info-circle" style="font-size: 24px; margin-top: 2px;"></i>
+                    <div>
+                        <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700;">No CSV Files Required!</h3>
+                        <p style="margin: 0; font-size: 14px; line-height: 1.6; opacity: 0.95;">
+                            Copy the CSV output from your AI partner and paste it directly below. System will auto-parse, validate, and load scenarios.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 1: Template & Category Selection -->
+            <div style="background: #f8f9fa; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+                <h3 style="font-size: 18px; font-weight: 700; color: #2c3e50; margin: 0 0 16px 0;">
+                    <span style="display: inline-block; background: #10b981; color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-size: 14px; margin-right: 8px;">1</span>
+                    Select Target Template & Category
+                </h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px;">
+                            Template <span style="color: #e74c3c;">*</span>
+                        </label>
+                        <select id="quick-paste-template" onchange="loadCategoriesForQuickPaste()" style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 8px; font-size: 14px;">
+                            <option value="">Select template...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px;">
+                            Category <span style="color: #e74c3c;">*</span>
+                        </label>
+                        <select id="quick-paste-category" style="width: 100%; padding: 10px; border: 2px solid #dee2e6; border-radius: 8px; font-size: 14px;" disabled>
+                            <option value="">Select template first...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Paste CSV Content -->
+            <div style="background: #f8f9fa; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+                <h3 style="font-size: 18px; font-weight: 700; color: #2c3e50; margin: 0 0 16px 0;">
+                    <span style="display: inline-block; background: #10b981; color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-size: 14px; margin-right: 8px;">2</span>
+                    Paste CSV Content (Header + Rows)
+                </h3>
+                <textarea id="quick-paste-content" placeholder="Paste your CSV content here (including the header row)..." style="width: 100%; height: 300px; padding: 16px; border: 2px solid #dee2e6; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 13px; resize: vertical;"></textarea>
+                <div style="display: flex; align-items: center; gap: 12px; margin-top: 12px;">
+                    <button onclick="validateQuickPaste()" style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                        <i class="fas fa-check-circle mr-2"></i>Validate
+                    </button>
+                    <button onclick="clearQuickPaste()" style="padding: 10px 20px; background: #e74c3c; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                        <i class="fas fa-times-circle mr-2"></i>Clear
+                    </button>
+                    <span id="quick-paste-count" style="color: #7f8c8d; font-size: 14px; font-weight: 600;"></span>
+                </div>
+            </div>
+
+            <!-- Validation Results -->
+            <div id="quick-paste-validation" style="display: none; margin-bottom: 24px;"></div>
+
+            <!-- Step 3: Load Scenarios -->
+            <div style="background: #f8f9fa; border-radius: 12px; padding: 24px;">
+                <h3 style="font-size: 18px; font-weight: 700; color: #2c3e50; margin: 0 0 16px 0;">
+                    <span style="display: inline-block; background: #10b981; color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-size: 14px; margin-right: 8px;">3</span>
+                    Load Scenarios
+                </h3>
+                <div style="display: flex; gap: 12px;">
+                    <button id="quick-paste-load-btn" onclick="loadScenariosFromQuickPaste()" style="padding: 12px 24px; background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%); color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 16px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);" disabled>
+                        <i class="fas fa-rocket mr-2"></i>Load All Scenarios
+                    </button>
+                    <button onclick="closeQuickPasteModal()" style="padding: 12px 24px; background: #95a5a6; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                        <i class="fas fa-times mr-2"></i>Cancel
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div id="quick-paste-progress" style="display: none; margin-top: 20px;">
+                <div style="background: #f8f9fa; border-radius: 8px; padding: 20px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                        <span id="quick-paste-progress-text" style="font-weight: 600; color: #2c3e50;">Loading scenarios...</span>
+                        <span id="quick-paste-progress-count" style="font-weight: 600; color: #10b981;">0 / 0</span>
+                    </div>
+                    <div style="background: #e9ecef; border-radius: 8px; height: 12px; overflow: hidden;">
+                        <div id="quick-paste-progress-bar" style="background: linear-gradient(90deg, #10b981 0%, #14b8a6 100%); height: 100%; width: 0%; transition: width 0.3s;"></div>
                     </div>
                 </div>
             </div>
@@ -11200,6 +11341,357 @@ async function loadScenariosFromCSV() {
     } catch (err) {
         console.error('❌ [BULK UPLOAD] Load failed:', err);
         alert(`❌ Load failed: ${err.message}`);
+    }
+}
+
+// ============================================
+// QUICK PASTE LOADER FUNCTIONS
+// ============================================
+
+let quickPasteParsedScenarios = [];
+
+/**
+ * Open Quick Paste modal
+ */
+function openQuickPasteModal() {
+    console.log('📋 [QUICK PASTE] Opening modal');
+    document.getElementById('quick-paste-modal').style.display = 'flex';
+    
+    // Load templates into dropdown
+    loadTemplatesForQuickPaste();
+    
+    // Reset state
+    clearQuickPaste();
+}
+
+/**
+ * Close Quick Paste modal
+ */
+function closeQuickPasteModal() {
+    console.log('📋 [QUICK PASTE] Closing modal');
+    document.getElementById('quick-paste-modal').style.display = 'none';
+    clearQuickPaste();
+}
+
+/**
+ * Load templates into dropdown
+ */
+async function loadTemplatesForQuickPaste() {
+    try {
+        const response = await fetch('/api/admin/global-instant-responses', {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+        
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const data = await response.json();
+        const templates = data.templates || [];
+        
+        const select = document.getElementById('quick-paste-template');
+        select.innerHTML = '<option value="">Select template...</option>';
+        
+        templates.forEach(template => {
+            const option = document.createElement('option');
+            option.value = template._id;
+            option.textContent = `${template.name} (${template.industryLabel || 'General'})`;
+            select.appendChild(option);
+        });
+        
+        console.log(`✅ Loaded ${templates.length} templates`);
+    } catch (err) {
+        console.error('❌ Failed to load templates:', err);
+        alert('Failed to load templates. Please refresh and try again.');
+    }
+}
+
+/**
+ * Load categories for selected template
+ */
+async function loadCategoriesForQuickPaste() {
+    const templateSelect = document.getElementById('quick-paste-template');
+    const categorySelect = document.getElementById('quick-paste-category');
+    const templateId = templateSelect.value;
+    
+    if (!templateId) {
+        categorySelect.innerHTML = '<option value="">Select template first...</option>';
+        categorySelect.disabled = true;
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+        
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const data = await response.json();
+        const template = data.template || {};
+        const categories = template.categories || [];
+        
+        categorySelect.innerHTML = '<option value="">Select category...</option>';
+        
+        categories.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.id;
+            option.textContent = `${cat.icon || '📁'} ${cat.name}`;
+            categorySelect.appendChild(option);
+        });
+        
+        categorySelect.disabled = false;
+        console.log(`✅ Loaded ${categories.length} categories`);
+    } catch (err) {
+        console.error('❌ Failed to load categories:', err);
+        alert('Failed to load categories. Please try again.');
+    }
+}
+
+/**
+ * Clear Quick Paste form
+ */
+function clearQuickPaste() {
+    document.getElementById('quick-paste-content').value = '';
+    document.getElementById('quick-paste-count').textContent = '';
+    document.getElementById('quick-paste-validation').style.display = 'none';
+    document.getElementById('quick-paste-validation').innerHTML = '';
+    document.getElementById('quick-paste-load-btn').disabled = true;
+    quickPasteParsedScenarios = [];
+}
+
+/**
+ * Validate pasted CSV content
+ */
+async function validateQuickPaste() {
+    const content = document.getElementById('quick-paste-content').value.trim();
+    const templateId = document.getElementById('quick-paste-template').value;
+    const categoryId = document.getElementById('quick-paste-category').value;
+    
+    if (!content) {
+        alert('❌ Please paste CSV content first');
+        return;
+    }
+    
+    if (!templateId || !categoryId) {
+        alert('❌ Please select template and category first');
+        return;
+    }
+    
+    console.log('🔍 [QUICK PASTE] Validating...');
+    
+    try {
+        // Parse CSV lines
+        const lines = content.split('\n').filter(l => l.trim());
+        
+        if (lines.length < 2) {
+            throw new Error('CSV must have at least a header row and one data row');
+        }
+        
+        // Parse header
+        const headerLine = lines[0];
+        const headers = parseCSVLine(headerLine);
+        
+        console.log(`📋 Found ${headers.length} columns in header`);
+        
+        // Verify we have the expected 33 columns
+        if (headers.length !== 33) {
+            throw new Error(`Expected 33 columns, found ${headers.length}. Please use the official CSV template.`);
+        }
+        
+        // Parse data rows
+        const scenarios = [];
+        const errors = [];
+        const warnings = [];
+        
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i];
+            if (!line.trim()) continue;
+            
+            try {
+                const values = parseCSVLine(line);
+                
+                if (values.length !== 33) {
+                    errors.push(`Row ${i + 1}: Expected 33 columns, found ${values.length}`);
+                    continue;
+                }
+                
+                // Build row object
+                const row = {};
+                headers.forEach((header, idx) => {
+                    row[header] = values[idx];
+                });
+                row._rowNumber = i + 1;
+                
+                // Transform to scenario object
+                const scenario = transformCSVRowToScenario(row);
+                
+                // Basic validation
+                if (!scenario.name) {
+                    errors.push(`Row ${i + 1}: Missing required field 'name'`);
+                }
+                if (!scenario.triggers || scenario.triggers.length === 0) {
+                    errors.push(`Row ${i + 1}: Missing required field 'triggers'`);
+                }
+                if (!scenario.fullReplies || scenario.fullReplies.length === 0) {
+                    errors.push(`Row ${i + 1}: Missing required field 'full_replies'`);
+                }
+                
+                scenarios.push(scenario);
+                
+            } catch (err) {
+                errors.push(`Row ${i + 1}: ${err.message}`);
+            }
+        }
+        
+        // Store parsed scenarios
+        quickPasteParsedScenarios = scenarios;
+        
+        // Display results
+        const validationDiv = document.getElementById('quick-paste-validation');
+        const countSpan = document.getElementById('quick-paste-count');
+        
+        countSpan.textContent = `${scenarios.length} scenarios parsed`;
+        
+        let html = '';
+        
+        if (errors.length > 0) {
+            html += `<div style="background: #fee; border: 2px solid #fcc; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+                <h4 style="color: #c00; margin: 0 0 8px 0; font-weight: 700;">
+                    <i class="fas fa-times-circle mr-2"></i>${errors.length} Error(s) Found
+                </h4>
+                <ul style="margin: 0; padding-left: 20px; color: #c00;">
+                    ${errors.slice(0, 10).map(e => `<li>${e}</li>`).join('')}
+                    ${errors.length > 10 ? `<li><em>... and ${errors.length - 10} more</em></li>` : ''}
+                </ul>
+            </div>`;
+        }
+        
+        if (warnings.length > 0) {
+            html += `<div style="background: #fffbf0; border: 2px solid #ffeb9c; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+                <h4 style="color: #b8860b; margin: 0 0 8px 0; font-weight: 700;">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>${warnings.length} Warning(s)
+                </h4>
+                <ul style="margin: 0; padding-left: 20px; color: #b8860b;">
+                    ${warnings.slice(0, 5).map(w => `<li>${w}</li>`).join('')}
+                    ${warnings.length > 5 ? `<li><em>... and ${warnings.length - 5} more</em></li>` : ''}
+                </ul>
+            </div>`;
+        }
+        
+        if (errors.length === 0) {
+            html += `<div style="background: #e7f7ef; border: 2px solid #b3e5c8; border-radius: 8px; padding: 16px;">
+                <h4 style="color: #0a7f3f; margin: 0 0 8px 0; font-weight: 700;">
+                    <i class="fas fa-check-circle mr-2"></i>Validation Passed!
+                </h4>
+                <p style="margin: 0; color: #0a7f3f;">
+                    ✅ ${scenarios.length} scenario(s) ready to load.
+                </p>
+            </div>`;
+            
+            document.getElementById('quick-paste-load-btn').disabled = false;
+        } else {
+            document.getElementById('quick-paste-load-btn').disabled = true;
+        }
+        
+        validationDiv.innerHTML = html;
+        validationDiv.style.display = 'block';
+        
+        console.log(`✅ Validation complete: ${scenarios.length} valid, ${errors.length} errors`);
+        
+    } catch (err) {
+        console.error('❌ [QUICK PASTE] Validation failed:', err);
+        alert(`❌ Validation failed: ${err.message}`);
+    }
+}
+
+/**
+ * Load scenarios from Quick Paste
+ */
+async function loadScenariosFromQuickPaste() {
+    const templateId = document.getElementById('quick-paste-template').value;
+    const categoryId = document.getElementById('quick-paste-category').value;
+    
+    if (!templateId || !categoryId) {
+        alert('❌ Please select template and category');
+        return;
+    }
+    
+    if (quickPasteParsedScenarios.length === 0) {
+        alert('❌ Please validate CSV content first');
+        return;
+    }
+    
+    if (!confirm(`🚀 Load ${quickPasteParsedScenarios.length} scenarios?\n\nThis will create new scenarios in the selected category.`)) {
+        return;
+    }
+    
+    console.log('🚀 [QUICK PASTE] Loading scenarios...');
+    
+    try {
+        // Show progress
+        const progressDiv = document.getElementById('quick-paste-progress');
+        progressDiv.style.display = 'block';
+        
+        const progressBar = document.getElementById('quick-paste-progress-bar');
+        const progressText = document.getElementById('quick-paste-progress-text');
+        const progressCount = document.getElementById('quick-paste-progress-count');
+        
+        progressCount.textContent = `0 / ${quickPasteParsedScenarios.length}`;
+        
+        // Disable load button
+        document.getElementById('quick-paste-load-btn').disabled = true;
+        
+        // Load scenarios one by one
+        const results = { success: [], failed: [] };
+        
+        for (let i = 0; i < quickPasteParsedScenarios.length; i++) {
+            const scenario = quickPasteParsedScenarios[i];
+            
+            try {
+                progressText.textContent = `Loading "${scenario.name}"...`;
+                progressCount.textContent = `${i + 1} / ${quickPasteParsedScenarios.length}`;
+                progressBar.style.width = `${((i + 1) / quickPasteParsedScenarios.length) * 100}%`;
+                
+                const response = await fetch(`/api/admin/global-instant-responses/${templateId}/categories/${categoryId}/scenarios`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify(scenario)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || `HTTP ${response.status}`);
+                }
+                
+                const result = await response.json();
+                results.success.push({ name: scenario.name, scenarioId: result.scenario?.scenarioId });
+                
+            } catch (err) {
+                console.error(`❌ Failed to load "${scenario.name}":`, err);
+                results.failed.push({ name: scenario.name, error: err.message });
+            }
+        }
+        
+        // Show results
+        progressText.textContent = 'Complete!';
+        progressBar.style.width = '100%';
+        
+        if (results.failed.length === 0) {
+            alert(`✅ Success! Loaded ${results.success.length} scenarios.`);
+            closeQuickPasteModal();
+            await switchDashboardTemplate(templateId);
+        } else {
+            alert(`⚠️ Partially complete:\n✅ ${results.success.length} succeeded\n❌ ${results.failed.length} failed\n\nCheck console for details.`);
+            console.log('Failed scenarios:', results.failed);
+        }
+        
+    } catch (err) {
+        console.error('❌ [QUICK PASTE] Load failed:', err);
+        alert(`❌ Load failed: ${err.message}`);
+    } finally {
+        document.getElementById('quick-paste-load-btn').disabled = false;
     }
 }
 
