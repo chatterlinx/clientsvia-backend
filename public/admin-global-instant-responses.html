@@ -3884,14 +3884,43 @@ Continue?`;
                 const result = await response.json();
                 const template = result.data;
                 
-                console.log('📞 [TWILIO TEST] twilioTest data from DB:', template.twilioTest);
+                console.log('📞 [TWILIO TEST] Full template data:', {
+                    id: template._id,
+                    name: template.name,
+                    version: template.version,
+                    hasTwilioTest: !!template.twilioTest,
+                    twilioTest: template.twilioTest
+                });
 
-                // Populate form
-                document.getElementById('twilio-test-phone').value = template.twilioTest?.phoneNumber || '';
-                document.getElementById('twilio-test-account-sid').value = template.twilioTest?.accountSid || '';
+                // Populate form with detailed logging
+                const phoneValue = template.twilioTest?.phoneNumber || '';
+                const sidValue = template.twilioTest?.accountSid || '';
+                const tokenValue = template.twilioTest?.authToken ? '***' + template.twilioTest.authToken.slice(-4) : '';
+                const greetingValue = template.twilioTest?.greeting || DEFAULT_GREETING;
+                const notesValue = template.twilioTest?.notes || '';
+                
+                console.log('📞 [TWILIO TEST] Setting form values:', {
+                    phone: phoneValue || '(empty)',
+                    sid: sidValue || '(empty)',
+                    token: tokenValue || '(empty)',
+                    greeting: greetingValue ? greetingValue.substring(0, 50) + '...' : '(empty)',
+                    notes: notesValue || '(empty)'
+                });
+                
+                document.getElementById('twilio-test-phone').value = phoneValue;
+                document.getElementById('twilio-test-account-sid').value = sidValue;
                 document.getElementById('twilio-test-auth-token').value = template.twilioTest?.authToken || '';
-                document.getElementById('twilio-test-greeting').value = template.twilioTest?.greeting || DEFAULT_GREETING;
-                document.getElementById('twilio-test-notes').value = template.twilioTest?.notes || '';
+                document.getElementById('twilio-test-greeting').value = greetingValue;
+                document.getElementById('twilio-test-notes').value = notesValue;
+                
+                // Verify values were set in DOM
+                console.log('✅ [TWILIO TEST] Values confirmed in DOM:', {
+                    phone: document.getElementById('twilio-test-phone').value || '(EMPTY)',
+                    sid: document.getElementById('twilio-test-account-sid').value || '(EMPTY)',
+                    tokenSet: !!document.getElementById('twilio-test-auth-token').value,
+                    greetingLength: document.getElementById('twilio-test-greeting').value.length,
+                    notesLength: document.getElementById('twilio-test-notes').value.length
+                });
                 
                 // Update character count for greeting
                 updateGreetingCharCount();
