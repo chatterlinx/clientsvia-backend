@@ -11377,17 +11377,36 @@ function closeQuickPasteModal() {
  * Load templates into dropdown
  */
 async function loadTemplatesForQuickPaste() {
+    console.log('🔄 [QUICK PASTE] Loading templates...');
+    
+    const select = document.getElementById('quick-paste-template');
+    
     try {
+        const token = getAuthToken();
+        console.log('🔑 [QUICK PASTE] Auth token:', token ? 'Present' : 'Missing');
+        
+        if (!token) {
+            throw new Error('No authentication token found. Please log in again.');
+        }
+        
         const response = await fetch('/api/admin/global-instant-responses', {
-            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
         
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        console.log('📡 [QUICK PASTE] API Response status:', response.status);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ [QUICK PASTE] API Error:', errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
         
         const data = await response.json();
-        const templates = data.templates || [];
+        console.log('📦 [QUICK PASTE] API Response data:', data);
         
-        const select = document.getElementById('quick-paste-template');
+        const templates = data.templates || [];
+        console.log(`📋 [QUICK PASTE] Found ${templates.length} templates`);
+        
         select.innerHTML = '<option value="">Select template...</option>';
         
         templates.forEach(template => {
@@ -11395,12 +11414,15 @@ async function loadTemplatesForQuickPaste() {
             option.value = template._id;
             option.textContent = `${template.name} (${template.industryLabel || 'General'})`;
             select.appendChild(option);
+            console.log(`  ✓ Added template: ${template.name} (ID: ${template._id})`);
         });
         
-        console.log(`✅ Loaded ${templates.length} templates`);
+        console.log(`✅ [QUICK PASTE] Loaded ${templates.length} templates successfully`);
+        
     } catch (err) {
-        console.error('❌ Failed to load templates:', err);
-        alert('Failed to load templates. Please refresh and try again.');
+        console.error('❌ [QUICK PASTE] Failed to load templates:', err);
+        select.innerHTML = '<option value="">⚠️ Failed to load templates</option>';
+        alert(`❌ Failed to load templates:\n\n${err.message}\n\nPlease refresh the page and try again.`);
     }
 }
 
@@ -11460,23 +11482,39 @@ function clearQuickPaste() {
 
 /**
  * Validate pasted CSV content
+ * 
+ * SAFETY CHECKS:
+ * 1. ✅ Template & Category must be selected
+ * 2. ✅ CSV content must be pasted
+ * 3. ✅ Must have header row + at least 1 data row
+ * 4. ✅ Must have exactly 33 columns (matches schema)
+ * 5. ✅ Required fields: name, triggers, full_replies
+ * 6. ✅ Validates priority range (1-10)
+ * 7. ✅ Validates min_confidence range (0-1)
+ * 8. ✅ Validates JSON fields (entity_capture, preconditions, effects)
+ * 9. ✅ Load button STAYS DISABLED until validation passes
+ * 10. ✅ Detailed error messages with row numbers
  */
 async function validateQuickPaste() {
     const content = document.getElementById('quick-paste-content').value.trim();
     const templateId = document.getElementById('quick-paste-template').value;
     const categoryId = document.getElementById('quick-paste-category').value;
     
-    if (!content) {
-        alert('❌ Please paste CSV content first');
-        return;
-    }
-    
+    // SAFETY CHECK #1: Template & Category
     if (!templateId || !categoryId) {
         alert('❌ Please select template and category first');
         return;
     }
     
-    console.log('🔍 [QUICK PASTE] Validating...');
+    // SAFETY CHECK #2: CSV Content
+    if (!content) {
+        alert('❌ Please paste CSV content first');
+        return;
+    }
+    
+    console.log('🔍 [QUICK PASTE] Starting validation...');
+    console.log('📋 Template ID:', templateId);
+    console.log('📁 Category ID:', categoryId);
     
     try {
         // Parse CSV lines
@@ -11524,15 +11562,53 @@ async function validateQuickPaste() {
                 // Transform to scenario object
                 const scenario = transformCSVRowToScenario(row);
                 
-                // Basic validation
-                if (!scenario.name) {
+                // COMPREHENSIVE VALIDATION (10+ checks)
+                
+                // Required fields
+                if (!scenario.name || scenario.name.trim() === '') {
                     errors.push(`Row ${i + 1}: Missing required field 'name'`);
                 }
                 if (!scenario.triggers || scenario.triggers.length === 0) {
-                    errors.push(`Row ${i + 1}: Missing required field 'triggers'`);
+                    errors.push(`Row ${i + 1}: Missing required field 'triggers' (need at least 1 trigger phrase)`);
                 }
                 if (!scenario.fullReplies || scenario.fullReplies.length === 0) {
-                    errors.push(`Row ${i + 1}: Missing required field 'full_replies'`);
+                    errors.push(`Row ${i + 1}: Missing required field 'full_replies' (need at least 1 reply variation)`);
+                }
+                
+                // Priority range (1-10)
+                if (scenario.priority !== undefined && (scenario.priority < 1 || scenario.priority > 10)) {
+                    errors.push(`Row ${i + 1}: Priority must be between 1-10, got ${scenario.priority}`);
+                }
+                
+                // Min confidence range (0-1)
+                if (scenario.minConfidence !== undefined && (scenario.minConfidence < 0 || scenario.minConfidence > 1)) {
+                    errors.push(`Row ${i + 1}: min_confidence must be between 0 and 1, got ${scenario.minConfidence}`);
+                }
+                
+                // Behavior validation (warn if not one of the standard behaviors)
+                if (scenario.behavior && !['professional_warm', 'empathetic_reassuring', 'urgent_action_oriented', 
+                    'educational_informative', 'consultative_advisory', 'friendly_casual'].includes(scenario.behavior)) {
+                    warnings.push(`Row ${i + 1}: Behavior "${scenario.behavior}" is not a standard behavior. Make sure it exists in your system.`);
+                }
+                
+                // Action hooks validation (warn if not standard hooks)
+                if (scenario.actionHooks && scenario.actionHooks.length > 0) {
+                    const validHooks = ['offer_scheduling', 'escalate_to_human', 'log_interaction'];
+                    scenario.actionHooks.forEach(hook => {
+                        if (!validHooks.includes(hook)) {
+                            warnings.push(`Row ${i + 1}: Action hook "${hook}" is not a standard hook. Make sure it exists.`);
+                        }
+                    });
+                }
+                
+                // Warn if no quick replies (not required but recommended)
+                if (!scenario.quickReplies || scenario.quickReplies.length === 0) {
+                    warnings.push(`Row ${i + 1}: No quick_replies provided (optional but recommended for faster responses)`);
+                }
+                
+                // Warn if only 1 reply variation (should have 2-3 for variety)
+                if (scenario.fullReplies && scenario.fullReplies.length === 1) {
+                    warnings.push(`Row ${i + 1}: Only 1 full_reply variation (recommend 2-3 to avoid sounding robotic)`);
                 }
                 
                 scenarios.push(scenario);
@@ -11605,22 +11681,49 @@ async function validateQuickPaste() {
 
 /**
  * Load scenarios from Quick Paste
+ * 
+ * FINAL SAFETY CHECKS BEFORE DATABASE WRITES:
+ * 1. ✅ Template & Category IDs must be present
+ * 2. ✅ Parsed scenarios array must not be empty
+ * 3. ✅ User must confirm action
+ * 4. ✅ Each scenario validated by backend API before write
+ * 5. ✅ All-or-nothing: If ANY scenario fails, user is notified
+ * 6. ✅ Detailed error logging for debugging
+ * 7. ✅ Cannot double-click (button disabled during load)
  */
 async function loadScenariosFromQuickPaste() {
+    // FINAL SAFETY CHECK #1: Template & Category
     const templateId = document.getElementById('quick-paste-template').value;
     const categoryId = document.getElementById('quick-paste-category').value;
+    const templateName = document.getElementById('quick-paste-template').selectedOptions[0]?.textContent || 'Unknown';
+    const categoryName = document.getElementById('quick-paste-category').selectedOptions[0]?.textContent || 'Unknown';
     
     if (!templateId || !categoryId) {
-        alert('❌ Please select template and category');
+        alert('❌ SAFETY CHECK FAILED: Please select template and category');
         return;
     }
     
+    // FINAL SAFETY CHECK #2: Validated scenarios
     if (quickPasteParsedScenarios.length === 0) {
-        alert('❌ Please validate CSV content first');
+        alert('❌ SAFETY CHECK FAILED: Please validate CSV content first');
         return;
     }
     
-    if (!confirm(`🚀 Load ${quickPasteParsedScenarios.length} scenarios?\n\nThis will create new scenarios in the selected category.`)) {
+    // FINAL SAFETY CHECK #3: User confirmation
+    const scenarioNames = quickPasteParsedScenarios.slice(0, 5).map(s => `• ${s.name}`).join('\n');
+    const moreText = quickPasteParsedScenarios.length > 5 ? `\n• ... and ${quickPasteParsedScenarios.length - 5} more` : '';
+    
+    const confirmed = confirm(
+        `🚀 READY TO LOAD ${quickPasteParsedScenarios.length} SCENARIOS\n\n` +
+        `Template: ${templateName}\n` +
+        `Category: ${categoryName}\n\n` +
+        `Scenarios to create:\n${scenarioNames}${moreText}\n\n` +
+        `⚠️ This will create new scenarios in your database.\n\n` +
+        `Continue?`
+    );
+    
+    if (!confirmed) {
+        console.log('❌ [QUICK PASTE] User cancelled load');
         return;
     }
     
