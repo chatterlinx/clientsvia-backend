@@ -11404,7 +11404,7 @@ async function loadTemplatesForQuickPaste() {
         const data = await response.json();
         console.log('📦 [QUICK PASTE] API Response data:', data);
         
-        const templates = data.templates || [];
+        const templates = data.data || [];  // FIX: API returns data.data, not data.templates
         console.log(`📋 [QUICK PASTE] Found ${templates.length} templates`);
         
         select.innerHTML = '<option value="">Select template...</option>';
@@ -11448,8 +11448,13 @@ async function loadCategoriesForQuickPaste() {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
         const data = await response.json();
-        const template = data.template || {};
+        console.log('📦 [QUICK PASTE] Template data:', data);
+        
+        const template = data.template || data.data || {};  // FIX: Handle both data.template and data.data
+        console.log('📋 [QUICK PASTE] Template object:', template);
+        
         const categories = template.categories || [];
+        console.log(`📁 [QUICK PASTE] Found ${categories.length} categories`);
         
         categorySelect.innerHTML = '<option value="">Select category...</option>';
         
