@@ -2905,24 +2905,33 @@ Just checking in..."></textarea>
         }
 
         function renderCategories() {
-            console.log('🎨 [RENDER CATEGORIES] renderCategories() called');
-            console.log('🎨 [RENDER CATEGORIES] activeTemplate:', activeTemplate?._id, activeTemplate?.name);
+            console.log('🎨 [RENDER CATEGORIES] ===== START =====');
+            console.log('🎨 [RENDER CATEGORIES] activeTemplate ID:', activeTemplate?._id);
+            console.log('🎨 [RENDER CATEGORIES] activeTemplate Name:', activeTemplate?.name);
             console.log('🎨 [RENDER CATEGORIES] Total categories in template:', activeTemplate?.categories?.length || 0);
+            console.log('🎨 [RENDER CATEGORIES] All category names:', activeTemplate?.categories?.map(c => c.name));
             
             if (!activeTemplate || !activeTemplate.categories) {
                 console.log('⚠️ [RENDER CATEGORIES] No active template or categories found');
+                const container = document.getElementById('categories-container');
+                if (container) {
+                    container.innerHTML = `
+                        <div class="bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-12 text-center">
+                            <i class="fas fa-exclamation-triangle text-yellow-500 text-5xl mb-4"></i>
+                            <p class="text-gray-600 text-lg">No template loaded. Please select a template above.</p>
+                        </div>
+                    `;
+                }
                 return;
             }
 
             const container = document.getElementById('categories-container');
             const categories = activeTemplate.categories.filter(cat => cat.isActive);
             
-            console.log('🎨 [RENDER CATEGORIES] Active categories to display:', categories.length);
-            console.log('🎨 [RENDER CATEGORIES] Categories detail:', categories.map(c => ({
-                id: c.id,
-                name: c.name,
-                isActive: c.isActive
-            })));
+            console.log('🎨 [RENDER CATEGORIES] Active categories (isActive=true):', categories.length);
+            console.log('🎨 [RENDER CATEGORIES] Inactive categories (isActive=false):', activeTemplate.categories.filter(cat => !cat.isActive).length);
+            console.log('🎨 [RENDER CATEGORIES] Active category names:', categories.map(c => c.name));
+            console.log('🎨 [RENDER CATEGORIES] ===== END =====');
 
             if (categories.length === 0) {
                 container.innerHTML = `
@@ -7359,27 +7368,41 @@ Continue?`;
                 });
                 
                 const result = await response.json();
+                console.log('📦 [SWITCH TEMPLATE] Raw API response:', result);
                 
-                if (result.success && result.data) {
+                // Handle both response formats: result.data or result.template
+                const template = result.template || result.data;
+                
+                if (result.success && template) {
                     console.log(`✅ [SWITCH TEMPLATE] Loaded template:`, {
-                        id: result.data._id,
-                        name: result.data.name,
-                        version: result.data.version,
-                        categories: result.data.categories?.length || 0
+                        id: template._id,
+                        name: template.name,
+                        version: template.version,
+                        categories: template.categories?.length || 0,
+                        categoryNames: template.categories?.map(c => c.name)
                     });
                     
-                    activeTemplate = result.data;
-                    activeTemplateId = result.data._id;
+                    // CRITICAL: Update global activeTemplate reference
+                    activeTemplate = template;
+                    activeTemplateId = template._id;
+                    
+                    console.log('🔍 [SWITCH TEMPLATE] activeTemplate updated:', {
+                        id: activeTemplate._id,
+                        name: activeTemplate.name,
+                        categoriesCount: activeTemplate.categories?.length || 0
+                    });
                     
                     // Update stats
                     updateDashboardStats();
                     
                     // Refresh categories list
+                    console.log('🎨 [SWITCH TEMPLATE] About to render categories...');
                     renderCategories();
                     
-                    showNotification(`✅ Loaded: ${result.data.name}`, 'success');
+                    showNotification(`✅ Loaded: ${template.name}`, 'success');
                 } else {
-                    console.error('❌ [SWITCH TEMPLATE] Failed to load:', result.message);
+                    console.error('❌ [SWITCH TEMPLATE] Failed to load:', result.message || 'No template data found');
+                    console.error('❌ [SWITCH TEMPLATE] Result object:', result);
                     showNotification('❌ Failed to load template', 'error');
                 }
             } catch (error) {
