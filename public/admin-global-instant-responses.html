@@ -696,7 +696,7 @@
                         <div class="flex items-start justify-between">
                             <div class="flex-1">
                                 <div class="flex items-center gap-3 mb-3">
-                                    <div class="w-12 h-12 bg-gradient-to-br from-emerald-600 to-teal-600 rounded-lg flex items-center justify-center">
+                                    <div class="w-12 h-12 bg-emerald-600 rounded-lg flex items-center justify-center">
                                         <i class="fas fa-paste text-white text-xl"></i>
                                     </div>
                                     <div>
@@ -715,7 +715,7 @@
                                 </div>
                             </div>
                             <div class="ml-4 flex flex-col gap-2">
-                                <button onclick="openQuickPasteModal()" class="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                                <button onclick="openQuickPasteModal()" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
                                     <i class="fas fa-paste"></i>
                                     Quick Paste
                                 </button>
@@ -2564,7 +2564,7 @@ Just checking in..."></textarea>
             </div>
 
             <!-- Info Box -->
-            <div style="background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%); color: white; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+            <div style="background: #10b981; color: white; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
                 <div style="display: flex; align-items: start; gap: 16px;">
                     <i class="fas fa-info-circle" style="font-size: 24px; margin-top: 2px;"></i>
                     <div>
@@ -2630,7 +2630,7 @@ Just checking in..."></textarea>
                     Load Scenarios
                 </h3>
                 <div style="display: flex; gap: 12px;">
-                    <button id="quick-paste-load-btn" onclick="loadScenariosFromQuickPaste()" style="padding: 12px 24px; background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%); color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 16px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);" disabled>
+                    <button id="quick-paste-load-btn" onclick="loadScenariosFromQuickPaste()" style="padding: 12px 24px; background: #10b981; color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 16px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);" disabled>
                         <i class="fas fa-rocket mr-2"></i>Load All Scenarios
                     </button>
                     <button onclick="closeQuickPasteModal()" style="padding: 12px 24px; background: #95a5a6; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
@@ -2647,7 +2647,7 @@ Just checking in..."></textarea>
                         <span id="quick-paste-progress-count" style="font-weight: 600; color: #10b981;">0 / 0</span>
                     </div>
                     <div style="background: #e9ecef; border-radius: 8px; height: 12px; overflow: hidden;">
-                        <div id="quick-paste-progress-bar" style="background: linear-gradient(90deg, #10b981 0%, #14b8a6 100%); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                        <div id="quick-paste-progress-bar" style="background: #10b981; height: 100%; width: 0%; transition: width 0.3s;"></div>
                     </div>
                 </div>
             </div>
