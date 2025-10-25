@@ -658,6 +658,38 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Bulk Upload Scenarios Card -->
+                    <div class="bg-purple-50 border-2 border-purple-200 rounded-lg p-6">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-3 mb-3">
+                                    <div class="w-12 h-12 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-file-upload text-white text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-lg font-bold text-gray-900">Bulk Upload Scenarios</h4>
+                                        <p class="text-sm text-gray-600">Load multiple scenarios from CSV file</p>
+                                    </div>
+                                </div>
+                                <div class="space-y-2 text-sm text-gray-700">
+                                    <p><i class="fas fa-check-circle text-purple-600 mr-2"></i>Pre-validation (zero risk preview)</p>
+                                    <p><i class="fas fa-check-circle text-purple-600 mr-2"></i>Atomic transactions (all or nothing)</p>
+                                    <p><i class="fas fa-check-circle text-purple-600 mr-2"></i>Auto-rollback on errors</p>
+                                    <p class="text-purple-700 font-semibold mt-3 bg-purple-100 px-3 py-2 rounded border border-purple-300">
+                                        <i class="fas fa-rocket mr-1"></i>
+                                        Enterprise-grade bulk loader for 10-100+ scenarios
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="ml-4 flex flex-col gap-2">
+                                <button onclick="openBulkUploadModal()" class="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                    Bulk Upload
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2331,6 +2363,154 @@ Just checking in..."></textarea>
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- BULK UPLOAD SCENARIOS MODAL -->
+    <!-- ============================================ -->
+    <div id="bulk-upload-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 16px; max-width: 900px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+            
+            <!-- Header -->
+            <div style="display: flex; align-items: center; justify-between; margin-bottom: 20px;">
+                <h2 style="font-size: 28px; font-weight: 700; color: #2c3e50; margin: 0;">
+                    <i class="fas fa-file-upload text-purple-600 mr-2"></i>
+                    Bulk Upload Scenarios
+                </h2>
+                <button onclick="closeBulkUploadModal()" style="background: none; border: none; font-size: 32px; color: #95a5a6; cursor: pointer;">
+                    &times;
+                </button>
+            </div>
+
+            <!-- Info Box -->
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                <div style="display: flex; align-items: start; gap: 16px;">
+                    <i class="fas fa-info-circle" style="font-size: 24px; margin-top: 2px;"></i>
+                    <div>
+                        <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700;">Enterprise Bulk Loader</h3>
+                        <p style="margin: 0; font-size: 14px; line-height: 1.6; opacity: 0.95;">
+                            Upload a CSV file to create multiple scenarios at once. System includes:
+                            ✅ Pre-validation (no writes until perfect)
+                            ✅ Atomic transactions (all or nothing)
+                            ✅ Auto-rollback on errors
+                            ✅ Detailed error reporting
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 1: Download Template -->
+            <div style="border: 2px solid #e9ecef; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                    <div style="background: #667eea; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">1</div>
+                    <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #2c3e50;">Download CSV Template</h3>
+                </div>
+                <p style="margin: 0 0 16px 0; color: #6c757d; font-size: 14px;">
+                    Start with our clean CSV template with all 33 fields ready to fill.
+                </p>
+                <div style="display: flex; gap: 12px;">
+                    <a href="/docs/SCENARIO-BULK-LOADER-CSV-TEMPLATE.csv" download style="background: #667eea; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-download"></i>
+                        Download CSV Template
+                    </a>
+                    <a href="/docs/SCENARIO-CSV-QUICK-REFERENCE.md" target="_blank" style="background: #f8f9fa; color: #495057; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; border: 2px solid #dee2e6; display: inline-flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-book"></i>
+                        Field Reference
+                    </a>
+                </div>
+            </div>
+
+            <!-- Step 2: Fill CSV -->
+            <div style="border: 2px solid #e9ecef; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                    <div style="background: #667eea; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">2</div>
+                    <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #2c3e50;">Fill CSV with Your Scenarios</h3>
+                </div>
+                <p style="margin: 0; color: #6c757d; font-size: 14px;">
+                    <strong>Minimum required fields:</strong> name, status, priority, triggers, min_confidence, behavior, quick_replies, full_replies
+                </p>
+                <p style="margin: 8px 0 0 0; color: #6c757d; font-size: 14px;">
+                    Use the Quick Reference guide for field explanations ("info icon" style lookup).
+                </p>
+            </div>
+
+            <!-- Step 3: Upload & Validate -->
+            <div style="border: 2px solid #e9ecef; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                    <div style="background: #667eea; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">3</div>
+                    <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #2c3e50;">Upload & Validate</h3>
+                </div>
+                
+                <!-- File Upload Area -->
+                <div id="csv-upload-area" style="border: 3px dashed #dee2e6; border-radius: 12px; padding: 40px; text-align: center; background: #f8f9fa; cursor: pointer; transition: all 0.3s;" onclick="document.getElementById('csv-file-input').click()">
+                    <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: #667eea; margin-bottom: 16px;"></i>
+                    <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #2c3e50;">
+                        Click to upload CSV or drag & drop
+                    </p>
+                    <p style="margin: 0; font-size: 14px; color: #6c757d;">
+                        CSV file, UTF-8 encoding, max 10MB
+                    </p>
+                    <input type="file" id="csv-file-input" accept=".csv" style="display: none;" onchange="handleCSVUpload(event)">
+                </div>
+
+                <!-- Selected File Display -->
+                <div id="selected-file-display" style="display: none; margin-top: 16px; padding: 16px; background: #e7f3ff; border: 2px solid #90cdf4; border-radius: 8px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <i class="fas fa-file-csv" style="font-size: 24px; color: #667eea;"></i>
+                            <div>
+                                <p id="selected-file-name" style="margin: 0; font-weight: 600; color: #2c3e50;"></p>
+                                <p id="selected-file-size" style="margin: 4px 0 0 0; font-size: 13px; color: #6c757d;"></p>
+                            </div>
+                        </div>
+                        <button onclick="clearCSVFile()" style="background: white; border: 2px solid #dee2e6; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; color: #6c757d;">
+                            <i class="fas fa-times mr-1"></i> Remove
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Validation Results -->
+                <div id="validation-results" style="display: none; margin-top: 16px;"></div>
+            </div>
+
+            <!-- Step 4: Load Scenarios -->
+            <div style="border: 2px solid #e9ecef; border-radius: 12px; padding: 20px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                    <div style="background: #667eea; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">4</div>
+                    <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #2c3e50;">Load Scenarios</h3>
+                </div>
+                
+                <div style="display: flex; gap: 12px;">
+                    <button id="validate-btn" onclick="validateCSVFile()" disabled style="flex: 1; background: #3b82f6; color: white; padding: 14px 24px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; font-size: 15px; opacity: 0.5;">
+                        <i class="fas fa-check-circle mr-2"></i>
+                        Validate Only
+                    </button>
+                    <button id="load-btn" onclick="loadScenariosFromCSV()" disabled style="flex: 1; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 24px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; font-size: 15px; opacity: 0.5; box-shadow: 0 4px 12px rgba(102,126,234,0.4);">
+                        <i class="fas fa-rocket mr-2"></i>
+                        Load Scenarios
+                    </button>
+                </div>
+
+                <p style="margin: 16px 0 0 0; font-size: 13px; color: #6c757d; text-align: center;">
+                    <i class="fas fa-shield-alt mr-1"></i>
+                    Safe to load: Atomic transactions ensure all-or-nothing writes
+                </p>
+            </div>
+
+            <!-- Progress Bar -->
+            <div id="upload-progress" style="display: none; margin-top: 20px;">
+                <div style="background: #f8f9fa; border-radius: 8px; padding: 20px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                        <span id="progress-text" style="font-weight: 600; color: #2c3e50;">Loading scenarios...</span>
+                        <span id="progress-count" style="font-weight: 600; color: #667eea;">0 / 0</span>
+                    </div>
+                    <div style="background: #e9ecef; border-radius: 8px; height: 12px; overflow: hidden;">
+                        <div id="progress-bar" style="background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -10544,6 +10724,483 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ============================================================================
+// BULK UPLOAD SCENARIOS - WEB UI
+// ============================================================================
+
+let uploadedCSVFile = null;
+let parsedScenarios = [];
+
+/**
+ * Open bulk upload modal
+ */
+function openBulkUploadModal() {
+    console.log('📤 [BULK UPLOAD] Opening modal');
+    document.getElementById('bulk-upload-modal').style.display = 'flex';
+    // Reset state
+    clearCSVFile();
+}
+
+/**
+ * Close bulk upload modal
+ */
+function closeBulkUploadModal() {
+    console.log('❌ [BULK UPLOAD] Closing modal');
+    document.getElementById('bulk-upload-modal').style.display = 'none';
+    clearCSVFile();
+}
+
+/**
+ * Handle CSV file upload
+ */
+function handleCSVUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    console.log('📂 [BULK UPLOAD] File selected:', file.name);
+    
+    // Validate file type
+    if (!file.name.endsWith('.csv')) {
+        alert('❌ Please upload a CSV file');
+        return;
+    }
+    
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+        alert('❌ File too large. Maximum size is 10MB');
+        return;
+    }
+    
+    uploadedCSVFile = file;
+    
+    // Show file info
+    document.getElementById('csv-upload-area').style.display = 'none';
+    document.getElementById('selected-file-display').style.display = 'block';
+    document.getElementById('selected-file-name').textContent = file.name;
+    document.getElementById('selected-file-size').textContent = formatFileSize(file.size);
+    
+    // Enable buttons
+    document.getElementById('validate-btn').disabled = false;
+    document.getElementById('validate-btn').style.opacity = '1';
+    document.getElementById('validate-btn').style.cursor = 'pointer';
+    
+    document.getElementById('load-btn').disabled = false;
+    document.getElementById('load-btn').style.opacity = '1';
+    document.getElementById('load-btn').style.cursor = 'pointer';
+    
+    // Clear previous validation results
+    document.getElementById('validation-results').style.display = 'none';
+    document.getElementById('validation-results').innerHTML = '';
+}
+
+/**
+ * Clear selected CSV file
+ */
+function clearCSVFile() {
+    uploadedCSVFile = null;
+    parsedScenarios = [];
+    
+    document.getElementById('csv-upload-area').style.display = 'block';
+    document.getElementById('selected-file-display').style.display = 'none';
+    document.getElementById('csv-file-input').value = '';
+    
+    document.getElementById('validate-btn').disabled = true;
+    document.getElementById('validate-btn').style.opacity = '0.5';
+    
+    document.getElementById('load-btn').disabled = true;
+    document.getElementById('load-btn').style.opacity = '0.5';
+    
+    document.getElementById('validation-results').style.display = 'none';
+    document.getElementById('upload-progress').style.display = 'none';
+}
+
+/**
+ * Format file size
+ */
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+/**
+ * Parse CSV file
+ */
+async function parseCSVFile(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+            try {
+                const content = e.target.result;
+                const lines = content.split('\n').filter(l => l.trim());
+                
+                if (lines.length < 2) {
+                    reject(new Error('CSV must have header row + at least 1 data row'));
+                    return;
+                }
+                
+                // Parse header
+                const headers = parseCSVLine(lines[0]);
+                
+                if (headers.length !== 33) {
+                    reject(new Error(`CSV must have 33 columns, found ${headers.length}`));
+                    return;
+                }
+                
+                // Parse data rows
+                const rows = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const values = parseCSVLine(lines[i]);
+                    if (values.length === 0) continue;
+                    
+                    const row = {};
+                    headers.forEach((header, idx) => {
+                        row[header] = values[idx] || '';
+                    });
+                    row._rowNumber = i + 1;
+                    rows.push(row);
+                }
+                
+                resolve(rows);
+            } catch (err) {
+                reject(err);
+            }
+        };
+        
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsText(file);
+    });
+}
+
+/**
+ * Parse single CSV line (handles quotes)
+ */
+function parseCSVLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const nextChar = line[i + 1];
+        
+        if (char === '"' && inQuotes && nextChar === '"') {
+            current += '"';
+            i++;
+        } else if (char === '"') {
+            inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    
+    result.push(current.trim());
+    return result;
+}
+
+/**
+ * Transform CSV row to scenario object
+ */
+function transformCSVRowToScenario(row) {
+    const splitPipe = (str) => str ? str.split('|').map(s => s.trim()).filter(Boolean) : [];
+    const splitComma = (str) => str ? str.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const parseKeyValue = (str) => {
+        if (!str) return {};
+        const obj = {};
+        str.split('|').forEach(pair => {
+            const [key, ...valueParts] = pair.split('=');
+            if (key && valueParts.length) {
+                obj[key.trim()] = valueParts.join('=').trim();
+            }
+        });
+        return obj;
+    };
+    const tryParseJSON = (str) => {
+        if (!str || !str.trim()) return null;
+        try {
+            return JSON.parse(str);
+        } catch (e) {
+            throw new Error(`Invalid JSON: ${str.substring(0, 50)}...`);
+        }
+    };
+    const normalizeEnum = (str) => str ? str.toLowerCase().trim() : '';
+    const parseBool = (str) => {
+        if (!str) return false;
+        const normalized = str.toLowerCase().trim();
+        return normalized === 'true' || normalized === '1' || normalized === 'yes';
+    };
+    
+    return {
+        name: row.name || '',
+        status: normalizeEnum(row.status) || 'live',
+        priority: parseInt(row.priority) || 0,
+        triggers: splitPipe(row.triggers),
+        negativeTriggers: splitPipe(row.negative_triggers),
+        regexTriggers: splitPipe(row.regex_triggers),
+        contextWeight: parseFloat(row.min_confidence) || 0.7,
+        behavior: normalizeEnum(row.behavior) || null,
+        channel: normalizeEnum(row.channel) || 'any',
+        language: normalizeEnum(row.language) || 'auto',
+        quickReplies: splitPipe(row.quick_replies),
+        fullReplies: splitPipe(row.full_replies),
+        followUpFunnel: row.followup_funnel || '',
+        replySelection: normalizeEnum(row.reply_selection) || 'random',
+        entityCapture: splitPipe(row.entity_capture),
+        dynamicVariables: parseKeyValue(row.dynamic_variables),
+        entityValidation: tryParseJSON(row.entity_validation),
+        cooldownSeconds: parseInt(row.cooldown_seconds) || 0,
+        handoffPolicy: normalizeEnum(row.handoff_policy) || 'low_confidence',
+        timedFollowUp: {
+            enabled: parseBool(row.timed_followup_enabled),
+            delaySeconds: parseInt(row.timed_followup_delay) || 50,
+            extensionSeconds: parseInt(row.timed_followup_extension) || 30,
+            messages: splitPipe(row.timed_followup_messages)
+        },
+        silencePolicy: {
+            maxConsecutive: parseInt(row.silence_max_consecutive) || 2,
+            finalWarning: row.silence_final_warning || 'Hello? Did I lose you?'
+        },
+        ttsOverride: {
+            pitch: normalizeEnum(row.tts_pitch) || undefined,
+            rate: normalizeEnum(row.tts_rate) || undefined,
+            volume: normalizeEnum(row.tts_volume) || undefined
+        },
+        preconditions: tryParseJSON(row.preconditions),
+        effects: tryParseJSON(row.effects),
+        actionHooks: splitComma(row.action_hooks),
+        sensitiveInfoRule: normalizeEnum(row.sensitive_info_rule) || 'platform_default',
+        customMasking: tryParseJSON(row.custom_masking),
+        _rowNumber: row._rowNumber
+    };
+}
+
+/**
+ * Validate CSV file only
+ */
+async function validateCSVFile() {
+    if (!uploadedCSVFile) {
+        alert('❌ Please upload a CSV file first');
+        return;
+    }
+    
+    console.log('🔍 [BULK UPLOAD] Validating CSV...');
+    
+    try {
+        // Parse CSV
+        const rows = await parseCSVFile(uploadedCSVFile);
+        
+        // Transform and validate
+        const errors = [];
+        const warnings = [];
+        
+        for (const row of rows) {
+            const rowErrors = [];
+            const rowWarnings = [];
+            
+            try {
+                const scenario = transformCSVRowToScenario(row);
+                
+                // Required fields
+                if (!scenario.name) rowErrors.push('name: Required');
+                if (!scenario.triggers || scenario.triggers.length === 0) rowErrors.push('triggers: Required');
+                if (!scenario.quickReplies || scenario.quickReplies.length === 0) rowErrors.push('quick_replies: Required');
+                if (!scenario.fullReplies || scenario.fullReplies.length === 0) rowErrors.push('full_replies: Required');
+                if (!scenario.behavior) rowErrors.push('behavior: Required');
+                
+                // Warnings
+                if (scenario.triggers && scenario.triggers.length < 3) {
+                    rowWarnings.push('triggers: Recommend 3-5 phrases');
+                }
+                if (scenario.quickReplies && scenario.quickReplies.length < 2) {
+                    rowWarnings.push('quick_replies: Recommend 2-3 variations');
+                }
+                if (scenario.fullReplies && scenario.fullReplies.length < 2) {
+                    rowWarnings.push('full_replies: Recommend 2-3 variations');
+                }
+                
+                // Range validation
+                if (scenario.priority < -10 || scenario.priority > 100) {
+                    rowErrors.push(`priority: Out of range (-10 to 100)`);
+                }
+                if (scenario.contextWeight < 0 || scenario.contextWeight > 1) {
+                    rowErrors.push(`min_confidence: Out of range (0.0 to 1.0)`);
+                }
+                
+                row._transformed = scenario;
+                
+            } catch (err) {
+                rowErrors.push(`Transform error: ${err.message}`);
+            }
+            
+            if (rowErrors.length > 0) {
+                errors.push({ row: row._rowNumber, name: row.name, errors: rowErrors });
+            }
+            if (rowWarnings.length > 0) {
+                warnings.push({ row: row._rowNumber, name: row.name, warnings: rowWarnings });
+            }
+        }
+        
+        // Display results
+        const resultsDiv = document.getElementById('validation-results');
+        resultsDiv.style.display = 'block';
+        
+        if (errors.length === 0) {
+            parsedScenarios = rows;
+            resultsDiv.innerHTML = `
+                <div style="background: #d1fae5; border: 2px solid #10b981; border-radius: 8px; padding: 20px;">
+                    <div style="display: flex; align-items: start; gap: 12px;">
+                        <i class="fas fa-check-circle" style="font-size: 24px; color: #10b981;"></i>
+                        <div style="flex: 1;">
+                            <h4 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 700; color: #065f46;">
+                                ✅ Validation Passed
+                            </h4>
+                            <p style="margin: 0; color: #065f46;">
+                                <strong>${rows.length} scenarios</strong> ready to load. No errors found.
+                            </p>
+                            ${warnings.length > 0 ? `
+                                <p style="margin: 12px 0 0 0; color: #065f46; font-size: 14px;">
+                                    ⚠️ ${warnings.length} warnings (optional improvements)
+                                </p>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            let errorsHTML = '';
+            errors.forEach(err => {
+                errorsHTML += `
+                    <div style="border-left: 4px solid #ef4444; background: #fee2e2; padding: 12px; margin-bottom: 12px; border-radius: 4px;">
+                        <p style="margin: 0 0 8px 0; font-weight: 700; color: #991b1b;">
+                            Row ${err.row}: "${err.name || '(unnamed)'}"
+                        </p>
+                        ${err.errors.map(e => `<p style="margin: 4px 0; color: #991b1b; font-size: 14px;">❌ ${e}</p>`).join('')}
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML = `
+                <div style="background: #fee2e2; border: 2px solid #ef4444; border-radius: 8px; padding: 20px;">
+                    <div style="display: flex; align-items: start; gap: 12px; margin-bottom: 16px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 24px; color: #ef4444;"></i>
+                        <div style="flex: 1;">
+                            <h4 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 700; color: #991b1b;">
+                                ❌ Validation Failed
+                            </h4>
+                            <p style="margin: 0; color: #991b1b;">
+                                Found <strong>${errors.length} error(s)</strong> in ${rows.length} rows. Fix and re-upload.
+                            </p>
+                        </div>
+                    </div>
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        ${errorsHTML}
+                    </div>
+                </div>
+            `;
+        }
+        
+    } catch (err) {
+        console.error('❌ [BULK UPLOAD] Validation failed:', err);
+        alert(`❌ Validation failed: ${err.message}`);
+    }
+}
+
+/**
+ * Load scenarios from CSV
+ */
+async function loadScenariosFromCSV() {
+    if (!uploadedCSVFile) {
+        alert('❌ Please upload a CSV file first');
+        return;
+    }
+    
+    if (!activeTemplateId) {
+        alert('❌ Please select a template first');
+        return;
+    }
+    
+    // Get category from current active category (we'll need to add UI for this)
+    // For now, we'll prompt the user
+    const categoryId = prompt('Enter Category ID (e.g., THERMO_001):');
+    if (!categoryId) return;
+    
+    console.log('🚀 [BULK UPLOAD] Loading scenarios...');
+    
+    try {
+        // Parse if not already parsed
+        if (parsedScenarios.length === 0) {
+            parsedScenarios = await parseCSVFile(uploadedCSVFile);
+        }
+        
+        // Show progress
+        const progressDiv = document.getElementById('upload-progress');
+        progressDiv.style.display = 'block';
+        
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        const progressCount = document.getElementById('progress-count');
+        
+        progressCount.textContent = `0 / ${parsedScenarios.length}`;
+        
+        // Load scenarios one by one
+        const results = { success: [], failed: [] };
+        
+        for (let i = 0; i < parsedScenarios.length; i++) {
+            const row = parsedScenarios[i];
+            
+            try {
+                progressText.textContent = `Loading "${row.name}"...`;
+                progressCount.textContent = `${i + 1} / ${parsedScenarios.length}`;
+                progressBar.style.width = `${((i + 1) / parsedScenarios.length) * 100}%`;
+                
+                const scenario = transformCSVRowToScenario(row);
+                
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplateId}/categories/${categoryId}/scenarios`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify(scenario)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || `HTTP ${response.status}`);
+                }
+                
+                const result = await response.json();
+                results.success.push({ name: scenario.name, scenarioId: result.scenario?.scenarioId });
+                
+            } catch (err) {
+                console.error(`❌ Failed to load row ${row._rowNumber}:`, err);
+                results.failed.push({ name: row.name, error: err.message, row: row._rowNumber });
+            }
+        }
+        
+        // Show results
+        progressText.textContent = 'Complete!';
+        progressBar.style.width = '100%';
+        
+        if (results.failed.length === 0) {
+            alert(`✅ Success! Loaded ${results.success.length} scenarios.`);
+            closeBulkUploadModal();
+            await switchDashboardTemplate(activeTemplateId);
+        } else {
+            alert(`⚠️ Partially complete:\n✅ ${results.success.length} succeeded\n❌ ${results.failed.length} failed\n\nCheck console for details.`);
+            console.log('Failed scenarios:', results.failed);
+        }
+        
+    } catch (err) {
+        console.error('❌ [BULK UPLOAD] Load failed:', err);
+        alert(`❌ Load failed: ${err.message}`);
+    }
 }
 
 </script>
