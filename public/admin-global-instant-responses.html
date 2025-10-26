@@ -2229,6 +2229,10 @@
                                     <i class="fas fa-filter text-gray-600"></i>
                                     <strong style="color: #374151;">Effective Filler Words:</strong>
                                     <span id="scenario-fillers-count" style="background: #e5e7eb; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">0</span>
+                                    <button onclick="openQuickAddFillerModal()" style="margin-left: auto; background: #059669; color: white; border: none; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#047857'" onmouseout="this.style.background='#059669'">
+                                        <i class="fas fa-plus"></i>
+                                        Quick Add
+                                    </button>
                                 </div>
                                 <div id="scenario-inherited-fillers" style="display: flex; flex-wrap: wrap; gap: 6px; padding: 12px; background: white; border: 1px solid #d1d5db; border-radius: 8px; min-height: 50px; max-height: 120px; overflow-y: auto;">
                                     <span style="color: #9ca3af; font-size: 13px;">Loading...</span>
@@ -2245,6 +2249,10 @@
                                     <i class="fas fa-language text-purple-600"></i>
                                     <strong style="color: #374151;">Effective Synonyms:</strong>
                                     <span id="scenario-synonyms-count" style="background: #e5e7eb; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">0 mappings</span>
+                                    <button onclick="openQuickAddSynonymModal()" style="margin-left: auto; background: #7c3aed; color: white; border: none; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#6d28d9'" onmouseout="this.style.background='#7c3aed'">
+                                        <i class="fas fa-plus"></i>
+                                        Quick Add
+                                    </button>
                                 </div>
                                 <div id="scenario-inherited-synonyms" style="padding: 12px; background: white; border: 1px solid #d1d5db; border-radius: 8px; min-height: 50px; max-height: 150px; overflow-y: auto;">
                                     <span style="color: #9ca3af; font-size: 13px;">Loading...</span>
@@ -2693,6 +2701,139 @@ Just checking in..."></textarea>
                 </div>
             </div>
 
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- QUICK ADD FILLER MODAL -->
+    <!-- ============================================ -->
+    <div id="quick-add-filler-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 10002; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 16px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
+            
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, #059669 0%, #047857 100%); padding: 24px 32px; border-radius: 16px 16px 0 0; display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                    <h2 style="font-size: 28px; font-weight: 700; margin: 0 0 8px 0; color: white;">
+                        <i class="fas fa-filter mr-3"></i>Quick Add Filler Words
+                    </h2>
+                    <p style="margin: 0; opacity: 0.9; font-size: 14px; color: white;">Add filler words to template or category</p>
+                </div>
+                <button onclick="closeQuickAddFillerModal()" style="background: rgba(255,255,255,0.2); border: none; color: white; font-size: 28px; cursor: pointer; width: 45px; height: 45px; border-radius: 50%; transition: all 0.3s; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <!-- Body -->
+            <div style="padding: 32px;">
+                
+                <!-- Scope Selection -->
+                <div style="margin-bottom: 24px;">
+                    <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 12px; font-size: 15px;">
+                        <i class="fas fa-layer-group text-blue-600 mr-2"></i>Save To:
+                    </label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <button id="quick-filler-scope-template" onclick="selectQuickFillerScope('template')" style="padding: 16px; border: 2px solid #3b82f6; background: #eff6ff; color: #1e40af; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            <i class="fas fa-globe mr-2"></i>Template (All Categories)
+                        </button>
+                        <button id="quick-filler-scope-category" onclick="selectQuickFillerScope('category')" style="padding: 16px; border: 2px solid #d1d5db; background: white; color: #6b7280; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            <i class="fas fa-folder mr-2"></i>Category Only
+                        </button>
+                    </div>
+                    <p id="quick-filler-scope-hint" style="margin: 8px 0 0; font-size: 13px; color: #3b82f6; font-weight: 500;">
+                        ✓ Will apply to all categories in this template
+                    </p>
+                </div>
+                
+                <!-- Filler Input -->
+                <div style="margin-bottom: 24px;">
+                    <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 12px; font-size: 15px;">
+                        <i class="fas fa-keyboard text-gray-600 mr-2"></i>Filler Words (comma-separated):
+                    </label>
+                    <textarea id="quick-filler-input" rows="4" placeholder="um, uh, like, you know, basically, literally..." style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px; font-family: 'Courier New', monospace; resize: vertical;"></textarea>
+                    <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">These words will be ignored during caller input matching</p>
+                </div>
+                
+                <!-- Actions -->
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button onclick="closeQuickAddFillerModal()" style="background: white; color: #6c757d; border: 2px solid #dee2e6; padding: 12px 24px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s;">
+                        Cancel
+                    </button>
+                    <button onclick="saveQuickAddFiller()" style="background: linear-gradient(135deg, #059669 0%, #047857 100%); color: white; border: none; padding: 12px 32px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 12px rgba(5,150,105,0.4);">
+                        <i class="fas fa-plus mr-2"></i>Add Fillers
+                    </button>
+                </div>
+                
+            </div>
+            
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- QUICK ADD SYNONYM MODAL -->
+    <!-- ============================================ -->
+    <div id="quick-add-synonym-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 10002; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 16px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
+            
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); padding: 24px 32px; border-radius: 16px 16px 0 0; display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                    <h2 style="font-size: 28px; font-weight: 700; margin: 0 0 8px 0; color: white;">
+                        <i class="fas fa-language mr-3"></i>Quick Add Synonym
+                    </h2>
+                    <p style="margin: 0; opacity: 0.9; font-size: 14px; color: white;">Map colloquial terms to technical terms</p>
+                </div>
+                <button onclick="closeQuickAddSynonymModal()" style="background: rgba(255,255,255,0.2); border: none; color: white; font-size: 28px; cursor: pointer; width: 45px; height: 45px; border-radius: 50%; transition: all 0.3s; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <!-- Body -->
+            <div style="padding: 32px;">
+                
+                <!-- Scope Selection -->
+                <div style="margin-bottom: 24px;">
+                    <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 12px; font-size: 15px;">
+                        <i class="fas fa-layer-group text-purple-600 mr-2"></i>Save To:
+                    </label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <button id="quick-synonym-scope-template" onclick="selectQuickSynonymScope('template')" style="padding: 16px; border: 2px solid #7c3aed; background: #f5f3ff; color: #5b21b6; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            <i class="fas fa-globe mr-2"></i>Template (All Categories)
+                        </button>
+                        <button id="quick-synonym-scope-category" onclick="selectQuickSynonymScope('category')" style="padding: 16px; border: 2px solid #d1d5db; background: white; color: #6b7280; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            <i class="fas fa-folder mr-2"></i>Category Only
+                        </button>
+                    </div>
+                    <p id="quick-synonym-scope-hint" style="margin: 8px 0 0; font-size: 13px; color: #7c3aed; font-weight: 500;">
+                        ✓ Will apply to all categories in this template
+                    </p>
+                </div>
+                
+                <!-- Synonym Mapping -->
+                <div style="margin-bottom: 24px;">
+                    <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 12px; font-size: 15px;">
+                        <i class="fas fa-tag text-purple-600 mr-2"></i>Technical Term:
+                    </label>
+                    <input type="text" id="quick-synonym-technical" placeholder="e.g., thermostat, air conditioner, furnace..." style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px; margin-bottom: 16px;">
+                    
+                    <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 12px; font-size: 15px;">
+                        <i class="fas fa-comments text-purple-600 mr-2"></i>Colloquial Terms (comma-separated):
+                    </label>
+                    <textarea id="quick-synonym-colloquial" rows="3" placeholder="e.g., thingy, box on wall, temperature thing..." style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px; font-family: 'Courier New', monospace; resize: vertical;"></textarea>
+                    <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Customer slang will be translated to the technical term during matching</p>
+                </div>
+                
+                <!-- Actions -->
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button onclick="closeQuickAddSynonymModal()" style="background: white; color: #6c757d; border: 2px solid #dee2e6; padding: 12px 24px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s;">
+                        Cancel
+                    </button>
+                    <button onclick="saveQuickAddSynonym()" style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: white; border: none; padding: 12px 32px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 12px rgba(124,58,237,0.4);">
+                        <i class="fas fa-plus mr-2"></i>Add Synonym
+                    </button>
+                </div>
+                
+            </div>
+            
         </div>
     </div>
 
@@ -9518,6 +9659,302 @@ Timestamp: ${new Date(timestamp).toISOString()}
             document.getElementById('scenario-modal').style.display = 'none';
             document.getElementById('scenario-form').reset();
             currentScenarioData = null;
+        }
+
+        // ============================================
+        // QUICK ADD FILLER MODAL
+        // ============================================
+        
+        let quickFillerScope = 'template'; // default: template
+
+        function openQuickAddFillerModal() {
+            console.log('🚀 [QUICK ADD FILLER] Opening modal...');
+            
+            // Reset
+            document.getElementById('quick-filler-input').value = '';
+            quickFillerScope = 'template';
+            selectQuickFillerScope('template');
+            
+            // Show modal
+            document.getElementById('quick-add-filler-modal').style.display = 'flex';
+        }
+
+        function closeQuickAddFillerModal() {
+            console.log('❌ [QUICK ADD FILLER] Closing modal...');
+            document.getElementById('quick-add-filler-modal').style.display = 'none';
+        }
+
+        function selectQuickFillerScope(scope) {
+            quickFillerScope = scope;
+            
+            const templateBtn = document.getElementById('quick-filler-scope-template');
+            const categoryBtn = document.getElementById('quick-filler-scope-category');
+            const hint = document.getElementById('quick-filler-scope-hint');
+            
+            if (scope === 'template') {
+                // Template selected
+                templateBtn.style.border = '2px solid #3b82f6';
+                templateBtn.style.background = '#eff6ff';
+                templateBtn.style.color = '#1e40af';
+                
+                categoryBtn.style.border = '2px solid #d1d5db';
+                categoryBtn.style.background = 'white';
+                categoryBtn.style.color = '#6b7280';
+                
+                hint.textContent = '✓ Will apply to all categories in this template';
+                hint.style.color = '#3b82f6';
+            } else {
+                // Category selected
+                categoryBtn.style.border = '2px solid #3b82f6';
+                categoryBtn.style.background = '#eff6ff';
+                categoryBtn.style.color = '#1e40af';
+                
+                templateBtn.style.border = '2px solid #d1d5db';
+                templateBtn.style.background = 'white';
+                templateBtn.style.color = '#6b7280';
+                
+                const categoryName = currentScenarioData?.categoryName || 'this category';
+                hint.textContent = `✓ Will apply only to "${categoryName}"`;
+                hint.style.color = '#3b82f6';
+            }
+            
+            console.log(`📍 [QUICK ADD FILLER] Scope set to: ${scope}`);
+        }
+
+        async function saveQuickAddFiller() {
+            const input = document.getElementById('quick-filler-input').value.trim();
+            
+            if (!input) {
+                if (window.toastManager) {
+                    window.toastManager.warning('Please enter at least one filler word!');
+                } else {
+                    alert('Please enter at least one filler word!');
+                }
+                return;
+            }
+            
+            const fillers = input.split(',').map(f => f.trim().toLowerCase()).filter(f => f.length > 0);
+            
+            if (fillers.length === 0) {
+                if (window.toastManager) {
+                    window.toastManager.warning('Please enter valid filler words!');
+                } else {
+                    alert('Please enter valid filler words!');
+                }
+                return;
+            }
+            
+            try {
+                console.log(`💾 [QUICK ADD FILLER] Saving to ${quickFillerScope}:`, fillers);
+                
+                const token = getAuthToken();
+                let apiUrl, method, body;
+                
+                if (quickFillerScope === 'template') {
+                    // Add to template
+                    apiUrl = `/api/admin/global-instant-responses/${activeTemplateId}/fillers`;
+                    method = 'POST';
+                    body = JSON.stringify({ fillerWords: fillers });
+                } else {
+                    // Add to category (we'll need to update the category via saveCategory)
+                    const categoryId = currentScenarioData?.categoryId;
+                    if (!categoryId) {
+                        throw new Error('No category ID found');
+                    }
+                    
+                    apiUrl = `/api/admin/global-instant-responses/${activeTemplateId}/categories/${categoryId}/fillers`;
+                    method = 'POST';
+                    body = JSON.stringify({ fillerWords: fillers });
+                }
+                
+                const response = await fetch(apiUrl, {
+                    method,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                console.log('✅ [QUICK ADD FILLER] Saved successfully!');
+                
+                // Show success toast
+                if (window.toastManager) {
+                    window.toastManager.success(`Added ${fillers.length} filler word(s) to ${quickFillerScope}!`);
+                }
+                
+                // Close modal
+                closeQuickAddFillerModal();
+                
+                // Reload inherited config
+                if (currentScenarioData && typeof loadScenarioInheritedConfig === 'function') {
+                    await loadScenarioInheritedConfig(activeTemplateId, currentScenarioData.categoryId);
+                }
+                
+            } catch (error) {
+                console.error('❌ [QUICK ADD FILLER] Failed to save:', error);
+                if (window.toastManager) {
+                    window.toastManager.error(`Failed to save: ${error.message}`);
+                } else {
+                    alert(`Failed to save: ${error.message}`);
+                }
+            }
+        }
+
+        // ============================================
+        // QUICK ADD SYNONYM MODAL
+        // ============================================
+        
+        let quickSynonymScope = 'template'; // default: template
+
+        function openQuickAddSynonymModal() {
+            console.log('🚀 [QUICK ADD SYNONYM] Opening modal...');
+            
+            // Reset
+            document.getElementById('quick-synonym-technical').value = '';
+            document.getElementById('quick-synonym-colloquial').value = '';
+            quickSynonymScope = 'template';
+            selectQuickSynonymScope('template');
+            
+            // Show modal
+            document.getElementById('quick-add-synonym-modal').style.display = 'flex';
+        }
+
+        function closeQuickAddSynonymModal() {
+            console.log('❌ [QUICK ADD SYNONYM] Closing modal...');
+            document.getElementById('quick-add-synonym-modal').style.display = 'none';
+        }
+
+        function selectQuickSynonymScope(scope) {
+            quickSynonymScope = scope;
+            
+            const templateBtn = document.getElementById('quick-synonym-scope-template');
+            const categoryBtn = document.getElementById('quick-synonym-scope-category');
+            const hint = document.getElementById('quick-synonym-scope-hint');
+            
+            if (scope === 'template') {
+                // Template selected
+                templateBtn.style.border = '2px solid #7c3aed';
+                templateBtn.style.background = '#f5f3ff';
+                templateBtn.style.color = '#5b21b6';
+                
+                categoryBtn.style.border = '2px solid #d1d5db';
+                categoryBtn.style.background = 'white';
+                categoryBtn.style.color = '#6b7280';
+                
+                hint.textContent = '✓ Will apply to all categories in this template';
+                hint.style.color = '#7c3aed';
+            } else {
+                // Category selected
+                categoryBtn.style.border = '2px solid #7c3aed';
+                categoryBtn.style.background = '#f5f3ff';
+                categoryBtn.style.color = '#5b21b6';
+                
+                templateBtn.style.border = '2px solid #d1d5db';
+                templateBtn.style.background = 'white';
+                templateBtn.style.color = '#6b7280';
+                
+                const categoryName = currentScenarioData?.categoryName || 'this category';
+                hint.textContent = `✓ Will apply only to "${categoryName}"`;
+                hint.style.color = '#7c3aed';
+            }
+            
+            console.log(`📍 [QUICK ADD SYNONYM] Scope set to: ${scope}`);
+        }
+
+        async function saveQuickAddSynonym() {
+            const technical = document.getElementById('quick-synonym-technical').value.trim().toLowerCase();
+            const colloquialInput = document.getElementById('quick-synonym-colloquial').value.trim().toLowerCase();
+            
+            if (!technical || !colloquialInput) {
+                if (window.toastManager) {
+                    window.toastManager.warning('Please fill in both fields!');
+                } else {
+                    alert('Please fill in both fields!');
+                }
+                return;
+            }
+            
+            const colloquial = colloquialInput.split(',').map(c => c.trim()).filter(c => c.length > 0);
+            
+            if (colloquial.length === 0) {
+                if (window.toastManager) {
+                    window.toastManager.warning('Please provide at least one colloquial term!');
+                } else {
+                    alert('Please provide at least one colloquial term!');
+                }
+                return;
+            }
+            
+            try {
+                console.log(`💾 [QUICK ADD SYNONYM] Saving to ${quickSynonymScope}:`, technical, '→', colloquial);
+                
+                const token = getAuthToken();
+                let apiUrl, method, body;
+                
+                if (quickSynonymScope === 'template') {
+                    // Add to template
+                    apiUrl = `/api/admin/global-instant-responses/${activeTemplateId}/synonyms`;
+                    method = 'POST';
+                    body = JSON.stringify({
+                        technicalTerm: technical,
+                        colloquialTerms: colloquial
+                    });
+                } else {
+                    // Add to category
+                    const categoryId = currentScenarioData?.categoryId;
+                    if (!categoryId) {
+                        throw new Error('No category ID found');
+                    }
+                    
+                    apiUrl = `/api/admin/global-instant-responses/${activeTemplateId}/categories/${categoryId}/synonyms`;
+                    method = 'POST';
+                    body = JSON.stringify({
+                        technicalTerm: technical,
+                        colloquialTerms: colloquial
+                    });
+                }
+                
+                const response = await fetch(apiUrl, {
+                    method,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                console.log('✅ [QUICK ADD SYNONYM] Saved successfully!');
+                
+                // Show success toast
+                if (window.toastManager) {
+                    window.toastManager.success(`Added synonym mapping: "${technical}" → ${colloquial.join(', ')}`);
+                }
+                
+                // Close modal
+                closeQuickAddSynonymModal();
+                
+                // Reload inherited config
+                if (currentScenarioData && typeof loadScenarioInheritedConfig === 'function') {
+                    await loadScenarioInheritedConfig(activeTemplateId, currentScenarioData.categoryId);
+                }
+                
+            } catch (error) {
+                console.error('❌ [QUICK ADD SYNONYM] Failed to save:', error);
+                if (window.toastManager) {
+                    window.toastManager.error(`Failed to save: ${error.message}`);
+                } else {
+                    alert(`Failed to save: ${error.message}`);
+                }
+            }
         }
 
         /**
