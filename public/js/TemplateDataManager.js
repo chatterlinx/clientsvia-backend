@@ -312,7 +312,10 @@ class TemplateDataManager {
                     <td colspan="7">
                         <div class="table-expansion-panel">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <!-- Custom Fillers -->
+                                
+                                <!-- ============================================
+                                     CUSTOM FILLERS (Category-Specific)
+                                     ============================================ -->
                                 <div>
                                     <h4 class="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
                                         <i class="fas fa-filter text-blue-600"></i>
@@ -321,16 +324,46 @@ class TemplateDataManager {
                                             + ${templateFillers.length} inherited
                                         </span>
                                     </h4>
-                                    <div class="flex flex-wrap gap-1.5">
+                                    
+                                    <!-- Quick Add Form -->
+                                    <div class="flex gap-2 mb-3">
+                                        <input type="text" 
+                                               id="quick-add-filler-${category._id}" 
+                                               placeholder="Add filler (e.g., basically, literally...)" 
+                                               class="flex-1 px-3 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                               onkeypress="if(event.key==='Enter'){event.preventDefault();templateDataManager.addCategoryFiller('${category._id}', this.value.trim()).then(()=>this.value='');}">
+                                        <button onclick="const input=document.getElementById('quick-add-filler-${category._id}'); templateDataManager.addCategoryFiller('${category._id}', input.value.trim()).then(()=>input.value='');" 
+                                                class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold transition-colors">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Filler Tags -->
+                                    <div class="flex flex-wrap gap-1.5 min-h-[40px] p-2 bg-yellow-50 border border-yellow-200 rounded-md">
                                         ${customFillers.length > 0 ? customFillers.map(filler => `
-                                            <span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium border border-yellow-300">
+                                            <span class="inline-flex items-center gap-1.5 px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium border border-yellow-300 hover:bg-yellow-200 transition-colors">
                                                 ${this.escapeHtml(filler)}
+                                                <button onclick="templateDataManager.removeCategoryFiller('${category._id}', '${this.escapeHtml(filler)}')" 
+                                                        class="text-yellow-600 hover:text-yellow-900 hover:bg-yellow-300 rounded-full transition-colors"
+                                                        title="Remove">
+                                                    <i class="fas fa-times text-xs"></i>
+                                                </button>
                                             </span>
-                                        `).join('') : '<span class="text-gray-500 text-sm">No custom fillers</span>'}
+                                        `).join('') : '<span class="text-gray-500 text-xs italic">No custom fillers yet</span>'}
+                                    </div>
+                                    
+                                    <!-- Info Box -->
+                                    <div class="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                                        <p class="text-xs text-gray-700">
+                                            <i class="fas fa-info-circle text-blue-600 mr-1"></i>
+                                            These extend the ${templateFillers.length} template fillers. All ${customFillers.length + templateFillers.length} words will be removed from caller input.
+                                        </p>
                                     </div>
                                 </div>
                                 
-                                <!-- Custom Synonyms -->
+                                <!-- ============================================
+                                     CUSTOM SYNONYMS (Category-Specific)
+                                     ============================================ -->
                                 <div>
                                     <h4 class="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
                                         <i class="fas fa-language text-purple-600"></i>
@@ -339,14 +372,49 @@ class TemplateDataManager {
                                             + ${Object.keys(templateSynonyms).length} inherited
                                         </span>
                                     </h4>
-                                    <div class="space-y-1.5">
+                                    
+                                    <!-- Quick Add Form -->
+                                    <div class="flex gap-1 mb-3">
+                                        <input type="text" 
+                                               id="quick-add-synonym-tech-${category._id}" 
+                                               placeholder="Technical" 
+                                               class="flex-1 px-3 py-1.5 border border-purple-300 rounded-md text-xs focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                        <span class="flex items-center text-gray-400 font-bold">→</span>
+                                        <input type="text" 
+                                               id="quick-add-synonym-coll-${category._id}" 
+                                               placeholder="Colloquial (comma-separated)" 
+                                               class="flex-1 px-3 py-1.5 border border-purple-300 rounded-md text-xs focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                               onkeypress="if(event.key==='Enter'){event.preventDefault();const tech=document.getElementById('quick-add-synonym-tech-${category._id}').value.trim(); const coll=this.value.trim(); if(tech&&coll){templateDataManager.addCategorySynonym('${category._id}',tech,coll).then(()=>{document.getElementById('quick-add-synonym-tech-${category._id}').value='';this.value='';});}}">
+                                        <button onclick="const tech=document.getElementById('quick-add-synonym-tech-${category._id}').value.trim(); const coll=document.getElementById('quick-add-synonym-coll-${category._id}').value.trim(); if(tech&&coll){templateDataManager.addCategorySynonym('${category._id}',tech,coll).then(()=>{document.getElementById('quick-add-synonym-tech-${category._id}').value='';document.getElementById('quick-add-synonym-coll-${category._id}').value='';});}" 
+                                                class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs font-semibold transition-colors">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Synonym Cards -->
+                                    <div class="space-y-1.5 min-h-[40px] p-2 bg-purple-50 border border-purple-200 rounded-md">
                                         ${customSynonyms > 0 ? Object.entries(category.synonymMap || {}).map(([tech, coll]) => `
-                                            <div class="text-xs">
-                                                <span class="font-mono font-bold text-purple-900">${this.escapeHtml(tech)}</span>
-                                                <span class="text-gray-400">→</span>
-                                                <span class="text-purple-700">${Array.isArray(coll) ? coll.join(', ') : coll}</span>
+                                            <div class="flex items-center justify-between p-2 bg-white border border-purple-200 rounded-md hover:border-purple-400 transition-colors">
+                                                <div class="flex-1 text-xs">
+                                                    <span class="font-mono font-bold text-purple-900">${this.escapeHtml(tech)}</span>
+                                                    <span class="text-gray-400 mx-1">→</span>
+                                                    <span class="text-purple-700">${Array.isArray(coll) ? coll.join(', ') : coll}</span>
+                                                </div>
+                                                <button onclick="templateDataManager.removeCategorySynonym('${category._id}', '${this.escapeHtml(tech)}')" 
+                                                        class="ml-2 px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-semibold transition-colors"
+                                                        title="Delete">
+                                                    <i class="fas fa-trash text-xs"></i>
+                                                </button>
                                             </div>
-                                        `).join('') : '<span class="text-gray-500 text-sm">No custom synonyms</span>'}
+                                        `).join('') : '<span class="text-gray-500 text-xs italic">No custom synonyms yet</span>'}
+                                    </div>
+                                    
+                                    <!-- Info Box -->
+                                    <div class="mt-2 p-2 bg-purple-50 border border-purple-200 rounded-md">
+                                        <p class="text-xs text-gray-700">
+                                            <i class="fas fa-info-circle text-purple-600 mr-1"></i>
+                                            These extend the ${Object.keys(templateSynonyms).length} template synonyms. Total: ${customSynonyms + Object.keys(templateSynonyms).length} mappings.
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -610,6 +678,137 @@ class TemplateDataManager {
             if (category) {
                 window.openEditCategoryModal(category);
             }
+        }
+    }
+    
+    /**
+     * ========================================================================
+     * CATEGORY-LEVEL FILLER & SYNONYM OPERATIONS
+     * ========================================================================
+     */
+    
+    async addCategoryFiller(categoryId, filler) {
+        console.log(`➕ [CATEGORY FILLER] Adding to category ${categoryId}: ${filler}`);
+        
+        try {
+            const response = await fetch(`${this.apiBase}/${this.currentTemplateId}/categories/${categoryId}/fillers`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ fillers: [filler] })
+            });
+            
+            if (!response.ok) throw new Error('Failed to add category filler');
+            
+            // Invalidate cache
+            this.cache.templates.delete(this.currentTemplateId);
+            
+            // Reload category settings tab
+            await this.loadCategorySettings(this.currentTemplateId);
+            
+            this.toast.show(`Added filler to category: "${filler}"`, 'success');
+            console.log('✅ [CATEGORY FILLER] Success');
+            
+        } catch (error) {
+            console.error('❌ [CATEGORY FILLER] Failed:', error);
+            this.toast.show('Failed to add filler', 'error');
+            throw error;
+        }
+    }
+    
+    async removeCategoryFiller(categoryId, filler) {
+        console.log(`➖ [CATEGORY FILLER] Removing from category ${categoryId}: ${filler}`);
+        
+        try {
+            const response = await fetch(`${this.apiBase}/${this.currentTemplateId}/categories/${categoryId}/fillers`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ fillers: [filler] })
+            });
+            
+            if (!response.ok) throw new Error('Failed to remove category filler');
+            
+            // Invalidate cache
+            this.cache.templates.delete(this.currentTemplateId);
+            
+            // Reload category settings tab
+            await this.loadCategorySettings(this.currentTemplateId);
+            
+            this.toast.show(`Removed filler from category: "${filler}"`, 'success');
+            console.log('✅ [CATEGORY FILLER] Success');
+            
+        } catch (error) {
+            console.error('❌ [CATEGORY FILLER] Failed:', error);
+            this.toast.show('Failed to remove filler', 'error');
+            throw error;
+        }
+    }
+    
+    async addCategorySynonym(categoryId, technical, colloquial) {
+        console.log(`➕ [CATEGORY SYNONYM] Adding to category ${categoryId}: ${technical} → ${colloquial}`);
+        
+        try {
+            const response = await fetch(`${this.apiBase}/${this.currentTemplateId}/categories/${categoryId}/synonyms`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    technicalTerm: technical,
+                    colloquialTerms: colloquial.split(',').map(t => t.trim())
+                })
+            });
+            
+            if (!response.ok) throw new Error('Failed to add category synonym');
+            
+            // Invalidate cache
+            this.cache.templates.delete(this.currentTemplateId);
+            
+            // Reload category settings tab
+            await this.loadCategorySettings(this.currentTemplateId);
+            
+            this.toast.show(`Added synonym to category: "${technical}"`, 'success');
+            console.log('✅ [CATEGORY SYNONYM] Success');
+            
+        } catch (error) {
+            console.error('❌ [CATEGORY SYNONYM] Failed:', error);
+            this.toast.show('Failed to add synonym', 'error');
+            throw error;
+        }
+    }
+    
+    async removeCategorySynonym(categoryId, technical) {
+        console.log(`➖ [CATEGORY SYNONYM] Removing from category ${categoryId}: ${technical}`);
+        
+        try {
+            const response = await fetch(`${this.apiBase}/${this.currentTemplateId}/categories/${categoryId}/synonyms/${encodeURIComponent(technical)}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`
+                }
+            });
+            
+            if (!response.ok) throw new Error('Failed to remove category synonym');
+            
+            // Invalidate cache
+            this.cache.templates.delete(this.currentTemplateId);
+            
+            // Reload category settings tab
+            await this.loadCategorySettings(this.currentTemplateId);
+            
+            this.toast.show(`Removed synonym from category: "${technical}"`, 'success');
+            console.log('✅ [CATEGORY SYNONYM] Success');
+            
+        } catch (error) {
+            console.error('❌ [CATEGORY SYNONYM] Failed:', error);
+            this.toast.show('Failed to remove synonym', 'error');
+            throw error;
         }
     }
 }
