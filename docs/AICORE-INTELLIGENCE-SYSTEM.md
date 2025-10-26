@@ -1955,9 +1955,267 @@ This includes:
 
 ---
 
-## 12. APPENDIX
+## 12. AI LEARNING NOTIFICATION SYSTEM
 
-### 12.1 Glossary
+### 12.1 Overview
+
+The **AI Learning Notification System** provides real-time visibility into every change made to your AI templates, categories, and scenarios. Every time a synonym, filler word, or keyword is added—whether manually by a developer or automatically by the LLM intelligence system—a notification is sent to the **Notification Center**.
+
+**Purpose:**
+- Track how the AI is evolving and learning from real call data
+- Audit all manual changes made by developers
+- Monitor LLM-detected patterns and suggestions
+- Maintain complete transparency in AI intelligence growth
+- Debug issues by seeing exactly when/how the AI configuration changed
+
+### 12.2 Notification Types
+
+#### 12.2.1 Manual Additions (Developer-Initiated)
+
+**Code:** `AI_LEARNING_SYNONYM_ADDED`, `AI_LEARNING_FILLER_ADDED`  
+**Severity:** `WARNING` (informational, not critical)  
+**Triggered When:**
+- Developer adds synonym mapping via Template Settings or Category Settings
+- Developer adds filler words via Quick Add or Template/Category forms
+
+**Example Notification:**
+```
+🧠 AI Learning: Synonym Added (Manual)
+
+New synonym mapping added to template.
+
+Template: "HVAC Front Desk Receptionist"
+Technical Term: "thermostat"
+Colloquial Terms: "thingy, box on wall, temperature thing"
+Added By: admin@clientsvia.com
+
+This improves the AI's ability to understand non-technical language.
+```
+
+#### 12.2.2 LLM-Generated Suggestions (AI-Initiated)
+
+**Code:** `AI_LEARNING_SYNONYM_ADDED`, `AI_LEARNING_FILLER_ADDED`, `AI_LEARNING_KEYWORD_ADDED`, `AI_LEARNING_NEGATIVE_KEYWORD_ADDED`  
+**Severity:** `WARNING`  
+**Triggered When:**
+- LLM analyzes test calls and detects patterns
+- Developer applies a suggestion from Intelligence Dashboard
+- System automatically adds learned pattern to template
+
+**Example Notification:**
+```
+🤖 AI Learning: Synonym Mapping Added by LLM (Category)
+
+The AI detected and added a new synonym mapping.
+
+Template: "HVAC Front Desk Receptionist"
+Category: "Thermostats"
+Technical Term: "thermostat"
+Colloquial Term: "thingy"
+Confidence: 78%
+Estimated Impact: 23%
+Detection Method: frequency_analysis
+
+This was automatically detected from 12 test calls.
+```
+
+### 12.3 Notification Details
+
+Every AI learning notification includes:
+
+**Core Context:**
+- **Template Name:** Which template was modified
+- **Category Name:** (if applicable) Which category was affected
+- **Scenario Name:** (if applicable) Which scenario received the keyword
+
+**Learning Data:**
+- **Technical Term / Filler Word / Keyword:** The actual data added
+- **Colloquial Terms / Aliases:** All variations added
+- **Total Count:** How many total synonyms/fillers now exist
+
+**For LLM Suggestions:**
+- **Confidence:** How confident the AI is (0-100%)
+- **Estimated Impact:** Expected improvement in match rate (%)
+- **Detection Method:** `frequency_analysis`, `context_analysis`, `semantic_analysis`
+- **Frequency:** How many test calls triggered this pattern
+- **Suggestion ID:** Reference to the Intelligence Dashboard suggestion
+
+**For Manual Additions:**
+- **Added By:** Username/email of the developer who made the change
+- **Source:** Always "Manual Addition"
+
+### 12.4 Where Notifications Are Sent
+
+All AI learning notifications appear in:
+
+**1. Notification Center Alert Log**
+- Location: `admin-notification-center.html`
+- Tab: "Alert Log"
+- Severity: WARNING (yellow badge)
+- Filterable by: Type, Template, Source
+
+**2. Dashboard Stats**
+- "Warning" count increases
+- Interactive stats bar shows totals
+- Clickable to filter by severity
+
+### 12.5 Notification Actions
+
+**From Notification Center:**
+1. **View Details:** Click alert to see full JSON payload
+2. **Acknowledge:** Mark as read (doesn't delete, just updates status)
+3. **Resolve:** Mark as resolved (grays out, moves to bottom)
+4. **Bulk Actions:** Delete, purge old, clear all
+
+**From Intelligence Dashboard:**
+1. **Apply Suggestion:** Triggers notification immediately
+2. **Ignore Suggestion:** No notification sent
+3. **Dismiss Suggestion:** No notification sent
+
+### 12.6 Notification Workflow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│            DEVELOPER ADDS SYNONYM (Manual)                   │
+└─────────────────────────┬───────────────────────────────────┘
+                          ↓
+                  POST /api/admin/global-instant-responses/:id/synonyms
+                          ↓
+              AdminNotificationService.sendAlert()
+                          ↓
+              NotificationLog created in MongoDB
+                          ↓
+          Notification appears in Notification Center
+                          ↓
+          Developer sees: "🧠 AI Learning: Synonym Added (Manual)"
+
+
+┌─────────────────────────────────────────────────────────────┐
+│         LLM ANALYZES TEST CALLS (AI-Initiated)              │
+└─────────────────────────┬───────────────────────────────────┘
+                          ↓
+        IntelligentPatternDetector.analyzeTestCalls()
+                          ↓
+          Suggestions saved to SuggestionKnowledgeBase
+                          ↓
+      Developer views Intelligence Dashboard
+                          ↓
+      Developer clicks "Apply" on a suggestion
+                          ↓
+       POST /api/admin/global-instant-responses/:id/suggestions/:suggestionId/apply
+                          ↓
+        SuggestionKnowledgeBase.applySynonymSuggestion()
+                          ↓
+              AdminNotificationService.sendAlert()
+                          ↓
+          Notification appears in Notification Center
+                          ↓
+          Developer sees: "🤖 AI Learning: Synonym Added by LLM (Category)"
+```
+
+### 12.7 Smart Alert Grouping
+
+The notification system includes **deduplication logic** to prevent alert spam:
+
+**Grouping Rules:**
+- Same `code` (e.g., `AI_LEARNING_SYNONYM_ADDED`)
+- Same `companyId` (null for global templates)
+- Same `severity` (WARNING)
+- Within **15-minute window**
+- Unacknowledged and unresolved
+
+**Result:**
+- Instead of 10 separate "Synonym Added" alerts, you get 1 alert with `occurrenceCount: 10`
+- Notification shows first/last occurrence timestamps
+- Expands to show all individual occurrences
+- "HOT ALERT" indicator if rapidly firing (>5 in 5 minutes)
+
+### 12.8 Best Practices
+
+**For Developers:**
+
+1. **Monitor Daily:** Check Notification Center once per day for AI learning activity
+2. **Review LLM Suggestions:** Verify LLM-detected patterns make sense before applying
+3. **Audit Manual Changes:** Use notifications as an audit trail for your own changes
+4. **Investigate Rapid Alerts:** If same synonym added 10 times, something's wrong
+5. **Use Filters:** Filter by "AI_LEARNING_SYNONYM_ADDED" to see only synonym changes
+
+**For Testing:**
+
+1. **Test → Check Notifications:** After testing, check if AI learned anything new
+2. **Validate Confidence:** Don't auto-apply suggestions with <60% confidence
+3. **Review Impact:** Focus on suggestions with >20% estimated impact
+4. **Compare Before/After:** Track if applied suggestions actually improved match rates
+
+**For Production:**
+
+1. **Production Monitoring:** Set up alerts for >10 AI learning events per day
+2. **Weekly Reviews:** Review all AI learning notifications from past week
+3. **Document Patterns:** Note which colloquial terms are most common
+4. **Feedback Loop:** Use notifications to improve template design
+
+### 12.9 Troubleshooting
+
+**Notification Not Appearing:**
+- Check code: Must be `AI_LEARNING_SYNONYM_ADDED`, `AI_LEARNING_FILLER_ADDED`, etc.
+- Verify severity: Should be `warning` (lowercase)
+- Check MongoDB: `notificationlogs` collection should have new entry
+- Redis cache: Clear with `redis-cli FLUSHDB` if stale
+
+**Too Many Notifications:**
+- Check if deduplication is working (should group similar alerts)
+- Review confidence threshold: Lower threshold = more suggestions applied
+- Disable auto-apply if implemented in future
+
+**Notification Missing Details:**
+- Check `details` object in MongoDB document
+- Ensure template/category/scenario names are populated
+- Verify user authentication is working (for "Added By" field)
+
+### 12.10 Code Reference
+
+**Backend Services:**
+- `services/AdminNotificationService.js` - Sends notifications
+- `models/NotificationLog.js` - Stores notifications in MongoDB
+- `models/SuggestionKnowledgeBase.js` - Applies LLM suggestions and sends notifications
+
+**API Routes:**
+- `routes/admin/globalInstantResponses.js` - Synonym/filler POST routes
+- `routes/admin/adminNotifications.js` - Notification CRUD operations
+
+**Frontend:**
+- `admin-notification-center.html` - Notification UI
+- `js/notification-center/LogManager.js` - Alert log rendering
+
+**Key Functions:**
+```javascript
+// Send notification
+await AdminNotificationService.sendAlert({
+    code: 'AI_LEARNING_SYNONYM_ADDED',
+    severity: 'warning',
+    title: '🧠 AI Learning: Synonym Added',
+    message: 'Detailed message...',
+    details: { /* rich context */ }
+});
+
+// Apply LLM suggestion (auto-sends notification)
+await suggestion.apply(userId);
+```
+
+### 12.11 Future Enhancements
+
+**Planned Features:**
+- Email/SMS notifications for high-priority AI learning events
+- Slack/Discord webhook integration
+- AI learning analytics dashboard (trends, top learned terms)
+- Undo/revert capability for applied suggestions
+- Auto-apply suggestions above confidence threshold
+- Machine learning to predict which suggestions to auto-apply
+
+---
+
+## 13. APPENDIX
+
+### 13.1 Glossary
 
 **AiCore:** The intelligence system (templates, scenarios, variables, knowledge)  
 **Behavior:** AI personality settings (tone, pace, volume, emotion)  
