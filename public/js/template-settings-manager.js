@@ -158,11 +158,18 @@ async function addFillerWord() {
         // Reload
         await loadFillerWordsForTemplate();
         
-        alert(`✅ Added "${normalizedWord}" to filler list!`);
+        // Show toast notification
+        if (window.toastManager) {
+            window.toastManager.success(`Added "${normalizedWord}" to filler list!`);
+        }
         
     } catch (error) {
         console.error('❌ [FILLER WORDS] Failed to add:', error);
-        alert(`❌ Failed to add: ${error.message}`);
+        if (window.toastManager) {
+            window.toastManager.error(`Failed to add: ${error.message}`);
+        } else {
+            alert(`❌ Failed to add: ${error.message}`);
+        }
     }
 }
 
@@ -196,9 +203,18 @@ async function removeFillerWord(word) {
         // Reload
         await loadFillerWordsForTemplate();
         
+        // Show success toast
+        if (window.toastManager) {
+            window.toastManager.success(`Removed "${word}" from filler list!`);
+        }
+        
     } catch (error) {
         console.error('❌ [FILLER WORDS] Failed to remove:', error);
-        alert(`❌ Failed to remove: ${error.message}`);
+        if (window.toastManager) {
+            window.toastManager.error(`Failed to remove: ${error.message}`);
+        } else {
+            alert(`❌ Failed to remove: ${error.message}`);
+        }
     }
 }
 
@@ -423,11 +439,18 @@ async function addSynonymMapping() {
         // Reload
         await loadSynonymsForTemplate();
         
-        alert(`✅ Added synonym mapping!\n\n"${technicalTerm}" will now match:\n${colloquialTerms.map(t => `  • "${t}"`).join('\n')}`);
+        // Show success toast
+        if (window.toastManager) {
+            window.toastManager.success(`Added synonym mapping: "${technicalTerm}" → ${colloquialTerms.join(', ')}`);
+        }
         
     } catch (error) {
         console.error('❌ [SYNONYMS] Failed to add:', error);
-        alert(`❌ Failed to add: ${error.message}`);
+        if (window.toastManager) {
+            window.toastManager.error(`Failed to add: ${error.message}`);
+        } else {
+            alert(`❌ Failed to add: ${error.message}`);
+        }
     }
 }
 
@@ -460,9 +483,18 @@ async function removeSynonymMapping(technicalTerm) {
         // Reload
         await loadSynonymsForTemplate();
         
+        // Show success toast
+        if (window.toastManager) {
+            window.toastManager.success(`Removed synonym mapping for "${technicalTerm}"`);
+        }
+        
     } catch (error) {
         console.error('❌ [SYNONYMS] Failed to remove:', error);
-        alert(`❌ Failed to remove: ${error.message}`);
+        if (window.toastManager) {
+            window.toastManager.error(`Failed to remove: ${error.message}`);
+        } else {
+            alert(`❌ Failed to remove: ${error.message}`);
+        }
     }
 }
 
@@ -558,7 +590,11 @@ function addCategoryFiller() {
     const fillers = input.value.split(',').map(f => f.trim().toLowerCase()).filter(f => f.length > 0);
     
     if (fillers.length === 0) {
-        alert('Please enter at least one filler word!');
+        if (window.toastManager) {
+            window.toastManager.warning('Please enter at least one filler word!');
+        } else {
+            alert('Please enter at least one filler word!');
+        }
         return;
     }
     
@@ -574,6 +610,11 @@ function addCategoryFiller() {
     
     // Re-render
     renderCategoryFillers();
+    
+    // Show success toast
+    if (window.toastManager) {
+        window.toastManager.success(`Added ${fillers.length} filler(s) to category`);
+    }
     
     console.log('✅ [CATEGORY FILLER] Added:', fillers);
 }
@@ -622,14 +663,22 @@ function addCategorySynonym() {
     const colloquialStr = colloquialInput.value.trim().toLowerCase();
     
     if (!technical || !colloquialStr) {
-        alert('Please fill in both fields!');
+        if (window.toastManager) {
+            window.toastManager.warning('Please fill in both fields!');
+        } else {
+            alert('Please fill in both fields!');
+        }
         return;
     }
     
     const colloquial = colloquialStr.split(',').map(c => c.trim()).filter(c => c.length > 0);
     
     if (colloquial.length === 0) {
-        alert('Please provide at least one colloquial term!');
+        if (window.toastManager) {
+            window.toastManager.warning('Please provide at least one colloquial term!');
+        } else {
+            alert('Please provide at least one colloquial term!');
+        }
         return;
     }
     
@@ -647,6 +696,11 @@ function addCategorySynonym() {
     
     // Re-render
     renderCategorySynonyms();
+    
+    // Show success toast
+    if (window.toastManager) {
+        window.toastManager.success(`Added synonym mapping: "${technical}" → ${colloquial.join(', ')}`);
+    }
     
     console.log('✅ [CATEGORY SYNONYM] Added:', technical, '→', colloquial);
 }
