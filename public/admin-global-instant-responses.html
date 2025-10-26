@@ -1878,6 +1878,78 @@
                         <p class="text-xs text-gray-500 mt-1">💡 Tip: Scenarios control their own behavior. No need for category-level behavior settings.</p>
                     </div>
                     
+                    <!-- 🔇 Additional Filler Words Section -->
+                    <div class="border-t border-gray-200 pt-6">
+                        <div class="mb-4">
+                            <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                <i class="fas fa-filter text-gray-600"></i>
+                                Additional Filler Words
+                            </h3>
+                            <p class="text-sm text-gray-600 mt-1">
+                                Extends template fillers • Inherited by all scenarios in this category
+                            </p>
+                        </div>
+                        
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-gray-700">
+                            <i class="fas fa-info-circle text-blue-600 mr-2"></i>
+                            <strong>Inheritance:</strong> This category will use template fillers PLUS these additional ones
+                        </div>
+                        
+                        <div class="flex gap-3 mb-4">
+                            <input type="text" id="category-filler-input" 
+                                   placeholder="Add filler words (comma-separated: um, uh, like...)" 
+                                   class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                   onkeypress="if(event.key==='Enter'){event.preventDefault();addCategoryFiller();}">
+                            <button type="button" onclick="addCategoryFiller()" 
+                                    class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold transition-colors flex items-center gap-2">
+                                <i class="fas fa-plus"></i>
+                                Add
+                            </button>
+                        </div>
+                        
+                        <div id="category-fillers-display" class="flex flex-wrap gap-2 min-h-[40px] p-3 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                            <!-- Filler tags will appear here -->
+                        </div>
+                    </div>
+                    
+                    <!-- 🔤 Category Synonyms Section -->
+                    <div class="border-t border-gray-200 pt-6">
+                        <div class="mb-4">
+                            <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                <i class="fas fa-language text-purple-600"></i>
+                                Category Synonyms
+                            </h3>
+                            <p class="text-sm text-gray-600 mt-1">
+                                Domain-specific colloquial terms • Extends template synonyms
+                            </p>
+                        </div>
+                        
+                        <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-4 text-sm text-gray-700">
+                            <i class="fas fa-info-circle text-purple-600 mr-2"></i>
+                            <strong>Inheritance:</strong> This category will use template synonyms PLUS these category-specific ones
+                        </div>
+                        
+                        <div class="flex gap-2 mb-4">
+                            <input type="text" id="category-synonym-technical" 
+                                   placeholder="Technical term (e.g., thermostat)" 
+                                   class="flex-1 px-4 py-2 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                            <div class="flex items-center px-3 text-xl text-gray-400">→</div>
+                            <input type="text" id="category-synonym-colloquial" 
+                                   placeholder="Colloquial terms (e.g., thingy, box)" 
+                                   class="flex-1 px-4 py-2 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                                   onkeypress="if(event.key==='Enter'){event.preventDefault();addCategorySynonym();}">
+                            <button type="button" onclick="addCategorySynonym()" 
+                                    class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-colors flex items-center gap-2">
+                                <i class="fas fa-plus"></i>
+                                Add
+                            </button>
+                        </div>
+                        
+                        <div id="category-synonyms-display" class="space-y-2 min-h-[40px] p-3 bg-purple-50 rounded-lg border border-dashed border-purple-300">
+                            <!-- Synonym cards will appear here -->
+                        </div>
+                    </div>
+                    
                     <!-- Scenarios Section -->
                     <div class="border-t border-gray-200 pt-6">
                         <div class="flex items-center justify-between mb-4">
@@ -5219,6 +5291,11 @@ Continue?`;
         function closeCategoryModal() {
             document.getElementById('category-modal').classList.add('hidden');
             document.getElementById('category-modal').classList.remove('flex');
+            
+            // Clear category form data (fillers & synonyms)
+            if (typeof clearCategoryForm === 'function') {
+                clearCategoryForm();
+            }
         }
 
         // ============================================
@@ -5244,6 +5321,9 @@ Continue?`;
                 const categoryId = document.getElementById('category-id').value;
                 const isEditMode = categoryId !== '';
 
+                // Get filler/synonym data from form
+                const categoryFormData = getCategoryFormData();
+                
                 const categoryData = {
                     id: isEditMode ? categoryId : `cat-${Date.now()}`,
                     name: document.getElementById('category-name').value.trim(),
@@ -5251,10 +5331,13 @@ Continue?`;
                     description: document.getElementById('category-description').value.trim(),
                     // REMOVED: behavior field (scenarios control their own behavior)
                     isActive: true, // FIX: Always active by default (no confusing checkbox)
+                    additionalFillerWords: categoryFormData.additionalFillerWords, // NEW: Category-level fillers
+                    synonymMap: categoryFormData.synonymMap, // NEW: Category-level synonyms
                     scenarios: [] // Start with empty scenarios, user will add via "Add Scenario" button
                 };
 
                 console.log('📝 [SAVE CATEGORY] Category data:', categoryData);
+                console.log('📝 [SAVE CATEGORY] Fillers:', categoryFormData.additionalFillerWords.length, 'Synonyms:', Object.keys(categoryFormData.synonymMap).length);
                 console.log('📊 [SAVE CATEGORY] Before save - Categories count:', activeTemplate.categories?.length || 0);
 
                 if (isEditMode) {

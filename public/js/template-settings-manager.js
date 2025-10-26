@@ -541,6 +541,217 @@ function resetFillerWordsToDefaults() {
 }
 
 // ============================================
+// CATEGORY-LEVEL MANAGEMENT
+// ============================================
+
+// Temporary storage for category form
+let tempCategoryFillers = [];
+let tempCategorySynonyms = new Map();
+
+/**
+ * Add filler to category (client-side only, saves when form submitted)
+ */
+function addCategoryFiller() {
+    const input = document.getElementById('category-filler-input');
+    if (!input) return;
+    
+    const fillers = input.value.split(',').map(f => f.trim().toLowerCase()).filter(f => f.length > 0);
+    
+    if (fillers.length === 0) {
+        alert('Please enter at least one filler word!');
+        return;
+    }
+    
+    // Add to temp storage (deduplicate)
+    fillers.forEach(filler => {
+        if (!tempCategoryFillers.includes(filler)) {
+            tempCategoryFillers.push(filler);
+        }
+    });
+    
+    // Clear input
+    input.value = '';
+    
+    // Re-render
+    renderCategoryFillers();
+    
+    console.log('✅ [CATEGORY FILLER] Added:', fillers);
+}
+
+/**
+ * Remove filler from category
+ */
+function removeCategoryFiller(filler) {
+    tempCategoryFillers = tempCategoryFillers.filter(f => f !== filler);
+    renderCategoryFillers();
+    console.log('➖ [CATEGORY FILLER] Removed:', filler);
+}
+
+/**
+ * Render category fillers
+ */
+function renderCategoryFillers() {
+    const container = document.getElementById('category-fillers-display');
+    if (!container) return;
+    
+    if (tempCategoryFillers.length === 0) {
+        container.innerHTML = '<div class="text-sm text-gray-500 py-2">No additional fillers yet</div>';
+        return;
+    }
+    
+    container.innerHTML = tempCategoryFillers.map(filler => `
+        <div class="inline-flex items-center gap-2 px-3 py-1 bg-gray-200 rounded-lg text-sm font-medium text-gray-800">
+            <span>${filler}</span>
+            <button type="button" onclick="removeCategoryFiller('${filler}')" class="text-red-600 hover:text-red-800">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+/**
+ * Add synonym to category (client-side only)
+ */
+function addCategorySynonym() {
+    const technicalInput = document.getElementById('category-synonym-technical');
+    const colloquialInput = document.getElementById('category-synonym-colloquial');
+    
+    if (!technicalInput || !colloquialInput) return;
+    
+    const technical = technicalInput.value.trim().toLowerCase();
+    const colloquialStr = colloquialInput.value.trim().toLowerCase();
+    
+    if (!technical || !colloquialStr) {
+        alert('Please fill in both fields!');
+        return;
+    }
+    
+    const colloquial = colloquialStr.split(',').map(c => c.trim()).filter(c => c.length > 0);
+    
+    if (colloquial.length === 0) {
+        alert('Please provide at least one colloquial term!');
+        return;
+    }
+    
+    // Add to temp storage (merge if exists)
+    if (tempCategorySynonyms.has(technical)) {
+        const existing = tempCategorySynonyms.get(technical);
+        tempCategorySynonyms.set(technical, [...new Set([...existing, ...colloquial])]);
+    } else {
+        tempCategorySynonyms.set(technical, colloquial);
+    }
+    
+    // Clear inputs
+    technicalInput.value = '';
+    colloquialInput.value = '';
+    
+    // Re-render
+    renderCategorySynonyms();
+    
+    console.log('✅ [CATEGORY SYNONYM] Added:', technical, '→', colloquial);
+}
+
+/**
+ * Remove synonym from category
+ */
+function removeCategorySynonym(technical) {
+    tempCategorySynonyms.delete(technical);
+    renderCategorySynonyms();
+    console.log('➖ [CATEGORY SYNONYM] Removed:', technical);
+}
+
+/**
+ * Render category synonyms
+ */
+function renderCategorySynonyms() {
+    const container = document.getElementById('category-synonyms-display');
+    if (!container) return;
+    
+    if (tempCategorySynonyms.size === 0) {
+        container.innerHTML = '<div class="text-sm text-gray-500 py-2">No category synonyms yet</div>';
+        return;
+    }
+    
+    const html = [];
+    for (const [technical, colloquial] of tempCategorySynonyms.entries()) {
+        html.push(`
+            <div class="bg-white border border-purple-200 rounded-lg p-3">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <div class="text-xs text-gray-500">Technical:</div>
+                        <div class="font-bold text-purple-700">${technical}</div>
+                        <div class="text-xs text-gray-500 mt-1">Colloquial:</div>
+                        <div class="flex flex-wrap gap-1 mt-1">
+                            ${colloquial.map(c => `<span class="px-2 py-0.5 bg-pink-100 text-pink-800 rounded text-xs">${c}</span>`).join('')}
+                        </div>
+                    </div>
+                    <button type="button" onclick="removeCategorySynonym('${technical}')" class="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs font-semibold">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `);
+    }
+    
+    container.innerHTML = html.join('');
+}
+
+/**
+ * Load category data into form (when editing)
+ */
+function loadCategoryDataIntoForm(category) {
+    // Load existing fillers
+    tempCategoryFillers = category.additionalFillerWords || [];
+    renderCategoryFillers();
+    
+    // Load existing synonyms
+    tempCategorySynonyms = new Map();
+    if (category.synonymMap) {
+        if (category.synonymMap instanceof Map) {
+            tempCategorySynonyms = new Map(category.synonymMap);
+        } else if (typeof category.synonymMap === 'object') {
+            for (const [term, aliases] of Object.entries(category.synonymMap)) {
+                if (Array.isArray(aliases)) {
+                    tempCategorySynonyms.set(term, aliases);
+                }
+            }
+        }
+    }
+    renderCategorySynonyms();
+    
+    console.log('✅ [CATEGORY] Loaded data:', {
+        fillers: tempCategoryFillers.length,
+        synonyms: tempCategorySynonyms.size
+    });
+}
+
+/**
+ * Clear category form (when opening new category)
+ */
+function clearCategoryForm() {
+    tempCategoryFillers = [];
+    tempCategorySynonyms = new Map();
+    renderCategoryFillers();
+    renderCategorySynonyms();
+    console.log('🔄 [CATEGORY] Form cleared');
+}
+
+/**
+ * Get category data for saving
+ */
+function getCategoryFormData() {
+    const synonymsObject = {};
+    for (const [term, aliases] of tempCategorySynonyms.entries()) {
+        synonymsObject[term] = aliases;
+    }
+    
+    return {
+        additionalFillerWords: tempCategoryFillers,
+        synonymMap: synonymsObject
+    };
+}
+
+// ============================================
 // EXPORTS
 // ============================================
 
@@ -558,6 +769,15 @@ window.addSynonymMapping = addSynonymMapping;
 window.removeSynonymMapping = removeSynonymMapping;
 window.exportSynonyms = exportSynonyms;
 window.importSynonyms = importSynonyms;
+
+// Category-level functions
+window.addCategoryFiller = addCategoryFiller;
+window.removeCategoryFiller = removeCategoryFiller;
+window.addCategorySynonym = addCategorySynonym;
+window.removeCategorySynonym = removeCategorySynonym;
+window.loadCategoryDataIntoForm = loadCategoryDataIntoForm;
+window.clearCategoryForm = clearCategoryForm;
+window.getCategoryFormData = getCategoryFormData;
 
 console.log('✅ [TEMPLATE SETTINGS] Manager loaded');
 
