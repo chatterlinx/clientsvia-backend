@@ -488,6 +488,35 @@ const categorySchema = new Schema({
     isActive: {
         type: Boolean,
         default: true
+    },
+    
+    // ============================================
+    // 🔇 CATEGORY-LEVEL FILLER WORDS (EXTENDS TEMPLATE)
+    // ============================================
+    // Additional fillers specific to this category
+    // Combined with template fillers for effective filler list
+    // Example: "thingy", "thing", "contraption" for Thermostats category
+    additionalFillerWords: {
+        type: [String],
+        default: [],
+        trim: true
+        // Extends template.fillerWords
+        // All scenarios in category inherit: template + category fillers
+    },
+    
+    // ============================================
+    // 🔤 CATEGORY-LEVEL SYNONYM MAPPING
+    // ============================================
+    // Translate colloquial terms to technical terms for this category
+    // Format: { "thermostat": ["thingy", "box on the wall", "temperature thing"] }
+    // Extends template.synonymMap
+    synonymMap: {
+        type: Map,
+        of: [String],
+        default: new Map()
+        // Key: technical term (e.g., "thermostat")
+        // Value: array of colloquial aliases (e.g., ["thingy", "thing", "contraption"])
+        // Applied before keyword matching in HybridScenarioSelector
     }
 }, { _id: false });
 
@@ -578,6 +607,26 @@ const globalInstantResponseTemplateSchema = new Schema({
         trim: true
         // Each word is lowercased and trimmed
         // Applied during normalization in HybridScenarioSelector
+    },
+    
+    // ============================================
+    // 🔤 TEMPLATE-LEVEL SYNONYM MAPPING (GLOBAL)
+    // ============================================
+    // Translate colloquial terms to technical terms for ALL scenarios
+    // Format: { "air conditioner": ["ac", "a/c", "air", "cooling", "cold air"] }
+    // Categories can add additional synonyms on top of these
+    synonymMap: {
+        type: Map,
+        of: [String],
+        default: () => new Map([
+            ['air conditioner', ['ac', 'a/c', 'air', 'cooling', 'cold air', 'system']],
+            ['furnace', ['heater', 'heat', 'heating', 'hot air']],
+            ['unit', ['system', 'equipment', 'machine', 'thing outside']]
+        ])
+        // Key: technical term (e.g., "air conditioner")
+        // Value: array of colloquial aliases
+        // Applied before keyword matching in HybridScenarioSelector
+        // Categories extend this with category-specific synonyms
     },
     
     // ============================================================================

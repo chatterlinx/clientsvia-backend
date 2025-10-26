@@ -566,8 +566,45 @@ router.post('/voice', async (req, res) => {
     if (company.isGlobalTestTemplate) {
       logger.debug(`🧠 [GLOBAL BRAIN] Test mode activated for template: ${company.template.name}`);
       
-      // Initialize selector with template scenarios
-      const selector = new HybridScenarioSelector(company.template.categories);
+      // Build effective fillers (template + all categories)
+      const templateFillers = company.template.fillerWords || [];
+      const allFillers = [...templateFillers];
+      company.template.categories.forEach(category => {
+        if (category.additionalFillerWords && Array.isArray(category.additionalFillerWords)) {
+          allFillers.push(...category.additionalFillerWords);
+        }
+      });
+      const effectiveFillers = [...new Set(allFillers)];
+      
+      // Build effective synonym map (template + all categories)
+      const effectiveSynonymMap = new Map();
+      if (company.template.synonymMap) {
+        for (const [term, aliases] of Object.entries(company.template.synonymMap)) {
+          if (Array.isArray(aliases)) {
+            effectiveSynonymMap.set(term, [...aliases]);
+          }
+        }
+      }
+      company.template.categories.forEach(category => {
+        if (category.synonymMap) {
+          for (const [term, aliases] of Object.entries(category.synonymMap || {})) {
+            if (Array.isArray(aliases)) {
+              if (effectiveSynonymMap.has(term)) {
+                const existing = effectiveSynonymMap.get(term);
+                effectiveSynonymMap.set(term, [...new Set([...existing, ...aliases])]);
+              } else {
+                effectiveSynonymMap.set(term, [...aliases]);
+              }
+            }
+          }
+        }
+      });
+      
+      const urgencyKeywords = company.template.urgencyKeywords || [];
+      logger.debug(`🧠 [GLOBAL BRAIN] Selector config - Fillers: ${effectiveFillers.length}, Urgency keywords: ${urgencyKeywords.length}, Synonym terms: ${effectiveSynonymMap.size}`);
+      
+      // Initialize selector with merged fillers, urgency keywords, and synonym map
+      const selector = new HybridScenarioSelector(effectiveFillers, urgencyKeywords, effectiveSynonymMap);
       
       // NEW: Greet the tester with custom greeting from GLOBAL config
       const rawGreeting = company.globalTestConfig?.greeting || 
@@ -1647,12 +1684,67 @@ router.post('/test-respond/:templateId', async (req, res) => {
     logger.debug(`🧠 [CHECKPOINT 4] Initializing HybridScenarioSelector...`);
     logger.debug(`🧠 [CHECKPOINT 4] Categories count: ${template.categories?.length || 0}`);
     
-    // Initialize selector with template's filler words and urgency keywords
-    const fillerWords = template.fillerWords || [];
+    // ============================================
+    // BUILD EFFECTIVE FILLERS (Template + All Categories)
+    // ============================================
+    const templateFillers = template.fillerWords || [];
+    const allFillers = [...templateFillers];
+    
+    // Add all category-specific fillers
+    template.categories.forEach(category => {
+        if (category.additionalFillerWords && Array.isArray(category.additionalFillerWords)) {
+            allFillers.push(...category.additionalFillerWords);
+        }
+    });
+    
+    // Deduplicate
+    const effectiveFillers = [...new Set(allFillers)];
+    
+    // ============================================
+    // BUILD EFFECTIVE SYNONYM MAP (Template + All Categories)
+    // ============================================
+    const effectiveSynonymMap = new Map();
+    
+    // Start with template-level synonyms
+    if (template.synonymMap) {
+        if (template.synonymMap instanceof Map) {
+            for (const [term, aliases] of template.synonymMap.entries()) {
+                effectiveSynonymMap.set(term, [...aliases]);
+            }
+        } else if (typeof template.synonymMap === 'object') {
+            for (const [term, aliases] of Object.entries(template.synonymMap)) {
+                if (Array.isArray(aliases)) {
+                    effectiveSynonymMap.set(term, [...aliases]);
+                }
+            }
+        }
+    }
+    
+    // Merge category-level synonyms
+    template.categories.forEach(category => {
+        if (category.synonymMap) {
+            const catMap = category.synonymMap instanceof Map 
+                ? category.synonymMap 
+                : new Map(Object.entries(category.synonymMap || {}));
+            
+            for (const [term, aliases] of catMap.entries()) {
+                if (effectiveSynonymMap.has(term)) {
+                    // Merge aliases
+                    const existing = effectiveSynonymMap.get(term);
+                    effectiveSynonymMap.set(term, [...new Set([...existing, ...aliases])]);
+                } else {
+                    effectiveSynonymMap.set(term, [...aliases]);
+                }
+            }
+        }
+    });
+    
     const urgencyKeywords = template.urgencyKeywords || [];
-    logger.debug(`🧠 [CHECKPOINT 4] Filler words count: ${fillerWords.length}, Urgency keywords: ${urgencyKeywords.length}`);
-    const selector = new HybridScenarioSelector(fillerWords, urgencyKeywords);
-    logger.debug(`🧠 [CHECKPOINT 4] ✅ Selector initialized with ${fillerWords.length} filler words and ${urgencyKeywords.length} urgency keywords`);
+    logger.debug(`🧠 [CHECKPOINT 4] Effective fillers: ${effectiveFillers.length} (template: ${templateFillers.length}), Urgency keywords: ${urgencyKeywords.length}, Synonym terms: ${effectiveSynonymMap.size}`);
+    
+    // Initialize selector with merged fillers, urgency keywords, and synonym map
+    const selector = new HybridScenarioSelector(effectiveFillers, urgencyKeywords, effectiveSynonymMap);
+    logger.debug(`🧠 [CHECKPOINT 4] ✅ Selector initialized with ${effectiveFillers.length} filler words, ${urgencyKeywords.length} urgency keywords, and ${effectiveSynonymMap.size} synonym mappings`);
     
     logger.debug(`🧠 [CHECKPOINT 5] Running scenario matching...`);
     logger.debug(`🧠 [CHECKPOINT 5] Extracting scenarios from ${template.categories.length} categories...`);

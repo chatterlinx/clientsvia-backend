@@ -31,7 +31,7 @@
 const logger = require('../utils/logger');
 
 class HybridScenarioSelector {
-    constructor(fillerWordsArray = null, urgencyKeywordsArray = null) {
+    constructor(fillerWordsArray = null, urgencyKeywordsArray = null, synonymMapObject = null) {
         // ============================================
         // CONFIGURATION
         // ============================================
@@ -117,6 +117,49 @@ class HybridScenarioSelector {
             source: fillerWordsArray ? 'template' : 'defaults',
             count: this.fillerWords.size
         });
+        
+        // ============================================
+        // 🔤 SYNONYM MAPPING (DATABASE-DRIVEN)
+        // ============================================
+        // CRITICAL: Translate colloquial terms → technical terms before matching
+        // Format: Map { "thermostat" => ["thingy", "box on wall", "temperature thing"] }
+        // This allows non-technical customers to use natural language
+        this.synonymMap = new Map();
+        
+        if (synonymMapObject && typeof synonymMapObject === 'object') {
+            // Convert from various formats to Map
+            if (synonymMapObject instanceof Map) {
+                this.synonymMap = new Map(synonymMapObject);
+            } else if (synonymMapObject.entries) {
+                // Mongoose Map object
+                for (const [technicalTerm, aliases] of synonymMapObject.entries()) {
+                    if (Array.isArray(aliases) && aliases.length > 0) {
+                        this.synonymMap.set(
+                            technicalTerm.toLowerCase().trim(),
+                            aliases.map(a => String(a).toLowerCase().trim())
+                        );
+                    }
+                }
+            } else {
+                // Plain object
+                for (const [technicalTerm, aliases] of Object.entries(synonymMapObject)) {
+                    if (Array.isArray(aliases) && aliases.length > 0) {
+                        this.synonymMap.set(
+                            technicalTerm.toLowerCase().trim(),
+                            aliases.map(a => String(a).toLowerCase().trim())
+                        );
+                    }
+                }
+            }
+            
+            logger.info('🔤 [HYBRID SELECTOR] Synonym map initialized', {
+                source: 'template/category',
+                technicalTermsCount: this.synonymMap.size,
+                totalAliases: Array.from(this.synonymMap.values()).reduce((sum, arr) => sum + arr.length, 0)
+            });
+        } else {
+            logger.info('🔤 [HYBRID SELECTOR] No synonym map provided (colloquial terms not translated)');
+        }
         
         // ============================================
         // 🎯 INTENT DETECTION KEYWORD SETS
@@ -968,12 +1011,28 @@ class HybridScenarioSelector {
     normalizePhrase(phrase) {
         if (!phrase) {return '';}
         
-        return phrase
+        // ============================================
+        // ENHANCED NORMALIZATION PIPELINE (3 stages)
+        // ============================================
+        // Stage 1: Synonym translation (colloquial → technical)
+        // Stage 2: Filler removal (noise removal)
+        // Stage 3: Standard normalization (lowercase, punctuation, spacing)
+        
+        // Stage 1: Apply synonym translation
+        let processed = this.applySynonymTranslation(phrase);
+        
+        // Stage 2: Standard normalization (punctuation + spacing)
+        processed = processed
             .toLowerCase()
             .trim()
             .replace(/[^\w\s]/g, ' ') // Remove punctuation
             .replace(/\s+/g, ' ')      // Collapse spaces
             .trim();
+        
+        // Stage 3: Remove filler words (after normalization for better matching)
+        processed = this.removeFillerWords(processed);
+        
+        return processed;
     }
     
     /**
@@ -1301,6 +1360,94 @@ class HybridScenarioSelector {
         });
         
         return found.length > 0 ? found.slice(0, 3) : ['an issue'];  // Max 3 topics
+    }
+    
+    /**
+     * ============================================================================
+     * 🔤 SYNONYM TRANSLATION - Colloquial → Technical Terms
+     * ============================================================================
+     * Translates colloquial/non-technical terms to technical terms before matching.
+     * This dramatically improves match rates for non-technical customers.
+     * 
+     * Example:
+     * Input: "the thingy on the wall isn't working"
+     * Output: "the thermostat on the wall isn't working"
+     * 
+     * @param {String} phrase - Input phrase
+     * @returns {String} - Phrase with synonyms replaced
+     */
+    applySynonymTranslation(phrase) {
+        if (!phrase || this.synonymMap.size === 0) {
+            return phrase;
+        }
+        
+        let translatedPhrase = phrase.toLowerCase();
+        const replacements = [];
+        
+        // For each technical term and its aliases
+        for (const [technicalTerm, aliases] of this.synonymMap.entries()) {
+            for (const alias of aliases) {
+                // Use word boundary regex for accurate replacement
+                // Prevents "the" from being replaced inside "thermostat"
+                const regex = new RegExp(`\\b${this.escapeRegex(alias)}\\b`, 'gi');
+                
+                if (regex.test(translatedPhrase)) {
+                    replacements.push({
+                        from: alias,
+                        to: technicalTerm
+                    });
+                    translatedPhrase = translatedPhrase.replace(regex, technicalTerm);
+                }
+            }
+        }
+        
+        if (replacements.length > 0) {
+            logger.debug('🔤 [SYNONYM TRANSLATION] Applied', {
+                original: phrase.substring(0, 100),
+                translated: translatedPhrase.substring(0, 100),
+                replacements: replacements.map(r => `"${r.from}" → "${r.to}"`).join(', ')
+            });
+        }
+        
+        return translatedPhrase;
+    }
+    
+    /**
+     * Helper: Escape special regex characters
+     */
+    escapeRegex(str) {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    
+    /**
+     * ============================================================================
+     * 🔇 ENHANCED FILLER REMOVAL - Template + Category Inheritance
+     * ============================================================================
+     * Removes filler words (noise) from input before matching.
+     * Now supports 3-tier inheritance: template + category + scenario exclusions.
+     * 
+     * @param {String} phrase - Input phrase
+     * @returns {String} - Phrase with fillers removed
+     */
+    removeFillerWords(phrase) {
+        if (!phrase || this.fillerWords.size === 0) {
+            return phrase;
+        }
+        
+        const words = phrase.toLowerCase().split(/\s+/);
+        const filtered = words.filter(word => !this.fillerWords.has(word.trim()));
+        
+        const result = filtered.join(' ').trim();
+        
+        if (result !== phrase.toLowerCase()) {
+            logger.debug('🔇 [FILLER REMOVAL] Applied', {
+                original: phrase.substring(0, 80),
+                filtered: result.substring(0, 80),
+                removed: words.length - filtered.length
+            });
+        }
+        
+        return result;
     }
     
     /**

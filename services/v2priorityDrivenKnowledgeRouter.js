@@ -355,14 +355,59 @@ class PriorityDrivenKnowledgeRouter {
 
             logger.info(`🧠 [V3 HYBRID BRAIN] Found ${allScenarios.length} scenarios across ${template.categories.length} categories`);
 
-            // 🔇 Load filler words (inherited + custom)
-            // NOTE: Custom filler words come from aiAgentSettings (new system)
-            //       Inherited fillers are auto-scanned from active templates
-            const fillerWords = [
+            // ============================================
+            // 🔇 BUILD EFFECTIVE FILLERS (Template + Categories + Company Custom)
+            // ============================================
+            // Priority: Template base + Category additions + Company custom overrides
+            const templateFillers = template.fillerWords || [];
+            const allFillers = [...templateFillers];
+            
+            // Add category-specific fillers
+            template.categories.forEach(category => {
+                if (category.additionalFillerWords && Array.isArray(category.additionalFillerWords)) {
+                    allFillers.push(...category.additionalFillerWords);
+                }
+            });
+            
+            // Add company-specific custom fillers
+            allFillers.push(
                 ...(company.configuration?.fillerWords?.inherited || []),  // Legacy location
                 ...(company.configuration?.fillerWords?.custom || []),     // Legacy location
                 ...(company.aiAgentSettings?.fillerWords?.custom || [])    // NEW location (AiCore Filler Filter)
-            ];
+            );
+            
+            // Deduplicate
+            const effectiveFillers = [...new Set(allFillers)];
+            
+            // ============================================
+            // 🔤 BUILD EFFECTIVE SYNONYM MAP (Template + Categories)
+            // ============================================
+            const effectiveSynonymMap = new Map();
+            
+            // Start with template-level synonyms
+            if (template.synonymMap) {
+                for (const [term, aliases] of Object.entries(template.synonymMap)) {
+                    if (Array.isArray(aliases)) {
+                        effectiveSynonymMap.set(term, [...aliases]);
+                    }
+                }
+            }
+            
+            // Merge category-level synonyms
+            template.categories.forEach(category => {
+                if (category.synonymMap) {
+                    for (const [term, aliases] of Object.entries(category.synonymMap || {})) {
+                        if (Array.isArray(aliases)) {
+                            if (effectiveSynonymMap.has(term)) {
+                                const existing = effectiveSynonymMap.get(term);
+                                effectiveSynonymMap.set(term, [...new Set([...existing, ...aliases])]);
+                            } else {
+                                effectiveSynonymMap.set(term, [...aliases]);
+                            }
+                        }
+                    }
+                }
+            });
             
             // 🚨 Load urgency keywords (inherited + custom)
             const urgencyKeywords = [
@@ -370,10 +415,10 @@ class PriorityDrivenKnowledgeRouter {
                 ...(company.configuration?.urgencyKeywords?.custom || [])
             ];
             
-            logger.info(`🔇 [V3 HYBRID BRAIN] Loaded ${fillerWords.length} filler words, ${urgencyKeywords.length} urgency keywords`);
+            logger.info(`🔇 [V3 HYBRID BRAIN] Loaded ${effectiveFillers.length} effective filler words (template: ${templateFillers.length}), ${urgencyKeywords.length} urgency keywords, ${effectiveSynonymMap.size} synonym mappings`);
             
-            // ✅ Instantiate HybridScenarioSelector with keywords
-            const selector = new HybridScenarioSelector(fillerWords, urgencyKeywords);
+            // ✅ Instantiate HybridScenarioSelector with effective fillers, urgency keywords, and synonym map
+            const selector = new HybridScenarioSelector(effectiveFillers, urgencyKeywords, effectiveSynonymMap);
 
             // Use HybridScenarioSelector for intelligent matching
             const matchContext = {
