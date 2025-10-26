@@ -1667,6 +1667,7 @@ router.post('/test-respond/:templateId', async (req, res) => {
     logger.info(`🧠 [CHECKPOINT 2] Extracting parameters...`);
     const { templateId } = req.params;
     const speechText = req.body.SpeechResult || '';
+    let allScenarios = []; // Declare at function scope for later use
     logger.debug(`🧠 [CHECKPOINT 2] ✅ Template ID: ${templateId}`);
     logger.debug(`🧠 [CHECKPOINT 2] ✅ Speech Input: "${speechText}"`);
     
@@ -1771,6 +1772,14 @@ router.post('/test-respond/:templateId', async (req, res) => {
     let tierUsed = 1;  // Track which tier was used
     let routingDetails = {};  // Store routing metadata
     
+    // Extract all scenarios from template (needed for diagnostics)
+    allScenarios = [];
+    template.categories.forEach(category => {
+      if (category.scenarios && Array.isArray(category.scenarios)) {
+        allScenarios.push(...category.scenarios);
+      }
+    });
+    
     if (ENABLE_3_TIER_INTELLIGENCE) {
       logger.info('🧠 [3-TIER ROUTING] Starting intelligent cascade (Tier 1 → 2 → 3)');
       
@@ -1848,16 +1857,6 @@ router.post('/test-respond/:templateId', async (req, res) => {
       logger.debug(`🧠 [CHECKPOINT 4] ✅ Selector initialized with ${effectiveFillers.length} filler words, ${urgencyKeywords.length} urgency keywords, and ${effectiveSynonymMap.size} synonym mappings`);
       
       logger.debug(`🧠 [CHECKPOINT 5] Running scenario matching...`);
-      logger.debug(`🧠 [CHECKPOINT 5] Extracting scenarios from ${template.categories.length} categories...`);
-      
-      // Extract all scenarios from categories
-      const allScenarios = [];
-      template.categories.forEach(category => {
-        if (category.scenarios && Array.isArray(category.scenarios)) {
-          allScenarios.push(...category.scenarios);
-        }
-      });
-      
       logger.info(`🧠 [CHECKPOINT 5] Total scenarios to match: ${allScenarios.length}`);
       result = await selector.selectScenario(speechText, allScenarios);
       logger.info(`🧠 [CHECKPOINT 5] ✅ Matching complete`);
