@@ -9641,8 +9641,29 @@ Timestamp: ${new Date(timestamp).toISOString()}
                 `;
             }
             
+            // Add Copy Report button
+            html += `
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #e5e7eb; display: flex; gap: 12px; align-items: center;">
+                    <button onclick="copyTestReportAsMarkdown('${matched}', '${status}', ${JSON.stringify(details).replace(/"/g, '&quot;')})" 
+                            style="flex: 1; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 14px; box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2); transition: all 0.2s;"
+                            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 12px rgba(37, 99, 235, 0.3)';"
+                            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px rgba(37, 99, 235, 0.2)';">
+                        <i class="fas fa-clipboard mr-2"></i>Copy Report (Markdown)
+                    </button>
+                    <button onclick="copyTestReportAsJSON('${matched}', '${status}', ${JSON.stringify(details).replace(/"/g, '&quot;')})" 
+                            style="flex: 1; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 14px; box-shadow: 0 4px 6px rgba(124, 58, 237, 0.2); transition: all 0.2s;"
+                            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 12px rgba(124, 58, 237, 0.3)';"
+                            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px rgba(124, 58, 237, 0.2)';">
+                        <i class="fas fa-code mr-2"></i>Copy Report (JSON)
+                    </button>
+                </div>
+            `;
+            
             html += `</div>`;
             resultsDiv.innerHTML = html;
+            
+            // Store results for export
+            window.lastTestResult = { matched, status, details };
             
             // Scroll to results
             resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -12055,6 +12076,153 @@ async function loadScenariosFromQuickPaste() {
     } finally {
         document.getElementById('quick-paste-load-btn').disabled = false;
     }
+}
+
+// ============================================
+// TEST REPORT EXPORT
+// ============================================
+
+/**
+ * Copy test report as Markdown
+ */
+async function copyTestReportAsMarkdown(matched, status, details) {
+    try {
+        // Parse details if it's a string
+        const detailsObj = typeof details === 'string' ? JSON.parse(details.replace(/&quot;/g, '"')) : details;
+        
+        // Generate Markdown report
+        const report = generateTestReportMarkdown(matched === 'true', status, detailsObj);
+        
+        // Copy to clipboard
+        await navigator.clipboard.writeText(report);
+        
+        // Show success message
+        alert('✅ Test report copied to clipboard! (Markdown format)\n\nPaste it into GitHub, Slack, or any Markdown editor.');
+        
+        console.log('✅ [TEST REPORT] Copied Markdown report to clipboard');
+        
+    } catch (error) {
+        console.error('❌ [TEST REPORT] Failed to copy Markdown:', error);
+        
+        // Fallback: Show report in a modal or textarea
+        const report = generateTestReportMarkdown(matched === 'true', status, typeof details === 'string' ? JSON.parse(details.replace(/&quot;/g, '"')) : details);
+        
+        const modal = document.createElement('div');
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+        modal.innerHTML = `
+            <div style="background: white; padding: 30px; border-radius: 12px; max-width: 800px; max-height: 90vh; overflow: auto;">
+                <h3 style="margin: 0 0 16px 0; font-size: 20px; font-weight: bold;">Test Report (Markdown)</h3>
+                <textarea readonly style="width: 100%; height: 400px; border: 2px solid #e5e7eb; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 13px;">${report}</textarea>
+                <div style="display: flex; gap: 12px; margin-top: 16px;">
+                    <button onclick="navigator.clipboard.writeText(this.parentElement.previousElementSibling.value).then(() => alert('Copied!')).catch(console.error)" style="flex: 1; background: #3b82f6; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer;">
+                        Copy to Clipboard
+                    </button>
+                    <button onclick="this.closest('div[style*=\\'fixed\\']').remove()" style="flex: 1; background: #6b7280; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer;">
+                        Close
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+}
+
+/**
+ * Copy test report as JSON
+ */
+async function copyTestReportAsJSON(matched, status, details) {
+    try {
+        // Parse details if it's a string
+        const detailsObj = typeof details === 'string' ? JSON.parse(details.replace(/&quot;/g, '"')) : details;
+        
+        // Generate JSON report
+        const report = {
+            timestamp: new Date().toISOString(),
+            matched: matched === 'true',
+            status,
+            testPhrase: detailsObj.phrase,
+            matchScore: detailsObj.matchScore,
+            minConfidence: detailsObj.minConfidence,
+            priority: detailsObj.priority,
+            matchType: detailsObj.matchType,
+            matchedTriggers: detailsObj.matchedTriggers || [],
+            negTrigger: detailsObj.negTrigger || null,
+            recommendation: matched === 'true' 
+                ? 'Test passed - scenario would match' 
+                : status === 'BLOCKED' 
+                    ? 'Test blocked by negative trigger'
+                    : 'Test failed - score too low, add more triggers or lower confidence'
+        };
+        
+        const jsonString = JSON.stringify(report, null, 2);
+        
+        // Copy to clipboard
+        await navigator.clipboard.writeText(jsonString);
+        
+        // Show success message
+        alert('✅ Test report copied to clipboard! (JSON format)\n\nPaste it into your code, API testing tool, or JSON viewer.');
+        
+        console.log('✅ [TEST REPORT] Copied JSON report to clipboard');
+        
+    } catch (error) {
+        console.error('❌ [TEST REPORT] Failed to copy JSON:', error);
+        alert(`❌ Failed to copy: ${error.message}`);
+    }
+}
+
+/**
+ * Generate Markdown formatted test report
+ */
+function generateTestReportMarkdown(matched, status, details) {
+    const timestamp = new Date().toLocaleString();
+    const emoji = matched ? '✅' : (status === 'BLOCKED' ? '🚫' : '⚠️');
+    
+    let markdown = `# ${emoji} Test Report: ${status}\n\n`;
+    markdown += `**Generated:** ${timestamp}\n\n`;
+    markdown += `---\n\n`;
+    
+    markdown += `## 📝 Test Input\n\n`;
+    markdown += `> "${details.phrase}"\n\n`;
+    
+    markdown += `## 📊 Results\n\n`;
+    markdown += `- **Status:** ${status}\n`;
+    markdown += `- **Would Match:** ${matched ? 'YES ✅' : 'NO ❌'}\n`;
+    
+    if (status === 'BLOCKED') {
+        markdown += `- **Reason:** ${details.reason || 'Blocked by negative trigger'}\n`;
+        markdown += `- **Negative Trigger:** \`${details.negTrigger || 'unknown'}\`\n\n`;
+        markdown += `### ⚠️ Action Required\n\n`;
+        markdown += `This phrase contains a negative trigger and will **NEVER** match this scenario. Remove the negative trigger or modify the test phrase.\n\n`;
+    } else {
+        markdown += `- **Match Score:** ${(details.matchScore * 100).toFixed(0)}% ${matched ? '✅' : '❌'}\n`;
+        markdown += `- **Min Confidence:** ${(details.minConfidence * 100).toFixed(0)}%\n`;
+        markdown += `- **Match Type:** ${(details.matchType || '').toUpperCase()}\n`;
+        markdown += `- **Priority:** ${details.priority} ${details.priority > 5 ? '(High)' : details.priority < 0 ? '(Low)' : '(Normal)'}\n`;
+        
+        if (details.matchedTriggers && details.matchedTriggers.length > 0) {
+            markdown += `- **Matched Triggers:** ${details.matchedTriggers.map(t => `\`${t}\``).join(', ')}\n\n`;
+        } else {
+            markdown += `- **Matched Triggers:** None\n\n`;
+        }
+        
+        if (matched) {
+            markdown += `### ✅ Test Passed\n\n`;
+            markdown += `This scenario **WOULD** match the test phrase. The match score (${(details.matchScore * 100).toFixed(0)}%) exceeds the minimum confidence threshold (${(details.minConfidence * 100).toFixed(0)}%).\n\n`;
+        } else {
+            markdown += `### ⚠️ Test Failed\n\n`;
+            markdown += `This scenario would **NOT** match the test phrase. The match score (${(details.matchScore * 100).toFixed(0)}%) is below the minimum confidence threshold (${(details.minConfidence * 100).toFixed(0)}%).\n\n`;
+            markdown += `#### 💡 Recommendations:\n\n`;
+            markdown += `1. **Add more trigger keywords** that appear in the test phrase\n`;
+            markdown += `2. **Lower the min confidence** threshold (current: ${(details.minConfidence * 100).toFixed(0)}%)\n`;
+            markdown += `3. **Use regex triggers** for more flexible matching\n`;
+            markdown += `4. **Check for typos** in triggers or test phrase\n\n`;
+        }
+    }
+    
+    markdown += `---\n\n`;
+    markdown += `*Generated by ClientsVia Global AI Brain Test System*\n`;
+    
+    return markdown;
 }
 
 // ============================================
