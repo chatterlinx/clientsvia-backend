@@ -40,6 +40,7 @@
 const HybridScenarioSelector = require('./HybridScenarioSelector');
 const Tier3LLMFallback = require('./Tier3LLMFallback');
 const PatternLearningService = require('./PatternLearningService');
+const IntelligenceMonitor = require('./IntelligenceMonitor');  // 🚨 Comprehensive monitoring
 const LLMCallLog = require('../models/LLMCallLog');
 const logger = require('../utils/logger');
 
@@ -309,6 +310,20 @@ class IntelligentRouter {
             await this.logCall(result, template, company);
             result.performance.totalTime = Date.now() - startTime;
             
+            // ============================================
+            // 🚨 COMPREHENSIVE MONITORING
+            // ============================================
+            // Monitor this routing result and send alerts if issues detected
+            await IntelligenceMonitor.monitorRoutingResult(result, {
+                templateId: template._id,
+                templateName: template.name,
+                callId,
+                companyId: company?._id,
+                tier1Threshold: tier1Threshold,
+                tier2Threshold: tier2Threshold,
+                scenarioCount: this.prepareScenarios(template).length
+            });
+            
             return result;
             
         } catch (error) {
@@ -321,6 +336,14 @@ class IntelligentRouter {
             result.success = false;
             result.error = error.message;
             result.performance.totalTime = Date.now() - startTime;
+            
+            // 🚨 Monitor the failure
+            await IntelligenceMonitor.monitorRoutingResult(result, {
+                templateId: template._id,
+                templateName: template.name,
+                callId,
+                companyId: company?._id
+            });
             
             return result;
         }
