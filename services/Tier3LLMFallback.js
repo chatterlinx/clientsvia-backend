@@ -25,6 +25,7 @@
  */
 
 const OpenAI = require('openai');
+const AdminNotificationService = require('./AdminNotificationService');
 const logger = require('../utils/logger');
 
 class Tier3LLMFallback {
@@ -131,9 +132,31 @@ class Tier3LLMFallback {
             
             logger.error('❌ [TIER 3 LLM] Analysis failed', {
                 error: error.message,
+                stack: error.stack,
                 templateId: template._id,
                 callerInput: callerInput.substring(0, 100),
                 responseTime: `${responseTime}ms`
+            });
+            
+            // 🚨 CRITICAL: Tier 3 LLM failure = ultimate fallback is down
+            await AdminNotificationService.sendAlert({
+                code: 'AI_TIER3_LLM_FAILURE',
+                severity: 'CRITICAL',
+                companyId: null,
+                companyName: 'Platform',
+                title: '🚨 AI Tier 3 (LLM) CRITICAL FAILURE',
+                message: `OpenAI API call failed for template "${template.name}". Ultimate AI fallback is DOWN. Callers may receive generic error messages.`,
+                details: {
+                    error: error.message,
+                    stackTrace: error.stack,
+                    templateId: template._id,
+                    templateName: template.name,
+                    callId,
+                    callerInput: callerInput.substring(0, 200),
+                    responseTime: `${responseTime}ms`,
+                    impact: 'ALL calls that Tier 1/2 cannot handle will FAIL. Customer experience severely degraded. No pattern learning possible.',
+                    action: 'Check OpenAI API key, account credits, rate limits, and API status at https://status.openai.com'
+                }
             });
             
             return {

@@ -38,6 +38,7 @@ const express = require('express');
 const router = express.Router();
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
+const CacheHelper = require('../../utils/cacheHelper');
 const { enhanceTemplate } = require('../../services/globalAIBrainEnhancer');
 
 // Middleware alias for consistency
@@ -268,6 +269,7 @@ router.post('/', async (req, res) => {
         });
         
         await newTemplate.save();
+        await CacheHelper.invalidateTemplate(newTemplate._id);
         
         logger.info(`✅ Created new global template: ${version} with ${newTemplate.stats.totalScenarios} scenarios`);
         
@@ -306,6 +308,7 @@ router.post('/:id/activate', async (req, res) => {
         // Add changelog entry
         template.addChangeLog(`Activated as global template`, adminUser);
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         
         logger.info(`✅ Activated template: ${template.version}`);
         
@@ -442,6 +445,7 @@ router.post('/import', async (req, res) => {
         });
         
         await importedTemplate.save();
+        await CacheHelper.invalidateTemplate(importedTemplate._id);
         
         logger.info(`✅ Imported template: ${templateData.version} with ${importedTemplate.stats.totalScenarios} scenarios`);
         
@@ -498,6 +502,7 @@ router.post('/:id/set-default', async (req, res) => {
         });
         
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         
         logger.info(`✅ Set default template: ${template.name} (${template.version}) by ${adminUser}`);
         
@@ -619,6 +624,7 @@ router.patch('/:id', async (req, res) => {
         }
         
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         
         logger.debug(`✅ Updated template ${template.version}: ${changes.join(', ')}`);
         
@@ -975,6 +981,7 @@ router.post('/seed', authenticateJWT, async (req, res) => {
         
         logger.info('🌱 [SEED CHECKPOINT 8] Template document created, attempting to save to MongoDB...');
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         logger.info('🌱 [SEED CHECKPOINT 9] ✅ Template saved successfully to database!');
         logger.info('🌱 [SEED CHECKPOINT 10] Template ID:', template._id);
         logger.info('🌱 [SEED CHECKPOINT 11] Stats - Categories:', template.stats.totalCategories, 'Scenarios:', template.stats.totalScenarios, 'Triggers:', template.stats.totalTriggers);
@@ -1045,6 +1052,7 @@ router.post('/:id/enhance', async (req, res) => {
         });
         
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         
         logger.info(`✅ [ENHANCE] Template enhanced successfully: ${template._id}`);
         logger.info(`📊 [ENHANCE] Stats: ${enhancedData.stats.totalKeywords} keywords, ${enhancedData.stats.totalQnAPairs} Q&A pairs`);
@@ -1366,6 +1374,7 @@ router.post('/:id/sync-from-parent', async (req, res) => {
         );
 
         await childTemplate.save();
+        await CacheHelper.invalidateTemplate(childTemplate._id);
 
         logger.info(`✅ [SYNC] Successfully synced ${syncedCount} scenarios`);
 
@@ -1553,6 +1562,7 @@ router.post('/:templateId/categories/:categoryId/scenarios', async (req, res) =>
         );
 
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
 
         logger.info(`✅ [SCENARIO CREATE] Created: ${newScenario.name} (${newScenario.scenarioId})`);
 
@@ -1668,6 +1678,7 @@ router.patch('/:templateId/categories/:categoryId/scenarios/:scenarioId', async 
         );
 
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
 
         logger.info(`✅ [SCENARIO UPDATE] Updated: ${scenario.name}`);
 
@@ -1741,6 +1752,7 @@ router.delete('/:templateId/categories/:categoryId/scenarios/:scenarioId', async
         );
 
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
 
         logger.info(`✅ [SCENARIO DELETE] Deleted: ${scenarioName}`);
 
@@ -1937,6 +1949,7 @@ router.post('/seed-template', async (req, res) => {
                 }
                 
                 await existingTemplate.save();
+                await CacheHelper.invalidateTemplate(existingTemplate._id);
                 template = existingTemplate;
                 
                 logger.info(`✅ [SEED API] Template UPDATED (categories/scenarios refreshed, Twilio preserved)`);
@@ -1945,6 +1958,7 @@ router.post('/seed-template', async (req, res) => {
                 logger.info(`📝 [SEED API] No existing template found, creating fresh...`);
                 template = new GlobalInstantResponseTemplate(templateData);
                 await template.save();
+                await CacheHelper.invalidateTemplate(template._id);
                 logger.info(`✅ [SEED API] Template CREATED from scratch`);
             }
         } else {
@@ -1952,6 +1966,7 @@ router.post('/seed-template', async (req, res) => {
             logger.info(`📝 [SEED API] Creating new template (replaceExisting=false)...`);
             template = new GlobalInstantResponseTemplate(templateData);
             await template.save();
+            await CacheHelper.invalidateTemplate(template._id);
             logger.info(`✅ [SEED API] Template CREATED`);
         }
         
@@ -2753,6 +2768,7 @@ router.post('/:id/filler-words', async (req, res) => {
         template.lastUpdatedBy = req.user?.username || 'admin';
         
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         
         logger.info('Filler words added', { 
             templateId: id, 
@@ -2803,6 +2819,7 @@ router.delete('/:id/filler-words/:word', async (req, res) => {
         template.lastUpdatedBy = req.user?.username || 'admin';
         
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         
         logger.info('Filler word removed', { 
             templateId: id, 
@@ -2852,6 +2869,7 @@ router.put('/:id/filler-words', async (req, res) => {
         template.lastUpdatedBy = req.user?.username || 'admin';
         
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         
         logger.info('Filler words replaced (bulk update)', { 
             templateId: id, 
@@ -2956,6 +2974,7 @@ router.post('/:id/urgency-keywords', async (req, res) => {
         });
         
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         
         logger.info('Urgency keyword added', {
             templateId: req.params.id,
@@ -3017,6 +3036,7 @@ router.patch('/:id/urgency-keywords/:keywordId', async (req, res) => {
         }
         
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         
         logger.info('Urgency keyword updated', {
             templateId: req.params.id,
@@ -3058,6 +3078,7 @@ router.delete('/:id/urgency-keywords/:keywordId', async (req, res) => {
         template.urgencyKeywords.pull(req.params.keywordId);
         
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         
         logger.info('Urgency keyword deleted', {
             templateId: req.params.id,
@@ -3121,6 +3142,7 @@ router.post('/:id/urgency-keywords/seed-defaults', async (req, res) => {
         template.urgencyKeywords = defaults;
         
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         
         logger.info('Default urgency keywords seeded', {
             templateId: req.params.id,
@@ -3207,6 +3229,7 @@ router.post('/:id/synonyms', authenticateJWT, adminOnly, async (req, res) => {
         
         template.synonymMap.set(technicalTerm.toLowerCase().trim(), merged);
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         
         logger.info('Synonym added to template', {
             templateId: template._id,
@@ -3271,6 +3294,7 @@ router.delete('/:id/synonyms/:term', authenticateJWT, adminOnly, async (req, res
         
         template.synonymMap.delete(term);
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         
         logger.info('Synonym removed from template', {
             templateId: template._id,
@@ -3362,6 +3386,7 @@ router.post('/:id/categories/:categoryId/synonyms', authenticateJWT, adminOnly, 
         
         category.synonymMap.set(technicalTerm.toLowerCase().trim(), merged);
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         
         logger.info('Synonym added to category', {
             templateId: template._id,
@@ -3467,6 +3492,7 @@ router.post('/:id/fillers', authenticateJWT, adminOnly, async (req, res) => {
         
         template.fillerWords = merged;
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         
         logger.info('Fillers added to template', {
             templateId: template._id,
@@ -3531,6 +3557,7 @@ router.delete('/:id/fillers', authenticateJWT, adminOnly, async (req, res) => {
         const toRemove = new Set(fillers.map(f => f.toLowerCase().trim()));
         template.fillerWords = template.fillerWords.filter(f => !toRemove.has(f.toLowerCase().trim()));
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         
         logger.info('Fillers removed from template', {
             templateId: template._id,
@@ -3615,6 +3642,7 @@ router.post('/:id/categories/:categoryId/fillers', authenticateJWT, adminOnly, a
         
         category.additionalFillerWords = merged;
         await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
         
         logger.info('Fillers added to category', {
             templateId: template._id,
@@ -3759,6 +3787,7 @@ router.post('/:id/suggestions/:suggestionId/ignore', authenticateJWT, adminOnly,
         suggestion.ignoredBy = req.user._id;
         suggestion.ignoredReason = reason || 'Not applicable';
         await suggestion.save();
+        await CacheHelper.invalidateSuggestions(req.params.id);
         
         logger.info('Suggestion ignored', {
             suggestionId: suggestion._id,
@@ -3796,6 +3825,7 @@ router.post('/:id/suggestions/:suggestionId/dismiss', authenticateJWT, adminOnly
         
         suggestion.status = 'dismissed';
         await suggestion.save();
+        await CacheHelper.invalidateSuggestions(req.params.id);
         
         logger.info('Suggestion dismissed', {
             suggestionId: suggestion._id,
@@ -4126,6 +4156,10 @@ router.patch('/:id/learning-settings', authenticateJWT, adminOnly, async (req, r
         }
         
         await template.save();
+        await CacheHelper.invalidateBulk({ 
+            templateId: template._id, 
+            llmMetrics: true 
+        });
         
         logger.info('✅ [LEARNING SETTINGS] Settings updated', {
             templateId: template._id,

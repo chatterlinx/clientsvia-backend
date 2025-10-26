@@ -171,6 +171,27 @@ class PatternLearningService {
         
         const processingTime = Date.now() - startTime;
         
+        // 🚨 If multiple patterns failed, send alert (indicates systemic issue)
+        if (result.errors.length >= 3) {
+            await AdminNotificationService.sendAlert({
+                code: 'AI_PATTERN_LEARNING_MULTIPLE_FAILURES',
+                severity: 'WARNING',
+                companyId: null,
+                companyName: 'Platform',
+                title: '⚠️ AI Pattern Learning: Multiple Failures',
+                message: `Pattern learning failed for ${result.errors.length} patterns in template "${template.name}". AI is not self-improving effectively.`,
+                details: {
+                    templateId: template._id,
+                    templateName: template.name,
+                    callId,
+                    patternCount: patterns.length,
+                    failedPatterns: result.errors.map(e => ({ type: e.pattern.type, error: e.error })),
+                    impact: 'AI will not learn from these patterns, Tier 1 effectiveness reduced, LLM costs stay high',
+                    action: 'Check pattern validation logic, template schema, and MongoDB connectivity'
+                }
+            });
+        }
+        
         logger.info('✅ [PATTERN LEARNING] Learning complete', {
             templateId: template._id,
             applied: result.patternsApplied.length,
@@ -213,8 +234,31 @@ class PatternLearningService {
         } catch (error) {
             logger.error('❌ [APPLY PATTERN] Error', {
                 pattern: pattern.type,
-                error: error.message
+                error: error.message,
+                stack: error.stack
             });
+            
+            // 🚨 CRITICAL: Pattern application failure
+            await AdminNotificationService.sendAlert({
+                code: 'AI_PATTERN_APPLICATION_FAILURE',
+                severity: 'CRITICAL',
+                companyId: null,
+                companyName: 'Platform',
+                title: '🚨 AI Pattern Application Failure',
+                message: `Failed to apply ${pattern.type} pattern to template "${template.name}". Self-improvement system broken.`,
+                details: {
+                    error: error.message,
+                    stackTrace: error.stack,
+                    patternType: pattern.type,
+                    pattern: pattern,
+                    templateId: template._id,
+                    templateName: template.name,
+                    callId,
+                    impact: 'AI cannot self-improve, patterns not being learned, costs will not decrease',
+                    action: 'Check template schema, MongoDB connectivity, and pattern application logic'
+                }
+            });
+            
             return {
                 success: false,
                 error: error.message
@@ -393,7 +437,30 @@ class PatternLearningService {
             };
             
         } catch (error) {
-            logger.error('❌ [QUEUE FOR REVIEW] Error', { error: error.message });
+            logger.error('❌ [QUEUE FOR REVIEW] Error', { error: error.message, stack: error.stack });
+            
+            // 🚨 WARNING: Suggestion creation failure
+            await AdminNotificationService.sendAlert({
+                code: 'AI_SUGGESTION_QUEUE_FAILURE',
+                severity: 'WARNING',
+                companyId: null,
+                companyName: 'Platform',
+                title: '⚠️ AI Suggestion Queue Failure',
+                message: `Failed to queue ${pattern.type} pattern for admin review. Suggestions not being created.`,
+                details: {
+                    error: error.message,
+                    stackTrace: error.stack,
+                    patternType: pattern.type,
+                    pattern: pattern,
+                    templateId: template._id,
+                    templateName: template.name,
+                    callId,
+                    confidence,
+                    impact: 'Medium-confidence patterns not reaching admin for review, potential learning opportunities lost',
+                    action: 'Check SuggestionKnowledgeBase model and MongoDB connectivity'
+                }
+            });
+            
             return {
                 success: false,
                 error: error.message
@@ -427,7 +494,25 @@ class PatternLearningService {
             await template.save();
             
         } catch (error) {
-            logger.error('❌ [UPDATE LEARNING STATS] Error', { error: error.message });
+            logger.error('❌ [UPDATE LEARNING STATS] Error', { error: error.message, stack: error.stack });
+            
+            // 🚨 INFO: Stats update failure (non-critical)
+            await AdminNotificationService.sendAlert({
+                code: 'AI_LEARNING_STATS_UPDATE_FAILURE',
+                severity: 'INFO',
+                companyId: null,
+                companyName: 'Platform',
+                title: 'ℹ️ AI Learning Stats Update Failure',
+                message: `Failed to update learning statistics for template "${template.name}". Dashboard metrics may be stale.`,
+                details: {
+                    error: error.message,
+                    stackTrace: error.stack,
+                    templateId: template._id,
+                    templateName: template.name,
+                    impact: 'Dashboard metrics inaccurate, does not affect AI functionality',
+                    action: 'Check template.learningStats schema and MongoDB write permissions'
+                }
+            });
         }
     }
     

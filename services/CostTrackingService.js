@@ -27,6 +27,7 @@
 
 const LLMCallLog = require('../models/LLMCallLog');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
+const AdminNotificationService = require('./AdminNotificationService');
 const logger = require('../utils/logger');
 
 class CostTrackingService {
@@ -155,8 +156,27 @@ class CostTrackingService {
         } catch (error) {
             logger.error('❌ [COST TRACKING] Error getting metrics', {
                 templateId,
-                error: error.message
+                error: error.message,
+                stack: error.stack
             });
+            
+            // 🚨 WARNING: Intelligence dashboard metrics failure
+            await AdminNotificationService.sendAlert({
+                code: 'AI_COST_TRACKING_METRICS_FAILURE',
+                severity: 'WARNING',
+                companyId: null,
+                companyName: 'Platform',
+                title: '⚠️ AI Cost Tracking Metrics Failure',
+                message: `Failed to retrieve intelligence metrics for template. Dashboard will show stale or incomplete data.`,
+                details: {
+                    error: error.message,
+                    stackTrace: error.stack,
+                    templateId,
+                    impact: 'Intelligence dashboard broken, no cost analytics, cannot track self-improvement progress',
+                    action: 'Check LLMCallLog queries, MongoDB aggregation pipelines, and template.learningStats schema'
+                }
+            });
+            
             throw error;
         }
     }
@@ -482,8 +502,27 @@ class CostTrackingService {
         } catch (error) {
             logger.error('❌ [COST TRACKING] Error updating template stats', {
                 templateId,
-                error: error.message
+                error: error.message,
+                stack: error.stack
             });
+            
+            // 🚨 INFO: Template stats update failure (non-critical for AI functionality)
+            await AdminNotificationService.sendAlert({
+                code: 'AI_TEMPLATE_STATS_UPDATE_FAILURE',
+                severity: 'INFO',
+                companyId: null,
+                companyName: 'Platform',
+                title: 'ℹ️ AI Template Stats Update Failure',
+                message: `Failed to update cached learning stats for template. Dashboard may show outdated metrics.`,
+                details: {
+                    error: error.message,
+                    stackTrace: error.stack,
+                    templateId,
+                    impact: 'Cached stats stale, dashboard shows old data, does not affect AI routing or learning',
+                    action: 'Check template.learningStats schema and MongoDB write permissions'
+                }
+            });
+            
             throw error;
         }
     }
@@ -535,8 +574,27 @@ class CostTrackingService {
         } catch (error) {
             logger.error('❌ [COST TRACKING] Error getting projections', {
                 templateId,
-                error: error.message
+                error: error.message,
+                stack: error.stack
             });
+            
+            // 🚨 INFO: Cost projection calculation failure
+            await AdminNotificationService.sendAlert({
+                code: 'AI_COST_PROJECTION_FAILURE',
+                severity: 'INFO',
+                companyId: null,
+                companyName: 'Platform',
+                title: 'ℹ️ AI Cost Projection Calculation Failure',
+                message: `Failed to calculate cost projections for template. ROI forecasting unavailable.`,
+                details: {
+                    error: error.message,
+                    stackTrace: error.stack,
+                    templateId,
+                    impact: 'Cannot forecast future costs, ROI estimates unavailable, dashboard chart empty',
+                    action: 'Check LLMCallLog historical data, aggregation queries, and calculation logic'
+                }
+            });
+            
             throw error;
         }
     }

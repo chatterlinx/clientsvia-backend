@@ -41,6 +41,7 @@ const HybridScenarioSelector = require('./HybridScenarioSelector');
 const Tier3LLMFallback = require('./Tier3LLMFallback');
 const PatternLearningService = require('./PatternLearningService');
 const IntelligenceMonitor = require('./IntelligenceMonitor');  // 🚨 Comprehensive monitoring
+const AdminNotificationService = require('./AdminNotificationService');  // 🔔 Notification Center
 const LLMCallLog = require('../models/LLMCallLog');
 const logger = require('../utils/logger');
 
@@ -495,7 +496,26 @@ class IntelligentRouter {
             };
             
         } catch (error) {
-            logger.error('❌ [BUDGET CHECK] Error', { error: error.message });
+            logger.error('❌ [BUDGET CHECK] Error', { error: error.message, stack: error.stack });
+            
+            // 🚨 CRITICAL: Budget system failure
+            await AdminNotificationService.sendAlert({
+                code: 'AI_BUDGET_SYSTEM_FAILURE',
+                severity: 'WARNING',
+                companyId: null,  // Platform-wide issue
+                companyName: 'Platform',
+                title: '⚠️ AI Budget System Failure',
+                message: `Budget check failed for template "${template.name}". Budget controls are not enforcing limits.`,
+                details: {
+                    error: error.message,
+                    stackTrace: error.stack,
+                    templateId: template._id,
+                    templateName: template.name,
+                    impact: 'LLM costs may exceed monthly budget',
+                    action: 'Investigate learning stats calculation or MongoDB query failure'
+                }
+            });
+            
             // If budget check fails, allow the call (fail open)
             return { allowed: true, error: error.message };
         }
@@ -578,7 +598,27 @@ class IntelligentRouter {
             });
             
         } catch (error) {
-            logger.error('❌ [LOG CALL] Failed to log call', { error: error.message });
+            logger.error('❌ [LOG CALL] Failed to log call', { error: error.message, stack: error.stack });
+            
+            // 🚨 WARNING: Losing audit data
+            await AdminNotificationService.sendAlert({
+                code: 'AI_CALL_LOG_FAILURE',
+                severity: 'WARNING',
+                companyId: company?._id || null,
+                companyName: company?.companyName || 'Unknown',
+                title: '⚠️ AI Call Logging Failure',
+                message: `Failed to log AI routing call to database. Audit trail is incomplete.`,
+                details: {
+                    error: error.message,
+                    stackTrace: error.stack,
+                    templateId: template._id,
+                    templateName: template.name,
+                    tierUsed: result.tierUsed,
+                    callId: result.routingId,
+                    impact: 'Missing audit data, cost tracking incomplete, analytics degraded',
+                    action: 'Check MongoDB connection and LLMCallLog schema'
+                }
+            });
         }
     }
     

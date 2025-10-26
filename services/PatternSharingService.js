@@ -112,8 +112,32 @@ class PatternSharingService {
         } catch (error) {
             logger.error('❌ [PATTERN SHARING] Evaluation error', {
                 error: error.message,
+                stack: error.stack,
                 pattern: pattern.type
             });
+            
+            // 🚨 WARNING: Pattern sharing system failure
+            await AdminNotificationService.sendAlert({
+                code: 'AI_PATTERN_SHARING_FAILURE',
+                severity: 'WARNING',
+                companyId: null,
+                companyName: 'Platform',
+                title: '⚠️ AI Pattern Sharing System Failure',
+                message: `Failed to evaluate ${pattern.type} pattern for cross-template sharing. Templates will not learn from each other.`,
+                details: {
+                    error: error.message,
+                    stackTrace: error.stack,
+                    patternType: pattern.type,
+                    pattern: pattern,
+                    templateId: template._id,
+                    templateName: template.name,
+                    callId,
+                    confidence,
+                    impact: 'Pattern stays template-only, industry/global sharing disabled, slower self-improvement across platform',
+                    action: 'Check template.learningSettings, industry labels, and MongoDB queries'
+                }
+            });
+            
             return {
                 industrySharing: { evaluated: false, shared: false, error: error.message },
                 globalProposal: { evaluated: false, proposed: false, error: error.message }
