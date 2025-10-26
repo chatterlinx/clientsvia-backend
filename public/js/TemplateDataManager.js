@@ -488,6 +488,20 @@ class TemplateDataManager {
     async addTemplateFiller(filler) {
         console.log(`➕ [ADD FILLER] Adding to template: ${filler}`);
         
+        // OPTIMISTIC UPDATE: Show immediately
+        const container = document.getElementById('template-fillers-display');
+        const currentHTML = container?.innerHTML || '';
+        
+        if (container) {
+            const newTag = `
+                <div class="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-100 text-blue-800 rounded-full border border-blue-300 transition-all hover:bg-blue-200 opacity-50" data-optimistic="${filler}">
+                    <span class="font-medium">${this.escapeHtml(filler)}</span>
+                    <i class="fas fa-spinner fa-spin text-xs"></i>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', newTag);
+        }
+        
         try {
             const response = await fetch(`${this.apiBase}/${this.currentTemplateId}/fillers`, {
                 method: 'POST',
@@ -498,20 +512,31 @@ class TemplateDataManager {
                 body: JSON.stringify({ fillers: [filler] })
             });
             
-            if (!response.ok) throw new Error('Failed to add filler');
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || 'Failed to add filler');
+            }
             
             // Invalidate cache
             this.cache.templates.delete(this.currentTemplateId);
             
-            // Reload
+            // Reload (replaces optimistic UI)
             await this.loadTemplateSettings(this.currentTemplateId);
             
-            this.toast.show(`Added filler: "${filler}"`, 'success');
+            this.toast.show(`✅ Added filler: "${filler}"`, 'success');
             console.log('✅ [ADD FILLER] Success');
             
         } catch (error) {
             console.error('❌ [ADD FILLER] Failed:', error);
-            this.toast.show('Failed to add filler', 'error');
+            
+            // ROLLBACK: Restore original HTML
+            if (container) {
+                container.innerHTML = currentHTML;
+            }
+            
+            // Show detailed error
+            const errorMessage = this.getErrorMessage(error, 'add filler');
+            this.toast.show(errorMessage, 'error', 5000);
             throw error;
         }
     }
@@ -661,9 +686,49 @@ class TemplateDataManager {
         return div.innerHTML;
     }
     
+    /**
+     * Get user-friendly error message with actionable guidance
+     */
+    getErrorMessage(error, operation) {
+        const message = error.message || 'Unknown error';
+        
+        // Network errors
+        if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
+            return `❌ Network error while trying to ${operation}. Check your internet connection and try again.`;
+        }
+        
+        // Authentication errors
+        if (message.includes('401') || message.includes('Unauthorized')) {
+            return `🔐 Session expired. Please log in again and retry.`;
+        }
+        
+        // Permission errors
+        if (message.includes('403') || message.includes('Forbidden')) {
+            return `🚫 You don't have permission to ${operation}. Contact your admin.`;
+        }
+        
+        // Validation errors
+        if (message.includes('duplicate') || message.includes('already exists')) {
+            return `⚠️ This item already exists. No need to add it again.`;
+        }
+        
+        // Server errors
+        if (message.includes('500') || message.includes('Internal Server Error')) {
+            return `🔧 Server error while trying to ${operation}. Our team has been notified. Please try again in a few minutes.`;
+        }
+        
+        // Rate limiting
+        if (message.includes('429') || message.includes('Too Many Requests')) {
+            return `⏱️ Too many requests. Please wait a moment and try again.`;
+        }
+        
+        // Default fallback
+        return `❌ Failed to ${operation}: ${message}`;
+    }
+    
     initFallbackToast() {
         return {
-            show: (message, type) => {
+            show: (message, type, duration) => {
                 console.log(`[TOAST ${type.toUpperCase()}] ${message}`);
                 alert(message);
             }
