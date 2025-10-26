@@ -3134,5 +3134,432 @@ router.post('/:id/urgency-keywords/seed-defaults', async (req, res) => {
     }
 });
 
+// ============================================================================
+// 🔤 SYNONYM MANAGEMENT ROUTES
+// ============================================================================
+
+/**
+ * GET /api/admin/global-instant-responses/:id/synonyms
+ * Get all synonyms for a template
+ */
+router.get('/:id/synonyms', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        // Convert Map to object for JSON response
+        const synonymObj = {};
+        if (template.synonymMap && template.synonymMap instanceof Map) {
+            for (const [term, aliases] of template.synonymMap.entries()) {
+                synonymObj[term] = aliases;
+            }
+        }
+        
+        res.json({
+            success: true,
+            templateId: template._id,
+            synonyms: synonymObj,
+            count: Object.keys(synonymObj).length
+        });
+        
+    } catch (error) {
+        logger.error('Error fetching synonyms', { error: error.message });
+        res.status(500).json({ error: 'Failed to fetch synonyms' });
+    }
+});
+
+/**
+ * POST /api/admin/global-instant-responses/:id/synonyms
+ * Add a synonym mapping to a template
+ * Body: { technicalTerm: "thermostat", colloquialTerms: ["thingy", "box on wall"] }
+ */
+router.post('/:id/synonyms', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const { technicalTerm, colloquialTerms } = req.body;
+        
+        if (!technicalTerm || !colloquialTerms || !Array.isArray(colloquialTerms)) {
+            return res.status(400).json({ 
+                error: 'technicalTerm (string) and colloquialTerms (array) are required' 
+            });
+        }
+        
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        // Get existing aliases or create empty array
+        const existing = template.synonymMap.get(technicalTerm.toLowerCase().trim()) || [];
+        
+        // Merge and deduplicate
+        const merged = [...new Set([
+            ...existing,
+            ...colloquialTerms.map(t => t.toLowerCase().trim())
+        ])];
+        
+        template.synonymMap.set(technicalTerm.toLowerCase().trim(), merged);
+        await template.save();
+        
+        logger.info('Synonym added to template', {
+            templateId: template._id,
+            technicalTerm,
+            added: colloquialTerms.length,
+            total: merged.length,
+            by: req.user?.username
+        });
+        
+        res.json({
+            success: true,
+            message: 'Synonym mapping added',
+            technicalTerm,
+            aliases: merged
+        });
+        
+    } catch (error) {
+        logger.error('Error adding synonym', { error: error.message });
+        res.status(500).json({ error: 'Failed to add synonym' });
+    }
+});
+
+/**
+ * DELETE /api/admin/global-instant-responses/:id/synonyms/:term
+ * Remove a synonym mapping from a template
+ */
+router.delete('/:id/synonyms/:term', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        const term = req.params.term.toLowerCase().trim();
+        
+        if (!template.synonymMap.has(term)) {
+            return res.status(404).json({ error: 'Synonym mapping not found' });
+        }
+        
+        template.synonymMap.delete(term);
+        await template.save();
+        
+        logger.info('Synonym removed from template', {
+            templateId: template._id,
+            term,
+            by: req.user?.username
+        });
+        
+        res.json({
+            success: true,
+            message: 'Synonym mapping removed'
+        });
+        
+    } catch (error) {
+        logger.error('Error removing synonym', { error: error.message });
+        res.status(500).json({ error: 'Failed to remove synonym' });
+    }
+});
+
+/**
+ * GET /api/admin/global-instant-responses/:id/categories/:categoryId/synonyms
+ * Get all synonyms for a category
+ */
+router.get('/:id/categories/:categoryId/synonyms', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        const category = template.categories.id(req.params.categoryId);
+        if (!category) {
+            return res.status(404).json({ error: 'Category not found' });
+        }
+        
+        // Convert Map to object
+        const synonymObj = {};
+        if (category.synonymMap && category.synonymMap instanceof Map) {
+            for (const [term, aliases] of category.synonymMap.entries()) {
+                synonymObj[term] = aliases;
+            }
+        }
+        
+        res.json({
+            success: true,
+            categoryId: category.id,
+            categoryName: category.name,
+            synonyms: synonymObj,
+            count: Object.keys(synonymObj).length
+        });
+        
+    } catch (error) {
+        logger.error('Error fetching category synonyms', { error: error.message });
+        res.status(500).json({ error: 'Failed to fetch category synonyms' });
+    }
+});
+
+/**
+ * POST /api/admin/global-instant-responses/:id/categories/:categoryId/synonyms
+ * Add a synonym mapping to a category
+ */
+router.post('/:id/categories/:categoryId/synonyms', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const { technicalTerm, colloquialTerms } = req.body;
+        
+        if (!technicalTerm || !colloquialTerms || !Array.isArray(colloquialTerms)) {
+            return res.status(400).json({ 
+                error: 'technicalTerm (string) and colloquialTerms (array) are required' 
+            });
+        }
+        
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        const category = template.categories.id(req.params.categoryId);
+        if (!category) {
+            return res.status(404).json({ error: 'Category not found' });
+        }
+        
+        // Get existing aliases or create empty array
+        const existing = category.synonymMap.get(technicalTerm.toLowerCase().trim()) || [];
+        
+        // Merge and deduplicate
+        const merged = [...new Set([
+            ...existing,
+            ...colloquialTerms.map(t => t.toLowerCase().trim())
+        ])];
+        
+        category.synonymMap.set(technicalTerm.toLowerCase().trim(), merged);
+        await template.save();
+        
+        logger.info('Synonym added to category', {
+            templateId: template._id,
+            categoryId: category.id,
+            categoryName: category.name,
+            technicalTerm,
+            added: colloquialTerms.length,
+            total: merged.length,
+            by: req.user?.username
+        });
+        
+        res.json({
+            success: true,
+            message: 'Synonym mapping added to category',
+            technicalTerm,
+            aliases: merged
+        });
+        
+    } catch (error) {
+        logger.error('Error adding category synonym', { error: error.message });
+        res.status(500).json({ error: 'Failed to add category synonym' });
+    }
+});
+
+// ============================================================================
+// 🔇 FILLER WORD MANAGEMENT ROUTES
+// ============================================================================
+
+/**
+ * GET /api/admin/global-instant-responses/:id/fillers
+ * Get all filler words for a template
+ */
+router.get('/:id/fillers', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        res.json({
+            success: true,
+            templateId: template._id,
+            fillers: template.fillerWords || [],
+            count: (template.fillerWords || []).length
+        });
+        
+    } catch (error) {
+        logger.error('Error fetching fillers', { error: error.message });
+        res.status(500).json({ error: 'Failed to fetch fillers' });
+    }
+});
+
+/**
+ * POST /api/admin/global-instant-responses/:id/fillers
+ * Add filler words to a template
+ * Body: { fillers: ["word1", "word2"] }
+ */
+router.post('/:id/fillers', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const { fillers } = req.body;
+        
+        if (!fillers || !Array.isArray(fillers)) {
+            return res.status(400).json({ error: 'fillers (array) is required' });
+        }
+        
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        // Merge and deduplicate
+        const existing = template.fillerWords || [];
+        const merged = [...new Set([
+            ...existing,
+            ...fillers.map(f => f.toLowerCase().trim())
+        ])];
+        
+        template.fillerWords = merged;
+        await template.save();
+        
+        logger.info('Fillers added to template', {
+            templateId: template._id,
+            added: fillers.length,
+            total: merged.length,
+            by: req.user?.username
+        });
+        
+        res.json({
+            success: true,
+            message: 'Filler words added',
+            fillers: merged,
+            count: merged.length
+        });
+        
+    } catch (error) {
+        logger.error('Error adding fillers', { error: error.message });
+        res.status(500).json({ error: 'Failed to add fillers' });
+    }
+});
+
+/**
+ * DELETE /api/admin/global-instant-responses/:id/fillers
+ * Remove filler words from a template
+ * Body: { fillers: ["word1", "word2"] }
+ */
+router.delete('/:id/fillers', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const { fillers } = req.body;
+        
+        if (!fillers || !Array.isArray(fillers)) {
+            return res.status(400).json({ error: 'fillers (array) is required' });
+        }
+        
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        const toRemove = new Set(fillers.map(f => f.toLowerCase().trim()));
+        template.fillerWords = template.fillerWords.filter(f => !toRemove.has(f.toLowerCase().trim()));
+        await template.save();
+        
+        logger.info('Fillers removed from template', {
+            templateId: template._id,
+            removed: fillers.length,
+            remaining: template.fillerWords.length,
+            by: req.user?.username
+        });
+        
+        res.json({
+            success: true,
+            message: 'Filler words removed',
+            fillers: template.fillerWords,
+            count: template.fillerWords.length
+        });
+        
+    } catch (error) {
+        logger.error('Error removing fillers', { error: error.message });
+        res.status(500).json({ error: 'Failed to remove fillers' });
+    }
+});
+
+/**
+ * GET /api/admin/global-instant-responses/:id/categories/:categoryId/fillers
+ * Get all additional filler words for a category
+ */
+router.get('/:id/categories/:categoryId/fillers', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        const category = template.categories.id(req.params.categoryId);
+        if (!category) {
+            return res.status(404).json({ error: 'Category not found' });
+        }
+        
+        res.json({
+            success: true,
+            categoryId: category.id,
+            categoryName: category.name,
+            fillers: category.additionalFillerWords || [],
+            count: (category.additionalFillerWords || []).length,
+            effectiveCount: (template.fillerWords || []).length + (category.additionalFillerWords || []).length
+        });
+        
+    } catch (error) {
+        logger.error('Error fetching category fillers', { error: error.message });
+        res.status(500).json({ error: 'Failed to fetch category fillers' });
+    }
+});
+
+/**
+ * POST /api/admin/global-instant-responses/:id/categories/:categoryId/fillers
+ * Add filler words to a category
+ * Body: { fillers: ["word1", "word2"] }
+ */
+router.post('/:id/categories/:categoryId/fillers', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const { fillers } = req.body;
+        
+        if (!fillers || !Array.isArray(fillers)) {
+            return res.status(400).json({ error: 'fillers (array) is required' });
+        }
+        
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        const category = template.categories.id(req.params.categoryId);
+        if (!category) {
+            return res.status(404).json({ error: 'Category not found' });
+        }
+        
+        // Merge and deduplicate
+        const existing = category.additionalFillerWords || [];
+        const merged = [...new Set([
+            ...existing,
+            ...fillers.map(f => f.toLowerCase().trim())
+        ])];
+        
+        category.additionalFillerWords = merged;
+        await template.save();
+        
+        logger.info('Fillers added to category', {
+            templateId: template._id,
+            categoryId: category.id,
+            categoryName: category.name,
+            added: fillers.length,
+            total: merged.length,
+            by: req.user?.username
+        });
+        
+        res.json({
+            success: true,
+            message: 'Filler words added to category',
+            fillers: merged,
+            count: merged.length
+        });
+        
+    } catch (error) {
+        logger.error('Error adding category fillers', { error: error.message });
+        res.status(500).json({ error: 'Failed to add category fillers' });
+    }
+});
+
 module.exports = router;
 
