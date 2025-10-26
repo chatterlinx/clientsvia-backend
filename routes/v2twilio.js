@@ -12,6 +12,7 @@ logger.debug('🚀 [V2TWILIO] ========== LOADING v2twilio.js FILE ==========');
 const twilio = require('twilio');
 const Company = require('../models/v2Company');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
+const AdminSettings = require('../models/AdminSettings');
 const HybridScenarioSelector = require('../services/HybridScenarioSelector');
 const MatchDiagnostics = require('../services/MatchDiagnostics');
 // 🚀 V2 SYSTEM: Using V2 AI Agent Runtime instead of legacy agent.js
