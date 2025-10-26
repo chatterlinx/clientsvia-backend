@@ -42,6 +42,8 @@ const { enhanceTemplate } = require('../../services/globalAIBrainEnhancer');
 const logger = require('../../utils/logger');
 const PlaceholderScanService = require('../../services/PlaceholderScanService');
 const CacheHelper = require('../../utils/cacheHelper');
+const IntelligentPatternDetector = require('../../services/IntelligentPatternDetector');
+const SuggestionKnowledgeBase = require('../../models/SuggestionKnowledgeBase');
 
 // ============================================================================
 // MIDDLEWARE
@@ -3560,6 +3562,331 @@ router.post('/:id/categories/:categoryId/fillers', authenticateJWT, adminOnly, a
         res.status(500).json({ error: 'Failed to add category fillers' });
     }
 });
+
+// ============================================================================
+// 🧠 INTELLIGENT SUGGESTIONS API ROUTES
+// ============================================================================
+
+/**
+ * GET /api/admin/global-instant-responses/:id/suggestions
+ * Get all pending suggestions for a template
+ */
+router.get('/:id/suggestions', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const { status, type, priority, minConfidence } = req.query;
+        
+        const options = {};
+        if (type) options.type = type;
+        if (priority) options.priority = priority;
+        if (minConfidence) options.minConfidence = parseFloat(minConfidence);
+        
+        const suggestions = await SuggestionKnowledgeBase.getPendingSuggestions(
+            req.params.id,
+            options
+        );
+        
+        const summary = await SuggestionKnowledgeBase.getSummary(req.params.id);
+        
+        res.json({
+            success: true,
+            templateId: req.params.id,
+            suggestions,
+            summary,
+            count: suggestions.length
+        });
+        
+    } catch (error) {
+        logger.error('Error fetching suggestions', { error: error.message });
+        res.status(500).json({ error: 'Failed to fetch suggestions' });
+    }
+});
+
+/**
+ * POST /api/admin/global-instant-responses/:id/suggestions/:suggestionId/apply
+ * Apply a suggestion
+ */
+router.post('/:id/suggestions/:suggestionId/apply', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const suggestion = await SuggestionKnowledgeBase.findById(req.params.suggestionId);
+        if (!suggestion) {
+            return res.status(404).json({ error: 'Suggestion not found' });
+        }
+        
+        if (suggestion.templateId.toString() !== req.params.id) {
+            return res.status(400).json({ error: 'Suggestion does not belong to this template' });
+        }
+        
+        const result = await suggestion.apply(req.user._id);
+        
+        logger.info('Suggestion applied', {
+            suggestionId: suggestion._id,
+            type: suggestion.type,
+            templateId: req.params.id,
+            by: req.user?.username
+        });
+        
+        res.json({
+            success: true,
+            message: 'Suggestion applied successfully',
+            result
+        });
+        
+    } catch (error) {
+        logger.error('Error applying suggestion', { error: error.message });
+        res.status(500).json({ error: 'Failed to apply suggestion' });
+    }
+});
+
+/**
+ * POST /api/admin/global-instant-responses/:id/suggestions/:suggestionId/ignore
+ * Ignore a suggestion
+ */
+router.post('/:id/suggestions/:suggestionId/ignore', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const { reason } = req.body;
+        
+        const suggestion = await SuggestionKnowledgeBase.findById(req.params.suggestionId);
+        if (!suggestion) {
+            return res.status(404).json({ error: 'Suggestion not found' });
+        }
+        
+        if (suggestion.templateId.toString() !== req.params.id) {
+            return res.status(400).json({ error: 'Suggestion does not belong to this template' });
+        }
+        
+        suggestion.status = 'ignored';
+        suggestion.ignoredAt = new Date();
+        suggestion.ignoredBy = req.user._id;
+        suggestion.ignoredReason = reason || 'Not applicable';
+        await suggestion.save();
+        
+        logger.info('Suggestion ignored', {
+            suggestionId: suggestion._id,
+            type: suggestion.type,
+            templateId: req.params.id,
+            reason,
+            by: req.user?.username
+        });
+        
+        res.json({
+            success: true,
+            message: 'Suggestion ignored'
+        });
+        
+    } catch (error) {
+        logger.error('Error ignoring suggestion', { error: error.message });
+        res.status(500).json({ error: 'Failed to ignore suggestion' });
+    }
+});
+
+/**
+ * POST /api/admin/global-instant-responses/:id/suggestions/:suggestionId/dismiss
+ * Permanently dismiss a suggestion
+ */
+router.post('/:id/suggestions/:suggestionId/dismiss', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const suggestion = await SuggestionKnowledgeBase.findById(req.params.suggestionId);
+        if (!suggestion) {
+            return res.status(404).json({ error: 'Suggestion not found' });
+        }
+        
+        if (suggestion.templateId.toString() !== req.params.id) {
+            return res.status(400).json({ error: 'Suggestion does not belong to this template' });
+        }
+        
+        suggestion.status = 'dismissed';
+        await suggestion.save();
+        
+        logger.info('Suggestion dismissed', {
+            suggestionId: suggestion._id,
+            type: suggestion.type,
+            templateId: req.params.id,
+            by: req.user?.username
+        });
+        
+        res.json({
+            success: true,
+            message: 'Suggestion dismissed permanently'
+        });
+        
+    } catch (error) {
+        logger.error('Error dismissing suggestion', { error: error.message });
+        res.status(500).json({ error: 'Failed to dismiss suggestion' });
+    }
+});
+
+/**
+ * POST /api/admin/global-instant-responses/:id/analyze
+ * Trigger pattern analysis on test calls
+ * Body: { testCalls: [...] }
+ */
+router.post('/:id/analyze', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const { testCalls } = req.body;
+        
+        if (!testCalls || !Array.isArray(testCalls)) {
+            return res.status(400).json({ error: 'testCalls (array) is required' });
+        }
+        
+        const result = await IntelligentPatternDetector.analyzeTestCalls(
+            testCalls,
+            req.params.id
+        );
+        
+        logger.info('Pattern analysis complete', {
+            templateId: req.params.id,
+            callsAnalyzed: testCalls.length,
+            suggestionsGenerated: result.totalSuggestions,
+            by: req.user?.username
+        });
+        
+        res.json({
+            success: true,
+            message: 'Pattern analysis complete',
+            ...result
+        });
+        
+    } catch (error) {
+        logger.error('Error analyzing patterns', { error: error.message });
+        res.status(500).json({ error: 'Failed to analyze patterns' });
+    }
+});
+
+// ============================================================================
+// 📊 TEST REPORT EXPORT API
+// ============================================================================
+
+/**
+ * POST /api/admin/global-instant-responses/:id/test-report
+ * Generate a detailed test report (Markdown or JSON)
+ * Body: { testResults: {...}, format: 'markdown' | 'json' }
+ */
+router.post('/:id/test-report', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const { testResults, format } = req.body;
+        
+        if (!testResults) {
+            return res.status(400).json({ error: 'testResults is required' });
+        }
+        
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        if (format === 'json') {
+            // JSON format
+            const report = {
+                template: {
+                    id: template._id,
+                    name: template.name,
+                    version: template.version
+                },
+                generatedAt: new Date().toISOString(),
+                generatedBy: req.user?.username,
+                testResults,
+                summary: {
+                    totalTests: testResults.tests?.length || 0,
+                    passed: testResults.tests?.filter(t => t.matched).length || 0,
+                    failed: testResults.tests?.filter(t => !t.matched).length || 0,
+                    avgConfidence: testResults.tests?.reduce((sum, t) => sum + (t.confidence || 0), 0) / (testResults.tests?.length || 1)
+                }
+            };
+            
+            res.json({
+                success: true,
+                report,
+                format: 'json'
+            });
+            
+        } else {
+            // Markdown format
+            const report = generateMarkdownReport(template, testResults, req.user?.username);
+            
+            res.json({
+                success: true,
+                report,
+                format: 'markdown'
+            });
+        }
+        
+    } catch (error) {
+        logger.error('Error generating test report', { error: error.message });
+        res.status(500).json({ error: 'Failed to generate test report' });
+    }
+});
+
+/**
+ * Helper: Generate Markdown test report
+ */
+function generateMarkdownReport(template, testResults, username) {
+    const now = new Date().toISOString();
+    const tests = testResults.tests || [];
+    const passed = tests.filter(t => t.matched).length;
+    const failed = tests.filter(t => !t.matched).length;
+    const avgConfidence = tests.reduce((sum, t) => sum + (t.confidence || 0), 0) / (tests.length || 1);
+    
+    let markdown = `# 🧪 AI Test Report - ${template.name}\n\n`;
+    markdown += `**Generated:** ${now}  \n`;
+    markdown += `**Generated By:** ${username}  \n`;
+    markdown += `**Template ID:** ${template._id}  \n`;
+    markdown += `**Template Version:** ${template.version || 1}  \n\n`;
+    
+    markdown += `---\n\n`;
+    markdown += `## 📊 Test Summary\n\n`;
+    markdown += `| Metric | Value |\n`;
+    markdown += `|--------|-------|\n`;
+    markdown += `| Total Tests | ${tests.length} |\n`;
+    markdown += `| ✅ Passed | ${passed} (${((passed/tests.length)*100).toFixed(1)}%) |\n`;
+    markdown += `| ❌ Failed | ${failed} (${((failed/tests.length)*100).toFixed(1)}%) |\n`;
+    markdown += `| 📈 Avg Confidence | ${(avgConfidence * 100).toFixed(1)}% |\n\n`;
+    
+    if (failed > 0) {
+        markdown += `---\n\n`;
+        markdown += `## ❌ Failed Tests\n\n`;
+        
+        const failedTests = tests.filter(t => !t.matched);
+        failedTests.forEach((test, idx) => {
+            markdown += `### ${idx + 1}. ${test.phrase || 'Unknown phrase'}\n\n`;
+            markdown += `**Expected:** ${test.expectedScenario || 'N/A'}  \n`;
+            markdown += `**Actual:** ${test.matchedScenario || 'No match'}  \n`;
+            markdown += `**Confidence:** ${((test.confidence || 0) * 100).toFixed(1)}%  \n\n`;
+            
+            if (test.trace) {
+                markdown += `**Normalized Input:** \`${test.trace.normalizedPhrase || ''}\`  \n`;
+                markdown += `**Terms Extracted:** ${test.trace.phraseTerms?.length || 0}  \n\n`;
+            }
+        });
+    }
+    
+    markdown += `---\n\n`;
+    markdown += `## ✅ Passed Tests\n\n`;
+    
+    const passedTests = tests.filter(t => t.matched);
+    passedTests.forEach((test, idx) => {
+        markdown += `${idx + 1}. **${test.phrase?.substring(0, 60)}...** → ${test.matchedScenario} (${((test.confidence || 0) * 100).toFixed(0)}%)\n`;
+    });
+    
+    markdown += `\n---\n\n`;
+    markdown += `## 🔍 Recommendations\n\n`;
+    
+    if (failed > 0) {
+        markdown += `- **${failed} tests failed.** Review normalized inputs and add missing keywords.\n`;
+    }
+    
+    if (avgConfidence < 0.7) {
+        markdown += `- **Low average confidence (${(avgConfidence * 100).toFixed(1)}%).** Consider adding more keywords or synonyms.\n`;
+    }
+    
+    if (failed === 0 && avgConfidence >= 0.8) {
+        markdown += `- **🎉 Excellent performance!** All tests passed with high confidence.\n`;
+    }
+    
+    markdown += `\n---\n\n`;
+    markdown += `*Report generated by ClientsVia AI Testing System*\n`;
+    
+    return markdown;
+}
 
 module.exports = router;
 
