@@ -344,22 +344,34 @@ async function getCompanyByPhoneNumber(phoneNumber) {
       };
     }
     
-    // 🧠 CHECK 1: Is this a Global AI Brain test number?
-    logger.info(`[GLOBAL BRAIN CHECK] Checking if ${phoneNumber} is a test template...`);
-    const testTemplate = await GlobalInstantResponseTemplate.findOne({
-      'twilioTest.phoneNumber': phoneNumber,
-      'twilioTest.enabled': true
-    });
+    // 🧠 CHECK 1: Is this a Global AI Brain test number? (NEW: Global Config)
+    logger.info(`[GLOBAL BRAIN CHECK] Checking if ${phoneNumber} is the global test number...`);
     
-    if (testTemplate) {
-      logger.info(`🧠 [GLOBAL BRAIN] Test template found: ${testTemplate.name}`);
-      // Return a special "company" object that signals this is a test template
-      return {
-        isGlobalTestTemplate: true,
-        template: testTemplate,
-        _id: testTemplate._id,
-        name: testTemplate.name
-      };
+    // NEW: Check global AI Brain test config in AdminSettings
+    const adminSettings = await AdminSettings.getSettings();
+    const globalTestConfig = adminSettings?.globalAIBrainTest;
+    
+    if (globalTestConfig?.enabled && globalTestConfig.phoneNumber === phoneNumber) {
+      logger.info(`🧠 [GLOBAL BRAIN] Global test number matched! Loading active template...`);
+      
+      // Load the template that's currently being tested
+      const testTemplate = await GlobalInstantResponseTemplate.findById(
+        globalTestConfig.activeTemplateId
+      );
+      
+      if (testTemplate) {
+        logger.info(`✅ [GLOBAL BRAIN] Test routing to: ${testTemplate.name}`);
+        // Return a special "company" object that signals this is a test template
+        return {
+          isGlobalTestTemplate: true,
+          template: testTemplate,
+          _id: testTemplate._id,
+          name: testTemplate.name,
+          globalTestConfig: globalTestConfig // Include config for greeting, etc.
+        };
+      } else {
+        logger.warn(`⚠️ [GLOBAL BRAIN] activeTemplateId points to non-existent template: ${globalTestConfig.activeTemplateId}`);
+      }
     }
     
     // 🏢 CHECK 2: Regular company lookup
@@ -557,8 +569,8 @@ router.post('/voice', async (req, res) => {
       // Initialize selector with template scenarios
       const selector = new HybridScenarioSelector(company.template.categories);
       
-      // Greet the tester with custom greeting (replace {template_name} placeholder)
-      const rawGreeting = company.template.twilioTest?.greeting || 
+      // NEW: Greet the tester with custom greeting from GLOBAL config
+      const rawGreeting = company.globalTestConfig?.greeting || 
         'Welcome to the ClientsVia Global AI Brain Testing Center. You are currently testing the {template_name} template. Please ask questions or make statements to test the AI scenarios now.';
       const greeting = rawGreeting.replace('{template_name}', company.template.name);
       
