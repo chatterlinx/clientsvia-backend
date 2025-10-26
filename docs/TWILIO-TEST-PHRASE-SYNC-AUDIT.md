@@ -305,16 +305,48 @@ If issues persist after force refresh:
 
 ## ✅ Resolution Status
 
-- ✅ Redis type errors fixed (SmartCallFilter.js)
+- ✅ Redis type errors fixed (SmartCallFilter.js - Lines 279, 337)
 - ✅ Test phrase loading logic corrected (admin-global-instant-responses.html)
-- ✅ Twilio routing logic verified (v2twilio.js)
-- ⏳ **USER ACTION REQUIRED**: Force refresh browser to load new code
+- ✅ Twilio routing logic verified (v2twilio.js - Lines 333-375)
+- ✅ **NEW FIX**: test-respond endpoint now checks global config (v2twilio.js - Line 1621-1644)
+- ⏳ **USER ACTION REQUIRED**: Force refresh browser to load new code (frontend only)
 
-**Expected Outcome**: After force refresh, test phrase library will show the correct HVAC template phrases, and test calls will work perfectly.
+**Expected Outcome**: Test calls now work end-to-end. Both initial routing AND test phrase responses check the same global config.
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: October 26, 2025  
+## 🆕 Issue #3: test-respond Endpoint Bug (FIXED)
+
+**Discovered**: October 26, 2025 (12:43 PM)
+**Symptom**: "Test input not found or testing is disabled" message during test calls
+**Root Cause**: The `test-respond` endpoint (line 1621) was checking `template.twilioTest.enabled` (deprecated, per-template) instead of `AdminSettings.globalAIBrainTest.enabled` (global config).
+
+**The Disconnect**:
+```javascript
+// Initial call routing (v2twilio.js line 333-375)
+const adminSettings = await AdminSettings.getSettings();
+if (adminSettings.globalAIBrainTest.enabled) { ... } // ✅ Returns TRUE
+
+// Test phrase response (v2twilio.js line 1621 - OLD CODE)
+if (!template.twilioTest?.enabled) { ... } // ❌ Returns FALSE (deprecated field)
+```
+
+**The Fix**:
+```javascript
+// Test phrase response (v2twilio.js line 1621-1644 - NEW CODE)
+const adminSettings = await AdminSettings.getSettings();
+const globalTestEnabled = adminSettings?.globalAIBrainTest?.enabled || false;
+if (!globalTestEnabled) { 
+  twiml.say('Testing is currently disabled. Please enable it in the admin settings.');
+  // Clear error message
+}
+```
+
+**Impact**: Now BOTH endpoints check the SAME global config, ensuring consistent behavior.
+
+---
+
+**Document Version**: 1.1  
+**Last Updated**: October 26, 2025 (12:48 PM)  
 **Author**: AI Assistant (ClientsVia Platform)
 
