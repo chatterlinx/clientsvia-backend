@@ -32,18 +32,20 @@ class DependencyHealthMonitor {
                 mongoHealth,
                 redisHealth,
                 twilioHealth,
-                elevenLabsHealth
+                elevenLabsHealth,
+                openAIHealth
             ] = await Promise.all([
                 this.checkMongoDB(),
                 this.checkRedis(),
                 this.checkTwilio(),
-                this.checkElevenLabs()
+                this.checkElevenLabs(),
+                this.checkOpenAI()
             ]);
 
             const totalDuration = Date.now() - startTime;
 
             // Calculate overall status
-            const allServices = [mongoHealth, redisHealth, twilioHealth, elevenLabsHealth];
+            const allServices = [mongoHealth, redisHealth, twilioHealth, elevenLabsHealth, openAIHealth];
             const criticalDown = allServices.filter(s => s.status === 'DOWN' && s.critical).length;
             const anyDown = allServices.filter(s => s.status === 'DOWN' && s.critical !== false).length; // Exclude NOT_CONFIGURED
             const anyDegraded = allServices.filter(s => s.status === 'DEGRADED').length;
@@ -67,7 +69,8 @@ class DependencyHealthMonitor {
                     mongodb: mongoHealth,
                     redis: redisHealth,
                     twilio: twilioHealth,
-                    elevenLabs: elevenLabsHealth
+                    elevenLabs: elevenLabsHealth,
+                    openai: openAIHealth
                 },
                 summary: {
                     total: allServices.length,
@@ -424,6 +427,132 @@ class DependencyHealthMonitor {
     }
 
     // ========================================================================
+    // OPENAI (GPT-4) HEALTH CHECK - 3-Tier Intelligence System
+    // ========================================================================
+    async checkOpenAI() {
+        const startTime = Date.now();
+
+        try {
+            const apiKey = process.env.OPENAI_API_KEY;
+            const enabled3Tier = process.env.ENABLE_3_TIER_INTELLIGENCE === 'true';
+
+            // If 3-tier system is disabled, OpenAI is not critical
+            if (!enabled3Tier) {
+                return {
+                    name: 'OpenAI (GPT-4)',
+                    status: 'NOT_CONFIGURED',
+                    critical: false,
+                    message: '3-Tier Intelligence System disabled (feature flag off)',
+                    responseTime: Date.now() - startTime,
+                    details: {
+                        featureFlag: 'ENABLE_3_TIER_INTELLIGENCE=false',
+                        impact: 'Using Tier 1 (rule-based) only - no LLM needed'
+                    },
+                    note: 'System works perfectly without OpenAI when 3-tier is disabled'
+                };
+            }
+
+            // 3-tier enabled: OpenAI is CRITICAL
+            if (!apiKey) {
+                return {
+                    name: 'OpenAI (GPT-4)',
+                    status: 'DOWN',
+                    critical: true,  // CRITICAL when 3-tier is enabled!
+                    message: 'OPENAI_API_KEY not configured (3-Tier system enabled but missing key)',
+                    responseTime: Date.now() - startTime,
+                    missingVars: ['OPENAI_API_KEY'],
+                    impact: 'Tier 3 (LLM) unavailable - calls will fail when Tier 1/2 have low confidence',
+                    action: 'Set OPENAI_API_KEY in environment or disable 3-tier system'
+                };
+            }
+
+            // Verify API key format (basic check)
+            const validFormat = apiKey.startsWith('sk-') && apiKey.length > 40;
+
+            if (!validFormat) {
+                return {
+                    name: 'OpenAI (GPT-4)',
+                    status: 'DOWN',
+                    critical: true,
+                    message: 'Invalid OPENAI_API_KEY format (must start with sk- and be 40+ chars)',
+                    responseTime: Date.now() - startTime,
+                    impact: 'Tier 3 (LLM) unavailable',
+                    action: 'Get valid API key from https://platform.openai.com/api-keys'
+                };
+            }
+
+            // Test OpenAI connectivity with minimal ping
+            try {
+                // Use Tier3LLMFallback's health check method
+                const Tier3LLMFallback = require('./Tier3LLMFallback');
+                const testResult = await Tier3LLMFallback.healthCheck();
+                
+                const responseTime = Date.now() - startTime;
+
+                if (testResult.status === 'healthy') {
+                    return {
+                        name: 'OpenAI (GPT-4)',
+                        status: 'HEALTHY',
+                        critical: true,
+                        message: 'OpenAI API connected and operational',
+                        responseTime,
+                        details: {
+                            apiKey: `${apiKey.substring(0, 10)}...`,
+                            model: testResult.model || 'gpt-3.5-turbo',
+                            tier: 'Tier 3 (LLM Fallback)',
+                            featureFlag: 'ENABLE_3_TIER_INTELLIGENCE=true'
+                        },
+                        note: '3-Tier Intelligence System fully operational'
+                    };
+                } else {
+                    return {
+                        name: 'OpenAI (GPT-4)',
+                        status: 'DOWN',
+                        critical: true,
+                        message: `OpenAI API test failed: ${testResult.error || 'Unknown error'}`,
+                        responseTime,
+                        error: testResult.error,
+                        impact: 'Tier 3 (LLM) unavailable - self-improvement cycle broken',
+                        action: 'Check OpenAI API key validity and account status'
+                    };
+                }
+                
+            } catch (testError) {
+                const responseTime = Date.now() - startTime;
+                
+                // Check if it's an auth error vs network error
+                const isAuthError = testError.message?.includes('401') || testError.message?.includes('authentication');
+                
+                return {
+                    name: 'OpenAI (GPT-4)',
+                    status: 'DOWN',
+                    critical: true,
+                    message: isAuthError 
+                        ? 'OpenAI authentication failed (invalid API key)'
+                        : `OpenAI connection failed: ${testError.message}`,
+                    responseTime,
+                    error: testError.message,
+                    impact: 'Tier 3 (LLM) unavailable',
+                    action: isAuthError 
+                        ? 'Verify OPENAI_API_KEY is valid and active'
+                        : 'Check network connectivity to OpenAI API'
+                };
+            }
+
+        } catch (error) {
+            return {
+                name: 'OpenAI (GPT-4)',
+                status: 'DOWN',
+                critical: enabled3Tier === 'true',
+                message: `OpenAI check failed: ${error.message}`,
+                responseTime: Date.now() - startTime,
+                error: error.message,
+                impact: 'Unable to verify Tier 3 (LLM) availability'
+            };
+        }
+    }
+
+    // ========================================================================
     // GET DEPENDENCY STATUS - Quick status check for specific service
     // ========================================================================
     async getDependencyStatus(serviceName) {
@@ -437,6 +566,10 @@ class DependencyHealthMonitor {
                     return await this.checkTwilio();
                 case 'elevenlabs':
                     return await this.checkElevenLabs();
+                case 'openai':
+                case 'gpt':
+                case 'gpt-4':
+                    return await this.checkOpenAI();
                 default:
                     return {
                         name: serviceName,

@@ -31,6 +31,8 @@ const GlobalPattern = require('../../models/GlobalPattern');
 const Tier3LLMFallback = require('../../services/Tier3LLMFallback');
 const CostTrackingService = require('../../services/CostTrackingService');
 const PatternSharingService = require('../../services/PatternSharingService');
+const DependencyHealthMonitor = require('../../services/DependencyHealthMonitor');
+const AdminNotificationService = require('../../services/AdminNotificationService');
 const logger = require('../../utils/logger');
 
 // Middleware
@@ -136,6 +138,120 @@ router.post('/analyze', async (req, res) => {
         res.status(500).json({
             success: false,
             error: error.message
+        });
+    }
+});
+
+// ============================================================================
+// GET /api/admin/intelligence/openai-health
+// Test OpenAI Connection & Send Alert if Down
+// ============================================================================
+/**
+ * Test OpenAI connectivity and send notification if it's down
+ * Called from Global AI Brain UI "Test OpenAI" button
+ */
+router.get('/openai-health', async (req, res) => {
+    try {
+        logger.info('🏥 [OPENAI HEALTH] Testing OpenAI connection', {
+            user: req.user?.email || req.user?.username
+        });
+        
+        // Get OpenAI health status
+        const healthCheck = await DependencyHealthMonitor.checkOpenAI();
+        
+        // Determine if we should send an alert
+        const isDown = healthCheck.status === 'DOWN';
+        const isNotConfigured = healthCheck.status === 'NOT_CONFIGURED';
+        const isCritical = healthCheck.critical === true;
+        
+        // Send alert to Notification Center if down AND critical
+        if (isDown && isCritical) {
+            try {
+                await AdminNotificationService.sendAlert({
+                    code: 'DEPENDENCY_HEALTH_CRITICAL',
+                    severity: 'critical',
+                    title: '🚨 OpenAI (GPT-4) Connection Failed',
+                    message: `OpenAI API is DOWN and 3-Tier Intelligence System is ENABLED.\n\n` +
+                             `Error: ${healthCheck.message}\n\n` +
+                             `Impact: ${healthCheck.impact}\n\n` +
+                             `Action Required: ${healthCheck.action}\n\n` +
+                             `The self-improvement cycle is broken. Tier 3 (LLM) cannot learn new patterns until OpenAI is restored.`,
+                    details: {
+                        service: 'OpenAI',
+                        status: healthCheck.status,
+                        error: healthCheck.error,
+                        responseTime: healthCheck.responseTime,
+                        featureFlag: 'ENABLE_3_TIER_INTELLIGENCE=true',
+                        missingVars: healthCheck.missingVars,
+                        testedBy: req.user?.username || req.user?.email,
+                        testedAt: new Date().toISOString()
+                    }
+                });
+                
+                logger.warn('📢 [OPENAI HEALTH] Alert sent to Notification Center', {
+                    status: 'DOWN',
+                    critical: true
+                });
+            } catch (notifError) {
+                logger.error('❌ [OPENAI HEALTH] Failed to send notification', {
+                    error: notifError.message
+                });
+            }
+        } else if (healthCheck.status === 'HEALTHY') {
+            // OpenAI is healthy - log success
+            logger.info('✅ [OPENAI HEALTH] OpenAI connection successful', {
+                responseTime: `${healthCheck.responseTime}ms`,
+                model: healthCheck.details?.model
+            });
+        } else if (isNotConfigured) {
+            // 3-tier disabled - OpenAI not needed
+            logger.info('ℹ️ [OPENAI HEALTH] OpenAI not configured (3-tier disabled)', {
+                status: healthCheck.status
+            });
+        }
+        
+        // Return detailed status to frontend
+        res.json({
+            success: true,
+            health: {
+                status: healthCheck.status,
+                critical: healthCheck.critical,
+                message: healthCheck.message,
+                responseTime: healthCheck.responseTime,
+                details: healthCheck.details,
+                note: healthCheck.note,
+                impact: healthCheck.impact,
+                action: healthCheck.action,
+                error: healthCheck.error
+            },
+            alerts: {
+                sent: isDown && isCritical,
+                severity: isDown && isCritical ? 'critical' : 'none',
+                message: isDown && isCritical 
+                    ? 'Alert sent to Notification Center - OpenAI is down!'
+                    : healthCheck.status === 'HEALTHY'
+                    ? 'OpenAI is operational - no alerts needed'
+                    : '3-Tier system disabled - OpenAI not required'
+            },
+            recommendations: {
+                enable3Tier: !isNotConfigured && healthCheck.status === 'HEALTHY',
+                disable3Tier: isDown && isCritical,
+                addApiKey: healthCheck.missingVars?.includes('OPENAI_API_KEY'),
+                checkBilling: healthCheck.error?.includes('401') || healthCheck.error?.includes('authentication')
+            },
+            timestamp: new Date()
+        });
+        
+    } catch (error) {
+        logger.error('❌ [OPENAI HEALTH] Health check failed', {
+            error: error.message,
+            stack: error.stack
+        });
+        
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            message: 'Failed to check OpenAI health'
         });
     }
 });
