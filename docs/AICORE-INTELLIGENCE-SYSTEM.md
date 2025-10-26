@@ -1721,6 +1721,227 @@ redis-cli INFO stats | grep keyspace_hits
 
 ---
 
+## 10.5 SYNONYM & FILLER SYSTEM (NEW!)
+
+### What's New?
+
+As of January 2025, ClientsVia AI Core now includes a **world-class Synonym & Filler System** that dramatically improves match rates for non-technical customers.
+
+### The Problem It Solves
+
+**Before:**
+```
+Customer: "The thingy on the wall isn't working"
+AI: ❌ No match (doesn't understand "thingy")
+```
+
+**After (with synonyms):**
+```
+Customer: "The thingy on the wall isn't working"
+AI Translation: "thingy" → "thermostat"
+AI: ✅ Matches "Thermostat Not Working" scenario
+```
+
+### Key Features
+
+1. **🔤 Synonym Mapping:** Translate colloquial → technical terms
+2. **🔇 Filler Removal:** Strip noise words (um, uh, like) from input
+3. **🏗️ 3-Tier Inheritance:** Template → Category → Scenario
+4. **⚡ Quick Add Workflow:** Add fillers/synonyms without leaving scenario form
+5. **🍞 Toast Notifications:** Beautiful success/error feedback
+6. **📊 Real-time Updates:** Instant display refresh
+
+### How It Works
+
+#### Step 1: Define Synonyms
+
+**Template Level (Applies to ALL categories):**
+```javascript
+synonymMap: {
+  "air conditioner": ["ac", "a/c", "air", "cooling", "cold air"],
+  "furnace": ["heater", "heat", "heating", "hot air"],
+  "unit": ["system", "equipment", "machine"]
+}
+```
+
+**Category Level (Domain-specific):**
+```javascript
+// Category: "Thermostat Issues"
+synonymMap: {
+  "thermostat": ["thingy", "box on wall", "temperature thing", "dial"]
+}
+```
+
+#### Step 2: Runtime Processing
+
+```
+Caller Input:
+"Um, the thingy on the wall, like, isn't working"
+    ↓
+1. Synonym Translation:
+   "thingy" → "thermostat"
+   "Um, the thermostat on the wall, like, isn't working"
+    ↓
+2. Normalization:
+   Lowercase, remove punctuation
+   "um the thermostat on the wall like isnt working"
+    ↓
+3. Filler Removal:
+   Remove: um, like
+   "thermostat wall isnt working"
+    ↓
+4. Scenario Matching:
+   ✅ Matched "Thermostat Not Working" (score: 0.89)
+```
+
+### Where to Manage Synonyms & Fillers
+
+#### 1. Template Settings Tab
+
+**Location:** Global AI Brain → Settings Tab
+
+**Features:**
+- Add/remove template-level fillers
+- Add/remove template-level synonyms
+- Search fillers
+- Export/import synonyms (JSON)
+- Real-time counts
+
+**When to Use:**
+- Universal fillers ("um", "uh", "like")
+- Industry-standard abbreviations ("ac" → "air conditioner")
+- Terms used across ALL categories
+
+#### 2. Category Modal
+
+**Location:** Dashboard → Edit Category
+
+**Features:**
+- Additional category-specific fillers
+- Domain-specific synonyms
+- Inheritance visualization
+- Extends template settings
+
+**When to Use:**
+- Domain-specific slang ("thingy" → "thermostat")
+- Category-specific noise words
+- Technical terms unique to one domain
+
+#### 3. Scenario Form - Inherited Configuration
+
+**Location:** Add/Edit Scenario → Inherited Configuration Section
+
+**Features:**
+- Read-only display of effective fillers/synonyms
+- See merged template + category settings
+- Quick Add buttons (NEW!)
+- Instant refresh after changes
+
+**Workflow:**
+1. Open scenario form
+2. See inherited config
+3. Notice missing synonym
+4. Click "Quick Add" button
+5. Enter synonym → Save
+6. See instant update!
+
+### Quick Add Workflow (NEW!)
+
+The **Quick Add** feature lets you add fillers/synonyms **without leaving the scenario form**!
+
+**Example:**
+```
+1. Editing scenario
+2. See inherited config:
+   - Fillers: um, uh, like [Quick Add]
+   - Synonyms: ac→air conditioner [Quick Add]
+3. Click [Quick Add] (purple button)
+4. Quick Add Synonym Modal opens
+5. Select scope:
+   - 🌐 Template (All Categories)
+   - 📁 Category (This Category Only)
+6. Enter:
+   - Technical: "thermostat"
+   - Colloquial: "thingy, box on wall, dial"
+7. Click [Add Synonym]
+8. Toast notification: "Added synonym!"
+9. Inherited config auto-refreshes
+10. Continue editing (no page reload!)
+```
+
+### Best Practices
+
+#### Synonyms
+
+**✅ GOOD:**
+```javascript
+{
+  "thermostat": ["thingy", "box on wall", "temperature thing", "dial"],
+  "air conditioner": ["ac", "a/c", "air", "cooling system"]
+}
+```
+
+**❌ BAD:**
+```javascript
+{
+  "thermostat": ["thing"],  // Too vague
+  "air conditioner": ["it"]  // Ambiguous
+}
+```
+
+#### Fillers
+
+**✅ GOOD:**
+- Vocal fillers: um, uh, er, ah
+- Discourse markers: like, you know, so, well
+- Hedges: basically, literally, actually
+
+**❌ BAD:**
+- Content words: broken, working, hot
+- Negations: not, no, never (changes meaning!)
+
+### Integration with HybridScenarioSelector
+
+The synonym/filler system is **deeply integrated** into the AI matching pipeline:
+
+```javascript
+// services/HybridScenarioSelector.js
+class HybridScenarioSelector {
+    constructor(fillerWordsArray, urgencyKeywordsArray, synonymMapObject) {
+        this.fillerWords = new Set(fillerWordsArray);
+        this.synonymMap = new Map(synonymMapObject);
+    }
+    
+    normalizePhrase(phrase) {
+        // Stage 1: Synonym translation
+        let processed = this.applySynonymTranslation(phrase);
+        
+        // Stage 2: Standard normalization
+        processed = processed.toLowerCase().trim();
+        
+        // Stage 3: Filler removal
+        processed = this.removeFillerWords(processed);
+        
+        return processed;
+    }
+}
+```
+
+### Complete Documentation
+
+For **complete architecture documentation**, see:
+
+📄 **`/docs/SYNONYM-FILLER-SYSTEM-ARCHITECTURE.md`**
+
+This includes:
+- Full API reference
+- UI component details
+- Troubleshooting guide
+- Code examples
+- Data flow diagrams
+
+---
+
 ## 11. FUTURE ENHANCEMENTS
 
 ### 11.1 Planned Features
@@ -1741,16 +1962,22 @@ redis-cli INFO stats | grep keyspace_hits
 **AiCore:** The intelligence system (templates, scenarios, variables, knowledge)  
 **Behavior:** AI personality settings (tone, pace, volume, emotion)  
 **Category:** Logical grouping of related scenarios (Greetings, Booking, Emergency)  
+**Colloquial Term:** Slang or non-technical term customers use (e.g., "thingy", "box on wall")  
 **Company Q&A:** Per-company custom knowledge base  
 **Entity:** Data extracted from speech (name, phone, date, etc.)  
 **Filler Words:** Noise words removed before matching (um, uh, like, etc.)  
 **Global AI Brain:** Platform-wide template library (admin-managed)  
 **Hybrid Selector:** Matching algorithm (BM25 + Semantic + Regex + Context)  
+**Inherited Configuration:** Merged fillers/synonyms from template + category displayed in scenario form  
 **Negative Trigger:** Phrase that prevents scenario from matching  
 **Priority:** Tie-breaker value (-10 to +100) when multiple scenarios score equally  
+**Quick Add:** Feature to add fillers/synonyms without leaving scenario form  
 **Scenario:** Single conversation unit (triggers → response)  
+**Synonym Map:** Technical term → colloquial aliases mapping (e.g., "thermostat" → ["thingy", "box on wall"])  
+**Technical Term:** Formal/correct term used in scenarios (e.g., "thermostat", "air conditioner")  
 **Template:** Industry-specific intelligence package (collection of categories/scenarios)  
 **Template Reference:** Company's link to Global AI Brain template (not a clone)  
+**3-Tier Inheritance:** System where scenarios inherit fillers/synonyms from template and category  
 **Trigger Phrase:** Phrase that activates a scenario  
 **Urgency Keyword:** Word that boosts emergency detection (emergency, urgent, leak)  
 **Variable:** Dynamic placeholder replaced with company-specific data ({{companyName}})  
