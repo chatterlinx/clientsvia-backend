@@ -2398,9 +2398,197 @@
                         Intelligence Dashboard
                     </h2>
                     <p class="text-purple-100">
-                        AI-powered optimization suggestions based on test call pattern analysis
+                        Monitor 3-Tier AI system performance, costs, and self-improvement metrics
                     </p>
                 </div>
+                
+                <!-- 3-TIER INTELLIGENCE ANALYTICS SECTION -->
+                <div class="bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-xl p-6 shadow-lg">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 class="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                                <i class="fas fa-layer-group text-indigo-600"></i>
+                                3-Tier Intelligence System
+                            </h3>
+                            <p class="text-sm text-gray-600 mt-1">
+                                Real-time analytics for rule-based, semantic, and LLM fallback routing
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div id="tier-system-status" class="px-4 py-2 bg-gray-200 text-gray-600 rounded-lg font-semibold text-sm">
+                                <i class="fas fa-circle-notch fa-spin mr-2"></i>Loading...
+                            </div>
+                            <button onclick="refreshIntelligenceMetrics()" 
+                                    id="refresh-intelligence-btn"
+                                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-all flex items-center gap-2 text-sm shadow-md hover:shadow-lg">
+                                <i class="fas fa-sync-alt"></i>
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Tier Distribution Stats -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                        <!-- Tier 1 Stats -->
+                        <div class="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2 py-1 bg-green-500 text-white text-xs rounded font-bold">TIER 1</span>
+                                    <span class="text-sm font-semibold text-green-900">Rule-Based</span>
+                                </div>
+                                <i class="fas fa-bolt text-2xl text-green-400"></i>
+                            </div>
+                            <div class="flex items-baseline gap-2">
+                                <p id="tier1-count" class="text-3xl font-bold text-green-700">0</p>
+                                <p id="tier1-percentage" class="text-sm text-green-600 font-semibold">(0%)</p>
+                            </div>
+                            <p class="text-xs text-green-600 mt-1">Free • Instant</p>
+                        </div>
+                        
+                        <!-- Tier 2 Stats -->
+                        <div class="bg-gradient-to-br from-blue-50 to-sky-50 border-2 border-blue-200 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2 py-1 bg-blue-500 text-white text-xs rounded font-bold">TIER 2</span>
+                                    <span class="text-sm font-semibold text-blue-900">Semantic</span>
+                                </div>
+                                <i class="fas fa-project-diagram text-2xl text-blue-400"></i>
+                            </div>
+                            <div class="flex items-baseline gap-2">
+                                <p id="tier2-count" class="text-3xl font-bold text-blue-700">0</p>
+                                <p id="tier2-percentage" class="text-sm text-blue-600 font-semibold">(0%)</p>
+                            </div>
+                            <p class="text-xs text-blue-600 mt-1">Free • Fast</p>
+                        </div>
+                        
+                        <!-- Tier 3 Stats -->
+                        <div class="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2 py-1 bg-purple-500 text-white text-xs rounded font-bold">TIER 3</span>
+                                    <span class="text-sm font-semibold text-purple-900">LLM</span>
+                                </div>
+                                <i class="fas fa-brain text-2xl text-purple-400"></i>
+                            </div>
+                            <div class="flex items-baseline gap-2">
+                                <p id="tier3-count" class="text-3xl font-bold text-purple-700">0</p>
+                                <p id="tier3-percentage" class="text-sm text-purple-600 font-semibold">(0%)</p>
+                            </div>
+                            <p class="text-xs text-purple-600 mt-1">Paid • Learns</p>
+                        </div>
+                        
+                        <!-- Total Calls -->
+                        <div class="bg-gradient-to-br from-gray-50 to-slate-50 border-2 border-gray-200 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-semibold text-gray-900">Total Calls</span>
+                                <i class="fas fa-phone text-2xl text-gray-400"></i>
+                            </div>
+                            <div class="flex items-baseline gap-2">
+                                <p id="total-calls-count" class="text-3xl font-bold text-gray-700">0</p>
+                            </div>
+                            <p class="text-xs text-gray-600 mt-1">Last 30 days</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Cost & Learning Metrics -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <!-- Monthly Cost -->
+                        <div class="bg-white border-2 border-gray-200 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-semibold text-gray-700">Monthly LLM Cost</span>
+                                <i class="fas fa-dollar-sign text-xl text-yellow-500"></i>
+                            </div>
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-2xl font-bold text-gray-900">$</span>
+                                <p id="monthly-cost" class="text-3xl font-bold text-gray-900">0.00</p>
+                            </div>
+                            <div class="flex items-center gap-2 mt-2">
+                                <div id="cost-budget-bar" class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div id="cost-budget-fill" class="h-full bg-yellow-500" style="width: 0%"></div>
+                                </div>
+                                <span id="cost-budget-text" class="text-xs text-gray-600">of $500</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Patterns Learned -->
+                        <div class="bg-white border-2 border-gray-200 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-semibold text-gray-700">Patterns Learned</span>
+                                <i class="fas fa-graduation-cap text-xl text-green-500"></i>
+                            </div>
+                            <div class="flex items-baseline gap-2">
+                                <p id="patterns-learned-count" class="text-3xl font-bold text-gray-900">0</p>
+                                <span class="text-sm text-green-600 font-semibold" id="patterns-learned-change">+0</span>
+                            </div>
+                            <p class="text-xs text-gray-600 mt-2">Auto-applied to Tier 1</p>
+                        </div>
+                        
+                        <!-- Self-Improvement Score -->
+                        <div class="bg-white border-2 border-gray-200 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-semibold text-gray-700">Self-Improvement</span>
+                                <i class="fas fa-chart-line text-xl text-blue-500"></i>
+                            </div>
+                            <div class="flex items-baseline gap-2">
+                                <p id="self-improvement-score" class="text-3xl font-bold text-gray-900">0</p>
+                                <span class="text-sm text-gray-600">%</span>
+                            </div>
+                            <p class="text-xs text-gray-600 mt-2">Tier 1 improvement rate</p>
+                        </div>
+                    </div>
+                    
+                    <!-- ROI Insight -->
+                    <div id="roi-insight-container" class="bg-white border-2 border-blue-200 rounded-lg p-4 mb-6 hidden">
+                        <div class="flex items-start gap-3">
+                            <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <i class="fas fa-lightbulb text-blue-600 text-xl"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h4 class="font-semibold text-gray-900 mb-1">💡 ROI Insight</h4>
+                                <p id="roi-insight-text" class="text-sm text-gray-700"></p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Recent LLM Calls Log -->
+                    <div class="bg-white border-2 border-gray-200 rounded-lg overflow-hidden">
+                        <div class="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                            <h4 class="font-semibold text-gray-900 flex items-center gap-2">
+                                <i class="fas fa-history text-purple-600"></i>
+                                Recent LLM Calls (Tier 3)
+                            </h4>
+                            <button onclick="loadDetailedLLMLog()" 
+                                    class="text-sm text-indigo-600 hover:text-indigo-800 font-semibold">
+                                View All →
+                            </button>
+                        </div>
+                        <div id="llm-calls-log" class="divide-y divide-gray-200">
+                            <!-- Loading skeleton -->
+                            <div class="p-4 animate-pulse">
+                                <div class="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                                <div class="h-3 bg-gray-200 rounded w-1/2"></div>
+                            </div>
+                            <div class="p-4 animate-pulse">
+                                <div class="h-4 bg-gray-200 rounded w-2/3 mb-2"></div>
+                                <div class="h-3 bg-gray-200 rounded w-1/3"></div>
+                            </div>
+                        </div>
+                        <div id="llm-calls-empty" class="hidden p-6 text-center text-gray-500">
+                            <i class="fas fa-inbox text-3xl text-gray-300 mb-2"></i>
+                            <p class="text-sm">No LLM calls recorded yet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pattern Analysis Suggestions -->
+                <div class="bg-white border-2 border-gray-200 rounded-xl p-6 shadow-sm">
+                    <h3 class="text-xl font-bold text-gray-900 flex items-center gap-3 mb-4">
+                        <i class="fas fa-lightbulb text-yellow-500"></i>
+                        Optimization Suggestions
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-6">
+                        AI-powered suggestions for improving scenario matching based on test call pattern analysis
+                    </p>
 
                 <!-- Stats Bar -->
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -14058,6 +14246,198 @@ async function testOpenAIConnection() {
 }
 
 // ============================================
+// INTELLIGENCE ANALYTICS DASHBOARD
+// ============================================
+
+/**
+ * Load Intelligence Metrics for current template
+ */
+async function loadIntelligenceMetrics() {
+    if (!activeTemplate || !activeTemplate._id) {
+        console.warn('⚠️ [INTELLIGENCE] No active template selected');
+        return;
+    }
+    
+    console.log('📊 [INTELLIGENCE] Loading metrics for template:', activeTemplate._id);
+    
+    try {
+        const token = localStorage.getItem('adminToken');
+        if (!token) {
+            throw new Error('Not authenticated');
+        }
+        
+        // Check if 3-tier system is enabled
+        const response = await fetch(`/api/admin/intelligence/metrics/${activeTemplate._id}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const metrics = await response.json();
+        console.log('✅ [INTELLIGENCE] Metrics loaded:', metrics);
+        
+        // Update system status badge
+        const statusBadge = document.getElementById('tier-system-status');
+        if (metrics.enabled) {
+            statusBadge.className = 'px-4 py-2 bg-green-500 text-white rounded-lg font-semibold text-sm';
+            statusBadge.innerHTML = '<i class="fas fa-check-circle mr-2"></i>3-Tier Enabled';
+        } else {
+            statusBadge.className = 'px-4 py-2 bg-gray-400 text-white rounded-lg font-semibold text-sm';
+            statusBadge.innerHTML = '<i class="fas fa-power-off mr-2"></i>3-Tier Disabled';
+        }
+        
+        // Update tier distribution stats
+        const tierDist = metrics.tierDistribution || { tier1: 0, tier2: 0, tier3: 0, total: 0 };
+        const total = tierDist.total || 0;
+        
+        document.getElementById('tier1-count').textContent = tierDist.tier1 || 0;
+        document.getElementById('tier1-percentage').textContent = total > 0 ? `(${Math.round((tierDist.tier1 / total) * 100)}%)` : '(0%)';
+        
+        document.getElementById('tier2-count').textContent = tierDist.tier2 || 0;
+        document.getElementById('tier2-percentage').textContent = total > 0 ? `(${Math.round((tierDist.tier2 / total) * 100)}%)` : '(0%)';
+        
+        document.getElementById('tier3-count').textContent = tierDist.tier3 || 0;
+        document.getElementById('tier3-percentage').textContent = total > 0 ? `(${Math.round((tierDist.tier3 / total) * 100)}%)` : '(0%)';
+        
+        document.getElementById('total-calls-count').textContent = total;
+        
+        // Update cost metrics
+        const costData = metrics.costs || { thisMonth: 0, budget: 500 };
+        document.getElementById('monthly-cost').textContent = costData.thisMonth.toFixed(2);
+        document.getElementById('cost-budget-text').textContent = `of $${costData.budget}`;
+        
+        const costPercentage = costData.budget > 0 ? (costData.thisMonth / costData.budget) * 100 : 0;
+        const costFill = document.getElementById('cost-budget-fill');
+        costFill.style.width = `${Math.min(costPercentage, 100)}%`;
+        
+        // Color code based on budget usage
+        if (costPercentage >= 90) {
+            costFill.className = 'h-full bg-red-500';
+        } else if (costPercentage >= 70) {
+            costFill.className = 'h-full bg-yellow-500';
+        } else {
+            costFill.className = 'h-full bg-green-500';
+        }
+        
+        // Update learning metrics
+        const learningData = metrics.learning || { patternsLearned: 0, changeThisWeek: 0, selfImprovementScore: 0 };
+        document.getElementById('patterns-learned-count').textContent = learningData.patternsLearned || 0;
+        document.getElementById('patterns-learned-change').textContent = `+${learningData.changeThisWeek || 0}`;
+        document.getElementById('self-improvement-score').textContent = learningData.selfImprovementScore || 0;
+        
+        // Show ROI insight if available
+        if (metrics.roiInsight) {
+            document.getElementById('roi-insight-text').textContent = metrics.roiInsight;
+            document.getElementById('roi-insight-container').classList.remove('hidden');
+        } else {
+            document.getElementById('roi-insight-container').classList.add('hidden');
+        }
+        
+        // Load recent LLM calls
+        loadRecentLLMCalls(metrics.recentLLMCalls || []);
+        
+    } catch (error) {
+        console.error('❌ [INTELLIGENCE] Failed to load metrics:', error);
+        
+        // Show error state
+        const statusBadge = document.getElementById('tier-system-status');
+        statusBadge.className = 'px-4 py-2 bg-red-500 text-white rounded-lg font-semibold text-sm';
+        statusBadge.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Error Loading';
+    }
+}
+
+/**
+ * Load Recent LLM Calls into the log table
+ */
+function loadRecentLLMCalls(calls) {
+    const logContainer = document.getElementById('llm-calls-log');
+    const emptyState = document.getElementById('llm-calls-empty');
+    
+    if (!calls || calls.length === 0) {
+        logContainer.classList.add('hidden');
+        emptyState.classList.remove('hidden');
+        return;
+    }
+    
+    logContainer.classList.remove('hidden');
+    emptyState.classList.add('hidden');
+    
+    logContainer.innerHTML = calls.map(call => {
+        const timestamp = new Date(call.timestamp).toLocaleString();
+        const cost = call.cost?.tier3 || 0;
+        const patternsLearned = call.patternsLearned?.length || 0;
+        
+        let statusBadge = '';
+        if (call.status === 'success') {
+            statusBadge = '<span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded font-semibold">Success</span>';
+        } else if (call.status === 'no_match') {
+            statusBadge = '<span class="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded font-semibold">No Match</span>';
+        } else if (call.status === 'error') {
+            statusBadge = '<span class="px-2 py-1 bg-red-100 text-red-700 text-xs rounded font-semibold">Error</span>';
+        } else {
+            statusBadge = '<span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded font-semibold">Fallback</span>';
+        }
+        
+        return `
+            <div class="p-4 hover:bg-gray-50 transition-colors">
+                <div class="flex items-start justify-between mb-2">
+                    <div class="flex-1">
+                        <p class="text-sm font-medium text-gray-900 line-clamp-1">${call.callerInput || 'N/A'}</p>
+                        <div class="flex items-center gap-3 mt-1 text-xs text-gray-600">
+                            <span><i class="far fa-clock mr-1"></i>${timestamp}</span>
+                            <span><i class="fas fa-dollar-sign mr-1 text-yellow-600"></i>$${cost.toFixed(4)}</span>
+                            ${patternsLearned > 0 ? `<span><i class="fas fa-graduation-cap mr-1 text-green-600"></i>${patternsLearned} patterns</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="ml-4 flex flex-col items-end gap-2">
+                        ${statusBadge}
+                        ${call.matchedScenarioName ? `<span class="text-xs text-gray-500">${call.matchedScenarioName}</span>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+/**
+ * Refresh Intelligence Metrics
+ */
+async function refreshIntelligenceMetrics() {
+    const btn = document.getElementById('refresh-intelligence-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+    
+    try {
+        await loadIntelligenceMetrics();
+        
+        if (typeof ToastManager !== 'undefined') {
+            ToastManager.success('Intelligence metrics refreshed!');
+        }
+    } catch (error) {
+        console.error('❌ [INTELLIGENCE] Refresh failed:', error);
+        if (typeof ToastManager !== 'undefined') {
+            ToastManager.error(`Failed to refresh: ${error.message}`);
+        }
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+    }
+}
+
+/**
+ * Load Detailed LLM Call Log (future enhancement)
+ */
+function loadDetailedLLMLog() {
+    alert('📊 Detailed LLM Call Log\n\nThis feature will open a full-screen modal with:\n• Complete call history\n• Advanced filtering\n• Export to CSV\n• Cost breakdown by scenario\n\nComing soon!');
+}
+
+// ============================================
 // AI LEARNING SETTINGS
 // ============================================
 
@@ -14287,6 +14667,14 @@ function switchTab(tabName) {
     
     // Load data for specific tabs
     if (tabName === 'intelligence') {
+        // Load 3-tier intelligence metrics
+        if (typeof loadIntelligenceMetrics === 'function') {
+            console.log('📊 [INTELLIGENCE] Loading metrics...');
+            loadIntelligenceMetrics();
+        } else {
+            console.warn('⚠️ [INTELLIGENCE] loadIntelligenceMetrics function not found');
+        }
+        
         // Load suggestions when Intelligence tab is opened
         if (typeof loadSuggestions === 'function') {
             console.log('📊 [INTELLIGENCE] Loading suggestions...');
