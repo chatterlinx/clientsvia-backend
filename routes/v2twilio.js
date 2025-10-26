@@ -14,6 +14,7 @@ const Company = require('../models/v2Company');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const AdminSettings = require('../models/AdminSettings');
 const HybridScenarioSelector = require('../services/HybridScenarioSelector');
+const IntelligentRouter = require('../services/IntelligentRouter');  // 🧠 3-Tier Self-Improvement System
 const MatchDiagnostics = require('../services/MatchDiagnostics');
 // 🚀 V2 SYSTEM: Using V2 AI Agent Runtime instead of legacy agent.js
 const { initializeCall, processUserInput } = require('../services/v2AIAgentRuntime');
@@ -28,6 +29,23 @@ const { redisClient } = require('../clients');
 const { normalizePhoneNumber, extractDigits, numbersMatch, } = require('../utils/phone');
 const { stripMarkdown, cleanTextForTTS } = require('../utils/textUtils');
 // Legacy personality system removed - using modern AI Agent Logic responseCategories
+
+// ============================================================================
+// 🧠 3-TIER SELF-IMPROVEMENT SYSTEM CONFIGURATION
+// ============================================================================
+// Feature flag to enable/disable the 3-tier intelligence system (Tier 1 → 2 → 3)
+// When enabled: Calls route through IntelligentRouter for self-improvement cycle
+// When disabled: Falls back to traditional HybridScenarioSelector (Tier 1 only)
+// Default: FALSE for safe rollout, set ENABLE_3_TIER_INTELLIGENCE=true to activate
+// ============================================================================
+const ENABLE_3_TIER_INTELLIGENCE = process.env.ENABLE_3_TIER_INTELLIGENCE === 'true';
+
+if (ENABLE_3_TIER_INTELLIGENCE) {
+  logger.info('🧠 [3-TIER SYSTEM] ENABLED - Self-improvement cycle active');
+  logger.info('🧠 [3-TIER SYSTEM] Calls will route: Tier 1 (rule) → Tier 2 (semantic) → Tier 3 (LLM)');
+} else {
+  logger.info('🧠 [3-TIER SYSTEM] DISABLED - Using traditional Tier 1 only');
+}
 
 const router = express.Router();
 logger.info('🚀 [V2TWILIO] ========== EXPRESS ROUTER CREATED ==========');
@@ -1742,26 +1760,110 @@ router.post('/test-respond/:templateId', async (req, res) => {
     const urgencyKeywords = template.urgencyKeywords || [];
     logger.debug(`🧠 [CHECKPOINT 4] Effective fillers: ${effectiveFillers.length} (template: ${templateFillers.length}), Urgency keywords: ${urgencyKeywords.length}, Synonym terms: ${effectiveSynonymMap.size}`);
     
-    // Initialize selector with merged fillers, urgency keywords, and synonym map
-    const selector = new HybridScenarioSelector(effectiveFillers, urgencyKeywords, effectiveSynonymMap);
-    logger.debug(`🧠 [CHECKPOINT 4] ✅ Selector initialized with ${effectiveFillers.length} filler words, ${urgencyKeywords.length} urgency keywords, and ${effectiveSynonymMap.size} synonym mappings`);
+    // ============================================================================
+    // 🧠 3-TIER INTELLIGENCE ROUTING
+    // ============================================================================
+    // Route through IntelligentRouter (Tier 1 → 2 → 3) if enabled
+    // Otherwise, use traditional HybridScenarioSelector (Tier 1 only)
+    // ============================================================================
     
-    logger.debug(`🧠 [CHECKPOINT 5] Running scenario matching...`);
-    logger.debug(`🧠 [CHECKPOINT 5] Extracting scenarios from ${template.categories.length} categories...`);
+    let result;
+    let tierUsed = 1;  // Track which tier was used
+    let routingDetails = {};  // Store routing metadata
     
-    // Extract all scenarios from categories
-    const allScenarios = [];
-    template.categories.forEach(category => {
-      if (category.scenarios && Array.isArray(category.scenarios)) {
-        allScenarios.push(...category.scenarios);
+    if (ENABLE_3_TIER_INTELLIGENCE) {
+      logger.info('🧠 [3-TIER ROUTING] Starting intelligent cascade (Tier 1 → 2 → 3)');
+      
+      // Route through 3-tier system
+      const routingResult = await IntelligentRouter.route({
+        callerInput: speechText,
+        template,
+        company: null,  // Test mode (no company context)
+        callId: `test-${templateId}-${Date.now()}`,
+        context: {
+          testMode: true,
+          templateId,
+          timestamp: new Date()
+        }
+      });
+      
+      if (routingResult.success && routingResult.matched) {
+        // ✅ Match found via 3-tier system
+        tierUsed = routingResult.tierUsed;
+        result = {
+          scenario: routingResult.scenario,
+          confidence: routingResult.confidence,
+          match: routingResult.scenario,
+          score: routingResult.confidence
+        };
+        
+        routingDetails = {
+          tierUsed,
+          tier1Confidence: routingResult.tier1Result?.confidence || 0,
+          tier2Confidence: routingResult.tier2Result?.confidence || 0,
+          tier3Confidence: routingResult.tier3Result?.confidence || 0,
+          cost: routingResult.cost?.total || 0,
+          responseTime: routingResult.performance?.totalTime || 0,
+          patternsLearned: routingResult.patternsLearned?.length || 0
+        };
+        
+        logger.info(`🧠 [3-TIER ROUTING] ✅ MATCH FOUND via Tier ${tierUsed}`);
+        logger.info(`🧠 [3-TIER ROUTING] Scenario: ${result.scenario?.name}`);
+        logger.info(`🧠 [3-TIER ROUTING] Confidence: ${(result.confidence * 100).toFixed(1)}%`);
+        logger.info(`🧠 [3-TIER ROUTING] Cost: $${routingDetails.cost.toFixed(4)}`);
+        logger.info(`🧠 [3-TIER ROUTING] Response Time: ${routingDetails.responseTime}ms`);
+        
+        if (tierUsed === 3 && routingDetails.patternsLearned > 0) {
+          logger.info(`🧠 [3-TIER LEARNING] 🎓 Learned ${routingDetails.patternsLearned} pattern(s) - Next call will be FREE!`);
+        }
+        
+      } else {
+        // ❌ No match even after all 3 tiers
+        logger.warn(`🧠 [3-TIER ROUTING] ⚠️ NO MATCH after all 3 tiers`);
+        logger.warn(`🧠 [3-TIER ROUTING] Tier 1: ${(routingResult.tier1Result?.confidence * 100 || 0).toFixed(1)}%`);
+        logger.warn(`🧠 [3-TIER ROUTING] Tier 2: ${(routingResult.tier2Result?.confidence * 100 || 0).toFixed(1)}%`);
+        logger.warn(`🧠 [3-TIER ROUTING] Tier 3: ${(routingResult.tier3Result?.confidence * 100 || 0).toFixed(1)}%`);
+        
+        result = {
+          scenario: null,
+          confidence: routingResult.confidence || 0,
+          match: null,
+          score: 0
+        };
+        
+        tierUsed = routingResult.tierUsed || 3;
+        routingDetails = {
+          tierUsed,
+          allTiersFailed: true,
+          cost: routingResult.cost?.total || 0
+        };
       }
-    });
-    
-    logger.info(`🧠 [CHECKPOINT 5] Total scenarios to match: ${allScenarios.length}`);
-    const result = await selector.selectScenario(speechText, allScenarios);
-    logger.info(`🧠 [CHECKPOINT 5] ✅ Matching complete`);
-    logger.info(`🧠 [CHECKPOINT 5] Match found: ${Boolean(result.match)}`);
-    logger.info(`🧠 [CHECKPOINT 5] Confidence: ${(result.confidence * 100).toFixed(1)}%`);
+      
+    } else {
+      // Traditional Tier 1 only (HybridScenarioSelector)
+      logger.debug(`🧠 [CHECKPOINT 4] Initializing HybridScenarioSelector (Tier 1 only)...`);
+      
+      // Initialize selector with merged fillers, urgency keywords, and synonym map
+      const selector = new HybridScenarioSelector(effectiveFillers, urgencyKeywords, effectiveSynonymMap);
+      logger.debug(`🧠 [CHECKPOINT 4] ✅ Selector initialized with ${effectiveFillers.length} filler words, ${urgencyKeywords.length} urgency keywords, and ${effectiveSynonymMap.size} synonym mappings`);
+      
+      logger.debug(`🧠 [CHECKPOINT 5] Running scenario matching...`);
+      logger.debug(`🧠 [CHECKPOINT 5] Extracting scenarios from ${template.categories.length} categories...`);
+      
+      // Extract all scenarios from categories
+      const allScenarios = [];
+      template.categories.forEach(category => {
+        if (category.scenarios && Array.isArray(category.scenarios)) {
+          allScenarios.push(...category.scenarios);
+        }
+      });
+      
+      logger.info(`🧠 [CHECKPOINT 5] Total scenarios to match: ${allScenarios.length}`);
+      result = await selector.selectScenario(speechText, allScenarios);
+      logger.info(`🧠 [CHECKPOINT 5] ✅ Matching complete`);
+      logger.info(`🧠 [CHECKPOINT 5] Match found: ${Boolean(result.match)}`);
+      logger.info(`🧠 [CHECKPOINT 5] Confidence: ${(result.confidence * 100).toFixed(1)}%`);
+    }
     
     logger.info(`🧠 [CHECKPOINT 6] Building TwiML response...`);
     const twiml = new twilio.twiml.VoiceResponse();
@@ -1786,7 +1888,27 @@ router.post('/test-respond/:templateId', async (req, res) => {
       // Say the matched reply + debug info
       twiml.say(reply);
       twiml.pause({ length: 1 });
-      twiml.say(`You triggered the scenario: ${result.scenario.name}. Confidence: ${(result.confidence * 100).toFixed(0)} percent. Score: ${(result.score * 100).toFixed(0)} percent.`);
+      
+      // Build debug message with tier information if 3-tier is enabled
+      let debugMessage = `You triggered the scenario: ${result.scenario.name}. Confidence: ${(result.confidence * 100).toFixed(0)} percent.`;
+      
+      if (ENABLE_3_TIER_INTELLIGENCE && routingDetails.tierUsed) {
+        const tierNames = { 1: 'Tier 1: Rule-based', 2: 'Tier 2: Semantic', 3: 'Tier 3: LLM' };
+        debugMessage += ` Matched via ${tierNames[routingDetails.tierUsed]}.`;
+        
+        if (routingDetails.tierUsed === 3) {
+          debugMessage += ` Cost: ${(routingDetails.cost * 100).toFixed(1)} cents.`;
+          if (routingDetails.patternsLearned > 0) {
+            debugMessage += ` Learned ${routingDetails.patternsLearned} new pattern${routingDetails.patternsLearned > 1 ? 's' : ''}.`;
+          }
+        } else if (routingDetails.tierUsed === 1) {
+          debugMessage += ` Cost: Free. Response time: ${routingDetails.responseTime} milliseconds.`;
+        }
+      } else {
+        debugMessage += ` Score: ${(result.score * 100).toFixed(0)} percent.`;
+      }
+      
+      twiml.say(debugMessage);
       logger.debug(`🧠 [CHECKPOINT 9] ✅ TwiML reply added`);
       
       logger.info(`🧠 [CHECKPOINT 10] Creating gather for continuation...`);
@@ -1844,7 +1966,25 @@ router.post('/test-respond/:templateId', async (req, res) => {
       } : null,
       topCandidates: result.trace?.topCandidates || [],
       timing: result.trace?.timingMs || {},
-      callSid: req.body.CallSid
+      callSid: req.body.CallSid,
+      
+      // ============================================
+      // 🧠 3-TIER ROUTING METADATA (if enabled)
+      // ============================================
+      ...(ENABLE_3_TIER_INTELLIGENCE && routingDetails.tierUsed && {
+        intelligenceRouting: {
+          enabled: true,
+          tierUsed: routingDetails.tierUsed,
+          tierName: { 1: 'Rule-based', 2: 'Semantic', 3: 'LLM' }[routingDetails.tierUsed],
+          tier1Confidence: routingDetails.tier1Confidence || 0,
+          tier2Confidence: routingDetails.tier2Confidence || 0,
+          tier3Confidence: routingDetails.tier3Confidence || 0,
+          cost: routingDetails.cost || 0,
+          responseTime: routingDetails.responseTime || 0,
+          patternsLearned: routingDetails.patternsLearned || 0,
+          allTiersFailed: routingDetails.allTiersFailed || false
+        }
+      })
     };
     
     // 🤖 Run AI analysis with detailed diagnostics
