@@ -752,6 +752,182 @@ function getCategoryFormData() {
 }
 
 // ============================================
+// SCENARIO INHERITED CONFIGURATION
+// ============================================
+
+/**
+ * Load and display inherited fillers/synonyms for a scenario
+ * @param {String} templateId - Template ID
+ * @param {String} categoryId - Category ID
+ */
+async function loadScenarioInheritedConfig(templateId, categoryId) {
+    if (!templateId) {
+        console.warn('⚠️ [SCENARIO CONFIG] No template ID provided');
+        return;
+    }
+    
+    try {
+        console.log('📥 [SCENARIO CONFIG] Loading inherited config:', { templateId, categoryId });
+        
+        // Fetch template data
+        const token = localStorage.getItem('adminToken');
+        const response = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        const template = result.data || result.template;
+        
+        // Get template-level fillers
+        let allFillers = [...(template.fillerWords || [])];
+        
+        // Get template-level synonyms
+        let allSynonyms = new Map();
+        if (template.synonymMap) {
+            if (template.synonymMap instanceof Map) {
+                allSynonyms = new Map(template.synonymMap);
+            } else if (typeof template.synonymMap === 'object') {
+                for (const [term, aliases] of Object.entries(template.synonymMap)) {
+                    if (Array.isArray(aliases)) {
+                        allSynonyms.set(term, [...aliases]);
+                    }
+                }
+            }
+        }
+        
+        // If category ID provided, merge category-level data
+        if (categoryId && template.categories) {
+            const category = template.categories.find(c => c.id === categoryId);
+            
+            if (category) {
+                // Merge category fillers
+                if (category.additionalFillerWords && Array.isArray(category.additionalFillerWords)) {
+                    allFillers.push(...category.additionalFillerWords);
+                }
+                
+                // Merge category synonyms
+                if (category.synonymMap) {
+                    const catMap = category.synonymMap instanceof Map 
+                        ? category.synonymMap 
+                        : new Map(Object.entries(category.synonymMap || {}));
+                    
+                    for (const [term, aliases] of catMap.entries()) {
+                        if (allSynonyms.has(term)) {
+                            // Merge aliases
+                            const existing = allSynonyms.get(term);
+                            allSynonyms.set(term, [...new Set([...existing, ...aliases])]);
+                        } else {
+                            allSynonyms.set(term, [...aliases]);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Deduplicate fillers
+        allFillers = [...new Set(allFillers)];
+        
+        // Render
+        renderScenarioInheritedFillers(allFillers);
+        renderScenarioInheritedSynonyms(allSynonyms);
+        
+        console.log('✅ [SCENARIO CONFIG] Loaded:', {
+            fillers: allFillers.length,
+            synonyms: allSynonyms.size
+        });
+        
+    } catch (error) {
+        console.error('❌ [SCENARIO CONFIG] Failed to load:', error);
+        showScenarioConfigError(error.message);
+    }
+}
+
+/**
+ * Render inherited fillers
+ */
+function renderScenarioInheritedFillers(fillers) {
+    const container = document.getElementById('scenario-inherited-fillers');
+    const countEl = document.getElementById('scenario-fillers-count');
+    
+    if (!container) return;
+    
+    if (countEl) {
+        countEl.textContent = fillers.length;
+    }
+    
+    if (fillers.length === 0) {
+        container.innerHTML = '<span style="color: #9ca3af; font-size: 13px;">No fillers configured</span>';
+        return;
+    }
+    
+    container.innerHTML = fillers.map(filler => `
+        <span style="display: inline-flex; align-items: center; padding: 4px 10px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; color: #374151; font-weight: 500;">
+            ${filler}
+        </span>
+    `).join('');
+}
+
+/**
+ * Render inherited synonyms
+ */
+function renderScenarioInheritedSynonyms(synonymMap) {
+    const container = document.getElementById('scenario-inherited-synonyms');
+    const countEl = document.getElementById('scenario-synonyms-count');
+    
+    if (!container) return;
+    
+    if (countEl) {
+        countEl.textContent = `${synonymMap.size} mappings`;
+    }
+    
+    if (synonymMap.size === 0) {
+        container.innerHTML = '<span style="color: #9ca3af; font-size: 13px;">No synonyms configured</span>';
+        return;
+    }
+    
+    const html = [];
+    for (const [technical, colloquial] of synonymMap.entries()) {
+        html.push(`
+            <div style="padding: 8px 12px; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 6px; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span style="font-weight: 600; color: #7c3aed; font-size: 13px;">${technical}</span>
+                    <span style="color: #9ca3af;">→</span>
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                        ${colloquial.map(c => `
+                            <span style="padding: 2px 8px; background: #fdf4ff; border: 1px solid #f3e8ff; border-radius: 4px; font-size: 12px; color: #a855f7;">
+                                ${c}
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `);
+    }
+    
+    container.innerHTML = html.join('');
+}
+
+/**
+ * Show error
+ */
+function showScenarioConfigError(message) {
+    const fillersContainer = document.getElementById('scenario-inherited-fillers');
+    const synonymsContainer = document.getElementById('scenario-inherited-synonyms');
+    
+    const errorHtml = `<span style="color: #ef4444; font-size: 13px;">❌ Error: ${message}</span>`;
+    
+    if (fillersContainer) fillersContainer.innerHTML = errorHtml;
+    if (synonymsContainer) synonymsContainer.innerHTML = errorHtml;
+}
+
+// ============================================
 // EXPORTS
 // ============================================
 
@@ -778,6 +954,11 @@ window.removeCategorySynonym = removeCategorySynonym;
 window.loadCategoryDataIntoForm = loadCategoryDataIntoForm;
 window.clearCategoryForm = clearCategoryForm;
 window.getCategoryFormData = getCategoryFormData;
+
+// Scenario inherited configuration functions
+window.loadScenarioInheritedConfig = loadScenarioInheritedConfig;
+window.renderScenarioInheritedFillers = renderScenarioInheritedFillers;
+window.renderScenarioInheritedSynonyms = renderScenarioInheritedSynonyms;
 
 console.log('✅ [TEMPLATE SETTINGS] Manager loaded');
 

@@ -2211,6 +2211,50 @@
                             </div>
                         </div>
 
+                        <!-- 🎯 INHERITED CONFIGURATION (Fillers & Synonyms) -->
+                        <div style="border: 2px solid #dbeafe; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-radius: 12px; padding: 20px; margin: 30px 0;">
+                            <h3 style="font-size: 18px; font-weight: 700; color: #1e40af; margin: 0 0 12px 0; display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-layer-group"></i>
+                                Inherited Configuration
+                                <span style="font-size: 12px; font-weight: 600; background: #3b82f6; color: white; padding: 4px 10px; border-radius: 20px;">Read-Only</span>
+                            </h3>
+                            <p style="font-size: 14px; color: #1e40af; margin: 0 0 16px 0;">
+                                This scenario inherits fillers & synonyms from its template and category
+                            </p>
+                            
+                            <!-- Inherited Fillers -->
+                            <div style="margin-bottom: 20px;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                                    <i class="fas fa-filter text-gray-600"></i>
+                                    <strong style="color: #374151;">Effective Filler Words:</strong>
+                                    <span id="scenario-fillers-count" style="background: #e5e7eb; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">0</span>
+                                </div>
+                                <div id="scenario-inherited-fillers" style="display: flex; flex-wrap: wrap; gap: 6px; padding: 12px; background: white; border: 1px solid #d1d5db; border-radius: 8px; min-height: 50px; max-height: 120px; overflow-y: auto;">
+                                    <span style="color: #9ca3af; font-size: 13px;">Loading...</span>
+                                </div>
+                                <p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    These words are removed from caller input before matching
+                                </p>
+                            </div>
+                            
+                            <!-- Inherited Synonyms -->
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                                    <i class="fas fa-language text-purple-600"></i>
+                                    <strong style="color: #374151;">Effective Synonyms:</strong>
+                                    <span id="scenario-synonyms-count" style="background: #e5e7eb; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">0 mappings</span>
+                                </div>
+                                <div id="scenario-inherited-synonyms" style="padding: 12px; background: white; border: 1px solid #d1d5db; border-radius: 8px; min-height: 50px; max-height: 150px; overflow-y: auto;">
+                                    <span style="color: #9ca3af; font-size: 13px;">Loading...</span>
+                                </div>
+                                <p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Colloquial terms are translated to technical terms before matching
+                                </p>
+                            </div>
+                        </div>
+
                         <!-- Triggers -->
                         <div>
                             <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
@@ -9252,6 +9296,11 @@ Timestamp: ${new Date(timestamp).toISOString()}
             await fetchBehaviors(); // Refresh from DB
             populateBehaviorDropdown('scenario-behavior');
             
+            // Load inherited fillers/synonyms
+            if (typeof loadScenarioInheritedConfig === 'function') {
+                await loadScenarioInheritedConfig(activeTemplateId, categoryId);
+            }
+            
             // Switch to first tab
             switchScenarioTab('basic');
             
@@ -9287,6 +9336,11 @@ Timestamp: ${new Date(timestamp).toISOString()}
                 
                 const { data } = await response.json();
                 populateScenarioForm(data);
+                
+                // Load inherited fillers/synonyms
+                if (typeof loadScenarioInheritedConfig === 'function') {
+                    await loadScenarioInheritedConfig(activeTemplateId, categoryId);
+                }
                 
                 // Switch to first tab
                 switchScenarioTab('basic');
