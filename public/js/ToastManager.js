@@ -37,6 +37,18 @@ class ToastManager {
      * Initialize toast container
      */
     init() {
+        // Wait for DOM to be ready
+        if (!document.body) {
+            // DOM not ready yet, wait for it
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => this.init());
+                return;
+            }
+            // Fallback: Use setTimeout
+            setTimeout(() => this.init(), 100);
+            return;
+        }
+        
         // Create container if it doesn't exist
         if (!this.container) {
             this.container = document.createElement('div');
