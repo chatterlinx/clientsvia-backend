@@ -347,8 +347,7 @@ async function getCompanyByPhoneNumber(phoneNumber) {
     // 🧠 CHECK 1: Is this a Global AI Brain test number? (NEW: Global Config)
     logger.info(`[GLOBAL BRAIN CHECK] Checking if ${phoneNumber} is the global test number...`);
     
-    // NEW: Check global AI Brain test config in AdminSettings
-    const adminSettings = await AdminSettings.getSettings();
+    // Use adminSettings already fetched above (line 333)
     const globalTestConfig = adminSettings?.globalAIBrainTest;
     
     if (globalTestConfig?.enabled && globalTestConfig.phoneNumber === phoneNumber) {
