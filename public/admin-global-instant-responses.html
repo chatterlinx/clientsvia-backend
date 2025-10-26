@@ -440,6 +440,29 @@
                             </div>
                         </div>
 
+                        <!-- 🎯 Active Test Template Banner (Shows which template Twilio will ACTUALLY use) -->
+                        <div id="active-test-template-banner" class="px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-600 border-b-2 border-emerald-700">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="bg-white rounded-full p-2">
+                                        <i class="fas fa-phone-volume text-emerald-600 text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-xs font-semibold text-emerald-100 uppercase tracking-wide">
+                                            🎯 Active Test Template (Twilio Routes Here)
+                                        </div>
+                                        <div id="active-test-template-display" class="text-lg font-bold text-white mt-1">
+                                            Loading...
+                                        </div>
+                                    </div>
+                                </div>
+                                <button onclick="loadTestPhrases()" class="px-4 py-2 bg-white text-emerald-600 hover:bg-emerald-50 rounded-lg font-semibold transition-all flex items-center gap-2 shadow-md text-sm">
+                                    <i class="fas fa-sync-alt"></i>
+                                    Refresh
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- Action Buttons Row -->
                         <div class="px-6 py-3 bg-gray-50 flex gap-2 flex-wrap border-b-2 border-gray-200">
                             <button onclick="expandAllCategories()" class="text-xs px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold transition-colors shadow-sm">
@@ -3989,30 +4012,91 @@ Continue?`;
         }
         
         /**
-         * Load test phrases from active template
+         * Load test phrases from GLOBAL ACTIVE template (ensures sync with Twilio routing)
+         * 🎯 FIX: Now loads from AdminSettings.globalAIBrainTest.activeTemplateId
+         *         instead of UI's activeTemplate to ensure WYSIWYG
          */
         async function loadTestPhrases() {
-            console.log('📋 [TEST PHRASES] Loading phrases from active template...');
-            console.log('📋 [TEST PHRASES] activeTemplateId:', activeTemplateId);
-            console.log('📋 [TEST PHRASES] activeTemplate:', activeTemplate);
-            
-            if (!activeTemplateId || !activeTemplate) {
-                console.error('❌ [TEST PHRASES] No active template found');
-                document.getElementById('test-phrase-categories').innerHTML = `
-                    <div class="text-center py-8 text-red-500">
-                        <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
-                        <p>No template loaded. Please select a template first.</p>
-                    </div>
-                `;
-                return;
-            }
+            console.log('📋 [TEST PHRASES] Loading phrases from GLOBAL active template...');
             
             try {
+                // STEP 1: Fetch global test config to get the REAL active template
+                console.log('📋 [TEST PHRASES] Step 1: Fetching global test config...');
+                const token = getAuthToken();
+                const globalConfigResponse = await fetch('/api/admin/settings/global-ai-brain-test', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!globalConfigResponse.ok) {
+                    throw new Error(`Failed to load global test config: ${globalConfigResponse.status}`);
+                }
+                
+                const globalConfigResult = await globalConfigResponse.json();
+                const globalConfig = globalConfigResult.data;
+                const realActiveTemplateId = globalConfig.activeTemplateId;
+                const realActiveTemplateName = globalConfig.activeTemplateName || 'Unknown';
+                
+                console.log('📋 [TEST PHRASES] Global config loaded:', {
+                    activeTemplateId: realActiveTemplateId,
+                    activeTemplateName: realActiveTemplateName,
+                    enabled: globalConfig.enabled
+                });
+                
+                if (!realActiveTemplateId) {
+                    console.warn('⚠️ [TEST PHRASES] No active template set in global config');
+                    document.getElementById('test-phrase-categories').innerHTML = `
+                        <div class="text-center py-8 text-yellow-600">
+                            <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
+                            <p>No active template configured for testing.</p>
+                            <p class="text-sm mt-2">Please save the Twilio test configuration first.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // STEP 2: Load the ACTUAL active template from backend
+                console.log('📋 [TEST PHRASES] Step 2: Loading template from backend...', realActiveTemplateId);
+                const templateResponse = await fetch(`/api/admin/global-instant-responses/${realActiveTemplateId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!templateResponse.ok) {
+                    throw new Error(`Failed to load template ${realActiveTemplateId}: ${templateResponse.status}`);
+                }
+                
+                const templateResult = await templateResponse.json();
+                const realActiveTemplate = templateResult.data || templateResult.template;
+                
+                console.log('📋 [TEST PHRASES] Template loaded:', {
+                    id: realActiveTemplate._id,
+                    name: realActiveTemplate.name,
+                    categories: realActiveTemplate.categories?.length || 0
+                });
+                
+                // STEP 3: Extract test phrases from the REAL active template
+                console.log('📋 [TEST PHRASES] Step 3: Extracting phrases...');
                 testPhraseData = [];
                 let totalPhrases = 0;
                 
+                if (!realActiveTemplate.categories || realActiveTemplate.categories.length === 0) {
+                    console.warn('⚠️ [TEST PHRASES] Template has no categories');
+                    document.getElementById('test-phrase-categories').innerHTML = `
+                        <div class="text-center py-8 text-yellow-600">
+                            <i class="fas fa-folder-open text-2xl mb-2"></i>
+                            <p>Template "${realActiveTemplate.name}" has no categories yet.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
                 // Extract all triggers from all scenarios in all categories
-                activeTemplate.categories.forEach(category => {
+                realActiveTemplate.categories.forEach(category => {
                     const categoryData = {
                         id: category.id,
                         name: category.name,
@@ -4022,18 +4106,20 @@ Continue?`;
                         expanded: false
                     };
                     
-                    category.scenarios.forEach(scenario => {
-                        if (scenario.triggers && Array.isArray(scenario.triggers)) {
-                            scenario.triggers.forEach(trigger => {
-                                categoryData.phrases.push({
-                                    text: trigger,
-                                    scenarioName: scenario.name,
-                                    scenarioId: scenario.scenarioId
+                    if (category.scenarios && Array.isArray(category.scenarios)) {
+                        category.scenarios.forEach(scenario => {
+                            if (scenario.triggers && Array.isArray(scenario.triggers)) {
+                                scenario.triggers.forEach(trigger => {
+                                    categoryData.phrases.push({
+                                        text: trigger,
+                                        scenarioName: scenario.name,
+                                        scenarioId: scenario.scenarioId
+                                    });
+                                    totalPhrases++;
                                 });
-                                totalPhrases++;
-                            });
-                        }
-                    });
+                            }
+                        });
+                    }
                     
                     if (categoryData.phrases.length > 0) {
                         testPhraseData.push(categoryData);
@@ -4041,16 +4127,26 @@ Continue?`;
                 });
                 
                 console.log(`✅ [TEST PHRASES] Loaded ${totalPhrases} phrases from ${testPhraseData.length} categories`);
+                console.log(`✅ [TEST PHRASES] Template: "${realActiveTemplate.name}" (${realActiveTemplateId})`);
                 
-                // Update header count
+                // STEP 4: Update UI with real active template info
                 document.getElementById('total-phrase-count').textContent = `${totalPhrases} phrases`;
-                
-                // Update footer stats
                 document.getElementById('footer-category-count').textContent = testPhraseData.length;
                 document.getElementById('footer-phrase-count').textContent = totalPhrases;
                 document.getElementById('footer-last-updated').textContent = new Date().toLocaleTimeString();
                 
-                // Render the phrases
+                // STEP 4.5: Update the active test template banner (CRITICAL for sync visibility)
+                const bannerElement = document.getElementById('active-test-template-display');
+                if (bannerElement) {
+                    bannerElement.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-check-circle text-emerald-100"></i>
+                            <span>${realActiveTemplate.name}</span>
+                        </div>
+                    `;
+                }
+                
+                // STEP 5: Render the phrases
                 renderTestPhrases();
                 
             } catch (error) {
@@ -4058,7 +4154,11 @@ Continue?`;
                 document.getElementById('test-phrase-categories').innerHTML = `
                     <div class="text-center py-8 text-red-500">
                         <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
-                        <p>Error loading test phrases: ${error.message}</p>
+                        <p class="font-semibold">Error loading test phrases</p>
+                        <p class="text-sm mt-2">${error.message}</p>
+                        <button onclick="loadTestPhrases()" class="mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
+                            <i class="fas fa-redo mr-2"></i>Retry
+                        </button>
                     </div>
                 `;
             }

@@ -334,7 +334,7 @@ class SmartCallFilter {
             }
 
             // Track this call attempt
-            await redisClient.lPush(redisKey, Date.now());
+            await redisClient.lPush(redisKey, Date.now().toString()); // Convert timestamp to string for Redis v4+
             await redisClient.lTrim(redisKey, 0, 19); // Keep last 20
             await redisClient.expire(redisKey, 86400); // 24 hours
 
