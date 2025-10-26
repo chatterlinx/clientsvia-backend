@@ -37,8 +37,11 @@
 const express = require('express');
 const router = express.Router();
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
-const { authenticateJWT } = require('../../middleware/auth');
+const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const { enhanceTemplate } = require('../../services/globalAIBrainEnhancer');
+
+// Middleware alias for consistency
+const adminOnly = requireRole('admin');
 const logger = require('../../utils/logger');
 const PlaceholderScanService = require('../../services/PlaceholderScanService');
 const CacheHelper = require('../../utils/cacheHelper');
