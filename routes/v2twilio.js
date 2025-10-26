@@ -1618,12 +1618,26 @@ router.post('/test-respond/:templateId', async (req, res) => {
     const template = await GlobalInstantResponseTemplate.findById(templateId);
     logger.debug(`🧠 [CHECKPOINT 3] ✅ Template loaded: ${template ? template.name : 'NOT FOUND'}`);
     
-    if (!template || !template.twilioTest?.enabled) {
-      logger.debug(`🧠 [CHECKPOINT 3] ❌ Template not found or testing disabled`);
-      logger.info(`🧠 [CHECKPOINT 3] Template exists: ${Boolean(template)}`);
-      logger.info(`🧠 [CHECKPOINT 3] Testing enabled: ${template?.twilioTest?.enabled}`);
+    // 🎯 FIX: Check GLOBAL config instead of deprecated per-template config
+    logger.debug(`🧠 [CHECKPOINT 3.5] Checking global AI Brain test config...`);
+    const adminSettings = await AdminSettings.getSettings();
+    const globalTestEnabled = adminSettings?.globalAIBrainTest?.enabled || false;
+    logger.info(`🧠 [CHECKPOINT 3] Template exists: ${Boolean(template)}`);
+    logger.info(`🧠 [CHECKPOINT 3] Global testing enabled: ${globalTestEnabled}`);
+    
+    if (!template) {
+      logger.debug(`🧠 [CHECKPOINT 3] ❌ Template not found`);
       const twiml = new twilio.twiml.VoiceResponse();
-      twiml.say('Test template not found or testing is disabled.');
+      twiml.say('Test template not found.');
+      twiml.hangup();
+      res.type('text/xml');
+      return res.send(twiml.toString());
+    }
+    
+    if (!globalTestEnabled) {
+      logger.debug(`🧠 [CHECKPOINT 3] ❌ Global testing is disabled`);
+      const twiml = new twilio.twiml.VoiceResponse();
+      twiml.say('Testing is currently disabled. Please enable it in the admin settings.');
       twiml.hangup();
       res.type('text/xml');
       return res.send(twiml.toString());
