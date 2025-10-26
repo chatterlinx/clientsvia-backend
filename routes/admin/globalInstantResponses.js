@@ -3988,5 +3988,171 @@ function generateMarkdownReport(template, testResults, username) {
     return markdown;
 }
 
+// ============================================================================
+// 🧠 LEARNING SETTINGS API
+// ============================================================================
+
+/**
+ * PATCH /api/admin/global-instant-responses/:id/learning-settings
+ * Update AI learning and sharing settings for a template
+ * Body: { learningSettings: { ... } }
+ */
+router.patch('/:id/learning-settings', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const { learningSettings } = req.body;
+        
+        if (!learningSettings || typeof learningSettings !== 'object') {
+            return res.status(400).json({
+                success: false,
+                error: 'learningSettings object is required'
+            });
+        }
+        
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        if (!template) {
+            return res.status(404).json({
+                success: false,
+                error: 'Template not found'
+            });
+        }
+        
+        // Validate thresholds
+        if (learningSettings.tier1Threshold !== undefined) {
+            const val = parseFloat(learningSettings.tier1Threshold);
+            if (val < 0.6 || val > 0.95) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'tier1Threshold must be between 0.6 and 0.95'
+                });
+            }
+            template.learningSettings.tier1Threshold = val;
+        }
+        
+        if (learningSettings.tier2Threshold !== undefined) {
+            const val = parseFloat(learningSettings.tier2Threshold);
+            if (val < 0.4 || val > 0.8) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'tier2Threshold must be between 0.4 and 0.8'
+                });
+            }
+            template.learningSettings.tier2Threshold = val;
+        }
+        
+        // Ensure tier2Threshold < tier1Threshold
+        if (template.learningSettings.tier2Threshold >= template.learningSettings.tier1Threshold) {
+            return res.status(400).json({
+                success: false,
+                error: 'tier2Threshold must be less than tier1Threshold'
+            });
+        }
+        
+        // Update sharing settings (checkboxes)
+        if (learningSettings.shareWithinIndustry !== undefined) {
+            template.learningSettings.shareWithinIndustry = Boolean(learningSettings.shareWithinIndustry);
+        }
+        
+        if (learningSettings.proposeForGlobal !== undefined) {
+            template.learningSettings.proposeForGlobal = Boolean(learningSettings.proposeForGlobal);
+        }
+        
+        // Update budget controls
+        if (learningSettings.llmBudgetMonthly !== undefined) {
+            const val = parseFloat(learningSettings.llmBudgetMonthly);
+            if (val < 0 || val > 10000) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'llmBudgetMonthly must be between 0 and 10000'
+                });
+            }
+            template.learningSettings.llmBudgetMonthly = val;
+        }
+        
+        if (learningSettings.llmCostPerCall !== undefined) {
+            const val = parseFloat(learningSettings.llmCostPerCall);
+            if (val < 0.01 || val > 5.0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'llmCostPerCall must be between 0.01 and 5.0'
+                });
+            }
+            template.learningSettings.llmCostPerCall = val;
+        }
+        
+        // Update quality filters
+        if (learningSettings.minPatternFrequency !== undefined) {
+            const val = parseInt(learningSettings.minPatternFrequency);
+            if (val < 1 || val > 20) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'minPatternFrequency must be between 1 and 20'
+                });
+            }
+            template.learningSettings.minPatternFrequency = val;
+        }
+        
+        if (learningSettings.industryShareThreshold !== undefined) {
+            const val = parseFloat(learningSettings.industryShareThreshold);
+            if (val < 0.7 || val > 0.95) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'industryShareThreshold must be between 0.7 and 0.95'
+                });
+            }
+            template.learningSettings.industryShareThreshold = val;
+        }
+        
+        if (learningSettings.globalProposeThreshold !== undefined) {
+            const val = parseFloat(learningSettings.globalProposeThreshold);
+            if (val < 0.85 || val > 0.98) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'globalProposeThreshold must be between 0.85 and 0.98'
+                });
+            }
+            template.learningSettings.globalProposeThreshold = val;
+        }
+        
+        // Ensure globalProposeThreshold > industryShareThreshold
+        if (template.learningSettings.globalProposeThreshold <= template.learningSettings.industryShareThreshold) {
+            return res.status(400).json({
+                success: false,
+                error: 'globalProposeThreshold must be greater than industryShareThreshold'
+            });
+        }
+        
+        if (learningSettings.autoApproveIndustry !== undefined) {
+            template.learningSettings.autoApproveIndustry = Boolean(learningSettings.autoApproveIndustry);
+        }
+        
+        await template.save();
+        
+        logger.info('✅ [LEARNING SETTINGS] Settings updated', {
+            templateId: template._id,
+            templateName: template.name,
+            updatedBy: req.user?.username,
+            changes: learningSettings
+        });
+        
+        res.json({
+            success: true,
+            message: 'Learning settings updated successfully',
+            learningSettings: template.learningSettings
+        });
+        
+    } catch (error) {
+        logger.error('❌ [LEARNING SETTINGS] Error updating settings', {
+            templateId: req.params.id,
+            error: error.message,
+            stack: error.stack
+        });
+        
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;
 

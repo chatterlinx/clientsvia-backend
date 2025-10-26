@@ -125,6 +125,7 @@ async function loadAllRoutes() {
         routes.adminNotificationsRoutes = await loadRouteWithTimeout('./routes/admin/adminNotifications', 'adminNotificationsRoutes');
         routes.setupNotificationCenterRoutes = await loadRouteWithTimeout('./routes/admin/setup-notification-center', 'setupNotificationCenterRoutes');
         routes.adminGlobalAIBrainTestRoutes = await loadRouteWithTimeout('./routes/admin/adminGlobalAIBrainTest', 'adminGlobalAIBrainTestRoutes');
+        routes.adminIntelligenceRoutes = await loadRouteWithTimeout('./routes/admin/adminIntelligence', 'adminIntelligenceRoutes');
         routes.healthRoutes = await loadRouteWithTimeout('./routes/health', 'healthRoutes');
         
         // REMOVED: Legacy V2 AI Intelligence routes - archived to prevent external LLM dependencies
@@ -278,6 +279,7 @@ function registerRoutes(routes) {
     app.use('/api', routes.adminNotificationsRoutes); // ADMIN: Notification Center (platform alerts, SMS delivery, health checks)
     app.use('/api', routes.setupNotificationCenterRoutes); // ADMIN: One-time setup endpoint for Notification Center company
     app.use('/api/admin/settings/global-ai-brain-test', routes.adminGlobalAIBrainTestRoutes); // ADMIN: Global AI Brain Test Config (single Twilio test console for all templates)
+    app.use('/api/admin/intelligence', routes.adminIntelligenceRoutes); // ADMIN: 3-Tier Intelligence System (LLM, pattern learning, cost tracking, global patterns)
     app.use('/api', routes.healthRoutes); // SYSTEM: Health check endpoint for all 3 new systems (AI Performance, Call Archives, Spam Filter)
     // app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     // V2 DELETED: Legacy enhancedAgentSettings route mount - used external LLMs, violates in-house AI system
