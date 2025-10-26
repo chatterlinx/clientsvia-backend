@@ -233,14 +233,152 @@ const suggestionKnowledgeBaseSchema = new Schema({
     
     detectionMethod: {
         type: String,
-        enum: ['frequency_analysis', 'context_analysis', 'semantic_analysis', 'manual'],
+        enum: ['frequency_analysis', 'context_analysis', 'semantic_analysis', 'manual', 'llm_extraction'],
         default: 'frequency_analysis'
         // How was this suggestion detected?
+        // llm_extraction: Extracted from GPT-4/Claude analysis
     },
     
     notes: {
         type: String
         // Optional admin notes
+    },
+    
+    // ============================================
+    // 🌍 PATTERN SHARING SCOPE (3-Tier System)
+    // ============================================
+    
+    scope: {
+        type: String,
+        enum: ['template', 'industry', 'global'],
+        default: 'template',
+        index: true
+        // template: Only applied to originating template
+        // industry: Shared with templates in same industryLabel
+        // global: Shared platform-wide (all templates)
+    },
+    
+    shareStatus: {
+        type: String,
+        enum: [
+            'template_only',         // Applied to template only (default)
+            'industry_pending',      // Awaiting industry-wide approval
+            'industry_approved',     // Auto-shared within industry
+            'global_pending',        // Submitted for admin review
+            'global_approved',       // Admin approved for all templates
+            'global_rejected'        // Admin rejected global sharing
+        ],
+        default: 'template_only',
+        index: true
+        // Tracks the sharing lifecycle of this pattern
+    },
+    
+    // ============================================
+    // 📊 QUALITY SCORING (Auto-Calculated)
+    // ============================================
+    
+    qualityScore: {
+        // Overall quality score (0-100)
+        overall: {
+            type: Number,
+            min: 0,
+            max: 100,
+            default: 0
+            // Calculated from confidence, frequency, universality, impact
+            // Template: 70+ = auto-add
+            // Industry: 85+ = auto-share
+            // Global: 90+ = submit for review
+        },
+        
+        // Confidence from detection (0-1)
+        confidenceScore: {
+            type: Number,
+            min: 0,
+            max: 1,
+            default: 0
+        },
+        
+        // Frequency score (normalized 0-1)
+        frequencyScore: {
+            type: Number,
+            min: 0,
+            max: 1,
+            default: 0
+            // Based on occurrences / total test calls
+        },
+        
+        // Universality score (0-1)
+        universalityScore: {
+            type: Number,
+            min: 0,
+            max: 1,
+            default: 0
+            // How universal is this pattern?
+            // 1.0 = Generic (applies to all industries)
+            // 0.5 = Industry-specific
+            // 0.0 = Template-specific
+        },
+        
+        // Impact score (normalized 0-1)
+        impactScore: {
+            type: Number,
+            min: 0,
+            max: 1,
+            default: 0
+            // estimatedImpact / 100
+        },
+        
+        // When this was calculated
+        calculatedAt: {
+            type: Date,
+            default: Date.now
+        }
+    },
+    
+    // ============================================
+    // 🌍 GLOBAL SHARING WORKFLOW
+    // ============================================
+    
+    globalSharingDetails: {
+        // Submitted for global review
+        submittedAt: { type: Date },
+        submittedBy: { type: Schema.Types.ObjectId, ref: 'v2User' },
+        
+        // Admin review
+        reviewedAt: { type: Date },
+        reviewedBy: { type: Schema.Types.ObjectId, ref: 'v2User' },
+        reviewNotes: { type: String },
+        
+        // If approved: which templates received it
+        appliedToTemplates: [{
+            templateId: { type: Schema.Types.ObjectId, ref: 'GlobalInstantResponseTemplate' },
+            templateName: { type: String },
+            appliedAt: { type: Date, default: Date.now }
+        }],
+        
+        // If rejected: reason
+        rejectionReason: { type: String }
+    },
+    
+    // ============================================
+    // 📊 INDUSTRY SHARING DETAILS
+    // ============================================
+    
+    industrySharingDetails: {
+        // Industry label this pattern applies to
+        industryLabel: { type: String, trim: true, index: true },
+        
+        // Templates in industry that received this pattern
+        sharedWithTemplates: [{
+            templateId: { type: Schema.Types.ObjectId, ref: 'GlobalInstantResponseTemplate' },
+            templateName: { type: String },
+            sharedAt: { type: Date, default: Date.now },
+            autoShared: { type: Boolean, default: true }  // vs manual admin share
+        }],
+        
+        // If approval was required
+        approvedAt: { type: Date },
+        approvedBy: { type: Schema.Types.ObjectId, ref: 'v2User' }
     }
     
 }, {

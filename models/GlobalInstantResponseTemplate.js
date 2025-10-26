@@ -630,6 +630,178 @@ const globalInstantResponseTemplateSchema = new Schema({
     },
     
     // ============================================================================
+    // 🧠 AI LEARNING SETTINGS - 3-TIER SELF-IMPROVEMENT SYSTEM
+    // ============================================================================
+    // Controls how this template learns from LLM analysis and shares patterns
+    // with other templates. Part of the self-improvement cycle that reduces
+    // LLM costs from 70% → 2% over 6 months while increasing intelligence.
+    // ============================================================================
+    learningSettings: {
+        // ============================================
+        // LEARNING ENABLED (Always On)
+        // ============================================
+        enableLearning: {
+            type: Boolean,
+            default: true,
+            required: true
+            // Cannot be disabled. Core self-improvement mechanism.
+            // Patterns learned from test calls automatically improve this template.
+        },
+        
+        // ============================================
+        // INDUSTRY-WIDE SHARING (Optional Checkbox)
+        // ============================================
+        shareWithinIndustry: {
+            type: Boolean,
+            default: false
+            // If enabled: High-quality patterns (confidence >85%) are automatically
+            // shared with other templates in the same industryLabel.
+            // Example: "HVAC Receptionist" teaches "HVAC Trade Knowledge"
+            // Requires: At least 2 templates in same industry
+        },
+        
+        industryShareThreshold: {
+            type: Number,
+            default: 0.85,
+            min: 0.7,
+            max: 0.95
+            // Minimum confidence score required for auto-sharing within industry
+            // Default: 0.85 (85% confidence)
+        },
+        
+        // ============================================
+        // GLOBAL SHARING (Admin Approval Required)
+        // ============================================
+        proposeForGlobal: {
+            type: Boolean,
+            default: false
+            // If enabled: Universal patterns (confidence >90%) are submitted to
+            // admin review queue for potential platform-wide sharing.
+            // Example: Generic fillers like "um, uh, like" benefit all templates.
+            // Requires: Manual admin approval before patterns go global
+        },
+        
+        globalProposeThreshold: {
+            type: Number,
+            default: 0.90,
+            min: 0.85,
+            max: 0.98
+            // Minimum confidence score required for proposing global patterns
+            // Default: 0.90 (90% confidence)
+            // Must be higher than industryShareThreshold
+        },
+        
+        // ============================================
+        // QUALITY FILTERS
+        // ============================================
+        minPatternFrequency: {
+            type: Number,
+            default: 3,
+            min: 1,
+            max: 20
+            // Pattern must appear in this many test calls before being considered
+            // Template-only: 3+ occurrences
+            // Industry: 10+ occurrences
+            // Global: 20+ occurrences
+        },
+        
+        autoApproveIndustry: {
+            type: Boolean,
+            default: true
+            // If true: Industry-wide patterns are auto-applied (if threshold met)
+            // If false: Industry patterns also require admin approval
+        },
+        
+        // ============================================
+        // TIER ROUTING THRESHOLDS
+        // ============================================
+        tier1Threshold: {
+            type: Number,
+            default: 0.80,
+            min: 0.60,
+            max: 0.95
+            // Minimum confidence for Tier 1 (rule-based) to accept match
+            // Below this: escalates to Tier 2
+            // Default: 0.80 (80% confidence)
+        },
+        
+        tier2Threshold: {
+            type: Number,
+            default: 0.60,
+            min: 0.40,
+            max: 0.80
+            // Minimum confidence for Tier 2 (semantic) to accept match
+            // Below this: escalates to Tier 3 (LLM)
+            // Default: 0.60 (60% confidence)
+        },
+        
+        // ============================================
+        // COST CONTROLS
+        // ============================================
+        llmBudgetMonthly: {
+            type: Number,
+            default: 500,
+            min: 0,
+            max: 10000
+            // Maximum monthly LLM spend for this template (USD)
+            // When reached: Falls back to Tier 2 (no LLM)
+            // Set to 0 to disable LLM completely
+        },
+        
+        llmCostPerCall: {
+            type: Number,
+            default: 0.50,
+            min: 0.01,
+            max: 5.00
+            // Estimated cost per LLM call (USD)
+            // Used for budget tracking and cost projections
+            // GPT-4 Turbo: ~$0.50, GPT-3.5 Turbo: ~$0.05
+        }
+    },
+    
+    // ============================================================================
+    // 📊 LEARNING STATISTICS (Auto-Calculated)
+    // ============================================================================
+    // Tracks self-improvement progress over time
+    // Updated by PatternLearningService and CostTrackingService
+    // ============================================================================
+    learningStats: {
+        // Pattern counts
+        patternsLearnedTotal: { type: Number, default: 0 },
+        patternsLearnedThisMonth: { type: Number, default: 0 },
+        synonymsLearned: { type: Number, default: 0 },
+        fillersLearned: { type: Number, default: 0 },
+        keywordsLearned: { type: Number, default: 0 },
+        
+        // Sharing statistics
+        patternsSharedToIndustry: { type: Number, default: 0 },
+        patternsSharedGlobally: { type: Number, default: 0 },
+        patternsReceivedFromIndustry: { type: Number, default: 0 },
+        patternsReceivedGlobal: { type: Number, default: 0 },
+        
+        // Tier distribution (current month)
+        tier1Percentage: { type: Number, default: 20 },  // Week 1 baseline
+        tier2Percentage: { type: Number, default: 10 },
+        tier3Percentage: { type: Number, default: 70 },  // Starts high, decreases over time
+        
+        // Cost tracking (current month)
+        llmCallsThisMonth: { type: Number, default: 0 },
+        llmCostThisMonth: { type: Number, default: 0 },
+        projectedMonthlyCost: { type: Number, default: 350 },  // Week 1 baseline
+        
+        // Improvement metrics
+        costSavingsVsBaseline: { type: Number, default: 0 },  // USD saved vs Week 1
+        averageResponseTime: { type: Number, default: 0 },     // ms
+        selfImprovementScore: { type: Number, default: 0 },    // 0-100
+        
+        // Timestamps
+        firstLearningEvent: { type: Date },
+        lastLearningEvent: { type: Date },
+        lastStatsReset: { type: Date, default: Date.now },
+        monthStartDate: { type: Date, default: () => new Date(new Date().getFullYear(), new Date().getMonth(), 1) }
+    },
+    
+    // ============================================================================
     // 📞 TWILIO TEST CONFIGURATION (⚠️ DEPRECATED - Moving to AdminSettings)
     // ============================================================================
     // ⚠️ DEPRECATION NOTICE:
