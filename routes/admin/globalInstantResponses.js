@@ -47,6 +47,7 @@ const PlaceholderScanService = require('../../services/PlaceholderScanService');
 const CacheHelper = require('../../utils/cacheHelper');
 const IntelligentPatternDetector = require('../../services/IntelligentPatternDetector');
 const SuggestionKnowledgeBase = require('../../models/SuggestionKnowledgeBase');
+const AdminNotificationService = require('../../services/AdminNotificationService');
 
 // ============================================================================
 // MIDDLEWARE
@@ -3215,6 +3216,29 @@ router.post('/:id/synonyms', authenticateJWT, adminOnly, async (req, res) => {
             by: req.user?.username
         });
         
+        // ============================================
+        // 📢 NOTIFY DEVELOPERS OF AI LEARNING
+        // ============================================
+        try {
+            await AdminNotificationService.sendAlert({
+                code: 'AI_LEARNING_SYNONYM_ADDED',
+                severity: 'warning',
+                title: '🧠 AI Learning: Synonym Added (Manual)',
+                message: `New synonym mapping added to template.\n\nTemplate: "${template.name}"\nTechnical Term: "${technicalTerm}"\nColloquial Terms: "${colloquialTerms.join(', ')}"\nAdded By: ${req.user?.username || 'Unknown'}\n\nThis improves the AI's ability to understand non-technical language.`,
+                details: {
+                    source: 'Manual Addition',
+                    templateId: template._id.toString(),
+                    templateName: template.name,
+                    technicalTerm,
+                    colloquialTerms,
+                    totalAliases: merged.length,
+                    addedBy: req.user?.username
+                }
+            });
+        } catch (notifError) {
+            logger.error('Failed to send synonym notification', { error: notifError.message });
+        }
+        
         res.json({
             success: true,
             message: 'Synonym mapping added',
@@ -3349,6 +3373,32 @@ router.post('/:id/categories/:categoryId/synonyms', authenticateJWT, adminOnly, 
             by: req.user?.username
         });
         
+        // ============================================
+        // 📢 NOTIFY DEVELOPERS OF AI LEARNING
+        // ============================================
+        try {
+            await AdminNotificationService.sendAlert({
+                code: 'AI_LEARNING_SYNONYM_ADDED',
+                severity: 'warning',
+                title: '🧠 AI Learning: Synonym Added to Category (Manual)',
+                message: `New synonym mapping added to category.\n\nTemplate: "${template.name}"\nCategory: "${category.name}"\nTechnical Term: "${technicalTerm}"\nColloquial Terms: "${colloquialTerms.join(', ')}"\nAdded By: ${req.user?.username || 'Unknown'}\n\nThis improves the AI's understanding of domain-specific colloquial terms.`,
+                details: {
+                    source: 'Manual Addition',
+                    scope: 'Category',
+                    templateId: template._id.toString(),
+                    templateName: template.name,
+                    categoryId: category.id,
+                    categoryName: category.name,
+                    technicalTerm,
+                    colloquialTerms,
+                    totalAliases: merged.length,
+                    addedBy: req.user?.username
+                }
+            });
+        } catch (notifError) {
+            logger.error('Failed to send category synonym notification', { error: notifError.message });
+        }
+        
         res.json({
             success: true,
             message: 'Synonym mapping added to category',
@@ -3424,6 +3474,28 @@ router.post('/:id/fillers', authenticateJWT, adminOnly, async (req, res) => {
             total: merged.length,
             by: req.user?.username
         });
+        
+        // ============================================
+        // 📢 NOTIFY DEVELOPERS OF AI LEARNING
+        // ============================================
+        try {
+            await AdminNotificationService.sendAlert({
+                code: 'AI_LEARNING_FILLER_ADDED',
+                severity: 'warning',
+                title: '🔇 AI Learning: Filler Words Added (Manual)',
+                message: `New filler words added to template for noise removal.\n\nTemplate: "${template.name}"\nFillers Added: "${fillers.join(', ')}"\nTotal Fillers: ${merged.length}\nAdded By: ${req.user?.username || 'Unknown'}\n\nThese words will be removed from caller input before matching, improving accuracy.`,
+                details: {
+                    source: 'Manual Addition',
+                    templateId: template._id.toString(),
+                    templateName: template.name,
+                    fillersAdded: fillers,
+                    totalFillers: merged.length,
+                    addedBy: req.user?.username
+                }
+            });
+        } catch (notifError) {
+            logger.error('Failed to send filler notification', { error: notifError.message });
+        }
         
         res.json({
             success: true,
@@ -3552,6 +3624,31 @@ router.post('/:id/categories/:categoryId/fillers', authenticateJWT, adminOnly, a
             total: merged.length,
             by: req.user?.username
         });
+        
+        // ============================================
+        // 📢 NOTIFY DEVELOPERS OF AI LEARNING
+        // ============================================
+        try {
+            await AdminNotificationService.sendAlert({
+                code: 'AI_LEARNING_FILLER_ADDED',
+                severity: 'warning',
+                title: '🔇 AI Learning: Filler Words Added to Category (Manual)',
+                message: `New filler words added to category for domain-specific noise removal.\n\nTemplate: "${template.name}"\nCategory: "${category.name}"\nFillers Added: "${fillers.join(', ')}"\nTotal Category Fillers: ${merged.length}\nAdded By: ${req.user?.username || 'Unknown'}\n\nThese words will be removed from caller input (in addition to template fillers).`,
+                details: {
+                    source: 'Manual Addition',
+                    scope: 'Category',
+                    templateId: template._id.toString(),
+                    templateName: template.name,
+                    categoryId: category.id,
+                    categoryName: category.name,
+                    fillersAdded: fillers,
+                    totalCategoryFillers: merged.length,
+                    addedBy: req.user?.username
+                }
+            });
+        } catch (notifError) {
+            logger.error('Failed to send category filler notification', { error: notifError.message });
+        }
         
         res.json({
             success: true,

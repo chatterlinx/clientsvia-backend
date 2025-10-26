@@ -23,6 +23,7 @@
 
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
+const logger = require('../utils/logger');
 
 const suggestionKnowledgeBaseSchema = new Schema({
     // ============================================
@@ -306,9 +307,12 @@ suggestionKnowledgeBaseSchema.methods.apply = async function(appliedByUserId) {
  * Apply filler suggestion
  */
 suggestionKnowledgeBaseSchema.methods.applyFillerSuggestion = async function(template) {
+    const AdminNotificationService = require('../services/AdminNotificationService');
+    
+    let category = null;
     if (this.categoryId) {
         // Add to category fillers
-        const category = template.categories.id(this.categoryId);
+        category = template.categories.id(this.categoryId);
         if (!category) throw new Error('Category not found');
         
         if (!category.additionalFillerWords.includes(this.fillerWord)) {
@@ -322,15 +326,49 @@ suggestionKnowledgeBaseSchema.methods.applyFillerSuggestion = async function(tem
     }
     
     await template.save();
+    
+    // ============================================
+    // 📢 NOTIFY DEVELOPERS OF AI LEARNING
+    // ============================================
+    try {
+        const scope = category ? 'Category' : 'Template';
+        await AdminNotificationService.sendAlert({
+            code: 'AI_LEARNING_FILLER_ADDED',
+            severity: 'warning',
+            title: `🤖 AI Learning: Filler Word Added by LLM (${scope})`,
+            message: `The AI detected and added a new filler word for noise removal.\n\nTemplate: "${template.name}"${category ? `\nCategory: "${category.name}"` : ''}\nFiller Word: "${this.fillerWord}"\nConfidence: ${(this.confidence * 100).toFixed(0)}%\nEstimated Impact: ${this.estimatedImpact}%\nDetection Method: ${this.detectionMethod}\n\nThis was automatically detected from ${this.frequency} test call${this.frequency > 1 ? 's' : ''}.`,
+            details: {
+                source: 'LLM Learning',
+                scope,
+                templateId: template._id.toString(),
+                templateName: template.name,
+                categoryId: category?.id,
+                categoryName: category?.name,
+                fillerWord: this.fillerWord,
+                confidence: this.confidence,
+                estimatedImpact: this.estimatedImpact,
+                frequency: this.frequency,
+                detectionMethod: this.detectionMethod,
+                suggestionId: this._id.toString()
+            }
+        });
+    } catch (notifError) {
+        logger.error('Failed to send filler suggestion notification', { error: notifError.message });
+    }
 };
 
 /**
  * Apply synonym suggestion
  */
 suggestionKnowledgeBaseSchema.methods.applySynonymSuggestion = async function(template) {
-    const synonymMap = this.categoryId
-        ? template.categories.id(this.categoryId).synonymMap
-        : template.synonymMap;
+    const AdminNotificationService = require('../services/AdminNotificationService');
+    
+    let category = null;
+    if (this.categoryId) {
+        category = template.categories.id(this.categoryId);
+    }
+    
+    const synonymMap = category ? category.synonymMap : template.synonymMap;
     
     // Get existing aliases or create empty array
     const existingAliases = synonymMap.get(this.technicalTerm) || [];
@@ -342,12 +380,45 @@ suggestionKnowledgeBaseSchema.methods.applySynonymSuggestion = async function(te
     }
     
     await template.save();
+    
+    // ============================================
+    // 📢 NOTIFY DEVELOPERS OF AI LEARNING
+    // ============================================
+    try {
+        const scope = category ? 'Category' : 'Template';
+        await AdminNotificationService.sendAlert({
+            code: 'AI_LEARNING_SYNONYM_ADDED',
+            severity: 'warning',
+            title: `🤖 AI Learning: Synonym Mapping Added by LLM (${scope})`,
+            message: `The AI detected and added a new synonym mapping.\n\nTemplate: "${template.name}"${category ? `\nCategory: "${category.name}"` : ''}\nTechnical Term: "${this.technicalTerm}"\nColloquial Term: "${this.colloquialTerm}"\nConfidence: ${(this.confidence * 100).toFixed(0)}%\nEstimated Impact: ${this.estimatedImpact}%\nDetection Method: ${this.detectionMethod}\n\nThis was automatically detected from ${this.frequency} test call${this.frequency > 1 ? 's' : ''}.`,
+            details: {
+                source: 'LLM Learning',
+                scope,
+                templateId: template._id.toString(),
+                templateName: template.name,
+                categoryId: category?.id,
+                categoryName: category?.name,
+                technicalTerm: this.technicalTerm,
+                colloquialTerm: this.colloquialTerm,
+                totalAliases: existingAliases.length,
+                confidence: this.confidence,
+                estimatedImpact: this.estimatedImpact,
+                frequency: this.frequency,
+                detectionMethod: this.detectionMethod,
+                suggestionId: this._id.toString()
+            }
+        });
+    } catch (notifError) {
+        logger.error('Failed to send synonym suggestion notification', { error: notifError.message });
+    }
 };
 
 /**
  * Apply keyword suggestion
  */
 suggestionKnowledgeBaseSchema.methods.applyKeywordSuggestion = async function(template) {
+    const AdminNotificationService = require('../services/AdminNotificationService');
+    
     const category = template.categories.id(this.categoryId);
     if (!category) throw new Error('Category not found');
     
@@ -359,12 +430,44 @@ suggestionKnowledgeBaseSchema.methods.applyKeywordSuggestion = async function(te
     }
     
     await template.save();
+    
+    // ============================================
+    // 📢 NOTIFY DEVELOPERS OF AI LEARNING
+    // ============================================
+    try {
+        await AdminNotificationService.sendAlert({
+            code: 'AI_LEARNING_KEYWORD_ADDED',
+            severity: 'warning',
+            title: '🤖 AI Learning: Keyword Added by LLM (Scenario)',
+            message: `The AI detected a missing keyword and added it to improve matching.\n\nTemplate: "${template.name}"\nCategory: "${category.name}"\nScenario: "${scenario.name}"\nKeyword: "${this.keyword}"\nConfidence: ${(this.confidence * 100).toFixed(0)}%\nEstimated Impact: ${this.estimatedImpact}%\nDetection Method: ${this.detectionMethod}\n\nThis was detected from ${this.frequency} failed match${this.frequency > 1 ? 'es' : ''}.`,
+            details: {
+                source: 'LLM Learning',
+                scope: 'Scenario',
+                templateId: template._id.toString(),
+                templateName: template.name,
+                categoryId: category.id,
+                categoryName: category.name,
+                scenarioId: scenario.scenarioId,
+                scenarioName: scenario.name,
+                keyword: this.keyword,
+                confidence: this.confidence,
+                estimatedImpact: this.estimatedImpact,
+                frequency: this.frequency,
+                detectionMethod: this.detectionMethod,
+                suggestionId: this._id.toString()
+            }
+        });
+    } catch (notifError) {
+        logger.error('Failed to send keyword suggestion notification', { error: notifError.message });
+    }
 };
 
 /**
  * Apply negative keyword suggestion
  */
 suggestionKnowledgeBaseSchema.methods.applyNegativeKeywordSuggestion = async function(template) {
+    const AdminNotificationService = require('../services/AdminNotificationService');
+    
     const category = template.categories.id(this.categoryId);
     if (!category) throw new Error('Category not found');
     
@@ -376,6 +479,36 @@ suggestionKnowledgeBaseSchema.methods.applyNegativeKeywordSuggestion = async fun
     }
     
     await template.save();
+    
+    // ============================================
+    // 📢 NOTIFY DEVELOPERS OF AI LEARNING
+    // ============================================
+    try {
+        await AdminNotificationService.sendAlert({
+            code: 'AI_LEARNING_NEGATIVE_KEYWORD_ADDED',
+            severity: 'warning',
+            title: '🤖 AI Learning: Negative Keyword Added by LLM (Scenario)',
+            message: `The AI detected a conflicting keyword and added it as a negative keyword.\n\nTemplate: "${template.name}"\nCategory: "${category.name}"\nScenario: "${scenario.name}"\nNegative Keyword: "${this.keyword}"\nConfidence: ${(this.confidence * 100).toFixed(0)}%\nEstimated Impact: ${this.estimatedImpact}%\nDetection Method: ${this.detectionMethod}\n\nThis helps prevent false matches and improve accuracy.`,
+            details: {
+                source: 'LLM Learning',
+                scope: 'Scenario',
+                templateId: template._id.toString(),
+                templateName: template.name,
+                categoryId: category.id,
+                categoryName: category.name,
+                scenarioId: scenario.scenarioId,
+                scenarioName: scenario.name,
+                negativeKeyword: this.keyword,
+                confidence: this.confidence,
+                estimatedImpact: this.estimatedImpact,
+                frequency: this.frequency,
+                detectionMethod: this.detectionMethod,
+                suggestionId: this._id.toString()
+            }
+        });
+    } catch (notifError) {
+        logger.error('Failed to send negative keyword suggestion notification', { error: notifError.message });
+    }
 };
 
 // ============================================
