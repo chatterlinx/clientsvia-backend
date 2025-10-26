@@ -310,7 +310,7 @@ class SmartCallFilter {
 
             // Check if number has suspicious pattern (e.g., sequential calls)
             const redisKey = `robo_pattern:${phoneNumber}`;
-            const callTimes = await redisClient.lrange(redisKey, 0, -1);
+            const callTimes = await redisClient.lRange(redisKey, 0, -1);
 
             if (callTimes.length >= 10) {
                 // More than 10 calls tracked - check if too regular
@@ -334,8 +334,8 @@ class SmartCallFilter {
             }
 
             // Track this call attempt
-            await redisClient.lpush(redisKey, Date.now());
-            await redisClient.ltrim(redisKey, 0, 19); // Keep last 20
+            await redisClient.lPush(redisKey, Date.now());
+            await redisClient.lTrim(redisKey, 0, 19); // Keep last 20
             await redisClient.expire(redisKey, 86400); // 24 hours
 
             return { shouldBlock: false };
