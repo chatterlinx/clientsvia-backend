@@ -283,6 +283,82 @@ const adminSettingsSchema = new mongoose.Schema({
         }
     },
     
+    // ============================================================================
+    // 🧠 GLOBAL AI BRAIN TEST CONFIGURATION (NEW - World-Class Refactor)
+    // ============================================================================
+    // PURPOSE: Single global test console for ALL AI Brain templates
+    // ARCHITECTURE: Static config + dynamic template routing
+    // BENEFITS: No duplicate phone numbers, persistent UI, clean UX
+    // ============================================================================
+    globalAIBrainTest: {
+        // Test Phone Configuration (GLOBAL - shared across all templates)
+        enabled: {
+            type: Boolean,
+            default: false,
+            description: 'Enable/disable test calls globally'
+        },
+        phoneNumber: {
+            type: String,
+            trim: true,
+            default: '',
+            description: 'Global test phone number (E.164: +15551234567) - ONE number for ALL templates'
+        },
+        accountSid: {
+            type: String,
+            trim: true,
+            default: '',
+            description: 'Twilio Account SID for test calls'
+        },
+        authToken: {
+            type: String,
+            trim: true,
+            default: '',
+            description: 'Twilio Auth Token (encrypt in production)'
+        },
+        greeting: {
+            type: String,
+            trim: true,
+            default: 'Welcome to the ClientsVia Global AI Brain Testing Center. You are currently testing the {template_name} template. Please ask questions or make statements to test the AI scenarios now.',
+            description: 'Test call greeting (supports {template_name} variable)'
+        },
+        notes: {
+            type: String,
+            trim: true,
+            default: '',
+            description: 'Admin notes about testing setup'
+        },
+        
+        // ROUTING: Which template receives test calls
+        activeTemplateId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'GlobalInstantResponseTemplate',
+            default: null,
+            description: 'Currently active template for test routing (changes when user switches templates)'
+        },
+        
+        // TRACKING: Test call analytics
+        lastTestedAt: {
+            type: Date,
+            description: 'Last time a test call was made'
+        },
+        testCallCount: {
+            type: Number,
+            default: 0,
+            description: 'Total number of test calls made'
+        },
+        
+        // METADATA
+        createdAt: {
+            type: Date,
+            default: Date.now
+        },
+        lastUpdatedBy: {
+            type: String,
+            default: 'Admin',
+            description: 'Who last updated this config'
+        }
+    },
+    
     // Metadata
     lastUpdated: {
         type: Date,

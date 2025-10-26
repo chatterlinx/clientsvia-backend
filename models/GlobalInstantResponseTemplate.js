@@ -580,9 +580,20 @@ const globalInstantResponseTemplateSchema = new Schema({
         // Applied during normalization in HybridScenarioSelector
     },
     
-    // 📞 TWILIO TEST CONFIGURATION
-    // Allows admin to test this template via dedicated test phone number
-    // ISOLATED from production company phone numbers
+    // ============================================================================
+    // 📞 TWILIO TEST CONFIGURATION (⚠️ DEPRECATED - Moving to AdminSettings)
+    // ============================================================================
+    // ⚠️ DEPRECATION NOTICE:
+    // This field is being phased out. Twilio test config has been moved to
+    // AdminSettings.globalAIBrainTest for a cleaner, global architecture.
+    // 
+    // REASON FOR CHANGE:
+    // - OLD: Each template had its own Twilio config (caused duplicate errors)
+    // - NEW: One global test console routes to any template (clean UX)
+    // 
+    // This field is kept temporarily for backward compatibility and data migration.
+    // It will be removed in a future version after all data is migrated.
+    // ============================================================================
     twilioTest: {
         enabled: {
             type: Boolean,
@@ -591,11 +602,9 @@ const globalInstantResponseTemplateSchema = new Schema({
         },
         phoneNumber: {
             type: String,
-            trim: true,
-            sparse: true,
-            unique: true
-            // Unique test phone number (e.g., +15551234567)
-            // Twilio routes this number → this template's scenarios
+            trim: true
+            // ⚠️ DEPRECATED: Unique constraint removed (no longer enforced)
+            // Test phone number (e.g., +15551234567)
         },
         accountSid: {
             type: String,
