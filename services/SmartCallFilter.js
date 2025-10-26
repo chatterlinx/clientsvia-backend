@@ -276,7 +276,7 @@ class SmartCallFilter {
             }
 
             // Increment counter (expires in 10 minutes)
-            await redisClient.setex(redisKey, 600, callCount + 1);
+            await redisClient.setEx(redisKey, 600, (callCount + 1).toString()); // Convert to string for Redis v4+
 
             return { shouldBlock: false, callCount: callCount + 1 };
 
