@@ -75,11 +75,34 @@ async function loadFillerWordsForTemplate() {
         loadedFillerWords = result.fillers || [];
         
         console.log(`✅ [FILLER WORDS] Loaded ${loadedFillerWords.length} words`);
-        console.log(`🔍 [DEBUG] About to call renderFillerWords with:`, loadedFillerWords);
-        console.log(`🔍 [DEBUG] renderFillerWords function exists:`, typeof renderFillerWords);
         
-        renderFillerWords(loadedFillerWords);
-        console.log(`✅ [DEBUG] renderFillerWords executed successfully`);
+        // INLINE RENDER (bypass any shadowing issues)
+        try {
+            console.log(`🎨 [INLINE RENDER] Starting with ${loadedFillerWords.length} words`);
+            const container = document.getElementById('template-fillers-display');
+            if (!container) {
+                console.error('❌ [INLINE RENDER] Container not found!');
+            } else {
+                console.log(`✅ [INLINE RENDER] Container found, innerHTML before:`, container.innerHTML.substring(0, 100));
+                
+                if (loadedFillerWords.length === 0) {
+                    container.innerHTML = '<div class="text-center w-full text-gray-500 py-8"><i class="fas fa-inbox text-4xl mb-3"></i><p>No filler words yet</p></div>';
+                } else {
+                    container.innerHTML = loadedFillerWords.map(word => `
+                        <div class="inline-flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                            <span>${word}</span>
+                            <button onclick="window.removeFillerWord('${word}')" class="text-red-600 hover:text-red-800">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    `).join('');
+                }
+                
+                console.log(`✅ [INLINE RENDER] Rendered! innerHTML after:`, container.innerHTML.substring(0, 100));
+            }
+        } catch (error) {
+            console.error(`❌ [INLINE RENDER] ERROR:`, error);
+        }
         
         updateFillerWordsStats();
         
