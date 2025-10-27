@@ -156,8 +156,94 @@ router.get('/openai-health', async (req, res) => {
             user: req.user?.email || req.user?.username
         });
         
-        // Get OpenAI health status
-        const healthCheck = await getDependencyHealthMonitor().checkOpenAI();
+        // ====================================================================
+        // CHECKPOINT 1: Verify DependencyHealthMonitor singleton exists
+        // ====================================================================
+        let healthMonitor;
+        try {
+            healthMonitor = getDependencyHealthMonitor();
+            if (!healthMonitor) {
+                throw new Error('DependencyHealthMonitor singleton returned null/undefined');
+            }
+            if (typeof healthMonitor.checkOpenAI !== 'function') {
+                throw new Error('checkOpenAI method does not exist on DependencyHealthMonitor instance');
+            }
+        } catch (monitorError) {
+            logger.error('❌ [OPENAI HEALTH] CHECKPOINT 1 FAILED: DependencyHealthMonitor initialization error', {
+                error: monitorError.message,
+                stack: monitorError.stack,
+                type: typeof healthMonitor,
+                methods: healthMonitor ? Object.keys(healthMonitor) : []
+            });
+            
+            // CRITICAL: Send notification - system architecture broken
+            await AdminNotificationService.sendAlert({
+                code: 'OPENAI_HEALTH_CHECK_SYSTEM_ERROR',
+                severity: 'CRITICAL',
+                title: '🔴 CRITICAL: OpenAI Health Check System Failure',
+                message: `The OpenAI health check system itself is broken. Cannot initialize DependencyHealthMonitor.`,
+                details: {
+                    checkpoint: 'CHECKPOINT 1: DependencyHealthMonitor initialization',
+                    error: monitorError.message,
+                    stack: monitorError.stack,
+                    impact: 'Cannot monitor OpenAI status. System monitoring is compromised.',
+                    action: 'Check services/DependencyHealthMonitor.js for initialization errors. Review recent code changes.',
+                    detectedBy: 'OpenAI health check endpoint',
+                    user: req.user?.username || req.user?.email
+                },
+                stackTrace: monitorError.stack,
+                bypassPatternDetection: true
+            });
+            
+            throw monitorError; // Re-throw to outer catch
+        }
+        
+        // ====================================================================
+        // CHECKPOINT 2: Call checkOpenAI() and validate response
+        // ====================================================================
+        let healthCheck;
+        try {
+            healthCheck = await healthMonitor.checkOpenAI();
+            
+            // Validate response structure
+            if (!healthCheck || typeof healthCheck !== 'object') {
+                throw new Error(`checkOpenAI() returned invalid response: ${typeof healthCheck}`);
+            }
+            if (!healthCheck.status) {
+                throw new Error('checkOpenAI() response missing required "status" field');
+            }
+            if (!['HEALTHY', 'DOWN', 'NOT_CONFIGURED', 'DEGRADED', 'ERROR'].includes(healthCheck.status)) {
+                throw new Error(`checkOpenAI() returned unexpected status: ${healthCheck.status}`);
+            }
+        } catch (checkError) {
+            logger.error('❌ [OPENAI HEALTH] CHECKPOINT 2 FAILED: checkOpenAI() execution error', {
+                error: checkError.message,
+                stack: checkError.stack,
+                response: healthCheck
+            });
+            
+            // CRITICAL: Send notification - health check broken
+            await AdminNotificationService.sendAlert({
+                code: 'OPENAI_HEALTH_CHECK_EXECUTION_ERROR',
+                severity: 'CRITICAL',
+                title: '🔴 CRITICAL: OpenAI Health Check Execution Failed',
+                message: `The checkOpenAI() method crashed or returned invalid data.`,
+                details: {
+                    checkpoint: 'CHECKPOINT 2: checkOpenAI() execution',
+                    error: checkError.message,
+                    stack: checkError.stack,
+                    response: healthCheck,
+                    impact: 'Cannot determine OpenAI status. Monitoring blind spot.',
+                    action: 'Check services/DependencyHealthMonitor.js checkOpenAI() method. Review OpenAI client initialization.',
+                    detectedBy: 'OpenAI health check endpoint',
+                    user: req.user?.username || req.user?.email
+                },
+                stackTrace: checkError.stack,
+                bypassPatternDetection: true
+            });
+            
+            throw checkError; // Re-throw to outer catch
+        }
         
         // Determine if we should send an alert
         const isDown = healthCheck.status === 'DOWN';
