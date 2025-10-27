@@ -9421,6 +9421,16 @@ Continue?`;
                         console.log('✅ [SWITCH TEMPLATE] Template Data sub-tabs refreshed');
                     }
                     
+                    // 🎯 NEW: Reload fillers/synonyms with template-settings-manager.js
+                    if (typeof loadFillerWordsForTemplate === 'function') {
+                        console.log('📥 [SWITCH TEMPLATE] Reloading fillers...');
+                        await loadFillerWordsForTemplate();
+                    }
+                    if (typeof loadSynonymsForTemplate === 'function') {
+                        console.log('📥 [SWITCH TEMPLATE] Reloading synonyms...');
+                        await loadSynonymsForTemplate();
+                    }
+                    
                     // NEW: Silently update activeTemplateId in global Twilio config (form stays static!)
                     console.log('📞 [SWITCH TEMPLATE] Updating activeTemplateId in global test config...');
                     try {
@@ -10834,6 +10844,16 @@ Timestamp: ${new Date(timestamp).toISOString()}
                 console.log('📊 [PAGE INIT] Loading Template Data tabs for active template...');
                 await window.templateDataManager.onTemplateChange(activeTemplateId);
                 console.log('✅ [PAGE INIT] Template Data tabs loaded');
+            }
+            
+            // 🎯 NEW: Initial load of fillers/synonyms with template-settings-manager.js
+            if (typeof loadFillerWordsForTemplate === 'function') {
+                console.log('📥 [PAGE INIT] Loading fillers...');
+                await loadFillerWordsForTemplate();
+            }
+            if (typeof loadSynonymsForTemplate === 'function') {
+                console.log('📥 [PAGE INIT] Loading synonyms...');
+                await loadSynonymsForTemplate();
             }
             
             // Load Twilio test config for the active template

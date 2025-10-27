@@ -138,13 +138,11 @@ class TemplateDataManager {
         try {
             const template = await this.fetchTemplate(templateId);
             
-            // Render fillers
-            this.renderTemplateFillers(template.fillerWords || []);
+            // ⚠️ DISABLED: Let template-settings-manager.js own filler/synonym rendering
+            // this.renderTemplateFillers(template.fillerWords || []);
+            // this.renderTemplateSynonyms(template.synonymMap || {});
             
-            // Render synonyms
-            this.renderTemplateSynonyms(template.synonymMap || {});
-            
-            console.log('✅ [TEMPLATE SETTINGS] Loaded successfully');
+            console.log('✅ [TEMPLATE SETTINGS] Loaded successfully (rendering delegated to template-settings-manager.js)');
             
         } catch (error) {
             console.error('❌ [TEMPLATE SETTINGS] Load failed:', error);
