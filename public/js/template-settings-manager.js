@@ -72,7 +72,7 @@ async function loadFillerWordsForTemplate() {
         }
         
         const result = await response.json();
-        loadedFillerWords = result.data.fillers || [];
+        loadedFillerWords = result.fillers || [];
         
         console.log(`✅ [FILLER WORDS] Loaded ${loadedFillerWords.length} words`);
         
@@ -336,11 +336,11 @@ async function loadSynonymsForTemplate() {
         
         // Convert to Map
         loadedSynonyms = new Map();
-        if (result.data.synonymMap) {
-            if (result.data.synonymMap instanceof Map) {
-                loadedSynonyms = new Map(result.data.synonymMap);
-            } else if (typeof result.data.synonymMap === 'object') {
-                for (const [term, aliases] of Object.entries(result.data.synonymMap)) {
+        if (result.synonyms) {
+            if (result.synonyms instanceof Map) {
+                loadedSynonyms = new Map(result.synonyms);
+            } else if (typeof result.synonyms === 'object') {
+                for (const [term, aliases] of Object.entries(result.synonyms)) {
                     if (Array.isArray(aliases)) {
                         loadedSynonyms.set(term, aliases);
                     }
