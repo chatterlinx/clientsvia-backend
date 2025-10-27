@@ -4654,6 +4654,20 @@ Just checking in..."></textarea>
             } catch (error) {
                 console.error('Error saving template:', error);
                 showNotification('Failed to save template', 'error');
+                
+                // Report error to Notification Center
+                await errorReporters.templates.reportError({
+                    error,
+                    operation: 'createTemplate',
+                    userMessage: 'Failed to create new AI template. Template was not saved.',
+                    retryFunction: () => saveTemplate(templateData),
+                    additionalContext: {
+                        endpoint: '/api/admin/global-instant-responses',
+                        templateName: templateData?.name,
+                        templateType: templateData?.type
+                    }
+                });
+                
                 return null;
             }
         }
@@ -4681,6 +4695,20 @@ Just checking in..."></textarea>
             } catch (error) {
                 console.error('Error updating template:', error);
                 showNotification('Failed to update template', 'error');
+                
+                // Report error to Notification Center
+                await errorReporters.templates.reportError({
+                    error,
+                    operation: 'updateTemplate',
+                    userMessage: 'Failed to update AI template. Changes were not saved.',
+                    retryFunction: () => updateTemplate(templateId, updates),
+                    additionalContext: {
+                        endpoint: `/api/admin/global-instant-responses/${templateId}`,
+                        templateId,
+                        updateFields: Object.keys(updates || {}).join(', ')
+                    }
+                });
+                
                 return null;
             }
         }
@@ -7394,6 +7422,18 @@ Continue?`;
             } catch (error) {
                 console.error('Error deleting template:', error);
                 showNotification('❌ Error: ' + error.message, 'error');
+                
+                // Report error to Notification Center
+                await errorReporters.templates.reportError({
+                    error,
+                    operation: 'deleteTemplate',
+                    userMessage: 'Failed to delete AI template. Template still exists.',
+                    retryFunction: () => deleteTemplate(templateId),
+                    additionalContext: {
+                        endpoint: `/api/admin/global-instant-responses/${templateId}`,
+                        templateId
+                    }
+                });
             }
         }
 
