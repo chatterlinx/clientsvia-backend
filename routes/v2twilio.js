@@ -16,6 +16,7 @@ const AdminSettings = require('../models/AdminSettings');
 const HybridScenarioSelector = require('../services/HybridScenarioSelector');
 const IntelligentRouter = require('../services/IntelligentRouter');  // 🧠 3-Tier Self-Improvement System
 const MatchDiagnostics = require('../services/MatchDiagnostics');
+const AdminNotificationService = require('../services/AdminNotificationService');  // 🚨 Critical error reporting
 // 🚀 V2 SYSTEM: Using V2 AI Agent Runtime instead of legacy agent.js
 const { initializeCall, processUserInput } = require('../services/v2AIAgentRuntime');
 // V2 DELETED: Legacy aiAgentRuntime - replaced with v2AIAgentRuntime
@@ -1329,7 +1330,27 @@ router.post('/voice/:companyID', async (req, res) => {
     // Load company by ID
     const company = await Company.findById(companyID);
     if (!company) {
-      logger.info(`[ERROR] Company not found: ${companyID}`);
+      logger.error(`[ERROR] Company not found: ${companyID}`);
+      
+      // 🚨 CRITICAL ALERT: Send to Notification Center
+      await AdminNotificationService.sendAlert({
+        code: 'TWILIO_COMPANY_NOT_FOUND',
+        severity: 'CRITICAL',
+        companyId: companyID,
+        companyName: `Company ${companyID}`,
+        message: `🔴 CRITICAL: Twilio call failed - Company ${companyID} not found in database`,
+        details: {
+          endpoint: `/api/twilio/voice/${companyID}`,
+          callSid: req.body.CallSid,
+          from: req.body.From,
+          to: req.body.To,
+          error: `Company ${companyID} does not exist in database`,
+          impact: 'Caller hears error message and call disconnects. All calls to this company fail.',
+          action: 'Check if company was deleted, verify Twilio webhook URL, ensure company exists in database.',
+          timestamp: new Date().toISOString()
+        }
+      }).catch(notifErr => logger.error('Failed to send company not found alert:', notifErr));
+      
       // Use configurable response instead of hardcoded message [[memory:8276820]]
       const companyNotFoundResponse = `Configuration error: Company ${companyID} not found. Each company must be properly configured in the platform.`;
       twiml.say(companyNotFoundResponse);
@@ -1400,6 +1421,28 @@ router.post('/voice/:companyID', async (req, res) => {
     
   } catch (error) {
     logger.error(`[ERROR] AI Agent Voice error for company ${companyID}:`, error);
+    
+    // 🚨 CRITICAL ALERT: Send to Notification Center
+    await AdminNotificationService.sendAlert({
+      code: 'TWILIO_WEBHOOK_ERROR',
+      severity: 'CRITICAL',
+      companyId: companyID,
+      companyName: `Company ${companyID}`,
+      message: `🔴 CRITICAL: Twilio webhook /voice/${companyID} crashed`,
+      details: {
+        endpoint: `/api/twilio/voice/${companyID}`,
+        callSid: req.body?.CallSid,
+        from: req.body?.From,
+        to: req.body?.To,
+        error: error.message,
+        stack: error.stack,
+        impact: 'Caller hears error message and call disconnects. All incoming calls to this company fail until resolved.',
+        action: 'Check error logs, verify company configuration, ensure AI Agent Logic is properly configured, check database connectivity.',
+        timestamp: new Date().toISOString()
+      },
+      stackTrace: error.stack
+    }).catch(notifErr => logger.error('Failed to send webhook error alert:', notifErr));
+    
     const twiml = new twilio.twiml.VoiceResponse();
     // Use configurable response instead of hardcoded message [[memory:8276820]]
     const voiceErrorResponse = `Configuration error: Company ${companyID} must configure voice error responses in AI Agent Logic. Each company must have their own protocol.`;
