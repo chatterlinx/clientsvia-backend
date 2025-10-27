@@ -15467,7 +15467,15 @@ function switchTab(tabName) {
     }
     
     // Load data for specific tabs
-    if (tabName === 'intelligence') {
+    if (tabName === 'behaviors') {
+        // Load behaviors when Behaviors tab is opened
+        if (typeof renderBehaviors === 'function') {
+            console.log('🎭 [BEHAVIORS] Loading behaviors...');
+            renderBehaviors();
+        } else {
+            console.warn('⚠️ [BEHAVIORS] renderBehaviors function not found');
+        }
+    } else if (tabName === 'intelligence') {
         // Load 3-tier intelligence metrics
         if (typeof loadIntelligenceMetrics === 'function') {
             console.log('📊 [INTELLIGENCE] Loading metrics...');
