@@ -15469,7 +15469,7 @@ async function saveAILearningSettings() {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(settings)
+            body: JSON.stringify({ learningSettings: settings })
         });
         
         if (!response.ok) {
@@ -15481,8 +15481,8 @@ async function saveAILearningSettings() {
         console.log('✅ [AI LEARNING] Settings saved successfully:', result);
         
         // Show success message
-        if (typeof ToastManager !== 'undefined') {
-            ToastManager.success('AI learning settings saved successfully!');
+        if (window.toastManager) {
+            window.toastManager.success('AI learning settings saved successfully!');
         } else {
             alert('✅ AI learning settings saved successfully!');
         }
@@ -15492,8 +15492,8 @@ async function saveAILearningSettings() {
         
     } catch (error) {
         console.error('❌ [AI LEARNING] Failed to save settings:', error);
-        if (typeof ToastManager !== 'undefined') {
-            ToastManager.error(`Failed to save: ${error.message}`);
+        if (window.toastManager) {
+            window.toastManager.error(`Failed to save: ${error.message}`);
         } else {
             alert(`❌ Failed to save AI learning settings: ${error.message}`);
         }
