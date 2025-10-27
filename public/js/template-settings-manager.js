@@ -93,33 +93,39 @@ async function loadFillerWordsForTemplate() {
  * Render filler words in UI
  */
 function renderFillerWords(words) {
-    console.log(`🎨 [RENDER FILLERS] Called with ${words.length} words`);
-    const container = document.getElementById('template-fillers-display');
-    if (!container) {
-        console.error('❌ [RENDER] Container #template-fillers-display not found!');
-        return;
-    }
-    console.log(`✅ [RENDER FILLERS] Container found, rendering...`);
-    
-    if (words.length === 0) {
-        container.innerHTML = `
-            <div class="text-center w-full text-gray-500 py-8">
-                <i class="fas fa-inbox text-4xl mb-3"></i>
-                <p>No filler words yet. Click "Add Word" to get started.</p>
+    try {
+        console.log(`🎨 [RENDER FILLERS] Called with ${words.length} words`);
+        const container = document.getElementById('template-fillers-display');
+        if (!container) {
+            console.error('❌ [RENDER] Container #template-fillers-display not found!');
+            return;
+        }
+        console.log(`✅ [RENDER FILLERS] Container found, rendering...`);
+        
+        if (words.length === 0) {
+            container.innerHTML = `
+                <div class="text-center w-full text-gray-500 py-8">
+                    <i class="fas fa-inbox text-4xl mb-3"></i>
+                    <p>No filler words yet. Click "Add Word" to get started.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Render as tags
+        container.innerHTML = words.map(word => `
+            <div class="inline-flex items-center gap-2 px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-medium text-gray-800 transition-all">
+                <span>${word}</span>
+                <button onclick="removeFillerWord('${word}')" class="text-red-600 hover:text-red-800 transition-colors">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-        `;
-        return;
+        `).join('');
+        console.log(`✅ [RENDER FILLERS] Rendered ${words.length} words successfully`);
+    } catch (error) {
+        console.error(`❌ [RENDER FILLERS] FATAL ERROR:`, error);
+        console.error(`❌ [RENDER FILLERS] Stack:`, error.stack);
     }
-    
-    // Render as tags
-    container.innerHTML = words.map(word => `
-        <div class="inline-flex items-center gap-2 px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-medium text-gray-800 transition-all">
-            <span>${word}</span>
-            <button onclick="removeFillerWord('${word}')" class="text-red-600 hover:text-red-800 transition-colors">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-    `).join('');
 }
 
 /**
