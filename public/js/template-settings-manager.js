@@ -50,8 +50,11 @@ function initializeTemplateSettings() {
  * Load filler words from API
  */
 async function loadFillerWordsForTemplate() {
-    const templateId = currentTemplateIdForSettings;
-    if (!templateId) return;
+    const templateId = window.activeTemplateId || currentTemplateIdForSettings;
+    if (!templateId) {
+        console.warn('⚠️ [FILLER WORDS] No template ID available for loading');
+        return;
+    }
     
     try {
         console.log('📥 [FILLER WORDS] Loading for template:', templateId);
@@ -308,8 +311,11 @@ function showFillerWordsError(message) {
  * Load synonyms from API
  */
 async function loadSynonymsForTemplate() {
-    const templateId = currentTemplateIdForSettings;
-    if (!templateId) return;
+    const templateId = window.activeTemplateId || currentTemplateIdForSettings;
+    if (!templateId) {
+        console.warn('⚠️ [SYNONYMS] No template ID available for loading');
+        return;
+    }
     
     try {
         console.log('📥 [SYNONYMS] Loading for template:', templateId);
