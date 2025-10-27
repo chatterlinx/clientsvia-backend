@@ -4534,26 +4534,54 @@ Just checking in..."></textarea>
                 // ============================================
                 // API succeeded but returned empty data - this is not an "error"
                 // but it's a configuration issue that needs attention
+                // 
+                // BYPASS PATTERN DETECTION: Empty critical tables warrant immediate alerts
                 if (availableBehaviors.length === 0) {
                     console.warn('⚠️ Behaviors loaded successfully but database is empty');
                     
-                    // Send INFO notification (not an error, but needs attention)
-                    await errorReporters.behaviors.reportError({
-                        error: new Error('EMPTY_STATE: Behaviors database is empty'),
-                        operation: 'fetchBehaviors_emptyState',
-                        userMessage: 'AI Behavior templates are missing. The database needs to be seeded with default behaviors.',
-                        retryFunction: fetchBehaviors,
-                        additionalContext: {
-                            endpoint: '/api/admin/global-behaviors',
-                            apiStatus: 'SUCCESS',
-                            httpCode: response.status,
-                            dataReturned: 'Empty array',
-                            issue: 'Database has 0 behaviors',
-                            suggestedFix: 'Run: node scripts/seed-behaviors-quick.js',
-                            impact: 'Users cannot select behaviors for categories/scenarios',
-                            notificationType: 'EMPTY_STATE_WARNING'
+                    // Send IMMEDIATE notification to backend (bypass pattern detection)
+                    try {
+                        const response = await fetch('/api/admin/notifications/frontend-error', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${getAuthToken()}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                error: {
+                                    message: 'EMPTY_STATE: Behaviors database is empty',
+                                    name: 'EmptyStateError',
+                                    stack: 'Empty state detected in fetchBehaviors()'
+                                },
+                                context: {
+                                    operation: 'fetchBehaviors_emptyState',
+                                    module: 'Behaviors',
+                                    page: 'Global AI Brain',
+                                    endpoint: '/api/admin/global-behaviors',
+                                    severity: 'INFO',
+                                    bypassPatternDetection: true // IMMEDIATE ALERT
+                                },
+                                additionalContext: {
+                                    apiStatus: 'SUCCESS',
+                                    httpCode: result.success ? 200 : 500,
+                                    dataReturned: 'Empty array',
+                                    issue: 'Database has 0 behaviors',
+                                    suggestedFix: 'Run: node scripts/seed-behaviors-quick.js',
+                                    impact: 'Users cannot select behaviors for categories/scenarios',
+                                    notificationType: 'EMPTY_STATE_WARNING',
+                                    userMessage: 'AI Behavior templates are missing. The database needs to be seeded with default behaviors.'
+                                }
+                            })
+                        });
+                        
+                        if (response.ok) {
+                            console.log('✅ Empty state alert sent to Notification Center');
+                        } else {
+                            console.error('❌ Failed to send empty state alert:', await response.text());
                         }
-                    });
+                    } catch (notifError) {
+                        console.error('❌ Error sending empty state notification:', notifError);
+                    }
                 }
                 
                 return availableBehaviors;

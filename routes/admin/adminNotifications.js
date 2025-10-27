@@ -128,6 +128,7 @@ const HealthCheckLog = require('../../models/HealthCheckLog');
 const AdminNotificationService = require('../../services/AdminNotificationService');
 const AlertEscalationService = require('../../services/AlertEscalationService');
 const PlatformHealthCheckService = require('../../services/PlatformHealthCheckService');
+const CriticalDataHealthCheck = require('../../services/CriticalDataHealthCheck');
 
 // ============================================================================
 // GET NOTIFICATION CENTER STATUS (for dynamic tab coloring)
@@ -1862,6 +1863,32 @@ router.get('/admin/notifications/_routes', authenticateJWT, requireRole('admin')
         ],
         allRoutes: routes.slice(0, 20) // First 20 routes
     });
+});
+
+// ============================================================================
+// CRITICAL DATA HEALTH CHECK (Manual Trigger)
+// ============================================================================
+
+router.post('/run-critical-data-health-check', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        logger.info('🏥 [HEALTH CHECK] Manual trigger by admin');
+        
+        const results = await CriticalDataHealthCheck.runAllChecks();
+        
+        res.json({
+            success: true,
+            message: 'Critical data health check completed',
+            results
+        });
+        
+    } catch (error) {
+        logger.error('❌ [HEALTH CHECK] Failed:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Health check failed',
+            error: error.message
+        });
+    }
 });
 
 module.exports = router;
