@@ -281,7 +281,7 @@ llmCallLogSchema.statics.getTierDistribution = async function(templateId, startD
     const pipeline = [
         {
             $match: {
-                templateId: mongoose.Types.ObjectId(templateId),
+                templateId: new mongoose.Types.ObjectId(templateId),
                 createdAt: { $gte: startDate, $lte: endDate }
             }
         },
@@ -331,7 +331,7 @@ llmCallLogSchema.statics.getTierDistribution = async function(templateId, startD
 llmCallLogSchema.statics.getWeeklyProgression = async function(templateId) {
     const pipeline = [
         {
-            $match: { templateId: mongoose.Types.ObjectId(templateId) }
+            $match: { templateId: new mongoose.Types.ObjectId(templateId) }
         },
         {
             $group: {
@@ -359,7 +359,7 @@ llmCallLogSchema.statics.getCostSavings = async function(templateId, baselineCos
     const result = await this.aggregate([
         {
             $match: {
-                templateId: mongoose.Types.ObjectId(templateId),
+                templateId: new mongoose.Types.ObjectId(templateId),
                 monthYear: currentMonth
             }
         },

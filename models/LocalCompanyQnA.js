@@ -182,7 +182,7 @@ localCompanyQnASchema.statics.searchByKeywords = function(companyId, keywords, o
 // 📊 Statistics
 localCompanyQnASchema.statics.getCompanyStats = async function(companyId) {
     const stats = await this.aggregate([
-        { $match: { companyId: mongoose.Types.ObjectId(companyId) } },
+        { $match: { companyId: new mongoose.Types.ObjectId(companyId) } },
         {
             $group: {
                 _id: '$status',

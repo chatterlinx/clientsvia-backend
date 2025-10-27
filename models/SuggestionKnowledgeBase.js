@@ -684,7 +684,7 @@ suggestionKnowledgeBaseSchema.statics.getPendingSuggestions = async function(tem
  */
 suggestionKnowledgeBaseSchema.statics.getSummary = async function(templateId) {
     const pipeline = [
-        { $match: { templateId: mongoose.Types.ObjectId(templateId), status: 'pending' } },
+        { $match: { templateId: new mongoose.Types.ObjectId(templateId), status: 'pending' } },
         {
             $group: {
                 _id: '$priority',

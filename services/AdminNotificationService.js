@@ -66,6 +66,23 @@ class AdminNotificationService {
         const startTime = Date.now();
         const requestId = `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
+        // ================================================================
+        // STRINGIFY DETAILS IF OBJECT (FIX FOR MONGOOSE VALIDATION)
+        // ================================================================
+        // NotificationLog.details expects a String, but services may pass Objects
+        // Convert to JSON string to prevent: "Cast to string failed for value"
+        if (typeof details === 'object' && details !== null) {
+            try {
+                details = JSON.stringify(details, null, 2);
+            } catch (stringifyError) {
+                logger.warn('⚠️ [ADMIN NOTIFICATION] Failed to stringify details object', {
+                    error: stringifyError.message,
+                    detailsType: typeof details
+                });
+                details = String(details); // Fallback to toString()
+            }
+        }
+        
         try {
             // ================================================================
             // STRUCTURED LOGGING (per REFACTOR_PROTOCOL.md)
