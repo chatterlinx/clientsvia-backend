@@ -122,6 +122,15 @@ function updateFillerWordsStats() {
  * Add a filler word
  */
 async function addFillerWord() {
+    // CRITICAL: Always get the latest template ID
+    const templateId = window.activeTemplateId || currentTemplateIdForSettings;
+    
+    if (!templateId) {
+        alert('❌ No template selected. Please select a template first.');
+        console.error('❌ [FILLER WORDS] No template ID available');
+        return;
+    }
+    
     const word = prompt('Enter a filler word to add (e.g., "um", "uh", "like"):');
     
     if (!word || word.trim() === '') {
@@ -137,10 +146,10 @@ async function addFillerWord() {
     }
     
     try {
-        console.log('➕ [FILLER WORDS] Adding:', normalizedWord);
+        console.log('➕ [FILLER WORDS] Adding:', normalizedWord, 'to template:', templateId);
         
         const token = localStorage.getItem('adminToken');
-        const response = await fetch(`/api/admin/global-instant-responses/${currentTemplateIdForSettings}/fillers`, {
+        const response = await fetch(`/api/admin/global-instant-responses/${templateId}/fillers`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -177,15 +186,24 @@ async function addFillerWord() {
  * Remove a filler word
  */
 async function removeFillerWord(word) {
+    // CRITICAL: Always get the latest template ID
+    const templateId = window.activeTemplateId || currentTemplateIdForSettings;
+    
+    if (!templateId) {
+        alert('❌ No template selected. Please select a template first.');
+        console.error('❌ [FILLER WORDS] No template ID available');
+        return;
+    }
+    
     if (!confirm(`Remove "${word}" from filler list?`)) {
         return;
     }
     
     try {
-        console.log('➖ [FILLER WORDS] Removing:', word);
+        console.log('➖ [FILLER WORDS] Removing:', word, 'from template:', templateId);
         
         const token = localStorage.getItem('adminToken');
-        const response = await fetch(`/api/admin/global-instant-responses/${currentTemplateIdForSettings}/fillers`, {
+        const response = await fetch(`/api/admin/global-instant-responses/${templateId}/fillers`, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -239,8 +257,11 @@ function searchFillerWords() {
  * Export filler words
  */
 function exportFillerWords() {
+    // CRITICAL: Always get the latest template ID
+    const templateId = window.activeTemplateId || currentTemplateIdForSettings;
+    
     const data = {
-        templateId: currentTemplateIdForSettings,
+        templateId: templateId,
         exportedAt: new Date().toISOString(),
         fillerWords: loadedFillerWords
     };
@@ -251,7 +272,7 @@ function exportFillerWords() {
     
     const a = document.createElement('a');
     a.href = url;
-    a.download = `filler-words-${currentTemplateIdForSettings}-${Date.now()}.json`;
+    a.download = `filler-words-${templateId}-${Date.now()}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -394,6 +415,15 @@ function updateSynonymsStats() {
  * Add synonym mapping
  */
 async function addSynonymMapping() {
+    // CRITICAL: Always get the latest template ID
+    const templateId = window.activeTemplateId || currentTemplateIdForSettings;
+    
+    if (!templateId) {
+        alert('❌ No template selected. Please select a template first.');
+        console.error('❌ [SYNONYMS] No template ID available');
+        return;
+    }
+    
     const technicalTerm = document.getElementById('synonym-technical-term').value.trim().toLowerCase();
     const colloquialTermsInput = document.getElementById('synonym-colloquial-terms').value.trim().toLowerCase();
     
@@ -411,10 +441,10 @@ async function addSynonymMapping() {
     }
     
     try {
-        console.log(`➕ [SYNONYMS] Adding mapping: "${technicalTerm}" → [${colloquialTerms.join(', ')}]`);
+        console.log(`➕ [SYNONYMS] Adding mapping: "${technicalTerm}" → [${colloquialTerms.join(', ')}] to template:`, templateId);
         
         const token = localStorage.getItem('adminToken');
-        const response = await fetch(`/api/admin/global-instant-responses/${currentTemplateIdForSettings}/synonyms`, {
+        const response = await fetch(`/api/admin/global-instant-responses/${templateId}/synonyms`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -458,15 +488,24 @@ async function addSynonymMapping() {
  * Remove synonym mapping
  */
 async function removeSynonymMapping(technicalTerm) {
+    // CRITICAL: Always get the latest template ID
+    const templateId = window.activeTemplateId || currentTemplateIdForSettings;
+    
+    if (!templateId) {
+        alert('❌ No template selected. Please select a template first.');
+        console.error('❌ [SYNONYMS] No template ID available');
+        return;
+    }
+    
     if (!confirm(`Remove synonym mapping for "${technicalTerm}"?`)) {
         return;
     }
     
     try {
-        console.log('➖ [SYNONYMS] Removing mapping:', technicalTerm);
+        console.log('➖ [SYNONYMS] Removing mapping:', technicalTerm, 'from template:', templateId);
         
         const token = localStorage.getItem('adminToken');
-        const response = await fetch(`/api/admin/global-instant-responses/${currentTemplateIdForSettings}/synonyms/${encodeURIComponent(technicalTerm)}`, {
+        const response = await fetch(`/api/admin/global-instant-responses/${templateId}/synonyms/${encodeURIComponent(technicalTerm)}`, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -502,13 +541,16 @@ async function removeSynonymMapping(technicalTerm) {
  * Export synonyms
  */
 function exportSynonyms() {
+    // CRITICAL: Always get the latest template ID
+    const templateId = window.activeTemplateId || currentTemplateIdForSettings;
+    
     const synonymsObject = {};
     for (const [term, aliases] of loadedSynonyms.entries()) {
         synonymsObject[term] = aliases;
     }
     
     const data = {
-        templateId: currentTemplateIdForSettings,
+        templateId: templateId,
         exportedAt: new Date().toISOString(),
         synonymMap: synonymsObject
     };
@@ -519,7 +561,7 @@ function exportSynonyms() {
     
     const a = document.createElement('a');
     a.href = url;
-    a.download = `synonyms-${currentTemplateIdForSettings}-${Date.now()}.json`;
+    a.download = `synonyms-${templateId}-${Date.now()}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

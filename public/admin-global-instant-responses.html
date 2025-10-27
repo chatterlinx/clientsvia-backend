@@ -4665,6 +4665,7 @@ Just checking in..."></textarea>
                 console.log('✅ [DEBUG] Template data received:', result);
                 activeTemplate = result.data;
                 activeTemplateId = result.data._id;
+                window.activeTemplateId = result.data._id; // Make available to template-settings-manager.js
                 updateDashboardStats();
                 renderCategories();
                 return activeTemplate;
@@ -7305,6 +7306,7 @@ Continue?`;
                 if (result.success && result.data) {
                     activeTemplate = result.data;
                     activeTemplateId = result.data._id;
+                    window.activeTemplateId = result.data._id; // Make available to template-settings-manager.js
                     
                     // Switch to Overview Dashboard
                     switchTab('overview');
@@ -9397,6 +9399,7 @@ Continue?`;
                     // CRITICAL: Update global activeTemplate reference
                     activeTemplate = template;
                     activeTemplateId = template._id;
+                    window.activeTemplateId = template._id; // Make available to template-settings-manager.js
                     
                     console.log('🔍 [SWITCH TEMPLATE] activeTemplate updated:', {
                         id: activeTemplate._id,
