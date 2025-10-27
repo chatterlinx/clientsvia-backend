@@ -167,6 +167,12 @@ async function addFillerWord() {
         
         console.log('✅ [FILLER WORDS] Added successfully');
         
+        // CRITICAL: Invalidate TemplateDataManager cache
+        if (window.templateDataManager) {
+            window.templateDataManager.cache.templates.delete(templateId);
+            console.log('🗑️ [CACHE] Invalidated TemplateDataManager cache for template:', templateId);
+        }
+        
         // Reload
         await loadFillerWordsForTemplate();
         
@@ -220,6 +226,12 @@ async function removeFillerWord(word) {
         }
         
         console.log('✅ [FILLER WORDS] Removed successfully');
+        
+        // CRITICAL: Invalidate TemplateDataManager cache
+        if (window.templateDataManager) {
+            window.templateDataManager.cache.templates.delete(templateId);
+            console.log('🗑️ [CACHE] Invalidated TemplateDataManager cache for template:', templateId);
+        }
         
         // Reload
         await loadFillerWordsForTemplate();
@@ -468,6 +480,12 @@ async function addSynonymMapping() {
         
         console.log('✅ [SYNONYMS] Added successfully');
         
+        // CRITICAL: Invalidate TemplateDataManager cache
+        if (window.templateDataManager) {
+            window.templateDataManager.cache.templates.delete(templateId);
+            console.log('🗑️ [CACHE] Invalidated TemplateDataManager cache for template:', templateId);
+        }
+        
         // Clear inputs
         document.getElementById('synonym-technical-term').value = '';
         document.getElementById('synonym-colloquial-terms').value = '';
@@ -524,6 +542,12 @@ async function removeSynonymMapping(technicalTerm) {
         }
         
         console.log('✅ [SYNONYMS] Removed successfully');
+        
+        // CRITICAL: Invalidate TemplateDataManager cache
+        if (window.templateDataManager) {
+            window.templateDataManager.cache.templates.delete(templateId);
+            console.log('🗑️ [CACHE] Invalidated TemplateDataManager cache for template:', templateId);
+        }
         
         // Reload
         await loadSynonymsForTemplate();
