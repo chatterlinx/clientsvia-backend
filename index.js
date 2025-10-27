@@ -404,6 +404,16 @@ app.use((req, res, next) => {
             next();
         }
     });
+
+    // ========================================================================
+    // ERROR NOTIFICATION HANDLER (MUST BE ABSOLUTE LAST MIDDLEWARE)
+    // ========================================================================
+    // Catches ALL unhandled errors from routes and sends alerts to
+    // Notification Center. Critical for 100+ company scaling.
+    // ========================================================================
+    const errorNotificationHandler = require('./middleware/errorNotificationHandler');
+    app.use(errorNotificationHandler);
+    console.log('[INIT] ✅ Error notification handler registered');
 }
 console.log('[INIT] ✅ All API routes registered');
 

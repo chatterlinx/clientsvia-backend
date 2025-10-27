@@ -40,6 +40,12 @@
 const { redisClient } = require('../db');
 const logger = require('./logger');
 
+// Track cache failures for alert throttling
+let consecutiveCacheFailures = 0;
+let lastCacheFailureAlert = 0;
+const CACHE_FAILURE_ALERT_THRESHOLD = 5; // Alert after 5 consecutive failures
+const CACHE_FAILURE_ALERT_COOLDOWN = 300000; // 5 minutes between alerts
+
 class CacheHelper {
     /**
      * ============================================================================
@@ -76,6 +82,9 @@ class CacheHelper {
                 timestamp: new Date().toISOString()
             });
 
+            // Reset failure counter on success
+            this._resetFailureCounter();
+
             return true;
 
         } catch (error) {
@@ -84,6 +93,16 @@ class CacheHelper {
                 error: error.message,
                 stack: error.stack
             });
+            
+            // Track consecutive failures and alert if threshold reached
+            await this._handleCacheFailure('TEMPLATE_CACHE_INVALIDATION_FAILURE', {
+                entityType: 'template',
+                entityId: templateId.toString(),
+                error: error.message,
+                impact: 'Template data may be stale - Users may see outdated scenarios, categories, or settings',
+                action: 'Check Redis health, verify redisClient connection, check for Redis timeouts'
+            }, error.stack);
+            
             // Never throw - cache failures should not break business logic
             return false;
         }
@@ -498,6 +517,76 @@ class CacheHelper {
                 error: error.message
             });
             return false;
+        }
+    }
+
+    /**
+     * ============================================================================
+     * CACHE FAILURE HANDLER (Internal)
+     * ============================================================================
+     * Tracks consecutive cache failures and sends alerts when threshold is reached.
+     * Implements smart throttling to prevent alert storms.
+     * 
+     * @private
+     * @param {String} alertCode - Alert code to send
+     * @param {Object} details - Failure details
+     * @param {String} stackTrace - Error stack trace
+     * @returns {Promise<void>}
+     */
+    static async _handleCacheFailure(alertCode, details, stackTrace) {
+        consecutiveCacheFailures++;
+
+        const now = Date.now();
+        const timeSinceLastAlert = now - lastCacheFailureAlert;
+        const shouldAlert = 
+            consecutiveCacheFailures >= CACHE_FAILURE_ALERT_THRESHOLD &&
+            timeSinceLastAlert >= CACHE_FAILURE_ALERT_COOLDOWN;
+
+        if (shouldAlert) {
+            try {
+                const AdminNotificationService = require('../services/AdminNotificationService');
+                
+                await AdminNotificationService.sendAlert({
+                    code: 'CACHE_INVALIDATION_PATTERN_FAILURE',
+                    severity: 'WARNING',
+                    companyId: null,
+                    companyName: 'Platform',
+                    message: `⚠️ Redis cache invalidation failing repeatedly`,
+                    details: {
+                        consecutiveFailures: consecutiveCacheFailures,
+                        threshold: CACHE_FAILURE_ALERT_THRESHOLD,
+                        lastFailure: details,
+                        impact: 'Cache invalidation is failing - Data staleness risk across platform',
+                        action: 'Check Redis health, verify connection, investigate Redis performance issues'
+                    },
+                    stackTrace
+                });
+
+                lastCacheFailureAlert = now;
+                logger.warn(`🚨 [CACHE HELPER] Sent alert after ${consecutiveCacheFailures} consecutive failures`);
+            } catch (notifErr) {
+                logger.error('Failed to send cache failure alert:', notifErr);
+            }
+        } else if (consecutiveCacheFailures >= CACHE_FAILURE_ALERT_THRESHOLD) {
+            const nextAlertIn = Math.ceil((CACHE_FAILURE_ALERT_COOLDOWN - timeSinceLastAlert) / 1000);
+            logger.debug(`[CACHE HELPER] ${consecutiveCacheFailures} failures, next alert in ${nextAlertIn}s`);
+        }
+    }
+
+    /**
+     * ============================================================================
+     * RESET FAILURE COUNTER (Internal)
+     * ============================================================================
+     * Resets the consecutive failure counter after successful operations.
+     * Should be called by cache invalidation methods on success.
+     * 
+     * @private
+     * @returns {void}
+     */
+    static _resetFailureCounter() {
+        if (consecutiveCacheFailures > 0) {
+            logger.debug(`✅ [CACHE HELPER] Cache operations recovered - resetting failure count (was ${consecutiveCacheFailures})`);
+            consecutiveCacheFailures = 0;
         }
     }
 }
