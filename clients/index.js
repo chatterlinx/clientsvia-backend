@@ -76,14 +76,15 @@ async function initializeRedis() {
       logger.info('✅ [REDIS] Connected and ready', { connectionTimeMs: connectionTime });
 
       // ⚠️ WARNING: Slow Redis connection
-      if (connectionTime > 3000 && AdminNotificationService) {
+      // Threshold: 5000ms (5 seconds) - accounts for Render free tier cold starts
+      if (connectionTime > 5000 && AdminNotificationService) {
         AdminNotificationService.sendAlert({
           code: 'REDIS_CONNECTION_SLOW',
           severity: 'WARNING',
           companyId: null,
           companyName: 'Platform',
           message: '⚠️ Slow Redis connection detected',
-          details: `Redis connection took ${connectionTime}ms (threshold: 3000ms). This may indicate network latency or Redis service performance issues.`,
+          details: `Redis connection took ${connectionTime}ms (threshold: 5000ms). This may indicate network latency or Redis service performance issues. Note: Render free tier cold starts (3-5 seconds) are normal.`,
           stackTrace: null
         }).catch(notifErr => logger.error('Failed to send Redis slow alert:', notifErr));
       }
