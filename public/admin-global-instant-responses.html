@@ -14413,8 +14413,70 @@ async function testOpenAIConnection() {
         const result = await response.json();
         console.log('✅ [OPENAI TEST] Health check result:', result);
         
+        // ====================================================================
+        // CHECKPOINT 3: Validate Frontend Response Structure
+        // ====================================================================
+        if (!result || typeof result !== 'object') {
+            console.error('❌ [OPENAI TEST] CHECKPOINT 3 FAILED: Invalid response type', {
+                result,
+                type: typeof result
+            });
+            throw new Error(`CHECKPOINT 3: API returned invalid response type: ${typeof result}`);
+        }
+        
+        if (!result.success) {
+            console.error('❌ [OPENAI TEST] CHECKPOINT 3 FAILED: API returned success=false', {
+                result
+            });
+            throw new Error(`CHECKPOINT 3: API call failed: ${result.error || 'Unknown error'}`);
+        }
+        
+        if (!result.health || typeof result.health !== 'object') {
+            console.error('❌ [OPENAI TEST] CHECKPOINT 3 FAILED: Missing or invalid "health" object', {
+                result,
+                healthExists: !!result.health,
+                healthType: typeof result.health
+            });
+            throw new Error('CHECKPOINT 3: Response missing required "health" object');
+        }
+        
+        if (!result.health.status) {
+            console.error('❌ [OPENAI TEST] CHECKPOINT 3 FAILED: Missing "health.status" field', {
+                health: result.health,
+                statusExists: !!result.health.status,
+                statusValue: result.health.status
+            });
+            throw new Error('CHECKPOINT 3: Response missing required "health.status" field');
+        }
+        
+        const validStatuses = ['HEALTHY', 'DOWN', 'NOT_CONFIGURED', 'DEGRADED', 'ERROR'];
+        if (!validStatuses.includes(result.health.status)) {
+            console.error('❌ [OPENAI TEST] CHECKPOINT 3 FAILED: Invalid status value', {
+                status: result.health.status,
+                validStatuses
+            });
+            throw new Error(`CHECKPOINT 3: Invalid status "${result.health.status}". Expected one of: ${validStatuses.join(', ')}`);
+        }
+        
+        console.log('✅ [OPENAI TEST] CHECKPOINT 3 PASSED: Response structure valid', {
+            status: result.health.status,
+            critical: result.health.critical,
+            hasMessage: !!result.health.message
+        });
+        
+        // Extract health data
+        const health = result.health;
+        const status = health.status;
+        const critical = health.critical;
+        const message = health.message;
+        const responseTimeBackend = health.responseTime;
+        const impact = health.impact;
+        const action = health.action;
+        const error = health.error;
+        const details = health.details;
+        
         // Display result based on status
-        if (result.status === 'HEALTHY') {
+        if (status === 'HEALTHY') {
             statusContent.className = 'p-4 rounded-lg bg-green-50 border-2 border-green-200';
             statusContent.innerHTML = `
                 <div class="space-y-3">
@@ -14431,37 +14493,43 @@ async function testOpenAIConnection() {
                     <div class="bg-white rounded-lg p-3 space-y-2">
                         <div class="flex justify-between items-center">
                             <span class="text-sm text-gray-600">Status:</span>
-                            <span class="font-semibold text-green-600">${result.status}</span>
+                            <span class="font-semibold text-green-600">${status}</span>
                         </div>
                         <div class="flex justify-between items-center">
-                            <span class="text-sm text-gray-600">Response Time:</span>
+                            <span class="text-sm text-gray-600">Frontend Response Time:</span>
                             <span class="font-semibold text-gray-900">${responseTime}ms</span>
                         </div>
+                        ${responseTimeBackend ? `
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">Backend Check Time:</span>
+                            <span class="font-semibold text-gray-900">${responseTimeBackend}ms</span>
+                        </div>
+                        ` : ''}
                         <div class="flex justify-between items-center">
                             <span class="text-sm text-gray-600">3-Tier System:</span>
-                            <span class="font-semibold ${result.details?.enabled ? 'text-green-600' : 'text-gray-500'}">
-                                ${result.details?.enabled ? 'Enabled ✅' : 'Disabled'}
+                            <span class="font-semibold ${details?.enabled ? 'text-green-600' : 'text-gray-500'}">
+                                ${details?.enabled ? 'Enabled ✅' : 'Disabled'}
                             </span>
                         </div>
-                        ${result.details?.model ? `
+                        ${details?.model ? `
                         <div class="flex justify-between items-center">
                             <span class="text-sm text-gray-600">Model:</span>
-                            <span class="font-semibold text-gray-900">${result.details.model}</span>
+                            <span class="font-semibold text-gray-900">${details.model}</span>
                         </div>
                         ` : ''}
                     </div>
                     
-                    ${result.message ? `
+                    ${message ? `
                     <div class="bg-blue-50 border-l-4 border-blue-400 p-3">
                         <p class="text-sm text-gray-700">
                             <i class="fas fa-info-circle text-blue-600 mr-2"></i>
-                            ${result.message}
+                            ${message}
                         </p>
                     </div>
                     ` : ''}
                 </div>
             `;
-        } else if (result.status === 'NOT_CONFIGURED') {
+        } else if (status === 'NOT_CONFIGURED') {
             statusContent.className = 'p-4 rounded-lg bg-yellow-50 border-2 border-yellow-200';
             statusContent.innerHTML = `
                 <div class="space-y-3">
@@ -14477,30 +14545,51 @@ async function testOpenAIConnection() {
                     
                     <div class="bg-white rounded-lg p-3 space-y-2">
                         <p class="text-sm text-gray-700">
-                            <strong>Status:</strong> ${result.status}
+                            <strong>Status:</strong> <span class="text-yellow-600 font-semibold">${status}</span>
                         </p>
                         <p class="text-sm text-gray-700">
-                            <strong>Critical:</strong> ${result.critical ? 'Yes' : 'No'}
+                            <strong>Critical:</strong> <span class="font-semibold">${critical ? 'Yes' : 'No'}</span>
                         </p>
+                        ${responseTimeBackend ? `
+                        <p class="text-sm text-gray-700">
+                            <strong>Check Time:</strong> <span class="font-semibold">${responseTimeBackend}ms</span>
+                        </p>
+                        ` : ''}
+                        ${details ? `
+                        <p class="text-sm text-gray-700">
+                            <strong>Feature Flag:</strong> <code class="text-gray-600 bg-gray-100 px-2 py-1 rounded text-xs">${details.featureFlag || 'N/A'}</code>
+                        </p>
+                        ` : ''}
                     </div>
                     
-                    ${result.message ? `
+                    ${message ? `
                     <div class="bg-blue-50 border-l-4 border-blue-400 p-3">
                         <p class="text-sm text-gray-700">
                             <i class="fas fa-info-circle text-blue-600 mr-2"></i>
-                            ${result.message}
+                            ${message}
                         </p>
                     </div>
                     ` : ''}
                     
-                    ${result.recommendations?.length > 0 ? `
+                    ${health.note ? `
+                    <div class="bg-green-50 border-l-4 border-green-400 p-3">
+                        <p class="text-sm text-gray-700">
+                            <i class="fas fa-check-circle text-green-600 mr-2"></i>
+                            ${health.note}
+                        </p>
+                    </div>
+                    ` : ''}
+                    
+                    ${result.recommendations?.enable3Tier ? `
                     <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3">
                         <p class="text-sm font-semibold text-yellow-900 mb-2">
-                            <i class="fas fa-lightbulb mr-2"></i>Recommendations:
+                            <i class="fas fa-lightbulb mr-2"></i>To Enable 3-Tier System:
                         </p>
-                        <ul class="text-sm text-yellow-800 space-y-1 ml-5">
-                            ${result.recommendations.map(rec => `<li>• ${rec}</li>`).join('')}
-                        </ul>
+                        <ol class="text-sm text-yellow-800 space-y-1 ml-5 list-decimal">
+                            <li>Set <code class="bg-yellow-100 px-1 rounded">ENABLE_3_TIER_INTELLIGENCE=true</code> in environment</li>
+                            <li>Add <code class="bg-yellow-100 px-1 rounded">OPENAI_API_KEY</code> to environment</li>
+                            <li>Restart server</li>
+                        </ol>
                     </div>
                     ` : ''}
                 </div>
@@ -14522,52 +14611,55 @@ async function testOpenAIConnection() {
                     
                     <div class="bg-white rounded-lg p-3 space-y-2">
                         <p class="text-sm text-gray-700">
-                            <strong>Status:</strong> <span class="text-red-600 font-semibold">${result.status}</span>
+                            <strong>Status:</strong> <span class="text-red-600 font-semibold">${status}</span>
                         </p>
                         <p class="text-sm text-gray-700">
-                            <strong>Critical:</strong> <span class="font-semibold">${result.critical ? 'Yes ⚠️' : 'No'}</span>
+                            <strong>Critical:</strong> <span class="font-semibold">${critical ? 'Yes ⚠️' : 'No'}</span>
                         </p>
-                        ${result.error ? `
+                        ${error ? `
                         <p class="text-sm text-gray-700">
-                            <strong>Error:</strong> <code class="text-red-600 bg-red-50 px-2 py-1 rounded">${result.error}</code>
+                            <strong>Error:</strong> <code class="text-red-600 bg-red-50 px-2 py-1 rounded text-xs">${error}</code>
+                        </p>
+                        ` : ''}
+                        ${responseTimeBackend ? `
+                        <p class="text-sm text-gray-700">
+                            <strong>Response Time:</strong> ${responseTimeBackend}ms
                         </p>
                         ` : ''}
                     </div>
                     
-                    ${result.impact ? `
+                    ${impact ? `
                     <div class="bg-red-50 border-l-4 border-red-400 p-3">
                         <p class="text-sm font-semibold text-red-900 mb-1">
                             <i class="fas fa-exclamation-circle mr-2"></i>Impact:
                         </p>
-                        <p class="text-sm text-red-800">${result.impact}</p>
+                        <p class="text-sm text-red-800">${impact}</p>
                     </div>
                     ` : ''}
                     
-                    ${result.action ? `
+                    ${action ? `
                     <div class="bg-orange-50 border-l-4 border-orange-400 p-3">
                         <p class="text-sm font-semibold text-orange-900 mb-1">
                             <i class="fas fa-tools mr-2"></i>Action Required:
                         </p>
-                        <p class="text-sm text-orange-800">${result.action}</p>
+                        <p class="text-sm text-orange-800">${action}</p>
                     </div>
                     ` : ''}
                     
-                    ${result.recommendations?.length > 0 ? `
+                    ${message ? `
                     <div class="bg-blue-50 border-l-4 border-blue-400 p-3">
-                        <p class="text-sm font-semibold text-blue-900 mb-2">
-                            <i class="fas fa-lightbulb mr-2"></i>Recommendations:
+                        <p class="text-sm text-gray-700">
+                            <i class="fas fa-info-circle text-blue-600 mr-2"></i>
+                            ${message}
                         </p>
-                        <ul class="text-sm text-blue-800 space-y-1 ml-5">
-                            ${result.recommendations.map(rec => `<li>• ${rec}</li>`).join('')}
-                        </ul>
                     </div>
                     ` : ''}
                     
-                    ${result.critical && result.notificationSent ? `
+                    ${result.alerts?.sent ? `
                     <div class="bg-purple-50 border-l-4 border-purple-400 p-3">
                         <p class="text-sm text-purple-900">
                             <i class="fas fa-bell mr-2"></i>
-                            <strong>Alert sent to Notification Center</strong> - Administrators have been notified of this critical issue.
+                            ${result.alerts.message}
                         </p>
                     </div>
                     ` : ''}
@@ -15519,4 +15611,6 @@ function switchTab(tabName) {
 
 </body>
 </html>
+
+
 
