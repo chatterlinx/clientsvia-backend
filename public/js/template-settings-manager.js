@@ -146,7 +146,7 @@ async function addFillerWord() {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ fillerWords: [normalizedWord] })
+            body: JSON.stringify({ fillers: [normalizedWord] })
         });
         
         if (!response.ok) {
@@ -191,7 +191,7 @@ async function removeFillerWord(word) {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ fillerWords: [word] })
+            body: JSON.stringify({ fillers: [word] })
         });
         
         if (!response.ok) {
