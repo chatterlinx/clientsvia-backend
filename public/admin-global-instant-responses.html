@@ -4528,6 +4528,34 @@ Just checking in..."></textarea>
                 const result = await response.json();
                 availableBehaviors = result.data || [];
                 console.log(`✅ Loaded ${availableBehaviors.length} behaviors from database`);
+                
+                // ============================================
+                // EMPTY STATE DETECTION (Strategic Checkpoint)
+                // ============================================
+                // API succeeded but returned empty data - this is not an "error"
+                // but it's a configuration issue that needs attention
+                if (availableBehaviors.length === 0) {
+                    console.warn('⚠️ Behaviors loaded successfully but database is empty');
+                    
+                    // Send INFO notification (not an error, but needs attention)
+                    await errorReporters.behaviors.reportError({
+                        error: new Error('EMPTY_STATE: Behaviors database is empty'),
+                        operation: 'fetchBehaviors_emptyState',
+                        userMessage: 'AI Behavior templates are missing. The database needs to be seeded with default behaviors.',
+                        retryFunction: fetchBehaviors,
+                        additionalContext: {
+                            endpoint: '/api/admin/global-behaviors',
+                            apiStatus: 'SUCCESS',
+                            httpCode: response.status,
+                            dataReturned: 'Empty array',
+                            issue: 'Database has 0 behaviors',
+                            suggestedFix: 'Run: node scripts/seed-behaviors-quick.js',
+                            impact: 'Users cannot select behaviors for categories/scenarios',
+                            notificationType: 'EMPTY_STATE_WARNING'
+                        }
+                    });
+                }
+                
                 return availableBehaviors;
             } catch (error) {
                 console.error('❌ Error fetching behaviors:', error);
