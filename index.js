@@ -611,6 +611,33 @@ async function startServer() {
         const { initializeAutoPurgeCron } = require('./services/autoPurgeCron');
         initializeAutoPurgeCron();
         
+        // Initialize Critical Data Health Check (PROACTIVE MONITORING)
+        console.log('[Server] Initializing Critical Data Health Check...');
+        const CriticalDataHealthCheck = require('./services/CriticalDataHealthCheck');
+        
+        // Run immediately on startup
+        setTimeout(async () => {
+            try {
+                console.log('🏥 [HEALTH CHECK] Running initial health check...');
+                await CriticalDataHealthCheck.runAllChecks();
+                console.log('🏥 [HEALTH CHECK] Initial check complete');
+            } catch (error) {
+                console.error('🏥 [HEALTH CHECK] Initial check failed:', error.message);
+            }
+        }, 5000); // Wait 5 seconds for server to stabilize
+        
+        // Run every 30 minutes
+        const healthCheckInterval = setInterval(async () => {
+            try {
+                console.log('🏥 [HEALTH CHECK] Running scheduled health check...');
+                await CriticalDataHealthCheck.runAllChecks();
+            } catch (error) {
+                console.error('🏥 [HEALTH CHECK] Scheduled check failed:', error.message);
+            }
+        }, 30 * 60 * 1000); // 30 minutes
+        
+        console.log('[Server] ✅ Critical Data Health Check initialized (runs every 30 min)');
+        
         return app.listen(PORT, '0.0.0.0', () => {
             console.log(`[Server] ✅ Step 6 COMPLETE: HTTP server bound in ${Date.now() - serverStart}ms`);
             console.log(`🎉 SERVER FULLY OPERATIONAL!`);
