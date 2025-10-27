@@ -5053,6 +5053,20 @@ Just checking in..."></textarea>
             } catch (error) {
                 console.error('❌ Error updating category:', error);
                 showNotification('❌ Failed to update category: ' + error.message, 'error');
+                
+                // Report error to Notification Center
+                await errorReporters.categories.reportError({
+                    error,
+                    operation: 'updateCategory',
+                    userMessage: `Failed to update category "${activeTemplate.categories[currentEditingCategoryIndex]?.name}". Changes were not saved.`,
+                    retryFunction: () => document.getElementById('edit-category-form').dispatchEvent(new Event('submit')),
+                    additionalContext: {
+                        endpoint: `/api/admin/global-instant-responses/${activeTemplate._id}`,
+                        templateId: activeTemplate._id,
+                        categoryIndex: currentEditingCategoryIndex,
+                        categoryName: activeTemplate.categories[currentEditingCategoryIndex]?.name
+                    }
+                });
             }
         });
 
@@ -6382,6 +6396,21 @@ Continue?`;
             } catch (error) {
                 console.error('❌ Error deleting category:', error);
                 showNotification('❌ Error: ' + error.message, 'error');
+                
+                // Report error to Notification Center
+                await errorReporters.categories.reportError({
+                    error,
+                    operation: 'deleteCategory',
+                    userMessage: `Failed to delete category "${category.name}". Category still exists.`,
+                    retryFunction: () => deleteCategory(index),
+                    additionalContext: {
+                        endpoint: `/api/admin/global-instant-responses/${activeTemplate._id}`,
+                        templateId: activeTemplate._id,
+                        categoryName: category.name,
+                        categoryIndex: index,
+                        scenarioCount: category.scenarios?.length || 0
+                    }
+                });
             }
         }
 
@@ -6726,6 +6755,21 @@ Continue?`;
             } catch (error) {
                 console.error('❌ [DELETE SCENARIO] Error:', error);
                 alert('Failed to delete scenario: ' + error.message);
+                
+                // Report error to Notification Center
+                await errorReporters.scenarios.reportError({
+                    error,
+                    operation: 'deleteScenario',
+                    userMessage: `Failed to delete scenario "${scenario.name}". Changes were not saved.`,
+                    retryFunction: () => deleteScenario(categoryIndex, scenarioIndex),
+                    additionalContext: {
+                        endpoint: `/api/admin/global-instant-responses/${activeTemplateId}/categories/${category.id}/scenarios/${scenario.scenarioId || scenario.id}`,
+                        templateId: activeTemplateId,
+                        categoryId: category.id,
+                        scenarioId: scenario.scenarioId || scenario.id,
+                        scenarioName: scenario.name
+                    }
+                });
             }
         }
 
@@ -11388,6 +11432,25 @@ Timestamp: ${new Date(timestamp).toISOString()}
             } catch (error) {
                 console.error('❌ [SAVE SCENARIO] Error:', error);
                 alert('Failed to save scenario: ' + error.message);
+                
+                // Report error to Notification Center
+                await errorReporters.scenarios.reportError({
+                    error,
+                    operation: currentScenarioEditMode === 'add' ? 'createScenario' : 'updateScenario',
+                    userMessage: `Failed to ${currentScenarioEditMode === 'add' ? 'create' : 'update'} scenario "${name}". Changes were not saved.`,
+                    retryFunction: () => saveScenario(status),
+                    additionalContext: {
+                        endpoint: currentScenarioEditMode === 'add' 
+                            ? `/api/admin/global-instant-responses/${activeTemplateId}/categories/${currentScenarioData.categoryId}/scenarios`
+                            : `/api/admin/global-instant-responses/${activeTemplateId}/categories/${currentScenarioData.categoryId}/scenarios/${currentScenarioData.scenarioId}`,
+                        templateId: activeTemplateId,
+                        categoryId: currentScenarioData.categoryId,
+                        scenarioId: currentScenarioData.scenarioId,
+                        scenarioName: name,
+                        mode: currentScenarioEditMode,
+                        status: status
+                    }
+                });
             }
         }
 
