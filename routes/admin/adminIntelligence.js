@@ -31,7 +31,7 @@ const GlobalPattern = require('../../models/GlobalPattern');
 const Tier3LLMFallback = require('../../services/Tier3LLMFallback');
 const CostTrackingService = require('../../services/CostTrackingService');
 const PatternSharingService = require('../../services/PatternSharingService');
-const DependencyHealthMonitor = require('../../services/DependencyHealthMonitor');
+const { getInstance: getDependencyHealthMonitor } = require('../../services/DependencyHealthMonitor');
 const AdminNotificationService = require('../../services/AdminNotificationService');
 const logger = require('../../utils/logger');
 
@@ -157,7 +157,7 @@ router.get('/openai-health', async (req, res) => {
         });
         
         // Get OpenAI health status
-        const healthCheck = await DependencyHealthMonitor.checkOpenAI();
+        const healthCheck = await getDependencyHealthMonitor().checkOpenAI();
         
         // Determine if we should send an alert
         const isDown = healthCheck.status === 'DOWN';
