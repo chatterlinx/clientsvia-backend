@@ -1,5 +1,6 @@
 const { ElevenLabsClient } = require('@elevenlabs/elevenlabs-js');
 const logger = require('../utils/logger.js');
+const AdminNotificationService = require('./AdminNotificationService'); // P1 monitoring
 
 const fs = require('fs');
 const path = require('path');
@@ -251,6 +252,99 @@ async function synthesizeSpeech({
       });
     } else {
       logger.error('❌ ElevenLabs synthesizeSpeech error:', error);
+    }
+    
+    // 🚨 P1 CHECKPOINT: Voice generation failure alerts
+    const companyId = company?._id?.toString() || null;
+    const companyName = company?.companyName || company?.businessName || 'Unknown';
+    
+    // Timeout errors
+    if (error.message?.includes('timeout') || error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
+      await AdminNotificationService.sendAlert({
+        code: 'ELEVENLABS_TIMEOUT',
+        severity: 'WARNING',
+        companyId,
+        companyName,
+        message: `⚠️ ElevenLabs voice generation timed out for ${companyName}`,
+        details: {
+          companyId,
+          companyName,
+          voiceId,
+          textLength: text?.length || 0,
+          modelId: model_id,
+          error: error.message,
+          impact: 'Call cannot proceed, caller will hear silence or fallback message',
+          suggestedFix: 'Check ElevenLabs API status, verify network connectivity, consider shorter text',
+          detectedBy: 'ElevenLabs synthesizeSpeech'
+        }
+      }).catch(err => logger.error('Failed to send ElevenLabs timeout alert:', err));
+    }
+    
+    // Quota exceeded errors
+    else if (error.statusCode === 429 || error.message?.includes('quota') || error.message?.includes('limit') || error.message?.includes('rate')) {
+      await AdminNotificationService.sendAlert({
+        code: 'ELEVENLABS_QUOTA_EXCEEDED',
+        severity: 'CRITICAL',
+        companyId,
+        companyName,
+        message: `🔴 CRITICAL: ElevenLabs quota exceeded for ${companyName}`,
+        details: {
+          companyId,
+          companyName,
+          voiceId,
+          apiSource: company?.aiAgentLogic?.voiceSettings?.apiSource || 'unknown',
+          error: error.message,
+          impact: 'All voice generation stopped, all calls will fail',
+          suggestedFix: 'Upgrade ElevenLabs plan, switch to company-owned API key, or wait for quota reset',
+          detectedBy: 'ElevenLabs synthesizeSpeech'
+        },
+        bypassPatternDetection: true // Critical quota issues = immediate alert
+      }).catch(err => logger.error('Failed to send ElevenLabs quota alert:', err));
+    }
+    
+    // Voice not found errors
+    else if (error.statusCode === 404 || error.message?.includes('voice') || error.message?.includes('not found')) {
+      await AdminNotificationService.sendAlert({
+        code: 'ELEVENLABS_VOICE_NOT_FOUND',
+        severity: 'CRITICAL',
+        companyId,
+        companyName,
+        message: `🔴 CRITICAL: ElevenLabs voice "${voiceId}" not found for ${companyName}`,
+        details: {
+          companyId,
+          companyName,
+          voiceId,
+          error: error.message,
+          impact: 'All calls using this voice will fail, company cannot communicate',
+          suggestedFix: 'Go to Company Profile → Voice Settings and select a valid voice ID',
+          detectedBy: 'ElevenLabs synthesizeSpeech'
+        },
+        bypassPatternDetection: true // Missing voice = immediate alert
+      }).catch(err => logger.error('Failed to send ElevenLabs voice not found alert:', err));
+    }
+    
+    // Generic API errors
+    else {
+      await AdminNotificationService.sendAlert({
+        code: 'ELEVENLABS_API_ERROR',
+        severity: 'CRITICAL',
+        companyId,
+        companyName,
+        message: `🔴 CRITICAL: ElevenLabs API error for ${companyName}`,
+        details: {
+          companyId,
+          companyName,
+          voiceId,
+          textLength: text?.length || 0,
+          modelId: model_id,
+          error: error.message,
+          statusCode: error.statusCode || 'unknown',
+          impact: 'Voice generation failed, call may fail or use fallback',
+          suggestedFix: 'Check ElevenLabs API key, verify API status, review error message',
+          detectedBy: 'ElevenLabs synthesizeSpeech'
+        },
+        stackTrace: error.stack
+      }).catch(err => logger.error('Failed to send ElevenLabs API error alert:', err));
     }
     
     throw new Error(`Failed to synthesize speech: ${error.message}`);
