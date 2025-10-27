@@ -11824,6 +11824,19 @@ Timestamp: ${new Date(timestamp).toISOString()}
             } catch (error) {
                 console.error('Error loading filler words:', error);
                 showNotification('Failed to load filler words', 'error');
+                
+                // Report error to Notification Center
+                await errorReporters.settings.reportError({
+                    error,
+                    operation: 'loadFillerWords',
+                    userMessage: 'Failed to load filler words configuration. Template Data tab may show incomplete data.',
+                    retryFunction: loadFillerWords,
+                    additionalContext: {
+                        endpoint: `/api/admin/global-instant-responses/${activeTemplateId}/filler-words`,
+                        templateId: activeTemplateId,
+                        templateName: activeTemplate?.name
+                    }
+                });
             }
         }
         
@@ -15229,6 +15242,19 @@ async function loadAILearningSettings() {
     } catch (error) {
         console.error('❌ [AI LEARNING] Failed to load settings:', error);
         alert(`Failed to load AI learning settings: ${error.message}`);
+        
+        // Report error to Notification Center
+        await errorReporters.settings.reportError({
+            error,
+            operation: 'loadAILearningSettings',
+            userMessage: 'Failed to load AI learning configuration. Settings tab may show incorrect data.',
+            retryFunction: loadAILearningSettings,
+            additionalContext: {
+                endpoint: `/api/admin/global-instant-responses/${activeTemplate._id}`,
+                templateId: activeTemplate._id,
+                templateName: activeTemplate.name
+            }
+        });
     }
 }
 
@@ -15323,6 +15349,20 @@ async function saveAILearningSettings() {
         } else {
             alert(`❌ Failed to save AI learning settings: ${error.message}`);
         }
+        
+        // Report error to Notification Center
+        await errorReporters.settings.reportError({
+            error,
+            operation: 'saveAILearningSettings',
+            userMessage: 'Failed to save AI learning configuration. Changes were not saved.',
+            retryFunction: saveAILearningSettings,
+            additionalContext: {
+                endpoint: `/api/admin/global-instant-responses/${activeTemplate._id}/learning-settings`,
+                templateId: activeTemplate._id,
+                templateName: activeTemplate.name,
+                settingsChanged: Object.keys(settings || {}).join(', ')
+            }
+        });
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-save"></i> Save Settings';
