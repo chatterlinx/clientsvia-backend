@@ -1220,6 +1220,54 @@ globalInstantResponseTemplateSchema.index({ isDefaultTemplate: 1 });
 globalInstantResponseTemplateSchema.index({ templateType: 1 });
 globalInstantResponseTemplateSchema.index({ 'lineage.clonedFrom': 1 });
 
+// ============================================================================
+// P1 CHECKPOINT: Template Integrity Validation (pre-save)
+// ============================================================================
+globalInstantResponseTemplateSchema.pre('save', async function(next) {
+    // Skip validation for new templates (they might not have scenarios yet)
+    if (this.isNew) {
+        return next();
+    }
+    
+    try {
+        const AdminNotificationService = require('../services/AdminNotificationService');
+        
+        // Count total scenarios across all categories
+        let totalScenarios = 0;
+        this.categories.forEach(category => {
+            if (category.scenarios && Array.isArray(category.scenarios)) {
+                totalScenarios += category.scenarios.length;
+            }
+        });
+        
+        // Alert if template has categories but no scenarios
+        if (this.categories.length > 0 && totalScenarios === 0) {
+            await AdminNotificationService.sendAlert({
+                code: 'TEMPLATE_EMPTY_SCENARIOS_ON_SAVE',
+                severity: 'WARNING',
+                companyId: null,
+                companyName: 'Platform',
+                message: `⚠️ Attempting to save template "${this.name}" with categories but no scenarios`,
+                details: {
+                    templateId: this._id.toString(),
+                    templateName: this.name,
+                    categoriesCount: this.categories.length,
+                    scenariosCount: 0,
+                    impact: 'AI agent cannot respond to any queries - template will be non-functional',
+                    suggestedFix: 'Add scenarios to categories before saving or mark template as draft',
+                    detectedBy: 'Template pre-save validation hook'
+                },
+                bypassPatternDetection: true // Empty state = immediate alert
+            }).catch(err => console.error('Failed to send pre-save template alert:', err));
+        }
+    } catch (error) {
+        // Don't block save if notification fails
+        console.error('Error in Template pre-save hook:', error.message);
+    }
+    
+    next();
+});
+
 const GlobalInstantResponseTemplate = mongoose.model('GlobalInstantResponseTemplate', globalInstantResponseTemplateSchema);
 
 module.exports = GlobalInstantResponseTemplate;

@@ -1796,6 +1796,59 @@ companySchema.pre('save', function(next) {
     next();
 });
 
+// ============================================================================
+// P1 CHECKPOINT: Critical Credentials Validation (pre-save)
+// ============================================================================
+companySchema.pre('save', async function(next) {
+    // Skip validation for new companies (they might not have creds yet)
+    if (this.isNew) {
+        return next();
+    }
+    
+    // Only validate if company is marked as active
+    if (this.isDeleted || this.accountStatus?.status === 'suspended') {
+        return next();
+    }
+    
+    try {
+        const AdminNotificationService = require('../services/AdminNotificationService');
+        const missingCredentials = [];
+        
+        // Check Twilio credentials
+        if (!this.twilioConfig?.accountSID || !this.twilioConfig?.authToken) {
+            missingCredentials.push('Twilio (accountSID/authToken)');
+        }
+        
+        // Check ElevenLabs API key (check both old and new locations)
+        if (!this.aiSettings?.elevenLabs?.apiKey && !this.aiAgentLogic?.voiceSettings?.apiKey) {
+            missingCredentials.push('ElevenLabs API Key');
+        }
+        
+        if (missingCredentials.length > 0) {
+            await AdminNotificationService.sendAlert({
+                code: 'COMPANY_MISSING_CREDENTIALS_ON_SAVE',
+                severity: 'WARNING',
+                companyId: this._id.toString(),
+                companyName: this.companyName,
+                message: `⚠️ Attempting to save company ${this.companyName} with missing credentials`,
+                details: {
+                    companyId: this._id.toString(),
+                    companyName: this.companyName,
+                    missingCredentials,
+                    impact: 'Company cannot receive/make calls once saved, voice generation will fail',
+                    suggestedFix: 'Add missing credentials before saving or mark company as suspended',
+                    detectedBy: 'Company pre-save validation hook'
+                }
+            }).catch(err => console.error('Failed to send pre-save credentials alert:', err));
+        }
+    } catch (error) {
+        // Don't block save if notification fails
+        console.error('Error in Company pre-save hook:', error.message);
+    }
+    
+    next();
+});
+
 companySchema.pre('findOneAndUpdate', function(next) {
     this.set({ updatedAt: new Date() });
     next();
