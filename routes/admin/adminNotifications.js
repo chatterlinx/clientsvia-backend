@@ -1749,6 +1749,94 @@ router.post('/admin/notifications/clear-all', authenticateJWT, requireRole('admi
 });
 
 // ============================================================================
+// FRONTEND ERROR REPORTING
+// ============================================================================
+// Receives error reports from frontend (Global AI Brain, Company Profile, etc.)
+// and forwards them to Notification Center
+// ============================================================================
+router.post('/frontend-error', authenticateJWT, requireRole('admin'), async (req, res) => {
+    const startTime = Date.now();
+    
+    try {
+        const {
+            context,           // e.g., 'Global AI Brain'
+            module,            // e.g., 'Behaviors'
+            operation,         // e.g., 'fetchBehaviors'
+            errorCategory,     // e.g., 'NETWORK', 'SERVER_ERROR'
+            errorMessage,
+            severity,
+            httpStatus,
+            stackTrace,
+            userAgent,
+            url,
+            timestamp,
+            additionalContext
+        } = req.body;
+
+        logger.info('📊 [FRONTEND ERROR] Received error report', {
+            context,
+            module,
+            operation,
+            errorCategory,
+            severity,
+            httpStatus
+        });
+
+        // Generate alert code based on category
+        const alertCode = `FRONTEND_${errorCategory}_ERROR`;
+
+        // Send alert to Notification Center
+        const AdminNotificationService = require('../../services/AdminNotificationService');
+        
+        await AdminNotificationService.sendAlert({
+            code: alertCode,
+            severity: severity || 'WARNING',
+            companyId: null,
+            companyName: 'Platform',
+            message: `🖥️ Frontend Error: ${context} - ${module}`,
+            details: {
+                operation,
+                errorMessage,
+                errorCategory,
+                httpStatus,
+                url,
+                userAgent,
+                context,
+                module,
+                additionalContext,
+                impact: 'User interface functionality impaired - users may experience loading failures or broken features',
+                action: `Check ${context} → ${module} → ${operation}. Verify backend API health, check for JS errors, inspect network requests.`
+            },
+            stackTrace
+        });
+
+        const responseTime = Date.now() - startTime;
+        
+        logger.info(`✅ [FRONTEND ERROR] Alert sent to Notification Center (${responseTime}ms)`);
+
+        res.json({
+            success: true,
+            message: 'Error reported to Notification Center',
+            alertCode,
+            timestamp: new Date().toISOString(),
+            responseTime
+        });
+
+    } catch (error) {
+        logger.error('❌ [FRONTEND ERROR] Failed to process frontend error report', {
+            error: error.message,
+            stack: error.stack
+        });
+
+        res.status(500).json({
+            success: false,
+            error: 'Failed to process error report',
+            message: error.message
+        });
+    }
+});
+
+// ============================================================================
 // DIAGNOSTIC: List all registered routes (for debugging 404s)
 // ============================================================================
 router.get('/admin/notifications/_routes', authenticateJWT, requireRole('admin'), (req, res) => {

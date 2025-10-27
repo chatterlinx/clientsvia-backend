@@ -22,6 +22,7 @@
     
     <!-- Synonym & Filler Management System -->
     <script src="/js/ToastManager.js"></script>
+    <script src="/js/FrontendErrorReporter.js"></script>
     <script src="/js/ai-agent-settings/SynonymManager.js"></script>
     <script src="/js/ai-agent-settings/FillerManager.js"></script>
     <script src="/js/ai-agent-settings/SuggestionManager.js"></script>
@@ -4474,6 +4475,14 @@ Just checking in..."></textarea>
         }
 
         // ============================================
+        // INITIALIZE ERROR REPORTER
+        // ============================================
+        const errorReporter = new FrontendErrorReporter({
+            context: 'Global AI Brain',
+            module: 'Behaviors'
+        });
+
+        // ============================================
         // FETCH BEHAVIORS FROM DATABASE
         // ============================================
         async function fetchBehaviors() {
@@ -4492,10 +4501,23 @@ Just checking in..."></textarea>
 
                 const result = await response.json();
                 availableBehaviors = result.data || [];
-                console.log(`Loaded ${availableBehaviors.length} behaviors from database`);
+                console.log(`✅ Loaded ${availableBehaviors.length} behaviors from database`);
                 return availableBehaviors;
             } catch (error) {
-                console.error('Error fetching behaviors:', error);
+                console.error('❌ Error fetching behaviors:', error);
+                
+                // Report error to Notification Center
+                await errorReporter.reportError({
+                    error,
+                    operation: 'fetchBehaviors',
+                    userMessage: 'Failed to load AI behavior templates. The Behaviors tab may be empty.',
+                    retryFunction: fetchBehaviors,
+                    additionalContext: {
+                        endpoint: '/api/admin/global-behaviors',
+                        expectedDataType: 'AI Behavior Templates'
+                    }
+                });
+                
                 return [];
             }
         }
