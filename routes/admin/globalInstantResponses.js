@@ -3300,7 +3300,7 @@ router.post('/:id/synonyms', authenticateJWT, adminOnly, async (req, res) => {
         try {
             await AdminNotificationService.sendAlert({
                 code: 'AI_LEARNING_SYNONYM_ADDED',
-                severity: 'warning',
+                severity: 'WARNING',
                 title: '🧠 AI Learning: Synonym Added (Manual)',
                 message: `New synonym mapping added to template.\n\nTemplate: "${template.name}"\nTechnical Term: "${technicalTerm}"\nColloquial Terms: "${colloquialTerms.join(', ')}"\nAdded By: ${req.user?.username || 'Unknown'}\n\nThis improves the AI's ability to understand non-technical language.`,
                 details: {
@@ -3459,7 +3459,7 @@ router.post('/:id/categories/:categoryId/synonyms', authenticateJWT, adminOnly, 
         try {
             await AdminNotificationService.sendAlert({
                 code: 'AI_LEARNING_SYNONYM_ADDED',
-                severity: 'warning',
+                severity: 'WARNING',
                 title: '🧠 AI Learning: Synonym Added to Category (Manual)',
                 message: `New synonym mapping added to category.\n\nTemplate: "${template.name}"\nCategory: "${category.name}"\nTechnical Term: "${technicalTerm}"\nColloquial Terms: "${colloquialTerms.join(', ')}"\nAdded By: ${req.user?.username || 'Unknown'}\n\nThis improves the AI's understanding of domain-specific colloquial terms.`,
                 details: {
@@ -3562,7 +3562,7 @@ router.post('/:id/fillers', authenticateJWT, adminOnly, async (req, res) => {
         try {
             await AdminNotificationService.sendAlert({
                 code: 'AI_LEARNING_FILLER_ADDED',
-                severity: 'warning',
+                severity: 'WARNING',
                 title: '🔇 AI Learning: Filler Words Added (Manual)',
                 message: `New filler words added to template for noise removal.\n\nTemplate: "${template.name}"\nFillers Added: "${fillers.join(', ')}"\nTotal Fillers: ${merged.length}\nAdded By: ${req.user?.username || 'Unknown'}\n\nThese words will be removed from caller input before matching, improving accuracy.`,
                 details: {
@@ -3714,7 +3714,7 @@ router.post('/:id/categories/:categoryId/fillers', authenticateJWT, adminOnly, a
         try {
             await AdminNotificationService.sendAlert({
                 code: 'AI_LEARNING_FILLER_ADDED',
-                severity: 'warning',
+                severity: 'WARNING',
                 title: '🔇 AI Learning: Filler Words Added to Category (Manual)',
                 message: `New filler words added to category for domain-specific noise removal.\n\nTemplate: "${template.name}"\nCategory: "${category.name}"\nFillers Added: "${fillers.join(', ')}"\nTotal Category Fillers: ${merged.length}\nAdded By: ${req.user?.username || 'Unknown'}\n\nThese words will be removed from caller input (in addition to template fillers).`,
                 details: {
