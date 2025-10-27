@@ -89,11 +89,13 @@ async function loadFillerWordsForTemplate() {
  * Render filler words in UI
  */
 function renderFillerWords(words) {
+    console.log(`🎨 [RENDER FILLERS] Called with ${words.length} words`);
     const container = document.getElementById('template-fillers-display');
     if (!container) {
         console.error('❌ [RENDER] Container #template-fillers-display not found!');
         return;
     }
+    console.log(`✅ [RENDER FILLERS] Container found, rendering...`);
     
     if (words.length === 0) {
         container.innerHTML = `
@@ -378,11 +380,13 @@ async function loadSynonymsForTemplate() {
  * Render synonyms in UI
  */
 function renderSynonyms(synonymMap) {
+    console.log(`🎨 [RENDER SYNONYMS] Called with ${synonymMap.size} mappings`);
     const container = document.getElementById('template-synonyms-display');
     if (!container) {
         console.error('❌ [RENDER] Container #template-synonyms-display not found!');
         return;
     }
+    console.log(`✅ [RENDER SYNONYMS] Container found, rendering...`);
     
     if (synonymMap.size === 0) {
         container.innerHTML = `
