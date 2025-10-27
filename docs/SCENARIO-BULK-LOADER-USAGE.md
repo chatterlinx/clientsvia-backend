@@ -55,6 +55,11 @@ node scripts/scenario-bulk-loader.js \
 7. `quick_replies` - 2-3 variations, pipe-separated
 8. `full_replies` - 2-3 variations, pipe-separated
 
+**📌 NEW: Fillers & Synonyms are auto-inherited!**
+- No CSV columns for fillers/synonyms
+- Manage them in **Template Settings** tab (applies to all scenarios)
+- See "Inherited Configuration" section in Quick Reference
+
 **Reference the Quick Reference guide for all field explanations!**
 
 ### **Step 4: Upload CSV**

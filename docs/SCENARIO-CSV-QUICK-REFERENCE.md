@@ -19,6 +19,49 @@
 
 ---
 
+## 🎨 **INHERITED CONFIGURATION** (Automatic - No CSV columns needed!)
+
+> **NEW FEATURE:** Fillers & Synonyms are now inherited from template and category!
+
+| Feature | What It Is | Where to Manage | How Scenarios Get It |
+|---------|-----------|-----------------|---------------------|
+| **Filler Words** (61+) | Noise removal (um, like, you know, well, basically) | Template Settings → Filler Words tab | Auto-inherited from template + category |
+| **Synonyms** (0+) | Colloquial → Technical mapping (thingy → thermostat) | Template Settings → Synonym Mapping tab | Auto-inherited from template + category |
+
+### 💡 **How It Works:**
+- **Scenarios inherit** all fillers & synonyms from their template and category
+- **No CSV columns** for fillers/synonyms (they're managed at template/category level)
+- **Changes propagate instantly** to all scenarios in the template/category
+- **Duplicates are auto-filtered** (no conflicts)
+
+### 🔧 **To Add Filler/Synonym:**
+1. Go to **Global AI Brain** → Select your template
+2. Click **"Template Settings"** sub-tab (below template dropdown)
+3. Add filler words or synonyms using **"+ Quick Add"** button
+4. **All scenarios in that template** immediately inherit it!
+
+### ✅ **Example Inheritance:**
+```
+Template: HVAC Trade Knowledge Template
+├─ Filler Words: um, like, you know, uh, well, basically (61 total)
+├─ Synonyms: thingy=thermostat, box=unit, clicker=thermostat (3 mappings)
+│
+└─ Category: Thermostats
+    ├─ Inherits: All 61 filler words from template
+    ├─ Inherits: All 3 synonyms from template
+    ├─ Custom Fillers: (category-specific, if any)
+    ├─ Custom Synonyms: (category-specific, if any)
+    │
+    └─ Scenario: "Thermostat blank screen" (CSV loaded)
+        └─ Effective Fillers: 61 (inherited automatically)
+        └─ Effective Synonyms: 3 (inherited automatically)
+```
+
+### 🎯 **Key Takeaway:**
+**Focus your CSV on scenario data (triggers, replies, behaviors).** Fillers & synonyms are handled at the template/category level for easy, centralized management! 🚀
+
+---
+
 ## 📌 **COMMONLY USED** (Fill when needed)
 
 | Column | What It Is | Example | When to Use |
