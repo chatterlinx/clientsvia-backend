@@ -1780,6 +1780,22 @@ router.get('/:templateId/scenarios', async (req, res) => {
     try {
         const template = await GlobalInstantResponseTemplate.findById(templateId);
         if (!template) {
+            // 🚨 P0 CHECKPOINT: Template not found
+            await AdminNotificationService.sendAlert({
+                code: 'TEMPLATE_NOT_FOUND',
+                severity: 'WARNING',
+                companyId: null,
+                companyName: 'Platform',
+                message: '⚠️ Attempted to load non-existent AI template',
+                details: {
+                    templateId,
+                    endpoint: `/api/admin/global-instant-responses/${templateId}/scenarios`,
+                    impact: 'Cannot display scenarios, AI agent configuration blocked',
+                    suggestedFix: 'Verify template ID is correct, check if template was deleted',
+                    detectedBy: 'Template scenarios endpoint'
+                }
+            }).catch(err => logger.error('Failed to send template not found alert:', err));
+            
             return res.status(404).json({
                 success: false,
                 message: 'Template not found'
@@ -1797,6 +1813,27 @@ router.get('/:templateId/scenarios', async (req, res) => {
                 });
             });
         });
+
+        // 🚨 P0 CHECKPOINT: Empty scenarios warning
+        if (allScenarios.length === 0 && template.categories.length > 0) {
+            await AdminNotificationService.sendAlert({
+                code: 'TEMPLATE_EMPTY_SCENARIOS',
+                severity: 'WARNING',
+                companyId: null,
+                companyName: 'Platform',
+                message: `⚠️ Template "${template.name}" has categories but no scenarios`,
+                details: {
+                    templateId,
+                    templateName: template.name,
+                    categoriesCount: template.categories.length,
+                    scenariosCount: 0,
+                    impact: 'AI agent cannot respond to any queries - template is non-functional',
+                    suggestedFix: 'Add scenarios to categories or seed default scenarios',
+                    detectedBy: 'Template scenarios endpoint'
+                },
+                bypassPatternDetection: true // Empty state = immediate alert
+            }).catch(err => logger.error('Failed to send empty scenarios alert:', err));
+        }
 
         // Apply filters
         if (status) {
@@ -1820,6 +1857,25 @@ router.get('/:templateId/scenarios', async (req, res) => {
 
     } catch (error) {
         logger.error('❌ Error fetching scenarios:', error.message, error.stack);
+        
+        // 🚨 P0 CHECKPOINT: Database query failure
+        await AdminNotificationService.sendAlert({
+            code: 'TEMPLATE_LOAD_FAILURE',
+            severity: 'CRITICAL',
+            companyId: null,
+            companyName: 'Platform',
+            message: '🔴 CRITICAL: Failed to load AI template from database',
+            details: {
+                templateId,
+                error: error.message,
+                endpoint: `/api/admin/global-instant-responses/${templateId}/scenarios`,
+                impact: 'AI configuration UI broken, cannot manage scenarios',
+                suggestedFix: 'Check MongoDB connection, review database logs',
+                detectedBy: 'Template scenarios endpoint'
+            },
+            stackTrace: error.stack
+        }).catch(err => logger.error('Failed to send template load failure alert:', err));
+        
         res.status(500).json({
             success: false,
             message: `Error fetching scenarios: ${error.message}`
