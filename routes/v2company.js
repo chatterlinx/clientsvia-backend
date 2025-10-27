@@ -13,6 +13,7 @@ const { redisClient } = require('../clients');
 const { apiLimiter } = require('../middleware/rateLimit'); // Rate limiting
 const { authenticateJWT, requireRole } = require('../middleware/auth'); // Authentication
 const CacheHelper = require('../utils/cacheHelper'); // Cache invalidation
+const AdminNotificationService = require('../services/AdminNotificationService'); // P0 monitoring
 // Legacy personality system removed - using modern AI Agent Logic responseCategories
 
 // V2 DELETED: Google OAuth2 Client Setup - Calendar integration eliminated
@@ -348,10 +349,57 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
         logger.debug(`📊 [DB] Loading company from database: ${companyId}`);
         // Explicitly include aiAgentLogic field in the query
         const company = await Company.findById(companyId).lean();
-        if (!company) {return res.status(404).json({ message: 'Company not found' });}
+        
+        if (!company) {
+            // 🚨 P0 CHECKPOINT: Company not found
+            await AdminNotificationService.sendAlert({
+                code: 'COMPANY_NOT_FOUND',
+                severity: 'WARNING',
+                companyId,
+                companyName: 'Unknown',
+                message: '⚠️ Attempted to load non-existent company',
+                details: {
+                    companyId,
+                    endpoint: `/api/company/${companyId}`,
+                    requestedBy: 'Company profile load',
+                    impact: 'User cannot view company details',
+                    suggestedFix: 'Verify company ID is correct, check if company was deleted',
+                    detectedBy: 'Company load endpoint'
+                }
+            }).catch(err => logger.error('Failed to send company not found alert:', err));
+            
+            return res.status(404).json({ message: 'Company not found' });
+        }
 
         logger.debug(`✅ [DB] Company loaded: ${company.companyName}, businessPhone: ${company.businessPhone}`);
         logger.debug(`📝 [DB] Notes in company document:`, company.notes?.length || 0, 'notes');
+
+        // 🚨 P0 CHECKPOINT: Missing critical credentials
+        const missingCredentials = [];
+        if (!company.twilioConfig?.accountSID || !company.twilioConfig?.authToken) {
+            missingCredentials.push('Twilio (accountSID/authToken)');
+        }
+        if (!company.aiSettings?.elevenLabs?.apiKey && !company.aiAgentLogic?.voiceSettings?.apiKey) {
+            missingCredentials.push('ElevenLabs API Key');
+        }
+        
+        if (missingCredentials.length > 0) {
+            await AdminNotificationService.sendAlert({
+                code: 'COMPANY_MISSING_CREDENTIALS',
+                severity: 'WARNING',
+                companyId: company._id.toString(),
+                companyName: company.companyName,
+                message: `⚠️ Company ${company.companyName} is missing critical credentials`,
+                details: {
+                    companyId: company._id.toString(),
+                    companyName: company.companyName,
+                    missingCredentials,
+                    impact: 'Company cannot receive/make calls, voice generation will fail',
+                    suggestedFix: 'Navigate to Company Profile → Configuration tab and add missing credentials',
+                    detectedBy: 'Company load validation'
+                }
+            }).catch(err => logger.error('Failed to send missing credentials alert:', err));
+        }
 
         const cacheKey = `company:${companyId}`;
         await redisClient.setEx(cacheKey, 3600, JSON.stringify(company));
@@ -369,6 +417,25 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
         res.json(company);
     } catch (error) {
         logger.error('[API GET /api/company/:id] Error:', error);
+        
+        // 🚨 P0 CHECKPOINT: Database query failure
+        await AdminNotificationService.sendAlert({
+            code: 'COMPANY_LOAD_FAILURE',
+            severity: 'CRITICAL',
+            companyId,
+            companyName: 'Unknown',
+            message: '🔴 CRITICAL: Failed to load company from database',
+            details: {
+                companyId,
+                error: error.message,
+                endpoint: `/api/company/${companyId}`,
+                impact: 'Company data inaccessible, blocking all operations',
+                suggestedFix: 'Check MongoDB connection, review database logs',
+                detectedBy: 'Company load endpoint'
+            },
+            stackTrace: error.stack
+        }).catch(err => logger.error('Failed to send company load failure alert:', err));
+        
         res.status(500).json({ message: 'Error fetching company details' });
     }
 });
