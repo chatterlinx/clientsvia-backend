@@ -75,8 +75,12 @@ async function loadFillerWordsForTemplate() {
         loadedFillerWords = result.fillers || [];
         
         console.log(`✅ [FILLER WORDS] Loaded ${loadedFillerWords.length} words`);
+        console.log(`🔍 [DEBUG] About to call renderFillerWords with:`, loadedFillerWords);
+        console.log(`🔍 [DEBUG] renderFillerWords function exists:`, typeof renderFillerWords);
         
         renderFillerWords(loadedFillerWords);
+        console.log(`✅ [DEBUG] renderFillerWords executed successfully`);
+        
         updateFillerWordsStats();
         
     } catch (error) {
