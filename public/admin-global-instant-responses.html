@@ -4475,12 +4475,38 @@ Just checking in..."></textarea>
         }
 
         // ============================================
-        // INITIALIZE ERROR REPORTER
+        // INITIALIZE ERROR REPORTERS (One per module)
         // ============================================
-        const errorReporter = new FrontendErrorReporter({
-            context: 'Global AI Brain',
-            module: 'Behaviors'
-        });
+        const errorReporters = {
+            behaviors: new FrontendErrorReporter({
+                context: 'Global AI Brain',
+                module: 'Behaviors'
+            }),
+            templates: new FrontendErrorReporter({
+                context: 'Global AI Brain',
+                module: 'Templates'
+            }),
+            categories: new FrontendErrorReporter({
+                context: 'Global AI Brain',
+                module: 'Categories'
+            }),
+            scenarios: new FrontendErrorReporter({
+                context: 'Global AI Brain',
+                module: 'Scenarios'
+            }),
+            testing: new FrontendErrorReporter({
+                context: 'Global AI Brain',
+                module: 'Testing Center'
+            }),
+            intelligence: new FrontendErrorReporter({
+                context: 'Global AI Brain',
+                module: 'Intelligence'
+            }),
+            settings: new FrontendErrorReporter({
+                context: 'Global AI Brain',
+                module: 'Settings'
+            })
+        };
 
         // ============================================
         // FETCH BEHAVIORS FROM DATABASE
@@ -4507,7 +4533,7 @@ Just checking in..."></textarea>
                 console.error('❌ Error fetching behaviors:', error);
                 
                 // Report error to Notification Center
-                await errorReporter.reportError({
+                await errorReporters.behaviors.reportError({
                     error,
                     operation: 'fetchBehaviors',
                     userMessage: 'Failed to load AI behavior templates. The Behaviors tab may be empty.',
@@ -4589,6 +4615,19 @@ Just checking in..."></textarea>
             } catch (error) {
                 console.error('❌ [DEBUG] Error fetching active template:', error);
                 showNotification('Failed to load active template', 'error');
+                
+                // Report error to Notification Center
+                await errorReporters.templates.reportError({
+                    error,
+                    operation: 'fetchActiveTemplate',
+                    userMessage: 'Failed to load active AI template. Dashboard may be incomplete.',
+                    retryFunction: fetchActiveTemplate,
+                    additionalContext: {
+                        endpoint: '/api/admin/global-instant-responses/active',
+                        expectedDataType: 'Active Template Data'
+                    }
+                });
+                
                 return null;
             }
         }
@@ -14503,8 +14542,24 @@ async function loadIntelligenceMetrics() {
         
         // Show error state
         const statusBadge = document.getElementById('tier-system-status');
-        statusBadge.className = 'px-4 py-2 bg-red-500 text-white rounded-lg font-semibold text-sm';
-        statusBadge.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Error Loading';
+        if (statusBadge) {
+            statusBadge.className = 'px-4 py-2 bg-red-500 text-white rounded-lg font-semibold text-sm';
+            statusBadge.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Error Loading';
+        }
+        
+        // Report error to Notification Center
+        await errorReporters.intelligence.reportError({
+            error,
+            operation: 'loadIntelligenceMetrics',
+            userMessage: 'Failed to load 3-Tier Intelligence analytics. Dashboard may show incomplete data.',
+            retryFunction: loadIntelligenceMetrics,
+            additionalContext: {
+                endpoint: `/api/admin/intelligence/metrics/${activeTemplate._id}`,
+                templateId: activeTemplate?._id,
+                templateName: activeTemplate?.name,
+                expectedDataType: '3-Tier Intelligence Metrics'
+            }
+        });
     }
 }
 
