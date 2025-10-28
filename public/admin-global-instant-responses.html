@@ -10748,30 +10748,55 @@ Timestamp: ${new Date(timestamp).toISOString()}
          * Load suggestions for current template
          */
         async function loadSuggestions(showLoading = true) {
+            console.log('🟣 [SUGGESTIONS CHECKPOINT 1] loadSuggestions() called', { showLoading });
+            
             try {
-                const activeTemplate = window.activeTemplate;
-                const templateId = activeTemplate?._id || window.activeTemplateId;
+                // Check if section exists
+                const sectionElement = document.getElementById('ai-suggestions-section');
+                console.log('🟣 [SUGGESTIONS CHECKPOINT 2] Section element:', sectionElement ? 'FOUND' : 'NOT FOUND');
                 
-                if (!templateId) {
-                    console.warn('[SUGGESTIONS] No active template');
+                if (!sectionElement) {
+                    console.error('🔴 [SUGGESTIONS ERROR] ai-suggestions-section element not found in DOM!');
                     return;
                 }
                 
-                console.log('[SUGGESTIONS] Loading for template:', templateId);
+                const activeTemplate = window.activeTemplate;
+                const templateId = activeTemplate?._id || window.activeTemplateId;
+                
+                console.log('🟣 [SUGGESTIONS CHECKPOINT 3] Template info:', {
+                    activeTemplate: activeTemplate ? 'exists' : 'null',
+                    activeTemplateId: activeTemplate?._id,
+                    windowActiveTemplateId: window.activeTemplateId,
+                    finalTemplateId: templateId
+                });
+                
+                if (!templateId) {
+                    console.warn('🔴 [SUGGESTIONS] No active template - exiting');
+                    return;
+                }
+                
+                console.log('🟣 [SUGGESTIONS CHECKPOINT 4] Loading suggestions for template:', templateId);
                 
                 // Show loading state
                 if (showLoading) {
                     document.getElementById('suggestions-loading-state').classList.remove('hidden');
                     document.getElementById('suggestions-cards-container').classList.add('hidden');
                     document.getElementById('suggestions-empty-state').classList.add('hidden');
+                    console.log('🟣 [SUGGESTIONS CHECKPOINT 5] Loading state displayed');
                 }
                 
                 // Fetch suggestions
+                console.log('🟣 [SUGGESTIONS CHECKPOINT 6] Fetching from API...');
                 const response = await fetch(`/api/admin/global-instant-responses/${templateId}/suggestions`, {
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
                         'Content-Type': 'application/json'
                     }
+                });
+                
+                console.log('🟣 [SUGGESTIONS CHECKPOINT 7] API response received:', {
+                    status: response.status,
+                    ok: response.ok
                 });
                 
                 if (!response.ok) {
@@ -10780,24 +10805,41 @@ Timestamp: ${new Date(timestamp).toISOString()}
                 
                 const data = await response.json();
                 
+                console.log('🟣 [SUGGESTIONS CHECKPOINT 8] API data parsed:', {
+                    success: data.success,
+                    suggestionsCount: data.suggestions?.length || 0,
+                    summary: data.summary
+                });
+                
                 if (!data.success) {
                     throw new Error('Failed to load suggestions');
                 }
                 
                 currentSuggestions = data.suggestions || [];
                 
+                console.log('🟣 [SUGGESTIONS CHECKPOINT 9] Current suggestions set:', currentSuggestions.length);
+                
                 // Update UI
                 updateSuggestionsSummary(data.summary);
                 renderSuggestionsCards(currentSuggestions);
                 
                 // Show/hide section
-                if (currentSuggestions.length > 0) {
+                const shouldShow = currentSuggestions.length > 0;
+                console.log('🟣 [SUGGESTIONS CHECKPOINT 10] Section visibility decision:', {
+                    suggestionsCount: currentSuggestions.length,
+                    shouldShow: shouldShow,
+                    action: shouldShow ? 'SHOWING section' : 'HIDING section'
+                });
+                
+                if (shouldShow) {
                     document.getElementById('ai-suggestions-section').classList.remove('hidden');
+                    console.log('✅ [SUGGESTIONS] Section is now VISIBLE');
                 } else {
                     document.getElementById('ai-suggestions-section').classList.add('hidden');
+                    console.log('🔵 [SUGGESTIONS] Section is now HIDDEN (no suggestions)');
                 }
                 
-                console.log('[SUGGESTIONS] Loaded successfully', {
+                console.log('🟣 [SUGGESTIONS CHECKPOINT 11] Load complete!', {
                     count: currentSuggestions.length,
                     summary: data.summary
                 });
@@ -11108,6 +11150,13 @@ Timestamp: ${new Date(timestamp).toISOString()}
         document.addEventListener('DOMContentLoaded', async function() {
             console.log('🚀 [PAGE INIT] DOMContentLoaded event fired - Global AI Brain Management - Initializing...');
             
+            // CHECKPOINT: Verify AI Suggestions section exists in DOM
+            const suggestionsSectionCheck = document.getElementById('ai-suggestions-section');
+            console.log('🟣 [DOM CHECK] AI Suggestions section exists:', suggestionsSectionCheck ? 'YES ✅' : 'NO ❌');
+            if (!suggestionsSectionCheck) {
+                console.error('🔴 CRITICAL: ai-suggestions-section NOT FOUND in HTML! Check if it was removed or renamed.');
+            }
+            
             // Check authentication
             const token = getAuthToken();
             if (!token) {
@@ -11130,10 +11179,17 @@ Timestamp: ${new Date(timestamp).toISOString()}
             await loadTemplatesIntoSelector();
             
             // Load AI suggestions now that activeTemplate is set
-            console.log('📊 [PAGE INIT] Loading AI suggestions...');
+            console.log('🟣🟣🟣 [PAGE INIT - SUGGESTIONS] ===== STARTING AI SUGGESTIONS LOAD =====');
+            console.log('🟣 [PAGE INIT] Active template info:', {
+                activeTemplate: window.activeTemplate ? 'SET' : 'NOT SET',
+                activeTemplateId: window.activeTemplateId,
+                activeTemplateName: window.activeTemplate?.name
+            });
+            
             await loadSuggestions(true);
             startSuggestionsAutoRefresh();
-            console.log('✅ [PAGE INIT] AI suggestions loaded and auto-refresh started');
+            
+            console.log('🟣🟣🟣 [PAGE INIT - SUGGESTIONS] ===== AI SUGGESTIONS LOAD COMPLETE =====');
             
             // 🎯 NEW: Load Template Data tabs for active template
             if (window.templateDataManager && activeTemplateId) {
