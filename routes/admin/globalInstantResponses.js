@@ -3913,6 +3913,117 @@ router.post('/:id/suggestions/:suggestionId/dismiss', authenticateJWT, adminOnly
 });
 
 /**
+ * POST /api/admin/global-instant-responses/:id/suggestions/apply-all-high
+ * Apply all high-confidence suggestions (90%+)
+ */
+router.post('/:id/suggestions/apply-all-high', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        const suggestions = await SuggestionKnowledgeBase.getPendingSuggestions(
+            req.params.id,
+            { minConfidence: 0.9 }
+        );
+        
+        if (suggestions.length === 0) {
+            return res.json({
+                success: true,
+                message: 'No high-confidence suggestions found',
+                applied: 0,
+                failed: 0
+            });
+        }
+        
+        let applied = 0;
+        let failed = 0;
+        const errors = [];
+        
+        for (const suggestion of suggestions) {
+            try {
+                await suggestion.apply(req.user._id);
+                applied++;
+                
+                logger.info('Auto-applied high-confidence suggestion', {
+                    suggestionId: suggestion._id,
+                    type: suggestion.type,
+                    confidence: suggestion.confidence,
+                    templateId: req.params.id,
+                    by: req.user?.username
+                });
+                
+            } catch (error) {
+                failed++;
+                errors.push({
+                    suggestionId: suggestion._id,
+                    type: suggestion.type,
+                    error: error.message
+                });
+                
+                logger.error('Failed to apply suggestion', {
+                    suggestionId: suggestion._id,
+                    error: error.message
+                });
+            }
+        }
+        
+        // Send notification about bulk apply
+        try {
+            await AdminNotificationService.sendAlert({
+                code: 'AI_SUGGESTIONS_BULK_APPLIED',
+                severity: 'INFO',
+                title: '🟣 AI Suggestions Bulk Applied',
+                message: `${applied} high-confidence suggestions applied automatically`,
+                context: {
+                    templateId: req.params.id,
+                    applied,
+                    failed,
+                    confidence: '90%+',
+                    by: req.user?.username
+                }
+            });
+        } catch (notifError) {
+            logger.error('Failed to send bulk apply notification', { error: notifError.message });
+        }
+        
+        logger.info('Bulk apply complete', {
+            templateId: req.params.id,
+            total: suggestions.length,
+            applied,
+            failed,
+            by: req.user?.username
+        });
+        
+        res.json({
+            success: true,
+            message: `Applied ${applied} of ${suggestions.length} suggestions`,
+            applied,
+            failed,
+            errors: failed > 0 ? errors : undefined
+        });
+        
+    } catch (error) {
+        logger.error('Error in bulk apply', { error: error.message });
+        
+        // Send critical notification
+        try {
+            await AdminNotificationService.sendAlert({
+                code: 'AI_SUGGESTIONS_BULK_APPLY_FAILED',
+                severity: 'CRITICAL',
+                title: '❌ AI Suggestions Bulk Apply Failed',
+                message: 'Failed to apply high-confidence suggestions',
+                context: {
+                    templateId: req.params.id,
+                    error: error.message,
+                    by: req.user?.username
+                }
+            });
+        } catch (notifError) {
+            logger.error('Failed to send error notification', { error: notifError.message });
+        }
+        
+        res.status(500).json({ error: 'Failed to apply suggestions', details: error.message });
+    }
+});
+
+/**
  * POST /api/admin/global-instant-responses/:id/analyze
  * Trigger pattern analysis on test calls
  * Body: { testCalls: [...] }

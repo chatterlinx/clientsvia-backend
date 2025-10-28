@@ -497,6 +497,108 @@
                 </div>
             </div>
 
+            <!-- ================================================================
+                 🟣 AI SUGGESTIONS BANNER - ALWAYS VISIBLE (Action Required)
+                 ================================================================
+                 Purpose: Show pending AI suggestions that need developer review
+                 Behavior: Auto-shows when suggestions > 0, auto-hides when 0
+                 Style: Purple theme (ACTION_REQUIRED severity)
+                 ================================================================ -->
+            <div id="ai-suggestions-banner" class="hidden mt-6 mb-4">
+                <div class="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl shadow-lg overflow-hidden">
+                    <!-- Header -->
+                    <div class="bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-3 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center animate-pulse">
+                                <i class="fas fa-lightbulb text-purple-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-white font-bold text-lg">
+                                    🟣 AI Suggestions Pending Review
+                                </h3>
+                                <p class="text-purple-100 text-sm">
+                                    <span id="suggestions-banner-count">0</span> pattern<span id="suggestions-banner-plural">s</span> discovered from test calls
+                                </p>
+                            </div>
+                        </div>
+                        <button onclick="dismissSuggestionsBanner()" class="text-white hover:text-purple-200 transition-colors" title="Dismiss for 24 hours">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- Content -->
+                    <div class="p-6">
+                        <!-- Priority Stats -->
+                        <div class="grid grid-cols-3 gap-4 mb-6">
+                            <!-- High Priority -->
+                            <div class="bg-white rounded-lg border-2 border-red-200 p-4 text-center">
+                                <div class="text-3xl font-bold text-red-600" id="suggestions-banner-high">0</div>
+                                <div class="text-sm text-gray-600 mt-1">
+                                    <i class="fas fa-exclamation-circle text-red-500 mr-1"></i>
+                                    High Priority
+                                </div>
+                            </div>
+                            
+                            <!-- Medium Priority -->
+                            <div class="bg-white rounded-lg border-2 border-yellow-200 p-4 text-center">
+                                <div class="text-3xl font-bold text-yellow-600" id="suggestions-banner-medium">0</div>
+                                <div class="text-sm text-gray-600 mt-1">
+                                    <i class="fas fa-flag text-yellow-500 mr-1"></i>
+                                    Medium Priority
+                                </div>
+                            </div>
+                            
+                            <!-- Low Priority -->
+                            <div class="bg-white rounded-lg border-2 border-gray-200 p-4 text-center">
+                                <div class="text-3xl font-bold text-gray-600" id="suggestions-banner-low">0</div>
+                                <div class="text-sm text-gray-600 mt-1">
+                                    <i class="fas fa-info-circle text-gray-500 mr-1"></i>
+                                    Low Priority
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Preview List -->
+                        <div id="suggestions-banner-preview" class="mb-6 space-y-2">
+                            <!-- Dynamically populated -->
+                        </div>
+                        
+                        <!-- Impact Summary -->
+                        <div class="bg-purple-100 border border-purple-300 rounded-lg p-4 mb-6">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-chart-line text-purple-600 text-2xl"></i>
+                                <div class="flex-1">
+                                    <div class="font-semibold text-gray-900">Estimated Impact</div>
+                                    <div class="text-sm text-gray-600">
+                                        Applying these suggestions could improve match accuracy by 
+                                        <span class="font-bold text-purple-700" id="suggestions-banner-impact">0</span>%
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="flex gap-3">
+                            <button onclick="openIntelligenceTab()" 
+                                    class="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg font-bold shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2">
+                                <i class="fas fa-eye"></i>
+                                Review & Approve All
+                            </button>
+                            <button onclick="applyHighConfidenceSuggestions()" 
+                                    class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
+                                <i class="fas fa-check-double"></i>
+                                Quick Apply (90%+)
+                            </button>
+                            <button onclick="dismissSuggestionsBanner()" 
+                                    class="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
+                                <i class="fas fa-clock"></i>
+                                Dismiss
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Sub Tabs -->
             <div class="mt-3 border-b border-gray-200">
                 <nav class="flex gap-2">
@@ -10815,6 +10917,283 @@ Timestamp: ${new Date(timestamp).toISOString()}
             }
         }
 
+        // ============================================================================
+        // 🟣 AI SUGGESTIONS BANNER - ALWAYS-VISIBLE INTELLIGENCE
+        // ============================================================================
+        // Purpose: Show pending AI suggestions at top of page for immediate visibility
+        // Auto-loads on page load and refreshes every 30 seconds
+        // ============================================================================
+        
+        let suggestionsBannerRefreshInterval = null;
+        
+        /**
+         * Load and display AI suggestions banner
+         */
+        async function loadSuggestionsBanner() {
+            try {
+                const templateId = window.activeTemplateId || currentTemplateIdForSettings;
+                
+                if (!templateId) {
+                    console.log('⚠️ [SUGGESTIONS BANNER] No template selected, hiding banner');
+                    hideSuggestionsBanner();
+                    return;
+                }
+                
+                console.log('📊 [SUGGESTIONS BANNER] Loading suggestions for template:', templateId);
+                
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-instant-responses/${templateId}/suggestions?status=pending`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || 'Failed to load suggestions');
+                }
+                
+                const suggestions = result.suggestions || [];
+                const summary = result.summary || { high: 0, medium: 0, low: 0, total: 0 };
+                
+                console.log('✅ [SUGGESTIONS BANNER] Loaded', suggestions.length, 'suggestions');
+                
+                // If no suggestions, hide banner
+                if (suggestions.length === 0 || summary.total === 0) {
+                    hideSuggestionsBanner();
+                    return;
+                }
+                
+                // Update banner content
+                updateSuggestionsBannerContent(suggestions, summary);
+                
+                // Show banner
+                showSuggestionsBanner();
+                
+            } catch (error) {
+                console.error('❌ [SUGGESTIONS BANNER] Error loading suggestions:', error);
+                hideSuggestionsBanner();
+                
+                // Send error notification to Notification Center
+                try {
+                    await fetch('/api/admin/notifications/frontend-error', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${getAuthToken()}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            code: 'SUGGESTIONS_BANNER_LOAD_FAILED',
+                            severity: 'WARNING',
+                            context: 'AI Suggestions Banner',
+                            operation: 'loadSuggestionsBanner',
+                            error: error.message,
+                            userMessage: 'Failed to load AI suggestions banner. Intelligence tab may be unavailable.'
+                        })
+                    });
+                } catch (notifError) {
+                    console.error('Failed to send error notification:', notifError);
+                }
+            }
+        }
+        
+        /**
+         * Update banner content with suggestions data
+         */
+        function updateSuggestionsBannerContent(suggestions, summary) {
+            // Update counts
+            document.getElementById('suggestions-banner-count').textContent = summary.total || suggestions.length;
+            document.getElementById('suggestions-banner-plural').textContent = summary.total === 1 ? '' : 's';
+            document.getElementById('suggestions-banner-high').textContent = summary.high || 0;
+            document.getElementById('suggestions-banner-medium').textContent = summary.medium || 0;
+            document.getElementById('suggestions-banner-low').textContent = summary.low || 0;
+            
+            // Calculate total estimated impact
+            const totalImpact = suggestions.reduce((sum, s) => sum + (s.estimatedImpact || 0), 0);
+            const avgImpact = suggestions.length > 0 ? Math.round(totalImpact / suggestions.length) : 0;
+            document.getElementById('suggestions-banner-impact').textContent = avgImpact;
+            
+            // Render preview (top 3 high-priority suggestions)
+            const highPriority = suggestions.filter(s => s.priority === 'high').slice(0, 3);
+            const previewHtml = highPriority.map(s => renderSuggestionPreview(s)).join('');
+            document.getElementById('suggestions-banner-preview').innerHTML = previewHtml || 
+                '<div class="text-sm text-gray-600 text-center py-2">Click "Review & Approve All" to see details</div>';
+        }
+        
+        /**
+         * Render a single suggestion preview
+         */
+        function renderSuggestionPreview(suggestion) {
+            const typeIcons = {
+                filler: '🔇',
+                synonym: '🔤',
+                keyword: '🎯',
+                negative_keyword: '⚠️'
+            };
+            
+            const typeNames = {
+                filler: 'Filler',
+                synonym: 'Synonym',
+                keyword: 'Keyword',
+                negative_keyword: 'Negative Keyword'
+            };
+            
+            let preview = '';
+            if (suggestion.type === 'synonym') {
+                preview = `"${suggestion.colloquialTerm || '?'}" → "${suggestion.technicalTerm || '?'}"`;
+            } else if (suggestion.type === 'filler') {
+                preview = `Add "${suggestion.fillerWord || suggestion.word || '?'}" to filter list`;
+            } else if (suggestion.type === 'keyword') {
+                preview = `Add "${suggestion.keyword || '?'}" to scenario`;
+            }
+            
+            return `
+                <div class="flex items-center gap-3 bg-white rounded-lg border border-purple-200 p-3">
+                    <div class="text-2xl">${typeIcons[suggestion.type] || '📋'}</div>
+                    <div class="flex-1">
+                        <div class="text-sm font-semibold text-gray-900">${typeNames[suggestion.type] || 'Unknown'}</div>
+                        <div class="text-sm text-gray-600">${preview}</div>
+                    </div>
+                    <div class="text-sm font-bold text-purple-600">${(suggestion.confidence * 100).toFixed(0)}%</div>
+                </div>
+            `;
+        }
+        
+        /**
+         * Show the suggestions banner
+         */
+        function showSuggestionsBanner() {
+            const banner = document.getElementById('ai-suggestions-banner');
+            if (banner) {
+                banner.classList.remove('hidden');
+                console.log('✅ [SUGGESTIONS BANNER] Shown');
+            }
+        }
+        
+        /**
+         * Hide the suggestions banner
+         */
+        function hideSuggestionsBanner() {
+            const banner = document.getElementById('ai-suggestions-banner');
+            if (banner) {
+                banner.classList.add('hidden');
+                console.log('📍 [SUGGESTIONS BANNER] Hidden (no suggestions)');
+            }
+        }
+        
+        /**
+         * Open Intelligence tab (from banner button)
+         */
+        function openIntelligenceTab() {
+            switchTab('intelligence');
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        
+        /**
+         * Quick apply all high-confidence suggestions (90%+)
+         */
+        async function applyHighConfidenceSuggestions() {
+            if (!confirm('Apply ALL suggestions with 90%+ confidence?\n\nThis will update your template immediately.')) {
+                return;
+            }
+            
+            try {
+                const templateId = window.activeTemplateId || currentTemplateIdForSettings;
+                
+                showNotification('🔄 Applying high-confidence suggestions...', 'info');
+                
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-instant-responses/${templateId}/suggestions/apply-all-high`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showNotification(`✅ Applied ${result.applied || 0} suggestions!`, 'success');
+                    // Reload banner
+                    await loadSuggestionsBanner();
+                } else {
+                    throw new Error(result.error || 'Failed to apply suggestions');
+                }
+                
+            } catch (error) {
+                console.error('❌ [SUGGESTIONS BANNER] Failed to apply:', error);
+                showNotification(`❌ Failed: ${error.message}`, 'error');
+            }
+        }
+        
+        /**
+         * Dismiss banner for 24 hours
+         */
+        function dismissSuggestionsBanner() {
+            hideSuggestionsBanner();
+            
+            // Store dismissal timestamp
+            localStorage.setItem('suggestionsBannerDismissedUntil', Date.now() + (24 * 60 * 60 * 1000));
+            
+            showNotification('ℹ️ Suggestions banner dismissed for 24 hours', 'info');
+        }
+        
+        /**
+         * Check if banner is currently dismissed
+         */
+        function isSuggestionsBannerDismissed() {
+            const dismissedUntil = localStorage.getItem('suggestionsBannerDismissedUntil');
+            if (!dismissedUntil) return false;
+            
+            const now = Date.now();
+            if (now < parseInt(dismissedUntil)) {
+                console.log('📍 [SUGGESTIONS BANNER] Dismissed until', new Date(parseInt(dismissedUntil)));
+                return true;
+            }
+            
+            // Expired, clear it
+            localStorage.removeItem('suggestionsBannerDismissedUntil');
+            return false;
+        }
+        
+        /**
+         * Start auto-refresh interval for suggestions banner
+         */
+        function startSuggestionsBannerAutoRefresh() {
+            // Clear existing interval
+            if (suggestionsBannerRefreshInterval) {
+                clearInterval(suggestionsBannerRefreshInterval);
+            }
+            
+            // Refresh every 30 seconds
+            suggestionsBannerRefreshInterval = setInterval(() => {
+                if (!isSuggestionsBannerDismissed()) {
+                    loadSuggestionsBanner();
+                }
+            }, 30000);
+            
+            console.log('✅ [SUGGESTIONS BANNER] Auto-refresh started (30s interval)');
+        }
+        
+        /**
+         * Stop auto-refresh interval
+         */
+        function stopSuggestionsBannerAutoRefresh() {
+            if (suggestionsBannerRefreshInterval) {
+                clearInterval(suggestionsBannerRefreshInterval);
+                suggestionsBannerRefreshInterval = null;
+                console.log('📍 [SUGGESTIONS BANNER] Auto-refresh stopped');
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', async function() {
             console.log('🚀 [PAGE INIT] DOMContentLoaded event fired - Global AI Brain Management - Initializing...');
             
@@ -10863,6 +11242,16 @@ Timestamp: ${new Date(timestamp).toISOString()}
             const greetingTextarea = document.getElementById('twilio-test-greeting');
             if (greetingTextarea) {
                 greetingTextarea.addEventListener('input', updateGreetingCharCount);
+            }
+            
+            // 🟣 NEW: Load AI Suggestions Banner (always-visible)
+            if (!isSuggestionsBannerDismissed()) {
+                console.log('📊 [PAGE INIT] Loading AI Suggestions Banner...');
+                await loadSuggestionsBanner();
+                // Start auto-refresh
+                startSuggestionsBannerAutoRefresh();
+            } else {
+                console.log('📍 [PAGE INIT] AI Suggestions Banner dismissed by user');
             }
             
             console.log('✅ Global AI Brain Management - Initialized');
