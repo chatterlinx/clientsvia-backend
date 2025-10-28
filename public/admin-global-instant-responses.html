@@ -26,8 +26,9 @@
     <script src="/js/ai-agent-settings/SynonymManager.js"></script>
     <script src="/js/ai-agent-settings/FillerManager.js"></script>
     <script src="/js/ai-agent-settings/SuggestionManager.js"></script>
+    <script src="/js/ai-agent-settings/SuggestionRenderer.js"></script>
+    <script src="/js/ai-agent-settings/SuggestionAnalysisModal.js"></script>
     <script src="/js/ai-agent-settings/TestReportExporter.js"></script>
-    <script src="/js/intelligence-dashboard.js"></script>
     <script src="/js/template-settings-manager.js"></script>
     
     <!-- 🎯 Template Data Manager - World-Class State Management -->
@@ -494,110 +495,8 @@
                     <p class="text-gray-600 mt-2">
                         World-class instant response library with 100+ human-like conversation scenarios
                     </p>
-                </div>
             </div>
-
-            <!-- ================================================================
-                 🟣 AI SUGGESTIONS BANNER - ALWAYS VISIBLE (Action Required)
-                 ================================================================
-                 Purpose: Show pending AI suggestions that need developer review
-                 Behavior: Auto-shows when suggestions > 0, auto-hides when 0
-                 Style: Purple theme (ACTION_REQUIRED severity)
-                 ================================================================ -->
-            <div id="ai-suggestions-banner" class="hidden mt-6 mb-4">
-                <div class="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl shadow-lg overflow-hidden">
-                    <!-- Header -->
-                    <div class="bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-3 flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center animate-pulse">
-                                <i class="fas fa-lightbulb text-purple-600 text-xl"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-white font-bold text-lg">
-                                    🟣 AI Suggestions Pending Review
-                                </h3>
-                                <p class="text-purple-100 text-sm">
-                                    <span id="suggestions-banner-count">0</span> pattern<span id="suggestions-banner-plural">s</span> discovered from test calls
-                                </p>
-                            </div>
-                        </div>
-                        <button onclick="dismissSuggestionsBanner()" class="text-white hover:text-purple-200 transition-colors" title="Dismiss for 24 hours">
-                            <i class="fas fa-times text-xl"></i>
-                        </button>
-                    </div>
-                    
-                    <!-- Content -->
-                    <div class="p-6">
-                        <!-- Priority Stats -->
-                        <div class="grid grid-cols-3 gap-4 mb-6">
-                            <!-- High Priority -->
-                            <div class="bg-white rounded-lg border-2 border-red-200 p-4 text-center">
-                                <div class="text-3xl font-bold text-red-600" id="suggestions-banner-high">0</div>
-                                <div class="text-sm text-gray-600 mt-1">
-                                    <i class="fas fa-exclamation-circle text-red-500 mr-1"></i>
-                                    High Priority
-                                </div>
-                            </div>
-                            
-                            <!-- Medium Priority -->
-                            <div class="bg-white rounded-lg border-2 border-yellow-200 p-4 text-center">
-                                <div class="text-3xl font-bold text-yellow-600" id="suggestions-banner-medium">0</div>
-                                <div class="text-sm text-gray-600 mt-1">
-                                    <i class="fas fa-flag text-yellow-500 mr-1"></i>
-                                    Medium Priority
-                                </div>
-                            </div>
-                            
-                            <!-- Low Priority -->
-                            <div class="bg-white rounded-lg border-2 border-gray-200 p-4 text-center">
-                                <div class="text-3xl font-bold text-gray-600" id="suggestions-banner-low">0</div>
-                                <div class="text-sm text-gray-600 mt-1">
-                                    <i class="fas fa-info-circle text-gray-500 mr-1"></i>
-                                    Low Priority
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Preview List -->
-                        <div id="suggestions-banner-preview" class="mb-6 space-y-2">
-                            <!-- Dynamically populated -->
-                        </div>
-                        
-                        <!-- Impact Summary -->
-                        <div class="bg-purple-100 border border-purple-300 rounded-lg p-4 mb-6">
-                            <div class="flex items-center gap-3">
-                                <i class="fas fa-chart-line text-purple-600 text-2xl"></i>
-                                <div class="flex-1">
-                                    <div class="font-semibold text-gray-900">Estimated Impact</div>
-                                    <div class="text-sm text-gray-600">
-                                        Applying these suggestions could improve match accuracy by 
-                                        <span class="font-bold text-purple-700" id="suggestions-banner-impact">0</span>%
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Action Buttons -->
-                        <div class="flex gap-3">
-                            <button onclick="openIntelligenceTab()" 
-                                    class="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg font-bold shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2">
-                                <i class="fas fa-eye"></i>
-                                Review & Approve All
-                            </button>
-                            <button onclick="applyHighConfidenceSuggestions()" 
-                                    class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
-                                <i class="fas fa-check-double"></i>
-                                Quick Apply (90%+)
-                            </button>
-                            <button onclick="dismissSuggestionsBanner()" 
-                                    class="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-bold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
-                                <i class="fas fa-clock"></i>
-                                Dismiss
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        </div>
 
             <!-- Sub Tabs -->
             <div class="mt-3 border-b border-gray-200">
@@ -617,11 +516,6 @@
                     <button id="tab-settings" onclick="switchTab('settings')" class="px-6 py-3 font-semibold text-gray-500 hover:text-blue-600 border-b-2 border-transparent hover:border-blue-300 transition-colors">
                         <i class="fas fa-cog mr-2"></i>
                         Settings
-                    </button>
-                    <button id="tab-intelligence" onclick="switchTab('intelligence')" class="px-6 py-3 font-semibold text-gray-500 hover:text-blue-600 border-b-2 border-transparent hover:border-blue-300 transition-colors">
-                        <i class="fas fa-brain mr-2"></i>
-                        Intelligence
-                        <span id="intelligence-badge" class="ml-2 px-2 py-1 text-xs font-bold rounded-full bg-red-500 text-white" style="display: none;">0</span>
                     </button>
                 </nav>
             </div>
@@ -650,6 +544,109 @@
 
             <!-- Dashboard Sub-Tab Content -->
             <div id="overview-dashboard-content" class="overview-subtab-content">
+                
+                <!-- ================================================================
+                     🟣 AI SUGGESTIONS SECTION - ALWAYS VISIBLE (Top of Page)
+                     ================================================================
+                     Purpose: Show AI-discovered improvements for current template
+                     Auto-shows when suggestions > 0, auto-hides when 0
+                     Renders before template selector for maximum visibility
+                     ================================================================ -->
+                <div id="ai-suggestions-section" class="hidden mb-8">
+                    <!-- Header -->
+                    <div class="bg-gradient-to-r from-purple-600 to-pink-600 rounded-t-xl p-6 text-white">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-4">
+                                <div class="w-14 h-14 bg-white rounded-full flex items-center justify-center animate-pulse">
+                                    <i class="fas fa-lightbulb text-purple-600 text-2xl"></i>
+                                </div>
+                                <div>
+                                    <h2 class="text-2xl font-bold flex items-center gap-2">
+                                        🟣 AI Suggestions
+                                        <span id="suggestions-count-badge" class="px-3 py-1 bg-white text-purple-700 rounded-full text-sm font-bold">0</span>
+                                    </h2>
+                                    <p class="text-purple-100 text-sm">
+                                        Intelligent improvements discovered from call patterns
+                                    </p>
+                                </div>
+                            </div>
+                            <button onclick="dismissSuggestions()" 
+                                    class="text-white hover:text-purple-200 transition-colors"
+                                    title="Hide for now">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Priority Summary -->
+                    <div class="bg-gradient-to-r from-purple-50 to-pink-50 px-6 py-4 border-x-2 border-purple-200">
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="bg-white rounded-lg p-3 border-2 border-red-200 text-center">
+                                <div id="suggestions-high-count" class="text-3xl font-bold text-red-600">0</div>
+                                <div class="text-sm text-gray-600 mt-1">
+                                    <i class="fas fa-exclamation-circle text-red-500 mr-1"></i>
+                                    High Priority
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg p-3 border-2 border-yellow-200 text-center">
+                                <div id="suggestions-medium-count" class="text-3xl font-bold text-yellow-600">0</div>
+                                <div class="text-sm text-gray-600 mt-1">
+                                    <i class="fas fa-flag text-yellow-500 mr-1"></i>
+                                    Medium Priority
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg p-3 border-2 border-gray-200 text-center">
+                                <div id="suggestions-low-count" class="text-3xl font-bold text-gray-600">0</div>
+                                <div class="text-sm text-gray-600 mt-1">
+                                    <i class="fas fa-info-circle text-gray-500 mr-1"></i>
+                                    Low Priority
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Suggestions List -->
+                    <div class="bg-white rounded-b-xl p-6 border-2 border-t-0 border-purple-200 shadow-lg">
+                        <!-- Batch Actions -->
+                        <div class="flex gap-3 mb-6 pb-4 border-b border-gray-200">
+                            <button onclick="applyAllHighConfidenceSuggestions()" 
+                                    class="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-bold shadow-md hover:shadow-xl transition-all flex items-center gap-2">
+                                <i class="fas fa-check-double"></i>
+                                Apply All (90%+)
+                            </button>
+                            <button onclick="refreshSuggestions()" 
+                                    class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold transition-all flex items-center gap-2">
+                                <i class="fas fa-sync-alt"></i>
+                                Refresh
+                            </button>
+                            <button onclick="dismissLowPriority()" 
+                                    class="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition-all flex items-center gap-2">
+                                <i class="fas fa-filter"></i>
+                                Dismiss Low
+                            </button>
+                        </div>
+                        
+                        <!-- Suggestions Cards Container -->
+                        <div id="suggestions-cards-container" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                            <!-- Cards will be rendered here by JavaScript -->
+                        </div>
+                        
+                        <!-- Empty State -->
+                        <div id="suggestions-empty-state" class="hidden text-center py-12">
+                            <i class="fas fa-check-circle text-green-500 text-6xl mb-4"></i>
+                            <h3 class="text-xl font-bold text-gray-700 mb-2">All Caught Up!</h3>
+                            <p class="text-gray-600">No pending suggestions at this time.</p>
+                            <p class="text-sm text-gray-500 mt-2">The AI will notify you when new patterns are detected.</p>
+                        </div>
+                        
+                        <!-- Loading State -->
+                        <div id="suggestions-loading-state" class="hidden text-center py-12">
+                            <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-600 mx-auto mb-4"></div>
+                            <p class="text-gray-600 font-semibold">Loading suggestions...</p>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Template Selector Section -->
                 <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-6 mb-8 shadow-sm">
                     <div class="mb-4">
@@ -2483,467 +2480,6 @@
                             Destructive operations like database reset will be available here in future updates.
                         </p>
                     </div>
-                </div>
-
-            </div>
-        </div>
-
-        <!-- ============================================ -->
-        <!-- INTELLIGENCE DASHBOARD TAB                  -->
-        <!-- ============================================ -->
-        <div id="intelligence-tab" class="tab-content hidden">
-            <div class="max-w-7xl mx-auto space-y-6">
-                
-                <!-- Page Header -->
-                <div class="bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl p-8 text-white">
-                    <h2 class="text-3xl font-bold mb-2 flex items-center gap-3">
-                        <i class="fas fa-brain"></i>
-                        Intelligence Dashboard
-                    </h2>
-                    <p class="text-purple-100">
-                        Monitor 3-Tier AI system performance, costs, and self-improvement metrics
-                    </p>
-                </div>
-                
-                <!-- 3-TIER INTELLIGENCE ANALYTICS SECTION -->
-                <div class="bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-xl p-6 shadow-lg">
-                    <div class="flex items-center justify-between mb-6">
-                        <div>
-                            <h3 class="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                                <i class="fas fa-layer-group text-indigo-600"></i>
-                                3-Tier Intelligence System
-                            </h3>
-                            <p class="text-sm text-gray-600 mt-1">
-                                Real-time analytics for rule-based, semantic, and LLM fallback routing
-                            </p>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <div id="tier-system-status" class="px-4 py-2 bg-gray-200 text-gray-600 rounded-lg font-semibold text-sm">
-                                <i class="fas fa-circle-notch fa-spin mr-2"></i>Loading...
-                            </div>
-                            <button onclick="refreshIntelligenceMetrics()" 
-                                    id="refresh-intelligence-btn"
-                                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-all flex items-center gap-2 text-sm shadow-md hover:shadow-lg">
-                                <i class="fas fa-sync-alt"></i>
-                                Refresh
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- Tier Distribution Stats -->
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                        <!-- Tier 1 Stats -->
-                        <div class="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg p-4">
-                            <div class="flex items-center justify-between mb-2">
-                                <div class="flex items-center gap-2">
-                                    <span class="px-2 py-1 bg-green-500 text-white text-xs rounded font-bold">TIER 1</span>
-                                    <span class="text-sm font-semibold text-green-900">Rule-Based</span>
-                                </div>
-                                <i class="fas fa-bolt text-2xl text-green-400"></i>
-                            </div>
-                            <div class="flex items-baseline gap-2">
-                                <p id="tier1-count" class="text-3xl font-bold text-green-700">0</p>
-                                <p id="tier1-percentage" class="text-sm text-green-600 font-semibold">(0%)</p>
-                            </div>
-                            <p class="text-xs text-green-600 mt-1">Free • Instant</p>
-                        </div>
-                        
-                        <!-- Tier 2 Stats -->
-                        <div class="bg-gradient-to-br from-blue-50 to-sky-50 border-2 border-blue-200 rounded-lg p-4">
-                            <div class="flex items-center justify-between mb-2">
-                                <div class="flex items-center gap-2">
-                                    <span class="px-2 py-1 bg-blue-500 text-white text-xs rounded font-bold">TIER 2</span>
-                                    <span class="text-sm font-semibold text-blue-900">Semantic</span>
-                                </div>
-                                <i class="fas fa-project-diagram text-2xl text-blue-400"></i>
-                            </div>
-                            <div class="flex items-baseline gap-2">
-                                <p id="tier2-count" class="text-3xl font-bold text-blue-700">0</p>
-                                <p id="tier2-percentage" class="text-sm text-blue-600 font-semibold">(0%)</p>
-                            </div>
-                            <p class="text-xs text-blue-600 mt-1">Free • Fast</p>
-                        </div>
-                        
-                        <!-- Tier 3 Stats -->
-                        <div class="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg p-4">
-                            <div class="flex items-center justify-between mb-2">
-                                <div class="flex items-center gap-2">
-                                    <span class="px-2 py-1 bg-purple-500 text-white text-xs rounded font-bold">TIER 3</span>
-                                    <span class="text-sm font-semibold text-purple-900">LLM</span>
-                                </div>
-                                <i class="fas fa-brain text-2xl text-purple-400"></i>
-                            </div>
-                            <div class="flex items-baseline gap-2">
-                                <p id="tier3-count" class="text-3xl font-bold text-purple-700">0</p>
-                                <p id="tier3-percentage" class="text-sm text-purple-600 font-semibold">(0%)</p>
-                            </div>
-                            <p class="text-xs text-purple-600 mt-1">Paid • Learns</p>
-                        </div>
-                        
-                        <!-- Total Calls -->
-                        <div class="bg-gradient-to-br from-gray-50 to-slate-50 border-2 border-gray-200 rounded-lg p-4">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-sm font-semibold text-gray-900">Total Calls</span>
-                                <i class="fas fa-phone text-2xl text-gray-400"></i>
-                            </div>
-                            <div class="flex items-baseline gap-2">
-                                <p id="total-calls-count" class="text-3xl font-bold text-gray-700">0</p>
-                            </div>
-                            <p class="text-xs text-gray-600 mt-1">Last 30 days</p>
-                        </div>
-                    </div>
-                    
-                    <!-- Cost & Learning Metrics -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <!-- Monthly Cost -->
-                        <div class="bg-white border-2 border-gray-200 rounded-lg p-4">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-sm font-semibold text-gray-700">Monthly LLM Cost</span>
-                                <i class="fas fa-dollar-sign text-xl text-yellow-500"></i>
-                            </div>
-                            <div class="flex items-baseline gap-2">
-                                <span class="text-2xl font-bold text-gray-900">$</span>
-                                <p id="monthly-cost" class="text-3xl font-bold text-gray-900">0.00</p>
-                            </div>
-                            <div class="flex items-center gap-2 mt-2">
-                                <div id="cost-budget-bar" class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                    <div id="cost-budget-fill" class="h-full bg-yellow-500" style="width: 0%"></div>
-                                </div>
-                                <span id="cost-budget-text" class="text-xs text-gray-600">of $500</span>
-                            </div>
-                        </div>
-                        
-                        <!-- Patterns Learned -->
-                        <div class="bg-white border-2 border-gray-200 rounded-lg p-4">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-sm font-semibold text-gray-700">Patterns Learned</span>
-                                <i class="fas fa-graduation-cap text-xl text-green-500"></i>
-                            </div>
-                            <div class="flex items-baseline gap-2">
-                                <p id="patterns-learned-count" class="text-3xl font-bold text-gray-900">0</p>
-                                <span class="text-sm text-green-600 font-semibold" id="patterns-learned-change">+0</span>
-                            </div>
-                            <p class="text-xs text-gray-600 mt-2">Auto-applied to Tier 1</p>
-                        </div>
-                        
-                        <!-- Self-Improvement Score -->
-                        <div class="bg-white border-2 border-gray-200 rounded-lg p-4">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-sm font-semibold text-gray-700">Self-Improvement</span>
-                                <i class="fas fa-chart-line text-xl text-blue-500"></i>
-                            </div>
-                            <div class="flex items-baseline gap-2">
-                                <p id="self-improvement-score" class="text-3xl font-bold text-gray-900">0</p>
-                                <span class="text-sm text-gray-600">%</span>
-                            </div>
-                            <p class="text-xs text-gray-600 mt-2">Tier 1 improvement rate</p>
-                        </div>
-                    </div>
-                    
-                    <!-- ROI Insight -->
-                    <div id="roi-insight-container" class="bg-white border-2 border-blue-200 rounded-lg p-4 mb-6 hidden">
-                        <div class="flex items-start gap-3">
-                            <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                <i class="fas fa-lightbulb text-blue-600 text-xl"></i>
-                            </div>
-                            <div class="flex-1">
-                                <h4 class="font-semibold text-gray-900 mb-1">💡 ROI Insight</h4>
-                                <p id="roi-insight-text" class="text-sm text-gray-700"></p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Recent LLM Calls Log -->
-                    <div class="bg-white border-2 border-gray-200 rounded-lg overflow-hidden">
-                        <div class="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-                            <h4 class="font-semibold text-gray-900 flex items-center gap-2">
-                                <i class="fas fa-history text-purple-600"></i>
-                                Recent LLM Calls (Tier 3)
-                            </h4>
-                            <button onclick="loadDetailedLLMLog()" 
-                                    class="text-sm text-indigo-600 hover:text-indigo-800 font-semibold">
-                                View All →
-                            </button>
-                        </div>
-                        <div id="llm-calls-log" class="divide-y divide-gray-200">
-                            <!-- Loading skeleton -->
-                            <div class="p-4 animate-pulse">
-                                <div class="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                                <div class="h-3 bg-gray-200 rounded w-1/2"></div>
-                            </div>
-                            <div class="p-4 animate-pulse">
-                                <div class="h-4 bg-gray-200 rounded w-2/3 mb-2"></div>
-                                <div class="h-3 bg-gray-200 rounded w-1/3"></div>
-                            </div>
-                        </div>
-                        <div id="llm-calls-empty" class="hidden p-6 text-center text-gray-500">
-                            <i class="fas fa-inbox text-3xl text-gray-300 mb-2"></i>
-                            <p class="text-sm">No LLM calls recorded yet</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- GLOBAL PATTERN REVIEW QUEUE -->
-                <div class="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-6 shadow-lg">
-                    <div class="flex items-center justify-between mb-6">
-                        <div>
-                            <h3 class="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                                <i class="fas fa-globe text-purple-600"></i>
-                                Global Pattern Review Queue
-                            </h3>
-                            <p class="text-sm text-gray-600 mt-1">
-                                Review and approve high-quality patterns for platform-wide sharing
-                            </p>
-                        </div>
-                        <button onclick="refreshGlobalPatternQueue()" 
-                                id="refresh-global-patterns-btn"
-                                class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-all flex items-center gap-2 text-sm shadow-md hover:shadow-lg">
-                            <i class="fas fa-sync-alt"></i>
-                            Refresh
-                        </button>
-                    </div>
-                    
-                    <!-- Review Stats -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <!-- Pending Approval -->
-                        <div class="bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-200 rounded-lg p-4 cursor-pointer hover:shadow-lg transition-all"
-                             onclick="filterGlobalPatterns('pending')">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-sm text-yellow-600 font-semibold">Pending Approval</p>
-                                    <p id="global-patterns-pending-count" class="text-3xl font-bold text-yellow-700">0</p>
-                                </div>
-                                <i class="fas fa-clock text-4xl text-yellow-400"></i>
-                            </div>
-                        </div>
-                        
-                        <!-- Approved -->
-                        <div class="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg p-4 cursor-pointer hover:shadow-lg transition-all"
-                             onclick="filterGlobalPatterns('approved')">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-sm text-green-600 font-semibold">Approved</p>
-                                    <p id="global-patterns-approved-count" class="text-3xl font-bold text-green-700">0</p>
-                                </div>
-                                <i class="fas fa-check-circle text-4xl text-green-400"></i>
-                            </div>
-                        </div>
-                        
-                        <!-- Rejected -->
-                        <div class="bg-gradient-to-br from-red-50 to-pink-50 border-2 border-red-200 rounded-lg p-4 cursor-pointer hover:shadow-lg transition-all"
-                             onclick="filterGlobalPatterns('rejected')">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-sm text-red-600 font-semibold">Rejected</p>
-                                    <p id="global-patterns-rejected-count" class="text-3xl font-bold text-red-700">0</p>
-                                </div>
-                                <i class="fas fa-times-circle text-4xl text-red-400"></i>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Filters -->
-                    <div class="bg-white border-2 border-gray-200 rounded-lg p-4 mb-4">
-                        <div class="flex flex-wrap items-center gap-4">
-                            <div>
-                                <label class="text-sm font-semibold text-gray-700 mr-2">Type:</label>
-                                <select id="global-pattern-type-filter" onchange="applyGlobalPatternFilters()" 
-                                        class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
-                                    <option value="">All Types</option>
-                                    <option value="filler">🔇 Filler Words</option>
-                                    <option value="synonym">🔤 Synonyms</option>
-                                    <option value="keyword">🎯 Keywords</option>
-                                    <option value="negative_keyword">⚠️ Negative Keywords</option>
-                                </select>
-                            </div>
-                            
-                            <div>
-                                <label class="text-sm font-semibold text-gray-700 mr-2">Min Quality:</label>
-                                <select id="global-pattern-quality-filter" onchange="applyGlobalPatternFilters()" 
-                                        class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
-                                    <option value="0">Any</option>
-                                    <option value="70">70%+</option>
-                                    <option value="80">80%+</option>
-                                    <option value="90" selected>90%+</option>
-                                </select>
-                            </div>
-                            
-                            <div>
-                                <label class="text-sm font-semibold text-gray-700 mr-2">Status:</label>
-                                <select id="global-pattern-status-filter" onchange="applyGlobalPatternFilters()" 
-                                        class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
-                                    <option value="global_pending">Pending Only</option>
-                                    <option value="">All Statuses</option>
-                                    <option value="global_approved">Approved Only</option>
-                                    <option value="global_rejected">Rejected Only</option>
-                                </select>
-                            </div>
-                            
-                            <div class="ml-auto">
-                                <button onclick="approveAllHighQuality()" 
-                                        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors flex items-center gap-2">
-                                    <i class="fas fa-check-double"></i>
-                                    Approve All 90%+
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Patterns List -->
-                    <div id="global-patterns-container" class="space-y-3">
-                        <!-- Loading skeleton -->
-                        <div class="bg-white border-2 border-gray-200 rounded-lg p-4 animate-pulse">
-                            <div class="h-5 bg-gray-200 rounded w-1/3 mb-3"></div>
-                            <div class="h-4 bg-gray-200 rounded w-2/3 mb-2"></div>
-                            <div class="h-4 bg-gray-200 rounded w-1/2"></div>
-                        </div>
-                        <div class="bg-white border-2 border-gray-200 rounded-lg p-4 animate-pulse">
-                            <div class="h-5 bg-gray-200 rounded w-1/4 mb-3"></div>
-                            <div class="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                            <div class="h-4 bg-gray-200 rounded w-1/3"></div>
-                        </div>
-                    </div>
-                    
-                    <!-- Empty State -->
-                    <div id="global-patterns-empty" class="hidden bg-white border-2 border-gray-200 rounded-lg p-12 text-center">
-                        <i class="fas fa-inbox text-6xl text-gray-300 mb-4"></i>
-                        <h3 class="text-xl font-semibold text-gray-600 mb-2">No Patterns in Review Queue</h3>
-                        <p class="text-gray-500 mb-4">
-                            Patterns will appear here when templates propose them for global sharing
-                        </p>
-                        <p class="text-sm text-gray-400">
-                            Templates must have "Propose Patterns for Global Platform" enabled in their learning settings
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Pattern Analysis Suggestions -->
-                <div class="bg-white border-2 border-gray-200 rounded-xl p-6 shadow-sm">
-                    <h3 class="text-xl font-bold text-gray-900 flex items-center gap-3 mb-4">
-                        <i class="fas fa-lightbulb text-yellow-500"></i>
-                        Optimization Suggestions
-                    </h3>
-                    <p class="text-sm text-gray-600 mb-6">
-                        AI-powered suggestions for improving scenario matching based on test call pattern analysis
-                    </p>
-
-                <!-- Stats Bar -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <!-- High Priority -->
-                    <div class="bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-200 rounded-lg p-4 cursor-pointer hover:shadow-lg transition-all" 
-                         onclick="filterSuggestionsByPriority('high')">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-sm text-red-600 font-semibold">High Priority</p>
-                                <p id="stat-high" class="text-3xl font-bold text-red-700">0</p>
-                            </div>
-                            <i class="fas fa-exclamation-circle text-4xl text-red-400"></i>
-                        </div>
-                    </div>
-                    
-                    <!-- Medium Priority -->
-                    <div class="bg-gradient-to-br from-yellow-50 to-yellow-100 border-2 border-yellow-200 rounded-lg p-4 cursor-pointer hover:shadow-lg transition-all" 
-                         onclick="filterSuggestionsByPriority('medium')">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-sm text-yellow-600 font-semibold">Medium Priority</p>
-                                <p id="stat-medium" class="text-3xl font-bold text-yellow-700">0</p>
-                            </div>
-                            <i class="fas fa-flag text-4xl text-yellow-400"></i>
-                        </div>
-                    </div>
-                    
-                    <!-- Low Priority -->
-                    <div class="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-200 rounded-lg p-4 cursor-pointer hover:shadow-lg transition-all" 
-                         onclick="filterSuggestionsByPriority('low')">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-sm text-gray-600 font-semibold">Low Priority</p>
-                                <p id="stat-low" class="text-3xl font-bold text-gray-700">0</p>
-                            </div>
-                            <i class="fas fa-info-circle text-4xl text-gray-400"></i>
-                        </div>
-                    </div>
-                    
-                    <!-- Total -->
-                    <div class="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 rounded-lg p-4 cursor-pointer hover:shadow-lg transition-all" 
-                         onclick="filterSuggestionsByPriority('all')">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-sm text-blue-600 font-semibold">Total Suggestions</p>
-                                <p id="stat-total" class="text-3xl font-bold text-blue-700">0</p>
-                            </div>
-                            <i class="fas fa-lightbulb text-4xl text-blue-400"></i>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Filters & Actions -->
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                    <div class="flex flex-wrap items-center gap-4">
-                        <!-- Type Filter -->
-                        <div>
-                            <label class="text-sm font-semibold text-gray-700 mr-2">Type:</label>
-                            <select id="filter-type" onchange="applySuggestionFilters()" 
-                                    class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                                <option value="">All Types</option>
-                                <option value="filler">🔇 Filler Words</option>
-                                <option value="synonym">🔤 Synonyms</option>
-                                <option value="keyword">🎯 Keywords</option>
-                                <option value="negative_keyword">⚠️ Negative Keywords</option>
-                                <option value="conflict">🔀 Conflicts</option>
-                            </select>
-                        </div>
-                        
-                        <!-- Confidence Filter -->
-                        <div>
-                            <label class="text-sm font-semibold text-gray-700 mr-2">Min Confidence:</label>
-                            <select id="filter-confidence" onchange="applySuggestionFilters()" 
-                                    class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                                <option value="0">Any</option>
-                                <option value="0.5">50%+</option>
-                                <option value="0.7" selected>70%+</option>
-                                <option value="0.8">80%+</option>
-                            </select>
-                        </div>
-                        
-                        <!-- Batch Actions -->
-                        <div class="ml-auto flex gap-2">
-                            <button onclick="applyAllHighPriority()" 
-                                    class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors flex items-center gap-2">
-                                <i class="fas fa-check-double"></i>
-                                Apply All High
-                            </button>
-                            
-                            <button onclick="ignoreAllLowPriority()" 
-                                    class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold transition-colors flex items-center gap-2">
-                                <i class="fas fa-times-circle"></i>
-                                Ignore All Low
-                            </button>
-                            
-                            <button onclick="refreshSuggestions()" 
-                                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors flex items-center gap-2">
-                                <i class="fas fa-sync-alt"></i>
-                                Refresh
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Suggestions Container -->
-                <div id="suggestions-container" class="space-y-4">
-                    <!-- Suggestions will be dynamically loaded here -->
-                </div>
-                
-                <!-- Empty State -->
-                <div id="suggestions-empty" class="hidden text-center py-12">
-                    <i class="fas fa-lightbulb text-6xl text-gray-300 mb-4"></i>
-                    <h3 class="text-xl font-semibold text-gray-600 mb-2">No Suggestions Yet</h3>
-                    <p class="text-gray-500 mb-4">Run pattern analysis on test calls to generate intelligent suggestions.</p>
-                    <button onclick="showHowToAnalyze()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors">
-                        <i class="fas fa-question-circle mr-2"></i>
-                        How to Generate Suggestions
-                    </button>
                 </div>
 
             </div>
@@ -11194,6 +10730,370 @@ Timestamp: ${new Date(timestamp).toISOString()}
             }
         }
 
+        // ============================================================================
+        // 🟣 AI SUGGESTIONS MANAGEMENT - INTEGRATION LAYER
+        // ============================================================================
+        
+        let currentSuggestions = [];
+        let suggestionsAutoRefreshInterval = null;
+        
+        /**
+         * Load suggestions for current template
+         */
+        async function loadSuggestions(showLoading = true) {
+            try {
+                const activeTemplate = window.activeTemplate;
+                if (!activeTemplate || !activeTemplate.id) {
+                    console.warn('[SUGGESTIONS] No active template');
+                    return;
+                }
+                
+                // Show loading state
+                if (showLoading) {
+                    document.getElementById('suggestions-loading-state').classList.remove('hidden');
+                    document.getElementById('suggestions-cards-container').classList.add('hidden');
+                    document.getElementById('suggestions-empty-state').classList.add('hidden');
+                }
+                
+                // Fetch suggestions
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate.id}/suggestions`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to load suggestions: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error('Failed to load suggestions');
+                }
+                
+                currentSuggestions = data.suggestions || [];
+                
+                // Update UI
+                updateSuggestionsSummary(data.summary);
+                renderSuggestionsCards(currentSuggestions);
+                
+                // Show/hide section
+                if (currentSuggestions.length > 0) {
+                    document.getElementById('ai-suggestions-section').classList.remove('hidden');
+                } else {
+                    document.getElementById('ai-suggestions-section').classList.add('hidden');
+                }
+                
+                console.log('[SUGGESTIONS] Loaded successfully', {
+                    count: currentSuggestions.length,
+                    summary: data.summary
+                });
+                
+            } catch (error) {
+                console.error('[SUGGESTIONS] Error loading:', error);
+                
+                // Hide loading, show empty state
+                document.getElementById('suggestions-loading-state').classList.add('hidden');
+                document.getElementById('suggestions-empty-state').classList.remove('hidden');
+                document.getElementById('suggestions-empty-state').innerHTML = `
+                    <i class="fas fa-exclamation-triangle text-red-500 text-6xl mb-4"></i>
+                    <h3 class="text-xl font-bold text-gray-700 mb-2">Error Loading Suggestions</h3>
+                    <p class="text-gray-600">${error.message}</p>
+                `;
+                
+                // Send error notification
+                try {
+                    await window.FrontendErrorReporter?.reportError({
+                        component: 'AISuggestions',
+                        operation: 'loadSuggestions',
+                        error: error.message,
+                        userMessage: 'Failed to load AI suggestions. Please refresh the page.'
+                    });
+                } catch (notifError) {
+                    console.error('[SUGGESTIONS] Failed to send error notification:', notifError);
+                }
+            }
+        }
+        
+        /**
+         * Update suggestions summary badges
+         */
+        function updateSuggestionsSummary(summary) {
+            document.getElementById('suggestions-count-badge').textContent = summary.total || 0;
+            document.getElementById('suggestions-high-count').textContent = summary.high || 0;
+            document.getElementById('suggestions-medium-count').textContent = summary.medium || 0;
+            document.getElementById('suggestions-low-count').textContent = summary.low || 0;
+        }
+        
+        /**
+         * Render suggestion cards using SuggestionRenderer
+         */
+        function renderSuggestionsCards(suggestions) {
+            const container = document.getElementById('suggestions-cards-container');
+            const loadingState = document.getElementById('suggestions-loading-state');
+            const emptyState = document.getElementById('suggestions-empty-state');
+            
+            // Hide loading
+            loadingState.classList.add('hidden');
+            
+            if (suggestions.length === 0) {
+                container.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                return;
+            }
+            
+            // Clear container
+            container.innerHTML = '';
+            container.classList.remove('hidden');
+            emptyState.classList.add('hidden');
+            
+            // Render each card
+            suggestions.forEach(suggestion => {
+                const card = window.SuggestionRenderer.renderSuggestionCard(suggestion);
+                container.appendChild(card);
+            });
+        }
+        
+        /**
+         * Apply a single suggestion
+         */
+        async function applySuggestion(suggestionId) {
+            try {
+                const activeTemplate = window.activeTemplate;
+                if (!activeTemplate || !activeTemplate.id) {
+                    throw new Error('No active template');
+                }
+                
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate.id}/suggestions/${suggestionId}/apply`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to apply suggestion: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error('Failed to apply suggestion');
+                }
+                
+                // Show success toast
+                if (window.ToastManager) {
+                    window.ToastManager.success('Suggestion applied successfully!');
+                }
+                
+                // Reload suggestions
+                await loadSuggestions(false);
+                
+                console.log('[SUGGESTIONS] Applied successfully', { suggestionId });
+                
+            } catch (error) {
+                console.error('[SUGGESTIONS] Error applying:', error);
+                
+                if (window.ToastManager) {
+                    window.ToastManager.error(`Failed to apply: ${error.message}`);
+                }
+                
+                // Send error notification
+                try {
+                    await window.FrontendErrorReporter?.reportError({
+                        component: 'AISuggestions',
+                        operation: 'applySuggestion',
+                        error: error.message,
+                        userMessage: 'Failed to apply suggestion. Please try again.'
+                    });
+                } catch (notifError) {
+                    console.error('[SUGGESTIONS] Failed to send error notification:', notifError);
+                }
+            }
+        }
+        
+        /**
+         * Ignore a single suggestion
+         */
+        async function ignoreSuggestion(suggestionId, reason = 'Not applicable') {
+            try {
+                const activeTemplate = window.activeTemplate;
+                if (!activeTemplate || !activeTemplate.id) {
+                    throw new Error('No active template');
+                }
+                
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate.id}/suggestions/${suggestionId}/ignore`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ reason })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to ignore suggestion: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error('Failed to ignore suggestion');
+                }
+                
+                // Show success toast
+                if (window.ToastManager) {
+                    window.ToastManager.info('Suggestion ignored');
+                }
+                
+                // Reload suggestions
+                await loadSuggestions(false);
+                
+                console.log('[SUGGESTIONS] Ignored successfully', { suggestionId });
+                
+            } catch (error) {
+                console.error('[SUGGESTIONS] Error ignoring:', error);
+                
+                if (window.ToastManager) {
+                    window.ToastManager.error(`Failed to ignore: ${error.message}`);
+                }
+            }
+        }
+        
+        /**
+         * Apply all high-confidence suggestions (90%+)
+         */
+        async function applyAllHighConfidenceSuggestions() {
+            try {
+                const activeTemplate = window.activeTemplate;
+                if (!activeTemplate || !activeTemplate.id) {
+                    throw new Error('No active template');
+                }
+                
+                const highConfSuggestions = currentSuggestions.filter(s => s.confidence >= 0.9);
+                
+                if (highConfSuggestions.length === 0) {
+                    if (window.ToastManager) {
+                        window.ToastManager.info('No high-confidence suggestions found (90%+)');
+                    }
+                    return;
+                }
+                
+                const confirmed = confirm(`Apply ${highConfSuggestions.length} high-confidence suggestions automatically?`);
+                if (!confirmed) return;
+                
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate.id}/suggestions/apply-all-high`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to apply suggestions: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error('Failed to apply suggestions');
+                }
+                
+                // Show success toast
+                if (window.ToastManager) {
+                    window.ToastManager.success(`Applied ${data.applied} of ${highConfSuggestions.length} suggestions!`);
+                }
+                
+                // Reload suggestions
+                await loadSuggestions(false);
+                
+                console.log('[SUGGESTIONS] Bulk apply complete', data);
+                
+            } catch (error) {
+                console.error('[SUGGESTIONS] Error applying all:', error);
+                
+                if (window.ToastManager) {
+                    window.ToastManager.error(`Failed to apply: ${error.message}`);
+                }
+            }
+        }
+        
+        /**
+         * Refresh suggestions
+         */
+        async function refreshSuggestions() {
+            await loadSuggestions(true);
+        }
+        
+        /**
+         * Dismiss low priority suggestions
+         */
+        async function dismissLowPriority() {
+            const lowPrioritySuggestions = currentSuggestions.filter(s => s.priority === 'low');
+            
+            if (lowPrioritySuggestions.length === 0) {
+                if (window.ToastManager) {
+                    window.ToastManager.info('No low-priority suggestions to dismiss');
+                }
+                return;
+            }
+            
+            const confirmed = confirm(`Dismiss ${lowPrioritySuggestions.length} low-priority suggestions?`);
+            if (!confirmed) return;
+            
+            // Ignore each low-priority suggestion
+            for (const suggestion of lowPrioritySuggestions) {
+                await ignoreSuggestion(suggestion._id, 'Low priority - dismissed in bulk');
+            }
+            
+            if (window.ToastManager) {
+                window.ToastManager.success(`Dismissed ${lowPrioritySuggestions.length} suggestions`);
+            }
+        }
+        
+        /**
+         * Dismiss suggestions banner (hide for now)
+         */
+        function dismissSuggestions() {
+            document.getElementById('ai-suggestions-section').classList.add('hidden');
+            
+            if (window.ToastManager) {
+                window.ToastManager.info('Suggestions hidden. Refresh page to show again.');
+            }
+        }
+        
+        /**
+         * Start auto-refresh for suggestions
+         */
+        function startSuggestionsAutoRefresh() {
+            // Refresh every 5 minutes
+            suggestionsAutoRefreshInterval = setInterval(async () => {
+                console.log('[SUGGESTIONS] Auto-refreshing...');
+                await loadSuggestions(false);
+            }, 5 * 60 * 1000);
+            
+            console.log('[SUGGESTIONS] Auto-refresh started (5 min interval)');
+        }
+        
+        /**
+         * Stop auto-refresh
+         */
+        function stopSuggestionsAutoRefresh() {
+            if (suggestionsAutoRefreshInterval) {
+                clearInterval(suggestionsAutoRefreshInterval);
+                suggestionsAutoRefreshInterval = null;
+                console.log('[SUGGESTIONS] Auto-refresh stopped');
+            }
+        }
+        
+        // ============================================================================
+        // PAGE INITIALIZATION
+        // ============================================================================
+        
         document.addEventListener('DOMContentLoaded', async function() {
             console.log('🚀 [PAGE INIT] DOMContentLoaded event fired - Global AI Brain Management - Initializing...');
             
@@ -11253,6 +11153,12 @@ Timestamp: ${new Date(timestamp).toISOString()}
             } else {
                 console.log('📍 [PAGE INIT] AI Suggestions Banner dismissed by user');
             }
+            
+            // Load AI suggestions for active template
+            console.log('📊 [PAGE INIT] Loading AI suggestions...');
+            await loadSuggestions(true);
+            startSuggestionsAutoRefresh();
+            console.log('✅ [PAGE INIT] AI suggestions loaded and auto-refresh started');
             
             console.log('✅ Global AI Brain Management - Initialized');
         });

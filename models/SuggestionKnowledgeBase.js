@@ -58,7 +58,7 @@ const suggestionKnowledgeBaseSchema = new Schema({
     
     type: {
         type: String,
-        enum: ['filler', 'synonym', 'keyword', 'negative_keyword', 'conflict'],
+        enum: ['filler', 'synonym', 'keyword', 'negative_keyword', 'conflict', 'missing_scenario'],
         required: true,
         index: true
         // filler: Add word to filler list
@@ -66,6 +66,7 @@ const suggestionKnowledgeBaseSchema = new Schema({
         // keyword: Add missing keyword to scenario
         // negative_keyword: Add negative keyword to avoid confusion
         // conflict: Overlapping keywords between scenarios
+        // missing_scenario: NEW SCENARIO NEEDED (detected from Tier 3 patterns)
     },
     
     // For 'filler' type
@@ -105,6 +106,81 @@ const suggestionKnowledgeBaseSchema = new Schema({
         scenarioB: String,      // Second conflicting scenario ID
         overlappingKeywords: [String],  // Keywords that overlap
         resolution: String      // Suggested fix
+    },
+    
+    // ============================================
+    // 🚨 FOR 'missing_scenario' TYPE (LLM-Generated)
+    // ============================================
+    
+    suggestedScenarioName: {
+        type: String,
+        trim: true
+        // Suggested name for the new scenario
+        // e.g., "Emergency Water Heater Leak"
+    },
+    
+    suggestedCategory: {
+        type: String,
+        trim: true
+        // Category where this scenario should be added
+        // e.g., "Emergency Service"
+    },
+    
+    suggestedKeywords: [{
+        type: String,
+        trim: true,
+        lowercase: true
+    }],
+    // Keywords that should match this scenario
+    // Pre-filled by LLM based on call analysis
+    
+    suggestedNegativeKeywords: [{
+        type: String,
+        trim: true,
+        lowercase: true
+    }],
+    // Negative keywords to prevent false matches
+    
+    suggestedResponse: {
+        type: String
+        // AI response template with [PLACEHOLDERS]
+        // Pre-filled by LLM
+    },
+    
+    suggestedActionHook: {
+        type: String,
+        trim: true
+        // Action hook to trigger (e.g., "schedule-emergency-appointment")
+    },
+    
+    suggestedBehavior: {
+        type: String,
+        trim: true
+        // Suggested behavior/tone (e.g., "Empathetic + Urgent")
+    },
+    
+    // ============================================
+    // 🧠 LLM CONTEXT & REASONING
+    // ============================================
+    
+    llmReasoning: {
+        type: String
+        // Detailed explanation from LLM about why this suggestion was made
+        // Includes pattern analysis, impact reasoning, and recommendations
+    },
+    
+    llmModel: {
+        type: String
+        // Which LLM generated this suggestion
+        // e.g., "gpt-4o", "gpt-3.5-turbo", "claude-3-opus"
+    },
+    
+    sourceCallId: {
+        type: Schema.Types.ObjectId,
+        ref: 'v2AIAgentCallLog',
+        index: true
+        // The specific call that triggered this suggestion
+        // Used to display transcript and context in analysis modal
     },
     
     // ============================================
@@ -428,6 +504,9 @@ suggestionKnowledgeBaseSchema.methods.apply = async function(appliedByUserId) {
         case 'negative_keyword':
             await this.applyNegativeKeywordSuggestion(template);
             break;
+        case 'missing_scenario':
+            await this.applyMissingScenarioSuggestion(template);
+            break;
         default:
             throw new Error(`Cannot auto-apply suggestion type: ${this.type}`);
     }
@@ -646,6 +725,126 @@ suggestionKnowledgeBaseSchema.methods.applyNegativeKeywordSuggestion = async fun
         });
     } catch (notifError) {
         logger.error('Failed to send negative keyword suggestion notification', { error: notifError.message });
+    }
+};
+
+/**
+ * Apply missing scenario suggestion (create new scenario)
+ */
+suggestionKnowledgeBaseSchema.methods.applyMissingScenarioSuggestion = async function(template) {
+    const AdminNotificationService = require('../services/AdminNotificationService');
+    const GlobalAIBehaviorTemplate = mongoose.model('GlobalAIBehaviorTemplate');
+    
+    // ────────────────────────────────────────────────────────────────────
+    // STEP 1: Find or create category
+    // ────────────────────────────────────────────────────────────────────
+    
+    let category = template.categories.find(c => c.name === this.suggestedCategory);
+    
+    if (!category) {
+        // Create new category
+        template.categories.push({
+            categoryId: `cat_${Date.now()}`,
+            name: this.suggestedCategory,
+            description: `Auto-created by AI for ${this.suggestedScenarioName}`,
+            isActive: true,
+            additionalFillerWords: [],
+            synonymMap: new Map()
+        });
+        category = template.categories[template.categories.length - 1];
+        logger.info('Created new category for missing scenario', {
+            categoryName: this.suggestedCategory
+        });
+    }
+    
+    // ────────────────────────────────────────────────────────────────────
+    // STEP 2: Find behavior template
+    // ────────────────────────────────────────────────────────────────────
+    
+    let behaviorId = null;
+    if (this.suggestedBehavior) {
+        const behavior = await GlobalAIBehaviorTemplate.findOne({
+            name: new RegExp(this.suggestedBehavior, 'i')
+        });
+        if (behavior) {
+            behaviorId = behavior._id.toString();
+        }
+    }
+    
+    // ────────────────────────────────────────────────────────────────────
+    // STEP 3: Create new scenario
+    // ────────────────────────────────────────────────────────────────────
+    
+    const newScenario = {
+        scenarioId: `scenario_${Date.now()}`,
+        name: this.suggestedScenarioName,
+        description: `Auto-created from ${this.frequency} Tier 3 calls`,
+        priority: this.priority === 'high' ? 100 : 50,
+        version: '1.0',
+        isActive: true,
+        
+        // Keywords from LLM
+        intentKeywords: this.suggestedKeywords || [],
+        negativeKeywords: this.suggestedNegativeKeywords || [],
+        
+        // Response from LLM
+        responseVariations: [this.suggestedResponse],
+        
+        // Behavior
+        behaviorOverride: behaviorId ? { enabled: true, behaviorId } : { enabled: false },
+        
+        // Action hook
+        actionHook: this.suggestedActionHook ? {
+            enabled: true,
+            hookId: this.suggestedActionHook
+        } : {
+            enabled: false
+        },
+        
+        // Entity capture (defaults)
+        entityCapture: [],
+        
+        // Metadata
+        createdBy: 'AI-LLM',
+        createdAt: new Date(),
+        lastModified: new Date()
+    };
+    
+    category.scenarios.push(newScenario);
+    
+    await template.save();
+    
+    // ────────────────────────────────────────────────────────────────────
+    // STEP 4: Send notification
+    // ────────────────────────────────────────────────────────────────────
+    
+    try {
+        await AdminNotificationService.sendAlert({
+            code: 'AI_LEARNING_SCENARIO_CREATED',
+            severity: 'INFO',
+            title: '🤖 AI Learning: Missing Scenario Created by LLM',
+            message: `The AI detected a pattern in ${this.frequency} Tier 3 calls and created a new scenario.\n\nTemplate: "${template.name}"\nCategory: "${category.name}"\nScenario: "${this.suggestedScenarioName}"\nKeywords: ${(this.suggestedKeywords || []).slice(0, 5).join(', ')}\nConfidence: ${(this.confidence * 100).toFixed(0)}%\nEstimated Impact: ${this.estimatedImpact}%\n\nThis scenario will now handle these calls at Tier 1 (free) instead of Tier 3 (paid).`,
+            details: {
+                source: 'LLM Learning',
+                scope: 'Template',
+                templateId: template._id.toString(),
+                templateName: template.name,
+                categoryId: category.categoryId,
+                categoryName: category.name,
+                scenarioId: newScenario.scenarioId,
+                scenarioName: newScenario.name,
+                keywords: this.suggestedKeywords,
+                negativeKeywords: this.suggestedNegativeKeywords,
+                behavior: this.suggestedBehavior,
+                actionHook: this.suggestedActionHook,
+                confidence: this.confidence,
+                estimatedImpact: this.estimatedImpact,
+                frequency: this.frequency,
+                suggestionId: this._id.toString()
+            }
+        });
+    } catch (notifError) {
+        logger.error('Failed to send missing scenario suggestion notification', { error: notifError.message });
     }
 };
 

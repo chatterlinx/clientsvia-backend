@@ -4023,6 +4023,112 @@ router.post('/:id/suggestions/apply-all-high', authenticateJWT, adminOnly, async
     }
 });
 
+// ============================================================================
+// 🟣 AI SUGGESTION ANALYSIS API - FULL CONTEXT FOR MODAL
+// ============================================================================
+
+/**
+ * GET /api/admin/global-instant-responses/suggestions/:suggestionId/context
+ * Get full context for a suggestion (call transcript, LLM reasoning, impact metrics)
+ * Used to populate the analysis modal
+ */
+router.get('/suggestions/:suggestionId/context', authenticateJWT, adminOnly, async (req, res) => {
+    try {
+        // ────────────────────────────────────────────────────────────────────
+        // CHECKPOINT 1: Validate suggestion ID
+        // ────────────────────────────────────────────────────────────────────
+        
+        if (!req.params.suggestionId) {
+            logger.warn('[SUGGESTION CONTEXT API] Missing suggestion ID');
+            
+            try {
+                await AdminNotificationService.sendAlert({
+                    code: 'SUGGESTION_CONTEXT_API_VALIDATION_ERROR',
+                    severity: 'WARNING',
+                    title: '⚠️ Suggestion Context API: Validation Error',
+                    message: 'Missing required suggestionId parameter',
+                    context: {
+                        endpoint: '/suggestions/:suggestionId/context',
+                        by: req.user?.username
+                    }
+                });
+            } catch (notifError) {
+                logger.error('Failed to send validation error notification', { error: notifError.message });
+            }
+            
+            return res.status(400).json({ error: 'suggestionId is required' });
+        }
+        
+        // ────────────────────────────────────────────────────────────────────
+        // CHECKPOINT 2: Fetch context using SuggestionAnalysisService
+        // ────────────────────────────────────────────────────────────────────
+        
+        logger.info('[SUGGESTION CONTEXT API] Fetching context', {
+            suggestionId: req.params.suggestionId,
+            by: req.user?.username
+        });
+        
+        const SuggestionAnalysisService = require('../../services/SuggestionAnalysisService');
+        const context = await SuggestionAnalysisService.fetchSuggestionContext(req.params.suggestionId);
+        
+        if (!context || !context.success) {
+            logger.error('[SUGGESTION CONTEXT API] Context not found or invalid', {
+                suggestionId: req.params.suggestionId
+            });
+            
+            return res.status(404).json({ error: 'Suggestion context not found' });
+        }
+        
+        // ────────────────────────────────────────────────────────────────────
+        // CHECKPOINT 3: Return formatted context
+        // ────────────────────────────────────────────────────────────────────
+        
+        logger.info('[SUGGESTION CONTEXT API] Context fetched successfully', {
+            suggestionId: req.params.suggestionId,
+            hasCall: !!context.call,
+            hasReasoning: !!context.suggestion.llmReasoning,
+            by: req.user?.username
+        });
+        
+        res.json({
+            success: true,
+            ...context
+        });
+        
+    } catch (error) {
+        // ────────────────────────────────────────────────────────────────────
+        // CHECKPOINT 4: Error handling with notification
+        // ────────────────────────────────────────────────────────────────────
+        
+        logger.error('[SUGGESTION CONTEXT API] Error fetching context', {
+            suggestionId: req.params.suggestionId,
+            error: error.message,
+            stack: error.stack
+        });
+        
+        try {
+            await AdminNotificationService.sendAlert({
+                code: 'SUGGESTION_CONTEXT_API_ERROR',
+                severity: 'CRITICAL',
+                title: '❌ Suggestion Context API: System Error',
+                message: `Failed to fetch suggestion context: ${error.message}`,
+                context: {
+                    suggestionId: req.params.suggestionId,
+                    error: error.message,
+                    by: req.user?.username
+                }
+            });
+        } catch (notifError) {
+            logger.error('Failed to send error notification', { error: notifError.message });
+        }
+        
+        res.status(500).json({
+            error: 'Failed to fetch suggestion context',
+            details: error.message
+        });
+    }
+});
+
 /**
  * POST /api/admin/global-instant-responses/:id/analyze
  * Trigger pattern analysis on test calls
