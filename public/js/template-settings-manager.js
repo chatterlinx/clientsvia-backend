@@ -364,12 +364,29 @@ async function loadSynonymsForTemplate() {
     
     try {
         console.log('📥 [SYNONYMS] Loading for template:', templateId);
+        console.log('🔍 [SYNONYMS DEBUG] window.activeTemplateId:', window.activeTemplateId);
+        console.log('🔍 [SYNONYMS DEBUG] currentTemplateIdForSettings:', currentTemplateIdForSettings);
+        
+        // CRITICAL: Show loading state immediately to clear stale data
+        const container = document.getElementById('template-synonyms-display');
+        if (container) {
+            container.innerHTML = `
+                <div class="text-center w-full text-gray-500 py-8">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-purple-600 mx-auto mb-3"></div>
+                    <p class="font-semibold">Loading synonyms for new template...</p>
+                </div>
+            `;
+        }
         
         const token = localStorage.getItem('adminToken');
-        const response = await fetch(`/api/admin/global-instant-responses/${templateId}/synonyms`, {
+        
+        // Add cache-busting timestamp to force fresh data
+        const cacheBuster = `?t=${Date.now()}`;
+        const response = await fetch(`/api/admin/global-instant-responses/${templateId}/synonyms${cacheBuster}`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache'  // Force no cache
             }
         });
         
@@ -378,6 +395,7 @@ async function loadSynonymsForTemplate() {
         }
         
         const result = await response.json();
+        console.log('🔍 [SYNONYMS DEBUG] API response:', result);
         
         // Convert to Map
         loadedSynonyms = new Map();
@@ -393,10 +411,15 @@ async function loadSynonymsForTemplate() {
             }
         }
         
-        console.log(`✅ [SYNONYMS] Loaded ${loadedSynonyms.size} mappings`);
+        console.log(`✅ [SYNONYMS] Loaded ${loadedSynonyms.size} mappings for template ${templateId}`);
+        console.log('🔍 [SYNONYMS DEBUG] Mappings:', Array.from(loadedSynonyms.entries()));
         
+        // CRITICAL: Force render with fresh data
         renderSynonyms(loadedSynonyms);
         updateSynonymsStats();
+        
+        // Store current template ID to detect changes
+        currentTemplateIdForSettings = templateId;
         
     } catch (error) {
         console.error('❌ [SYNONYMS] Failed to load:', error);
@@ -409,14 +432,23 @@ async function loadSynonymsForTemplate() {
  */
 function renderSynonyms(synonymMap) {
     console.log(`🎨 [RENDER SYNONYMS] Called with ${synonymMap.size} mappings`);
+    console.log(`🔍 [RENDER DEBUG] Synonym entries:`, Array.from(synonymMap.entries()).slice(0, 3));
+    
     const container = document.getElementById('template-synonyms-display');
     if (!container) {
         console.error('❌ [RENDER] Container #template-synonyms-display not found!');
         return;
     }
-    console.log(`✅ [RENDER SYNONYMS] Container found, rendering...`);
+    console.log(`✅ [RENDER SYNONYMS] Container found, clearing and rendering...`);
+    
+    // CRITICAL: Force clear the container first
+    container.innerHTML = '';
+    
+    // Force reflow to ensure DOM is updated
+    container.offsetHeight;
     
     if (synonymMap.size === 0) {
+        console.log('📭 [RENDER SYNONYMS] No mappings to display, showing empty state');
         container.innerHTML = `
             <div class="text-center w-full text-gray-500 py-8">
                 <i class="fas fa-inbox text-4xl mb-3 text-purple-400"></i>
@@ -425,6 +457,8 @@ function renderSynonyms(synonymMap) {
         `;
         return;
     }
+    
+    console.log(`🎨 [RENDER SYNONYMS] Building HTML for ${synonymMap.size} mappings...`);
     
     // Render as cards
     const html = [];
@@ -461,7 +495,13 @@ function renderSynonyms(synonymMap) {
         `);
     }
     
+    console.log(`🎨 [RENDER SYNONYMS] Setting innerHTML with ${html.length} cards...`);
     container.innerHTML = html.join('');
+    
+    // Force reflow again
+    container.offsetHeight;
+    
+    console.log(`✅ [RENDER SYNONYMS] Complete! DOM updated with ${synonymMap.size} mappings`);
 }
 
 /**
