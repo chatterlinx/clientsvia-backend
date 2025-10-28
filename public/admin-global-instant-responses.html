@@ -10822,7 +10822,7 @@ Timestamp: ${new Date(timestamp).toISOString()}
                 updateSuggestionsSummary(data.summary);
                 renderSuggestionsCards(currentSuggestions);
                 
-                // Show/hide section
+                // Show/hide section based on suggestion count
                 const shouldShow = currentSuggestions.length > 0;
                 console.log('🟣 [SUGGESTIONS CHECKPOINT 10] Section visibility decision:', {
                     suggestionsCount: currentSuggestions.length,
@@ -10830,17 +10830,13 @@ Timestamp: ${new Date(timestamp).toISOString()}
                     action: shouldShow ? 'SHOWING section' : 'HIDING section'
                 });
                 
-                // 🧪 TEMPORARY: Always show section for visual verification
-                document.getElementById('ai-suggestions-section').classList.remove('hidden');
-                console.log('🧪 [TEMP DEBUG] Section FORCED VISIBLE for testing (normally would hide when empty)');
-                
-                // if (shouldShow) {
-                //     document.getElementById('ai-suggestions-section').classList.remove('hidden');
-                //     console.log('✅ [SUGGESTIONS] Section is now VISIBLE');
-                // } else {
-                //     document.getElementById('ai-suggestions-section').classList.add('hidden');
-                //     console.log('🔵 [SUGGESTIONS] Section is now HIDDEN (no suggestions)');
-                // }
+                if (shouldShow) {
+                    document.getElementById('ai-suggestions-section').classList.remove('hidden');
+                    console.log('✅ [SUGGESTIONS] Section is now VISIBLE');
+                } else {
+                    document.getElementById('ai-suggestions-section').classList.add('hidden');
+                    console.log('🔵 [SUGGESTIONS] Section is now HIDDEN (no suggestions)');
+                }
                 
                 console.log('🟣 [SUGGESTIONS CHECKPOINT 11] Load complete!', {
                     count: currentSuggestions.length,
