@@ -112,7 +112,7 @@ class IntelligenceMonitor {
         if (this.shouldSendAlert(alertKey)) {
             await AdminNotificationService.sendAlert({
                 code: 'AI_ROUTING_CRITICAL_FAILURE',
-                severity: 'critical',
+                severity: 'CRITICAL',
                 title: '🚨 3-Tier Intelligence System: CRITICAL FAILURE',
                 message: `The intelligent routing system has COMPLETELY FAILED.\n\n` +
                          `Template: "${context.templateName}"\n` +
@@ -198,7 +198,7 @@ class IntelligenceMonitor {
         if (this.shouldSendAlert(alertKey)) {
             await AdminNotificationService.sendAlert({
                 code: 'AI_ROUTING_SLOW_RESPONSE',
-                severity: 'warning',
+                severity: 'WARNING',
                 title: '⏱️ Intelligence System: SLOW RESPONSE',
                 message: `The 3-tier routing system is responding slowly.\n\n` +
                          `Template: "${context.templateName}"\n` +
@@ -241,7 +241,7 @@ class IntelligenceMonitor {
             if (this.shouldSendAlert(alertKey)) {
                 await AdminNotificationService.sendAlert({
                     code: 'AI_ROUTING_EXPENSIVE_LLM_CALL',
-                    severity: 'warning',
+                    severity: 'WARNING',
                     title: '💰 Expensive LLM Call Detected',
                     message: `A Tier 3 (LLM) call cost more than expected.\n\n` +
                              `Template: "${context.templateName}"\n` +
@@ -274,7 +274,7 @@ class IntelligenceMonitor {
             if (this.shouldSendAlert(alertKey)) {
                 await AdminNotificationService.sendAlert({
                     code: 'AI_ROUTING_NO_PATTERNS_LEARNED',
-                    severity: 'info',
+                    severity: 'INFO',
                     title: 'ℹ️ LLM Matched but No Patterns Learned',
                     message: `Tier 3 (LLM) matched a scenario but did NOT extract any patterns for learning.\n\n` +
                              `Template: "${context.templateName}"\n` +
@@ -317,7 +317,7 @@ class IntelligenceMonitor {
             if (this.shouldSendAlert(alertKey)) {
                 await AdminNotificationService.sendAlert({
                     code: 'AI_ROUTING_TIER1_SLOW',
-                    severity: 'warning',
+                    severity: 'WARNING',
                     title: '🐢 Tier 1 (Rule-Based) Running Slow',
                     message: `Tier 1 response time is above acceptable threshold.\n\n` +
                              `Template: "${context.templateName}"\n` +
@@ -352,7 +352,7 @@ class IntelligenceMonitor {
             if (this.shouldSendAlert(alertKey)) {
                 await AdminNotificationService.sendAlert({
                     code: 'AI_ROUTING_TIER2_SLOW',
-                    severity: 'warning',
+                    severity: 'WARNING',
                     title: '🐢 Tier 2 (Semantic) Running Slow',
                     message: `Tier 2 response time is above acceptable threshold.\n\n` +
                              `Template: "${context.templateName}"\n` +
@@ -395,7 +395,7 @@ class IntelligenceMonitor {
                 if (this.shouldSendAlert(alertKey)) {
                     await AdminNotificationService.sendAlert({
                         code: 'AI_ROUTING_TIER1_NEAR_MISS',
-                        severity: 'info',
+                        severity: 'INFO',
                         title: 'ℹ️ Tier 1 Near Miss - Consider Threshold Adjustment',
                         message: `Tier 1 was VERY CLOSE to matching but fell below threshold.\n\n` +
                                  `Template: "${context.templateName}"\n` +
@@ -461,7 +461,7 @@ class IntelligenceMonitor {
         // Check if template has categories
         if (!template.categories || template.categories.length === 0) {
             issues.push({
-                severity: 'critical',
+                severity: 'CRITICAL',
                 message: 'Template has NO categories'
             });
         }
@@ -479,12 +479,12 @@ class IntelligenceMonitor {
         
         if (totalScenarios === 0) {
             issues.push({
-                severity: 'critical',
+                severity: 'CRITICAL',
                 message: 'Template has NO scenarios'
             });
         } else if (activeScenarios === 0) {
             issues.push({
-                severity: 'critical',
+                severity: 'CRITICAL',
                 message: `Template has ${totalScenarios} scenarios but NONE are active/live`
             });
         }
@@ -495,7 +495,7 @@ class IntelligenceMonitor {
         
         if (tier2Threshold >= tier1Threshold) {
             issues.push({
-                severity: 'warning',
+                severity: 'WARNING',
                 message: `Tier 2 threshold (${tier2Threshold}) >= Tier 1 threshold (${tier1Threshold}) - invalid configuration`
             });
         }
@@ -505,7 +505,7 @@ class IntelligenceMonitor {
             if (issue.severity === 'critical') {
                 await AdminNotificationService.sendAlert({
                     code: 'AI_TEMPLATE_CONFIGURATION_ERROR',
-                    severity: 'critical',
+                    severity: 'CRITICAL',
                     title: '⚠️ Template Configuration Error',
                     message: `Template "${template.name}" has a CRITICAL configuration issue.\n\n` +
                              `Issue: ${issue.message}\n\n` +

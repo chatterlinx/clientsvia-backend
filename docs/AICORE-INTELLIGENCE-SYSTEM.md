@@ -2157,7 +2157,7 @@ The notification system includes **deduplication logic** to prevent alert spam:
 
 **Notification Not Appearing:**
 - Check code: Must be `AI_LEARNING_SYNONYM_ADDED`, `AI_LEARNING_FILLER_ADDED`, etc.
-- Verify severity: Should be `warning` (lowercase)
+- Verify severity: Must be `WARNING` (uppercase) - Mongoose enum values are case-sensitive
 - Check MongoDB: `notificationlogs` collection should have new entry
 - Redis cache: Clear with `redis-cli FLUSHDB` if stale
 

@@ -199,7 +199,7 @@ function determineFailureReason(result, allScenarios) {
   if (allScenarios.length === 0) {
     reasons.push({
       type: 'no_scenarios',
-      severity: 'critical',
+      severity: 'CRITICAL',
       message: 'No scenarios configured in template!',
       fix: 'Add scenarios to this template'
     });
@@ -229,7 +229,7 @@ function determineFailureReason(result, allScenarios) {
   if (result.confidence > 0 && result.confidence < 0.45) {
     reasons.push({
       type: 'fuzzy_match_partial',
-      severity: 'info',
+      severity: 'INFO',
       message: 'Fuzzy matching found partial keyword overlap but not enough',
       fix: 'Caller words exist in triggers but need more overlap'
     });
@@ -2101,7 +2101,7 @@ router.post('/test-respond/:templateId', async (req, res) => {
           code: 'E01',
           name: 'EngineBug',
           type: 'error',
-          severity: 'critical',
+          severity: 'CRITICAL',
           message: 'DECISION CONTRACT VIOLATION: Confidence above threshold but no scenario returned',
           impact: 'Engine logic error - requires immediate investigation',
           rootCause: violation.possibleCauses.join(', '),

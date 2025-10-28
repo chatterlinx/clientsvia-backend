@@ -337,7 +337,7 @@ class TestReportExporter {
         if (failed === 0 && avgConfidence >= 0.8) {
             recommendations.push({
                 type: 'success',
-                severity: 'info',
+                severity: 'INFO',
                 message: 'Excellent performance! All tests passed with high confidence.'
             });
         }

@@ -123,7 +123,7 @@ class ConfigurationReadinessService {
                 report.blockers.push({
                     code: 'NO_TEMPLATE',
                     message: 'No Global AI Brain template cloned',
-                    severity: 'critical',
+                    severity: 'CRITICAL',
                     target: '/company/:companyId/ai-agent-settings/template-info',
                     component: 'template'
                 });
@@ -139,7 +139,7 @@ class ConfigurationReadinessService {
                 report.blockers.push({
                     code: 'TEMPLATE_NOT_FOUND',
                     message: 'Cloned template no longer exists',
-                    severity: 'critical',
+                    severity: 'CRITICAL',
                     target: '/company/:companyId/ai-agent-settings/template-info',
                     component: 'template'
                 });
@@ -183,7 +183,7 @@ class ConfigurationReadinessService {
                 report.blockers.push({
                     code: 'MISSING_REQUIRED_VARIABLES',
                     message: `${component.missing.length} required variable(s) not configured`,
-                    severity: 'critical',
+                    severity: 'CRITICAL',
                     target: `/company/:companyId/ai-agent-settings/variables`,
                     component: 'variables',
                     details: component.missing.map(v => v.label).join(', ')
@@ -196,7 +196,7 @@ class ConfigurationReadinessService {
             report.blockers.push({
                 code: 'VARIABLES_ERROR',
                 message: `Error calculating variables: ${error.message}`,
-                severity: 'critical',
+                severity: 'CRITICAL',
                 component: 'variables'
             });
         }
@@ -241,7 +241,7 @@ class ConfigurationReadinessService {
                 report.warnings.push({
                     code: 'FEW_FILLER_WORDS',
                     message: `Only ${component.active} filler words configured (recommended: 20+)`,
-                    severity: 'warning',
+                    severity: 'WARNING',
                     target: `/company/:companyId/ai-agent-settings/filler-words`,
                     component: 'fillerWords'
                 });
@@ -303,7 +303,7 @@ class ConfigurationReadinessService {
                 report.blockers.push({
                     code: 'NO_SCENARIOS',
                     message: 'No active scenarios found in template',
-                    severity: 'critical',
+                    severity: 'CRITICAL',
                     target: `/company/:companyId/ai-agent-settings/scenarios`,
                     component: 'scenarios'
                 });
@@ -326,7 +326,7 @@ class ConfigurationReadinessService {
             report.blockers.push({
                 code: 'SCENARIOS_ERROR',
                 message: `Error loading scenarios: ${error.message}`,
-                severity: 'critical',
+                severity: 'CRITICAL',
                 component: 'scenarios'
             });
         }
@@ -359,7 +359,7 @@ class ConfigurationReadinessService {
                 report.blockers.push({
                     code: 'NO_VOICE',
                     message: 'No voice selected for AI Agent',
-                    severity: 'critical',
+                    severity: 'CRITICAL',
                     target: `/company/:companyId/ai-voice`,
                     component: 'voice'
                 });
@@ -373,7 +373,7 @@ class ConfigurationReadinessService {
             report.blockers.push({
                 code: 'VOICE_ERROR',
                 message: `Error checking voice settings: ${error.message}`,
-                severity: 'critical',
+                severity: 'CRITICAL',
                 component: 'voice'
             });
         }
@@ -411,7 +411,7 @@ class ConfigurationReadinessService {
                 report.warnings.push({
                     code: 'FEW_TEST_CALLS',
                     message: `Only ${component.made} test call(s) made (recommended: ${component.required}+)`,
-                    severity: 'warning',
+                    severity: 'WARNING',
                     target: `/company/:companyId/ai-agent-settings/dashboard`,
                     component: 'testCalls'
                 });
@@ -456,7 +456,7 @@ class ConfigurationReadinessService {
                 report.blockers.push({
                     code: 'ACCOUNT_SUSPENDED',
                     message: 'Account is SUSPENDED - All incoming calls are blocked',
-                    severity: 'critical',
+                    severity: 'CRITICAL',
                     target: '/company/:companyId/config#account-status',
                     component: 'accountStatus',
                     details: `Reason: ${accountStatus.reason || 'Not specified'}. Change status to ACTIVE in Configuration tab to go live.`
@@ -469,7 +469,7 @@ class ConfigurationReadinessService {
                 report.blockers.push({
                     code: 'ACCOUNT_CALL_FORWARD',
                     message: 'Account is set to CALL FORWARD - Calls are being forwarded, not handled by AI',
-                    severity: 'critical',
+                    severity: 'CRITICAL',
                     target: '/company/:companyId/config#account-status',
                     component: 'accountStatus',
                     details: `Currently forwarding to: ${accountStatus.callForwardNumber || 'unknown'}. Change status to ACTIVE in Configuration tab to enable AI Agent.`
@@ -486,7 +486,7 @@ class ConfigurationReadinessService {
                 report.blockers.push({
                     code: 'ACCOUNT_STATUS_UNKNOWN',
                     message: `Unknown account status: "${status}"`,
-                    severity: 'critical',
+                    severity: 'CRITICAL',
                     target: '/company/:companyId/config#account-status',
                     component: 'accountStatus',
                     details: 'Please set account status to ACTIVE in Configuration tab.'
@@ -501,7 +501,7 @@ class ConfigurationReadinessService {
             report.blockers.push({
                 code: 'ACCOUNT_STATUS_ERROR',
                 message: `Error checking account status: ${error.message}`,
-                severity: 'critical',
+                severity: 'CRITICAL',
                 component: 'accountStatus'
             });
         }

@@ -255,7 +255,7 @@ router.get('/openai-health', async (req, res) => {
             try {
                 await AdminNotificationService.sendAlert({
                     code: 'DEPENDENCY_HEALTH_CRITICAL',
-                    severity: 'critical',
+                    severity: 'CRITICAL',
                     title: '🚨 OpenAI (GPT-4) Connection Failed',
                     message: `OpenAI API is DOWN and 3-Tier Intelligence System is ENABLED.\n\n` +
                              `Error: ${healthCheck.message}\n\n` +

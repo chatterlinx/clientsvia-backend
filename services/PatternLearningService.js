@@ -542,7 +542,7 @@ class PatternLearningService {
             
             await AdminNotificationService.sendAlert({
                 code,
-                severity: 'warning',
+                severity: 'WARNING',
                 title,
                 message,
                 details: {

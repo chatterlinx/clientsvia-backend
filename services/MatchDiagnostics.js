@@ -175,7 +175,7 @@ class MatchDiagnostics {
                 // M09: NoScenarios
                 primaryReason = this.REASON_CODES.M09;
                 primaryReasonDetails = {
-                    severity: 'critical',
+                    severity: 'CRITICAL',
                     message: 'No scenarios configured in template',
                     impact: 'System cannot match any phrase',
                     rootCause: 'Template has no scenarios',

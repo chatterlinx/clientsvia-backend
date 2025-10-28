@@ -245,7 +245,7 @@ class PatternSharingService {
             // Send notification
             await AdminNotificationService.sendAlert({
                 code: 'AI_LEARNING_PATTERN_SHARED_INDUSTRY',
-                severity: 'info',
+                severity: 'INFO',
                 title: '🌍 AI Learning: Pattern Shared Across Industry',
                 message: `A high-quality pattern was automatically shared within the ${template.industryLabel} industry.\n\nOrigin Template: "${template.name}"\nPattern Type: ${pattern.type}\nShared With: ${sharedCount} template(s)\nConfidence: ${(confidence * 100).toFixed(0)}%`,
                 details: {
@@ -393,7 +393,7 @@ class PatternSharingService {
             // Send notification to admin
             await AdminNotificationService.sendAlert({
                 code: 'AI_LEARNING_GLOBAL_PATTERN_PROPOSED',
-                severity: 'info',
+                severity: 'INFO',
                 title: '🌍 AI Learning: Global Pattern Proposed for Review',
                 message: `A high-quality universal pattern has been detected and submitted for admin approval.\n\nOrigin Template: "${template.name}"\nPattern Type: ${pattern.type}\nConfidence: ${(confidence * 100).toFixed(0)}%\nUniversality: ${(universality * 100).toFixed(0)}%\nQuality Score: ${qualityScore}/100\n\n⚠️ Admin review required before platform-wide sharing.`,
                 details: {

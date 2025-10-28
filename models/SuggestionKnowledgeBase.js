@@ -472,7 +472,7 @@ suggestionKnowledgeBaseSchema.methods.applyFillerSuggestion = async function(tem
         const scope = category ? 'Category' : 'Template';
         await AdminNotificationService.sendAlert({
             code: 'AI_LEARNING_FILLER_ADDED',
-            severity: 'warning',
+            severity: 'WARNING',
             title: `🤖 AI Learning: Filler Word Added by LLM (${scope})`,
             message: `The AI detected and added a new filler word for noise removal.\n\nTemplate: "${template.name}"${category ? `\nCategory: "${category.name}"` : ''}\nFiller Word: "${this.fillerWord}"\nConfidence: ${(this.confidence * 100).toFixed(0)}%\nEstimated Impact: ${this.estimatedImpact}%\nDetection Method: ${this.detectionMethod}\n\nThis was automatically detected from ${this.frequency} test call${this.frequency > 1 ? 's' : ''}.`,
             details: {
@@ -526,7 +526,7 @@ suggestionKnowledgeBaseSchema.methods.applySynonymSuggestion = async function(te
         const scope = category ? 'Category' : 'Template';
         await AdminNotificationService.sendAlert({
             code: 'AI_LEARNING_SYNONYM_ADDED',
-            severity: 'warning',
+            severity: 'WARNING',
             title: `🤖 AI Learning: Synonym Mapping Added by LLM (${scope})`,
             message: `The AI detected and added a new synonym mapping.\n\nTemplate: "${template.name}"${category ? `\nCategory: "${category.name}"` : ''}\nTechnical Term: "${this.technicalTerm}"\nColloquial Term: "${this.colloquialTerm}"\nConfidence: ${(this.confidence * 100).toFixed(0)}%\nEstimated Impact: ${this.estimatedImpact}%\nDetection Method: ${this.detectionMethod}\n\nThis was automatically detected from ${this.frequency} test call${this.frequency > 1 ? 's' : ''}.`,
             details: {
@@ -575,7 +575,7 @@ suggestionKnowledgeBaseSchema.methods.applyKeywordSuggestion = async function(te
     try {
         await AdminNotificationService.sendAlert({
             code: 'AI_LEARNING_KEYWORD_ADDED',
-            severity: 'warning',
+            severity: 'WARNING',
             title: '🤖 AI Learning: Keyword Added by LLM (Scenario)',
             message: `The AI detected a missing keyword and added it to improve matching.\n\nTemplate: "${template.name}"\nCategory: "${category.name}"\nScenario: "${scenario.name}"\nKeyword: "${this.keyword}"\nConfidence: ${(this.confidence * 100).toFixed(0)}%\nEstimated Impact: ${this.estimatedImpact}%\nDetection Method: ${this.detectionMethod}\n\nThis was detected from ${this.frequency} failed match${this.frequency > 1 ? 'es' : ''}.`,
             details: {
@@ -624,7 +624,7 @@ suggestionKnowledgeBaseSchema.methods.applyNegativeKeywordSuggestion = async fun
     try {
         await AdminNotificationService.sendAlert({
             code: 'AI_LEARNING_NEGATIVE_KEYWORD_ADDED',
-            severity: 'warning',
+            severity: 'WARNING',
             title: '🤖 AI Learning: Negative Keyword Added by LLM (Scenario)',
             message: `The AI detected a conflicting keyword and added it as a negative keyword.\n\nTemplate: "${template.name}"\nCategory: "${category.name}"\nScenario: "${scenario.name}"\nNegative Keyword: "${this.keyword}"\nConfidence: ${(this.confidence * 100).toFixed(0)}%\nEstimated Impact: ${this.estimatedImpact}%\nDetection Method: ${this.detectionMethod}\n\nThis helps prevent false matches and improve accuracy.`,
             details: {

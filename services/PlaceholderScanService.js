@@ -197,7 +197,7 @@ class PlaceholderScanService {
             if (missingRequired.length > 0) {
                 company.aiAgentSettings.configurationAlert = {
                     type: 'missing_variables',
-                    severity: 'warning',
+                    severity: 'WARNING',
                     message: `${missingRequired.length} required variable${missingRequired.length > 1 ? 's' : ''} need${missingRequired.length === 1 ? 's' : ''} values`,
                     missingVariables: missingRequired.map(def => ({
                         key: def.key,
@@ -240,7 +240,7 @@ class PlaceholderScanService {
                             companyId,
                             companyName: company.companyName || 'Unknown Company',
                             alertType: 'missing_variables',
-                            severity: 'warning',
+                            severity: 'WARNING',
                             message: `${missingRequired.length} required variable${missingRequired.length > 1 ? 's' : ''} need${missingRequired.length === 1 ? 's' : ''} values`,
                             fixUrl
                         });
