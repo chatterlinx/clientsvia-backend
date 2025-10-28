@@ -549,10 +549,10 @@
                      🟣 AI SUGGESTIONS SECTION - ALWAYS VISIBLE (Top of Page)
                      ================================================================
                      Purpose: Show AI-discovered improvements for current template
-                     Auto-shows when suggestions > 0, auto-hides when 0
+                     ALWAYS VISIBLE - Shows empty state when no suggestions
                      Renders before template selector for maximum visibility
                      ================================================================ -->
-                <div id="ai-suggestions-section" class="hidden mb-8">
+                <div id="ai-suggestions-section" class="mb-8">
                     <!-- Header -->
                     <div class="bg-gradient-to-r from-purple-600 to-pink-600 rounded-t-xl p-6 text-white">
                         <div class="flex items-center justify-between">
@@ -570,11 +570,6 @@
                                     </p>
                                 </div>
                             </div>
-                            <button onclick="dismissSuggestions()" 
-                                    class="text-white hover:text-purple-200 transition-colors"
-                                    title="Hide for now">
-                                <i class="fas fa-times text-xl"></i>
-                            </button>
                         </div>
                     </div>
                     
@@ -10822,21 +10817,11 @@ Timestamp: ${new Date(timestamp).toISOString()}
                 updateSuggestionsSummary(data.summary);
                 renderSuggestionsCards(currentSuggestions);
                 
-                // Show/hide section based on suggestion count
-                const shouldShow = currentSuggestions.length > 0;
-                console.log('🟣 [SUGGESTIONS CHECKPOINT 10] Section visibility decision:', {
+                // Section is ALWAYS VISIBLE (no auto-hide)
+                console.log('🟣 [SUGGESTIONS CHECKPOINT 10] Section is ALWAYS VISIBLE:', {
                     suggestionsCount: currentSuggestions.length,
-                    shouldShow: shouldShow,
-                    action: shouldShow ? 'SHOWING section' : 'HIDING section'
+                    display: currentSuggestions.length > 0 ? 'Showing suggestion cards' : 'Showing empty state'
                 });
-                
-                if (shouldShow) {
-                    document.getElementById('ai-suggestions-section').classList.remove('hidden');
-                    console.log('✅ [SUGGESTIONS] Section is now VISIBLE');
-                } else {
-                    document.getElementById('ai-suggestions-section').classList.add('hidden');
-                    console.log('🔵 [SUGGESTIONS] Section is now HIDDEN (no suggestions)');
-                }
                 
                 console.log('🟣 [SUGGESTIONS CHECKPOINT 11] Load complete!', {
                     count: currentSuggestions.length,
@@ -11107,16 +11092,7 @@ Timestamp: ${new Date(timestamp).toISOString()}
             }
         }
         
-        /**
-         * Dismiss suggestions banner (hide for now)
-         */
-        function dismissSuggestions() {
-            document.getElementById('ai-suggestions-section').classList.add('hidden');
-            
-            if (window.ToastManager) {
-                window.ToastManager.info('Suggestions hidden. Refresh page to show again.');
-            }
-        }
+        // dismissSuggestions() function removed - section is now always visible
         
         /**
          * Start auto-refresh for suggestions
