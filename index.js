@@ -638,6 +638,19 @@ async function startServer() {
         
         console.log('[Server] ✅ Critical Data Health Check initialized (runs every 30 min)');
         
+        // ────────────────────────────────────────────────────────────────────────
+        // STEP 6.5: START PRODUCTION AI HEALTH MONITOR (8-hour health pings)
+        // ────────────────────────────────────────────────────────────────────────
+        try {
+            console.log('[Server] 🚀 Initializing Production AI Health Monitor...');
+            const ProductionAIHealthMonitor = require('./services/ProductionAIHealthMonitor');
+            ProductionAIHealthMonitor.startPeriodicHealthChecks();
+            console.log('[Server] ✅ Production AI Health Monitor initialized (runs every 8 hours)');
+        } catch (error) {
+            console.error('[Server] ❌ Failed to initialize Production AI Health Monitor:', error.message);
+            // Non-blocking: continue server startup even if health monitor fails
+        }
+        
         return app.listen(PORT, '0.0.0.0', () => {
             console.log(`[Server] ✅ Step 6 COMPLETE: HTTP server bound in ${Date.now() - serverStart}ms`);
             console.log(`🎉 SERVER FULLY OPERATIONAL!`);
