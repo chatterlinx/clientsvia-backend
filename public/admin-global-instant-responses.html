@@ -4304,6 +4304,7 @@ Just checking in..."></textarea>
                 activeTemplate = result.data;
                 activeTemplateId = result.data._id;
                 window.activeTemplateId = result.data._id; // Make available to template-settings-manager.js
+                window.activeTemplate = result.data; // Make available to loadSuggestions()
                 updateDashboardStats();
                 renderCategories();
                 return activeTemplate;
@@ -9038,6 +9039,7 @@ Continue?`;
                     activeTemplate = template;
                     activeTemplateId = template._id;
                     window.activeTemplateId = template._id; // Make available to template-settings-manager.js
+                    window.activeTemplate = template; // Make available to loadSuggestions()
                     
                     console.log('🔍 [SWITCH TEMPLATE] activeTemplate updated:', {
                         id: activeTemplate._id,
