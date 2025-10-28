@@ -9069,6 +9069,11 @@ Continue?`;
                         await loadSynonymsForTemplate();
                     }
                     
+                    // 🟣 Reload AI suggestions for new template
+                    console.log('📥 [SWITCH TEMPLATE] Reloading AI suggestions...');
+                    await loadSuggestions(false);
+                    console.log('✅ [SWITCH TEMPLATE] AI suggestions reloaded');
+                    
                     // NEW: Silently update activeTemplateId in global Twilio config (form stays static!)
                     console.log('📞 [SWITCH TEMPLATE] Updating activeTemplateId in global test config...');
                     try {
@@ -11118,6 +11123,12 @@ Timestamp: ${new Date(timestamp).toISOString()}
             // Load templates into dashboard selector
             await loadTemplatesIntoSelector();
             
+            // Load AI suggestions now that activeTemplate is set
+            console.log('📊 [PAGE INIT] Loading AI suggestions...');
+            await loadSuggestions(true);
+            startSuggestionsAutoRefresh();
+            console.log('✅ [PAGE INIT] AI suggestions loaded and auto-refresh started');
+            
             // 🎯 NEW: Load Template Data tabs for active template
             if (window.templateDataManager && activeTemplateId) {
                 console.log('📊 [PAGE INIT] Loading Template Data tabs for active template...');
@@ -11153,12 +11164,6 @@ Timestamp: ${new Date(timestamp).toISOString()}
             } else {
                 console.log('📍 [PAGE INIT] AI Suggestions Banner dismissed by user');
             }
-            
-            // Load AI suggestions for active template
-            console.log('📊 [PAGE INIT] Loading AI suggestions...');
-            await loadSuggestions(true);
-            startSuggestionsAutoRefresh();
-            console.log('✅ [PAGE INIT] AI suggestions loaded and auto-refresh started');
             
             console.log('✅ Global AI Brain Management - Initialized');
         });
