@@ -3260,7 +3260,7 @@ router.get('/:id/synonyms', authenticateJWT, adminOnly, async (req, res) => {
  */
 router.post('/:id/synonyms', authenticateJWT, adminOnly, async (req, res) => {
     try {
-        const { technicalTerm, colloquialTerms } = req.body;
+        const { technicalTerm, colloquialTerms, replace } = req.body;
         
         if (!technicalTerm || !colloquialTerms || !Array.isArray(colloquialTerms)) {
             return res.status(400).json({ 
@@ -3273,24 +3273,32 @@ router.post('/:id/synonyms', authenticateJWT, adminOnly, async (req, res) => {
             return res.status(404).json({ error: 'Template not found' });
         }
         
-        // Get existing aliases or create empty array
-        const existing = template.synonymMap.get(technicalTerm.toLowerCase().trim()) || [];
+        let finalTerms;
         
-        // Merge and deduplicate
-        const merged = [...new Set([
-            ...existing,
-            ...colloquialTerms.map(t => t.toLowerCase().trim())
-        ])];
+        if (replace) {
+            // REPLACE MODE: Use only new terms (for Edit operation)
+            finalTerms = [...new Set(colloquialTerms.map(t => t.toLowerCase().trim()))];
+            logger.info('Replacing synonym mapping', { technicalTerm, old: template.synonymMap.get(technicalTerm.toLowerCase().trim()), new: finalTerms });
+        } else {
+            // MERGE MODE: Combine with existing (for Add operation)
+            const existing = template.synonymMap.get(technicalTerm.toLowerCase().trim()) || [];
+            finalTerms = [...new Set([
+                ...existing,
+                ...colloquialTerms.map(t => t.toLowerCase().trim())
+            ])];
+            logger.info('Merging synonym mapping', { technicalTerm, existing, added: colloquialTerms, merged: finalTerms });
+        }
         
-        template.synonymMap.set(technicalTerm.toLowerCase().trim(), merged);
+        template.synonymMap.set(technicalTerm.toLowerCase().trim(), finalTerms);
         await template.save();
         await CacheHelper.invalidateTemplate(template._id);
         
-        logger.info('Synonym added to template', {
+        logger.info(replace ? 'Synonym mapping replaced in template' : 'Synonym mapping added to template', {
             templateId: template._id,
             technicalTerm,
-            added: colloquialTerms.length,
-            total: merged.length,
+            operation: replace ? 'replace' : 'merge',
+            newTermsCount: colloquialTerms.length,
+            finalTermsCount: finalTerms.length,
             by: req.user?.username
         });
         
@@ -3301,16 +3309,19 @@ router.post('/:id/synonyms', authenticateJWT, adminOnly, async (req, res) => {
             await AdminNotificationService.sendAlert({
                 code: 'AI_LEARNING_SYNONYM_ADDED',
                 severity: 'WARNING',
-                title: '🧠 AI Learning: Synonym Added (Manual)',
-                message: `New synonym mapping added to template.\n\nTemplate: "${template.name}"\nTechnical Term: "${technicalTerm}"\nColloquial Terms: "${colloquialTerms.join(', ')}"\nAdded By: ${req.user?.username || 'Unknown'}\n\nThis improves the AI's ability to understand non-technical language.`,
+                title: replace ? '✏️ AI Learning: Synonym Edited (Manual)' : '🧠 AI Learning: Synonym Added (Manual)',
+                message: replace 
+                    ? `Synonym mapping updated in template.\n\nTemplate: "${template.name}"\nTechnical Term: "${technicalTerm}"\nNew Colloquial Terms: "${colloquialTerms.join(', ')}"\nTotal Terms: ${finalTerms.length}\nEdited By: ${req.user?.username || 'Unknown'}\n\nThis improves the AI's ability to understand non-technical language.`
+                    : `New synonym mapping added to template.\n\nTemplate: "${template.name}"\nTechnical Term: "${technicalTerm}"\nColloquial Terms: "${colloquialTerms.join(', ')}"\nTotal Terms: ${finalTerms.length}\nAdded By: ${req.user?.username || 'Unknown'}\n\nThis improves the AI's ability to understand non-technical language.`,
                 details: {
-                    source: 'Manual Addition',
+                    source: 'Manual ' + (replace ? 'Edit' : 'Addition'),
+                    operation: replace ? 'replace' : 'merge',
                     templateId: template._id.toString(),
                     templateName: template.name,
                     technicalTerm,
                     colloquialTerms,
-                    totalAliases: merged.length,
-                    addedBy: req.user?.username
+                    totalAliases: finalTerms.length,
+                    modifiedBy: req.user?.username
                 }
             });
         } catch (notifError) {
@@ -3319,9 +3330,10 @@ router.post('/:id/synonyms', authenticateJWT, adminOnly, async (req, res) => {
         
         res.json({
             success: true,
-            message: 'Synonym mapping added',
+            message: replace ? 'Synonym mapping updated' : 'Synonym mapping added',
+            operation: replace ? 'replace' : 'merge',
             technicalTerm,
-            aliases: merged
+            aliases: finalTerms
         });
         
     } catch (error) {

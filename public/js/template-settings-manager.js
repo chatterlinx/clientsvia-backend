@@ -623,7 +623,8 @@ async function editSynonymMapping(technicalTerm, currentColloquialTerms) {
             },
             body: JSON.stringify({
                 technicalTerm,
-                colloquialTerms: newColloquialTerms
+                colloquialTerms: newColloquialTerms,
+                replace: true  // ✅ REPLACE mode for Edit operation
             })
         });
         
