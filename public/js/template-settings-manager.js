@@ -76,15 +76,12 @@ async function loadFillerWordsForTemplate() {
         
         console.log(`✅ [FILLER WORDS] Loaded ${loadedFillerWords.length} words`);
         
-        // INLINE RENDER (bypass any shadowing issues)
+        // Render inline (direct DOM manipulation for reliability)
         try {
-            console.log(`🎨 [INLINE RENDER] Starting with ${loadedFillerWords.length} words`);
             const container = document.getElementById('template-fillers-display');
             if (!container) {
-                console.error('❌ [INLINE RENDER] Container not found!');
+                console.error('❌ [FILLER WORDS] Container not found!');
             } else {
-                console.log(`✅ [INLINE RENDER] Container found, innerHTML before:`, container.innerHTML.substring(0, 100));
-                
                 if (loadedFillerWords.length === 0) {
                     container.innerHTML = '<div class="text-center w-full text-gray-500 py-8"><i class="fas fa-inbox text-4xl mb-3"></i><p>No filler words yet</p></div>';
                 } else {
@@ -97,11 +94,9 @@ async function loadFillerWordsForTemplate() {
                         </div>
                     `).join('');
                 }
-                
-                console.log(`✅ [INLINE RENDER] Rendered! innerHTML after:`, container.innerHTML.substring(0, 100));
             }
         } catch (error) {
-            console.error(`❌ [INLINE RENDER] ERROR:`, error);
+            console.error(`❌ [FILLER WORDS] Render error:`, error);
         }
         
         updateFillerWordsStats();
