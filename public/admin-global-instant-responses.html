@@ -11379,6 +11379,36 @@ Timestamp: ${new Date(timestamp).toISOString()}
                 console.error('🔴 CRITICAL: ai-suggestions-section NOT FOUND in HTML! Check if it was removed or renamed.');
             }
             
+            // ────────────────────────────────────────────────────────────────────
+            // 🔍 CHECKPOINT: Verify Production AI Tab Button Exists
+            // ────────────────────────────────────────────────────────────────────
+            console.log('🔍 [TAB CHECK] ═══════════════════════════════════════════');
+            const prodAIButton = document.getElementById('tab-production-ai');
+            console.log('🔍 [TAB CHECK] Production AI button element:', prodAIButton);
+            
+            if (prodAIButton) {
+                const styles = window.getComputedStyle(prodAIButton);
+                console.log('✅ [TAB CHECK] Button FOUND in DOM');
+                console.log('🔍 [TAB CHECK] Display:', styles.display);
+                console.log('🔍 [TAB CHECK] Visibility:', styles.visibility);
+                console.log('🔍 [TAB CHECK] Opacity:', styles.opacity);
+                console.log('🔍 [TAB CHECK] Width:', styles.width);
+                console.log('🔍 [TAB CHECK] Height:', styles.height);
+                console.log('🔍 [TAB CHECK] Inner text:', prodAIButton.innerText);
+            } else {
+                console.error('❌ [TAB CHECK] Production AI button NOT FOUND in DOM!');
+                console.log('🔍 [TAB CHECK] Checking nav container...');
+                const navContainer = document.querySelector('nav.flex.gap-2');
+                console.log('🔍 [TAB CHECK] Nav container:', navContainer);
+                if (navContainer) {
+                    console.log('🔍 [TAB CHECK] Nav has', navContainer.children.length, 'buttons');
+                    Array.from(navContainer.children).forEach((btn, idx) => {
+                        console.log(`🔍 [TAB CHECK] Button ${idx}:`, btn.id, '|', btn.innerText.substring(0, 30));
+                    });
+                }
+            }
+            console.log('🔍 [TAB CHECK] ═══════════════════════════════════════════');
+            
             // Check authentication
             const token = getAuthToken();
             if (!token) {
