@@ -9,6 +9,9 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateJWT, adminOnly } = require('../../middleware/auth');
+const { requireIdempotency } = require('../../middleware/validate');
+const { captureAuditInfo } = require('../../middleware/audit');
+const { configWriteRateLimit } = require('../../middleware/rateLimit');
 const logger = require('../../utils/logger');
 const Company = require('../../models/v2Company');
 const ProductionAIHealthMonitor = require('../../services/ProductionAIHealthMonitor');
@@ -125,7 +128,13 @@ router.get('/settings/:companyId', authenticateJWT, adminOnly, async (req, res) 
  * PATCH /api/admin/production-ai/settings/:companyId/gatekeeper
  * Update template gatekeeper settings
  */
-router.patch('/settings/:companyId/gatekeeper', authenticateJWT, adminOnly, async (req, res) => {
+router.patch('/settings/:companyId/gatekeeper', 
+    authenticateJWT, 
+    adminOnly, 
+    captureAuditInfo,
+    requireIdempotency,
+    configWriteRateLimit,
+    async (req, res) => {
     try {
         const { enabled, tier1Threshold, tier2Threshold, enableLLMFallback, monthlyBudget } = req.body;
         
@@ -194,7 +203,13 @@ router.patch('/settings/:companyId/gatekeeper', authenticateJWT, adminOnly, asyn
  * PATCH /api/admin/production-ai/settings/:companyId/fallback
  * Update fallback response settings
  */
-router.patch('/settings/:companyId/fallback', authenticateJWT, adminOnly, async (req, res) => {
+router.patch('/settings/:companyId/fallback', 
+    authenticateJWT, 
+    adminOnly, 
+    captureAuditInfo,
+    requireIdempotency,
+    configWriteRateLimit,
+    async (req, res) => {
     try {
         const { toneProfile, clarificationNeeded, noMatchFound, technicalIssue, outOfScope, escalationOptions } = req.body;
         
@@ -232,6 +247,16 @@ router.patch('/settings/:companyId/fallback', authenticateJWT, adminOnly, async 
                 success: false,
                 error: 'Company not found'
             });
+        }
+        
+        // Clear Redis cache
+        try {
+            const redisClient = require('../../db').redisClient;
+            if (redisClient && redisClient.del) {
+                await redisClient.del(`company:${req.params.companyId}:production-ai`);
+            }
+        } catch (cacheError) {
+            logger.warn('[PRODUCTION AI API] Failed to clear cache', { error: cacheError.message });
         }
         
         res.json({
