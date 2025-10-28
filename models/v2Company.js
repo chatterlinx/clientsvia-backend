@@ -302,6 +302,287 @@ const aiAgentLogicSchema = new mongoose.Schema({
             updatedAt: { type: Date, default: Date.now }
         }],
         default: []
+    },
+    
+    // ════════════════════════════════════════════════════════════════════════════════
+    // 🚀 PRODUCTION AI - ENTERPRISE-GRADE GATEKEEPER SYSTEM
+    // ════════════════════════════════════════════════════════════════════════════════
+    // PURPOSE: Control 3-tier routing, budget management, fallback responses for 100+ companies
+    // LOCATION: Production AI tab (admin-production-ai.html)
+    // ARCHITECTURE: Sub-50ms performance, Redis-cached, multi-tenant isolated
+    // DOCUMENTATION: /docs/PRODUCTION-AI-CORE-INTEGRATION.md
+    // ════════════════════════════════════════════════════════════════════════════════
+    
+    // ────────────────────────────────────────────────────────────────────────────────
+    // 🔐 TEMPLATE GATEKEEPER - 3-Tier Routing Configuration
+    // ────────────────────────────────────────────────────────────────────────────────
+    // Controls how the AI routes queries through Tier 1 (Rule-Based), Tier 2 (Semantic),
+    // and Tier 3 (LLM Fallback) with budget management and performance tracking
+    templateGatekeeper: {
+        // Master enable/disable switch
+        enabled: { 
+            type: Boolean, 
+            default: false 
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // TIER CONFIDENCE THRESHOLDS
+        // ────────────────────────────────────────────────────────────────────────
+        // Minimum confidence required to accept a match from each tier
+        tier1Threshold: { 
+            type: Number, 
+            min: 0, 
+            max: 1, 
+            default: 0.70,
+            // Tier 1 (Rule-Based): Pattern matching, keyword detection
+            // Confidence: 0.70 = 70% match certainty
+            // Cost: FREE (no LLM calls)
+        },
+        tier2Threshold: { 
+            type: Number, 
+            min: 0, 
+            max: 1, 
+            default: 0.60,
+            // Tier 2 (Semantic): Vector similarity, context matching
+            // Confidence: 0.60 = 60% match certainty
+            // Cost: FREE (no LLM calls)
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // TIER 3 (LLM) CONTROL
+        // ────────────────────────────────────────────────────────────────────────
+        enableLLMFallback: { 
+            type: Boolean, 
+            default: false,
+            // If true: Queries that fail Tier 1 & 2 go to OpenAI GPT-4 (paid)
+            // If false: Queries that fail Tier 1 & 2 go to fallback responses
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // BUDGET MANAGEMENT (LLM COST TRACKING)
+        // ────────────────────────────────────────────────────────────────────────
+        // Prevents LLM overspending by enforcing monthly budgets
+        monthlyBudget: { 
+            type: Number, 
+            min: 0, 
+            default: 0,
+            // Monthly budget in USD (e.g., 200 = $200/month)
+            // When spent, LLM is automatically disabled until reset
+        },
+        currentSpend: { 
+            type: Number, 
+            min: 0, 
+            default: 0,
+            // Real-time tracking of current month's LLM spend
+            // Updated after each Tier 3 call (atomic $inc operation)
+        },
+        lastResetDate: { 
+            type: Date, 
+            default: Date.now,
+            // Last time budget was reset (monthly cron job)
+            // See: scripts/monthly-budget-reset.js
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // PERFORMANCE TRACKING
+        // ────────────────────────────────────────────────────────────────────────
+        metrics: {
+            tier1Calls: { type: Number, default: 0 },              // Tier 1 successful matches
+            tier2Calls: { type: Number, default: 0 },              // Tier 2 successful matches
+            tier3Calls: { type: Number, default: 0 },              // Tier 3 LLM calls
+            fallbackCalls: { type: Number, default: 0 },           // Total fallback responses
+            avgResponseTime: { type: Number, default: 0 },         // Average response time (ms)
+            lastUpdated: { type: Date, default: Date.now }
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // METADATA
+        // ────────────────────────────────────────────────────────────────────────
+        version: { type: Number, default: 1 },
+        lastUpdated: { type: Date, default: Date.now }
+    },
+    
+    // ────────────────────────────────────────────────────────────────────────────────
+    // 🆘 INTELLIGENT FALLBACK RESPONSES - When AI Fails
+    // ────────────────────────────────────────────────────────────────────────────────
+    // Context-aware fallback responses used when:
+    // 1. All 3 tiers fail to match (confidence too low)
+    // 2. LLM budget exceeded
+    // 3. System error (OpenAI down, timeout, etc.)
+    fallbackResponses: {
+        // ────────────────────────────────────────────────────────────────────────
+        // TONE & PERSONALITY
+        // ────────────────────────────────────────────────────────────────────────
+        toneProfile: { 
+            type: String, 
+            enum: ['professional', 'friendly', 'empathetic', 'technical', 'casual'], 
+            default: 'friendly',
+            // Controls the overall tone of fallback responses
+            // professional: "I'll connect you with a specialist."
+            // friendly: "Let me get you to the right person!"
+            // empathetic: "I understand your concern. Let me help."
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // RESPONSE VARIATIONS (Rotated to avoid repetition)
+        // ────────────────────────────────────────────────────────────────────────
+        
+        // Type 1: Clarification Needed (Low Confidence, Ambiguous)
+        clarificationNeeded: { 
+            type: [String], 
+            default: [
+                "I'm sorry, I didn't quite understand your question. Could you please rephrase or give me a little more detail?",
+                "Hmm, I may not be following you — could you please say that another way so I can help better?",
+                "I want to make sure I get this right for you — would you mind rephrasing that question?"
+            ]
+        },
+        
+        // Type 2: No Match Found (Clear Question, No Answer)
+        noMatchFound: { 
+            type: [String], 
+            default: [
+                "I'm not sure about that one, but I can forward this to a specialist or take a message so someone from the team can assist you.",
+                "That's a great question, but I'll need to connect you with someone from our team who can give you the best answer.",
+                "I don't have that information right now, but I can make sure the right person gets back to you about this."
+            ]
+        },
+        
+        // Type 3: Technical Issue (System Error)
+        technicalIssue: { 
+            type: [String], 
+            default: [
+                "I'm having a bit of trouble processing that right now. Could you try saying it differently?",
+                "I wasn't able to interpret that request correctly. Could you clarify what you'd like me to check or do?"
+            ]
+        },
+        
+        // Type 4: Out of Scope (Wrong Service)
+        outOfScope: { 
+            type: [String], 
+            default: [
+                "I appreciate you calling, but we specialize in {INDUSTRY_TYPE}. Is there anything else I can help with today?"
+            ]
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // ESCALATION OPTIONS
+        // ────────────────────────────────────────────────────────────────────────
+        escalationOptions: {
+            offerTransfer: { 
+                type: Boolean, 
+                default: true,
+                // Offer to transfer to live agent
+            },
+            offerMessage: { 
+                type: Boolean, 
+                default: true,
+                // Offer to take a message
+            },
+            offerCallback: { 
+                type: Boolean, 
+                default: true,
+                // Offer callback option
+            },
+            transferPhrase: { 
+                type: String, 
+                default: "Would you like me to transfer you to someone who can help with that?",
+                trim: true
+            },
+            messagePhrase: { 
+                type: String, 
+                default: "I can take a message and have someone call you back within the hour if that works better?",
+                trim: true
+            }
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // FOLLOW-UP PROMPTS (Appended to responses)
+        // ────────────────────────────────────────────────────────────────────────
+        followUpPrompts: { 
+            type: [String], 
+            default: [
+                "Or if you'd like, you can tell me what it's about, and I'll connect you to the right person.",
+                "Would you like me to transfer you now?",
+                "I can take a detailed message for you if you prefer?"
+            ]
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // ROTATION TRACKING (Prevents Same Response Repetition)
+        // ────────────────────────────────────────────────────────────────────────
+        // Tracks which variation was last used for each fallback type
+        // Incremented after each use (mod length for wrap-around)
+        lastUsedIndex: {
+            clarification: { type: Number, default: 0, min: 0 },
+            noMatch: { type: Number, default: 0, min: 0 },
+            technical: { type: Number, default: 0, min: 0 },
+            outOfScope: { type: Number, default: 0, min: 0 }
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // METADATA
+        // ────────────────────────────────────────────────────────────────────────
+        version: { type: Number, default: 1 },
+        lastUpdated: { type: Date, default: Date.now }
+    },
+    
+    // ────────────────────────────────────────────────────────────────────────────────
+    // 🧠 LEARNING SETTINGS - AI Pattern Detection & Suggestions
+    // ────────────────────────────────────────────────────────────────────────────────
+    // Controls how the AI learns from production calls and generates suggestions
+    learningSettings: {
+        // ────────────────────────────────────────────────────────────────────────
+        // AUTO-LEARNING (Pattern Detection)
+        // ────────────────────────────────────────────────────────────────────────
+        autoLearn: { 
+            type: Boolean, 
+            default: true,
+            // If true: System analyzes Tier 3 (LLM) calls to detect patterns
+            // If false: No automatic learning (manual scenario creation only)
+            // Location: Production AI tab → Learning Settings
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // PATTERN SHARING (Cross-Company Learning)
+        // ────────────────────────────────────────────────────────────────────────
+        sharePatterns: { 
+            type: Boolean, 
+            default: false,
+            // If true: Learned patterns shared with other companies in same industry
+            // If false: Patterns stay private to this company only
+            // Example: HVAC Company A learns "thermostat" patterns, shares with HVAC Company B
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // SUGGESTION CONFIDENCE THRESHOLD
+        // ────────────────────────────────────────────────────────────────────────
+        minConfidenceForSuggestion: { 
+            type: Number, 
+            min: 0, 
+            max: 1, 
+            default: 0.80,
+            // Minimum confidence for LLM to suggest a new scenario
+            // 0.80 = Only suggest if 80%+ confident this is a real pattern
+            // Lower = More suggestions (may be noisy)
+            // Higher = Fewer suggestions (only high-quality)
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // PERFORMANCE TRACKING
+        // ────────────────────────────────────────────────────────────────────────
+        metrics: {
+            totalSuggestionsGenerated: { type: Number, default: 0 },  // Lifetime suggestion count
+            suggestionsApplied: { type: Number, default: 0 },          // How many were accepted
+            suggestionsIgnored: { type: Number, default: 0 },          // How many were dismissed
+            lastSuggestionAt: { type: Date, default: null },           // Most recent suggestion
+            lastUpdated: { type: Date, default: Date.now }
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // METADATA
+        // ────────────────────────────────────────────────────────────────────────
+        version: { type: Number, default: 1 },
+        lastUpdated: { type: Date, default: Date.now }
     }
 }, { _id: false });
 

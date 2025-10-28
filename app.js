@@ -224,6 +224,15 @@ try {
     logger.error('❌ Failed to load Admin Notification routes:', error);
 }
 
+// 🚀 PRODUCTION AI - Gatekeeper & Health Monitoring Routes
+try {
+    const productionAIRoutes = require('./routes/admin/productionAI');
+    app.use('/api/admin/production-ai', productionAIRoutes);
+    logger.info('✅ Production AI routes registered - Gatekeeper & health monitoring active');
+} catch (error) {
+    logger.error('❌ Failed to load Production AI routes:', error);
+}
+
 // Add simplified AI Agent Logic routes as fallback (no auth required for basic functionality)
 // try {
 //     const aiAgentLogicSimpleRoutes = require('./routes/aiAgentLogicSimple'); // MISSING FILE
