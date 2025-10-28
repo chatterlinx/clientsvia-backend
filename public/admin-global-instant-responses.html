@@ -10750,10 +10750,14 @@ Timestamp: ${new Date(timestamp).toISOString()}
         async function loadSuggestions(showLoading = true) {
             try {
                 const activeTemplate = window.activeTemplate;
-                if (!activeTemplate || !activeTemplate.id) {
+                const templateId = activeTemplate?._id || window.activeTemplateId;
+                
+                if (!templateId) {
                     console.warn('[SUGGESTIONS] No active template');
                     return;
                 }
+                
+                console.log('[SUGGESTIONS] Loading for template:', templateId);
                 
                 // Show loading state
                 if (showLoading) {
@@ -10763,7 +10767,7 @@ Timestamp: ${new Date(timestamp).toISOString()}
                 }
                 
                 // Fetch suggestions
-                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate.id}/suggestions`, {
+                const response = await fetch(`/api/admin/global-instant-responses/${templateId}/suggestions`, {
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
                         'Content-Type': 'application/json'
@@ -10868,12 +10872,12 @@ Timestamp: ${new Date(timestamp).toISOString()}
          */
         async function applySuggestion(suggestionId) {
             try {
-                const activeTemplate = window.activeTemplate;
-                if (!activeTemplate || !activeTemplate.id) {
+                const templateId = window.activeTemplateId || window.activeTemplate?._id;
+                if (!templateId) {
                     throw new Error('No active template');
                 }
                 
-                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate.id}/suggestions/${suggestionId}/apply`, {
+                const response = await fetch(`/api/admin/global-instant-responses/${templateId}/suggestions/${suggestionId}/apply`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
@@ -10927,12 +10931,12 @@ Timestamp: ${new Date(timestamp).toISOString()}
          */
         async function ignoreSuggestion(suggestionId, reason = 'Not applicable') {
             try {
-                const activeTemplate = window.activeTemplate;
-                if (!activeTemplate || !activeTemplate.id) {
+                const templateId = window.activeTemplateId || window.activeTemplate?._id;
+                if (!templateId) {
                     throw new Error('No active template');
                 }
                 
-                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate.id}/suggestions/${suggestionId}/ignore`, {
+                const response = await fetch(`/api/admin/global-instant-responses/${templateId}/suggestions/${suggestionId}/ignore`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
@@ -10975,8 +10979,8 @@ Timestamp: ${new Date(timestamp).toISOString()}
          */
         async function applyAllHighConfidenceSuggestions() {
             try {
-                const activeTemplate = window.activeTemplate;
-                if (!activeTemplate || !activeTemplate.id) {
+                const templateId = window.activeTemplateId || window.activeTemplate?._id;
+                if (!templateId) {
                     throw new Error('No active template');
                 }
                 
@@ -10992,7 +10996,7 @@ Timestamp: ${new Date(timestamp).toISOString()}
                 const confirmed = confirm(`Apply ${highConfSuggestions.length} high-confidence suggestions automatically?`);
                 if (!confirmed) return;
                 
-                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate.id}/suggestions/apply-all-high`, {
+                const response = await fetch(`/api/admin/global-instant-responses/${templateId}/suggestions/apply-all-high`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
