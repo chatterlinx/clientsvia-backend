@@ -412,7 +412,9 @@ async function loadSynonymsForTemplate() {
         }
         
         console.log(`✅ [SYNONYMS] Loaded ${loadedSynonyms.size} mappings for template ${templateId}`);
-        console.log('🔍 [SYNONYMS DEBUG] Mappings:', Array.from(loadedSynonyms.entries()));
+        console.log('🔍 [SYNONYMS DEBUG] Full mappings:', Array.from(loadedSynonyms.entries()));
+        console.log('🔍 [SYNONYMS DEBUG] Technical terms:', Array.from(loadedSynonyms.keys()));
+        console.log('🔍 [SYNONYMS DEBUG] Raw API response synonyms:', result.synonyms);
         
         // CRITICAL: Force render with fresh data
         renderSynonyms(loadedSynonyms);
@@ -496,12 +498,14 @@ function renderSynonyms(synonymMap) {
     }
     
     console.log(`🎨 [RENDER SYNONYMS] Setting innerHTML with ${html.length} cards...`);
+    console.log(`🔍 [RENDER DEBUG] Rendering these technical terms:`, Array.from(synonymMap.keys()));
     container.innerHTML = html.join('');
     
     // Force reflow again
     container.offsetHeight;
     
     console.log(`✅ [RENDER SYNONYMS] Complete! DOM updated with ${synonymMap.size} mappings`);
+    console.log(`🔍 [RENDER DEBUG] Final check - container has ${container.children.length} child elements`);
 }
 
 /**
