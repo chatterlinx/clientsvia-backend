@@ -436,11 +436,18 @@ function renderSynonyms(synonymMap) {
                         <div class="text-sm text-gray-500 mb-1">Technical Term:</div>
                         <div class="text-lg font-bold text-purple-700">${technicalTerm}</div>
                     </div>
-                    <button onclick="removeSynonymMapping('${technicalTerm}')" 
-                            class="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-semibold transition-colors">
-                        <i class="fas fa-trash mr-1"></i>
-                        Remove
-                    </button>
+                    <div class="flex gap-2">
+                        <button onclick="editSynonymMapping('${technicalTerm}', ${JSON.stringify(colloquialTerms).replace(/"/g, '&quot;')})" 
+                                class="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-semibold transition-colors">
+                            <i class="fas fa-edit mr-1"></i>
+                            Edit
+                        </button>
+                        <button onclick="removeSynonymMapping('${technicalTerm}')" 
+                                class="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-semibold transition-colors">
+                            <i class="fas fa-trash mr-1"></i>
+                            Remove
+                        </button>
+                    </div>
                 </div>
                 <div class="text-sm text-gray-500 mb-2">Colloquial Terms (${colloquialTerms.length}):</div>
                 <div class="flex flex-wrap gap-2">
@@ -469,6 +476,7 @@ function updateSynonymsStats() {
 
 /**
  * Add synonym mapping
+ * Supports both Template Settings sub-tab and main Settings tab
  */
 async function addSynonymMapping() {
     // CRITICAL: Always get the latest template ID
@@ -480,8 +488,24 @@ async function addSynonymMapping() {
         return;
     }
     
-    const technicalTerm = document.getElementById('synonym-technical-term').value.trim().toLowerCase();
-    const colloquialTermsInput = document.getElementById('synonym-colloquial-terms').value.trim().toLowerCase();
+    // Try Template Settings sub-tab fields first, then fallback to main Settings tab fields
+    let technicalTermInput = document.getElementById('template-synonym-technical');
+    let colloquialTermsInputElement = document.getElementById('template-synonym-colloquial');
+    
+    // If not found, try main Settings tab fields
+    if (!technicalTermInput || !colloquialTermsInputElement) {
+        technicalTermInput = document.getElementById('synonym-technical-term');
+        colloquialTermsInputElement = document.getElementById('synonym-colloquial-terms');
+    }
+    
+    if (!technicalTermInput || !colloquialTermsInputElement) {
+        alert('❌ Could not find input fields. Please refresh the page.');
+        console.error('❌ [SYNONYMS] Input fields not found in DOM');
+        return;
+    }
+    
+    const technicalTerm = technicalTermInput.value.trim().toLowerCase();
+    const colloquialTermsInput = colloquialTermsInputElement.value.trim().toLowerCase();
     
     if (!technicalTerm || !colloquialTermsInput) {
         alert('❌ Please fill in both fields!\n\nTechnical term: e.g., "thermostat"\nColloquial terms: e.g., "thingy, box on wall"');
@@ -524,9 +548,9 @@ async function addSynonymMapping() {
             console.log('🗑️ [CACHE] Invalidated TemplateDataManager cache for template:', templateId);
         }
         
-        // Clear inputs
-        document.getElementById('synonym-technical-term').value = '';
-        document.getElementById('synonym-colloquial-terms').value = '';
+        // Clear the inputs that were used
+        technicalTermInput.value = '';
+        colloquialTermsInputElement.value = '';
         
         // Reload
         await loadSynonymsForTemplate();
@@ -542,6 +566,93 @@ async function addSynonymMapping() {
             window.toastManager.error(`Failed to add: ${error.message}`);
         } else {
             alert(`❌ Failed to add: ${error.message}`);
+        }
+    }
+}
+
+/**
+ * Edit synonym mapping
+ */
+async function editSynonymMapping(technicalTerm, currentColloquialTerms) {
+    // CRITICAL: Always get the latest template ID
+    const templateId = window.activeTemplateId || currentTemplateIdForSettings;
+    
+    if (!templateId) {
+        alert('❌ No template selected. Please select a template first.');
+        console.error('❌ [SYNONYMS] No template ID available');
+        return;
+    }
+    
+    // Show prompt with current values
+    const currentTermsStr = Array.isArray(currentColloquialTerms) 
+        ? currentColloquialTerms.join(', ') 
+        : currentColloquialTerms;
+    
+    const newTermsStr = prompt(
+        `Edit colloquial terms for "${technicalTerm}"\n\n` +
+        `Enter comma-separated terms:`,
+        currentTermsStr
+    );
+    
+    if (newTermsStr === null) {
+        return; // User cancelled
+    }
+    
+    if (!newTermsStr.trim()) {
+        alert('❌ Please provide at least one colloquial term!');
+        return;
+    }
+    
+    // Parse new terms
+    const newColloquialTerms = newTermsStr.split(',').map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
+    
+    if (newColloquialTerms.length === 0) {
+        alert('❌ Please provide at least one colloquial term!');
+        return;
+    }
+    
+    try {
+        console.log(`✏️ [SYNONYMS] Updating mapping: "${technicalTerm}" → [${newColloquialTerms.join(', ')}]`);
+        
+        const token = localStorage.getItem('adminToken');
+        const response = await fetch(`/api/admin/global-instant-responses/${templateId}/synonyms`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                technicalTerm,
+                colloquialTerms: newColloquialTerms
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        console.log('✅ [SYNONYMS] Updated successfully');
+        
+        // CRITICAL: Invalidate TemplateDataManager cache
+        if (window.templateDataManager) {
+            window.templateDataManager.cache.templates.delete(templateId);
+            console.log('🗑️ [CACHE] Invalidated TemplateDataManager cache for template:', templateId);
+        }
+        
+        // Reload
+        await loadSynonymsForTemplate();
+        
+        // Show success toast
+        if (window.toastManager) {
+            window.toastManager.success(`Updated synonym mapping for "${technicalTerm}"`);
+        }
+        
+    } catch (error) {
+        console.error('❌ [SYNONYMS] Failed to update:', error);
+        if (window.toastManager) {
+            window.toastManager.error(`Failed to update: ${error.message}`);
+        } else {
+            alert(`❌ Failed to update: ${error.message}`);
         }
     }
 }
@@ -1106,6 +1217,7 @@ window.exportFillerWords = exportFillerWords;
 window.showAddFillerWordModal = showAddFillerWordModal;
 window.resetFillerWordsToDefaults = resetFillerWordsToDefaults;
 window.addSynonymMapping = addSynonymMapping;
+window.editSynonymMapping = editSynonymMapping;
 window.removeSynonymMapping = removeSynonymMapping;
 window.exportSynonyms = exportSynonyms;
 window.importSynonyms = importSynonyms;
