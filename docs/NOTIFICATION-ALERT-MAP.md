@@ -1,7 +1,7 @@
 # 📋 NOTIFICATION ALERT MAP - Complete Reference
 
-> **Last Updated:** October 27, 2025  
-> **Total Alert Codes:** 73  
+> **Last Updated:** October 29, 2025  
+> **Total Alert Codes:** 79  
 > **Documentation Purpose:** Central reference for all notification alert codes, severities, and actions
 
 ---
@@ -10,9 +10,9 @@
 
 | Severity | Count | Use Case |
 |----------|-------|----------|
-| **CRITICAL** | 25 | System down, data loss imminent, revenue impact |
-| **WARNING** | 38 | Performance degradation, missing config, non-critical failures |
-| **INFO** | 10 | Successful operations, health checks, system status |
+| **CRITICAL** | 29 | System down, data loss imminent, revenue impact |
+| **WARNING** | 39 | Performance degradation, missing config, non-critical failures |
+| **INFO** | 11 | Successful operations, health checks, system status |
 
 ---
 
@@ -27,6 +27,7 @@
 7. [API Error Handling](#7-api-error-handling) (7 codes)
 8. [AI Learning & Optimization](#8-ai-learning--optimization) (4 codes)
 9. [Critical Data Health](#9-critical-data-health) (6 codes)
+10. [AI Gateway Health Monitoring](#10-ai-gateway-health-monitoring) (6 codes)
 
 ---
 
@@ -732,6 +733,59 @@ curl -H "xi-api-key: YOUR_API_KEY" https://api.elevenlabs.io/v1/user
 
 ---
 
+## 10. 🌐 AI GATEWAY HEALTH MONITORING
+
+### **AI_GATEWAY_OPENAI_UNHEALTHY**
+- **Severity:** 🔴 CRITICAL
+- **Trigger:** OpenAI API health check failed
+- **Impact:** LLM fallback (Tier 3) unavailable, AI suggestions disabled
+- **Action:** Check OpenAI API key, account credits, and API status at status.openai.com
+- **File:** `services/aiGateway/HealthMonitor.js:136`
+
+### **AI_GATEWAY_OPENAI_SLOW**
+- **Severity:** ⚠️ WARNING
+- **Trigger:** OpenAI response time exceeded 5 seconds
+- **Impact:** Slow AI responses, degraded user experience
+- **Action:** Monitor OpenAI status, consider rate limit adjustments
+- **File:** `services/aiGateway/HealthMonitor.js:104`
+
+### **AI_GATEWAY_MONGODB_UNHEALTHY**
+- **Severity:** 🔴 CRITICAL
+- **Trigger:** MongoDB health check failed
+- **Impact:** Cannot read/write AI Gateway call logs and suggestions
+- **Action:** Check MongoDB Atlas connection, network, and database status
+- **File:** `services/aiGateway/HealthMonitor.js:183`
+
+### **AI_GATEWAY_REDIS_UNHEALTHY**
+- **Severity:** 🔴 CRITICAL
+- **Trigger:** Redis health check failed
+- **Impact:** Cache unavailable, performance degradation, increased DB load
+- **Action:** Check Redis connection, restart Redis service if needed
+- **File:** `services/aiGateway/HealthMonitor.js:230`
+
+### **AI_GATEWAY_HEALTH_ALL_HEALTHY**
+- **Severity:** ℹ️ INFO
+- **Trigger:** All AI Gateway systems healthy (auto-ping with "always" notification mode)
+- **Impact:** None - informational only
+- **Action:** No action needed
+- **File:** `services/aiGateway/HealthMonitor.js:552`
+
+### **AI_GATEWAY_HEALTH_DEGRADED**
+- **Severity:** ⚠️ WARNING
+- **Trigger:** One AI Gateway system unhealthy (auto-ping)
+- **Impact:** Partial degradation, some features may be unavailable
+- **Action:** Review health dashboard, investigate unhealthy service
+- **File:** `services/aiGateway/HealthMonitor.js:552`
+
+### **AI_GATEWAY_HEALTH_CRITICAL**
+- **Severity:** 🔴 CRITICAL
+- **Trigger:** Two or more AI Gateway systems unhealthy (auto-ping)
+- **Impact:** Major degradation, AI Gateway may be non-functional
+- **Action:** Immediate investigation required, check all services
+- **File:** `services/aiGateway/HealthMonitor.js:552`
+
+---
+
 ## 📚 **RELATED DOCUMENTATION**
 
 - [Notification System Architecture](./NOTIFICATION-SYSTEM-ARCHITECTURE.md)
@@ -742,7 +796,7 @@ curl -H "xi-api-key: YOUR_API_KEY" https://api.elevenlabs.io/v1/user
 ---
 
 **Generated:** October 27, 2025  
-**Last Updated:** October 27, 2025  
-**Version:** 1.0  
+**Last Updated:** October 29, 2025  
+**Version:** 1.1  
 **Maintainer:** Platform Engineering Team
 
