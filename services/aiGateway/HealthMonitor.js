@@ -212,13 +212,24 @@ class AIGatewayHealthMonitor {
             status: 'UNKNOWN',
             latency: null,
             error: null,
-            timestamp: new Date()
+            timestamp: new Date(),
+            metrics: {
+                memoryUsed: null,
+                memoryMax: null,
+                memoryUsagePercent: null,
+                connectedClients: null,
+                evictedKeys: null,
+                hitRate: null,
+                opsPerSec: null
+            }
         };
         
         try {
             const startTime = Date.now();
             
-            // Check if Redis client exists
+            // ────────────────────────────────────────────────────────────────────
+            // CHECKPOINT 2: Check if Redis client exists
+            // ────────────────────────────────────────────────────────────────────
             if (!redisClient || !redisClient.isReady) {
                 result.status = 'UNKNOWN';
                 result.error = 'Redis client not initialized (server may still be starting)';
@@ -226,13 +237,150 @@ class AIGatewayHealthMonitor {
                 return result;
             }
             
-            // Simple ping to Redis
+            // ────────────────────────────────────────────────────────────────────
+            // CHECKPOINT 3: Ping Redis
+            // ────────────────────────────────────────────────────────────────────
             await redisClient.ping();
             
             result.latency = Date.now() - startTime;
+            
+            // ────────────────────────────────────────────────────────────────────
+            // CHECKPOINT 4: Get Redis INFO metrics
+            // ────────────────────────────────────────────────────────────────────
+            const info = await redisClient.info('stats');
+            const memory = await redisClient.info('memory');
+            const clients = await redisClient.info('clients');
+            
+            // Parse memory metrics
+            const memoryUsedMatch = memory.match(/used_memory:(\d+)/);
+            const memoryMaxMatch = memory.match(/maxmemory:(\d+)/);
+            const evictedKeysMatch = info.match(/evicted_keys:(\d+)/);
+            
+            // Parse client metrics
+            const connectedClientsMatch = clients.match(/connected_clients:(\d+)/);
+            
+            // Parse hit rate metrics
+            const hitsMatch = info.match(/keyspace_hits:(\d+)/);
+            const missesMatch = info.match(/keyspace_misses:(\d+)/);
+            const opsMatch = info.match(/instantaneous_ops_per_sec:(\d+)/);
+            
+            if (memoryUsedMatch && memoryMaxMatch) {
+                const memoryUsed = parseInt(memoryUsedMatch[1]);
+                const memoryMax = parseInt(memoryMaxMatch[1]);
+                const memoryUsagePercent = memoryMax > 0 ? (memoryUsed / memoryMax) * 100 : 0;
+                
+                result.metrics.memoryUsed = memoryUsed;
+                result.metrics.memoryMax = memoryMax;
+                result.metrics.memoryUsagePercent = Math.round(memoryUsagePercent * 100) / 100;
+            }
+            
+            if (connectedClientsMatch) {
+                result.metrics.connectedClients = parseInt(connectedClientsMatch[1]);
+            }
+            
+            if (evictedKeysMatch) {
+                result.metrics.evictedKeys = parseInt(evictedKeysMatch[1]);
+            }
+            
+            if (hitsMatch && missesMatch) {
+                const hits = parseInt(hitsMatch[1]);
+                const misses = parseInt(missesMatch[1]);
+                const total = hits + misses;
+                result.metrics.hitRate = total > 0 ? Math.round((hits / total) * 100 * 100) / 100 : 100;
+            }
+            
+            if (opsMatch) {
+                result.metrics.opsPerSec = parseInt(opsMatch[1]);
+            }
+            
+            // ────────────────────────────────────────────────────────────────────
+            // CHECKPOINT 5: Check thresholds and send proactive alerts
+            // ────────────────────────────────────────────────────────────────────
+            
+            // 🚨 CRITICAL: Memory usage > 90%
+            if (result.metrics.memoryUsagePercent > 90) {
+                await AdminNotificationService.sendAlert({
+                    code: 'REDIS_MEMORY_CRITICAL',
+                    severity: 'CRITICAL',
+                    message: `Redis memory usage at ${result.metrics.memoryUsagePercent}% - UPGRADE REQUIRED IMMEDIATELY`,
+                    details: {
+                        memoryUsed: `${(result.metrics.memoryUsed / 1024 / 1024).toFixed(2)} MB`,
+                        memoryMax: `${(result.metrics.memoryMax / 1024 / 1024).toFixed(2)} MB`,
+                        usagePercent: result.metrics.memoryUsagePercent,
+                        recommendation: 'Upgrade Redis plan immediately to prevent data loss'
+                    },
+                    source: 'AIGatewayHealthMonitor'
+                });
+            }
+            // ⚠️ WARNING: Memory usage > 80%
+            else if (result.metrics.memoryUsagePercent > 80) {
+                await AdminNotificationService.sendAlert({
+                    code: 'REDIS_MEMORY_HIGH',
+                    severity: 'WARNING',
+                    message: `Redis memory usage at ${result.metrics.memoryUsagePercent}% - Consider upgrading soon`,
+                    details: {
+                        memoryUsed: `${(result.metrics.memoryUsed / 1024 / 1024).toFixed(2)} MB`,
+                        memoryMax: `${(result.metrics.memoryMax / 1024 / 1024).toFixed(2)} MB`,
+                        usagePercent: result.metrics.memoryUsagePercent,
+                        recommendation: 'Plan Redis upgrade within 7 days'
+                    },
+                    source: 'AIGatewayHealthMonitor'
+                });
+            }
+            
+            // ⚠️ WARNING: Keys being evicted (memory pressure)
+            if (result.metrics.evictedKeys > 100) {
+                await AdminNotificationService.sendAlert({
+                    code: 'REDIS_EVICTION_DETECTED',
+                    severity: 'WARNING',
+                    message: `Redis is evicting keys due to memory pressure (${result.metrics.evictedKeys} keys evicted)`,
+                    details: {
+                        evictedKeys: result.metrics.evictedKeys,
+                        memoryUsagePercent: result.metrics.memoryUsagePercent,
+                        recommendation: 'Upgrade Redis to prevent cache data loss'
+                    },
+                    source: 'AIGatewayHealthMonitor'
+                });
+            }
+            
+            // ⚠️ WARNING: Low cache hit rate (< 70%)
+            if (result.metrics.hitRate !== null && result.metrics.hitRate < 70) {
+                await AdminNotificationService.sendAlert({
+                    code: 'REDIS_LOW_HIT_RATE',
+                    severity: 'WARNING',
+                    message: `Redis cache hit rate is low (${result.metrics.hitRate}%)`,
+                    details: {
+                        hitRate: result.metrics.hitRate,
+                        recommendation: 'Low hit rate may indicate memory pressure or inefficient caching strategy'
+                    },
+                    source: 'AIGatewayHealthMonitor'
+                });
+            }
+            
+            // ⚠️ WARNING: Slow response time (> 100ms)
+            if (result.latency > 100) {
+                await AdminNotificationService.sendAlert({
+                    code: 'REDIS_SLOW_RESPONSE',
+                    severity: 'WARNING',
+                    message: `Redis response time is slow (${result.latency}ms)`,
+                    details: {
+                        latency: result.latency,
+                        threshold: 100,
+                        recommendation: 'Check Redis connection or consider upgrading to faster tier'
+                    },
+                    source: 'AIGatewayHealthMonitor'
+                });
+            }
+            
             result.status = 'HEALTHY';
             
             console.log(`✅ [AI GATEWAY HEALTH] Redis status: HEALTHY (${result.latency}ms)`);
+            console.log(`📊 [AI GATEWAY HEALTH] Redis metrics:`, {
+                memory: `${result.metrics.memoryUsagePercent}%`,
+                clients: result.metrics.connectedClients,
+                hitRate: `${result.metrics.hitRate}%`,
+                opsPerSec: result.metrics.opsPerSec
+            });
             
         } catch (error) {
             console.error('❌ [AI GATEWAY HEALTH] Redis health check failed:', error.message);
