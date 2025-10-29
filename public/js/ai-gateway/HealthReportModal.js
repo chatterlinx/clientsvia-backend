@@ -25,9 +25,9 @@ class HealthReportModal {
         this.modal.id = 'health-report-modal';
         this.modal.className = 'hidden fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4';
         this.modal.innerHTML = `
-            <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col" style="height: 90vh;">
                 <!-- Header -->
-                <div class="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
+                <div class="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4 flex items-center justify-between flex-shrink-0">
                     <div class="flex items-center gap-3">
                         <i class="fas fa-file-medical-alt text-white text-2xl"></i>
                         <div>
@@ -41,7 +41,7 @@ class HealthReportModal {
                 </div>
 
                 <!-- Content -->
-                <div class="flex-1 overflow-y-auto p-6">
+                <div class="flex-1 overflow-y-auto p-6" style="min-height: 0;">
                     <!-- Loading State -->
                     <div id="report-loading" class="space-y-4">
                         <div class="animate-pulse bg-gray-200 rounded h-32"></div>
@@ -124,7 +124,7 @@ class HealthReportModal {
                 </div>
 
                 <!-- Footer -->
-                <div class="bg-gray-50 px-6 py-4 flex items-center justify-between border-t">
+                <div class="bg-gray-50 px-6 py-4 flex items-center justify-between border-t flex-shrink-0">
                     <span id="report-id" class="text-xs text-gray-500"></span>
                     <button onclick="window.healthReportModal.close()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors">
                         Close
