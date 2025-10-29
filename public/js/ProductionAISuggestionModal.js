@@ -57,7 +57,7 @@ class ProductionAISuggestionModal {
         } catch (error) {
             console.error('[PRODUCTION AI MODAL] Failed to load suggestion:', error);
             this.showErrorModal(error.message);
-            ToastManager.error(`❌ Failed to load suggestion: ${error.message}`);
+            window.toastManager.error(`❌ Failed to load suggestion: ${error.message}`);
         }
     }
 
@@ -315,7 +315,7 @@ class ProductionAISuggestionModal {
                         <i class="fas fa-file-alt text-gray-600 mr-2"></i>
                         📝 FULL CALL TRANSCRIPT
                     </h3>
-                    <button onclick="navigator.clipboard.writeText(\`${(callLog.transcript || '').replace(/`/g, '\\`')}\`); window.ToastManager.success('✅ Copied!')" class="px-3 py-1 bg-gray-200 text-gray-700 text-sm rounded hover:bg-gray-300 transition-colors">
+                    <button onclick="navigator.clipboard.writeText(\`${(callLog.transcript || '').replace(/`/g, '\\`')}\`); window.window.toastManager.success('✅ Copied!')" class="px-3 py-1 bg-gray-200 text-gray-700 text-sm rounded hover:bg-gray-300 transition-colors">
                         <i class="fas fa-copy mr-1"></i>
                         Copy
                     </button>
@@ -615,11 +615,11 @@ class ProductionAISuggestionModal {
     }
 
     async saveForLater(suggestionId) {
-        ToastManager.info('💾 Saved for later (stays in pending queue)');
+        window.toastManager.info('💾 Saved for later (stays in pending queue)');
     }
 
     async exportReport(suggestionId) {
-        ToastManager.info('📋 Export functionality coming soon!');
+        window.toastManager.info('📋 Export functionality coming soon!');
     }
 
     // ════════════════════════════════════════════════════════════════════════

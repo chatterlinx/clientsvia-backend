@@ -48,17 +48,17 @@ class ProductionAIManager {
             
             // Show toast
             if (result.status === 'HEALTHY') {
-                ToastManager.success(`✅ OpenAI Connected! Response time: ${result.responseTime}ms | Model: ${result.model || 'gpt-4'}`);
+                window.toastManager.success(`✅ OpenAI Connected! Response time: ${result.responseTime}ms | Model: ${result.model || 'gpt-4'}`);
             } else if (result.status === 'NOT_CONFIGURED') {
-                ToastManager.warning('⚠️ OpenAI Not Configured - Add OPENAI_API_KEY to environment variables');
+                window.toastManager.warning('⚠️ OpenAI Not Configured - Add OPENAI_API_KEY to environment variables');
             } else {
-                ToastManager.error(`❌ OpenAI Connection Failed: ${result.error || 'Unknown error'}`);
+                window.toastManager.error(`❌ OpenAI Connection Failed: ${result.error || 'Unknown error'}`);
             }
             
         } catch (error) {
             console.error('[PRODUCTION AI] OpenAI health check failed:', error);
             this.updateLLMStatus('ERROR', null, null);
-            ToastManager.error(`❌ Failed to check OpenAI connection: ${error.message}`);
+            window.toastManager.error(`❌ Failed to check OpenAI connection: ${error.message}`);
             
             // Report to notification center
             FrontendErrorReporter.reportError({
@@ -106,11 +106,11 @@ class ProductionAIManager {
                 }
             }
             
-            ToastManager.success('✅ Full health check complete - All systems checked');
+            window.toastManager.success('✅ Full health check complete - All systems checked');
             
         } catch (error) {
             console.error('[PRODUCTION AI] Full health check failed:', error);
-            ToastManager.error(`❌ Health check failed: ${error.message}`);
+            window.toastManager.error(`❌ Health check failed: ${error.message}`);
             
             FrontendErrorReporter.reportError({
                 page: 'Production AI',
@@ -127,7 +127,7 @@ class ProductionAIManager {
     async refreshHealthStatus() {
         console.log('[PRODUCTION AI] Refreshing health status...');
         await this.testOpenAIConnection();
-        ToastManager.success('✅ Health status refreshed');
+        window.toastManager.success('✅ Health status refreshed');
     }
 
     /**
@@ -300,7 +300,7 @@ class ProductionAIManager {
             
         } catch (error) {
             console.error('[PRODUCTION AI] Failed to load companies:', error);
-            ToastManager.error(`❌ Failed to load companies: ${error.message}`);
+            window.toastManager.error(`❌ Failed to load companies: ${error.message}`);
         }
     }
 
@@ -360,7 +360,7 @@ class ProductionAIManager {
             
         } catch (error) {
             console.error('[PRODUCTION AI] Failed to load company settings:', error);
-            ToastManager.error(`❌ Failed to load company settings: ${error.message}`);
+            window.toastManager.error(`❌ Failed to load company settings: ${error.message}`);
             
             FrontendErrorReporter.reportError({
                 page: 'Production AI',
@@ -418,7 +418,7 @@ class ProductionAIManager {
      */
     async saveGatekeeperSettings() {
         if (!this.currentCompanyId) {
-            ToastManager.error('❌ No company selected');
+            window.toastManager.error('❌ No company selected');
             return;
         }
         
@@ -454,14 +454,14 @@ class ProductionAIManager {
             
             console.log('[PRODUCTION AI] Settings saved:', result);
             
-            ToastManager.success('✅ Gatekeeper settings saved successfully!');
+            window.toastManager.success('✅ Gatekeeper settings saved successfully!');
             
             // Reload settings to show updated values
             await this.loadCompanySettings(this.currentCompanyId);
             
         } catch (error) {
             console.error('[PRODUCTION AI] Failed to save settings:', error);
-            ToastManager.error(`❌ Failed to save settings: ${error.message}`);
+            window.toastManager.error(`❌ Failed to save settings: ${error.message}`);
             
             FrontendErrorReporter.reportError({
                 page: 'Production AI',
@@ -622,7 +622,7 @@ class ProductionAIManager {
         } catch (error) {
             console.error('[PRODUCTION AI] Failed to load suggestions:', error);
             document.getElementById('suggestions-loading-skeleton').classList.add('hidden');
-            ToastManager.error(`❌ Failed to load suggestions: ${error.message}`);
+            window.toastManager.error(`❌ Failed to load suggestions: ${error.message}`);
         }
     }
 
@@ -702,7 +702,7 @@ class ProductionAIManager {
             window.suggestionAnalysisModal.open(suggestionId);
         } else {
             console.error('[PRODUCTION AI] SuggestionAnalysisModal not found');
-            ToastManager.error('❌ Suggestion modal not available');
+            window.toastManager.error('❌ Suggestion modal not available');
         }
     }
 
@@ -714,7 +714,7 @@ class ProductionAIManager {
         console.log('[PRODUCTION AI] Applying suggestion:', suggestionId);
         
         try {
-            ToastManager.info('⏳ Applying suggestion...');
+            window.toastManager.info('⏳ Applying suggestion...');
             
             const response = await fetch(`/api/admin/production-ai/suggestions/${suggestionId}/apply`, {
                 method: 'POST',
@@ -733,7 +733,7 @@ class ProductionAIManager {
             
             const result = await response.json();
             
-            ToastManager.success('✅ Suggestion applied successfully!');
+            window.toastManager.success('✅ Suggestion applied successfully!');
             
             // Reload suggestions
             await this.loadSuggestions();
@@ -742,7 +742,7 @@ class ProductionAIManager {
             
         } catch (error) {
             console.error('[PRODUCTION AI] Failed to apply suggestion:', error);
-            ToastManager.error(`❌ Failed to apply suggestion: ${error.message}`);
+            window.toastManager.error(`❌ Failed to apply suggestion: ${error.message}`);
             throw error;
         }
     }
@@ -769,14 +769,14 @@ class ProductionAIManager {
                 throw new Error(errorData.error || `HTTP ${response.status}`);
             }
             
-            ToastManager.success('✅ Suggestion ignored');
+            window.toastManager.success('✅ Suggestion ignored');
             
             // Reload suggestions
             await this.loadSuggestions();
             
         } catch (error) {
             console.error('[PRODUCTION AI] Failed to ignore suggestion:', error);
-            ToastManager.error(`❌ Failed to ignore suggestion: ${error.message}`);
+            window.toastManager.error(`❌ Failed to ignore suggestion: ${error.message}`);
             throw error;
         }
     }
@@ -814,7 +814,7 @@ class ProductionAIManager {
             
         } catch (error) {
             console.error('[PRODUCTION AI] Initialization failed:', error);
-            ToastManager.error(`❌ Production AI initialization failed: ${error.message}`);
+            window.toastManager.error(`❌ Production AI initialization failed: ${error.message}`);
         }
     }
 
