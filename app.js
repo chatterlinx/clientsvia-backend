@@ -224,8 +224,14 @@ try {
     logger.error('❌ Failed to load Admin Notification routes:', error);
 }
 
-// 🚀 AI GATEWAY - Routes will be added here after new system is built
-// (Placeholder for AI Gateway routes)
+// 🚀 AI GATEWAY - Health Monitoring & LLM Suggestion Routes
+try {
+    const aiGatewayRoutes = require('./routes/admin/aiGateway');
+    app.use('/api/admin/ai-gateway', aiGatewayRoutes);
+    logger.info('✅ AI Gateway routes registered - Health monitoring & LLM suggestions active');
+} catch (error) {
+    logger.error('❌ Failed to load AI Gateway routes:', error);
+}
 
 // Add simplified AI Agent Logic routes as fallback (no auth required for basic functionality)
 // try {
