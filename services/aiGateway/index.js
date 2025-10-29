@@ -12,6 +12,7 @@ const SuggestionApplier = require('./SuggestionApplier');
 const CallLogProcessor = require('./CallLogProcessor');
 const AlertEngine = require('./AlertEngine');
 const AnalyticsEngine = require('./AnalyticsEngine');
+const CostTracker = require('./CostTracker');
 
 module.exports = {
     HealthMonitor,
@@ -19,6 +20,7 @@ module.exports = {
     SuggestionApplier,
     CallLogProcessor,
     AlertEngine,
-    AnalyticsEngine
+    AnalyticsEngine,
+    CostTracker
 };
 

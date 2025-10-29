@@ -1115,6 +1115,97 @@ router.get('/analytics/dashboard', authenticateJWT, adminOnly, async (req, res) 
 });
 
 // ============================================================================
+// 💰 COST MANAGEMENT ENDPOINTS (Phase 4)
+// ============================================================================
+
+/**
+ * GET /api/admin/ai-gateway/costs/summary
+ * Get monthly cost summary
+ */
+router.get('/costs/summary', authenticateJWT, adminOnly, async (req, res) => {
+    const requestId = `costs-summary-${Date.now()}`;
+    console.log(`💰 [AI GATEWAY API] [${requestId}] Getting cost summary`);
+    
+    try {
+        const { CostTracker } = require('../../services/aiGateway');
+        
+        const summary = await CostTracker.getMonthlyCosts();
+        const budget = await CostTracker.checkBudget();
+        const forecast = await CostTracker.forecastMonthEnd();
+        
+        res.json({
+            success: true,
+            summary,
+            budget,
+            forecast,
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Cost summary: $${summary.totalCost}`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed:`, error.message);
+        res.status(500).json({ success: false, error: error.message, requestId });
+    }
+});
+
+/**
+ * GET /api/admin/ai-gateway/costs/trend
+ * Get daily cost trend
+ */
+router.get('/costs/trend', authenticateJWT, adminOnly, async (req, res) => {
+    const requestId = `costs-trend-${Date.now()}`;
+    const { days = 30 } = req.query;
+    console.log(`💰 [AI GATEWAY API] [${requestId}] Getting cost trend (${days} days)`);
+    
+    try {
+        const { CostTracker } = require('../../services/aiGateway');
+        
+        const trend = await CostTracker.getDailyCostTrend(parseInt(days));
+        
+        res.json({
+            success: true,
+            trend,
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Trend: ${trend.dataPoints.length} days`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed:`, error.message);
+        res.status(500).json({ success: false, error: error.message, requestId });
+    }
+});
+
+/**
+ * GET /api/admin/ai-gateway/costs/recommendations
+ * Get cost optimization recommendations
+ */
+router.get('/costs/recommendations', authenticateJWT, adminOnly, async (req, res) => {
+    const requestId = `costs-recommendations-${Date.now()}`;
+    console.log(`💰 [AI GATEWAY API] [${requestId}] Getting optimization recommendations`);
+    
+    try {
+        const { CostTracker } = require('../../services/aiGateway');
+        
+        const recommendations = await CostTracker.getOptimizationRecommendations();
+        
+        res.json({
+            success: true,
+            recommendations,
+            count: recommendations.length,
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Found ${recommendations.length} recommendations`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed:`, error.message);
+        res.status(500).json({ success: false, error: error.message, requestId });
+    }
+});
+
+// ============================================================================
 // 📦 EXPORT ROUTER
 // ============================================================================
 
