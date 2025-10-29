@@ -9,10 +9,12 @@
 const AIGatewayCallLog = require('./CallLog');
 const AIGatewaySuggestion = require('./Suggestion');
 const AIGatewayHealthLog = require('./HealthLog');
+const AIGatewayAlertRule = require('./AlertRule');
 
 module.exports = {
     AIGatewayCallLog,
     AIGatewaySuggestion,
-    AIGatewayHealthLog
+    AIGatewayHealthLog,
+    AIGatewayAlertRule
 };
 

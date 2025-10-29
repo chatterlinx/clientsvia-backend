@@ -869,6 +869,164 @@ router.post('/maintenance/cleanup',
 });
 
 // ============================================================================
+// 🚨 ALERT RULE MANAGEMENT ENDPOINTS (Phase 2)
+// ============================================================================
+
+/**
+ * GET /api/admin/ai-gateway/alert-rules
+ * Get all alert rules
+ */
+router.get('/alert-rules', authenticateJWT, adminOnly, async (req, res) => {
+    const requestId = `alert-rules-list-${Date.now()}`;
+    console.log(`🚨 [AI GATEWAY API] [${requestId}] Listing alert rules`);
+    
+    try {
+        const { AlertEngine } = require('../../services/aiGateway');
+        const { AIGatewayAlertRule } = require('../../models/aiGateway');
+        
+        const rules = await AIGatewayAlertRule.find().sort({ createdAt: -1 }).lean();
+        
+        res.json({
+            success: true,
+            rules: rules,
+            count: rules.length,
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Found ${rules.length} rules`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed:`, error.message);
+        res.status(500).json({ success: false, error: error.message, requestId });
+    }
+});
+
+/**
+ * POST /api/admin/ai-gateway/alert-rules
+ * Create new alert rule
+ */
+router.post('/alert-rules', authenticateJWT, adminOnly, strictLimiter, async (req, res) => {
+    const requestId = `alert-rules-create-${Date.now()}`;
+    console.log(`🚨 [AI GATEWAY API] [${requestId}] Creating alert rule`);
+    
+    try {
+        const { AIGatewayAlertRule } = require('../../models/aiGateway');
+        
+        const rule = await AIGatewayAlertRule.create({
+            ...req.body,
+            createdBy: req.user._id
+        });
+        
+        res.json({
+            success: true,
+            rule: rule,
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Rule created: ${rule.name}`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed:`, error.message);
+        res.status(500).json({ success: false, error: error.message, requestId });
+    }
+});
+
+/**
+ * PUT /api/admin/ai-gateway/alert-rules/:ruleId
+ * Update alert rule
+ */
+router.put('/alert-rules/:ruleId', authenticateJWT, adminOnly, strictLimiter, async (req, res) => {
+    const requestId = `alert-rules-update-${Date.now()}`;
+    const { ruleId } = req.params;
+    console.log(`🚨 [AI GATEWAY API] [${requestId}] Updating rule: ${ruleId}`);
+    
+    try {
+        const { AIGatewayAlertRule } = require('../../models/aiGateway');
+        
+        const rule = await AIGatewayAlertRule.findByIdAndUpdate(
+            ruleId,
+            { ...req.body, updatedAt: new Date() },
+            { new: true, runValidators: true }
+        );
+        
+        if (!rule) {
+            return res.status(404).json({ success: false, error: 'Rule not found', requestId });
+        }
+        
+        res.json({
+            success: true,
+            rule: rule,
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Rule updated: ${rule.name}`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed:`, error.message);
+        res.status(500).json({ success: false, error: error.message, requestId });
+    }
+});
+
+/**
+ * DELETE /api/admin/ai-gateway/alert-rules/:ruleId
+ * Delete alert rule
+ */
+router.delete('/alert-rules/:ruleId', authenticateJWT, adminOnly, strictLimiter, async (req, res) => {
+    const requestId = `alert-rules-delete-${Date.now()}`;
+    const { ruleId } = req.params;
+    console.log(`🚨 [AI GATEWAY API] [${requestId}] Deleting rule: ${ruleId}`);
+    
+    try {
+        const { AIGatewayAlertRule } = require('../../models/aiGateway');
+        
+        const rule = await AIGatewayAlertRule.findByIdAndDelete(ruleId);
+        
+        if (!rule) {
+            return res.status(404).json({ success: false, error: 'Rule not found', requestId });
+        }
+        
+        res.json({
+            success: true,
+            message: 'Rule deleted successfully',
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Rule deleted: ${rule.name}`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed:`, error.message);
+        res.status(500).json({ success: false, error: error.message, requestId });
+    }
+});
+
+/**
+ * POST /api/admin/ai-gateway/alert-rules/seed-defaults
+ * Seed default alert rules
+ */
+router.post('/alert-rules/seed-defaults', authenticateJWT, adminOnly, strictLimiter, async (req, res) => {
+    const requestId = `alert-rules-seed-${Date.now()}`;
+    console.log(`🚨 [AI GATEWAY API] [${requestId}] Seeding default rules`);
+    
+    try {
+        const { AlertEngine } = require('../../services/aiGateway');
+        
+        await AlertEngine.seedDefaultRules();
+        
+        res.json({
+            success: true,
+            message: 'Default rules seeded successfully',
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Default rules seeded`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed:`, error.message);
+        res.status(500).json({ success: false, error: error.message, requestId });
+    }
+});
+
+// ============================================================================
 // 📦 EXPORT ROUTER
 // ============================================================================
 

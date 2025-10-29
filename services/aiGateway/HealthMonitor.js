@@ -14,6 +14,7 @@ const logger = require('../../utils/logger');
 const AdminNotificationService = require('../AdminNotificationService');
 const AdminSettings = require('../../models/AdminSettings');
 const { AIGatewayHealthLog } = require('../../models/aiGateway');
+const AlertEngine = require('./AlertEngine');
 
 class AIGatewayHealthMonitor {
     // ========================================================================
@@ -471,6 +472,9 @@ class AIGatewayHealthMonitor {
             
             // Send notification if needed
             await this.sendNotificationIfNeeded(overallStatus, results);
+            
+            // Evaluate alert rules (Phase 2)
+            await AlertEngine.evaluateRules(results, triggeredBy);
             
             return { results, healthLog };
             
