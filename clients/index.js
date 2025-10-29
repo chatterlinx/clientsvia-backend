@@ -179,10 +179,9 @@ async function initializeRedis() {
   }
 }
 
-// Initialize Redis on module load
-initializeRedis().catch(err => {
-  logger.warn('⚠️ Redis initialization failed:', { timestamp: new Date().toISOString() });
-});
+// Redis initialization is handled explicitly in index.js during server startup
+// to ensure proper async sequencing with database and other services
+logger.info('📦 [REDIS] Redis client module loaded - waiting for explicit initialization');
 
 module.exports = {
   get redisClient() {

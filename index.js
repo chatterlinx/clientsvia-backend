@@ -558,7 +558,22 @@ async function startServer() {
         console.log('[Server] Step 3/7: Starting database connection...');
         const dbStart = Date.now();
         await connectDB();
-        console.log(`[Server] ✅ Step 2 COMPLETE: Database connected in ${Date.now() - dbStart}ms`);
+        console.log(`[Server] ✅ Step 3 COMPLETE: Database connected in ${Date.now() - dbStart}ms`);
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // STEP 3.5: CRITICAL - INITIALIZE REDIS BEFORE ANY HEALTH CHECKS
+        // ────────────────────────────────────────────────────────────────────────
+        console.log('[Server] Step 3.5/7: Initializing Redis client...');
+        const redisStart = Date.now();
+        try {
+            const { initializeRedis } = require('./clients');
+            await initializeRedis();
+            console.log(`[Server] ✅ Step 3.5 COMPLETE: Redis initialized in ${Date.now() - redisStart}ms`);
+        } catch (redisError) {
+            console.error('[Server] ❌ Redis initialization failed:', redisError.message);
+            console.warn('[Server] ⚠️ Server will continue without Redis caching (degraded mode)');
+            // Non-blocking: continue server startup even if Redis fails
+        }
         
         // 🔧 FIX: Ensure v2TradeCategory indexes are correct for multi-tenancy
         console.log('[Server] Step 2.5/7: Checking v2TradeCategory indexes...');
