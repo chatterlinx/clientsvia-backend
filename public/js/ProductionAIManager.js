@@ -61,12 +61,12 @@ class ProductionAIManager {
             window.toastManager.error(`❌ Failed to check OpenAI connection: ${error.message}`);
             
             // Report to notification center
-            FrontendErrorReporter.reportError({
-                page: 'Production AI',
-                action: 'test_openai_connection',
-                error: error.message,
-                severity: 'WARNING'
-            });
+//             FrontendErrorReporter.reportError({
+//                 page: 'Production AI',
+//                 action: 'test_openai_connection',
+//                 error: error.message,
+//                 severity: 'WARNING'
+//             });
         }
     }
 
@@ -112,12 +112,12 @@ class ProductionAIManager {
             console.error('[PRODUCTION AI] Full health check failed:', error);
             window.toastManager.error(`❌ Health check failed: ${error.message}`);
             
-            FrontendErrorReporter.reportError({
-                page: 'Production AI',
-                action: 'full_health_check',
-                error: error.message,
-                severity: 'WARNING'
-            });
+//             FrontendErrorReporter.reportError({
+//                 page: 'Production AI',
+//                 action: 'full_health_check',
+//                 error: error.message,
+//                 severity: 'WARNING'
+//             });
         }
     }
 
@@ -362,13 +362,13 @@ class ProductionAIManager {
             console.error('[PRODUCTION AI] Failed to load company settings:', error);
             window.toastManager.error(`❌ Failed to load company settings: ${error.message}`);
             
-            FrontendErrorReporter.reportError({
-                page: 'Production AI',
-                action: 'load_company_settings',
-                error: error.message,
-                companyId,
-                severity: 'WARNING'
-            });
+//             FrontendErrorReporter.reportError({
+//                 page: 'Production AI',
+//                 action: 'load_company_settings',
+//                 error: error.message,
+//                 companyId,
+//                 severity: 'WARNING'
+//             });
         }
     }
 
@@ -463,13 +463,13 @@ class ProductionAIManager {
             console.error('[PRODUCTION AI] Failed to save settings:', error);
             window.toastManager.error(`❌ Failed to save settings: ${error.message}`);
             
-            FrontendErrorReporter.reportError({
-                page: 'Production AI',
-                action: 'save_gatekeeper_settings',
-                error: error.message,
-                companyId: this.currentCompanyId,
-                severity: 'CRITICAL'
-            });
+//             FrontendErrorReporter.reportError({
+//                 page: 'Production AI',
+//                 action: 'save_gatekeeper_settings',
+//                 error: error.message,
+//                 companyId: this.currentCompanyId,
+//                 severity: 'CRITICAL'
+//             });
         }
     }
 
