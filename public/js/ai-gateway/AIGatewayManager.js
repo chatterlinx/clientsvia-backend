@@ -130,15 +130,21 @@ class AIGatewayManager {
         const button = document.getElementById('ai-gateway-test-openai-btn');
         if (button) {
             button.disabled = true;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing All Systems...';
         }
         
         try {
-            console.log('📡 [AI GATEWAY UI] CHECKPOINT 2: Calling API...');
+            console.log('📡 [AI GATEWAY UI] CHECKPOINT 2: Running FULL health check...');
             
             const token = localStorage.getItem('adminToken');
-            const response = await fetch('/api/admin/ai-gateway/health/openai', {
-                headers: { 'Authorization': `Bearer ${token}` }
+            
+            // Run FULL health check (not just OpenAI)
+            const response = await fetch('/api/admin/ai-gateway/health/run', {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
             });
             
             console.log(`📨 [AI GATEWAY UI] CHECKPOINT 3: Response received (${response.status})`);
@@ -150,40 +156,46 @@ class AIGatewayManager {
             const data = await response.json();
             
             if (data.success) {
-                this.updateHealthCard('openai', data.health);
+                // Update all health cards
+                this.updateHealthCard('openai', data.results.openai);
+                this.updateHealthCard('mongodb', data.results.mongodb);
+                this.updateHealthCard('redis', data.results.redis);
                 
-                // Store results for modal
+                // Store FULL results for modal
                 this.lastHealthResults = {
-                    openai: data.health,
+                    openai: data.results.openai,
+                    mongodb: data.results.mongodb,
+                    redis: data.results.redis,
+                    tier3System: data.results.tier3System,
                     timestamp: new Date()
                 };
                 
-                // Open health modal with results
+                // Open health modal with ALL results
                 if (window.healthModal) {
-                    window.healthModal.open(this.lastHealthResults);
+                    await window.healthModal.open(this.lastHealthResults);
                 } else {
-                    window.toastManager?.success(`OpenAI: ${data.health.status} (${data.health.responseTime}ms)`);
+                    window.toastManager?.success(`Health check complete: ${data.overallStatus}`);
                 }
                 
-                console.log('✅ [AI GATEWAY UI] OpenAI test complete, modal opened');
+                console.log('✅ [AI GATEWAY UI] Full health check complete, modal opened');
             }
             
         } catch (error) {
-            console.error('❌ [AI GATEWAY UI] OpenAI test failed:', error.message);
+            console.error('❌ [AI GATEWAY UI] Health check failed:', error.message);
             
             window.frontendErrorReporter?.reportError({
                 component: 'AIGateway',
-                action: 'testOpenAIConnection',
+                action: 'fullHealthCheck',
                 error: error,
                 severity: 'ERROR'
             });
             
-            window.toastManager?.error(`Failed to test OpenAI: ${error.message}`);
+            window.toastManager?.error(`Failed to run health check: ${error.message}`);
             
         } finally {
             if (button) {
                 button.disabled = false;
-                button.innerHTML = '<i class="fas fa-vial"></i> Test OpenAI Connection';
+                button.innerHTML = '<i class="fas fa-vial"></i> Run Health Check';
             }
         }
     }
