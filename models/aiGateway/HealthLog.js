@@ -113,6 +113,39 @@ const AIGatewayHealthLogSchema = new Schema({
     totalResponseTime: {
         type: Number,
         min: 0
+    },
+    
+    // ========================================================================
+    // 🔍 DIAGNOSTIC ANALYSIS (for detailed error reports)
+    // ========================================================================
+    
+    rootCauseAnalysis: {
+        type: String, // Human-readable explanation of what went wrong
+        default: null
+    },
+    
+    suggestedFixes: [{
+        type: String // Array of actionable fix suggestions
+    }],
+    
+    affectedSystems: [{
+        type: String // Which systems are impacted (openai, mongodb, redis, etc.)
+    }],
+    
+    diagnosticDetails: {
+        type: Schema.Types.Mixed, // Technical details for debugging
+        default: {}
+    },
+    
+    reportFormatted: {
+        type: String, // Pre-formatted report for copy-paste
+        default: null
+    },
+    
+    severity: {
+        type: String,
+        enum: ['INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        default: 'INFO'
     }
     
 }, {

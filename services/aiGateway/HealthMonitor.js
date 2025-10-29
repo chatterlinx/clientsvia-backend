@@ -15,6 +15,7 @@ const AdminNotificationService = require('../AdminNotificationService');
 const AdminSettings = require('../../models/AdminSettings');
 const { AIGatewayHealthLog } = require('../../models/aiGateway');
 const AlertEngine = require('./AlertEngine');
+const DiagnosticEngine = require('./DiagnosticEngine');
 
 class AIGatewayHealthMonitor {
     // ========================================================================
@@ -436,7 +437,20 @@ class AIGatewayHealthMonitor {
                 (results.mongodb.queryTime || 0) +
                 (results.redis.latency || 0);
             
-            // Save to database
+            // ────────────────────────────────────────────────────────────────────
+            // 🔬 RUN DIAGNOSTIC ANALYSIS
+            // ────────────────────────────────────────────────────────────────────
+            
+            console.log('🔬 [AI GATEWAY HEALTH] Running diagnostic analysis...');
+            const diagnostics = DiagnosticEngine.analyzeHealthCheck(results);
+            
+            // Add overallStatus to results for diagnostics
+            results.overallStatus = overallStatus;
+            
+            // ────────────────────────────────────────────────────────────────────
+            // 💾 SAVE TO DATABASE (with diagnostics)
+            // ────────────────────────────────────────────────────────────────────
+            
             const healthLog = await AIGatewayHealthLog.create({
                 timestamp: results.timestamp,
                 type,
@@ -462,7 +476,15 @@ class AIGatewayHealthMonitor {
                 tier3System: results.tier3System,
                 overallStatus,
                 unhealthyCount,
-                totalResponseTime
+                totalResponseTime,
+                
+                // ═══ DIAGNOSTIC FIELDS ═══
+                rootCauseAnalysis: diagnostics.rootCauseAnalysis,
+                suggestedFixes: diagnostics.suggestedFixes,
+                affectedSystems: diagnostics.affectedSystems,
+                diagnosticDetails: diagnostics.diagnosticDetails,
+                reportFormatted: diagnostics.reportFormatted,
+                severity: diagnostics.severity
             });
             
             console.log(`✅ [AI GATEWAY HEALTH] Health check logged: ${overallStatus} (${unhealthyCount} unhealthy)`);

@@ -177,7 +177,10 @@ class AIGatewayManager {
                     window.toastManager?.success(`Health check complete: ${data.overallStatus}`);
                 }
                 
-                console.log('✅ [AI GATEWAY UI] Full health check complete, modal opened');
+                // Auto-refresh health logs after successful check
+                this.loadHealthLogs();
+                
+                console.log('✅ [AI GATEWAY UI] Full health check complete, modal opened, logs refreshing');
             }
             
         } catch (error) {
@@ -198,6 +201,139 @@ class AIGatewayManager {
                 button.innerHTML = '<i class="fas fa-vial"></i> Run Health Check';
             }
         }
+    }
+    
+    // ========================================================================
+    // 📜 HEALTH LOGS METHODS
+    // ========================================================================
+    
+    async loadHealthLogs() {
+        console.log('📜 [AI GATEWAY UI] Loading health logs...');
+        
+        // Show loading state
+        const loading = document.getElementById('health-logs-loading');
+        const table = document.getElementById('health-logs-table');
+        const empty = document.getElementById('health-logs-empty');
+        
+        if (loading) loading.classList.remove('hidden');
+        if (table) table.classList.add('hidden');
+        if (empty) empty.classList.add('hidden');
+        
+        try {
+            const token = localStorage.getItem('adminToken');
+            const response = await fetch('/api/admin/ai-gateway/health/history?limit=10', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                if (data.history.length === 0) {
+                    // Show empty state
+                    if (loading) loading.classList.add('hidden');
+                    if (empty) empty.classList.remove('hidden');
+                } else {
+                    // Render logs
+                    this.renderHealthLogs(data.history);
+                    
+                    // Show table
+                    if (loading) loading.classList.add('hidden');
+                    if (table) table.classList.remove('hidden');
+                }
+                
+                console.log(`✅ [AI GATEWAY UI] Loaded ${data.history.length} health logs`);
+            }
+            
+        } catch (error) {
+            console.error('❌ [AI GATEWAY UI] Failed to load health logs:', error.message);
+            
+            window.frontendErrorReporter?.reportError({
+                component: 'AIGateway',
+                action: 'loadHealthLogs',
+                error: error,
+                severity: 'ERROR'
+            });
+            
+            // Show empty state on error
+            if (loading) loading.classList.add('hidden');
+            if (empty) empty.classList.remove('hidden');
+        }
+    }
+    
+    renderHealthLogs(logs) {
+        console.log(`🎨 [AI GATEWAY UI] Rendering ${logs.length} health logs...`);
+        
+        const tbody = document.getElementById('health-logs-tbody');
+        if (!tbody) {
+            console.error('❌ [AI GATEWAY UI] health-logs-tbody not found');
+            return;
+        }
+        
+        tbody.innerHTML = logs.map(log => {
+            // Determine status icon and color
+            let statusIcon, statusClass, statusText;
+            if (log.overallStatus === 'ALL_HEALTHY') {
+                statusIcon = '🟢';
+                statusClass = 'text-green-600';
+                statusText = 'HEALTHY';
+            } else if (log.overallStatus === 'DEGRADED') {
+                statusIcon = '🟡';
+                statusClass = 'text-yellow-600';
+                statusText = 'DEGRADED';
+            } else {
+                statusIcon = '🔴';
+                statusClass = 'text-red-600';
+                statusText = 'CRITICAL';
+            }
+            
+            // Format timestamp
+            const timestamp = new Date(log.timestamp).toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            // Format type
+            const typeClass = log.type === 'manual' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800';
+            
+            // Affected systems badge
+            const affectedCount = log.unhealthyCount || 0;
+            const systemsBadge = affectedCount > 0 ? 
+                `<span class="text-xs px-2 py-1 bg-red-100 text-red-800 rounded">${affectedCount} issue${affectedCount > 1 ? 's' : ''}</span>` :
+                `<span class="text-xs px-2 py-1 bg-green-100 text-green-800 rounded">All OK</span>`;
+            
+            // Duration
+            const duration = log.totalResponseTime ? `${log.totalResponseTime}ms` : 'N/A';
+            
+            return `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">${statusIcon}</span>
+                            <span class="font-medium ${statusClass}">${statusText}</span>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-600">${timestamp}</td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <span class="text-xs px-2 py-1 rounded font-medium ${typeClass}">${log.type.toUpperCase()}</span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">${systemsBadge}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-600">${duration}</td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <button onclick="window.healthReportModal.open('${log._id}')" class="px-3 py-1 bg-indigo-600 text-white text-xs font-medium rounded hover:bg-indigo-700 transition-colors">
+                            <i class="fas fa-eye mr-1"></i> View Report
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+        console.log('✅ [AI GATEWAY UI] Health logs rendered');
     }
     
     updateHealthDashboard(health) {

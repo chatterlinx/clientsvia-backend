@@ -322,6 +322,48 @@ router.get('/health/history', authenticateJWT, adminOnly, async (req, res) => {
 });
 
 /**
+ * GET /api/admin/ai-gateway/health/log/:id
+ * Get a single health log by ID (for detailed report modal)
+ */
+router.get('/health/log/:id', authenticateJWT, adminOnly, async (req, res) => {
+    const requestId = `health-log-detail-${Date.now()}`;
+    const { id } = req.params;
+    
+    console.log(`🔍 [AI GATEWAY API] [${requestId}] Health log detail requested: id=${id}`);
+    
+    try {
+        const { AIGatewayHealthLog } = require('../../models/aiGateway');
+        
+        const log = await AIGatewayHealthLog.findById(id).lean();
+        
+        if (!log) {
+            return res.status(404).json({
+                success: false,
+                error: 'Health log not found',
+                requestId
+            });
+        }
+        
+        res.json({
+            success: true,
+            log,
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Returned health log detail`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed to get health log:`, error.message);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to load health log',
+            details: error.message,
+            requestId
+        });
+    }
+});
+
+/**
  * GET /api/admin/ai-gateway/health/stats
  * Get health statistics (uptime %, response times, trends)
  */
