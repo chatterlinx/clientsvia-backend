@@ -295,6 +295,20 @@ Time: ${new Date().toLocaleTimeString()}
         
         for (const contact of callContacts) {
             try {
+                // ────────────────────────────────────────────────────────────────────
+                // SAFETY CHECK: Skip if phone number is missing or invalid
+                // ────────────────────────────────────────────────────────────────────
+                if (!contact.phoneNumber || typeof contact.phoneNumber !== 'string' || contact.phoneNumber.trim() === '') {
+                    logger.warn(`⚠️ [ESCALATION CALL] Skipping ${contact.name || 'contact'} - no valid phone number`);
+                    results.push({
+                        recipient: contact.phoneNumber || 'N/A',
+                        recipientName: contact.name || 'Unknown',
+                        status: 'skipped',
+                        error: 'No valid phone number configured'
+                    });
+                    continue;
+                }
+                
                 logger.debug(`📞 [ESCALATION CALL] Calling ${contact.name} (${contact.phoneNumber})...`);
                 
                 // Use Twilio Voice API to make automated call

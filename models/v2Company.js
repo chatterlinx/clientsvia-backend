@@ -305,12 +305,12 @@ const aiAgentLogicSchema = new mongoose.Schema({
     },
     
     // ════════════════════════════════════════════════════════════════════════════════
-    // 🚀 PRODUCTION AI - ENTERPRISE-GRADE GATEKEEPER SYSTEM
+    // 🤖 AI GATEWAY - 3-TIER ROUTING SYSTEM
     // ════════════════════════════════════════════════════════════════════════════════
     // PURPOSE: Control 3-tier routing, budget management, fallback responses for 100+ companies
-    // LOCATION: Production AI tab (admin-production-ai.html)
+    // LOCATION: Global AI Brain → Overview → AI Gateway sub-tab
     // ARCHITECTURE: Sub-50ms performance, Redis-cached, multi-tenant isolated
-    // DOCUMENTATION: /docs/PRODUCTION-AI-CORE-INTEGRATION.md
+    // DOCUMENTATION: /docs/ai-gateway/
     // ════════════════════════════════════════════════════════════════════════════════
     
     // ────────────────────────────────────────────────────────────────────────────────
@@ -539,7 +539,7 @@ const aiAgentLogicSchema = new mongoose.Schema({
             default: true,
             // If true: System analyzes Tier 3 (LLM) calls to detect patterns
             // If false: No automatic learning (manual scenario creation only)
-            // Location: Production AI tab → Learning Settings
+            // Location: AI Gateway tab → Learning Settings
         },
         
         // ────────────────────────────────────────────────────────────────────────
