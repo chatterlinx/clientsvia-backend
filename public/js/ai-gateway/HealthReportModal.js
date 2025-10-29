@@ -392,9 +392,18 @@ class HealthReportModal {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// 🌐 GLOBAL INITIALIZATION
+// 🌐 GLOBAL INITIALIZATION (with DOM ready check)
 // ────────────────────────────────────────────────────────────────────────────
 
-window.healthReportModal = new HealthReportModal();
-console.log('✅ [HEALTH REPORT MODAL] Global instance created');
+if (document.readyState === 'loading') {
+    // DOM is still loading, wait for it
+    document.addEventListener('DOMContentLoaded', () => {
+        window.healthReportModal = new HealthReportModal();
+        console.log('✅ [HEALTH REPORT MODAL] Global instance created (after DOM ready)');
+    });
+} else {
+    // DOM is already ready, initialize immediately
+    window.healthReportModal = new HealthReportModal();
+    console.log('✅ [HEALTH REPORT MODAL] Global instance created (DOM already ready)');
+}
 

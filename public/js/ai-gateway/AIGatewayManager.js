@@ -325,7 +325,7 @@ class AIGatewayManager {
                     <td class="px-4 py-3 whitespace-nowrap">${systemsBadge}</td>
                     <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-600">${duration}</td>
                     <td class="px-4 py-3 whitespace-nowrap">
-                        <button onclick="window.healthReportModal.open('${log._id}')" class="px-3 py-1 bg-indigo-600 text-white text-xs font-medium rounded hover:bg-indigo-700 transition-colors">
+                        <button onclick="window.healthReportModal && window.healthReportModal.open('${log._id}')" class="px-3 py-1 bg-indigo-600 text-white text-xs font-medium rounded hover:bg-indigo-700 transition-colors">
                             <i class="fas fa-eye mr-1"></i> View Report
                         </button>
                     </td>
