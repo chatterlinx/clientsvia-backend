@@ -127,6 +127,283 @@ router.get('/health/full', authenticateJWT, adminOnly, async (req, res) => {
 });
 
 // ============================================================================
+// ⚙️ HEALTH CONFIGURATION & HISTORY ENDPOINTS (Enterprise)
+// ============================================================================
+
+/**
+ * GET /api/admin/ai-gateway/health/config
+ * Get current auto-ping configuration from AdminSettings
+ */
+router.get('/health/config', authenticateJWT, adminOnly, async (req, res) => {
+    const requestId = `health-config-${Date.now()}`;
+    console.log(`⚙️ [AI GATEWAY API] [${requestId}] Health config requested by ${req.user.email}`);
+    
+    try {
+        const AdminSettings = require('../../models/AdminSettings');
+        let settings = await AdminSettings.findOne();
+        
+        if (!settings || !settings.aiGatewayHealthCheck) {
+            // Return defaults if not configured yet
+            return res.json({
+                success: true,
+                config: {
+                    enabled: true,
+                    interval: { value: 1, unit: 'hours' },
+                    notificationMode: 'errors_only',
+                    lastCheck: null,
+                    nextScheduledCheck: null,
+                    stats: {
+                        totalChecks: 0,
+                        healthyChecks: 0,
+                        errorChecks: 0,
+                        lastError: null
+                    }
+                },
+                requestId
+            });
+        }
+        
+        res.json({
+            success: true,
+            config: settings.aiGatewayHealthCheck,
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Config: ${settings.aiGatewayHealthCheck.interval.value} ${settings.aiGatewayHealthCheck.interval.unit}`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed to get health config:`, error.message);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to load health configuration',
+            details: error.message,
+            requestId
+        });
+    }
+});
+
+/**
+ * PUT /api/admin/ai-gateway/health/config
+ * Update auto-ping configuration (interval, notification mode)
+ */
+router.put('/health/config', authenticateJWT, adminOnly, strictLimiter, async (req, res) => {
+    const requestId = `health-config-update-${Date.now()}`;
+    const { intervalValue, intervalUnit, notificationMode } = req.body;
+    
+    console.log(`⚙️ [AI GATEWAY API] [${requestId}] Updating health config: ${intervalValue} ${intervalUnit}, notify: ${notificationMode}`);
+    
+    try {
+        // Validation
+        if (!intervalValue || intervalValue < 1 || intervalValue > 1440) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid interval value (must be 1-1440)',
+                requestId
+            });
+        }
+        
+        if (!['minutes', 'hours', 'days'].includes(intervalUnit)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid interval unit (must be minutes, hours, or days)',
+                requestId
+            });
+        }
+        
+        if (!['never', 'errors_only', 'always'].includes(notificationMode)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid notification mode (must be never, errors_only, or always)',
+                requestId
+            });
+        }
+        
+        // Update via HealthMonitor (handles rescheduling)
+        await HealthMonitor.updateInterval(intervalValue, intervalUnit, notificationMode);
+        
+        res.json({
+            success: true,
+            message: 'Health check configuration updated successfully',
+            config: {
+                interval: { value: intervalValue, unit: intervalUnit },
+                notificationMode
+            },
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Config updated successfully`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed to update config:`, error.message);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update health configuration',
+            details: error.message,
+            requestId
+        });
+    }
+});
+
+/**
+ * POST /api/admin/ai-gateway/health/run
+ * Run manual health check and save to history
+ */
+router.post('/health/run', authenticateJWT, adminOnly, async (req, res) => {
+    const requestId = `health-run-${Date.now()}`;
+    console.log(`🏥 [AI GATEWAY API] [${requestId}] Manual health check requested by ${req.user.email}`);
+    
+    try {
+        // Run health check and save to database
+        const { results, healthLog } = await HealthMonitor.runHealthCheckAndLog('manual', req.user._id.toString());
+        
+        res.json({
+            success: true,
+            results: {
+                timestamp: results.timestamp,
+                openai: results.openai,
+                mongodb: results.mongodb,
+                redis: results.redis,
+                tier3System: results.tier3System
+            },
+            overallStatus: healthLog.overallStatus,
+            logId: healthLog._id,
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Manual check complete: ${healthLog.overallStatus}`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed to run health check:`, error.message);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to run health check',
+            details: error.message,
+            requestId
+        });
+    }
+});
+
+/**
+ * GET /api/admin/ai-gateway/health/history
+ * Get health check history (last N checks)
+ */
+router.get('/health/history', authenticateJWT, adminOnly, async (req, res) => {
+    const requestId = `health-history-${Date.now()}`;
+    const { limit = 10, type = null } = req.query;
+    
+    console.log(`📜 [AI GATEWAY API] [${requestId}] Health history requested: limit=${limit}, type=${type}`);
+    
+    try {
+        const { AIGatewayHealthLog } = require('../../models/aiGateway');
+        
+        const logs = await AIGatewayHealthLog.getRecent({
+            limit: parseInt(limit),
+            type: type || null
+        });
+        
+        res.json({
+            success: true,
+            history: logs,
+            count: logs.length,
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Returned ${logs.length} history entries`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed to get history:`, error.message);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to load health history',
+            details: error.message,
+            requestId
+        });
+    }
+});
+
+/**
+ * GET /api/admin/ai-gateway/health/stats
+ * Get health statistics (uptime %, response times, trends)
+ */
+router.get('/health/stats', authenticateJWT, adminOnly, async (req, res) => {
+    const requestId = `health-stats-${Date.now()}`;
+    const { days = 7, service = null } = req.query;
+    
+    console.log(`📊 [AI GATEWAY API] [${requestId}] Health stats requested: days=${days}, service=${service}`);
+    
+    try {
+        const { AIGatewayHealthLog } = require('../../models/aiGateway');
+        
+        const stats = await AIGatewayHealthLog.getStats(parseInt(days));
+        
+        // Get response time stats if specific service requested
+        let responseTimeStats = null;
+        if (service && ['openai', 'mongodb', 'redis'].includes(service)) {
+            responseTimeStats = await AIGatewayHealthLog.getResponseTimeStats(service, parseInt(days));
+        }
+        
+        res.json({
+            success: true,
+            stats,
+            responseTimeStats,
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Stats: ${stats.totalChecks} checks over ${days} days`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed to get stats:`, error.message);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to load health statistics',
+            details: error.message,
+            requestId
+        });
+    }
+});
+
+/**
+ * POST /api/admin/ai-gateway/health/enable
+ * Enable or disable auto-ping
+ */
+router.post('/health/enable', authenticateJWT, adminOnly, strictLimiter, async (req, res) => {
+    const requestId = `health-enable-${Date.now()}`;
+    const { enabled } = req.body;
+    
+    console.log(`⚙️ [AI GATEWAY API] [${requestId}] ${enabled ? 'Enabling' : 'Disabling'} auto-ping`);
+    
+    try {
+        if (typeof enabled !== 'boolean') {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid enabled value (must be boolean)',
+                requestId
+            });
+        }
+        
+        await HealthMonitor.setEnabled(enabled);
+        
+        res.json({
+            success: true,
+            message: `Auto-ping ${enabled ? 'enabled' : 'disabled'} successfully`,
+            enabled,
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Auto-ping ${enabled ? 'enabled' : 'disabled'}`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed to set enabled:`, error.message);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update auto-ping status',
+            details: error.message,
+            requestId
+        });
+    }
+});
+
+// ============================================================================
 // 💡 SUGGESTION MANAGEMENT ENDPOINTS
 // ============================================================================
 
