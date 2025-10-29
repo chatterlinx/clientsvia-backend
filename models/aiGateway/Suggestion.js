@@ -24,7 +24,6 @@ const AIGatewaySuggestionSchema = new Schema({
         enum: ['filler-words', 'synonym', 'keywords', 'negative-keywords', 'missing-scenario'],
         required: true,
         index: true,
-        description: 'Type of improvement suggested'
     },
     
     templateId: {
@@ -32,20 +31,17 @@ const AIGatewaySuggestionSchema = new Schema({
         ref: 'GlobalInstantResponseTemplate',
         required: true,
         index: true,
-        description: 'Template this suggestion applies to'
     },
     
     companyId: {
         type: Schema.Types.ObjectId,
         ref: 'v2Company',
-        description: 'Company (if company-specific suggestion)'
     },
     
     callLogId: {
         type: Schema.Types.ObjectId,
         ref: 'AIGatewayCallLog',
         required: true,
-        description: 'Source call that triggered this suggestion'
     },
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -57,7 +53,6 @@ const AIGatewaySuggestionSchema = new Schema({
         enum: ['low', 'medium', 'high'],
         default: 'medium',
         index: true,
-        description: 'Suggestion priority (based on impact)'
     },
     
     confidence: {
@@ -65,7 +60,6 @@ const AIGatewaySuggestionSchema = new Schema({
         min: 0,
         max: 1,
         default: 0.5,
-        description: 'LLM confidence in this suggestion'
     },
     
     status: {
@@ -73,7 +67,6 @@ const AIGatewaySuggestionSchema = new Schema({
         enum: ['pending', 'applied', 'ignored', 'saved'],
         default: 'pending',
         index: true,
-        description: 'Current status of suggestion'
     },
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -83,18 +76,15 @@ const AIGatewaySuggestionSchema = new Schema({
     llmReasoning: {
         type: String,
         required: true,
-        description: 'Detailed LLM explanation for this suggestion'
     },
     
     llmModel: {
         type: String,
-        description: 'LLM model used (e.g., gpt-4-turbo)'
     },
     
     llmCost: {
         type: Number,
         default: 0,
-        description: 'Cost of LLM analysis'
     },
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -109,7 +99,6 @@ const AIGatewaySuggestionSchema = new Schema({
         estimatedAnnualSavings: { type: Number, default: 0 },
         performanceGain: { type: Number, default: 0 },
         affectedCalls: { type: Number, default: 0 },
-        description: 'Estimated business impact if applied'
     },
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -119,7 +108,6 @@ const AIGatewaySuggestionSchema = new Schema({
     // For type='filler-words'
     fillerWords: {
         type: [String],
-        description: 'Filler words to add to template'
     },
     
     // For type='synonym'
@@ -131,66 +119,54 @@ const AIGatewaySuggestionSchema = new Schema({
             technical: String,
             occurrences: Number
         }],
-        description: 'Synonym mapping (colloquial → technical)'
     },
     
     // For type='keywords' or 'negative-keywords'
     scenarioId: {
         type: Schema.Types.ObjectId,
         ref: 'GlobalInstantResponseScenario',
-        description: 'Scenario to enhance'
     },
     
     categoryId: {
         type: Schema.Types.ObjectId,
         ref: 'GlobalInstantResponseCategory',
-        description: 'Category this scenario belongs to'
     },
     
     suggestedKeywords: {
         type: [String],
-        description: 'Keywords to add to scenario'
     },
     
     suggestedNegativeKeywords: {
         type: [String],
-        description: 'Negative keywords to add to scenario'
     },
     
     // For type='missing-scenario'
     suggestedScenarioName: {
         type: String,
-        description: 'Name for new scenario'
     },
     
     suggestedCategory: {
         type: String,
-        description: 'Category for new scenario'
     },
     
     suggestedKeywordsForScenario: {
         type: [String],
-        description: 'Keywords for new scenario'
     },
     
     suggestedNegativeKeywordsForScenario: {
         type: [String],
-        description: 'Negative keywords for new scenario'
     },
     
     suggestedResponse: {
         type: String,
-        description: 'Response template for new scenario'
     },
     
     suggestedActionHook: {
         type: String,
-        description: 'Action hook for new scenario'
     },
     
     suggestedBehavior: {
         type: String,
-        description: 'Behavior for new scenario'
     },
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -210,24 +186,20 @@ const AIGatewaySuggestionSchema = new Schema({
     
     appliedAt: {
         type: Date,
-        description: 'When suggestion was applied'
     },
     
     appliedBy: {
         type: Schema.Types.ObjectId,
         ref: 'v2User',
-        description: 'Admin who applied this suggestion'
     },
     
     ignoredAt: {
         type: Date,
-        description: 'When suggestion was ignored'
     },
     
     ignoredBy: {
         type: Schema.Types.ObjectId,
         ref: 'v2User',
-        description: 'Admin who ignored this suggestion'
     },
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -237,7 +209,6 @@ const AIGatewaySuggestionSchema = new Schema({
     relatedSuggestions: {
         type: [Schema.Types.ObjectId],
         ref: 'AIGatewaySuggestion',
-        description: 'Other suggestions with similar patterns'
     }
 }, {
     timestamps: false, // Using manual timestamp fields

@@ -10,8 +10,6 @@
 const OpenAI = require('openai');
 const { AIGatewayCallLog, AIGatewaySuggestion } = require('../../models/aiGateway');
 const Template = require('../../models/GlobalInstantResponseTemplate');
-const Category = require('../../models/GlobalInstantResponseCategory');
-const Scenario = require('../../models/GlobalInstantResponseScenario');
 const AdminNotificationService = require('../AdminNotificationService');
 const logger = require('../../utils/logger');
 
@@ -72,8 +70,8 @@ class LLMAnalyzer {
                 throw new Error(`Template not found: ${callLog.templateId}`);
             }
             
-            const categories = await Category.find({ templateId: template._id });
-            const scenarios = await Scenario.find({ templateId: template._id });
+            const categories = template.categories || [];
+            const scenarios = categories.flatMap(cat => cat.scenarios || []);
             
             console.log(`✅ [AI GATEWAY ANALYZER] Loaded template "${template.name}" with ${scenarios.length} scenarios`);
             
@@ -313,17 +311,24 @@ Return ONLY valid JSON. Be specific and actionable.`;
         // Keyword Enhancements
         if (analysis.keywordEnhancements && analysis.keywordEnhancements.length > 0) {
             for (const enhancement of analysis.keywordEnhancements) {
-                const scenario = await Scenario.findOne({ 
-                    templateId: template._id, 
-                    name: enhancement.scenarioName 
-                });
+                // Find scenario in template's embedded arrays
+                let scenario = null;
+                let categoryId = null;
+                for (const cat of template.categories) {
+                    const found = cat.scenarios.find(s => s.name === enhancement.scenarioName);
+                    if (found) {
+                        scenario = found;
+                        categoryId = cat._id;
+                        break;
+                    }
+                }
                 
                 if (scenario) {
                     const suggestion = await AIGatewaySuggestion.create({
                         type: 'keywords',
                         templateId: template._id,
                         scenarioId: scenario._id,
-                        categoryId: scenario.categoryId,
+                        categoryId: categoryId,
                         callLogId: callLog._id,
                         priority: 'medium',
                         confidence: 0.75,

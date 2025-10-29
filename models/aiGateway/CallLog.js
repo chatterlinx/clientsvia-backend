@@ -25,7 +25,6 @@ const AIGatewayCallLogSchema = new Schema({
         ref: 'v2Company',
         required: true,
         index: true,
-        description: 'Company that received this call'
     },
     
     templateId: {
@@ -33,19 +32,16 @@ const AIGatewayCallLogSchema = new Schema({
         ref: 'GlobalInstantResponseTemplate',
         required: true,
         index: true,
-        description: 'AI template used for this call'
     },
     
     categoryId: {
         type: Schema.Types.ObjectId,
         ref: 'GlobalInstantResponseCategory',
-        description: 'Matched category (if any)'
     },
     
     scenarioId: {
         type: Schema.Types.ObjectId,
         ref: 'GlobalInstantResponseScenario',
-        description: 'Matched scenario (if any)'
     },
     
     callId: {
@@ -53,7 +49,6 @@ const AIGatewayCallLogSchema = new Schema({
         required: true,
         unique: true,
         index: true,
-        description: 'Unique call identifier (Twilio SID)'
     },
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -62,12 +57,10 @@ const AIGatewayCallLogSchema = new Schema({
     
     callerPhone: {
         type: String,
-        description: 'Caller phone number (normalized)'
     },
     
     callerName: {
         type: String,
-        description: 'Caller name (if captured)'
     },
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -77,24 +70,20 @@ const AIGatewayCallLogSchema = new Schema({
     transcript: {
         type: String,
         required: true,
-        description: 'Full conversation transcript (caller + agent)'
     },
     
     userInput: {
         type: String,
         required: true,
-        description: 'Raw user input (before processing)'
     },
     
     processedInput: {
         type: String,
-        description: 'User input after filler removal & synonym mapping'
     },
     
     finalResponse: {
         type: String,
         required: true,
-        description: 'AI agent response sent to caller'
     },
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -106,7 +95,6 @@ const AIGatewayCallLogSchema = new Schema({
         enum: ['Tier1', 'Tier2', 'Tier3', 'Fallback'],
         required: true,
         index: true,
-        description: 'Which tier successfully matched'
     },
     
     tier1Result: {
@@ -116,7 +104,6 @@ const AIGatewayCallLogSchema = new Schema({
         matchedScenario: { type: String },
         reason: { type: String },
         responseTime: { type: Number },
-        description: 'Tier 1 (Rule-Based) matching result'
     },
     
     tier2Result: {
@@ -126,7 +113,6 @@ const AIGatewayCallLogSchema = new Schema({
         matchedScenario: { type: String },
         reason: { type: String },
         responseTime: { type: Number },
-        description: 'Tier 2 (Semantic) matching result'
     },
     
     tier3Result: {
@@ -140,7 +126,6 @@ const AIGatewayCallLogSchema = new Schema({
         llmReasoning: { type: String },
         reason: { type: String },
         responseTime: { type: Number },
-        description: 'Tier 3 (LLM Fallback) matching result'
     },
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -150,13 +135,11 @@ const AIGatewayCallLogSchema = new Schema({
     totalResponseTime: {
         type: Number,
         required: true,
-        description: 'Total time to respond (milliseconds)'
     },
     
     cost: {
         type: Number,
         default: 0,
-        description: 'Total cost (LLM + API calls)'
     },
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -167,37 +150,31 @@ const AIGatewayCallLogSchema = new Schema({
         type: Boolean,
         default: false,
         index: true,
-        description: 'True if call came from Test Pilot'
     },
     
     analyzed: {
         type: Boolean,
         default: false,
         index: true,
-        description: 'True if LLMAnalyzer has processed this call'
     },
     
     analysisAttempts: {
         type: Number,
         default: 0,
-        description: 'Number of times analysis was attempted'
     },
     
     analysisError: {
         type: String,
-        description: 'Error message if analysis failed'
     },
     
     suggestionsGenerated: {
         type: Boolean,
         default: false,
-        description: 'True if suggestions were created from this call'
     },
     
     suggestionCount: {
         type: Number,
         default: 0,
-        description: 'Number of suggestions generated from this call'
     },
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -208,12 +185,10 @@ const AIGatewayCallLogSchema = new Schema({
         type: Date,
         default: Date.now,
         index: true,
-        description: 'When this call occurred'
     },
     
     analyzedAt: {
         type: Date,
-        description: 'When LLM analysis completed'
     },
     
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -222,7 +197,6 @@ const AIGatewayCallLogSchema = new Schema({
     
     metadata: {
         type: Schema.Types.Mixed,
-        description: 'Additional call metadata (platform, device, etc.)'
     }
 }, {
     timestamps: false, // Using manual timestamp field

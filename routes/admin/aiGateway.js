@@ -11,9 +11,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
-const { requireIdempotency } = require('../../middleware/validate');
-const { captureAuditInfo } = require('../../middleware/audit');
-const { configWriteRateLimit } = require('../../middleware/rateLimit');
+const { strictLimiter } = require('../../middleware/rateLimit');
 const logger = require('../../utils/logger');
 
 // Middleware alias for consistency
@@ -283,8 +281,7 @@ router.get('/suggestions/:suggestionId/details', authenticateJWT, adminOnly, asy
 router.post('/suggestions/:suggestionId/apply', 
     authenticateJWT, 
     adminOnly, 
-    captureAuditInfo, 
-    configWriteRateLimit, 
+    strictLimiter, 
     async (req, res) => {
     
     const requestId = `apply-${Date.now()}`;
@@ -320,7 +317,6 @@ router.post('/suggestions/:suggestionId/apply',
 router.post('/suggestions/:suggestionId/ignore', 
     authenticateJWT, 
     adminOnly, 
-    captureAuditInfo, 
     async (req, res) => {
     
     const requestId = `ignore-${Date.now()}`;
@@ -365,8 +361,7 @@ router.post('/suggestions/:suggestionId/ignore',
 router.post('/suggestions/apply-batch', 
     authenticateJWT, 
     adminOnly, 
-    captureAuditInfo, 
-    configWriteRateLimit, 
+    strictLimiter, 
     async (req, res) => {
     
     const requestId = `batch-${Date.now()}`;
