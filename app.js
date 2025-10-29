@@ -224,14 +224,8 @@ try {
     logger.error('❌ Failed to load Admin Notification routes:', error);
 }
 
-// 🚀 PRODUCTION AI - Gatekeeper & Health Monitoring Routes
-try {
-    const productionAIRoutes = require('./routes/admin/productionAI');
-    app.use('/api/admin/production-ai', productionAIRoutes);
-    logger.info('✅ Production AI routes registered - Gatekeeper & health monitoring active');
-} catch (error) {
-    logger.error('❌ Failed to load Production AI routes:', error);
-}
+// 🚀 AI GATEWAY - Routes will be added here after new system is built
+// (Placeholder for AI Gateway routes)
 
 // Add simplified AI Agent Logic routes as fallback (no auth required for basic functionality)
 // try {
