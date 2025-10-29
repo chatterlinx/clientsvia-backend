@@ -310,7 +310,7 @@ class AIGatewayManager {
     renderSuggestions() {
         console.log(`🎨 [AI GATEWAY UI] Rendering ${this.suggestions.length} suggestions...`);
         
-        const container = document.getElementById('ai-gateway-suggestions-container');
+        const container = document.getElementById('suggestions-container');
         if (!container) {
             console.warn('⚠️ [AI GATEWAY UI] Suggestions container not found');
             return;

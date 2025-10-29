@@ -9,7 +9,7 @@
 
 const OpenAI = require('openai');
 const mongoose = require('mongoose');
-const redis = require('../../db').redisClient;
+const { redisClient } = require('../../db');
 const logger = require('../../utils/logger');
 const AdminNotificationService = require('../AdminNotificationService');
 
@@ -100,7 +100,7 @@ class AIGatewayHealthMonitor {
             // NOTIFICATION: Send warning if slow
             // ────────────────────────────────────────────────────────────────
             if (result.responseTime > 5000) {
-                await AdminNotificationService.sendNotification({
+                await AdminNotificationService.sendAlert({
                     code: 'AI_GATEWAY_OPENAI_SLOW',
                     severity: 'WARNING',
                     message: `OpenAI response time exceeded 5 seconds: ${result.responseTime}ms`,
@@ -132,7 +132,7 @@ class AIGatewayHealthMonitor {
             // ────────────────────────────────────────────────────────────────
             // NOTIFICATION: Send critical alert
             // ────────────────────────────────────────────────────────────────
-            await AdminNotificationService.sendNotification({
+            await AdminNotificationService.sendAlert({
                 code: 'AI_GATEWAY_OPENAI_UNHEALTHY',
                 severity: 'CRITICAL',
                 message: `OpenAI health check failed: ${error.message}`,
@@ -179,7 +179,7 @@ class AIGatewayHealthMonitor {
             result.status = 'UNHEALTHY';
             result.error = error.message;
             
-            await AdminNotificationService.sendNotification({
+            await AdminNotificationService.sendAlert({
                 code: 'AI_GATEWAY_MONGODB_UNHEALTHY',
                 severity: 'CRITICAL',
                 message: `MongoDB health check failed: ${error.message}`,
@@ -208,8 +208,13 @@ class AIGatewayHealthMonitor {
         try {
             const startTime = Date.now();
             
+            // Check if Redis client exists
+            if (!redisClient) {
+                throw new Error('Redis client not initialized');
+            }
+            
             // Simple ping to Redis
-            await redis.ping();
+            await redisClient.ping();
             
             result.latency = Date.now() - startTime;
             result.status = 'HEALTHY';
@@ -221,7 +226,7 @@ class AIGatewayHealthMonitor {
             result.status = 'UNHEALTHY';
             result.error = error.message;
             
-            await AdminNotificationService.sendNotification({
+            await AdminNotificationService.sendAlert({
                 code: 'AI_GATEWAY_REDIS_UNHEALTHY',
                 severity: 'CRITICAL',
                 message: `Redis health check failed: ${error.message}`,
