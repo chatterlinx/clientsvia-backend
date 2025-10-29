@@ -651,6 +651,19 @@ async function startServer() {
             // Non-blocking: continue server startup even if health monitor fails
         }
         
+        // ────────────────────────────────────────────────────────────────────────
+        // STEP 6.6: START PRODUCTION AI SUGGESTION CRON JOB (5-minute analysis)
+        // ────────────────────────────────────────────────────────────────────────
+        try {
+            console.log('[Server] 🚀 Initializing Production AI Suggestion Cron Job...');
+            const ProductionAISuggestionCron = require('./services/ProductionAISuggestionCron');
+            ProductionAISuggestionCron.start();
+            console.log('[Server] ✅ Production AI Suggestion Cron Job initialized (runs every 5 minutes)');
+        } catch (error) {
+            console.error('[Server] ❌ Failed to initialize Production AI Suggestion Cron Job:', error.message);
+            // Non-blocking: continue server startup even if cron fails
+        }
+        
         return app.listen(PORT, '0.0.0.0', () => {
             console.log(`[Server] ✅ Step 6 COMPLETE: HTTP server bound in ${Date.now() - serverStart}ms`);
             console.log(`🎉 SERVER FULLY OPERATIONAL!`);

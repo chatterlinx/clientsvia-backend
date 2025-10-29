@@ -526,6 +526,262 @@ class ProductionAIManager {
     }
 
     // ════════════════════════════════════════════════════════════════════════
+    // 💡 SUGGESTIONS MANAGEMENT
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Load suggestions for the selected template
+     */
+    async loadSuggestions(page = 1) {
+        console.log('[PRODUCTION AI] Loading suggestions (page', page, ')...');
+        
+        try {
+            // Show loading skeleton
+            document.getElementById('suggestions-loading-skeleton').classList.remove('hidden');
+            document.getElementById('suggestions-empty-state').classList.add('hidden');
+            
+            // Get selected template
+            const templateFilter = document.getElementById('production-ai-template-filter');
+            const templateId = templateFilter.value;
+            
+            // Load stats
+            const statsResponse = await fetch(`/api/admin/production-ai/suggestions/stats${templateId ? '?templateId=' + templateId : ''}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!statsResponse.ok) {
+                throw new Error(`HTTP ${statsResponse.status}`);
+            }
+            
+            const statsData = await statsResponse.json();
+            
+            // Update stats bar
+            document.getElementById('suggestions-pending-count').textContent = statsData.stats.pending || 0;
+            document.getElementById('suggestions-applied-count').textContent = statsData.stats.applied || 0;
+            document.getElementById('suggestions-ignored-count').textContent = statsData.stats.ignored || 0;
+            
+            // Load suggestions
+            if (!templateId) {
+                // No template selected, show message
+                document.getElementById('suggestions-loading-skeleton').classList.add('hidden');
+                document.getElementById('suggestions-empty-state').classList.remove('hidden');
+                document.getElementById('suggestions-empty-state').querySelector('p:first-of-type').textContent = 'Select a template to view suggestions';
+                return;
+            }
+            
+            const suggestionsResponse = await fetch(`/api/admin/production-ai/suggestions/${templateId}?page=${page}&limit=10`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!suggestionsResponse.ok) {
+                throw new Error(`HTTP ${suggestionsResponse.status}`);
+            }
+            
+            const suggestionsData = await suggestionsResponse.json();
+            
+            // Hide loading skeleton
+            document.getElementById('suggestions-loading-skeleton').classList.add('hidden');
+            
+            // Clear container
+            const container = document.getElementById('suggestions-container');
+            if (page === 1) {
+                container.innerHTML = '';
+            }
+            
+            // Show empty state or render suggestions
+            if (suggestionsData.suggestions.length === 0) {
+                document.getElementById('suggestions-empty-state').classList.remove('hidden');
+            } else {
+                document.getElementById('suggestions-empty-state').classList.add('hidden');
+                
+                // Render each suggestion
+                suggestionsData.suggestions.forEach(suggestion => {
+                    this.renderSuggestionCard(suggestion, container);
+                });
+                
+                // Show/hide "Load More" button
+                const loadMoreContainer = document.getElementById('suggestions-load-more-container');
+                if (suggestionsData.pagination.page < suggestionsData.pagination.pages) {
+                    loadMoreContainer.classList.remove('hidden');
+                } else {
+                    loadMoreContainer.classList.add('hidden');
+                }
+                
+                // Store current page
+                this.currentSuggestionsPage = page;
+            }
+            
+        } catch (error) {
+            console.error('[PRODUCTION AI] Failed to load suggestions:', error);
+            document.getElementById('suggestions-loading-skeleton').classList.add('hidden');
+            ToastManager.error(`❌ Failed to load suggestions: ${error.message}`);
+        }
+    }
+
+    /**
+     * Load more suggestions (pagination)
+     */
+    async loadMoreSuggestions() {
+        const nextPage = (this.currentSuggestionsPage || 1) + 1;
+        await this.loadSuggestions(nextPage);
+    }
+
+    /**
+     * Render a single suggestion card
+     * @param {Object} suggestion - Suggestion data
+     * @param {HTMLElement} container - Container to append to
+     */
+    renderSuggestionCard(suggestion, container) {
+        // Priority badge styling
+        let priorityBadge = '';
+        let priorityBorder = '';
+        
+        if (suggestion.priority === 'high') {
+            priorityBadge = '<span class="inline-flex items-center px-2 py-1 bg-red-100 text-red-800 text-xs font-bold rounded"><i class="fas fa-fire mr-1"></i>High Priority (' + Math.round(suggestion.confidence * 100) + '% confidence)</span>';
+            priorityBorder = 'border-l-4 border-red-500';
+        } else if (suggestion.priority === 'medium') {
+            priorityBadge = '<span class="inline-flex items-center px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-bold rounded"><i class="fas fa-exclamation-circle mr-1"></i>Medium Priority (' + Math.round(suggestion.confidence * 100) + '% confidence)</span>';
+            priorityBorder = 'border-l-4 border-yellow-500';
+        } else {
+            priorityBadge = '<span class="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded"><i class="fas fa-info-circle mr-1"></i>Low Priority (' + Math.round(suggestion.confidence * 100) + '% confidence)</span>';
+            priorityBorder = 'border-l-4 border-blue-500';
+        }
+        
+        const card = document.createElement('div');
+        card.className = `bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow ${priorityBorder}`;
+        card.innerHTML = `
+            <div class="flex items-start justify-between mb-3">
+                ${priorityBadge}
+                <div class="text-xs text-gray-500">
+                    <i class="far fa-clock mr-1"></i>
+                    ${new Date(suggestion.createdAt).toLocaleString()}
+                </div>
+            </div>
+            
+            <p class="text-gray-900 font-medium mb-2">
+                ${suggestion.briefDescription}
+            </p>
+            
+            <p class="text-sm text-gray-600 mb-3">
+                ${suggestion.impactSummary}
+            </p>
+            
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2 text-xs text-gray-500">
+                    <span><i class="fas fa-building mr-1"></i>${suggestion.companyId?.companyName || 'Unknown'}</span>
+                    <span><i class="fas fa-copy mr-1"></i>${suggestion.templateId?.name || 'Unknown Template'}</span>
+                </div>
+                
+                <button onclick="window.productionAIManager.openSuggestionModal('${suggestion._id}')" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors">
+                    <i class="fas fa-file-alt mr-2"></i>
+                    📄 View Full Details
+                </button>
+            </div>
+        `;
+        
+        container.appendChild(card);
+    }
+
+    /**
+     * Open suggestion detail modal
+     * @param {String} suggestionId - Suggestion ID
+     */
+    async openSuggestionModal(suggestionId) {
+        console.log('[PRODUCTION AI] Opening suggestion modal:', suggestionId);
+        
+        // This will be handled by SuggestionAnalysisModal.js
+        if (window.suggestionAnalysisModal && typeof window.suggestionAnalysisModal.open === 'function') {
+            window.suggestionAnalysisModal.open(suggestionId);
+        } else {
+            console.error('[PRODUCTION AI] SuggestionAnalysisModal not found');
+            ToastManager.error('❌ Suggestion modal not available');
+        }
+    }
+
+    /**
+     * Apply a suggestion
+     * @param {String} suggestionId - Suggestion ID
+     */
+    async applySuggestion(suggestionId) {
+        console.log('[PRODUCTION AI] Applying suggestion:', suggestionId);
+        
+        try {
+            ToastManager.info('⏳ Applying suggestion...');
+            
+            const response = await fetch(`/api/admin/production-ai/suggestions/${suggestionId}/apply`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json',
+                    'X-Idempotency-Key': `apply-${suggestionId}-${Date.now()}`
+                },
+                body: JSON.stringify({})
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            ToastManager.success('✅ Suggestion applied successfully!');
+            
+            // Reload suggestions
+            await this.loadSuggestions();
+            
+            return result;
+            
+        } catch (error) {
+            console.error('[PRODUCTION AI] Failed to apply suggestion:', error);
+            ToastManager.error(`❌ Failed to apply suggestion: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Ignore a suggestion
+     * @param {String} suggestionId - Suggestion ID
+     */
+    async ignoreSuggestion(suggestionId) {
+        console.log('[PRODUCTION AI] Ignoring suggestion:', suggestionId);
+        
+        try {
+            const response = await fetch(`/api/admin/production-ai/suggestions/${suggestionId}/ignore`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({})
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP ${response.status}`);
+            }
+            
+            ToastManager.success('✅ Suggestion ignored');
+            
+            // Reload suggestions
+            await this.loadSuggestions();
+            
+        } catch (error) {
+            console.error('[PRODUCTION AI] Failed to ignore suggestion:', error);
+            ToastManager.error(`❌ Failed to ignore suggestion: ${error.message}`);
+            throw error;
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
     // 🚀 INITIALIZATION
     // ════════════════════════════════════════════════════════════════════════
 
@@ -536,8 +792,14 @@ class ProductionAIManager {
         console.log('[PRODUCTION AI] Initializing Production AI Manager...');
         
         try {
-            // Load companies into selector
+            // Load templates into filter dropdown
+            await this.loadTemplates();
+            
+            // Load companies into selector (if needed for company-specific settings)
             await this.loadCompanies();
+            
+            // Load initial suggestions (will show empty state if no template selected)
+            await this.loadSuggestions();
             
             // Load system metrics
             await this.loadSystemMetrics();
@@ -545,7 +807,7 @@ class ProductionAIManager {
             // Run initial health check
             await this.testOpenAIConnection();
             
-            // Start auto-refresh
+            // Start auto-refresh for health status
             this.startAutoRefresh();
             
             console.log('✅ [PRODUCTION AI] Initialization complete');
@@ -553,6 +815,44 @@ class ProductionAIManager {
         } catch (error) {
             console.error('[PRODUCTION AI] Initialization failed:', error);
             ToastManager.error(`❌ Production AI initialization failed: ${error.message}`);
+        }
+    }
+
+    /**
+     * Load templates into filter dropdown
+     */
+    async loadTemplates() {
+        try {
+            const response = await fetch('/api/admin/global-instant-responses', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            const templates = data.templates || [];
+            
+            // Populate filter dropdown
+            const filterSelect = document.getElementById('production-ai-template-filter');
+            filterSelect.innerHTML = '<option value="">All Templates</option>';
+            
+            templates.forEach(template => {
+                const option = document.createElement('option');
+                option.value = template._id;
+                option.textContent = template.name;
+                filterSelect.appendChild(option);
+            });
+            
+            console.log(`[PRODUCTION AI] Loaded ${templates.length} templates into filter`);
+            
+        } catch (error) {
+            console.error('[PRODUCTION AI] Failed to load templates:', error);
         }
     }
 
