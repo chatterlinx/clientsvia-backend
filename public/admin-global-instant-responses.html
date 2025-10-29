@@ -34,9 +34,9 @@
     <!-- 🎯 Template Data Manager - World-Class State Management -->
     <script src="/js/TemplateDataManager.js"></script>
     
-    <!-- 🚀 Production AI Manager - Enterprise Health Monitoring & Settings -->
-    <script src="/js/ProductionAIManager.js"></script>
-    <script src="/js/ProductionAISuggestionModal.js"></script>
+    <!-- 🚀 AI Gateway Manager - LLM Health Monitoring & Suggestion System -->
+    <script src="/js/ai-gateway/AIGatewayManager.js"></script>
+    <script src="/js/ai-gateway/index.js"></script>
     
     <style>
         /* ============================================================================
@@ -540,10 +540,10 @@
                         <i class="fas fa-chart-line mr-1.5 text-xs"></i>
                         Dashboard
                     </button>
-                    <button id="overview-subtab-production-ai" onclick="switchOverviewSubTab('production-ai')" class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 border-b-2 border-transparent rounded-t">
-                        <i class="fas fa-robot mr-1.5 text-xs"></i>
-                        Production AI
-                        <span class="ml-1.5 px-1.5 py-0.5 bg-green-500 text-white text-xs rounded-full font-bold">NEW</span>
+                    <button id="overview-subtab-ai-gateway" onclick="switchOverviewSubTab('ai-gateway')" class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 border-b-2 border-transparent rounded-t">
+                        <i class="fas fa-network-wired mr-1.5 text-xs"></i>
+                        AI Gateway
+                        <span class="ml-1.5 px-1.5 py-0.5 bg-purple-500 text-white text-xs rounded-full font-bold animate-pulse">LLM</span>
                     </button>
                     <button id="overview-subtab-templates" onclick="switchOverviewSubTab('templates')" class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 border-b-2 border-transparent rounded-t">
                         <i class="fas fa-copy mr-1.5 text-xs"></i>
@@ -1550,20 +1550,20 @@
                 </div>
             </div>
 
-            <!-- Production AI Sub-Tab Content -->
-            <div id="overview-production-ai-content" class="overview-subtab-content hidden">
+            <!-- AI Gateway Sub-Tab Content -->
+            <div id="overview-ai-gateway-content" class="overview-subtab-content hidden">
                 
                 <!-- ========================================================================
-                     PRODUCTION AI - COMPLETE LEARNING & MONITORING SYSTEM
+                     AI GATEWAY - LLM HEALTH MONITORING & SUGGESTION QUEUE
                      ======================================================================== -->
                 
                 <div class="mb-6">
                     <h2 class="text-2xl font-bold text-gray-900 mb-2">
-                        <i class="fas fa-robot text-purple-600 mr-2"></i>
-                        Production AI Learning & Monitoring
+                        <i class="fas fa-network-wired text-purple-600 mr-2"></i>
+                        AI Gateway - LLM Health & Suggestion System
                     </h2>
                     <p class="text-gray-600">
-                        Real-time health monitoring and LLM-generated suggestions to improve template performance.
+                        Real-time health monitoring and LLM-generated suggestions to improve template performance and reduce costs.
                     </p>
                 </div>
 
@@ -1575,17 +1575,17 @@
                             System Health Status
                         </h3>
                         <div class="flex gap-2">
-                            <button onclick="window.productionAIManager && window.productionAIManager.testOpenAIConnection()" class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded hover:bg-green-700 transition-colors">
+                            <button onclick="window.aiGatewayManager && window.aiGatewayManager.testOpenAIConnection()" class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded hover:bg-green-700 transition-colors">
                                 <i class="fas fa-vial mr-2"></i>
                                 Test OpenAI Connection
                             </button>
-                            <button onclick="window.productionAIManager && window.productionAIManager.runFullHealthCheck()" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors">
+                            <button onclick="window.aiGatewayManager && window.aiGatewayManager.loadHealthStatus()" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors">
                                 <i class="fas fa-heartbeat mr-2"></i>
-                                Run Full Health Check
+                                Refresh Health Status
                             </button>
-                            <button onclick="window.productionAIManager && window.productionAIManager.refreshHealthStatus()" class="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded hover:bg-gray-700 transition-colors">
+                            <button onclick="window.aiGatewayManager && window.aiGatewayManager.loadSuggestions()" class="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded hover:bg-gray-700 transition-colors">
                                 <i class="fas fa-sync-alt mr-2"></i>
-                                Refresh
+                                Refresh Suggestions
                             </button>
                         </div>
                     </div>
@@ -1690,12 +1690,12 @@
                             <p class="text-gray-500 text-sm">Production call data will appear here once LLM analyzes calls.</p>
                         </div>
 
-                        <!-- Suggestions will be rendered here by ProductionAIManager.js -->
+                        <!-- Suggestions will be rendered here by AIGatewayManager.js -->
                     </div>
 
                     <!-- Load More Button -->
                     <div id="suggestions-load-more-container" class="hidden mt-6 text-center">
-                        <button onclick="window.productionAIManager && window.productionAIManager.loadMoreSuggestions()" class="px-6 py-2 bg-blue-600 text-white font-medium rounded hover:bg-blue-700 transition-colors">
+                        <button onclick="window.aiGatewayManager && window.aiGatewayManager.loadSuggestions()" class="px-6 py-2 bg-blue-600 text-white font-medium rounded hover:bg-blue-700 transition-colors">
                             <i class="fas fa-arrow-down mr-2"></i>
                             Load More Suggestions...
                         </button>
@@ -7108,13 +7108,13 @@ Continue?`;
             } else if (subTabName === 'dashboard') {
                 // Load Twilio test config when viewing dashboard
                 loadTwilioTestConfig();
-            } else if (subTabName === 'production-ai') {
-                // Initialize Production AI Manager
-                if (window.productionAIManager && typeof window.productionAIManager.initialize === 'function') {
-                    console.log('🚀 [PRODUCTION AI] Initializing Production AI Manager...');
-                    window.productionAIManager.initialize();
+            } else if (subTabName === 'ai-gateway') {
+                // Initialize AI Gateway Manager
+                if (window.aiGatewayManager && typeof window.aiGatewayManager.initialize === 'function') {
+                    console.log('🚀 [AI GATEWAY] Initializing AI Gateway Manager...');
+                    window.aiGatewayManager.initialize();
                 } else {
-                    console.warn('⚠️ [PRODUCTION AI] ProductionAIManager not found');
+                    console.warn('⚠️ [AI GATEWAY] AIGatewayManager not found');
                 }
             }
         }
