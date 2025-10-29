@@ -12,6 +12,8 @@ const mongoose = require('mongoose');
 const { redisClient } = require('../../db');
 const logger = require('../../utils/logger');
 const AdminNotificationService = require('../AdminNotificationService');
+const AdminSettings = require('../../models/AdminSettings');
+const { AIGatewayHealthLog } = require('../../models/aiGateway');
 
 class AIGatewayHealthMonitor {
     // ========================================================================
@@ -29,6 +31,10 @@ class AIGatewayHealthMonitor {
                 apiKey: process.env.OPENAI_API_KEY
             });
         }
+        
+        // Instance variables for dynamic interval management
+        this.currentInterval = null; // Store the setInterval ID
+        this.config = null; // Current configuration
         
         console.log('✅ [AI GATEWAY HEALTH] HealthMonitor initialized');
     }
@@ -294,21 +300,347 @@ class AIGatewayHealthMonitor {
     }
     
     // ========================================================================
-    // ⏰ PERIODIC HEALTH CHECKS (8-hour interval)
+    // ⏰ DYNAMIC INTERVAL MANAGEMENT (Enterprise-Grade)
     // ========================================================================
     
-    startPeriodicHealthChecks() {
-        console.log('⏰ [AI GATEWAY HEALTH] Starting periodic health checks (every 8 hours)...');
+    /**
+     * Load configuration from AdminSettings and start auto-ping
+     */
+    async startPeriodicHealthChecks() {
+        console.log('⏰ [AI GATEWAY HEALTH] Loading configuration from AdminSettings...');
         
-        // Run immediately
-        this.checkAllSystems();
+        try {
+            // Load or create default config
+            let settings = await AdminSettings.findOne();
+            if (!settings) {
+                console.log('⚙️ [AI GATEWAY HEALTH] No AdminSettings found, creating defaults...');
+                settings = await AdminSettings.create({});
+            }
+            
+            this.config = settings.aiGatewayHealthCheck;
+            
+            // Check if enabled
+            if (!this.config.enabled) {
+                console.log('⚙️ [AI GATEWAY HEALTH] Auto-ping is DISABLED in settings');
+                return;
+            }
+            
+            console.log(`⏰ [AI GATEWAY HEALTH] Auto-ping enabled: every ${this.config.interval.value} ${this.config.interval.unit}`);
+            console.log(`📢 [AI GATEWAY HEALTH] Notification mode: ${this.config.notificationMode}`);
+            
+            // Run immediately
+            await this.runHealthCheckAndLog('auto');
+            
+            // Schedule recurring checks
+            this.scheduleNextCheck();
+            
+            console.log('✅ [AI GATEWAY HEALTH] Periodic health checks started');
+            
+        } catch (error) {
+            console.error('❌ [AI GATEWAY HEALTH] Failed to start periodic checks:', error.message);
+        }
+    }
+    
+    /**
+     * Schedule the next health check based on current config
+     */
+    scheduleNextCheck() {
+        // Clear existing interval if any
+        if (this.currentInterval) {
+            clearInterval(this.currentInterval);
+            this.currentInterval = null;
+        }
         
-        // Then every 8 hours
-        setInterval(() => {
-            this.checkAllSystems();
-        }, 8 * 60 * 60 * 1000); // 8 hours
+        // Calculate interval in milliseconds
+        const intervalMs = this.convertToMilliseconds(
+            this.config.interval.value,
+            this.config.interval.unit
+        );
         
-        console.log('✅ [AI GATEWAY HEALTH] Periodic health checks scheduled');
+        // Calculate next check time
+        const nextCheck = new Date(Date.now() + intervalMs);
+        
+        console.log(`⏰ [AI GATEWAY HEALTH] Next check scheduled for: ${nextCheck.toLocaleString()}`);
+        
+        // Update AdminSettings with next check time
+        this.updateNextCheckTime(nextCheck);
+        
+        // Schedule the interval
+        this.currentInterval = setInterval(async () => {
+            await this.runHealthCheckAndLog('auto');
+        }, intervalMs);
+    }
+    
+    /**
+     * Convert interval value + unit to milliseconds
+     */
+    convertToMilliseconds(value, unit) {
+        const multipliers = {
+            minutes: 60 * 1000,
+            hours: 60 * 60 * 1000,
+            days: 24 * 60 * 60 * 1000
+        };
+        
+        return value * (multipliers[unit] || multipliers.hours);
+    }
+    
+    /**
+     * Update next check time in database
+     */
+    async updateNextCheckTime(nextCheck) {
+        try {
+            await AdminSettings.updateOne(
+                {},
+                {
+                    $set: {
+                        'aiGatewayHealthCheck.nextScheduledCheck': nextCheck
+                    }
+                },
+                { upsert: true }
+            );
+        } catch (error) {
+            console.error('❌ [AI GATEWAY HEALTH] Failed to update next check time:', error.message);
+        }
+    }
+    
+    /**
+     * Run health check and save to database
+     */
+    async runHealthCheckAndLog(type, triggeredBy = 'auto-ping') {
+        console.log(`🏥 [AI GATEWAY HEALTH] Running ${type} health check...`);
+        
+        try {
+            // Run all health checks
+            const results = await this.checkAllSystems();
+            
+            // Determine overall status
+            let overallStatus = 'ALL_HEALTHY';
+            let unhealthyCount = 0;
+            
+            if (results.openai.status !== 'HEALTHY' && results.openai.status !== 'NOT_CONFIGURED') unhealthyCount++;
+            if (results.mongodb.status !== 'HEALTHY') unhealthyCount++;
+            if (results.redis.status !== 'HEALTHY') unhealthyCount++;
+            
+            if (unhealthyCount === 0) {
+                overallStatus = 'ALL_HEALTHY';
+            } else if (unhealthyCount <= 1) {
+                overallStatus = 'DEGRADED';
+            } else {
+                overallStatus = 'CRITICAL';
+            }
+            
+            // Calculate total response time
+            const totalResponseTime = 
+                (results.openai.responseTime || 0) +
+                (results.mongodb.queryTime || 0) +
+                (results.redis.latency || 0);
+            
+            // Save to database
+            const healthLog = await AIGatewayHealthLog.create({
+                timestamp: results.timestamp,
+                type,
+                triggeredBy,
+                openai: {
+                    status: results.openai.status,
+                    responseTime: results.openai.responseTime,
+                    error: results.openai.error,
+                    details: {
+                        model: results.openai.model
+                    }
+                },
+                mongodb: {
+                    status: results.mongodb.status,
+                    responseTime: results.mongodb.queryTime,
+                    error: results.mongodb.error
+                },
+                redis: {
+                    status: results.redis.status,
+                    responseTime: results.redis.latency,
+                    error: results.redis.error
+                },
+                tier3System: results.tier3System,
+                overallStatus,
+                unhealthyCount,
+                totalResponseTime
+            });
+            
+            console.log(`✅ [AI GATEWAY HEALTH] Health check logged: ${overallStatus} (${unhealthyCount} unhealthy)`);
+            
+            // Update stats in AdminSettings
+            await this.updateStats(overallStatus, results);
+            
+            // Send notification if needed
+            await this.sendNotificationIfNeeded(overallStatus, results);
+            
+            return { results, healthLog };
+            
+        } catch (error) {
+            console.error('❌ [AI GATEWAY HEALTH] Failed to run health check:', error.message);
+            throw error;
+        }
+    }
+    
+    /**
+     * Update statistics in AdminSettings
+     */
+    async updateStats(overallStatus, results) {
+        try {
+            const update = {
+                $inc: {
+                    'aiGatewayHealthCheck.stats.totalChecks': 1
+                },
+                $set: {
+                    'aiGatewayHealthCheck.lastCheck': new Date()
+                }
+            };
+            
+            if (overallStatus === 'ALL_HEALTHY') {
+                update.$inc['aiGatewayHealthCheck.stats.healthyChecks'] = 1;
+            } else {
+                update.$inc['aiGatewayHealthCheck.stats.errorChecks'] = 1;
+                
+                // Update last error
+                const unhealthyService = 
+                    results.openai.status !== 'HEALTHY' ? 'openai' :
+                    results.mongodb.status !== 'HEALTHY' ? 'mongodb' :
+                    results.redis.status !== 'HEALTHY' ? 'redis' : null;
+                
+                if (unhealthyService) {
+                    update.$set['aiGatewayHealthCheck.stats.lastError'] = {
+                        service: unhealthyService,
+                        message: results[unhealthyService].error || 'Unknown error',
+                        timestamp: new Date()
+                    };
+                }
+            }
+            
+            await AdminSettings.updateOne({}, update, { upsert: true });
+            
+        } catch (error) {
+            console.error('❌ [AI GATEWAY HEALTH] Failed to update stats:', error.message);
+        }
+    }
+    
+    /**
+     * Send notification based on notification mode and health status
+     */
+    async sendNotificationIfNeeded(overallStatus, results) {
+        try {
+            if (!this.config) return;
+            
+            const mode = this.config.notificationMode;
+            
+            // Never mode: no notifications
+            if (mode === 'never') {
+                return;
+            }
+            
+            // Errors only mode: only notify on degraded/critical
+            if (mode === 'errors_only' && overallStatus === 'ALL_HEALTHY') {
+                return;
+            }
+            
+            // Always mode: send notification for all checks
+            if (mode === 'always' || overallStatus !== 'ALL_HEALTHY') {
+                const severity = overallStatus === 'CRITICAL' ? 'CRITICAL' : 
+                                 overallStatus === 'DEGRADED' ? 'WARNING' : 'INFO';
+                
+                const message = overallStatus === 'ALL_HEALTHY' ?
+                    'All AI Gateway systems healthy' :
+                    `AI Gateway health check: ${overallStatus}`;
+                
+                await AdminNotificationService.sendAlert({
+                    code: `AI_GATEWAY_HEALTH_${overallStatus}`,
+                    severity,
+                    message,
+                    details: {
+                        openai: results.openai.status,
+                        mongodb: results.mongodb.status,
+                        redis: results.redis.status,
+                        tier3: results.tier3System.status
+                    },
+                    source: 'AIGatewayHealthMonitor'
+                });
+                
+                console.log(`📢 [AI GATEWAY HEALTH] Sent ${severity} notification: ${message}`);
+            }
+            
+        } catch (error) {
+            console.error('❌ [AI GATEWAY HEALTH] Failed to send notification:', error.message);
+        }
+    }
+    
+    /**
+     * Dynamically update interval without server restart
+     */
+    async updateInterval(newValue, newUnit, notificationMode) {
+        console.log(`🔄 [AI GATEWAY HEALTH] Updating interval to: ${newValue} ${newUnit}, notifications: ${notificationMode}`);
+        
+        try {
+            // Update in database
+            await AdminSettings.updateOne(
+                {},
+                {
+                    $set: {
+                        'aiGatewayHealthCheck.interval.value': newValue,
+                        'aiGatewayHealthCheck.interval.unit': newUnit,
+                        'aiGatewayHealthCheck.notificationMode': notificationMode
+                    }
+                },
+                { upsert: true }
+            );
+            
+            // Reload config
+            const settings = await AdminSettings.findOne();
+            this.config = settings.aiGatewayHealthCheck;
+            
+            // Reschedule checks
+            this.scheduleNextCheck();
+            
+            console.log('✅ [AI GATEWAY HEALTH] Interval updated successfully');
+            
+            return { success: true };
+            
+        } catch (error) {
+            console.error('❌ [AI GATEWAY HEALTH] Failed to update interval:', error.message);
+            throw error;
+        }
+    }
+    
+    /**
+     * Enable or disable auto-ping
+     */
+    async setEnabled(enabled) {
+        console.log(`🔄 [AI GATEWAY HEALTH] ${enabled ? 'Enabling' : 'Disabling'} auto-ping...`);
+        
+        try {
+            await AdminSettings.updateOne(
+                {},
+                {
+                    $set: {
+                        'aiGatewayHealthCheck.enabled': enabled
+                    }
+                },
+                { upsert: true }
+            );
+            
+            if (enabled) {
+                await this.startPeriodicHealthChecks();
+            } else {
+                if (this.currentInterval) {
+                    clearInterval(this.currentInterval);
+                    this.currentInterval = null;
+                }
+            }
+            
+            console.log(`✅ [AI GATEWAY HEALTH] Auto-ping ${enabled ? 'enabled' : 'disabled'}`);
+            
+            return { success: true };
+            
+        } catch (error) {
+            console.error('❌ [AI GATEWAY HEALTH] Failed to set enabled state:', error.message);
+            throw error;
+        }
     }
 }
 

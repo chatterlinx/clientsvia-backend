@@ -284,6 +284,92 @@ const adminSettingsSchema = new mongoose.Schema({
     },
     
     // ============================================================================
+    // 💊 AI GATEWAY HEALTH MONITORING CONFIGURATION (Enterprise-Grade)
+    // ============================================================================
+    // PURPOSE: Monitor OpenAI, MongoDB, Redis health with configurable auto-ping
+    // ARCHITECTURE: Flexible intervals (minutes/hours/days), smart notifications
+    // INTEGRATIONS: Notification Center, Alert Rules, Historical Tracking
+    // ============================================================================
+    aiGatewayHealthCheck: {
+        // Enable/Disable auto-ping
+        enabled: {
+            type: Boolean,
+            default: true,
+            description: 'Enable automatic health checks'
+        },
+        
+        // Check interval configuration
+        interval: {
+            value: {
+                type: Number,
+                default: 1,
+                min: 1,
+                max: 1440, // Max 1 day in any unit
+                description: 'Health check interval value'
+            },
+            unit: {
+                type: String,
+                enum: ['minutes', 'hours', 'days'],
+                default: 'hours',
+                description: 'Health check interval unit'
+            }
+        },
+        
+        // Notification behavior
+        notificationMode: {
+            type: String,
+            enum: ['never', 'errors_only', 'always'],
+            default: 'errors_only',
+            description: 'When to send notifications: never (silent), errors_only (default), always (verbose)'
+        },
+        
+        // Timestamps
+        lastCheck: {
+            type: Date,
+            description: 'When the last health check ran (manual or auto)'
+        },
+        
+        nextScheduledCheck: {
+            type: Date,
+            description: 'When the next auto-check will run'
+        },
+        
+        // Statistics tracking
+        stats: {
+            totalChecks: {
+                type: Number,
+                default: 0,
+                description: 'Total number of health checks performed'
+            },
+            healthyChecks: {
+                type: Number,
+                default: 0,
+                description: 'Number of checks where all systems were healthy'
+            },
+            errorChecks: {
+                type: Number,
+                default: 0,
+                description: 'Number of checks where at least one system had errors'
+            },
+            lastError: {
+                service: {
+                    type: String,
+                    enum: ['openai', 'mongodb', 'redis', 'tier3'],
+                    description: 'Which service had the last error'
+                },
+                message: {
+                    type: String,
+                    description: 'Last error message'
+                },
+                timestamp: {
+                    type: Date,
+                    description: 'When the last error occurred'
+                }
+            }
+        }
+    },
+    
+    // ============================================================================
     // 🧠 GLOBAL AI BRAIN TEST CONFIGURATION (NEW - World-Class Refactor)
     // ============================================================================
     // PURPOSE: Single global test console for ALL AI Brain templates

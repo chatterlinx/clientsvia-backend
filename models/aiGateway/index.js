@@ -8,9 +8,11 @@
 
 const AIGatewayCallLog = require('./CallLog');
 const AIGatewaySuggestion = require('./Suggestion');
+const AIGatewayHealthLog = require('./HealthLog');
 
 module.exports = {
     AIGatewayCallLog,
-    AIGatewaySuggestion
+    AIGatewaySuggestion,
+    AIGatewayHealthLog
 };
 
