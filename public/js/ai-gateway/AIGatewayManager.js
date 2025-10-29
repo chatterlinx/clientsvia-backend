@@ -19,6 +19,7 @@ class AIGatewayManager {
         this.suggestions = [];
         this.healthCheckInterval = null;
         this.suggestionRefreshInterval = null;
+        this.lastHealthResults = null; // Store latest health results for modal
         
         console.log('✅ [AI GATEWAY UI] CONSTRUCTOR: AIGatewayManager initialized');
     }
@@ -101,8 +102,14 @@ class AIGatewayManager {
             const data = await response.json();
             
             if (data.success) {
+                // Store results for modal access
+                this.lastHealthResults = {
+                    ...data.health,
+                    timestamp: new Date()
+                };
+                
                 this.updateHealthDashboard(data.health);
-                console.log('✅ [AI GATEWAY UI] Health status updated');
+                console.log('✅ [AI GATEWAY UI] Health status updated and stored');
             }
             
         } catch (error) {
@@ -144,8 +151,21 @@ class AIGatewayManager {
             
             if (data.success) {
                 this.updateHealthCard('openai', data.health);
-                window.toastManager?.success(`OpenAI: ${data.health.status} (${data.health.responseTime}ms)`);
-                console.log('✅ [AI GATEWAY UI] OpenAI test complete');
+                
+                // Store results for modal
+                this.lastHealthResults = {
+                    openai: data.health,
+                    timestamp: new Date()
+                };
+                
+                // Open health modal with results
+                if (window.healthModal) {
+                    window.healthModal.open(this.lastHealthResults);
+                } else {
+                    window.toastManager?.success(`OpenAI: ${data.health.status} (${data.health.responseTime}ms)`);
+                }
+                
+                console.log('✅ [AI GATEWAY UI] OpenAI test complete, modal opened');
             }
             
         } catch (error) {
