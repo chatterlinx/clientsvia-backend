@@ -1027,6 +1027,94 @@ router.post('/alert-rules/seed-defaults', authenticateJWT, adminOnly, strictLimi
 });
 
 // ============================================================================
+// 📈 ANALYTICS ENDPOINTS (Phase 3)
+// ============================================================================
+
+/**
+ * GET /api/admin/ai-gateway/analytics/trends
+ * Get response time trends for a service
+ */
+router.get('/analytics/trends', authenticateJWT, adminOnly, async (req, res) => {
+    const requestId = `analytics-trends-${Date.now()}`;
+    const { service = 'openai', days = 7 } = req.query;
+    console.log(`📈 [AI GATEWAY API] [${requestId}] Getting trends: ${service} (${days} days)`);
+    
+    try {
+        const { AnalyticsEngine } = require('../../services/aiGateway');
+        
+        const trends = await AnalyticsEngine.getResponseTimeTrends(service, parseInt(days));
+        
+        res.json({
+            success: true,
+            trends,
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Trends: ${trends.dataPoints.length} data points`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed:`, error.message);
+        res.status(500).json({ success: false, error: error.message, requestId });
+    }
+});
+
+/**
+ * GET /api/admin/ai-gateway/analytics/uptime
+ * Get uptime statistics for all services
+ */
+router.get('/analytics/uptime', authenticateJWT, adminOnly, async (req, res) => {
+    const requestId = `analytics-uptime-${Date.now()}`;
+    const { days = 30 } = req.query;
+    console.log(`⏱️ [AI GATEWAY API] [${requestId}] Getting uptime (${days} days)`);
+    
+    try {
+        const { AnalyticsEngine } = require('../../services/aiGateway');
+        
+        const uptime = await AnalyticsEngine.getUptimeStats(parseInt(days));
+        
+        res.json({
+            success: true,
+            uptime,
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Uptime calculated`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed:`, error.message);
+        res.status(500).json({ success: false, error: error.message, requestId });
+    }
+});
+
+/**
+ * GET /api/admin/ai-gateway/analytics/dashboard
+ * Get complete analytics dashboard data
+ */
+router.get('/analytics/dashboard', authenticateJWT, adminOnly, async (req, res) => {
+    const requestId = `analytics-dashboard-${Date.now()}`;
+    const { days = 7 } = req.query;
+    console.log(`📊 [AI GATEWAY API] [${requestId}] Getting dashboard data (${days} days)`);
+    
+    try {
+        const { AnalyticsEngine } = require('../../services/aiGateway');
+        
+        const dashboard = await AnalyticsEngine.getDashboardData(parseInt(days));
+        
+        res.json({
+            success: true,
+            dashboard,
+            requestId
+        });
+        
+        console.log(`✅ [AI GATEWAY API] [${requestId}] Dashboard data generated`);
+        
+    } catch (error) {
+        console.error(`❌ [AI GATEWAY API] [${requestId}] Failed:`, error.message);
+        res.status(500).json({ success: false, error: error.message, requestId });
+    }
+});
+
+// ============================================================================
 // 📦 EXPORT ROUTER
 // ============================================================================
 

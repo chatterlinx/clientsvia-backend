@@ -11,12 +11,14 @@ const LLMAnalyzer = require('./LLMAnalyzer');
 const SuggestionApplier = require('./SuggestionApplier');
 const CallLogProcessor = require('./CallLogProcessor');
 const AlertEngine = require('./AlertEngine');
+const AnalyticsEngine = require('./AnalyticsEngine');
 
 module.exports = {
     HealthMonitor,
     LLMAnalyzer,
     SuggestionApplier,
     CallLogProcessor,
-    AlertEngine
+    AlertEngine,
+    AnalyticsEngine
 };
 
