@@ -238,18 +238,34 @@ class AIGatewayHealthMonitor {
             }
             
             // ────────────────────────────────────────────────────────────────────
-            // CHECKPOINT 3: Ping Redis
+            // CHECKPOINT 3: Ping Redis (with 2s timeout)
             // ────────────────────────────────────────────────────────────────────
-            await redisClient.ping();
+            await Promise.race([
+                redisClient.ping(),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Redis ping timeout')), 2000)
+                )
+            ]);
             
             result.latency = Date.now() - startTime;
             
             // ────────────────────────────────────────────────────────────────────
-            // CHECKPOINT 4: Get Redis INFO metrics
+            // CHECKPOINT 4: Get Redis INFO metrics (with timeout protection)
             // ────────────────────────────────────────────────────────────────────
-            const info = await redisClient.info('stats');
-            const memory = await redisClient.info('memory');
-            const clients = await redisClient.info('clients');
+            try {
+                const infoTimeout = 3000; // 3s timeout for INFO commands
+                const info = await Promise.race([
+                    redisClient.info('stats'),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('INFO timeout')), infoTimeout))
+                ]);
+                const memory = await Promise.race([
+                    redisClient.info('memory'),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('INFO timeout')), infoTimeout))
+                ]);
+                const clients = await Promise.race([
+                    redisClient.info('clients'),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('INFO timeout')), infoTimeout))
+                ]);
             
             // Parse memory metrics
             const memoryUsedMatch = memory.match(/used_memory:(\d+)/);
@@ -370,6 +386,15 @@ class AIGatewayHealthMonitor {
                     },
                     source: 'AIGatewayHealthMonitor'
                 });
+            }
+            
+            } catch (metricsError) {
+                // INFO commands timed out - Redis is responsive but slow
+                // This is acceptable during cold start, mark as DEGRADED not UNHEALTHY
+                console.warn(`⚠️ [AI GATEWAY HEALTH] Redis metrics unavailable: ${metricsError.message}`);
+                result.status = 'DEGRADED';
+                result.error = `Ping OK but metrics timed out: ${metricsError.message}`;
+                return result;
             }
             
             result.status = 'HEALTHY';
