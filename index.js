@@ -663,40 +663,7 @@ async function startServer() {
         
         console.log('[Server] ✅ Critical Data Health Check initialized (runs every 30 min)');
         
-        // ────────────────────────────────────────────────────────────────────────
-        // STEP 6.5: AI GATEWAY INITIALIZATION (Health Monitor & LLM Analyzer)
-        // ────────────────────────────────────────────────────────────────────────
-        try {
-            console.log('[Server] 🚀 Initializing AI Gateway Health Monitor...');
-            const { HealthMonitor } = require('./services/aiGateway');
-            HealthMonitor.startPeriodicHealthChecks();
-            console.log('[Server] ✅ AI Gateway Health Monitor initialized (runs every 8 hours)');
-        } catch (error) {
-            console.error('[Server] ❌ Failed to initialize AI Gateway Health Monitor:', error.message);
-            // Non-blocking: continue server startup even if health monitor fails
-        }
-        
-        // ────────────────────────────────────────────────────────────────────────
-        // STEP 6.6: AI GATEWAY LLM ANALYZER CRON (Process pending call analysis)
-        // ────────────────────────────────────────────────────────────────────────
-        try {
-            console.log('[Server] 🚀 Initializing AI Gateway LLM Analyzer cron job...');
-            const { LLMAnalyzer } = require('./services/aiGateway');
-            
-            // Run batch analysis every 5 minutes
-            setInterval(async () => {
-                try {
-                    await LLMAnalyzer.analyzePendingCalls(10);
-                } catch (error) {
-                    console.error('[AI Gateway Cron] Analysis batch failed:', error.message);
-                }
-            }, 5 * 60 * 1000); // 5 minutes
-            
-            console.log('[Server] ✅ AI Gateway LLM Analyzer cron initialized (runs every 5 minutes)');
-        } catch (error) {
-            console.error('[Server] ❌ Failed to initialize AI Gateway LLM Analyzer:', error.message);
-            // Non-blocking: continue server startup even if cron fails
-        }
+        console.log('[Server] Step 6/6: Binding to port FIRST (AI Gateway health checks deferred)...');
         
         return app.listen(PORT, '0.0.0.0', () => {
             console.log(`[Server] ✅ Step 6 COMPLETE: HTTP server bound in ${Date.now() - serverStart}ms`);
@@ -705,6 +672,41 @@ async function startServer() {
             console.log(`📊 Node environment: ${process.env.NODE_ENV || 'development'}`);
             console.log(`🎯 Server ready to accept connections on port ${PORT}`);
             console.log(`⏱️  Total startup time: ${Date.now() - routeStart}ms`);
+            
+            // ────────────────────────────────────────────────────────────────────────
+            // POST-STARTUP: AI GATEWAY INITIALIZATION (Health Monitor & LLM Analyzer)
+            // Initialize AFTER port binding to prevent blocking Render health checks
+            // ────────────────────────────────────────────────────────────────────────
+            setTimeout(() => {
+                try {
+                    console.log('[Post-Startup] 🚀 Initializing AI Gateway Health Monitor...');
+                    const { HealthMonitor } = require('./services/aiGateway');
+                    HealthMonitor.startPeriodicHealthChecks();
+                    console.log('[Post-Startup] ✅ AI Gateway Health Monitor started (runs every 8 hours)');
+                } catch (error) {
+                    console.error('[Post-Startup] ❌ Failed to start AI Gateway Health Monitor:', error.message);
+                    // Non-blocking: server continues even if health monitor fails
+                }
+                
+                try {
+                    console.log('[Post-Startup] 🚀 Initializing AI Gateway LLM Analyzer cron...');
+                    const { LLMAnalyzer } = require('./services/aiGateway');
+                    
+                    // Run batch analysis every 5 minutes
+                    setInterval(async () => {
+                        try {
+                            await LLMAnalyzer.analyzePendingCalls(10);
+                        } catch (error) {
+                            console.error('[AI Gateway Cron] Analysis batch failed:', error.message);
+                        }
+                    }, 5 * 60 * 1000); // 5 minutes
+                    
+                    console.log('[Post-Startup] ✅ AI Gateway LLM Analyzer cron started (runs every 5 minutes)');
+                } catch (error) {
+                    console.error('[Post-Startup] ❌ Failed to start AI Gateway LLM Analyzer:', error.message);
+                    // Non-blocking: server continues even if analyzer fails
+                }
+            }, 10000); // Wait 10 seconds after server starts to begin health checks
             
             // 🤖 AUTO-OPTIMIZATION SCHEDULER - DISABLED (Missing dependency: smartThresholdOptimizer)
             // TODO: Re-enable when smartThresholdOptimizer is implemented
