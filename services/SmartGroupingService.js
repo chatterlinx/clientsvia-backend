@@ -16,10 +16,13 @@
 // - Send ONE: "🚨 5 SMS_DELIVERY_FAILURE errors in 10 minutes"
 // ============================================================================
 
-const { redisClient } = require('../db');
+const db = require('../db');
 const logger = require('../utils/logger');
 
 class SmartGroupingService {
+    static getRedisClient() {
+        return db.redisClient;
+    }
     
     /**
      * Check if an error should be grouped
@@ -79,6 +82,11 @@ class SmartGroupingService {
             const sentTime = Date.now();
             
             // Store when we sent the grouped alert
+            const redisClient = this.getRedisClient();
+            if (!redisClient) {
+                logger.warn('⚠️ [SMART GROUPING] Redis client unavailable when marking grouped alert');
+                return false;
+            }
             await redisClient.set(sentKey, JSON.stringify({
                 sentAt: sentTime,
                 totalCount
@@ -103,6 +111,11 @@ class SmartGroupingService {
     static async hasRecentGroupedAlert(groupKey) {
         try {
             const sentKey = `${groupKey}:sent`;
+            const redisClient = this.getRedisClient();
+            if (!redisClient) {
+                logger.warn('⚠️ [SMART GROUPING] Redis client unavailable when checking recent alerts');
+                return { alreadySent: false };
+            }
             const sentData = await redisClient.get(sentKey);
             
             if (!sentData) {
@@ -135,6 +148,11 @@ class SmartGroupingService {
      */
     static async getGroupCount(groupKey) {
         try {
+            const redisClient = this.getRedisClient();
+            if (!redisClient) {
+                logger.warn('⚠️ [SMART GROUPING] Redis client unavailable when getting group count');
+                return 0;
+            }
             const count = await redisClient.get(groupKey);
             return count ? parseInt(count) : 0;
         } catch (error) {
@@ -150,6 +168,11 @@ class SmartGroupingService {
      */
     static async resetGroupCounter(groupKey) {
         try {
+            const redisClient = this.getRedisClient();
+            if (!redisClient) {
+                logger.warn('⚠️ [SMART GROUPING] Redis client unavailable when resetting counter');
+                return false;
+            }
             await redisClient.del(groupKey);
             logger.debug(`🔗 [SMART GROUPING] Reset counter: ${groupKey}`);
             return true;
@@ -169,6 +192,11 @@ class SmartGroupingService {
     static async incrementCounter(key, expirationSeconds) {
         try {
             // Increment the counter
+            const redisClient = this.getRedisClient();
+            if (!redisClient) {
+                logger.warn('⚠️ [SMART GROUPING] Redis client unavailable when incrementing counter');
+                return 0;
+            }
             const count = await redisClient.incr(key);
             
             // Set expiration only on first occurrence

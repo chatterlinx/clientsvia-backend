@@ -9,7 +9,7 @@
 
 const OpenAI = require('openai');
 const mongoose = require('mongoose');
-const { redisClient } = require('../../db');
+const db = require('../../db');
 const logger = require('../../utils/logger');
 const AdminNotificationService = require('../AdminNotificationService');
 const AdminSettings = require('../../models/AdminSettings');
@@ -206,6 +206,8 @@ class AIGatewayHealthMonitor {
     async checkRedis() {
         console.log('🔍 [AI GATEWAY HEALTH] CHECKPOINT 1: Starting Redis health check...');
         
+        const redisClient = db.redisClient;
+
         const result = {
             status: 'UNKNOWN',
             latency: null,
@@ -217,8 +219,11 @@ class AIGatewayHealthMonitor {
             const startTime = Date.now();
             
             // Check if Redis client exists
-            if (!redisClient) {
-                throw new Error('Redis client not initialized');
+            if (!redisClient || !redisClient.isReady) {
+                result.status = 'UNKNOWN';
+                result.error = 'Redis client not initialized (server may still be starting)';
+                // Don't send alert during startup
+                return result;
             }
             
             // Simple ping to Redis
