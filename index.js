@@ -567,7 +567,15 @@ async function startServer() {
         const redisStart = Date.now();
         try {
             const { initializeRedis } = require('./clients');
-            await initializeRedis();
+            
+            // Add 10-second timeout to prevent blocking server startup
+            await Promise.race([
+                initializeRedis(),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Redis initialization timeout after 10s')), 10000)
+                )
+            ]);
+            
             console.log(`[Server] ✅ Step 3.5 COMPLETE: Redis initialized in ${Date.now() - redisStart}ms`);
         } catch (redisError) {
             console.error('[Server] ❌ Redis initialization failed:', redisError.message);
