@@ -30,6 +30,10 @@ const { ObjectId } = require('mongodb');
 const Company = require('../../models/v2Company');
 const { redisClient } = require('../../clients');
 const { getAvailableVoices, getUserInfo } = require('../../services/v2elevenLabsService');
+const { authenticateJWT } = require('../../middleware/auth');
+
+// 🔒 SECURITY: Require authentication for all routes
+router.use(authenticateJWT);
 
 /**
  * @route   GET /api/company/:companyId/v2-voice-settings/status

@@ -28,6 +28,10 @@ const router = express.Router();
 const v2Company = require('../../models/v2Company');
 const GlobalAIBehaviorTemplate = require('../../models/GlobalAIBehaviorTemplate');
 const { redisClient } = require('../../clients/index');
+const { authenticateJWT } = require('../../middleware/auth');
+
+// 🔒 SECURITY: Require authentication for all routes
+router.use(authenticateJWT);
 
 /**
  * GET /api/company/:companyId/configuration/filler-filter

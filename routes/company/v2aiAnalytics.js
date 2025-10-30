@@ -34,6 +34,10 @@ const logger = require('../../utils/logger.js');
 const router = express.Router();
 const v2AIAgentCallLog = require('../../models/v2AIAgentCallLog');
 const v2Company = require('../../models/v2Company');
+const { authenticateJWT } = require('../../middleware/auth');
+
+// 🔒 SECURITY: Require authentication for all routes
+router.use(authenticateJWT);
 
 /**
  * GET /api/company/:companyId/analytics/overview

@@ -28,6 +28,10 @@ const logger = require('../../utils/logger.js');
 const router = express.Router();
 const v2Company = require('../../models/v2Company');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+const { authenticateJWT } = require('../../middleware/auth');
+
+// 🔒 SECURITY: Require authentication for all routes
+router.use(authenticateJWT);
 
 /**
  * GET /api/company/:companyId/live-scenarios
