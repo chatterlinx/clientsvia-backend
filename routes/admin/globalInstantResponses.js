@@ -3522,6 +3522,7 @@ router.get('/:id/fillers', authenticateJWT, adminOnly, async (req, res) => {
         res.json({
             success: true,
             templateId: template._id,
+            templateName: template.name,  // ✅ ADD: Template name for UI badge
             fillers: template.fillerWords || [],
             count: (template.fillerWords || []).length
         });
