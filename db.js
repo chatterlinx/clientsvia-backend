@@ -195,22 +195,8 @@ const getDB = () => {
     return mongoose.connection.db; // Return the native Db instance from Mongoose
 };
 
-// ============================================================================
-// 🔴 CRITICAL: Import Redis client correctly as getter
-// ============================================================================
-// WRONG: const { redisClient } = require('./clients');
-// This destructures at module load time when redisClient is null!
-//
-// CORRECT: Import the entire module and access via getter
-// This ensures we always get the current redisClient value
-// ============================================================================
-const clients = require('./clients');
+// Import redisClient from clients module
+const { redisClient } = require('./clients');
 
-// Export both functions + redisClient getter
-module.exports = { 
-  connectDB, 
-  getDB, 
-  get redisClient() {
-    return clients.redisClient;
-  }
-};
+// Export both functions + redisClient
+module.exports = { connectDB, getDB, redisClient };
