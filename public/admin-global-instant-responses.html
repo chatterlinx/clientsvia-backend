@@ -758,10 +758,16 @@
                                                 </p>
                                             </div>
                                         </div>
-                                        <button onclick="toggleDiagnosticErrors()" class="px-4 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg text-sm font-semibold transition-colors">
-                                            View Details
-                                            <i class="fas fa-chevron-down ml-2"></i>
-                                        </button>
+                                        <div class="flex gap-2">
+                                            <button onclick="refreshDiagnostics()" class="px-4 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg text-sm font-semibold transition-colors">
+                                                <i class="fas fa-sync-alt mr-2"></i>
+                                                Refresh
+                                            </button>
+                                            <button onclick="toggleDiagnosticErrors()" class="px-4 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg text-sm font-semibold transition-colors">
+                                                View Details
+                                                <i class="fas fa-chevron-down ml-2"></i>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
