@@ -741,7 +741,32 @@
                                 </div>
                             </div>
                             
-                            <!-- ERROR LOG SECTION (NEW) -->
+                            <!-- QUICK STATUS BANNER (COMPACT SUMMARY) -->
+                            <div id="diagnostic-status-banner" class="hidden mt-4">
+                                <div id="diagnostic-status-card" class="rounded-lg p-4 border-2 shadow-sm">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-3">
+                                            <div id="status-icon" class="text-3xl">
+                                                <!-- Icon populated by JS -->
+                                            </div>
+                                            <div>
+                                                <h5 id="status-title" class="font-bold text-lg">
+                                                    <!-- Title populated by JS -->
+                                                </h5>
+                                                <p id="status-summary" class="text-sm opacity-90 mt-0.5">
+                                                    <!-- Summary populated by JS -->
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button onclick="toggleDiagnosticErrors()" class="px-4 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg text-sm font-semibold transition-colors">
+                                            View Details
+                                            <i class="fas fa-chevron-down ml-2"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- ERROR LOG SECTION (DETAILED REPORT) -->
                             <div id="diagnostic-error-log" class="hidden mt-4">
                                 <div class="bg-red-50 border-2 border-red-300 rounded-lg p-4">
                                     <div class="flex items-center justify-between mb-3">
@@ -758,7 +783,7 @@
                                                 <i class="fas fa-sync-alt mr-1"></i>
                                                 Refresh
                                             </button>
-                                            <button onclick="toggleDiagnosticErrors()" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-xs font-semibold transition-colors">
+                                            <button onclick="closeDiagnostics()" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-xs font-semibold transition-colors">
                                                 <i class="fas fa-times mr-1"></i>
                                                 Close
                                             </button>
@@ -11462,9 +11487,40 @@ Timestamp: ${new Date(timestamp).toISOString()}
         
         function toggleDiagnosticErrors() {
             const errorLog = document.getElementById('diagnostic-error-log');
+            const button = event?.target?.closest('button');
+            const icon = button?.querySelector('i.fa-chevron-down, i.fa-chevron-up');
+            
             if (errorLog) {
+                const isHidden = errorLog.classList.contains('hidden');
                 errorLog.classList.toggle('hidden');
+                
+                // Update button text and icon
+                if (button) {
+                    if (isHidden) {
+                        button.innerHTML = 'Hide Details <i class="fas fa-chevron-up ml-2"></i>';
+                    } else {
+                        button.innerHTML = 'View Details <i class="fas fa-chevron-down ml-2"></i>';
+                    }
+                }
+                
+                console.log(`📊 [DIAGNOSTICS] Detailed report ${isHidden ? 'expanded' : 'collapsed'}`);
             }
+        }
+        
+        function closeDiagnostics() {
+            // Hide both the status banner and detailed report
+            const statusBanner = document.getElementById('diagnostic-status-banner');
+            const errorLog = document.getElementById('diagnostic-error-log');
+            
+            if (statusBanner) {
+                statusBanner.classList.add('hidden');
+            }
+            
+            if (errorLog) {
+                errorLog.classList.add('hidden');
+            }
+            
+            console.log('🗑️ [DIAGNOSTICS] Diagnostics closed');
         }
         
         async function copyDiagnosticErrors() {
@@ -11486,6 +11542,50 @@ Timestamp: ${new Date(timestamp).toISOString()}
         function showDiagnosticErrors(healthData) {
             console.log('📊 [DIAGNOSTICS] Displaying error log...', healthData);
             
+            // ============================================================================
+            // 🎯 STEP 1: Show compact status banner (quick acknowledgement)
+            // ============================================================================
+            const statusBanner = document.getElementById('diagnostic-status-banner');
+            const statusCard = document.getElementById('diagnostic-status-card');
+            const statusIcon = document.getElementById('status-icon');
+            const statusTitle = document.getElementById('status-title');
+            const statusSummary = document.getElementById('status-summary');
+            
+            if (statusBanner && statusCard && statusIcon && statusTitle && statusSummary) {
+                // Determine status styling
+                let cardClass, icon, title, summary;
+                
+                if (healthData.overallStatus === 'HEALTHY') {
+                    cardClass = 'bg-green-50 border-green-300 text-green-900';
+                    icon = '✅';
+                    title = 'All Systems Operational';
+                    summary = 'OpenAI, MongoDB, Redis, and 3-Tier Intelligence are running smoothly';
+                } else if (healthData.overallStatus === 'DEGRADED') {
+                    cardClass = 'bg-yellow-50 border-yellow-300 text-yellow-900';
+                    icon = '⚠️';
+                    title = 'System Partially Operational';
+                    summary = `${healthData.redis?.status === 'UNKNOWN' ? 'Redis cold start detected' : 'Some components need attention'}`;
+                } else {
+                    cardClass = 'bg-red-50 border-red-300 text-red-900';
+                    icon = '❌';
+                    title = 'System Issues Detected';
+                    summary = 'Critical components are not responding correctly';
+                }
+                
+                // Apply styling and content
+                statusCard.className = `rounded-lg p-4 border-2 shadow-sm ${cardClass}`;
+                statusIcon.textContent = icon;
+                statusTitle.textContent = title;
+                statusSummary.textContent = summary;
+                
+                // Show the banner
+                statusBanner.classList.remove('hidden');
+                console.log('✅ [DIAGNOSTICS] Status banner displayed');
+            }
+            
+            // ============================================================================
+            // 🎯 STEP 2: Build comprehensive diagnostic report (detailed)
+            // ============================================================================
             // Build comprehensive diagnostic report
             let report = `
 ╔══════════════════════════════════════════════════════════════════════════════╗
