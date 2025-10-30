@@ -161,7 +161,7 @@ class AIGatewayManager {
                 this.updateHealthCard('mongodb', data.results.mongodb);
                 this.updateHealthCard('redis', data.results.redis);
                 
-                // Store FULL results for modal
+                // Store FULL results for diagnostics
                 this.lastHealthResults = {
                     openai: data.results.openai,
                     mongodb: data.results.mongodb,
@@ -171,17 +171,33 @@ class AIGatewayManager {
                     timestamp: new Date()
                 };
                 
-                // Show diagnostic errors in Dashboard Settings tab (if available)
+                // ============================================================================
+                // 🎯 PROPER UX: Show diagnostic report directly (NO CONFUSING MODAL)
+                // ============================================================================
+                // OLD BROKEN FLOW:
+                // 1. Click "Test Connection"
+                // 2. Modal pops up ❌ (blocks view)
+                // 3. User closes modal
+                // 4. Report is visible behind it (confusing!)
+                //
+                // NEW CORRECT FLOW:
+                // 1. Click "Test Connection"
+                // 2. Report appears directly in expandable section ✅
+                // 3. Simple toast notification confirms completion ✅
+                // 4. No modal blocking the view ✅
+                // ============================================================================
+                
+                // Show diagnostic report directly in Dashboard Settings tab
                 if (typeof showDiagnosticErrors === 'function') {
                     showDiagnosticErrors(this.lastHealthResults);
                 }
                 
-                // Open health modal with ALL results
-                if (window.healthModal) {
-                    await window.healthModal.open(this.lastHealthResults);
-                } else {
-                    window.toastManager?.success(`Health check complete: ${data.overallStatus}`);
-                }
+                // Show simple success toast (no confusing modal)
+                const statusEmoji = data.overallStatus === 'HEALTHY' ? '✅' : 
+                                   data.overallStatus === 'DEGRADED' ? '⚠️' : '❌';
+                window.toastManager?.success(
+                    `${statusEmoji} System diagnostics complete: ${data.overallStatus}`
+                );
                 
                 // Auto-refresh health logs after successful check
                 this.loadHealthLogs();
