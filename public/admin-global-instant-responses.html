@@ -8486,7 +8486,24 @@ Continue?`;
                     return;
                 }
 
-                // Populate edit form
+                // ============================================================================
+                // 🔧 SAFETY CHECK: Verify edit modal exists before populating
+                // ============================================================================
+                // Issue: Edit behavior modal HTML is missing from this page
+                // This is a REFACTOR AUDIT finding - the modal was never implemented
+                // For now, show a helpful message instead of crashing
+                // TODO: Implement the full edit behavior modal UI
+                // ============================================================================
+                
+                const editModal = document.getElementById('edit-behavior-modal');
+                
+                if (!editModal) {
+                    console.warn('⚠️ [BEHAVIORS] Edit modal not implemented yet');
+                    showNotification('Edit behavior UI coming soon! For now, use the API endpoint.', 'info');
+                    return;
+                }
+                
+                // Populate edit form (only if modal exists)
                 document.getElementById('edit-behavior-id').value = behavior._id;
                 document.getElementById('edit-behavior-name').value = behavior.name;
                 document.getElementById('edit-behavior-icon').value = behavior.icon;
@@ -8497,7 +8514,7 @@ Continue?`;
                 document.getElementById('edit-behavior-volume').value = behavior.volume || 'normal';
                 document.getElementById('edit-behavior-emotion-intensity').value = behavior.emotionIntensity || 3;
 
-                document.getElementById('edit-behavior-modal').style.display = 'flex';
+                editModal.style.display = 'flex';
             } catch (error) {
                 console.error('Error loading behavior for edit:', error);
                 showNotification('Error loading behavior', 'error');
