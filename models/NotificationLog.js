@@ -180,7 +180,7 @@ const notificationLogSchema = new mongoose.Schema({
             recipientName: String,
             status: {
                 type: String,
-                enum: ['initiated', 'ringing', 'answered', 'completed', 'failed', 'no-answer']
+                enum: ['initiated', 'ringing', 'answered', 'completed', 'failed', 'no-answer', 'skipped']
             },
             twilioCallSid: String,
             duration: Number,            // seconds
