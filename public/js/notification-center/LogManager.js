@@ -789,14 +789,19 @@ Paste this report to your AI assistant for instant root cause analysis!
                 const failed = response.data?.summary?.failed || 0;
                 const warnings = response.data?.summary?.warnings || 0;
                 
+                // ✅ FIX: Use alert() instead of non-existent showWarning/showSuccess methods
                 if (status === 'HEALTHY' || status === 'PASS') {
-                    this.nc.showSuccess(`✅ ${testName} PASSED! All systems operational (${passed}/${total} checks passed)`);
+                    alert(`✅ ${testName} PASSED! All systems operational (${passed}/${total} checks passed)`);
+                    console.log(`✅ ${testName} PASSED!`, response.data);
                 } else if (status === 'WARNING') {
-                    this.nc.showWarning(`⚠️ ${testName} completed with WARNINGS: ${warnings} warning(s), ${failed} failure(s). Check details in new alert.`);
+                    alert(`⚠️ ${testName} completed with WARNINGS: ${warnings} warning(s), ${failed} failure(s). Check details in new alert.`);
+                    console.warn(`⚠️ ${testName} WARNING`, response.data);
                 } else if (status === 'CRITICAL' || status === 'FAIL') {
-                    this.nc.showError(`🚨 ${testName} FAILED: ${failed} critical failure(s), ${warnings} warning(s). Check Alert Log for details!`);
+                    alert(`🚨 ${testName} FAILED: ${failed} critical failure(s), ${warnings} warning(s). Check Alert Log for details!`);
+                    console.error(`🚨 ${testName} FAILED`, response.data);
                 } else {
-                    this.nc.showInfo(`ℹ️ ${testName} completed. Status: ${status}`);
+                    alert(`ℹ️ ${testName} completed. Status: ${status}`);
+                    console.info(`ℹ️ ${testName}`, response.data);
                 }
                 
                 // Auto-refresh logs to show new test results
@@ -804,12 +809,13 @@ Paste this report to your AI assistant for instant root cause analysis!
                     this.load();
                 }, 2000);
             } else {
-                this.nc.showError(`❌ ${testName} failed to run: ${response.message || 'Unknown error'}`);
+                alert(`❌ ${testName} failed to run: ${response.message || 'Unknown error'}`);
+                console.error(`❌ ${testName} error:`, response);
             }
             
         } catch (error) {
             console.error('❌ [LOG] Test failed:', error);
-            this.nc.showError(`Test failed: ${error.message}`);
+            alert(`❌ Test failed: ${error.message}`);
         }
     }
     
