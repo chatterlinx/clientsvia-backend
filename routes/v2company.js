@@ -657,7 +657,7 @@ router.patch('/company/:id', async (req, res) => {
 });
 
 // 🚨 Account Status Management - Critical for billing/service control
-router.patch('/company/:companyId/account-status', async (req, res) => {
+router.patch('/company/:companyId/account-status', authenticateJWT, async (req, res) => {
     const { companyId } = req.params;
     const { status, callForwardNumber, callForwardMessage, suspendedMessage, reason, notes } = req.body;
     
@@ -837,7 +837,7 @@ router.delete('/company/:companyId/account-status/history/:index', authenticateJ
     }
 });
 
-router.patch('/company/:companyId/configuration', async (req, res) => {
+router.patch('/company/:companyId/configuration', authenticateJWT, async (req, res) => {
     const { companyId } = req.params;
     const { twilioConfig, smsSettings } = req.body;
     if (!ObjectId.isValid(companyId)) {return res.status(400).json({ message: 'Invalid company ID format' });}
@@ -882,7 +882,7 @@ router.patch('/company/:companyId/configuration', async (req, res) => {
 
 // This route needs to be updated if you want to manage Google Calendar OAuth tokens here.
 // For now, it only updates highlevel. Google Calendar linking should have its own dedicated routes.
-router.patch('/company/:companyId/integrations', async (req, res) => {
+router.patch('/company/:companyId/integrations', authenticateJWT, async (req, res) => {
     const { companyId } = req.params;
     const { integrations } = req.body; // Assuming this only sends highlevel data
     if (!ObjectId.isValid(companyId)) {return res.status(400).json({ message: 'Invalid company ID format' });}
@@ -917,7 +917,7 @@ router.patch('/company/:companyId/integrations', async (req, res) => {
 });
 
 
-router.patch('/company/:companyId/aisettings', async (req, res) => {
+router.patch('/company/:companyId/aisettings', authenticateJWT, async (req, res) => {
     const { companyId } = req.params;
     const { aiSettings } = req.body;
     if (!ObjectId.isValid(companyId)) {return res.status(400).json({ message: 'Invalid company ID format' });}
@@ -989,7 +989,7 @@ router.patch('/company/:companyId/aisettings', async (req, res) => {
 });
 
 // Voice Settings endpoint - ElevenLabs only
-router.patch('/company/:companyId/voice-settings', async (req, res) => {
+router.patch('/company/:companyId/voice-settings', authenticateJWT, async (req, res) => {
     const { companyId } = req.params;
     const settings = req.body;
     
@@ -1153,7 +1153,7 @@ router.patch('/company/:companyId/profile', authenticateJWT, async (req, res) =>
     }
 });
 
-router.patch('/company/:companyId/agentsetup', async (req, res) => {
+router.patch('/company/:companyId/agentsetup', authenticateJWT, async (req, res) => {
     const { companyId } = req.params;
     const { agentSetup, tradeTypes, timezone } = req.body;
 
@@ -1234,7 +1234,7 @@ router.patch('/company/:companyId/agentsetup', async (req, res) => {
 // --- Booking Flow Configuration Routes ---
 
 // Get booking flow configuration for a company
-router.get('/companies/:companyId/booking-flow', apiLimiter, async (req, res) => {
+router.get('/companies/:companyId/booking-flow', authenticateJWT, apiLimiter, async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -1265,7 +1265,7 @@ router.get('/companies/:companyId/booking-flow', apiLimiter, async (req, res) =>
 });
 
 // Save booking flow configuration for a company
-router.post('/companies/:companyId/booking-flow', apiLimiter, async (req, res) => {
+router.post('/companies/:companyId/booking-flow', authenticateJWT, apiLimiter, async (req, res) => {
     try {
         const { companyId } = req.params;
         const bookingFlowFields = req.body;
@@ -1337,7 +1337,7 @@ router.post('/companies/:companyId/booking-flow', apiLimiter, async (req, res) =
 });
 
 // Get company's trade categories
-router.get('/companies/:companyId/trade-categories', apiLimiter, async (req, res) => {
+router.get('/companies/:companyId/trade-categories', authenticateJWT, apiLimiter, async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -1360,7 +1360,7 @@ router.get('/companies/:companyId/trade-categories', apiLimiter, async (req, res
 });
 
 // Save company's trade categories
-router.post('/companies/:companyId/trade-categories', apiLimiter, async (req, res) => {
+router.post('/companies/:companyId/trade-categories', authenticateJWT, apiLimiter, async (req, res) => {
     try {
         const { companyId } = req.params;
         const { tradeCategories } = req.body;
