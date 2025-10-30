@@ -8414,12 +8414,32 @@ Continue?`;
         // BEHAVIOR MANAGEMENT FUNCTIONS
         // ============================================
         function openAddBehaviorModal() {
-            document.getElementById('add-behavior-modal').style.display = 'flex';
+            // ============================================================================
+            // 🔧 SAFETY CHECK: Verify add behavior modal exists
+            // ============================================================================
+            // Issue: Add behavior modal HTML is missing from this page
+            // This is a REFACTOR AUDIT finding - the modal was never implemented
+            // For now, show a helpful message instead of crashing
+            // TODO: Implement the full add behavior modal UI
+            // ============================================================================
+            
+            const modal = document.getElementById('add-behavior-modal');
+            
+            if (!modal) {
+                console.warn('⚠️ [BEHAVIORS] Add modal not implemented yet');
+                showNotification('Add behavior UI coming soon! For now, use the API endpoint.', 'info');
+                return;
+            }
+            
+            modal.style.display = 'flex';
             document.getElementById('add-behavior-form').reset();
         }
 
         function closeAddBehaviorModal() {
-            document.getElementById('add-behavior-modal').style.display = 'none';
+            const modal = document.getElementById('add-behavior-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
         }
 
         async function handleAddBehavior(event) {
@@ -8522,7 +8542,10 @@ Continue?`;
         }
 
         function closeEditBehaviorModal() {
-            document.getElementById('edit-behavior-modal').style.display = 'none';
+            const modal = document.getElementById('edit-behavior-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
         }
 
         async function handleEditBehavior(event) {
