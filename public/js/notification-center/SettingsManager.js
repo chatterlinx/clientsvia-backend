@@ -18,7 +18,8 @@ class SettingsManager {
             this.loadTestCallConfig(),
             this.loadAdminContacts(),
             this.loadEscalationSettings(),
-            this.loadNotificationPolicy()
+            this.loadNotificationPolicy(),
+            this.loadAlertThresholds()
         ]);
         
         this.attachEventHandlers();
@@ -672,8 +673,94 @@ class SettingsManager {
             policyBtn.addEventListener('click', () => this.saveNotificationPolicy());
         }
         
+        // Alert Thresholds save button
+        const thresholdsBtn = document.getElementById('save-thresholds-btn');
+        if (thresholdsBtn) {
+            thresholdsBtn.addEventListener('click', () => this.saveAlertThresholds());
+        }
+        
         // Make this instance globally accessible for remove buttons
         window.settingsManager = this;
+    }
+    
+    // ========================================================================
+    // ALERT THRESHOLDS
+    // ========================================================================
+    
+    async loadAlertThresholds() {
+        try {
+            const response = await this.nc.apiGet('/api/admin/notifications/thresholds');
+            
+            if (response.success && response.data) {
+                const thresholds = response.data;
+                
+                // Redis thresholds
+                if (thresholds.redis) {
+                    if (thresholds.redis.hitRate !== undefined) {
+                        document.getElementById('redis-hit-rate-threshold').value = thresholds.redis.hitRate;
+                    }
+                    if (thresholds.redis.memory !== undefined) {
+                        document.getElementById('redis-memory-threshold').value = thresholds.redis.memory;
+                    }
+                    if (thresholds.redis.latency !== undefined) {
+                        document.getElementById('redis-latency-threshold').value = thresholds.redis.latency;
+                    }
+                }
+                
+                // Update slider labels
+                if (typeof updateSliderLabels === 'function') {
+                    updateSliderLabels();
+                }
+                
+                console.log('✅ [SETTINGS] Alert thresholds loaded');
+            } else {
+                console.log('ℹ️ [SETTINGS] No custom thresholds set, using defaults');
+            }
+            
+        } catch (error) {
+            console.error('❌ [SETTINGS] Failed to load alert thresholds:', error);
+        }
+    }
+    
+    async saveAlertThresholds() {
+        try {
+            const hitRate = parseInt(document.getElementById('redis-hit-rate-threshold').value);
+            const memory = parseInt(document.getElementById('redis-memory-threshold').value);
+            const latency = parseInt(document.getElementById('redis-latency-threshold').value);
+            
+            // Validate
+            if (hitRate < 30 || hitRate > 90) {
+                alert('❌ Hit Rate must be between 30% and 90%');
+                return;
+            }
+            if (memory < 50 || memory > 95) {
+                alert('❌ Memory threshold must be between 50% and 95%');
+                return;
+            }
+            if (latency < 50 || latency > 500) {
+                alert('❌ Latency threshold must be between 50ms and 500ms');
+                return;
+            }
+            
+            const response = await this.nc.apiPost('/api/admin/notifications/thresholds', {
+                redis: {
+                    hitRate,
+                    memory,
+                    latency
+                }
+            });
+            
+            if (response.success) {
+                alert(`✅ Alert thresholds saved successfully!\n\n• Hit Rate: ${hitRate}%\n• Memory: ${memory}%\n• Latency: ${latency}ms\n\nThese will take effect on the next health check.`);
+                console.log('✅ [SETTINGS] Alert thresholds saved');
+            } else {
+                throw new Error(response.message || 'Failed to save thresholds');
+            }
+            
+        } catch (error) {
+            console.error('❌ [SETTINGS] Failed to save alert thresholds:', error);
+            alert(`❌ Failed to save alert thresholds: ${error.message}`);
+        }
     }
     
     // ========================================================================

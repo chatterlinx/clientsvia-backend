@@ -370,6 +370,39 @@ const adminSettingsSchema = new mongoose.Schema({
     },
     
     // ============================================================================
+    // 🎯 ALERT THRESHOLDS - Configurable Monitoring Limits
+    // ============================================================================
+    // PURPOSE: Define when health alerts fire to reduce false positives
+    // ARCHITECTURE: Per-service thresholds stored in DB, read by HealthMonitor
+    // BENEFITS: Adjust in UI without code changes, optimize for environment
+    // ============================================================================
+    alertThresholds: {
+        redis: {
+            hitRate: {
+                type: Number,
+                default: 60,
+                min: 30,
+                max: 90,
+                description: 'Alert if cache hit rate drops below this % (default: 60, lower after restarts)'
+            },
+            memory: {
+                type: Number,
+                default: 85,
+                min: 50,
+                max: 95,
+                description: 'Alert if memory usage exceeds this % (default: 85)'
+            },
+            latency: {
+                type: Number,
+                default: 100,
+                min: 50,
+                max: 500,
+                description: 'Alert if response time exceeds this in ms (default: 100)'
+            }
+        }
+    },
+    
+    // ============================================================================
     // 🧠 GLOBAL AI BRAIN TEST CONFIGURATION (NEW - World-Class Refactor)
     // ============================================================================
     // PURPOSE: Single global test console for ALL AI Brain templates

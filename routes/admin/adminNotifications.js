@@ -1891,4 +1891,107 @@ router.post('/run-critical-data-health-check', authenticateJWT, requireRole('adm
     }
 });
 
+// ============================================================================
+// 🎯 ALERT THRESHOLDS - Configurable Monitoring Settings
+// ============================================================================
+
+/**
+ * GET /api/admin/notifications/thresholds
+ * Retrieve current alert thresholds for health monitoring
+ */
+router.get('/thresholds', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const AdminSettings = require('../../models/AdminSettings');
+        const settings = await AdminSettings.getSettings();
+        
+        res.json({
+            success: true,
+            data: settings.alertThresholds || {
+                redis: {
+                    hitRate: 60,
+                    memory: 85,
+                    latency: 100
+                }
+            }
+        });
+        
+    } catch (error) {
+        logger.error('❌ [THRESHOLDS] Failed to load:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to load alert thresholds',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/admin/notifications/thresholds
+ * Update alert thresholds for health monitoring
+ */
+router.post('/thresholds', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const AdminSettings = require('../../models/AdminSettings');
+        const { redis } = req.body;
+        
+        // Validate thresholds
+        if (redis) {
+            if (redis.hitRate && (redis.hitRate < 30 || redis.hitRate > 90)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Redis hit rate threshold must be between 30% and 90%'
+                });
+            }
+            if (redis.memory && (redis.memory < 50 || redis.memory > 95)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Redis memory threshold must be between 50% and 95%'
+                });
+            }
+            if (redis.latency && (redis.latency < 50 || redis.latency > 500)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Redis latency threshold must be between 50ms and 500ms'
+                });
+            }
+        }
+        
+        // Update settings
+        const settings = await AdminSettings.getSettings();
+        
+        if (!settings.alertThresholds) {
+            settings.alertThresholds = {};
+        }
+        
+        if (redis) {
+            settings.alertThresholds.redis = {
+                hitRate: redis.hitRate || 60,
+                memory: redis.memory || 85,
+                latency: redis.latency || 100
+            };
+        }
+        
+        settings.lastUpdated = new Date();
+        settings.updatedBy = req.user?.email || 'Admin';
+        
+        await settings.save();
+        
+        logger.info(`✅ [THRESHOLDS] Updated by ${settings.updatedBy}:`, settings.alertThresholds);
+        
+        res.json({
+            success: true,
+            message: 'Alert thresholds updated successfully',
+            data: settings.alertThresholds
+        });
+        
+    } catch (error) {
+        logger.error('❌ [THRESHOLDS] Failed to update:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update alert thresholds',
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;

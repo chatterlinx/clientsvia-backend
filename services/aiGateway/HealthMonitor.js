@@ -224,6 +224,26 @@ class AIGatewayHealthMonitor {
             }
         };
         
+        // ────────────────────────────────────────────────────────────────────
+        // CHECKPOINT 1.5: Load configurable thresholds from database
+        // ────────────────────────────────────────────────────────────────────
+        let thresholds = {
+            hitRate: 60,    // Default: Alert if hit rate < 60%
+            memory: 85,     // Default: Alert if memory > 85%
+            latency: 100    // Default: Alert if latency > 100ms
+        };
+        
+        try {
+            const AdminSettings = require('../models/AdminSettings');
+            const settings = await AdminSettings.getSettings();
+            if (settings.alertThresholds?.redis) {
+                thresholds = settings.alertThresholds.redis;
+                console.log('✅ [AI GATEWAY HEALTH] Using custom thresholds:', thresholds);
+            }
+        } catch (error) {
+            console.warn('⚠️ [AI GATEWAY HEALTH] Failed to load thresholds, using defaults:', error.message);
+        }
+        
         try {
             const startTime = Date.now();
             
@@ -359,29 +379,30 @@ class AIGatewayHealthMonitor {
                 });
             }
             
-            // ⚠️ WARNING: Low cache hit rate (< 70%)
-            if (result.metrics.hitRate !== null && result.metrics.hitRate < 70) {
+            // ⚠️ WARNING: Low cache hit rate (configurable threshold)
+            if (result.metrics.hitRate !== null && result.metrics.hitRate < thresholds.hitRate) {
                 await AdminNotificationService.sendAlert({
                     code: 'REDIS_LOW_HIT_RATE',
                     severity: 'WARNING',
-                    message: `Redis cache hit rate is low (${result.metrics.hitRate}%)`,
+                    message: `Redis cache hit rate is low (${result.metrics.hitRate}% < ${thresholds.hitRate}%)`,
                     details: {
                         hitRate: result.metrics.hitRate,
+                        threshold: thresholds.hitRate,
                         recommendation: 'Low hit rate may indicate memory pressure or inefficient caching strategy'
                     },
                     source: 'AIGatewayHealthMonitor'
                 });
             }
             
-            // ⚠️ WARNING: Slow response time (> 100ms)
-            if (result.latency > 100) {
+            // ⚠️ WARNING: Slow response time (configurable threshold)
+            if (result.latency > thresholds.latency) {
                 await AdminNotificationService.sendAlert({
                     code: 'REDIS_SLOW_RESPONSE',
                     severity: 'WARNING',
-                    message: `Redis response time is slow (${result.latency}ms)`,
+                    message: `Redis response time is slow (${result.latency}ms > ${thresholds.latency}ms)`,
                     details: {
                         latency: result.latency,
-                        threshold: 100,
+                        threshold: thresholds.latency,
                         recommendation: 'Check Redis connection or consider upgrading to faster tier'
                     },
                     source: 'AIGatewayHealthMonitor'
