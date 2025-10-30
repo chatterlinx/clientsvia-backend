@@ -838,13 +838,46 @@
                     </div>
                     
                     <div class="bg-white border-2 border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
+                        <!-- 📌 TEMPLATE ID BADGE (VISUAL TRACKING) -->
+                        <div id="filler-synonym-template-badge" class="mb-6 p-4 rounded-lg border-2 hidden" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="bg-white bg-opacity-20 rounded-full p-3">
+                                        <i class="fas fa-brain text-white text-2xl"></i>
+                                    </div>
+                                    <div class="text-white">
+                                        <div class="text-xs font-semibold opacity-90 uppercase tracking-wide">Editing Template</div>
+                                        <div class="text-lg font-bold" id="template-badge-name">Loading...</div>
+                                        <div class="text-xs font-mono opacity-75 flex items-center gap-2 mt-1">
+                                            <span>Template ID:</span>
+                                            <code id="template-badge-id" class="bg-white bg-opacity-20 px-2 py-0.5 rounded">...</code>
+                                            <span class="mx-1">•</span>
+                                            <span class="bg-green-400 bg-opacity-40 px-2 py-0.5 rounded flex items-center gap-1">
+                                                <i class="fas fa-link text-xs"></i>
+                                                <span id="template-badge-filler-id">...-F</span>
+                                            </span>
+                                            <span class="bg-purple-400 bg-opacity-40 px-2 py-0.5 rounded flex items-center gap-1">
+                                                <i class="fas fa-link text-xs"></i>
+                                                <span id="template-badge-synonym-id">...-S</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="text-right text-white">
+                                    <div class="text-xs opacity-75">Last Synced</div>
+                                    <div class="text-sm font-semibold" id="template-badge-sync-time">Just now</div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- 🔇 FILLER WORDS SECTION -->
-                        <div class="mb-8">
+                        <div class="mb-8" data-template-section="fillers">
                             <div class="flex items-center justify-between mb-4">
                                 <div>
                                     <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
                                         <i class="fas fa-filter text-gray-600"></i>
                                         Filler Words (Noise Removal)
+                                        <span id="filler-container-id" class="text-xs font-mono text-gray-400 ml-2" title="Filler Container ID"></span>
                                     </h3>
                                     <p class="text-sm text-gray-600 mt-1">
                                         Words to remove from caller input before matching • Inherited by ALL categories
@@ -895,12 +928,13 @@
                         </div>
                         
                         <!-- 🔤 SYNONYM MAPPINGS SECTION -->
-                        <div>
+                        <div data-template-section="synonyms">
                             <div class="flex items-center justify-between mb-4">
                                 <div>
                                     <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
                                         <i class="fas fa-language text-purple-600"></i>
                                         Synonym Mappings (Colloquial → Technical)
+                                        <span id="synonym-container-id" class="text-xs font-mono text-gray-400 ml-2" title="Synonym Container ID"></span>
                                     </h3>
                                     <p class="text-sm text-gray-600 mt-1">
                                         Translate customer slang into technical terms • Inherited by ALL categories

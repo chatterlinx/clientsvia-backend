@@ -47,6 +47,48 @@ function initializeTemplateSettings() {
 // ============================================
 
 /**
+ * Update template ID badge (visual tracking)
+ */
+function updateTemplateIdBadge(templateId, templateName) {
+    const badge = document.getElementById('filler-synonym-template-badge');
+    const badgeName = document.getElementById('template-badge-name');
+    const badgeId = document.getElementById('template-badge-id');
+    const badgeFillerId = document.getElementById('template-badge-filler-id');
+    const badgeSynonymId = document.getElementById('template-badge-synonym-id');
+    const badgeSyncTime = document.getElementById('template-badge-sync-time');
+    const fillerContainerId = document.getElementById('filler-container-id');
+    const synonymContainerId = document.getElementById('synonym-container-id');
+    
+    if (badge && templateId) {
+        badge.classList.remove('hidden');
+        badgeName.textContent = templateName || 'Unknown Template';
+        badgeId.textContent = templateId;
+        
+        // Generate composite IDs with suffix (your idea!)
+        const fillerFileId = `${templateId}-F`;
+        const synonymFileId = `${templateId}-S`;
+        
+        badgeFillerId.textContent = fillerFileId;
+        badgeSynonymId.textContent = synonymFileId;
+        
+        // Update container IDs
+        if (fillerContainerId) {
+            fillerContainerId.textContent = `[${templateId.substring(0, 6)}...-F]`;
+        }
+        if (synonymContainerId) {
+            synonymContainerId.textContent = `[${templateId.substring(0, 6)}...-S]`;
+        }
+        
+        // Update sync time
+        badgeSyncTime.textContent = 'Just now';
+        
+        console.log(`✅ [TEMPLATE BADGE] Updated for ${templateName} (${templateId})`);
+        console.log(`   📌 Filler Container: ${fillerFileId}`);
+        console.log(`   📌 Synonym Container: ${synonymFileId}`);
+    }
+}
+
+/**
  * Load filler words from API
  */
 async function loadFillerWordsForTemplate() {
@@ -75,6 +117,10 @@ async function loadFillerWordsForTemplate() {
         loadedFillerWords = result.fillers || [];
         
         console.log(`✅ [FILLER WORDS] Loaded ${loadedFillerWords.length} words`);
+        
+        // ✅ UPDATE TEMPLATE BADGE (VISUAL TRACKING)
+        const templateName = result.templateName || window.currentTemplateName || 'Unknown';
+        updateTemplateIdBadge(templateId, templateName);
         
         // Render inline (direct DOM manipulation for reliability)
         try {
