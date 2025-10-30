@@ -14,6 +14,53 @@ const logger = require('./utils/logger');
 logger.info('--- STARTING CLIENTSVIA BACKEND SERVER - PRODUCTION BUILD ---');
 console.log('[INIT] ✅ Logger initialized');
 
+// ============================================================================
+// 🛡️ CRITICAL: GLOBAL ERROR HANDLERS (Prevent silent crashes)
+// ============================================================================
+
+process.on('uncaughtException', (error) => {
+    console.error('💥 [FATAL] UNCAUGHT EXCEPTION - SERVER WILL CRASH:', error);
+    console.error('💥 [FATAL] Stack trace:', error.stack);
+    logger.error('💥 [FATAL] Uncaught exception', {
+        error: error.message,
+        stack: error.stack,
+        name: error.name
+    });
+    
+    // Give logger time to flush before exiting
+    setTimeout(() => {
+        process.exit(1);
+    }, 1000);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('💥 [CRITICAL] UNHANDLED PROMISE REJECTION:', reason);
+    console.error('💥 [CRITICAL] Promise:', promise);
+    logger.error('💥 [CRITICAL] Unhandled promise rejection', {
+        reason: reason instanceof Error ? reason.message : String(reason),
+        stack: reason instanceof Error ? reason.stack : undefined,
+        promise: String(promise)
+    });
+    
+    // Don't exit on unhandled rejections, just log them
+    // They might be non-critical async operations
+});
+
+process.on('SIGTERM', () => {
+    console.log('⚠️ [SHUTDOWN] SIGTERM received - graceful shutdown initiated');
+    logger.info('⚠️ [SHUTDOWN] SIGTERM received');
+    // Perform graceful shutdown
+    process.exit(0);
+});
+
+process.on('SIGINT', () => {
+    console.log('⚠️ [SHUTDOWN] SIGINT received - graceful shutdown initiated');
+    logger.info('⚠️ [SHUTDOWN] SIGINT received');
+    process.exit(0);
+});
+
+console.log('[INIT] ✅ Global error handlers installed');
+
 // admin-dashboard/index.js (Main Express Server)
 
 // Import necessary modules
