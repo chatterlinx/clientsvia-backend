@@ -13,6 +13,11 @@ const logger = require('../../utils/logger.js');
 
 const router = express.Router();
 const mongoose = require('mongoose');
+const { authenticateJWT, requireRole } = require('../../middleware/auth');
+
+// 🔒 SECURITY: Require admin authentication - CRITICAL repair operations
+router.use(authenticateJWT);
+router.use(requireRole('admin'));
 
 /**
  * @route   GET /api/admin/emergency/inspect-company/:companyId

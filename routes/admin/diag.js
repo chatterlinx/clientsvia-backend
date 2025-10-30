@@ -1,6 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const { authenticateJWT, requireRole } = require('../../middleware/auth');
+
+// 🔒 SECURITY: Require admin authentication
+router.use(authenticateJWT);
+router.use(requireRole('admin'));
 
 // Diagnostics: expose current environment and DB/Redis fingerprints (redacted)
 router.get('/whoami', (req, res) => {

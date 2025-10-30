@@ -23,6 +23,11 @@ const logger = require('../../utils/logger.js');
 
 const router = express.Router();
 const GlobalActionHookDirectory = require('../../models/GlobalActionHookDirectory');
+const { authenticateJWT, requireRole } = require('../../middleware/auth');
+
+// 🔒 SECURITY: Require admin authentication
+router.use(authenticateJWT);
+router.use(requireRole('admin'));
 
 // ============================================================================
 // GET ROUTES - READ OPERATIONS

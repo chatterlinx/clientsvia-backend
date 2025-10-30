@@ -27,6 +27,11 @@ const rateLimit = require('express-rate-limit');
 const accountDeletionService = require('../../services/accountDeletionService');
 const logger = require('../../utils/logger');
 const Company = require('../../models/v2Company');
+const { authenticateJWT, requireRole } = require('../../middleware/auth');
+
+// 🔒 SECURITY: Require admin authentication for ALL routes
+router.use(authenticateJWT);
+router.use(requireRole('admin'));
 
 // Rate limiting for deletion operations
 const deletionRateLimit = rateLimit({

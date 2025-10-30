@@ -23,6 +23,11 @@ const logger = require('../../utils/logger.js');
 
 const router = express.Router();
 const GlobalAIBehaviorTemplate = require('../../models/GlobalAIBehaviorTemplate');
+const { authenticateJWT, requireRole } = require('../../middleware/auth');
+
+// 🔒 SECURITY: Require admin authentication
+router.use(authenticateJWT);
+router.use(requireRole('admin'));
 
 /**
  * GET ALL BEHAVIORS

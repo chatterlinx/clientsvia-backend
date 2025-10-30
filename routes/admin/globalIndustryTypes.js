@@ -21,6 +21,11 @@ const logger = require('../../utils/logger.js');
 
 const router = express.Router();
 const GlobalIndustryType = require('../../models/GlobalIndustryType');
+const { authenticateJWT, requireRole } = require('../../middleware/auth');
+
+// 🔒 SECURITY: Require admin authentication
+router.use(authenticateJWT);
+router.use(requireRole('admin'));
 
 // GET all industry types
 router.get('/', async (req, res) => {
