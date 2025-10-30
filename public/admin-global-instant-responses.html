@@ -9497,6 +9497,11 @@ Continue?`;
                     await loadSuggestions(false);
                     console.log('✅ [SWITCH TEMPLATE] AI suggestions reloaded');
                     
+                    // 📞 Reload Twilio test config for new template
+                    console.log('📥 [SWITCH TEMPLATE] Reloading Twilio test config...');
+                    await loadTwilioTestConfig();
+                    console.log('✅ [SWITCH TEMPLATE] Twilio test config reloaded');
+                    
                     // NEW: Silently update activeTemplateId in global Twilio config (form stays static!)
                     console.log('📞 [SWITCH TEMPLATE] Updating activeTemplateId in global test config...');
                     try {
@@ -11915,6 +11920,13 @@ ${JSON.stringify(healthData, null, 2)}
             // 🔧 FIX: Load templates into selector on page load
             // This was missing, causing "Loading templates..." to get stuck
             await loadTemplatesIntoSelector();
+            
+            // 🔧 FIX: Load Twilio test config on page load (if template is selected)
+            // This ensures Twilio credentials persist after page refresh
+            if (activeTemplateId) {
+                console.log('📞 [PAGE INIT] Loading Twilio test config for template:', activeTemplateId);
+                await loadTwilioTestConfig();
+            }
             
             console.log('✅ [PAGE INIT] Page initialization complete');
         });
