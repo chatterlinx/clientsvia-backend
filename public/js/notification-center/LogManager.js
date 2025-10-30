@@ -791,8 +791,11 @@ Paste this report to your AI assistant for instant root cause analysis!
                 
                 // ✅ FIX: Use alert() instead of non-existent showWarning/showSuccess methods
                 if (status === 'HEALTHY' || status === 'PASS') {
-                    alert(`✅ ${testName} PASSED! All systems operational (${passed}/${total} checks passed)`);
+                    alert(`✅ ${testName} PASSED! All systems operational (${passed}/${total} checks passed)\n\n🔄 Auto-resolving old CRITICAL alerts...`);
                     console.log(`✅ ${testName} PASSED!`, response.data);
+                    
+                    // ✅ AUTO-RESOLVE: Mark all old CRITICAL health check alerts as resolved
+                    this.autoResolveOldHealthCheckAlerts();
                 } else if (status === 'WARNING') {
                     alert(`⚠️ ${testName} completed with WARNINGS: ${warnings} warning(s), ${failed} failure(s). Check details in new alert.`);
                     console.warn(`⚠️ ${testName} WARNING`, response.data);
@@ -1087,6 +1090,70 @@ Paste this report to your AI assistant for instant root cause analysis!
             return `${minutes} minute${minutes > 1 ? 's' : ''}`;
         } else {
             return `${seconds} second${seconds > 1 ? 's' : ''}`;
+        }
+    }
+    
+    /**
+     * 🔄 AUTO-RESOLVE OLD HEALTH CHECK ALERTS
+     * Automatically marks old CRITICAL health check alerts as resolved when a new test passes
+     */
+    async autoResolveOldHealthCheckAlerts() {
+        try {
+            console.log('🔄 [AUTO-RESOLVE] Finding old CRITICAL health check alerts...');
+            
+            // Find all CRITICAL alerts with code PLATFORM_HEALTH_CHECK that are not already resolved
+            const criticalHealthCheckAlerts = this.logs.filter(log => 
+                log.code === 'PLATFORM_HEALTH_CHECK' && 
+                log.severity === 'CRITICAL' &&
+                log.status !== 'resolved' &&
+                log.status !== 'acknowledged'
+            );
+            
+            if (criticalHealthCheckAlerts.length === 0) {
+                console.log('✅ [AUTO-RESOLVE] No old CRITICAL alerts to resolve');
+                return;
+            }
+            
+            console.log(`🔄 [AUTO-RESOLVE] Found ${criticalHealthCheckAlerts.length} old CRITICAL alert(s) to resolve`);
+            
+            // Resolve each alert
+            const token = localStorage.getItem('adminToken');
+            let resolvedCount = 0;
+            
+            for (const alert of criticalHealthCheckAlerts) {
+                try {
+                    const response = await fetch(`/api/admin/notifications/resolve/${alert._id}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            resolution: 'Auto-resolved: New health check passed successfully',
+                            resolvedBy: 'System (Auto-Resolve)'
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        resolvedCount++;
+                        console.log(`✅ [AUTO-RESOLVE] Resolved alert: ${alert._id}`);
+                    } else {
+                        console.warn(`⚠️ [AUTO-RESOLVE] Failed to resolve alert: ${alert._id}`);
+                    }
+                } catch (error) {
+                    console.error(`❌ [AUTO-RESOLVE] Error resolving alert ${alert._id}:`, error);
+                }
+            }
+            
+            console.log(`✅ [AUTO-RESOLVE] Resolved ${resolvedCount}/${criticalHealthCheckAlerts.length} alerts`);
+            
+            // Refresh the log list to show updated statuses
+            setTimeout(() => {
+                this.load();
+            }, 1000);
+            
+        } catch (error) {
+            console.error('❌ [AUTO-RESOLVE] Error in autoResolveOldHealthCheckAlerts:', error);
         }
     }
 }
