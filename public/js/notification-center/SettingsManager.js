@@ -722,6 +722,61 @@ class SettingsManager {
         }
     }
     
+    async testThresholdConnection() {
+        console.log('🔌 [SETTINGS] Testing threshold API connection...');
+        
+        const banner = document.getElementById('threshold-test-banner');
+        const icon = document.getElementById('threshold-test-icon');
+        const title = document.getElementById('threshold-test-title');
+        const message = document.getElementById('threshold-test-message');
+        const details = document.getElementById('threshold-test-details');
+        
+        try {
+            const startTime = Date.now();
+            const response = await this.nc.apiGet('/api/admin/notifications/thresholds');
+            const responseTime = Date.now() - startTime;
+            
+            if (response.success) {
+                // ✅ SUCCESS
+                banner.className = 'mt-6 p-4 rounded-lg border-l-4 border-green-500 bg-green-50';
+                icon.className = 'fas fa-check-circle text-green-600 text-2xl mr-3';
+                title.textContent = '✅ Connection Successful!';
+                message.textContent = `Threshold API is working perfectly. Response time: ${responseTime}ms`;
+                
+                details.textContent = JSON.stringify(response.data, null, 2);
+                details.classList.remove('hidden');
+                
+                console.log('✅ [SETTINGS] Threshold API test: SUCCESS', response.data);
+            } else {
+                throw new Error(response.message || 'API returned non-success response');
+            }
+            
+        } catch (error) {
+            // ❌ FAILURE
+            banner.className = 'mt-6 p-4 rounded-lg border-l-4 border-red-500 bg-red-50';
+            icon.className = 'fas fa-times-circle text-red-600 text-2xl mr-3';
+            title.textContent = '❌ Connection Failed';
+            
+            if (error.message.includes('404')) {
+                message.textContent = 'Threshold API endpoints not found (404). The new code may not be deployed to production yet. Check Render deploy status.';
+            } else if (error.message.includes('403')) {
+                message.textContent = 'Access denied (403). You may not have admin permissions.';
+            } else if (error.message.includes('500')) {
+                message.textContent = 'Server error (500). Check backend logs for database or code errors.';
+            } else {
+                message.textContent = `API Error: ${error.message}`;
+            }
+            
+            details.textContent = `Error Details:\n${error.stack || error.message}`;
+            details.classList.remove('hidden');
+            
+            console.error('❌ [SETTINGS] Threshold API test: FAILED', error);
+        }
+        
+        // Show banner
+        banner.classList.remove('hidden');
+    }
+    
     async saveAlertThresholds() {
         try {
             const hitRate = parseInt(document.getElementById('redis-hit-rate-threshold').value);
