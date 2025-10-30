@@ -126,9 +126,15 @@ class HealthReportModal {
                 <!-- Footer -->
                 <div class="bg-gray-50 px-6 py-4 flex items-center justify-between border-t flex-shrink-0">
                     <span id="report-id" class="text-xs text-gray-500"></span>
-                    <button onclick="window.healthReportModal.close()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors">
-                        Close
-                    </button>
+                    <div class="flex items-center gap-3">
+                        <button onclick="window.healthReportModal.exportReport()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-2">
+                            <i class="fas fa-download"></i>
+                            Export Full Report
+                        </button>
+                        <button onclick="window.healthReportModal.close()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors">
+                            Close
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
@@ -378,6 +384,176 @@ class HealthReportModal {
             console.error('❌ [HEALTH REPORT MODAL] Failed to copy report:', error.message);
             window.toastManager?.error(`Failed to copy: ${error.message}`);
         }
+    }
+
+    // ========================================================================
+    // 📥 EXPORT FULL DIAGNOSTIC REPORT
+    // ========================================================================
+
+    exportReport() {
+        if (!this.currentLog) {
+            window.toastManager?.error('No report loaded');
+            return;
+        }
+
+        console.log('📥 [HEALTH REPORT MODAL] Exporting full diagnostic report');
+
+        try {
+            // Build comprehensive diagnostic report
+            const report = this.buildDiagnosticReport(this.currentLog);
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(report).then(() => {
+                window.toastManager?.success('Full diagnostic report copied to clipboard!');
+                console.log('✅ [EXPORT] Report copied successfully');
+            }).catch(err => {
+                // Fallback: Download as file
+                this.downloadReport(report);
+                window.toastManager?.info('Report downloaded as file (clipboard unavailable)');
+            });
+        } catch (error) {
+            console.error('❌ [EXPORT] Failed:', error);
+            window.toastManager?.error(`Export failed: ${error.message}`);
+        }
+    }
+
+    // ========================================================================
+    // 📄 BUILD COMPREHENSIVE DIAGNOSTIC REPORT
+    // ========================================================================
+
+    buildDiagnosticReport(log) {
+        const timestamp = new Date(log.timestamp).toLocaleString();
+        
+        let report = `
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    AI GATEWAY HEALTH DIAGNOSTIC REPORT                       ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📅 REPORT TIMESTAMP: ${timestamp}
+🆔 REPORT ID: ${log._id}
+⏱️  OVERALL STATUS: ${log.overallStatus || 'UNKNOWN'}
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📊 SYSTEM COMPONENT STATUS:
+───────────────────────────────────────────────────────────────────────────────
+`;
+
+        // OpenAI Status
+        report += `
+🤖 OPENAI API (Tier 3 LLM Fallback):
+   Status: ${log.openAI?.status || 'UNKNOWN'}
+   Response Time: ${log.openAI?.responseTime || 'N/A'}ms
+   Model: ${log.openAI?.model || 'N/A'}
+   ${log.openAI?.status !== 'HEALTHY' ? `   ⚠️  Error: ${log.openAI?.error || 'Unknown error'}` : ''}
+`;
+
+        // MongoDB Status
+        report += `
+🗄️  MONGODB DATABASE:
+   Status: ${log.mongoDB?.status || 'UNKNOWN'}
+   Response Time: ${log.mongoDB?.responseTime || 'N/A'}ms
+   ${log.mongoDB?.status !== 'HEALTHY' ? `   ⚠️  Error: ${log.mongoDB?.error || 'Unknown error'}` : ''}
+`;
+
+        // Redis Status
+        report += `
+💾 REDIS CACHE:
+   Status: ${log.redis?.status || 'UNKNOWN'}
+   ${log.redis?.status === 'UNKNOWN' ? '   ⚠️  Redis not initialized (cold start or connection issue)' : ''}
+   ${log.redis?.responseTime ? `   Response Time: ${log.redis.responseTime}ms` : ''}
+   ${log.redis?.memory ? `   Memory Usage: ${log.redis.memory}` : ''}
+   ${log.redis?.connections ? `   Active Connections: ${log.redis.connections}` : ''}
+   ${log.redis?.hitRate ? `   Cache Hit Rate: ${log.redis.hitRate}` : ''}
+   ${log.redis?.status !== 'HEALTHY' && log.redis?.error ? `   ⚠️  Error: ${log.redis.error}` : ''}
+`;
+
+        // 3-Tier System Status
+        report += `
+🧠 3-TIER INTELLIGENCE SYSTEM:
+   Status: ${log.threeTier?.status || 'UNKNOWN'}
+   ${log.threeTier?.status !== 'ENABLED' ? `   ⚠️  Warning: ${log.threeTier?.message || 'System not enabled'}` : ''}
+`;
+
+        // Diagnostic Analysis
+        if (log.diagnostics && log.diagnostics.length > 0) {
+            report += `
+═══════════════════════════════════════════════════════════════════════════════
+
+🔍 DIAGNOSTIC ANALYSIS & RECOMMENDATIONS:
+───────────────────────────────────────────────────────────────────────────────
+`;
+            log.diagnostics.forEach((diag, index) => {
+                report += `
+${index + 1}. ${diag.title}
+   Severity: ${diag.severity || 'INFO'}
+   Issue: ${diag.issue || 'N/A'}
+   Impact: ${diag.impact || 'N/A'}
+   Recommendation: ${diag.recommendation || 'N/A'}
+   ${diag.action ? `   Action Required: ${diag.action}` : ''}
+`;
+            });
+        }
+
+        // Root Cause
+        if (log.rootCause) {
+            report += `
+═══════════════════════════════════════════════════════════════════════════════
+
+🎯 ROOT CAUSE ANALYSIS:
+───────────────────────────────────────────────────────────────────────────────
+${log.rootCause}
+`;
+        }
+
+        // Next Steps
+        if (log.nextSteps && log.nextSteps.length > 0) {
+            report += `
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ RECOMMENDED NEXT STEPS:
+───────────────────────────────────────────────────────────────────────────────
+`;
+            log.nextSteps.forEach((step, index) => {
+                report += `${index + 1}. ${step}\n`;
+            });
+        }
+
+        // Raw Technical Details
+        report += `
+═══════════════════════════════════════════════════════════════════════════════
+
+🔧 RAW TECHNICAL DATA (for developer debugging):
+───────────────────────────────────────────────────────────────────────────────
+${JSON.stringify(log, null, 2)}
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📝 REPORT GENERATED BY: ClientsVia AI Gateway Health Monitor
+🔗 SUPPORT: Contact your system administrator with this report
+⏰ GENERATED: ${new Date().toLocaleString()}
+
+╚══════════════════════════════════════════════════════════════════════════════╝
+`;
+
+        return report;
+    }
+
+    // ========================================================================
+    // 💾 DOWNLOAD REPORT AS FILE (Fallback)
+    // ========================================================================
+
+    downloadReport(reportText) {
+        const blob = new Blob([reportText], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ai-gateway-diagnostic-${Date.now()}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        console.log('💾 [EXPORT] Report downloaded as file');
     }
 
     // ========================================================================
