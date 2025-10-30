@@ -24,7 +24,23 @@ class V2SingleSessionManager {
         this.forceReauthInterval = 4 * 60 * 60 * 1000; // 4 hours
         this.suspiciousActivityThreshold = 5;
         
-        // Rate limiting
+        // ============================================================================
+        // 🔧 CRITICAL: Initialize in-memory session tracking
+        // ============================================================================
+        // DISASTER SCENARIO: If activeSessions is undefined, cleanupExpiredSessions()
+        // will crash with: "Cannot read properties of undefined (reading 'entries')"
+        // This happens when the periodic cleanup runs every 30 minutes (line 390-391)
+        // 
+        // WHY THIS MATTERS:
+        // - Server crashes silently without this Map
+        // - Periodic cleanup job (setInterval) triggers the crash
+        // - No sessions can be tracked or refreshed
+        // - Token refresh fails completely
+        // 
+        // LOCATION: Used in cleanupExpiredSessions(), getAllActiveSessions(), 
+        //           and token refresh logic
+        // ============================================================================
+        this.activeSessions = new Map(); // CRITICAL: Must be initialized!
         this.loginAttempts = new Map();
         
         logger.security('🛡️ V2 Single Session Manager initialized');
