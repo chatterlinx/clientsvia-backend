@@ -11597,7 +11597,7 @@ Timestamp: ${new Date(timestamp).toISOString()}
                 let issueCount = 0;
                 let issueList = [];
                 
-                if (healthData.overallStatus === 'HEALTHY') {
+                if (healthData.overallStatus === 'HEALTHY' || healthData.overallStatus === 'ALL_HEALTHY') {
                     cardClass = 'bg-green-50 border-green-300 text-green-900';
                     icon = '✅';
                     title = 'All Systems Operational';
