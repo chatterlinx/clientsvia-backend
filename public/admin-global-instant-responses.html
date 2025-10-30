@@ -744,30 +744,64 @@
                             <!-- QUICK STATUS BANNER (COMPACT SUMMARY) -->
                             <div id="diagnostic-status-banner" class="hidden mt-4">
                                 <div id="diagnostic-status-card" class="rounded-lg p-4 border-2 shadow-sm">
-                                    <div class="flex items-center justify-between">
+                                    <!-- Header with Overall Status -->
+                                    <div class="flex items-center justify-between mb-3">
                                         <div class="flex items-center gap-3">
-                                            <div id="status-icon" class="text-3xl">
+                                            <div id="status-icon" class="text-2xl">
                                                 <!-- Icon populated by JS -->
                                             </div>
                                             <div>
-                                                <h5 id="status-title" class="font-bold text-lg">
+                                                <h5 id="status-title" class="font-bold text-base">
                                                     <!-- Title populated by JS -->
                                                 </h5>
-                                                <p id="status-summary" class="text-sm opacity-90 mt-0.5">
-                                                    <!-- Summary populated by JS -->
-                                                </p>
                                             </div>
                                         </div>
                                         <div class="flex gap-2">
-                                            <button onclick="refreshDiagnostics()" class="px-4 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg text-sm font-semibold transition-colors">
-                                                <i class="fas fa-sync-alt mr-2"></i>
+                                            <button onclick="refreshDiagnostics()" class="px-3 py-1.5 bg-white bg-opacity-20 hover:bg-opacity-30 rounded text-xs font-semibold transition-colors">
+                                                <i class="fas fa-sync-alt mr-1"></i>
                                                 Refresh
                                             </button>
-                                            <button onclick="toggleDiagnosticErrors()" class="px-4 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg text-sm font-semibold transition-colors">
-                                                View Details
-                                                <i class="fas fa-chevron-down ml-2"></i>
+                                            <button onclick="toggleDiagnosticErrors()" class="px-3 py-1.5 bg-white bg-opacity-20 hover:bg-opacity-30 rounded text-xs font-semibold transition-colors">
+                                                Details
+                                                <i class="fas fa-chevron-down ml-1"></i>
                                             </button>
                                         </div>
+                                    </div>
+                                    
+                                    <!-- Component Status Grid -->
+                                    <div class="grid grid-cols-2 gap-2 text-xs">
+                                        <!-- OpenAI Status -->
+                                        <div class="flex items-center gap-2 p-2 rounded" id="openai-status-row">
+                                            <span id="openai-status-icon" class="text-base">⚪</span>
+                                            <span class="font-semibold">OpenAI LLM:</span>
+                                            <span id="openai-status-text" class="font-mono font-bold">-</span>
+                                        </div>
+                                        
+                                        <!-- MongoDB Status -->
+                                        <div class="flex items-center gap-2 p-2 rounded" id="mongodb-status-row">
+                                            <span id="mongodb-status-icon" class="text-base">⚪</span>
+                                            <span class="font-semibold">MongoDB:</span>
+                                            <span id="mongodb-status-text" class="font-mono font-bold">-</span>
+                                        </div>
+                                        
+                                        <!-- Redis Status -->
+                                        <div class="flex items-center gap-2 p-2 rounded" id="redis-status-row">
+                                            <span id="redis-status-icon" class="text-base">⚪</span>
+                                            <span class="font-semibold">Redis Cache:</span>
+                                            <span id="redis-status-text" class="font-mono font-bold">-</span>
+                                        </div>
+                                        
+                                        <!-- 3-Tier Status -->
+                                        <div class="flex items-center gap-2 p-2 rounded" id="tier3-status-row">
+                                            <span id="tier3-status-icon" class="text-base">⚪</span>
+                                            <span class="font-semibold">3-Tier AI:</span>
+                                            <span id="tier3-status-text" class="font-mono font-bold">-</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Issue Summary -->
+                                    <div id="status-issues" class="mt-2 text-xs opacity-90 hidden">
+                                        <!-- Populated by JS if there are issues -->
                                     </div>
                                 </div>
                             </div>
@@ -11549,44 +11583,159 @@ Timestamp: ${new Date(timestamp).toISOString()}
             console.log('📊 [DIAGNOSTICS] Displaying error log...', healthData);
             
             // ============================================================================
-            // 🎯 STEP 1: Show compact status banner (quick acknowledgement)
+            // 🎯 STEP 1: Show detailed compact status banner
             // ============================================================================
             const statusBanner = document.getElementById('diagnostic-status-banner');
             const statusCard = document.getElementById('diagnostic-status-card');
             const statusIcon = document.getElementById('status-icon');
             const statusTitle = document.getElementById('status-title');
-            const statusSummary = document.getElementById('status-summary');
+            const statusIssues = document.getElementById('status-issues');
             
-            if (statusBanner && statusCard && statusIcon && statusTitle && statusSummary) {
-                // Determine status styling
-                let cardClass, icon, title, summary;
+            if (statusBanner && statusCard && statusIcon && statusTitle) {
+                // Determine overall status styling
+                let cardClass, icon, title;
+                let issueCount = 0;
+                let issueList = [];
                 
                 if (healthData.overallStatus === 'HEALTHY') {
                     cardClass = 'bg-green-50 border-green-300 text-green-900';
                     icon = '✅';
                     title = 'All Systems Operational';
-                    summary = 'OpenAI, MongoDB, Redis, and 3-Tier Intelligence are running smoothly';
                 } else if (healthData.overallStatus === 'DEGRADED') {
                     cardClass = 'bg-yellow-50 border-yellow-300 text-yellow-900';
                     icon = '⚠️';
                     title = 'System Partially Operational';
-                    summary = `${healthData.redis?.status === 'UNKNOWN' ? 'Redis cold start detected' : 'Some components need attention'}`;
                 } else {
                     cardClass = 'bg-red-50 border-red-300 text-red-900';
                     icon = '❌';
                     title = 'System Issues Detected';
-                    summary = 'Critical components are not responding correctly';
                 }
                 
-                // Apply styling and content
+                // Apply header styling
                 statusCard.className = `rounded-lg p-4 border-2 shadow-sm ${cardClass}`;
                 statusIcon.textContent = icon;
                 statusTitle.textContent = title;
-                statusSummary.textContent = summary;
+                
+                // Update OpenAI status
+                const openaiIcon = document.getElementById('openai-status-icon');
+                const openaiText = document.getElementById('openai-status-text');
+                const openaiRow = document.getElementById('openai-status-row');
+                if (openaiIcon && openaiText && openaiRow) {
+                    if (healthData.openai?.status === 'HEALTHY') {
+                        openaiIcon.textContent = '✅';
+                        openaiText.textContent = `OK (${healthData.openai.responseTime}ms)`;
+                        openaiText.className = 'font-mono font-bold text-green-700';
+                        openaiRow.className = 'flex items-center gap-2 p-2 rounded bg-green-100 bg-opacity-50';
+                    } else if (healthData.openai?.status === 'UNKNOWN') {
+                        openaiIcon.textContent = '⚪';
+                        openaiText.textContent = 'UNKNOWN';
+                        openaiText.className = 'font-mono font-bold text-gray-700';
+                        openaiRow.className = 'flex items-center gap-2 p-2 rounded bg-gray-100 bg-opacity-50';
+                        issueCount++;
+                        issueList.push('OpenAI not responding');
+                    } else {
+                        openaiIcon.textContent = '❌';
+                        openaiText.textContent = 'ERROR';
+                        openaiText.className = 'font-mono font-bold text-red-700';
+                        openaiRow.className = 'flex items-center gap-2 p-2 rounded bg-red-100 bg-opacity-50';
+                        issueCount++;
+                        issueList.push('OpenAI connection failed');
+                    }
+                }
+                
+                // Update MongoDB status
+                const mongoIcon = document.getElementById('mongodb-status-icon');
+                const mongoText = document.getElementById('mongodb-status-text');
+                const mongoRow = document.getElementById('mongodb-status-row');
+                if (mongoIcon && mongoText && mongoRow) {
+                    if (healthData.mongodb?.status === 'HEALTHY') {
+                        mongoIcon.textContent = '✅';
+                        mongoText.textContent = `OK (${healthData.mongodb.queryTime || healthData.mongodb.responseTime}ms)`;
+                        mongoText.className = 'font-mono font-bold text-green-700';
+                        mongoRow.className = 'flex items-center gap-2 p-2 rounded bg-green-100 bg-opacity-50';
+                    } else if (healthData.mongodb?.status === 'UNKNOWN') {
+                        mongoIcon.textContent = '⚪';
+                        mongoText.textContent = 'UNKNOWN';
+                        mongoText.className = 'font-mono font-bold text-gray-700';
+                        mongoRow.className = 'flex items-center gap-2 p-2 rounded bg-gray-100 bg-opacity-50';
+                        issueCount++;
+                        issueList.push('MongoDB not responding');
+                    } else {
+                        mongoIcon.textContent = '❌';
+                        mongoText.textContent = 'ERROR';
+                        mongoText.className = 'font-mono font-bold text-red-700';
+                        mongoRow.className = 'flex items-center gap-2 p-2 rounded bg-red-100 bg-opacity-50';
+                        issueCount++;
+                        issueList.push('MongoDB connection failed');
+                    }
+                }
+                
+                // Update Redis status
+                const redisIcon = document.getElementById('redis-status-icon');
+                const redisText = document.getElementById('redis-status-text');
+                const redisRow = document.getElementById('redis-status-row');
+                if (redisIcon && redisText && redisRow) {
+                    if (healthData.redis?.status === 'HEALTHY') {
+                        redisIcon.textContent = '✅';
+                        redisText.textContent = `OK (${healthData.redis.latency || 0}ms)`;
+                        redisText.className = 'font-mono font-bold text-green-700';
+                        redisRow.className = 'flex items-center gap-2 p-2 rounded bg-green-100 bg-opacity-50';
+                    } else if (healthData.redis?.status === 'UNKNOWN') {
+                        redisIcon.textContent = '⚠️';
+                        redisText.textContent = 'COLD START';
+                        redisText.className = 'font-mono font-bold text-yellow-700';
+                        redisRow.className = 'flex items-center gap-2 p-2 rounded bg-yellow-100 bg-opacity-50';
+                        issueCount++;
+                        issueList.push('Redis initializing (cold start)');
+                    } else {
+                        redisIcon.textContent = '❌';
+                        redisText.textContent = 'ERROR';
+                        redisText.className = 'font-mono font-bold text-red-700';
+                        redisRow.className = 'flex items-center gap-2 p-2 rounded bg-red-100 bg-opacity-50';
+                        issueCount++;
+                        issueList.push('Redis connection failed');
+                    }
+                }
+                
+                // Update 3-Tier status
+                const tier3Icon = document.getElementById('tier3-status-icon');
+                const tier3Text = document.getElementById('tier3-status-text');
+                const tier3Row = document.getElementById('tier3-status-row');
+                if (tier3Icon && tier3Text && tier3Row) {
+                    if (healthData.tier3System?.status === 'ENABLED' || healthData.tier3System?.enabled) {
+                        tier3Icon.textContent = '✅';
+                        tier3Text.textContent = 'ENABLED';
+                        tier3Text.className = 'font-mono font-bold text-green-700';
+                        tier3Row.className = 'flex items-center gap-2 p-2 rounded bg-green-100 bg-opacity-50';
+                    } else if (healthData.tier3System?.status === 'DISABLED') {
+                        tier3Icon.textContent = '⚠️';
+                        tier3Text.textContent = 'DISABLED';
+                        tier3Text.className = 'font-mono font-bold text-yellow-700';
+                        tier3Row.className = 'flex items-center gap-2 p-2 rounded bg-yellow-100 bg-opacity-50';
+                        issueCount++;
+                        issueList.push('3-Tier AI is disabled');
+                    } else {
+                        tier3Icon.textContent = '⚪';
+                        tier3Text.textContent = 'UNKNOWN';
+                        tier3Text.className = 'font-mono font-bold text-gray-700';
+                        tier3Row.className = 'flex items-center gap-2 p-2 rounded bg-gray-100 bg-opacity-50';
+                    }
+                }
+                
+                // Update issue summary
+                if (statusIssues) {
+                    if (issueCount > 0) {
+                        statusIssues.innerHTML = `<strong>${issueCount} issue${issueCount > 1 ? 's' : ''} detected:</strong> ${issueList.join(', ')}`;
+                        statusIssues.classList.remove('hidden');
+                    } else {
+                        statusIssues.innerHTML = '<strong>All systems operational</strong> • No issues detected';
+                        statusIssues.classList.remove('hidden');
+                    }
+                }
                 
                 // Show the banner
                 statusBanner.classList.remove('hidden');
-                console.log('✅ [DIAGNOSTICS] Status banner displayed');
+                console.log(`✅ [DIAGNOSTICS] Status banner displayed (${issueCount} issues)`);
             }
             
             // ============================================================================
