@@ -3,6 +3,7 @@ const logger = require('../utils/logger.js');
 
 const router = express.Router();
 const Company = require('../models/v2Company');
+const { authenticateJWT } = require('../middleware/auth');
 const { 
   getAvailableVoices, 
   getAvailableModels,
@@ -13,6 +14,9 @@ const {
   getUserInfo,
   getMockVoices
 } = require('../services/v2elevenLabsService');
+
+// 🔒 SECURITY: Require authentication for all routes
+router.use(authenticateJWT);
 
 /**
  * GET /api/elevenlabs/voices - Get all available voices

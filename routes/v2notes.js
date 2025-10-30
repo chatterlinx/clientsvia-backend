@@ -13,6 +13,9 @@ const { ObjectId } = require('mongodb');
 const Company = require('../models/v2Company');
 const { authenticateJWT } = require('../middleware/auth');
 
+// 🔒 SECURITY: Require authentication for all routes FIRST
+router.use(authenticateJWT);
+
 // Middleware to validate company ID and tenant isolation
 const validateCompanyAccess = async (req, res, next) => {
     const { companyId } = req.params;

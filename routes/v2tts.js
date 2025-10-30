@@ -5,6 +5,10 @@ const { getAvailableVoices } = require('../services/v2elevenLabsService');
 const router = express.Router();
 const { getDB } = require('../db');
 const { ObjectId } = require('mongodb');
+const { authenticateJWT } = require('../middleware/auth');
+
+// 🔒 SECURITY: Require authentication for all routes
+router.use(authenticateJWT);
 
 async function getVoices(req, res) {
     // Get parameters from either query params (GET) or body (POST)
