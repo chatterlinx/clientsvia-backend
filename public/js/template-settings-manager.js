@@ -362,10 +362,18 @@ async function loadSynonymsForTemplate() {
         return;
     }
     
+    // ============================================================================
+    // 🔧 CRITICAL: Update local cache to match window.activeTemplateId
+    // ============================================================================
+    // This ensures currentTemplateIdForSettings stays in sync
+    // Prevents stale variable from causing confusion
+    // ============================================================================
+    currentTemplateIdForSettings = templateId;
+    
     try {
         console.log('📥 [SYNONYMS] Loading for template:', templateId);
         console.log('🔍 [SYNONYMS DEBUG] window.activeTemplateId:', window.activeTemplateId);
-        console.log('🔍 [SYNONYMS DEBUG] currentTemplateIdForSettings:', currentTemplateIdForSettings);
+        console.log('🔍 [SYNONYMS DEBUG] currentTemplateIdForSettings (synced):', currentTemplateIdForSettings);
         
         // CRITICAL: Show loading state immediately to clear stale data
         const container = document.getElementById('template-synonyms-display');
