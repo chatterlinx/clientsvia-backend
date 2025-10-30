@@ -8,7 +8,7 @@
  * 🌐 COFFEE SHOP FRIENDLY: Graceful fallback to in-memory cache
  */
 
-const Company = require('../../models/Company');
+const Company = require('../../models/v2Company');
 const { redisClient } = require('../../clients');
 
 class AIConfigLoader {
