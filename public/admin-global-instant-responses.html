@@ -5755,18 +5755,23 @@ Continue?`;
         // ============================================================================
         
         async function loadTwilioTestConfig() {
-            console.log('📞 [TWILIO TEST - GLOBAL] loadTwilioTestConfig() CALLED');
+            console.log('📞 [TWILIO TEST - PER-TEMPLATE] loadTwilioTestConfig() CALLED');
+            
+            if (!activeTemplateId) {
+                console.warn('⚠️ [TWILIO TEST] No active template, skipping load');
+                return;
+            }
             
             try {
-                // Fetch GLOBAL test config from AdminSettings
-                const response = await fetch('/api/admin/settings/global-ai-brain-test', {
+                // ✅ FIXED: Fetch PER-TEMPLATE config (correct endpoint!)
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplateId}/twilio-test`, {
                     headers: { Authorization: `Bearer ${getAuthToken()}` }
                 });
 
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
                 const result = await response.json();
-                const config = result.data;
+                const config = result.twilioTest; // ✅ FIXED: Use correct response key
                 
                 console.log('📞 [TWILIO TEST - GLOBAL] Global config loaded:', {
                     enabled: config.enabled,
@@ -6345,8 +6350,8 @@ Continue?`;
             });
 
             try {
-                // Save to GLOBAL config (not per-template anymore!)
-                const response = await fetch('/api/admin/settings/global-ai-brain-test', {
+                // ✅ FIXED: Save to PER-TEMPLATE config (correct endpoint!)
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplateId}/twilio-test`, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
@@ -6358,8 +6363,7 @@ Continue?`;
                         accountSid,
                         authToken,
                         greeting,
-                        notes,
-                        activeTemplateId: activeTemplateId  // Route test calls to current template
+                        notes
                     })
                 });
 
