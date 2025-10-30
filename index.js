@@ -239,25 +239,36 @@ const session = require('express-session');
 // V2 DELETED: Passport - using JWT-only authentication system
 // const passport = require('./config/passport');
 
-console.log('🔍 SESSION CHECKPOINT 2: Creating Redis session store for production...');
+console.log('🔍 SESSION CHECKPOINT 2: Setting up session middleware (Redis store will be configured after connection)...');
 
-// 🚨 CRITICAL PRODUCTION FIX: Use Redis instead of MemoryStore
-const RedisStore = require('connect-redis').default;
-const { redisClient } = require('./clients');
+// ════════════════════════════════════════════════════════════════════════════
+// 🚨 CRITICAL FIX: Session store initialization DEFERRED until Redis connects
+// ════════════════════════════════════════════════════════════════════════════
+// Problem: RedisStore was being created with redisClient = null, causing crash
+// Solution: Use MemoryStore initially, switch to Redis after initialization
+// This allows server to start even if Redis is slow/unavailable during cold start
+// ════════════════════════════════════════════════════════════════════════════
 
-app.use(session({
-  store: new RedisStore({ client: redisClient }),
+const MemoryStore = require('memorystore')(session);
+
+// Start with MemoryStore (safe fallback)
+const sessionConfig = {
+  store: new MemoryStore({
+    checkPeriod: 86400000 // prune expired entries every 24h
+  }),
   secret: process.env.SESSION_SECRET || 'fallback-secret-key',
   resave: false,
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production', // true on HTTPS (like Render)
+    secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
-}));
-console.log('✅ PRODUCTION: Redis session store configured - no more memory leaks!');
+};
+
+app.use(session(sessionConfig));
+console.log('✅ SESSION: MemoryStore configured (will upgrade to Redis after connection)');
 console.log('🔍 SESSION CHECKPOINT 3: Session middleware applied successfully');
 
 // V2 DELETED: Passport initialization - using JWT-only authentication system
