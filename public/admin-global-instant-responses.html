@@ -740,6 +740,35 @@
                                     <!-- Dynamic content populated by JS -->
                                 </div>
                             </div>
+                            
+                            <!-- ERROR LOG SECTION (NEW) -->
+                            <div id="diagnostic-error-log" class="hidden mt-4">
+                                <div class="bg-red-50 border-2 border-red-300 rounded-lg p-4">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <h5 class="font-bold text-red-900 flex items-center gap-2">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                            System Error Log
+                                        </h5>
+                                        <div class="flex gap-2">
+                                            <button onclick="copyDiagnosticErrors()" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold transition-colors">
+                                                <i class="fas fa-copy mr-1"></i>
+                                                Copy All
+                                            </button>
+                                            <button onclick="refreshDiagnostics()" class="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold transition-colors">
+                                                <i class="fas fa-sync-alt mr-1"></i>
+                                                Refresh
+                                            </button>
+                                            <button onclick="toggleDiagnosticErrors()" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-xs font-semibold transition-colors">
+                                                <i class="fas fa-times mr-1"></i>
+                                                Close
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div id="diagnostic-error-list" class="bg-white rounded p-4 max-h-96 overflow-y-auto text-sm font-mono text-gray-800">
+                                        <!-- Errors will be populated here -->
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
@@ -11413,6 +11442,165 @@ Timestamp: ${new Date(timestamp).toISOString()}
             }
         }
         
+        // ============================================================================
+        // DIAGNOSTIC ERROR LOG FUNCTIONS
+        // ============================================================================
+        
+        let lastDiagnosticReport = null;
+        
+        async function refreshDiagnostics() {
+            console.log('🔄 [DIAGNOSTICS] Refreshing system diagnostics...');
+            showNotification('Running system diagnostics...', 'info');
+            
+            // Trigger a full health check
+            if (window.aiGatewayManager && window.aiGatewayManager.testOpenAIConnection) {
+                await window.aiGatewayManager.testOpenAIConnection();
+            } else {
+                showNotification('AI Gateway not initialized', 'error');
+            }
+        }
+        
+        function toggleDiagnosticErrors() {
+            const errorLog = document.getElementById('diagnostic-error-log');
+            if (errorLog) {
+                errorLog.classList.toggle('hidden');
+            }
+        }
+        
+        async function copyDiagnosticErrors() {
+            if (!lastDiagnosticReport) {
+                showNotification('No diagnostic data available', 'error');
+                return;
+            }
+            
+            try {
+                await navigator.clipboard.writeText(lastDiagnosticReport);
+                showNotification('Diagnostic report copied to clipboard!', 'success');
+                console.log('✅ [DIAGNOSTICS] Report copied to clipboard');
+            } catch (error) {
+                console.error('❌ [DIAGNOSTICS] Failed to copy:', error);
+                showNotification('Failed to copy report', 'error');
+            }
+        }
+        
+        function showDiagnosticErrors(healthData) {
+            console.log('📊 [DIAGNOSTICS] Displaying error log...', healthData);
+            
+            // Build comprehensive diagnostic report
+            let report = `
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    SYSTEM DIAGNOSTIC REPORT                                  ║
+║                    Dashboard Test Pilot Area                                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📅 REPORT TIMESTAMP: ${new Date().toLocaleString()}
+🖥️  LOCATION: Settings Tab → System Diagnostics
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📊 SYSTEM COMPONENT STATUS:
+───────────────────────────────────────────────────────────────────────────────
+`;
+
+            // Add component statuses
+            if (healthData.openai) {
+                report += `
+🤖 OPENAI API (Tier 3 LLM):
+   Status: ${healthData.openai.status || 'UNKNOWN'}
+   ${healthData.openai.responseTime ? `Response Time: ${healthData.openai.responseTime}ms` : ''}
+   ${healthData.openai.model ? `Model: ${healthData.openai.model}` : ''}
+   ${healthData.openai.error ? `⚠️  ERROR: ${healthData.openai.error}` : ''}
+`;
+            }
+
+            if (healthData.mongodb) {
+                report += `
+🗄️  MONGODB DATABASE:
+   Status: ${healthData.mongodb.status || 'UNKNOWN'}
+   ${healthData.mongodb.responseTime ? `Response Time: ${healthData.mongodb.responseTime}ms` : ''}
+   ${healthData.mongodb.error ? `⚠️  ERROR: ${healthData.mongodb.error}` : ''}
+`;
+            }
+
+            if (healthData.redis) {
+                report += `
+💾 REDIS CACHE:
+   Status: ${healthData.redis.status || 'UNKNOWN'}
+   ${healthData.redis.status === 'UNKNOWN' ? '⚠️  WARNING: Redis not initialized (cold start issue)' : ''}
+   ${healthData.redis.error ? `⚠️  ERROR: ${healthData.redis.error}` : ''}
+   ${healthData.redis.message ? `Info: ${healthData.redis.message}` : ''}
+`;
+            }
+
+            if (healthData.tier3System) {
+                report += `
+🧠 3-TIER INTELLIGENCE SYSTEM:
+   Status: ${healthData.tier3System.status || 'UNKNOWN'}
+   ${healthData.tier3System.message ? `Info: ${healthData.tier3System.message}` : ''}
+`;
+            }
+
+            // Add error summary
+            if (healthData.overallStatus) {
+                report += `
+═══════════════════════════════════════════════════════════════════════════════
+
+🎯 OVERALL STATUS: ${healthData.overallStatus}
+`;
+            }
+
+            // Add recommendations
+            report += `
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ RECOMMENDED ACTIONS:
+───────────────────────────────────────────────────────────────────────────────
+`;
+
+            if (healthData.redis?.status === 'UNKNOWN') {
+                report += `1. REDIS ISSUE: Check Redis connection configuration\n`;
+                report += `   - Verify REDIS_URL environment variable\n`;
+                report += `   - Check if Redis service is running\n`;
+                report += `   - Review server startup logs for Redis errors\n\n`;
+            }
+
+            if (healthData.openai?.status === 'UNHEALTHY') {
+                report += `2. OPENAI ISSUE: Check OpenAI API configuration\n`;
+                report += `   - Verify OPENAI_API_KEY environment variable\n`;
+                report += `   - Check API quota/billing status\n`;
+                report += `   - Test API key manually\n\n`;
+            }
+
+            report += `
+═══════════════════════════════════════════════════════════════════════════════
+
+🔧 RAW TECHNICAL DATA (for debugging):
+───────────────────────────────────────────────────────────────────────────────
+${JSON.stringify(healthData, null, 2)}
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📝 REPORT GENERATED BY: ClientsVia System Diagnostics
+🔗 NEXT STEP: Copy this report and share with development team
+⏰ GENERATED: ${new Date().toLocaleString()}
+
+╚══════════════════════════════════════════════════════════════════════════════╝
+`;
+
+            // Store report globally
+            lastDiagnosticReport = report;
+            
+            // Display in UI
+            const errorList = document.getElementById('diagnostic-error-list');
+            const errorLog = document.getElementById('diagnostic-error-log');
+            
+            if (errorList && errorLog) {
+                errorList.textContent = report;
+                errorLog.classList.remove('hidden');
+                console.log('✅ [DIAGNOSTICS] Error log displayed');
+            }
+        }
+
         // ============================================================================
         // PAGE INITIALIZATION
         // ============================================================================

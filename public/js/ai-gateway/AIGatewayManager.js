@@ -167,8 +167,14 @@ class AIGatewayManager {
                     mongodb: data.results.mongodb,
                     redis: data.results.redis,
                     tier3System: data.results.tier3System,
+                    overallStatus: data.overallStatus,
                     timestamp: new Date()
                 };
+                
+                // Show diagnostic errors in Dashboard Settings tab (if available)
+                if (typeof showDiagnosticErrors === 'function') {
+                    showDiagnosticErrors(this.lastHealthResults);
+                }
                 
                 // Open health modal with ALL results
                 if (window.healthModal) {
