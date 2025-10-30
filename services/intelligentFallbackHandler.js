@@ -24,6 +24,7 @@ const logger = require('../utils/logger');
 const smsClient = require('../clients/smsClient');
 const emailClient = require('../clients/emailClient');
 const v2elevenLabsService = require('./v2elevenLabsService');
+const AdminNotificationService = require('./AdminNotificationService');
 
 class IntelligentFallbackHandler {
     constructor() {
@@ -207,18 +208,41 @@ class IntelligentFallbackHandler {
     }
 
     /**
-     * Notify admin of fallback event with custom contacts and variable replacement
+     * Notify admin of fallback event via AdminNotificationService (Notification Contract compliant)
+     * 
+     * ============================================================================
+     * REFACTOR NOTE (Phase 4 - Notification Contract Compliance)
+     * ============================================================================
+     * 
+     * BEFORE: This method directly called smsClient.send() and emailClient.send()
+     * PROBLEMS:
+     * - ❌ Alerts not visible in Notification Center dashboard
+     * - ❌ No deduplication (100 fallbacks = 100 SMS)
+     * - ❌ No escalation tracking or acknowledgment workflow
+     * - ❌ Bypassed severity policies and quiet hours
+     * - ❌ No analytics or registry tracking
+     * 
+     * AFTER: Now uses AdminNotificationService.sendAlert() per REFACTOR_PROTOCOL
+     * BENEFITS:
+     * - ✅ Alerts visible in Notification Center dashboard
+     * - ✅ Smart deduplication (100 fallbacks → 1 alert with occurrenceCount: 100)
+     * - ✅ Escalation tracking and acknowledgment workflow
+     * - ✅ Respects quiet hours and severity policies
+     * - ✅ Full audit trail and analytics
+     * 
+     * ============================================================================
+     * 
      * @param {String} companyId - Company ID
      * @param {String} companyName - Company name
      * @param {String} failureReason - Why fallback was triggered
-     * @param {String} method - Notification method (sms | email | both)
+     * @param {String} method - Notification method (sms | email | both) - DEPRECATED, now controlled by AdminNotificationService policies
      * @param {Object} fallbackConfig - Fallback configuration
      * @param {Object} company - Company document (for variable replacement)
      * @returns {Boolean} - Success status
      */
     async notifyAdmin(companyId, companyName, failureReason, method, fallbackConfig, company) {
         try {
-            logger.info(`🚨 [FALLBACK] Notifying admin via: ${method}`);
+            logger.info(`🚨 [FALLBACK] Sending alert via AdminNotificationService (method: ${method})`);
 
             // Use custom admin SMS message with variable replacement
             const smsMessage = fallbackConfig.adminSmsMessage || 
@@ -226,66 +250,39 @@ class IntelligentFallbackHandler {
             
             const processedSmsMessage = this.replaceVariables(smsMessage, company);
 
-            // Email message (more detailed)
-            const emailMessage = `🆘 FALLBACK ALERT\n\nCompany: ${companyName}\nID: ${companyId}\n\nReason: ${failureReason}\n\nAction required: Check Messages & Greetings settings.`;
+            // Determine severity based on fallback config
+            // CRITICAL if no fallback message configured (company is down)
+            // WARNING if fallback exists but primary greeting failed
+            const severity = (!fallbackConfig.customerMessage || fallbackConfig.customerMessage.trim() === '') 
+                ? 'CRITICAL'  // No fallback message = customers hear nothing = system down
+                : 'WARNING';  // Fallback exists = degraded but functional
 
-            let smsSent = false;
-            let emailSent = false;
-
-            // Get admin contact info (custom from fallback config OR fallback to env vars)
-            const adminPhone = fallbackConfig.adminPhone || this.adminPhone;
-            const adminEmail = fallbackConfig.adminEmail || this.adminEmail;
-
-            // Send SMS
-            if ((method === 'sms' || method === 'both') && adminPhone) {
-                try {
-                    await smsClient.send({
-                        to: adminPhone,
-                        body: processedSmsMessage,
-                        from: 'ClientsVia Alert'
-                    });
-                    smsSent = true;
-                    logger.debug(`✅ [FALLBACK] Admin SMS sent to: ${adminPhone}`);
-                    logger.debug(`📝 [FALLBACK] SMS message: ${processedSmsMessage}`);
-                } catch (smsError) {
-                    logger.error(`❌ [FALLBACK] Admin SMS failed:`, smsError);
+            // Send alert via AdminNotificationService (Notification Contract)
+            await AdminNotificationService.sendAlert({
+                code: 'AI_AGENT_FALLBACK_TRIGGERED',
+                severity: severity,
+                message: `Greeting fallback triggered for ${companyName}: ${failureReason}`,
+                companyId: companyId,
+                companyName: companyName,
+                details: `Failure Reason: ${failureReason}\nCustomer Message: ${fallbackConfig.customerMessage || 'NONE CONFIGURED'}\nAdmin Notification Method: ${method}\nProcessed SMS Message: ${processedSmsMessage}`,
+                feature: 'ai-agent',
+                tab: 'AI_AGENT',
+                module: 'FALLBACK_HANDLER',
+                meta: {
+                    failureReason: failureReason,
+                    customerMessage: (fallbackConfig.customerMessage || '').substring(0, 100),
+                    notificationMethod: method,
+                    hasCustomerFallback: !!(fallbackConfig.customerMessage && fallbackConfig.customerMessage.trim()),
+                    adminPhone: fallbackConfig.adminPhone || this.adminPhone || 'none',
+                    adminEmail: fallbackConfig.adminEmail || this.adminEmail || 'none'
                 }
-            } else if ((method === 'sms' || method === 'both') && !adminPhone) {
-                logger.warn(`⚠️ [FALLBACK] Admin SMS notification requested but no phone number configured`);
-            }
+            });
 
-            // Send Email
-            if ((method === 'email' || method === 'both') && adminEmail) {
-                try {
-                    await emailClient.send({
-                        to: adminEmail,
-                        subject: `🆘 Fallback Alert: ${companyName} (${companyId})`,
-                        text: emailMessage,
-                        html: `
-                            <div style="font-family: Arial, sans-serif; padding: 20px; background: #fff3cd; border-left: 4px solid #ffc107;">
-                                <h2 style="color: #856404; margin: 0 0 15px 0;">🆘 Fallback Alert</h2>
-                                <p><strong>Company:</strong> ${companyName}</p>
-                                <p><strong>ID:</strong> ${companyId}</p>
-                                <p><strong>Reason:</strong> ${failureReason}</p>
-                                <p style="margin-top: 20px; padding: 15px; background: #fff; border-radius: 4px;">
-                                    <strong>Action Required:</strong> Check the Messages & Greetings settings in the AI Agent Settings tab.
-                                </p>
-                            </div>
-                        `
-                    });
-                    emailSent = true;
-                    logger.info(`✅ [FALLBACK] Admin email sent to: ${adminEmail}`);
-                } catch (emailError) {
-                    logger.error(`❌ [FALLBACK] Admin email failed:`, emailError);
-                }
-            } else if ((method === 'email' || method === 'both') && !adminEmail) {
-                logger.warn(`⚠️ [FALLBACK] Admin email notification requested but no email configured`);
-            }
-
-            return smsSent || emailSent;
+            logger.info(`✅ [FALLBACK] Alert sent successfully via AdminNotificationService`);
+            return true;
 
         } catch (error) {
-            logger.error(`❌ [FALLBACK] Error notifying admin:`, error);
+            logger.error(`❌ [FALLBACK] Error sending alert via AdminNotificationService:`, error);
             return false;
         }
     }
