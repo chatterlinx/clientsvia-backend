@@ -11407,6 +11407,11 @@ Timestamp: ${new Date(timestamp).toISOString()}
             // ────────────────────────────────────────────────────────────────────
             // PAGE INIT: Load initial data
             // ────────────────────────────────────────────────────────────────────
+            
+            // 🔧 FIX: Load templates into selector on page load
+            // This was missing, causing "Loading templates..." to get stuck
+            await loadTemplatesIntoSelector();
+            
             console.log('✅ [PAGE INIT] Page initialization complete');
         });
         
