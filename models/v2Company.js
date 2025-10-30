@@ -2181,5 +2181,47 @@ companySchema.methods.getActivePhoneNumbers = function() {
     return this.twilioConfig?.phoneNumber ? [{ phoneNumber: this.twilioConfig.phoneNumber, friendlyName: 'Primary', isPrimary: true }] : [];
 };
 
+// ============================================================================
+// CRITICAL INDEXES FOR PERFORMANCE (Phase 5 Audit)
+// ============================================================================
+// These indexes are ESSENTIAL for production performance. Without them:
+// - Phone number lookups (EVERY incoming call) would do collection scans
+// - Company searches in Data Center would be slow
+// - Deleted company filtering would be inefficient
+//
+// INDEX RATIONALE:
+// 1. twilioConfig.phoneNumber - MOST CRITICAL (queried on EVERY call)
+// 2. twilioConfig.phoneNumbers.phoneNumber - Multi-phone support
+// 3. isDeleted - Filtered in almost every query
+// 4. Compound (isDeleted + companyName) - Data Center searches
+// ============================================================================
+
+companySchema.index({ 'twilioConfig.phoneNumber': 1 }, { 
+    name: 'idx_twilio_phone',
+    background: true,
+    sparse: true // Only index documents with this field
+});
+
+companySchema.index({ 'twilioConfig.phoneNumbers.phoneNumber': 1 }, { 
+    name: 'idx_twilio_phone_numbers',
+    background: true,
+    sparse: true
+});
+
+companySchema.index({ isDeleted: 1 }, { 
+    name: 'idx_is_deleted',
+    background: true
+});
+
+companySchema.index({ isDeleted: 1, companyName: 1 }, { 
+    name: 'idx_deleted_name',
+    background: true
+});
+
+companySchema.index({ isDeleted: 1, createdAt: -1 }, { 
+    name: 'idx_deleted_created',
+    background: true
+});
+
 const Company = mongoose.model('Company', companySchema, 'companiesCollection');
 module.exports = Company;
