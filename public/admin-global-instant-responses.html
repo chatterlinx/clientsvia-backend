@@ -4304,6 +4304,34 @@ Just checking in..."></textarea>
     <!-- ============================================ -->
     <!-- JAVASCRIPT -->
     <!-- ============================================ -->
+    <!-- 
+    🚨 CRITICAL WARNING (Oct 2025 - 4+ hour debugging nightmare):
+    
+    This <script> tag MUST be properly closed with </script> at the end of the file!
+    
+    SYMPTOMS IF NOT CLOSED:
+    - All tabs fail to open (onclick functions not found)
+    - Browser console: "ReferenceError: switchTab is not defined"
+    - Functions exist in code but are not accessible globally
+    - HTML structure appears normal but is actually broken
+    
+    ROOT CAUSE:
+    - If this <script> tag is never closed, the entire rest of the file
+      is treated as JavaScript code, not HTML
+    - Functions defined inside are scoped locally, not globally
+    - onclick="functionName()" fails because functions are not in global scope
+    
+    HOW TO VERIFY:
+    1. Check line count of this file (should be ~11,370 lines)
+    2. Last 4 lines MUST be:
+       - Line N-3: });  (closes DOMContentLoaded)
+       - Line N-2: </script>  (closes THIS script tag)
+       - Line N-1: </body>
+       - Line N: </html>
+    3. Test by clicking any tab - if "switchTab is not defined", script is not closed!
+    
+    ⚠️ DO NOT REMOVE OR FORGET THIS CLOSING TAG - it breaks the entire UI!
+    -->
     <script>
         // Set current year in footer
         document.getElementById('current-year').textContent = new Date().getFullYear();
@@ -11366,5 +11394,12 @@ Timestamp: ${new Date(timestamp).toISOString()}
         });
         
     </script>
+    <!-- 
+    ✅ CRITICAL VERIFICATION CHECKPOINT:
+    - If you see this comment, the <script> tag is properly closed above! ✅
+    - This is line ~11,398 (last line of HTML)
+    - DO NOT DELETE this closing </script> tag (line above)
+    - If tabs don't work, check if </script> was accidentally removed
+    -->
 </body>
 </html>

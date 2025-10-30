@@ -14,6 +14,27 @@
 // - 5 SMS_DELIVERY_FAILURE errors in 10 minutes
 // - Instead of 5 separate SMS/emails
 // - Send ONE: "🚨 5 SMS_DELIVERY_FAILURE errors in 10 minutes"
+//
+// 🚨 LESSON LEARNED (Oct 2025 - Infinite Recursion Loop):
+// CRITICAL: This service can cause INFINITE ALERT LOOPS if not careful!
+// 
+// THE PROBLEM:
+// 1. Redis connection fails → AdminNotificationService sends alert
+// 2. AdminNotificationService calls SmartGroupingService to dedupe
+// 3. SmartGroupingService tries to use Redis → Redis fails AGAIN
+// 4. SmartGroupingService triggers ANOTHER alert via AdminNotificationService
+// 5. Loop repeats infinitely, crashing the server
+//
+// THE SOLUTION (Circuit Breaker in AdminNotificationService):
+// - AdminNotificationService has a list of infrastructure error codes
+// - For these errors, it SKIPS calling SmartGroupingService entirely
+// - Examples: REDIS_CONNECTION_FAILED, MONGODB_CONNECTION_FAILED
+// - This breaks the infinite loop
+//
+// IF YOU SEE INFINITE ALERTS:
+// 1. Check AdminNotificationService.js for circuit breaker logic
+// 2. Add the error code to INFRASTRUCTURE_ERRORS array
+// 3. Never remove the circuit breaker - it prevents catastrophic loops
 // ============================================================================
 
 const db = require('../db');

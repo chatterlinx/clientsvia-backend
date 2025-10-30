@@ -287,6 +287,26 @@ Time: ${new Date().toLocaleTimeString()}
     
     /**
      * 📞 MAKE ESCALATION PHONE CALLS (CRITICAL level 4+)
+     * 
+     * 🚨 LESSON LEARNED (Oct 2025 - Twilio crash loop):
+     * ALWAYS validate phone numbers before making Twilio calls!
+     * 
+     * THE PROBLEM:
+     * - AdminSettings had contacts with missing/null phoneNumber fields
+     * - Code called twilioClient.calls.create({ to: null })
+     * - Twilio throws: "Required parameter 'params['to']' missing"
+     * - This triggered an alert → which tried to call AGAIN → infinite loop
+     * 
+     * THE SOLUTION:
+     * - Added safety check BEFORE making Twilio call
+     * - Validates: phoneNumber exists, is string, and not empty
+     * - Skips invalid contacts and logs warning instead of crashing
+     * 
+     * WHAT TO CHECK IF YOU SEE THIS ERROR:
+     * 1. Look at AdminSettings → adminContacts array
+     * 2. Verify every contact has a valid phoneNumber field
+     * 3. Check that phoneCallAlerts is properly configured
+     * 4. Never remove this validation - Twilio doesn't handle null gracefully
      */
     static async makeEscalationCalls(alert, adminContacts, attemptNumber) {
         const results = [];
