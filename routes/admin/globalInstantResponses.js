@@ -4473,5 +4473,87 @@ router.patch('/:id/learning-settings', authenticateJWT, adminOnly, async (req, r
     }
 });
 
+// ============================================================================
+// 📞 TWILIO TEST CONFIGURATION ROUTES
+// ============================================================================
+
+/**
+ * GET /api/admin/global-instant-responses/:id/twilio-test
+ * Get Twilio test configuration for a template
+ */
+router.get('/:id/twilio-test', async (req, res) => {
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        res.json({
+            success: true,
+            twilioTest: template.twilioTest || {
+                enabled: false,
+                phoneNumber: '',
+                accountSid: '',
+                authToken: '',
+                greeting: ''
+            }
+        });
+        
+    } catch (error) {
+        logger.error('Error fetching Twilio test config', { error: error.message });
+        res.status(500).json({ error: 'Failed to fetch Twilio test config' });
+    }
+});
+
+/**
+ * PATCH /api/admin/global-instant-responses/:id/twilio-test
+ * Update Twilio test configuration for a template
+ */
+router.patch('/:id/twilio-test', async (req, res) => {
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        const { phoneNumber, accountSid, authToken, greeting, enabled } = req.body;
+        
+        // Update twilioTest config
+        template.twilioTest = {
+            phoneNumber: phoneNumber || template.twilioTest?.phoneNumber || '',
+            accountSid: accountSid || template.twilioTest?.accountSid || '',
+            authToken: authToken || template.twilioTest?.authToken || '',
+            greeting: greeting || template.twilioTest?.greeting || 'Welcome to the ClientsVia Global AI Brain Testing Center. You are currently testing the {template_name} template. Please ask questions or make statements to test the AI scenarios now.',
+            enabled: enabled !== undefined ? enabled : template.twilioTest?.enabled || false,
+            lastTestedAt: template.twilioTest?.lastTestedAt || null,
+            testCallCount: template.twilioTest?.testCallCount || 0,
+            notes: template.twilioTest?.notes || ''
+        };
+        
+        await template.save();
+        
+        logger.info('✅ [TWILIO TEST] Config updated', {
+            templateId: template._id,
+            templateName: template.name,
+            phoneNumber: phoneNumber,
+            enabled: enabled,
+            by: req.user?.username
+        });
+        
+        res.json({
+            success: true,
+            message: 'Twilio test configuration updated',
+            twilioTest: template.twilioTest
+        });
+        
+    } catch (error) {
+        logger.error('❌ [TWILIO TEST] Error updating config', { 
+            error: error.message,
+            stack: error.stack
+        });
+        res.status(500).json({ error: 'Failed to update Twilio test config' });
+    }
+});
+
 module.exports = router;
 
