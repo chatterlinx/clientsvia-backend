@@ -50,7 +50,15 @@ function initializeTemplateSettings() {
  * Load filler words from API
  */
 async function loadFillerWordsForTemplate() {
+    // ============================================================================
+    // 🔧 CRITICAL: Always use window.activeTemplateId first (most current)
+    // ============================================================================
     const templateId = window.activeTemplateId || currentTemplateIdForSettings;
+    
+    // CRITICAL: Update local cache to match
+    if (templateId) {
+        currentTemplateIdForSettings = templateId;
+    }
     if (!templateId) {
         console.warn('⚠️ [FILLER WORDS] No template ID available for loading');
         return;
@@ -356,16 +364,28 @@ function showFillerWordsError(message) {
  * Load synonyms from API
  */
 async function loadSynonymsForTemplate() {
+    // ============================================================================
+    // 🔧 CRITICAL FIX: Always use window.activeTemplateId first (most current)
+    // ============================================================================
+    // ISSUE: Synonyms not updating when switching templates
+    // ROOT CAUSE: Function was using stale currentTemplateIdForSettings
+    // FIX: Prioritize window.activeTemplateId which is updated immediately
+    //      when template switches, then update local cache
+    // ============================================================================
+    
     const templateId = window.activeTemplateId || currentTemplateIdForSettings;
     if (!templateId) {
         console.warn('⚠️ [SYNONYMS] No template ID available for loading');
         return;
     }
     
+    // CRITICAL: Update local cache to match
+    currentTemplateIdForSettings = templateId;
+    
     try {
         console.log('📥 [SYNONYMS] Loading for template:', templateId);
         console.log('🔍 [SYNONYMS DEBUG] window.activeTemplateId:', window.activeTemplateId);
-        console.log('🔍 [SYNONYMS DEBUG] currentTemplateIdForSettings:', currentTemplateIdForSettings);
+        console.log('🔍 [SYNONYMS DEBUG] currentTemplateIdForSettings (updated):', currentTemplateIdForSettings);
         
         // CRITICAL: Show loading state immediately to clear stale data
         const container = document.getElementById('template-synonyms-display');

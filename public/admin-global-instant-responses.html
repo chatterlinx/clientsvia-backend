@@ -9350,14 +9350,34 @@ Continue?`;
                         console.log('✅ [SWITCH TEMPLATE] Template Data sub-tabs refreshed');
                     }
                     
-                    // 🎯 NEW: Reload fillers/synonyms with template-settings-manager.js
-                    if (typeof loadFillerWordsForTemplate === 'function') {
-                        console.log('📥 [SWITCH TEMPLATE] Reloading fillers...');
-                        await loadFillerWordsForTemplate();
+                    // ============================================================================
+                    // 🔧 CRITICAL FIX: Force reload fillers/synonyms with new template ID
+                    // ============================================================================
+                    // ISSUE: User reported synonyms not changing when switching templates
+                    // ROOT CAUSE: Template settings were using cached/stale template ID
+                    // FIX: Explicitly update currentTemplateIdForSettings BEFORE loading
+                    // ============================================================================
+                    
+                    // 1. Update the global template ID for settings
+                    if (typeof currentTemplateIdForSettings !== 'undefined') {
+                        currentTemplateIdForSettings = template._id;
+                        console.log(`🔄 [SWITCH TEMPLATE] Updated currentTemplateIdForSettings to: ${template._id}`);
                     }
+                    
+                    // 2. Force reload fillers
+                    if (typeof loadFillerWordsForTemplate === 'function') {
+                        console.log('📥 [SWITCH TEMPLATE] Reloading fillers for template:', template._id);
+                        await loadFillerWordsForTemplate();
+                        console.log('✅ [SWITCH TEMPLATE] Fillers reloaded');
+                    }
+                    
+                    // 3. Force reload synonyms (with explicit template ID verification)
                     if (typeof loadSynonymsForTemplate === 'function') {
-                        console.log('📥 [SWITCH TEMPLATE] Reloading synonyms...');
+                        console.log('📥 [SWITCH TEMPLATE] Reloading synonyms for template:', template._id);
+                        console.log('🔍 [SWITCH TEMPLATE] Before reload - window.activeTemplateId:', window.activeTemplateId);
+                        console.log('🔍 [SWITCH TEMPLATE] Before reload - currentTemplateIdForSettings:', currentTemplateIdForSettings);
                         await loadSynonymsForTemplate();
+                        console.log('✅ [SWITCH TEMPLATE] Synonyms reloaded');
                     }
                     
                     // 🟣 Reload AI suggestions for new template
