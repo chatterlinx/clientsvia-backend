@@ -731,50 +731,384 @@ class SettingsManager {
         const message = document.getElementById('threshold-test-message');
         const details = document.getElementById('threshold-test-details');
         
+        // Build comprehensive diagnostic report
+        const report = {
+            timestamp: new Date().toISOString(),
+            test: 'Alert Thresholds API',
+            endpoint: '/api/admin/notifications/thresholds',
+            results: {}
+        };
+        
         try {
+            // Test 1: Threshold API
             const startTime = Date.now();
             const response = await this.nc.apiGet('/api/admin/notifications/thresholds');
             const responseTime = Date.now() - startTime;
             
-            if (response.success) {
-                // ✅ SUCCESS
-                banner.className = 'mt-6 p-4 rounded-lg border-l-4 border-green-500 bg-green-50';
-                icon.className = 'fas fa-check-circle text-green-600 text-2xl mr-3';
-                title.textContent = '✅ Connection Successful!';
-                message.textContent = `Threshold API is working perfectly. Response time: ${responseTime}ms`;
-                
-                details.textContent = JSON.stringify(response.data, null, 2);
-                details.classList.remove('hidden');
-                
-                console.log('✅ [SETTINGS] Threshold API test: SUCCESS', response.data);
-            } else {
-                throw new Error(response.message || 'API returned non-success response');
-            }
+            report.results.thresholdAPI = {
+                status: 'SUCCESS',
+                responseTime: responseTime + 'ms',
+                data: response.data
+            };
             
-        } catch (error) {
-            // ❌ FAILURE
-            banner.className = 'mt-6 p-4 rounded-lg border-l-4 border-red-500 bg-red-50';
-            icon.className = 'fas fa-times-circle text-red-600 text-2xl mr-3';
-            title.textContent = '❌ Connection Failed';
+            // ✅ SUCCESS - Show green banner
+            banner.className = 'mt-6 p-4 rounded-lg border-l-4 border-green-500 bg-green-50';
+            icon.className = 'fas fa-check-circle text-green-600 text-2xl mr-3';
+            title.innerHTML = '✅ All Systems Operational!';
+            message.innerHTML = `
+                <strong>Threshold API:</strong> Working perfectly (${responseTime}ms)<br>
+                <strong>Data Retrieved:</strong> Hit Rate: ${response.data?.redis?.hitRate}%, Memory: ${response.data?.redis?.memory}%, Latency: ${response.data?.redis?.latency}ms
+            `;
             
-            if (error.message.includes('404')) {
-                message.textContent = 'Threshold API endpoints not found (404). The new code may not be deployed to production yet. Check Render deploy status.';
-            } else if (error.message.includes('403')) {
-                message.textContent = 'Access denied (403). You may not have admin permissions.';
-            } else if (error.message.includes('500')) {
-                message.textContent = 'Server error (500). Check backend logs for database or code errors.';
-            } else {
-                message.textContent = `API Error: ${error.message}`;
-            }
-            
-            details.textContent = `Error Details:\n${error.stack || error.message}`;
+            const reportText = this.buildSuccessReport(report);
+            details.innerHTML = `
+                <div class="flex items-center justify-between mb-2">
+                    <span class="font-semibold">📊 Full Diagnostic Report:</span>
+                    <button onclick="navigator.clipboard.writeText(document.getElementById('threshold-report-text').textContent).then(() => alert('✅ Report copied to clipboard!'))" class="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 rounded">
+                        <i class="fas fa-copy mr-1"></i> Copy Report
+                    </button>
+                </div>
+                <pre id="threshold-report-text" class="whitespace-pre-wrap text-xs">${reportText}</pre>
+            `;
             details.classList.remove('hidden');
             
-            console.error('❌ [SETTINGS] Threshold API test: FAILED', error);
+            console.log('✅ [SETTINGS] Threshold API test: SUCCESS', report);
+            
+        } catch (error) {
+            // ❌ FAILURE - Run full diagnostics
+            report.results.thresholdAPI = {
+                status: 'FAILED',
+                error: error.message,
+                errorType: this.categorizeError(error)
+            };
+            
+            // Run additional checks
+            await this.runFullDiagnostics(report);
+            
+            // Show red banner with actionable steps
+            banner.className = 'mt-6 p-4 rounded-lg border-l-4 border-red-500 bg-red-50';
+            icon.className = 'fas fa-times-circle text-red-600 text-2xl mr-3';
+            title.innerHTML = '❌ Connection Failed - Diagnostics Complete';
+            
+            const errorType = this.categorizeError(error);
+            message.innerHTML = this.getErrorMessage(errorType);
+            
+            const reportText = this.buildFailureReport(report, errorType);
+            details.innerHTML = `
+                <div class="flex items-center justify-between mb-2">
+                    <span class="font-semibold">📊 Full Diagnostic Report:</span>
+                    <button onclick="navigator.clipboard.writeText(document.getElementById('threshold-report-text').textContent).then(() => alert('✅ Report copied! Paste to your AI assistant for instant fix.'))" class="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded">
+                        <i class="fas fa-copy mr-1"></i> Copy Full Report
+                    </button>
+                </div>
+                <pre id="threshold-report-text" class="whitespace-pre-wrap text-xs">${reportText}</pre>
+            `;
+            details.classList.remove('hidden');
+            
+            console.error('❌ [SETTINGS] Threshold API test: FAILED', report);
         }
         
         // Show banner
         banner.classList.remove('hidden');
+    }
+    
+    categorizeError(error) {
+        const msg = error.message.toLowerCase();
+        if (msg.includes('404')) return '404_NOT_FOUND';
+        if (msg.includes('403')) return '403_FORBIDDEN';
+        if (msg.includes('500')) return '500_SERVER_ERROR';
+        if (msg.includes('network')) return 'NETWORK_ERROR';
+        if (msg.includes('timeout')) return 'TIMEOUT';
+        return 'UNKNOWN_ERROR';
+    }
+    
+    getErrorMessage(errorType) {
+        const messages = {
+            '404_NOT_FOUND': `
+                <strong>🚨 API Endpoints Not Deployed</strong><br>
+                The threshold endpoints are missing from production.<br>
+                <strong>Most likely:</strong> Render hasn't deployed the latest code yet.
+            `,
+            '403_FORBIDDEN': `
+                <strong>🔒 Access Denied</strong><br>
+                Your account doesn't have admin permissions.<br>
+                <strong>Action:</strong> Verify your JWT token and admin role.
+            `,
+            '500_SERVER_ERROR': `
+                <strong>💥 Server Error</strong><br>
+                The backend crashed while processing your request.<br>
+                <strong>Action:</strong> Check Render logs for stack traces.
+            `,
+            'NETWORK_ERROR': `
+                <strong>🌐 Network Issue</strong><br>
+                Cannot reach the backend server.<br>
+                <strong>Action:</strong> Check if Render service is running.
+            `,
+            'TIMEOUT': `
+                <strong>⏱️ Request Timeout</strong><br>
+                The server is taking too long to respond.<br>
+                <strong>Action:</strong> Check if Render is cold-starting.
+            `
+        };
+        return messages[errorType] || `<strong>❓ Unknown Error</strong><br>${errorType}`;
+    }
+    
+    async runFullDiagnostics(report) {
+        // Test 2: Check if backend is reachable
+        try {
+            const healthCheck = await fetch('https://clientsvia-backend.onrender.com/health');
+            report.results.backendReachable = {
+                status: healthCheck.ok ? 'SUCCESS' : 'FAILED',
+                statusCode: healthCheck.status
+            };
+        } catch (e) {
+            report.results.backendReachable = {
+                status: 'FAILED',
+                error: 'Cannot reach backend server'
+            };
+        }
+        
+        // Test 3: Check authentication
+        const token = localStorage.getItem('adminToken');
+        report.results.authentication = {
+            tokenPresent: !!token,
+            tokenLength: token ? token.length : 0
+        };
+        
+        // Test 4: Browser info
+        report.results.browser = {
+            userAgent: navigator.userAgent,
+            timestamp: new Date().toLocaleString(),
+            url: window.location.href
+        };
+    }
+    
+    buildSuccessReport(report) {
+        return `
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ ✅ ALERT THRESHOLDS API - DIAGNOSTIC REPORT (SUCCESS)                       ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📅 TIMESTAMP: ${new Date().toLocaleString()}
+🌐 ENDPOINT: GET /api/admin/notifications/thresholds
+✅ STATUS: ALL SYSTEMS OPERATIONAL
+
+═══════════════════════════════════════════════════════════════════════════════
+📊 TEST RESULTS:
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Threshold API: SUCCESS
+   Response Time: ${report.results.thresholdAPI.responseTime}
+   
+   Current Thresholds:
+   • Hit Rate: ${report.results.thresholdAPI.data?.redis?.hitRate}%
+   • Memory: ${report.results.thresholdAPI.data?.redis?.memory}%
+   • Latency: ${report.results.thresholdAPI.data?.redis?.latency}ms
+
+═══════════════════════════════════════════════════════════════════════════════
+🎯 NEXT STEPS:
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Everything is working! You can now:
+   1. Adjust thresholds using the sliders above
+   2. Click "Save Alert Thresholds" to persist changes
+   3. Changes will take effect on the next health check
+
+═══════════════════════════════════════════════════════════════════════════════
+Generated: ${new Date().toISOString()}
+Platform: ClientsVia Notification Center
+Environment: Production
+═══════════════════════════════════════════════════════════════════════════════
+`.trim();
+    }
+    
+    buildFailureReport(report, errorType) {
+        return `
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ 🚨 ALERT THRESHOLDS API - DIAGNOSTIC REPORT (FAILURE)                       ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📅 TIMESTAMP: ${new Date().toLocaleString()}
+🌐 ENDPOINT: GET /api/admin/notifications/thresholds
+❌ STATUS: ${errorType}
+
+═══════════════════════════════════════════════════════════════════════════════
+📊 TEST RESULTS:
+═══════════════════════════════════════════════════════════════════════════════
+
+❌ Threshold API: FAILED
+   Error: ${report.results.thresholdAPI.error}
+   Type: ${errorType}
+
+${report.results.backendReachable ? `
+${report.results.backendReachable.status === 'SUCCESS' ? '✅' : '❌'} Backend Server: ${report.results.backendReachable.status}
+   Status Code: ${report.results.backendReachable.statusCode || 'N/A'}
+   ${report.results.backendReachable.error || ''}
+` : ''}
+
+${report.results.authentication ? `
+${report.results.authentication.tokenPresent ? '✅' : '❌'} Authentication Token: ${report.results.authentication.tokenPresent ? 'Present' : 'Missing'}
+   Token Length: ${report.results.authentication.tokenLength} chars
+` : ''}
+
+═══════════════════════════════════════════════════════════════════════════════
+🔍 ROOT CAUSE ANALYSIS:
+═══════════════════════════════════════════════════════════════════════════════
+
+${this.getRootCauseAnalysis(errorType, report)}
+
+═══════════════════════════════════════════════════════════════════════════════
+🔧 RECOMMENDED FIX:
+═══════════════════════════════════════════════════════════════════════════════
+
+${this.getRecommendedFix(errorType)}
+
+═══════════════════════════════════════════════════════════════════════════════
+🖥️ ENVIRONMENT INFO:
+═══════════════════════════════════════════════════════════════════════════════
+
+Browser: ${report.results.browser?.userAgent || 'Unknown'}
+Current URL: ${report.results.browser?.url || 'Unknown'}
+Timestamp: ${report.results.browser?.timestamp || 'Unknown'}
+
+═══════════════════════════════════════════════════════════════════════════════
+📝 NEXT STEPS FOR AI ASSISTANT:
+═══════════════════════════════════════════════════════════════════════════════
+
+Copy this entire report and paste it to your AI assistant with the message:
+"Fix this Alert Thresholds API issue"
+
+The AI will:
+1. Analyze the root cause
+2. Check if code is deployed to Render
+3. Verify route mounting and middleware
+4. Provide step-by-step fix instructions
+
+═══════════════════════════════════════════════════════════════════════════════
+Generated: ${new Date().toISOString()}
+Platform: ClientsVia Notification Center
+Environment: Production
+═══════════════════════════════════════════════════════════════════════════════
+
+Paste this report to your AI assistant for instant root cause analysis!
+`.trim();
+    }
+    
+    getRootCauseAnalysis(errorType, report) {
+        const analysis = {
+            '404_NOT_FOUND': `
+The threshold API endpoints (GET/POST /thresholds) are returning 404.
+
+Possible causes:
+1. ⚠️ MOST LIKELY: Render hasn't deployed commit 9799c56d yet
+   - The endpoints were added in routes/admin/adminNotifications.js
+   - Render auto-deploy may be disabled or failed
+   - Build logs might show errors
+
+2. Route mounting issue:
+   - adminNotifications.js routes not mounted in index.js
+   - Middleware blocking the routes
+
+3. Code rollback:
+   - Render deployed old code instead of latest commit`,
+
+            '403_FORBIDDEN': `
+The backend rejected your authentication token.
+
+Possible causes:
+1. JWT token expired (check token exp claim)
+2. User role is not 'admin' (requireRole('admin') middleware)
+3. Session invalidated on backend`,
+
+            '500_SERVER_ERROR': `
+The backend crashed while processing the request.
+
+Check Render logs for:
+1. Database connection errors (MongoDB)
+2. Missing AdminSettings model import
+3. Mongoose validation errors
+4. Redis connection issues`,
+
+            'NETWORK_ERROR': `
+Cannot reach the backend server at all.
+
+Possible causes:
+1. Render service is stopped/crashed
+2. DNS resolution failure
+3. CORS blocking the request
+4. Network firewall/proxy issue`
+        };
+        
+        return analysis[errorType] || `Unknown error type: ${errorType}`;
+    }
+    
+    getRecommendedFix(errorType) {
+        const fixes = {
+            '404_NOT_FOUND': `
+STEP 1: Check Render Deploy Status
+   → Go to https://dashboard.render.com
+   → Find "clientsvia-backend" service
+   → Check if latest commit (9799c56d) is deployed
+   → If not, click "Manual Deploy" → "Deploy latest commit"
+
+STEP 2: Verify Code Exists
+   → Check routes/admin/adminNotifications.js (lines 1902-1995)
+   → Verify GET/POST /thresholds endpoints exist
+   → Confirm router.get('/thresholds', ...) is present
+
+STEP 3: Check Route Mounting
+   → Verify index.js mounts adminNotifications routes:
+     app.use('/api/admin/notifications', adminNotificationsRoutes)
+
+STEP 4: Wait for Deploy
+   → Render deploy takes 2-3 minutes
+   → Refresh this page after deploy completes
+   → Click "Test Connection" again`,
+
+            '403_FORBIDDEN': `
+STEP 1: Check JWT Token
+   → Open DevTools Console
+   → Run: localStorage.getItem('adminToken')
+   → Verify token is present and not expired
+
+STEP 2: Check User Role
+   → The /thresholds endpoint requires admin role
+   → Verify your user account has role: 'admin'
+
+STEP 3: Re-login
+   → Logout and login again to get fresh token
+   → Try "Test Connection" again`,
+
+            '500_SERVER_ERROR': `
+STEP 1: Check Render Logs
+   → Go to Render dashboard
+   → Click "Logs" tab
+   → Look for error stack traces around ${new Date().toISOString()}
+
+STEP 2: Common Fixes
+   → Verify AdminSettings model is imported
+   → Check MongoDB connection is healthy
+   → Ensure alertThresholds field exists in schema
+
+STEP 3: Restart Service
+   → Sometimes a restart clears stuck states
+   → Render dashboard → "Manual Deploy" → "Clear build cache"`,
+
+            'NETWORK_ERROR': `
+STEP 1: Check Render Service
+   → Go to https://dashboard.render.com
+   → Verify service is "Live" (not "Suspended")
+
+STEP 2: Check DNS
+   → Try: https://clientsvia-backend.onrender.com/health
+   → Should return 200 OK
+
+STEP 3: Check CORS
+   → Verify backend allows requests from your domain
+   → Check middleware/helmet.js CORS config`
+        };
+        
+        return fixes[errorType] || 'No specific fix available. Contact support with this report.';
     }
     
     async saveAlertThresholds() {
