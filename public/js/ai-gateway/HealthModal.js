@@ -548,7 +548,7 @@ class HealthModal {
         };
         
         return `
-            <tr class="hover:bg-gray-50">
+            <tr class="hover:bg-blue-50 cursor-pointer transition-colors" onclick="window.healthReportModal.open('${log._id}')" title="Click to view detailed diagnostic report">
                 <td class="px-4 py-2 text-gray-600">${number}</td>
                 <td class="px-4 py-2 text-gray-600 text-xs">${this.formatRelativeTime(new Date(log.timestamp))}</td>
                 <td class="px-4 py-2">
