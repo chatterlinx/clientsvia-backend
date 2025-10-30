@@ -2,7 +2,7 @@
 // SUGGESTION KNOWLEDGE BASE MODEL
 // ============================================================================
 // Purpose: Stores AI-generated suggestions for template improvements
-// Used by: Production AI dashboard, LLMSuggestionAnalyzer
+// Used by: AI Gateway dashboard, LLMAnalyzer
 // Source: Real production call analysis via GPT-4
 // ============================================================================
 
@@ -49,7 +49,7 @@ const SuggestionKnowledgeBaseSchema = new Schema({
 
   callLogId: {
     type: Schema.Types.ObjectId,
-    ref: 'ProductionAICallLog',
+    ref: 'v2AIAgentCallLog',
     required: true,
     index: true,
     description: 'Source call that triggered this suggestion'
