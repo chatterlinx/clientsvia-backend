@@ -731,6 +731,9 @@ class SettingsManager {
         const message = document.getElementById('threshold-test-message');
         const details = document.getElementById('threshold-test-details');
         
+        // CRITICAL FIX: Hide banner at start of each test
+        banner.classList.add('hidden');
+        
         // Build comprehensive diagnostic report
         const report = {
             timestamp: new Date().toISOString(),
