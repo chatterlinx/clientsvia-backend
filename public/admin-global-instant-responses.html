@@ -1043,31 +1043,31 @@
                             
                             <div class="space-y-4">
                                 <!-- Learning Enabled (Always ON) -->
-                                <div class="flex items-center justify-between p-3 bg-green-50 border-2 border-green-200 rounded-lg">
-                                    <div class="flex items-center gap-3">
-                                        <i class="fas fa-check-circle text-green-600 text-xl"></i>
+                                <div class="flex items-center justify-between px-3 py-2 bg-green-50 border-2 border-green-200 rounded-lg">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-check-circle text-green-600"></i>
                                         <div>
-                                            <p class="font-semibold text-green-900">Learning Enabled</p>
-                                            <p class="text-sm text-green-700">Patterns are always captured and stored</p>
+                                            <p class="font-semibold text-green-900 text-sm">Learning Enabled</p>
+                                            <p class="text-xs text-green-700">Patterns are always captured and stored</p>
                                         </div>
                                     </div>
-                                    <div class="px-3 py-1 bg-green-100 text-green-800 font-semibold text-sm rounded-full">
+                                    <div class="px-2 py-1 bg-green-100 text-green-800 font-semibold text-xs rounded-full">
                                         Always ON
                                     </div>
                                 </div>
                                 
                                 <!-- Share Within Industry -->
-                                <div class="flex items-start gap-3 p-3 bg-gray-50 border-2 border-gray-200 rounded-lg hover:border-indigo-300 transition-colors">
+                                <div class="flex items-start gap-2 px-3 py-2 bg-gray-50 border-2 border-gray-200 rounded-lg hover:border-indigo-300 transition-colors">
                                     <input type="checkbox" 
                                            id="learning-share-industry" 
                                            onchange="updateAILearningUI()"
-                                           class="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 mt-1">
+                                           class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 mt-0.5">
                                     <div class="flex-1">
-                                        <label for="learning-share-industry" class="font-semibold text-gray-900 cursor-pointer flex items-center gap-2">
-                                            <i class="fas fa-building text-indigo-600"></i>
+                                        <label for="learning-share-industry" class="font-semibold text-gray-900 cursor-pointer flex items-center gap-2 text-sm">
+                                            <i class="fas fa-building text-indigo-600 text-xs"></i>
                                             Share Patterns Within Industry
                                         </label>
-                                        <p class="text-sm text-gray-600 mt-1">
+                                        <p class="text-xs text-gray-600 mt-0.5">
                                             High-confidence patterns are shared with other templates in the same industry (e.g., all HVAC templates)
                                         </p>
                                         
@@ -1104,17 +1104,17 @@
                                 </div>
                                 
                                 <!-- Propose for Global -->
-                                <div class="flex items-start gap-3 p-3 bg-gray-50 border-2 border-gray-200 rounded-lg hover:border-purple-300 transition-colors">
+                                <div class="flex items-start gap-2 px-3 py-2 bg-gray-50 border-2 border-gray-200 rounded-lg hover:border-purple-300 transition-colors">
                                     <input type="checkbox" 
                                            id="learning-propose-global" 
                                            onchange="updateAILearningUI()"
-                                           class="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500 mt-1">
+                                           class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500 mt-0.5">
                                     <div class="flex-1">
-                                        <label for="learning-propose-global" class="font-semibold text-gray-900 cursor-pointer flex items-center gap-2">
-                                            <i class="fas fa-globe text-purple-600"></i>
+                                        <label for="learning-propose-global" class="font-semibold text-gray-900 cursor-pointer flex items-center gap-2 text-sm">
+                                            <i class="fas fa-globe text-purple-600 text-xs"></i>
                                             Propose Patterns for Global Platform
                                         </label>
-                                        <p class="text-sm text-gray-600 mt-1">
+                                        <p class="text-xs text-gray-600 mt-0.5">
                                             Universal patterns (work across all industries) are submitted for admin review to be shared platform-wide
                                         </p>
                                         
@@ -1155,10 +1155,10 @@
                             
                             <div class="space-y-4">
                                 <!-- Tier 1 Threshold -->
-                                <div class="p-4 bg-green-50 border-2 border-green-200 rounded-lg">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <label class="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                                            <span class="px-2 py-1 bg-green-500 text-white text-xs rounded font-bold">TIER 1</span>
+                                <div class="px-3 py-2 bg-green-50 border-2 border-green-200 rounded-lg">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <label class="text-xs font-semibold text-gray-900 flex items-center gap-2">
+                                            <span class="px-2 py-0.5 bg-green-500 text-white text-xs rounded font-bold">TIER 1</span>
                                             Rule-Based Matching (Free)
                                         </label>
                                         <div class="flex items-center gap-2">
@@ -1173,16 +1173,16 @@
                                            value="80" 
                                            oninput="document.getElementById('tier1-threshold-value').textContent=this.value"
                                            class="w-full">
-                                    <p class="text-xs text-gray-600 mt-2">
+                                    <p class="text-xs text-gray-600 mt-1">
                                         If match confidence ≥ threshold → Use Tier 1 (instant, free)
                                     </p>
                                 </div>
                                 
                                 <!-- Tier 2 Threshold -->
-                                <div class="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <label class="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                                            <span class="px-2 py-1 bg-blue-500 text-white text-xs rounded font-bold">TIER 2</span>
+                                <div class="px-3 py-2 bg-blue-50 border-2 border-blue-200 rounded-lg">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <label class="text-xs font-semibold text-gray-900 flex items-center gap-2">
+                                            <span class="px-2 py-0.5 bg-blue-500 text-white text-xs rounded font-bold">TIER 2</span>
                                             Semantic Analysis (Free)
                                         </label>
                                         <div class="flex items-center gap-2">
@@ -1197,23 +1197,23 @@
                                            value="60" 
                                            oninput="document.getElementById('tier2-threshold-value').textContent=this.value"
                                            class="w-full">
-                                    <p class="text-xs text-gray-600 mt-2">
+                                    <p class="text-xs text-gray-600 mt-1">
                                         If Tier 1 fails but Tier 2 ≥ threshold → Use semantic matching (fast, free)
                                     </p>
                                 </div>
                                 
                                 <!-- Tier 3 (LLM) Info -->
-                                <div class="p-4 bg-purple-50 border-2 border-purple-200 rounded-lg">
+                                <div class="px-3 py-2 bg-purple-50 border-2 border-purple-200 rounded-lg">
                                     <div class="flex items-center justify-between">
-                                        <label class="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                                            <span class="px-2 py-1 bg-purple-500 text-white text-xs rounded font-bold">TIER 3</span>
+                                        <label class="text-xs font-semibold text-gray-900 flex items-center gap-2">
+                                            <span class="px-2 py-0.5 bg-purple-500 text-white text-xs rounded font-bold">TIER 3</span>
                                             LLM Fallback (Expensive)
                                         </label>
                                         <div class="flex items-center gap-2">
-                                            <span class="text-sm text-purple-700 font-medium">Used when Tier 1 & 2 fail</span>
+                                            <span class="text-xs text-purple-700 font-medium">Used when Tier 1 & 2 fail</span>
                                         </div>
                                     </div>
-                                    <p class="text-xs text-gray-600 mt-2">
+                                    <p class="text-xs text-gray-600 mt-1">
                                         GPT-4 analyzes the input and teaches Tier 1/2 for future free matches
                                     </p>
                                 </div>
