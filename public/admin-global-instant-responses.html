@@ -556,6 +556,15 @@
             <!-- Test Pilot Sub-Tab Content -->
             <div id="overview-dashboard-content" class="overview-subtab-content">
                 
+                <!-- Test Pilot Header -->
+                <div class="mb-6">
+                    <h2 class="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                        <i class="fas fa-flask text-blue-600"></i>
+                        Test Pilot
+                    </h2>
+                    <p class="text-gray-600 mt-1">Test and preview your AI templates before deploying to production</p>
+                </div>
+                
                 <!-- ================================================================
                      🟣 AI SUGGESTIONS SECTION - ALWAYS VISIBLE (Top of Page)
                      ================================================================
@@ -9417,18 +9426,16 @@ Continue?`;
                 
                 if (result.success && result.data) {
                     const selector = document.getElementById('dashboard-template-selector');
-                    selector.innerHTML = result.data.map(template => 
-                        `<option value="${template._id}" ${template._id === activeTemplateId ? 'selected' : ''}>
-                            ${template.name} (${template.version})
-                        </option>`
-                    ).join('');
+                    
+                    // Start with "Select a template" option (not selected by default)
+                    selector.innerHTML = '<option value="">-- Select a template --</option>' + 
+                        result.data.map(template => 
+                            `<option value="${template._id}">
+                                ${template.name} (${template.version})
+                            </option>`
+                        ).join('');
                     
                     console.log(`✅ Loaded ${result.data.length} templates into selector`);
-                    
-                    // Update stats for current template
-                    if (activeTemplate) {
-                        updateDashboardStats();
-                    }
                 }
             } catch (error) {
                 console.error('❌ Error loading templates into selector:', error);
@@ -11933,26 +11940,12 @@ ${JSON.stringify(healthData, null, 2)}
             // This was missing, causing "Loading templates..." to get stuck
             await loadTemplatesIntoSelector();
             
-            // 🔧 FIX: Show helper message if no template selected on initial load
-            // This ensures user knows to select a template when page first loads
+            // 🎯 UX: Always show "Select a template" helper message on initial load
+            // User must explicitly select a template (no auto-loading)
             const helper = document.getElementById('template-select-helper');
-            if (helper && !activeTemplateId) {
+            if (helper) {
                 helper.style.display = 'flex';
                 console.log('💡 [PAGE INIT] Showing template selection helper message');
-            }
-            
-            // 🔧 FIX: Auto-load first template on page load (if available)
-            // This ensures data is ready when user lands on page
-            if (activeTemplateId) {
-                console.log('✅ [PAGE INIT] Auto-loading first template:', activeTemplateId);
-                await switchDashboardTemplate(activeTemplateId);
-            }
-            
-            // 🔧 FIX: Load Twilio test config on page load (if template is selected)
-            // This ensures Twilio credentials persist after page refresh
-            if (activeTemplateId) {
-                console.log('📞 [PAGE INIT] Loading Twilio test config for template:', activeTemplateId);
-                await loadTwilioTestConfig();
             }
             
             console.log('✅ [PAGE INIT] Page initialization complete');
