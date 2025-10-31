@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
+const { performance } = require('perf_hooks');
 
 // 🔒 SECURITY: Require admin authentication
 router.use(authenticateJWT);
@@ -32,234 +33,375 @@ router.get('/whoami', (req, res) => {
 });
 
 // ============================================================================
-// 🔍 AUTOMATED ENVIRONMENT HEALTH CHECK
+// 🚨 ER TRIAGE MONITOR - PRODUCTION HEALTH CHECK
 // ============================================================================
-// Purpose: Automatically diagnose ALL system issues without manual checking
-// Returns: Detailed report of what's working and what's broken
+// Purpose: Real-time incident triage with auto-blame and actionable fixes
+// Format: Incident packet with overallStatus, failureSource, and actions[]
 // ============================================================================
 
-router.get('/full-health-check', async (req, res) => {
+router.post('/selfcheck', async (req, res) => {
     try {
-        const report = {
-            timestamp: new Date().toISOString(),
-            environment: process.env.NODE_ENV || 'development',
-            checks: {},
-            issues: [],
-            fixes: []
+        const incidentPacket = {
+            overallStatus: 'OK',  // Will be set to WARN or FAIL if issues found
+            failureSource: null,  // REDIS | MONGO | ROUTE_DEPLOY | NODE_RUNTIME
+            summary: '',
+            actions: [],
+            redis: {},
+            mongo: {},
+            app: {}
         };
         
-        // ========================================================================
-        // CHECK 1: MongoDB Connection
-        // ========================================================================
-        try {
-            const c = mongoose.connection;
-            if (c.readyState === 1) {
-                const startTime = Date.now();
-                await mongoose.connection.db.admin().ping();
-                const responseTime = Date.now() - startTime;
-                
-                report.checks.mongodb = {
-                    status: 'HEALTHY',
-                    connected: true,
-                    host: c.host,
-                    database: c.name,
-                    responseTime: responseTime + 'ms'
-                };
-            } else {
-                report.checks.mongodb = {
-                    status: 'DOWN',
-                    connected: false,
-                    readyState: c.readyState
-                };
-                report.issues.push('MongoDB is not connected');
-                report.fixes.push('Check MONGODB_URI environment variable in Render');
-            }
-        } catch (error) {
-            report.checks.mongodb = {
-                status: 'ERROR',
-                error: error.message
-            };
-            report.issues.push('MongoDB error: ' + error.message);
-        }
+        const issues = [];
+        const criticalIssues = [];
         
         // ========================================================================
-        // CHECK 2: Redis Connection
+        // CHECK 1: REDIS ROUND-TRIP TEST (SET → GET → DEL with timing)
         // ========================================================================
         try {
             const db = require('../../db');
             const redisClient = db.redisClient;
             
-            if (redisClient && redisClient.isReady) {
-                const startTime = Date.now();
-                await redisClient.ping();
-                const responseTime = Date.now() - startTime;
-                
-                const info = await redisClient.info();
-                const memoryMatch = info.match(/used_memory_human:([^\r\n]+)/);
-                const clientsMatch = info.match(/connected_clients:(\d+)/);
-                
-                report.checks.redis = {
-                    status: 'HEALTHY',
-                    connected: true,
-                    responseTime: responseTime + 'ms',
-                    memory: memoryMatch ? memoryMatch[1].trim() : 'unknown',
-                    clients: clientsMatch ? parseInt(clientsMatch[1]) : 0
+            if (!redisClient || !redisClient.isReady) {
+                criticalIssues.push('Redis client not initialized or not ready');
+                incidentPacket.redis = {
+                    setGetDelOk: false,
+                    error: 'Redis client not ready',
+                    notes: ['REDIS_URL environment variable may be missing or invalid']
                 };
             } else {
-                report.checks.redis = {
-                    status: 'DOWN',
-                    connected: false,
-                    ready: redisClient ? redisClient.isReady : false
+                // Real round-trip test
+                const testKey = `healthcheck:${Date.now()}`;
+                const testValue = 'triage-test';
+                
+                const startTime = performance.now();
+                
+                // SET with expiration
+                await redisClient.set(testKey, testValue, { EX: 10 });
+                
+                // GET to verify
+                const retrieved = await redisClient.get(testKey);
+                
+                // DEL to clean up
+                await redisClient.del(testKey);
+                
+                const roundTripMs = (performance.now() - startTime).toFixed(2);
+                
+                // Verify round trip worked
+                const setGetDelOk = retrieved === testValue;
+                
+                // Get Redis INFO for detailed metrics
+                const info = await redisClient.info();
+                
+                // Parse critical metrics
+                const usedMemoryMatch = info.match(/used_memory:(\d+)/);
+                const maxMemoryMatch = info.match(/maxmemory:(\d+)/);
+                const evictedKeysMatch = info.match(/evicted_keys:(\d+)/);
+                const rejectedConnectionsMatch = info.match(/rejected_connections:(\d+)/);
+                const connectedClientsMatch = info.match(/connected_clients:(\d+)/);
+                const fragmentationRatioMatch = info.match(/mem_fragmentation_ratio:([\d.]+)/);
+                const rdbLastSaveStatusMatch = info.match(/rdb_last_bgsave_status:(\w+)/);
+                
+                const usedMemoryBytes = usedMemoryMatch ? parseInt(usedMemoryMatch[1]) : 0;
+                const maxMemoryBytes = maxMemoryMatch ? parseInt(maxMemoryMatch[1]) : 0;
+                const evictedKeys = evictedKeysMatch ? parseInt(evictedKeysMatch[1]) : 0;
+                const rejectedConnections = rejectedConnectionsMatch ? parseInt(rejectedConnectionsMatch[1]) : 0;
+                const connectedClients = connectedClientsMatch ? parseInt(connectedClientsMatch[1]) : 0;
+                const fragmentationRatio = fragmentationRatioMatch ? parseFloat(fragmentationRatioMatch[1]) : 1.0;
+                const persistenceOk = rdbLastSaveStatusMatch ? rdbLastSaveStatusMatch[1] === 'ok' : true;
+                
+                const usedMemoryPercent = maxMemoryBytes > 0 ? 
+                    ((usedMemoryBytes / maxMemoryBytes) * 100).toFixed(1) : 0;
+                
+                // Get key count
+                const dbsize = await redisClient.dbSize();
+                
+                incidentPacket.redis = {
+                    setGetDelOk,
+                    roundTripMs: parseFloat(roundTripMs),
+                    usedMemoryBytes,
+                    usedMemoryPercent: parseFloat(usedMemoryPercent),
+                    evictedKeys,
+                    rejectedConnections,
+                    connectedClients,
+                    fragmentationRatio,
+                    persistenceOk,
+                    dbsize,
+                    notes: []
                 };
-                report.issues.push('Redis is not connected or not ready');
-                report.fixes.push('Check REDIS_URL environment variable in Render');
-                report.fixes.push('Verify Redis service is running (if using external Redis)');
+                
+                // Check for critical Redis issues
+                if (evictedKeys > 0 && usedMemoryPercent > 80) {
+                    criticalIssues.push(`Redis memory pressure: ${usedMemoryPercent}% used with ${evictedKeys} keys evicted`);
+                    incidentPacket.redis.notes.push('🔥 FIRE ALARM: Evicting keys due to memory pressure - customers losing cached data!');
+                    incidentPacket.actions.push('Upgrade Redis memory limit immediately to prevent data loss');
+                }
+                
+                if (rejectedConnections > 0) {
+                    criticalIssues.push(`Redis rejecting connections: ${rejectedConnections} rejected`);
+                    incidentPacket.redis.notes.push('🚨 RED ALERT: Hitting max clients - users cannot be served!');
+                    incidentPacket.actions.push('Increase Redis maxclients or investigate connection leaks');
+                }
+                
+                if (!persistenceOk) {
+                    issues.push('Redis persistence failing - data loss risk on restart');
+                    incidentPacket.redis.notes.push('⚠️ WARNING: If Redis restarts, cached state will be lost');
+                    incidentPacket.actions.push('Check Redis persistence configuration (RDB/AOF)');
+                }
+                
+                if (fragmentationRatio > 1.5 && usedMemoryPercent > 80) {
+                    issues.push('Redis fragmentation high with memory pressure');
+                    incidentPacket.redis.notes.push('Memory fragmentation above 1.5 - consider restart during low traffic');
+                }
+                
+                if (parseFloat(roundTripMs) > 100) {
+                    issues.push(`Redis slow: ${roundTripMs}ms round trip`);
+                    incidentPacket.redis.notes.push('Round trip > 100ms - check network or Redis load');
+                }
             }
         } catch (error) {
-            report.checks.redis = {
-                status: 'ERROR',
-                error: error.message
+            criticalIssues.push(`Redis error: ${error.message}`);
+            incidentPacket.redis = {
+                setGetDelOk: false,
+                error: error.message,
+                notes: [
+                    error.message.includes('ECONNREFUSED') ? 
+                        '🔴 CRITICAL: Redis connection refused - Redis service not running or REDIS_URL incorrect' :
+                        error.message
+                ]
             };
-            report.issues.push('Redis error: ' + error.message);
-            
-            if (error.message.includes('ECONNREFUSED')) {
-                report.fixes.push('CRITICAL: Redis connection refused - check if Redis service is running');
-                report.fixes.push('In Render: Add a Redis add-on or set REDIS_URL to external Redis');
-            }
         }
         
         // ========================================================================
-        // CHECK 3: Environment Variables
-        // ========================================================================
-        const requiredEnvVars = [
-            'MONGODB_URI',
-            'REDIS_URL',
-            'JWT_SECRET',
-            'OPENAI_API_KEY',
-            'NODE_ENV',
-            'PORT'
-        ];
-        
-        const optionalEnvVars = [
-            'TWILIO_ACCOUNT_SID',
-            'TWILIO_AUTH_TOKEN',
-            'SENDGRID_API_KEY',
-            'SENTRY_DSN'
-        ];
-        
-        const missingRequired = [];
-        const missingOptional = [];
-        const present = [];
-        
-        requiredEnvVars.forEach(key => {
-            if (process.env[key]) {
-                present.push(key);
-            } else {
-                missingRequired.push(key);
-            }
-        });
-        
-        optionalEnvVars.forEach(key => {
-            if (!process.env[key]) {
-                missingOptional.push(key);
-            }
-        });
-        
-        report.checks.environment = {
-            status: missingRequired.length === 0 ? 'HEALTHY' : 'MISSING_VARS',
-            required: {
-                present: present.length,
-                total: requiredEnvVars.length,
-                missing: missingRequired
-            },
-            optional: {
-                missing: missingOptional
-            }
-        };
-        
-        if (missingRequired.length > 0) {
-            report.issues.push(`Missing required environment variables: ${missingRequired.join(', ')}`);
-            report.fixes.push('In Render dashboard → Environment tab → Add missing variables');
-        }
-        
-        // ========================================================================
-        // CHECK 4: API Routes (Threshold Endpoints)
+        // CHECK 2: MONGODB QUICK QUERY (with timing)
         // ========================================================================
         try {
-            const AdminSettings = require('../../models/AdminSettings');
-            const settings = await AdminSettings.getSettings();
+            const c = mongoose.connection;
             
-            if (settings.alertThresholds) {
-                report.checks.thresholdEndpoints = {
-                    status: 'DEPLOYED',
-                    thresholds: settings.alertThresholds
+            if (c.readyState !== 1) {
+                criticalIssues.push('MongoDB not connected');
+                incidentPacket.mongo = {
+                    quickQueryOk: false,
+                    error: 'MongoDB connection not ready',
+                    notes: ['Check MONGODB_URI environment variable']
                 };
             } else {
-                report.checks.thresholdEndpoints = {
-                    status: 'DEPLOYED_BUT_EMPTY',
-                    note: 'Endpoints exist but no thresholds configured yet'
+                const startTime = performance.now();
+                
+                // Quick findOne query
+                await c.db.admin().ping();
+                
+                const roundTripMs = (performance.now() - startTime).toFixed(2);
+                
+                incidentPacket.mongo = {
+                    quickQueryOk: true,
+                    roundTripMs: parseFloat(roundTripMs),
+                    notes: []
                 };
+                
+                // Check if Mongo is choking the event loop
+                if (parseFloat(roundTripMs) > 1000) {
+                    criticalIssues.push(`MongoDB query taking ${roundTripMs}ms - choking Node event loop`);
+                    incidentPacket.mongo.notes.push('🚨 MongoDB blocking app thread - check Atlas performance/indexes');
+                    incidentPacket.actions.push('Investigate MongoDB slow queries before blaming Redis');
+                }
             }
         } catch (error) {
-            report.checks.thresholdEndpoints = {
-                status: 'ERROR',
-                error: error.message
+            criticalIssues.push(`MongoDB error: ${error.message}`);
+            incidentPacket.mongo = {
+                quickQueryOk: false,
+                error: error.message,
+                notes: [error.message]
             };
-            report.issues.push('Threshold endpoints error: ' + error.message);
         }
         
         // ========================================================================
-        // CHECK 5: OpenAI API
+        // CHECK 3: EVENT LOOP DELAY
         // ========================================================================
-        if (process.env.OPENAI_API_KEY) {
-            try {
-                const openaiKey = process.env.OPENAI_API_KEY;
-                report.checks.openai = {
-                    status: 'CONFIGURED',
-                    keyPresent: true,
-                    keyPrefix: openaiKey.substring(0, 7) + '...'
-                };
-            } catch (error) {
-                report.checks.openai = {
-                    status: 'ERROR',
-                    error: error.message
-                };
+        try {
+            const eventLoopStart = performance.now();
+            await new Promise(resolve => setImmediate(resolve));
+            const eventLoopDelayMs = (performance.now() - eventLoopStart).toFixed(2);
+            
+            incidentPacket.app.eventLoopDelayMs = parseFloat(eventLoopDelayMs);
+            
+            if (parseFloat(eventLoopDelayMs) > 50) {
+                issues.push(`Event loop stalled: ${eventLoopDelayMs}ms delay`);
+                incidentPacket.actions.push('Main thread overloaded - investigate long-running handlers');
             }
-        } else {
-            report.checks.openai = {
-                status: 'NOT_CONFIGURED',
-                keyPresent: false
-            };
-            report.issues.push('OpenAI API key not configured');
+        } catch (error) {
+            incidentPacket.app.eventLoopDelayMs = null;
         }
         
         // ========================================================================
-        // CHECK 6: Render-Specific Environment
+        // CHECK 4: ROUTE VERIFICATION (does /thresholds actually exist)
         // ========================================================================
-        report.checks.renderEnvironment = {
-            isRender: !!process.env.RENDER,
-            region: process.env.RENDER_REGION || 'unknown',
-            service: process.env.RENDER_SERVICE_NAME || 'unknown',
-            instanceId: process.env.RENDER_INSTANCE_ID || 'unknown',
-            commit: process.env.RENDER_GIT_COMMIT ? process.env.RENDER_GIT_COMMIT.substring(0, 8) : 'unknown'
-        };
+        const routesToTest = [
+            { url: '/api/admin/notifications/thresholds', method: 'GET', name: 'Thresholds API' }
+        ];
+        
+        incidentPacket.app.routes = [];
+        
+        for (const route of routesToTest) {
+            try {
+                // Internal route check (simulate request)
+                const axios = require('axios');
+                const baseURL = process.env.BASE_URL || 'http://localhost:5000';
+                const token = req.headers.authorization?.replace('Bearer ', '');
+                
+                const startTime = performance.now();
+                const response = await axios({
+                    method: route.method,
+                    url: baseURL + route.url,
+                    headers: { Authorization: `Bearer ${token}` },
+                    timeout: 5000,
+                    validateStatus: () => true // Accept any status
+                });
+                const timeMs = (performance.now() - startTime).toFixed(2);
+                
+                const routeResult = {
+                    name: route.name,
+                    url: route.url,
+                    status: response.status,
+                    statusText: response.statusText,
+                    timeMs: parseFloat(timeMs),
+                    reachable: response.status < 500
+                };
+                
+                if (response.status === 404) {
+                    criticalIssues.push(`Route 404: ${route.url}`);
+                    routeResult.likelyCause = 'Route missing or deploy mismatch';
+                    routeResult.fix = [
+                        `Verify routes/admin/adminNotifications.js defines ${route.method} /thresholds`,
+                        "Check app.use('/api/admin/notifications', adminNotificationsRoutes) in index.js",
+                        'Redeploy latest commit to Render'
+                    ];
+                } else if (response.status === 401) {
+                    routeResult.likelyCause = 'Token invalid or expired';
+                    routeResult.fix = ['Check admin auth middleware / JWT env keys'];
+                } else if (response.status === 403) {
+                    routeResult.likelyCause = 'Auth OK but role mismatch';
+                    routeResult.fix = ['Confirm admin user role or ACL settings'];
+                } else if (response.status >= 500) {
+                    criticalIssues.push(`Route 500: ${route.url}`);
+                    routeResult.likelyCause = 'Backend crash or unhandled exception';
+                    routeResult.fix = ['Check Render logs for stacktrace - backend failed after route reached'];
+                }
+                
+                incidentPacket.app.routes.push(routeResult);
+                
+            } catch (error) {
+                criticalIssues.push(`Route unreachable: ${route.url}`);
+                incidentPacket.app.routes.push({
+                    name: route.name,
+                    url: route.url,
+                    status: 0,
+                    error: error.message,
+                    reachable: false,
+                    likelyCause: 'Cannot reach backend or network timeout',
+                    fix: ['Check if Render service is running', 'Verify BASE_URL environment variable']
+                });
+            }
+        }
         
         // ========================================================================
-        // OVERALL STATUS
+        // CHECK 5: DEPLOYMENT VERSION VERIFICATION
         // ========================================================================
-        const criticalIssues = report.issues.length;
-        report.overallStatus = criticalIssues === 0 ? 'ALL_HEALTHY' : 'ISSUES_DETECTED';
-        report.issueCount = criticalIssues;
+        incidentPacket.app.deployedCommit = process.env.RENDER_GIT_COMMIT ? 
+            process.env.RENDER_GIT_COMMIT.substring(0, 8) : 'unknown';
+        incidentPacket.app.uiExpectedCommit = 'b9def4c3'; // Latest commit
+        incidentPacket.app.commitMismatch = 
+            incidentPacket.app.deployedCommit !== incidentPacket.app.uiExpectedCommit &&
+            incidentPacket.app.deployedCommit !== 'unknown';
         
-        // Return report
-        res.json({
-            success: true,
-            report
-        });
+        if (incidentPacket.app.commitMismatch) {
+            issues.push(`Deploy mismatch: running ${incidentPacket.app.deployedCommit}, expected ${incidentPacket.app.uiExpectedCommit}`);
+        }
+        
+        // ========================================================================
+        // AUTO-BLAME LOGIC: Determine failureSource
+        // ========================================================================
+        
+        // Case A: Route 404 (ROUTE_DEPLOY)
+        const route404 = incidentPacket.app.routes.some(r => r.status === 404);
+        if (route404) {
+            incidentPacket.overallStatus = 'FAIL';
+            incidentPacket.failureSource = 'ROUTE_DEPLOY';
+            incidentPacket.summary = 'Thresholds API 404 in prod. Backend not running latest commit.';
+            if (!incidentPacket.actions.length) {
+                incidentPacket.actions = [
+                    'Go to Render > clientsvia-backend > Deploys. Deploy latest commit.',
+                    'Verify adminNotifications routes are mounted at /api/admin/notifications in index.js.',
+                    'Reload dashboard after deploy.'
+                ];
+            }
+        }
+        // Case B: Redis failing (REDIS)
+        else if (!incidentPacket.redis.setGetDelOk) {
+            incidentPacket.overallStatus = 'FAIL';
+            incidentPacket.failureSource = 'REDIS';
+            incidentPacket.summary = `Redis connection failed: ${incidentPacket.redis.error || 'Cannot perform SET/GET/DEL'}`;
+            if (!incidentPacket.actions.length) {
+                incidentPacket.actions = [
+                    'Check REDIS_URL environment variable in Render',
+                    'Verify Redis service is running',
+                    'Check Redis maxclients if rejectedConnections > 0',
+                    'Restart Redis if memory% > 90 and fragmentationRatio > 1.5'
+                ];
+            }
+        }
+        // Case C: Mongo slow (MONGO)
+        else if (incidentPacket.mongo.roundTripMs > 1000) {
+            incidentPacket.overallStatus = 'WARN';
+            incidentPacket.failureSource = 'MONGO';
+            incidentPacket.summary = `MongoDB query latency blocking app thread (${incidentPacket.mongo.roundTripMs}ms)`;
+            if (!incidentPacket.actions.length) {
+                incidentPacket.actions = [
+                    'Check MongoDB Atlas performance dashboard',
+                    'Review slow query logs',
+                    'Add indexes if missing',
+                    'Do NOT touch Redis - MongoDB is the bottleneck'
+                ];
+            }
+        }
+        // Case D: Event loop stalled (NODE_RUNTIME)
+        else if (incidentPacket.app.eventLoopDelayMs > 50) {
+            incidentPacket.overallStatus = 'WARN';
+            incidentPacket.failureSource = 'NODE_RUNTIME';
+            incidentPacket.summary = `Main thread overloaded (${incidentPacket.app.eventLoopDelayMs}ms event loop delay)`;
+            if (!incidentPacket.actions.length) {
+                incidentPacket.actions = [
+                    'Investigate long-running handler / infinite loop / CPU spike in current deploy',
+                    'Check for blocking synchronous operations',
+                    'Consider scaling Node instances'
+                ];
+            }
+        }
+        // No critical issues but warnings
+        else if (issues.length > 0) {
+            incidentPacket.overallStatus = 'WARN';
+            incidentPacket.failureSource = null;
+            incidentPacket.summary = `${issues.length} warning(s) detected: ${issues[0]}`;
+        }
+        // All good
+        else {
+            incidentPacket.overallStatus = 'OK';
+            incidentPacket.failureSource = null;
+            incidentPacket.summary = 'All systems operational';
+        }
+        
+        // Return incident packet
+        res.json(incidentPacket);
         
     } catch (error) {
         res.status(500).json({
-            success: false,
+            overallStatus: 'FAIL',
+            failureSource: 'NODE_RUNTIME',
+            summary: `Health check crashed: ${error.message}`,
+            actions: [
+                'Check Render logs for error stack trace',
+                'Verify all dependencies are installed',
+                'This should never happen - report to dev team'
+            ],
             error: error.message,
             stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
@@ -267,5 +409,3 @@ router.get('/full-health-check', async (req, res) => {
 });
 
 module.exports = router;
-
-

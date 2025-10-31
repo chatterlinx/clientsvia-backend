@@ -723,7 +723,7 @@ class SettingsManager {
     }
     
     async testThresholdConnection() {
-        console.log('🔌 [SETTINGS] Testing threshold API connection...');
+        console.log('🚨 [SETTINGS] Running ER Triage Monitor...');
         
         const banner = document.getElementById('threshold-test-banner');
         const icon = document.getElementById('threshold-test-icon');
@@ -731,84 +731,108 @@ class SettingsManager {
         const message = document.getElementById('threshold-test-message');
         const details = document.getElementById('threshold-test-details');
         
-        // CRITICAL FIX: Hide banner at start of each test
+        // Hide banner before starting test
         banner.classList.add('hidden');
         
-        // Build comprehensive diagnostic report
-        const report = {
-            timestamp: new Date().toISOString(),
-            test: 'Alert Thresholds API',
-            endpoint: '/api/admin/notifications/thresholds',
-            results: {}
-        };
-        
         try {
-            // Test 1: Threshold API
-            const startTime = Date.now();
-            const response = await this.nc.apiGet('/api/admin/notifications/thresholds');
-            const responseTime = Date.now() - startTime;
+            // Call the ER Triage Monitor
+            const incidentPacket = await this.nc.apiPost('/api/admin/diag/selfcheck', {});
             
-            report.results.thresholdAPI = {
-                status: 'SUCCESS',
-                responseTime: responseTime + 'ms',
-                data: response.data
-            };
+            console.log('🎯 [SETTINGS] Incident Packet:', incidentPacket);
             
-            // ✅ SUCCESS - Show green banner
-            banner.className = 'mt-6 p-4 rounded-lg border-l-4 border-green-500 bg-green-50';
-            icon.className = 'fas fa-check-circle text-green-600 text-2xl mr-3';
-            title.innerHTML = '✅ All Systems Operational!';
-            message.innerHTML = `
-                <strong>Threshold API:</strong> Working perfectly (${responseTime}ms)<br>
-                <strong>Data Retrieved:</strong> Hit Rate: ${response.data?.redis?.hitRate}%, Memory: ${response.data?.redis?.memory}%, Latency: ${response.data?.redis?.latency}ms
-            `;
+            // Display based on overallStatus
+            if (incidentPacket.overallStatus === 'OK') {
+                // GREEN: All systems operational
+                banner.className = 'mt-6 p-4 rounded-lg border-l-4 border-green-500 bg-green-50';
+                icon.className = 'fas fa-check-circle text-green-600 text-2xl mr-3';
+                title.innerHTML = '✅ ALL SYSTEMS OPERATIONAL';
+                message.innerHTML = `
+                    <div class="space-y-2">
+                        <p class="text-sm font-semibold text-green-700">${incidentPacket.summary}</p>
+                        <div class="grid grid-cols-4 gap-2 text-xs mt-2">
+                            <div class="p-2 bg-white rounded border border-green-200">
+                                <strong>Redis:</strong> ${incidentPacket.redis.setGetDelOk ? '✅ OK' : '❌ FAIL'}<br>
+                                <span class="text-gray-600">${incidentPacket.redis.roundTripMs}ms</span>
+                            </div>
+                            <div class="p-2 bg-white rounded border border-green-200">
+                                <strong>MongoDB:</strong> ${incidentPacket.mongo.quickQueryOk ? '✅ OK' : '❌ FAIL'}<br>
+                                <span class="text-gray-600">${incidentPacket.mongo.roundTripMs}ms</span>
+                            </div>
+                            <div class="p-2 bg-white rounded border border-green-200">
+                                <strong>Routes:</strong> ${incidentPacket.app.routes?.every(r => r.status === 200) ? '✅ OK' : '⚠️ WARN'}<br>
+                                <span class="text-gray-600">${incidentPacket.app.routes?.length || 0} checked</span>
+                            </div>
+                            <div class="p-2 bg-white rounded border border-green-200">
+                                <strong>Event Loop:</strong> ✅ OK<br>
+                                <span class="text-gray-600">${incidentPacket.app.eventLoopDelayMs}ms</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (incidentPacket.overallStatus === 'WARN') {
+                // YELLOW: Warnings detected
+                banner.className = 'mt-6 p-4 rounded-lg border-l-4 border-yellow-500 bg-yellow-50';
+                icon.className = 'fas fa-exclamation-triangle text-yellow-600 text-2xl mr-3';
+                title.innerHTML = '⚠️ WARNINGS DETECTED';
+                message.innerHTML = `
+                    <div class="space-y-2">
+                        <p class="text-sm font-semibold text-yellow-700">${incidentPacket.summary}</p>
+                        <p class="text-xs text-gray-600">Failure Source: <strong>${incidentPacket.failureSource || 'N/A'}</strong></p>
+                        ${incidentPacket.actions.length ? `
+                        <div class="mt-2 p-2 bg-white rounded border border-yellow-200">
+                            <strong class="text-xs">Action Required:</strong>
+                            <ul class="text-xs text-gray-700 mt-1 list-disc list-inside">
+                                ${incidentPacket.actions.map(a => `<li>${a}</li>`).join('')}
+                            </ul>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            } else {
+                // RED: Critical failure
+                banner.className = 'mt-6 p-4 rounded-lg border-l-4 border-red-500 bg-red-50';
+                icon.className = 'fas fa-times-circle text-red-600 text-2xl mr-3';
+                title.innerHTML = '🚨 CRITICAL FAILURE DETECTED';
+                message.innerHTML = `
+                    <div class="space-y-2">
+                        <p class="text-sm font-bold text-red-700">${incidentPacket.summary}</p>
+                        <p class="text-xs text-gray-600">Failure Source: <strong class="text-red-600">${incidentPacket.failureSource}</strong></p>
+                        ${incidentPacket.actions.length ? `
+                        <div class="mt-2 p-2 bg-white rounded border border-red-200">
+                            <strong class="text-xs text-red-700">IMMEDIATE ACTIONS:</strong>
+                            <ol class="text-xs text-gray-700 mt-1 list-decimal list-inside">
+                                ${incidentPacket.actions.map(a => `<li class="font-semibold">${a}</li>`).join('')}
+                            </ol>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
             
-            const reportText = this.buildSuccessReport(report);
+            // Build full incident report
+            const reportText = this.buildIncidentReport(incidentPacket);
             details.innerHTML = `
                 <div class="flex items-center justify-between mb-2">
-                    <span class="font-semibold">📊 Full Diagnostic Report:</span>
-                    <button onclick="navigator.clipboard.writeText(document.getElementById('threshold-report-text').textContent).then(() => alert('✅ Report copied to clipboard!'))" class="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 rounded">
-                        <i class="fas fa-copy mr-1"></i> Copy Report
+                    <span class="font-semibold">🚨 ER TRIAGE REPORT:</span>
+                    <button onclick="navigator.clipboard.writeText(document.getElementById('threshold-report-text').textContent).then(() => alert('✅ Incident packet copied!'))" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded">
+                        <i class="fas fa-copy mr-1"></i> Copy Full Incident Packet
                     </button>
                 </div>
                 <pre id="threshold-report-text" class="whitespace-pre-wrap text-xs">${reportText}</pre>
             `;
             details.classList.remove('hidden');
-            
-            console.log('✅ [SETTINGS] Threshold API test: SUCCESS', report);
             
         } catch (error) {
-            // ❌ FAILURE - Run full diagnostics
-            report.results.thresholdAPI = {
-                status: 'FAILED',
-                error: error.message,
-                errorType: this.categorizeError(error)
-            };
+            console.error('❌ [SETTINGS] ER Triage failed:', error);
             
-            // Run additional checks
-            await this.runFullDiagnostics(report);
-            
-            // Show red banner with actionable steps
             banner.className = 'mt-6 p-4 rounded-lg border-l-4 border-red-500 bg-red-50';
             icon.className = 'fas fa-times-circle text-red-600 text-2xl mr-3';
-            title.innerHTML = '❌ Connection Failed - Diagnostics Complete';
-            
-            const errorType = this.categorizeError(error);
-            message.innerHTML = this.getErrorMessage(errorType);
-            
-            const reportText = this.buildFailureReport(report, errorType);
-            details.innerHTML = `
-                <div class="flex items-center justify-between mb-2">
-                    <span class="font-semibold">🤖 Automated Diagnostic Report:</span>
-                    <button onclick="navigator.clipboard.writeText(document.getElementById('threshold-report-text').textContent).then(() => alert('✅ Report copied! Paste to your AI assistant for instant fix.'))" class="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded">
-                        <i class="fas fa-copy mr-1"></i> Copy Full Report
-                    </button>
-                </div>
-                <pre id="threshold-report-text" class="whitespace-pre-wrap text-xs">${reportText}</pre>
+            title.innerHTML = '🚨 TRIAGE ENDPOINT UNREACHABLE';
+            message.innerHTML = `
+                <p class="text-sm text-red-700 font-bold">Cannot reach ER Triage Monitor endpoint</p>
+                <p class="text-xs text-gray-600 mt-1">Error: ${error.message}</p>
             `;
-            details.classList.remove('hidden');
-            
-            console.error('❌ [SETTINGS] Threshold API test: FAILED', report);
+            details.innerHTML = '';
         }
         
         // Show banner
@@ -1208,5 +1232,174 @@ STEP 3: Check CORS
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+    
+    // ========================================================================
+    // ER TRIAGE MONITOR - BUILD INCIDENT REPORT
+    // ========================================================================
+    
+    buildIncidentReport(packet) {
+        return `
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ 🚨 ER TRIAGE MONITOR - INCIDENT PACKET                                      ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+🎯 OVERALL STATUS: ${packet.overallStatus}
+🔍 FAILURE SOURCE: ${packet.failureSource || 'None'}
+📝 SUMMARY: ${packet.summary}
+
+═══════════════════════════════════════════════════════════════════════════════
+🔥 IMMEDIATE ACTIONS REQUIRED:
+═══════════════════════════════════════════════════════════════════════════════
+
+${packet.actions.length ? packet.actions.map((a, i) => `${i + 1}. ${a}`).join('\n') : 'None - all systems operational'}
+
+═══════════════════════════════════════════════════════════════════════════════
+💾 REDIS STATUS:
+═══════════════════════════════════════════════════════════════════════════════
+
+SET/GET/DEL Test: ${packet.redis.setGetDelOk ? '✅ PASS' : '❌ FAIL'}
+Round Trip Time: ${packet.redis.roundTripMs || 'N/A'}ms
+Memory Usage: ${packet.redis.usedMemoryPercent || 0}% (${packet.redis.usedMemoryBytes || 0} bytes)
+Evicted Keys: ${packet.redis.evictedKeys || 0} ${packet.redis.evictedKeys > 0 ? '🔥 FIRE ALARM!' : ''}
+Rejected Connections: ${packet.redis.rejectedConnections || 0} ${packet.redis.rejectedConnections > 0 ? '🚨 RED ALERT!' : ''}
+Connected Clients: ${packet.redis.connectedClients || 0}
+Fragmentation Ratio: ${packet.redis.fragmentationRatio || 1.0}
+Persistence OK: ${packet.redis.persistenceOk ? '✅ Yes' : '⚠️ NO - DATA LOSS RISK!'}
+Key Count (dbsize): ${packet.redis.dbsize || 0}
+
+${packet.redis.notes && packet.redis.notes.length ? `
+⚠️ CRITICAL NOTES:
+${packet.redis.notes.map(n => '• ' + n).join('\n')}
+` : ''}
+
+═══════════════════════════════════════════════════════════════════════════════
+🗄️ MONGODB STATUS:
+═══════════════════════════════════════════════════════════════════════════════
+
+Quick Query Test: ${packet.mongo.quickQueryOk ? '✅ PASS' : '❌ FAIL'}
+Round Trip Time: ${packet.mongo.roundTripMs || 'N/A'}ms
+
+${packet.mongo.notes && packet.mongo.notes.length ? `
+⚠️ CRITICAL NOTES:
+${packet.mongo.notes.map(n => '• ' + n).join('\n')}
+` : ''}
+
+═══════════════════════════════════════════════════════════════════════════════
+🌐 ROUTE VERIFICATION:
+═══════════════════════════════════════════════════════════════════════════════
+
+${packet.app.routes?.map(r => `
+${r.reachable ? '✅' : '❌'} ${r.name}
+   URL: ${r.url}
+   Status: ${r.status} ${r.statusText || ''}
+   Response Time: ${r.timeMs}ms
+   ${r.likelyCause ? '⚠️ Cause: ' + r.likelyCause : ''}
+   ${r.fix ? '🔧 Fix:\n' + r.fix.map(f => '      • ' + f).join('\n') : ''}
+`).join('\n') || 'No routes tested'}
+
+═══════════════════════════════════════════════════════════════════════════════
+🖥️ NODE RUNTIME:
+═══════════════════════════════════════════════════════════════════════════════
+
+Event Loop Delay: ${packet.app.eventLoopDelayMs}ms ${packet.app.eventLoopDelayMs > 50 ? '⚠️ OVERLOADED!' : '✅ OK'}
+Deployed Commit: ${packet.app.deployedCommit}
+Expected Commit: ${packet.app.uiExpectedCommit}
+Commit Mismatch: ${packet.app.commitMismatch ? '⚠️ YES - DEPLOY DRIFT!' : '✅ No'}
+
+═══════════════════════════════════════════════════════════════════════════════
+📊 AUTO-BLAME ANALYSIS:
+═══════════════════════════════════════════════════════════════════════════════
+
+${this.getAutoBlameExplanation(packet)}
+
+═══════════════════════════════════════════════════════════════════════════════
+🕐 Report Generated: ${new Date().toLocaleString()}
+🔗 Copy this packet and share with dev team for instant troubleshooting
+═══════════════════════════════════════════════════════════════════════════════
+`.trim();
+    }
+    
+    getAutoBlameExplanation(packet) {
+        if (packet.failureSource === 'ROUTE_DEPLOY') {
+            return `
+🎯 FAILURE SOURCE: ROUTE_DEPLOY
+
+The system detected that API routes are returning 404.
+This is NOT a Redis or MongoDB issue.
+This is a deployment/mounting issue.
+
+What this means:
+• Code commit mismatch between UI and backend
+• Routes not mounted in index.js
+• Render deploy failed or stuck
+
+Next 60 seconds:
+1. Go to Render dashboard
+2. Deploy latest commit
+3. Wait 2-3 minutes
+4. Refresh and test again`;
+        } else if (packet.failureSource === 'REDIS') {
+            return `
+🎯 FAILURE SOURCE: REDIS
+
+Redis SET/GET/DEL test failed or Redis not ready.
+MongoDB and routes are OK - Redis is the bottleneck.
+
+What this means:
+• REDIS_URL missing or incorrect
+• Redis service down or unreachable
+• Connection limits hit (rejectedConnections > 0)
+• Memory pressure causing evictions
+
+Next 60 seconds:
+1. Check REDIS_URL in Render env vars
+2. Verify Redis service is running
+3. If memory% > 90%, upgrade Redis plan
+4. If rejectedConnections > 0, increase maxclients`;
+        } else if (packet.failureSource === 'MONGO') {
+            return `
+🎯 FAILURE SOURCE: MONGO
+
+MongoDB query taking ${packet.mongo.roundTripMs}ms - choking Node.
+Redis is FINE - MongoDB is blocking the event loop.
+
+What this means:
+• Atlas performance degraded
+• Missing or inefficient indexes
+• Network latency to MongoDB cluster
+• Query volume overwhelming MongoDB
+
+Next 60 seconds:
+1. Check MongoDB Atlas performance dashboard
+2. Review slow query logs
+3. Add missing indexes
+4. Scale up MongoDB cluster if needed
+5. DO NOT TOUCH REDIS - it's innocent!`;
+        } else if (packet.failureSource === 'NODE_RUNTIME') {
+            return `
+🎯 FAILURE SOURCE: NODE_RUNTIME
+
+Event loop stalled at ${packet.app.eventLoopDelayMs}ms.
+Redis and MongoDB are OK - Node itself is overloaded.
+
+What this means:
+• Long-running synchronous handler
+• Infinite loop or CPU spike
+• Too many requests for current Node capacity
+• Blocking I/O operations
+
+Next 60 seconds:
+1. Check Render logs for CPU spikes
+2. Investigate recent deploys for sync operations
+3. Consider scaling Node instances
+4. Profile code for bottlenecks`;
+        } else {
+            return `
+✅ NO CRITICAL FAILURES DETECTED
+
+All systems are operational or have minor warnings.
+Check individual component notes above for optimization opportunities.`;
+        }
     }
 }
