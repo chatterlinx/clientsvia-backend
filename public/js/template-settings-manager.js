@@ -168,7 +168,7 @@ function renderFillerWords(words) {
         
         if (words.length === 0) {
             container.innerHTML = `
-                <div class="col-span-7 text-center text-gray-500 py-8">
+                <div class="col-span-8 text-center text-gray-500 py-8">
                     <i class="fas fa-inbox text-4xl mb-3"></i>
                     <p>No filler words yet. Click "Add" to get started.</p>
                 </div>
@@ -177,7 +177,7 @@ function renderFillerWords(words) {
         }
         
         // Render as compact text list with columns
-        // Grid is 7 columns with tight spacing (gap-x-3) for short words
+        // Grid is 8 columns with tight spacing (gap-x-3) for short words
         container.innerHTML = words.map(word => `
             <div class="flex items-center justify-between py-1 px-2 hover:bg-gray-200 rounded transition-colors group">
                 <span class="text-gray-700 font-medium">${word}</span>
