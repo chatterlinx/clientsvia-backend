@@ -425,24 +425,48 @@ router.post('/selfcheck', async (req, res) => {
                 let mongoProvider = 'Unknown';
                 let mongoRegion = 'Unknown';
                 let isAtlas = false;
+                let atlasClusterId = 'unknown';
                 
                 if (mongoUri.includes('mongodb.net') || mongoUri.includes('atlas')) {
                     mongoProvider = 'MongoDB Atlas';
                     isAtlas = true;
                     
-                    // Try to extract region from connection string
-                    // Format: cluster0.abc123.mongodb.net
-                    // Or: cluster0-shard-00-00.abc123.mongodb.net
-                    const regionMatch = mongoHost.match(/\.([\w-]+)\.mongodb\.net/);
-                    if (regionMatch) {
-                        const clusterCode = regionMatch[1];
-                        // Atlas uses codes like: xxxxx (random) but we can infer from latency
-                        if (parseFloat(roundTripMs) < 30) {
-                            mongoRegion = 'Same region as backend (low latency)';
-                        } else if (parseFloat(roundTripMs) < 100) {
-                            mongoRegion = 'Nearby region (acceptable latency)';
+                    // Extract cluster identifier from connection string
+                    // Format: cluster0.0o7c1u.mongodb.net (actual production cluster)
+                    // Or: cluster0-shard-00-00.0o7c1u.mongodb.net
+                    const clusterMatch = mongoHost.match(/(cluster\d+)\.([\w-]+)\.mongodb\.net/);
+                    if (clusterMatch) {
+                        const clusterName = clusterMatch[1]; // e.g., "cluster0"
+                        atlasClusterId = clusterMatch[2];     // e.g., "0o7c1u"
+                        
+                        // Known production cluster: cluster0.0o7c1u = CA Project (Virginia)
+                        if (atlasClusterId === '0o7c1u') {
+                            mongoProvider = 'MongoDB Atlas (CA Project)';
+                            mongoRegion = 'Virginia (us-east-1) ✅';
                         } else {
-                            mongoRegion = 'Cross-region or distant (high latency)';
+                            // Unknown cluster - infer from latency
+                            mongoProvider = `MongoDB Atlas (${clusterName})`;
+                            if (parseFloat(roundTripMs) < 30) {
+                                mongoRegion = 'Same region as backend (low latency)';
+                            } else if (parseFloat(roundTripMs) < 100) {
+                                mongoRegion = 'Nearby region (acceptable latency)';
+                            } else {
+                                mongoRegion = 'Cross-region or distant (high latency)';
+                            }
+                        }
+                    } else {
+                        // Fallback to latency-based inference
+                        const regionMatch = mongoHost.match(/\.([\w-]+)\.mongodb\.net/);
+                        if (regionMatch) {
+                            const clusterCode = regionMatch[1];
+                            atlasClusterId = clusterCode;
+                            if (parseFloat(roundTripMs) < 30) {
+                                mongoRegion = 'Same region as backend (low latency)';
+                            } else if (parseFloat(roundTripMs) < 100) {
+                                mongoRegion = 'Nearby region (acceptable latency)';
+                            } else {
+                                mongoRegion = 'Cross-region or distant (high latency)';
+                            }
                         }
                     }
                 } else if (mongoUri.includes('localhost') || mongoUri.includes('127.0.0.1')) {
@@ -507,6 +531,7 @@ router.post('/selfcheck', async (req, res) => {
                         host: mongoHost,
                         database: mongoDbName,
                         isAtlas,
+                        clusterId: atlasClusterId, // e.g., "0o7c1u" for CA Project
                         performanceGrade: mongoPerformanceGrade,
                         capacityEstimate: mongoCapacityEstimate,
                         recommendation: mongoRecommendation,

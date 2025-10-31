@@ -878,7 +878,7 @@ class SettingsManager {
                 <div style="line-height: 1.6;">
                     <div style="font-weight: 600; margin-bottom: 8px;">${detail}</div>
                     <div style="font-size: 12px; opacity: 0.9;">
-                        <div><strong>Provider:</strong> ${diag.provider}</div>
+                        <div><strong>Provider:</strong> ${diag.provider}${diag.clusterId && diag.clusterId !== 'unknown' ? ` <code style="background: #374151; padding: 2px 6px; border-radius: 4px; font-family: monospace;">${diag.clusterId}</code>` : ''}</div>
                         <div><strong>Region:</strong> ${diag.region}</div>
                         <div><strong>Database:</strong> ${diag.database}</div>
                         <div style="margin-top: 6px;"><strong>Performance:</strong> ${diag.performanceGrade} (${diag.capacityEstimate})</div>
