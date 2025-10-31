@@ -11921,6 +11921,16 @@ ${JSON.stringify(healthData, null, 2)}
             // This was missing, causing "Loading templates..." to get stuck
             await loadTemplatesIntoSelector();
             
+            // 🔥 CRITICAL FIX: Auto-load first template on page load
+            // Without this, the page loads with HVAC selected but no data shown
+            // User has to manually switch to another template, then back to HVAC
+            if (activeTemplateId) {
+                console.log('🚀 [PAGE INIT] Auto-loading template on page load:', activeTemplateId);
+                await switchTemplate(activeTemplateId);
+            } else {
+                console.warn('⚠️ [PAGE INIT] No activeTemplateId found - skipping auto-load');
+            }
+            
             // 🔧 FIX: Load Twilio test config on page load (if template is selected)
             // This ensures Twilio credentials persist after page refresh
             if (activeTemplateId) {
