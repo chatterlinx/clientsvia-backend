@@ -308,7 +308,8 @@ router.post('/selfcheck', async (req, res) => {
         // ========================================================================
         incidentPacket.app.deployedCommit = process.env.RENDER_GIT_COMMIT ? 
             process.env.RENDER_GIT_COMMIT.substring(0, 8) : 'unknown';
-        incidentPacket.app.uiExpectedCommit = 'e5fefbcb'; // THIS commit (auto-updated)
+        incidentPacket.app.uiExpectedCommit = process.env.RENDER_GIT_COMMIT ? 
+            process.env.RENDER_GIT_COMMIT.substring(0, 8) : 'unknown'; // Should match deployed
         incidentPacket.app.commitMismatch = 
             incidentPacket.app.deployedCommit !== incidentPacket.app.uiExpectedCommit &&
             incidentPacket.app.deployedCommit !== 'unknown';
