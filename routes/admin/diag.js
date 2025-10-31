@@ -39,6 +39,105 @@ router.get('/whoami', (req, res) => {
 // Format: Incident packet with overallStatus, failureSource, and actions[]
 // ============================================================================
 
+/**
+ * REDIS SEVERITY CLASSIFICATION
+ * Strict rules: No fake green. If Redis is borderline, call it WARNING.
+ * 
+ * HEALTHY:  <150ms, no evictions, no rejections, memory <80%
+ * WARNING:  150-250ms OR memory 80-85% OR approaching limits
+ * CRITICAL: >250ms OR rejections>0 OR evicting keys OR SET/GET/DEL failed
+ */
+function classifyRedis(redisStats) {
+    // Hard fail cases first
+    if (!redisStats.setGetDelOk) {
+        return {
+            level: 'CRITICAL',
+            headline: 'Redis unreachable or read/write failed',
+            detail: 'SET/GET/DEL did not succeed. Live features may be impacted.'
+        };
+    }
+
+    if (redisStats.rejectedConnections > 0) {
+        return {
+            level: 'CRITICAL',
+            headline: 'Redis rejecting connections',
+            detail: 'maxclients hit. Calls may be dropped.'
+        };
+    }
+
+    if (redisStats.evictedKeys > 0 && redisStats.usedMemoryPercent >= 85) {
+        return {
+            level: 'CRITICAL',
+            headline: 'Redis evicting keys due to memory pressure',
+            detail: `Cache is dumping keys at ~${redisStats.usedMemoryPercent}%. Data loss in cache layer.`
+        };
+    }
+
+    // Critical latency threshold
+    if (redisStats.roundTripMs >= 250) {
+        return {
+            level: 'CRITICAL',
+            headline: 'Redis latency critical',
+            detail: `${redisStats.roundTripMs.toFixed(0)}ms round-trip. User-facing impact likely.`
+        };
+    }
+
+    // Warning band - this is where 180-198ms will land
+    if (redisStats.roundTripMs >= 150 && redisStats.roundTripMs < 250) {
+        return {
+            level: 'WARNING',
+            headline: 'Redis latency high',
+            detail: `${redisStats.roundTripMs.toFixed(0)}ms round-trip. Region mismatch or saturation.`
+        };
+    }
+
+    if (redisStats.usedMemoryPercent >= 80 && redisStats.usedMemoryPercent < 85) {
+        return {
+            level: 'WARNING',
+            headline: 'Redis memory high',
+            detail: `Memory at ${redisStats.usedMemoryPercent}%. Approaching eviction range.`
+        };
+    }
+
+    // If none of the above triggers, call it healthy
+    return {
+        level: 'HEALTHY',
+        headline: 'All tests passed',
+        detail: 'No evictions, no rejects, latency acceptable (<150ms).'
+    };
+}
+
+/**
+ * OVERALL STATUS DETERMINATION
+ * Honest, no-BS logic: If anything is WARNING, the whole system is WARN.
+ */
+function determineOverallStatus(redisLevel, mongoOk, routeStatusOk, commitMismatch, eventLoopDelayMs) {
+    // Hard fails first
+    if (!routeStatusOk) {
+        return 'FAIL';
+    }
+    if (redisLevel === 'CRITICAL') {
+        return 'FAIL';
+    }
+    if (!mongoOk) {
+        return 'FAIL';
+    }
+
+    // Warnings
+    if (redisLevel === 'WARNING') {
+        return 'WARN';
+    }
+    if (commitMismatch) {
+        return 'WARN';
+    }
+    if (eventLoopDelayMs > 50) {
+        return 'WARN';
+    }
+
+    // Otherwise
+    return 'OK';
+}
+
 router.post('/selfcheck', async (req, res) => {
     try {
         const incidentPacket = {
@@ -157,6 +256,21 @@ router.post('/selfcheck', async (req, res) => {
                     issues.push(`Redis slow: ${roundTripMs}ms round trip`);
                     incidentPacket.redis.notes.push('Round trip > 200ms - check network or Redis load');
                 }
+                
+                // ────────────────────────────────────────────────────────────────────
+                // CLASSIFY REDIS SEVERITY (HONEST, NO-BS LOGIC)
+                // ────────────────────────────────────────────────────────────────────
+                const redisClassification = classifyRedis({
+                    setGetDelOk: true,
+                    roundTripMs: parseFloat(roundTripMs),
+                    evictedKeys,
+                    rejectedConnections,
+                    usedMemoryPercent: parseFloat(usedMemoryPercent)
+                });
+                
+                incidentPacket.redis.healthLevel = redisClassification.level;       // 'HEALTHY' | 'WARNING' | 'CRITICAL'
+                incidentPacket.redis.healthHeadline = redisClassification.headline; // string
+                incidentPacket.redis.healthDetail = redisClassification.detail;     // string
             }
         } catch (error) {
             criticalIssues.push(`Redis error: ${error.message}`);
@@ -167,7 +281,12 @@ router.post('/selfcheck', async (req, res) => {
                     error.message.includes('ECONNREFUSED') ? 
                         '🔴 CRITICAL: Redis connection refused - Redis service not running or REDIS_URL incorrect' :
                         error.message
-                ]
+                ],
+                healthLevel: 'CRITICAL',
+                healthHeadline: 'Redis unreachable',
+                healthDetail: error.message.includes('ECONNREFUSED') ? 
+                    'Redis connection refused - service not running or REDIS_URL incorrect' :
+                    error.message
             };
         }
         
@@ -378,17 +497,30 @@ router.post('/selfcheck', async (req, res) => {
                 ];
             }
         }
-        // Case E: Redis slow (PERF warning) - only warn if > 200ms (cross-region tolerance)
-        else if (incidentPacket.redis.roundTripMs > 200) {
+        // Case E: Redis WARNING or CRITICAL (based on severity classification)
+        else if (incidentPacket.redis.healthLevel === 'WARNING') {
             incidentPacket.overallStatus = 'WARN';
             incidentPacket.failureSource = 'PERF';
-            incidentPacket.summary = `Redis round trip slow (${incidentPacket.redis.roundTripMs}ms). Not a Redis failure - topology/region issue.`;
+            incidentPacket.summary = `Redis ${incidentPacket.redis.healthHeadline}: ${incidentPacket.redis.healthDetail}`;
             incidentPacket.actions = [
                 `Network latency to Redis is high (~${incidentPacket.redis.roundTripMs}ms, expected <20ms).`,
                 'Confirm Redis and API service are in the same region/provider tier in Render.',
                 'If Redis is external (Upstash/Redis Cloud), upgrade to region-local plan or move API to same region.',
                 'Confirm you are not creating/destroying Redis clients per request - reuse one global client.',
-                'This is NOT killing uptime but will scale into pain at high traffic.'
+                '⚠️ This is not killing uptime NOW but will scale into pain at high traffic.'
+            ];
+        }
+        else if (incidentPacket.redis.healthLevel === 'CRITICAL' && incidentPacket.redis.setGetDelOk) {
+            // Redis responding but critically slow/overloaded
+            incidentPacket.overallStatus = 'FAIL';
+            incidentPacket.failureSource = 'REDIS';
+            incidentPacket.summary = `Redis ${incidentPacket.redis.healthHeadline}: ${incidentPacket.redis.healthDetail}`;
+            incidentPacket.actions = [
+                '🚨 CRITICAL: Redis is critically slow or overloaded - user impact likely.',
+                'Check Redis region alignment with API',
+                'Check Redis memory/CPU usage in Render dashboard',
+                'Consider upgrading Redis tier or moving to same region as API',
+                'Monitor for user-reported issues'
             ];
         }
         // No critical issues but warnings

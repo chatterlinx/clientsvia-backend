@@ -699,8 +699,44 @@ class SettingsManager {
     
     classifyRedisHealth(redisSection) {
         // redisSection is incidentPacket.redis
+        // NOW USES BACKEND-PROVIDED healthLevel, healthHeadline, healthDetail
         
-        if (!redisSection || !redisSection.setGetDelOk) {
+        if (!redisSection) {
+            return {
+                level: 'CRITICAL',
+                icon: '🔴',
+                bg: '#7f1d1d',
+                fg: '#fff',
+                headline: 'REDIS STATUS: UNKNOWN',
+                detail: 'No Redis data in incident packet.'
+            };
+        }
+        
+        // If backend sent explicit classification, use it (new behavior)
+        if (redisSection.healthLevel) {
+            let icon = '🟢';
+            let bg = '#065f46'; // green
+            
+            if (redisSection.healthLevel === 'WARNING') {
+                icon = '🟡';
+                bg = '#92400e'; // amber
+            } else if (redisSection.healthLevel === 'CRITICAL') {
+                icon = '🔴';
+                bg = '#7f1d1d'; // red
+            }
+            
+            return {
+                level: redisSection.healthLevel,
+                icon: icon,
+                bg: bg,
+                fg: '#fff',
+                headline: `REDIS STATUS: ${redisSection.healthLevel}`,
+                detail: redisSection.healthDetail || redisSection.healthHeadline || 'No detail'
+            };
+        }
+        
+        // FALLBACK: Old logic for backward compatibility (if backend doesn't send healthLevel)
+        if (!redisSection.setGetDelOk) {
             return {
                 level: 'CRITICAL',
                 icon: '🔴',
@@ -711,66 +747,14 @@ class SettingsManager {
             };
         }
         
-        // Extract metrics
-        const usedPct = redisSection.usedMemoryPercent ?? null;
-        const evicted = redisSection.evictedKeys ?? 0;
-        const rejected = redisSection.rejectedConnections ?? 0;
-        const rtt = redisSection.roundTripMs ?? redisSection.roundTripTime ?? null;
-        
-        // CRITICAL conditions
-        if (rejected > 0) {
-            return {
-                level: 'CRITICAL',
-                icon: '🔴',
-                bg: '#7f1d1d',
-                fg: '#fff',
-                headline: 'REDIS STATUS: CRITICAL',
-                detail: 'Redis is rejecting connections (maxclients hit). Users may be getting dropped.'
-            };
-        }
-        
-        if (evicted > 0 && usedPct !== null && usedPct >= 85) {
-            return {
-                level: 'CRITICAL',
-                icon: '🔴',
-                bg: '#7f1d1d',
-                fg: '#fff',
-                headline: 'REDIS STATUS: CRITICAL',
-                detail: `Redis is evicting keys at ~${usedPct}%. Cache data is being dropped to stay alive.`
-            };
-        }
-        
-        // WARNING conditions (only warn if > 200ms for cross-region tolerance)
-        if (rtt !== null && rtt > 200) {
-            return {
-                level: 'WARNING',
-                icon: '🟡',
-                bg: '#92400e',
-                fg: '#fff',
-                headline: 'REDIS STATUS: WARNING',
-                detail: `High latency: ${Math.round(rtt)}ms round-trip. Redis and API may be in different regions.`
-            };
-        }
-        
-        if (usedPct !== null && usedPct >= 80) {
-            return {
-                level: 'WARNING',
-                icon: '🟡',
-                bg: '#92400e',
-                fg: '#fff',
-                headline: 'REDIS STATUS: WARNING',
-                detail: `High memory usage: ${usedPct}% of max. Approaching eviction zone.`
-            };
-        }
-        
-        // If none of the above triggers:
+        // If we got here, backend is old and didn't send healthLevel - return generic healthy
         return {
             level: 'HEALTHY',
             icon: '🟢',
             bg: '#065f46',
             fg: '#fff',
             headline: 'REDIS STATUS: HEALTHY',
-            detail: 'All tests passed. No evictions, no rejects, latency acceptable.'
+            detail: 'All tests passed (legacy check).'
         };
     }
     

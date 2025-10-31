@@ -186,15 +186,19 @@ class DependencyHealthMonitor {
             const info = await redisClient.info('server');
             const memoryInfo = await redisClient.info('memory');
 
+            // STRICT THRESHOLDS (NO FAKE GREEN):
+            // < 150ms  = HEALTHY (same-region expected)
+            // 150-250ms = DEGRADED (cross-region, borderline)
+            // > 250ms  = DOWN (critical, user impact)
             let status = 'HEALTHY';
             let message = 'Cache operational';
 
-            if (responseTime > 500) {
+            if (responseTime >= 250) {
+                status = 'DOWN';
+                message = `Critical latency: ${responseTime}ms (user impact likely)`;
+            } else if (responseTime >= 150) {
                 status = 'DEGRADED';
-                message = `Slow response: ${responseTime}ms`;
-            } else if (responseTime > 200) {
-                status = 'DEGRADED';
-                message = `Elevated latency: ${responseTime}ms`;
+                message = `High latency: ${responseTime}ms (region mismatch or saturation)`;
             }
 
             return {
