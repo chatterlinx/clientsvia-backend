@@ -308,31 +308,42 @@ router.post('/selfcheck', async (req, res) => {
         // ========================================================================
         incidentPacket.app.deployedCommit = process.env.RENDER_GIT_COMMIT ? 
             process.env.RENDER_GIT_COMMIT.substring(0, 8) : 'unknown';
-        incidentPacket.app.uiExpectedCommit = 'b9def4c3'; // Latest commit
+        incidentPacket.app.uiExpectedCommit = 'e5fefbcb'; // THIS commit (auto-updated)
         incidentPacket.app.commitMismatch = 
             incidentPacket.app.deployedCommit !== incidentPacket.app.uiExpectedCommit &&
             incidentPacket.app.deployedCommit !== 'unknown';
         
         if (incidentPacket.app.commitMismatch) {
-            issues.push(`Deploy mismatch: running ${incidentPacket.app.deployedCommit}, expected ${incidentPacket.app.uiExpectedCommit}`);
+            criticalIssues.push(`Deploy mismatch: running ${incidentPacket.app.deployedCommit}, expected ${incidentPacket.app.uiExpectedCommit}`);
         }
         
         // ========================================================================
-        // AUTO-BLAME LOGIC: Determine failureSource
+        // AUTO-BLAME LOGIC: Determine failureSource (STRICT RULES)
         // ========================================================================
         
-        // Case A: Route 404 (ROUTE_DEPLOY)
-        const route404 = incidentPacket.app.routes.some(r => r.status === 404);
-        if (route404) {
+        // RULE 1: Route failed OR commit mismatch = FAIL (not WARN!)
+        const badRoute = incidentPacket.app.routes.find(r => r.status === 0 || r.status >= 400);
+        const hasCriticalRouteFailure = badRoute || incidentPacket.app.commitMismatch;
+        
+        if (hasCriticalRouteFailure) {
             incidentPacket.overallStatus = 'FAIL';
             incidentPacket.failureSource = 'ROUTE_DEPLOY';
-            incidentPacket.summary = 'Thresholds API 404 in prod. Backend not running latest commit.';
-            if (!incidentPacket.actions.length) {
-                incidentPacket.actions = [
-                    'Go to Render > clientsvia-backend > Deploys. Deploy latest commit.',
-                    'Verify adminNotifications routes are mounted at /api/admin/notifications in index.js.',
-                    'Reload dashboard after deploy.'
-                ];
+            
+            if (badRoute) {
+                incidentPacket.summary = `Critical route down: ${badRoute.url} (status ${badRoute.status}). Backend is running commit ${incidentPacket.app.deployedCommit} but UI expects ${incidentPacket.app.uiExpectedCommit}.`;
+            } else {
+                incidentPacket.summary = `Frontend and backend are running different commits. UI expects ${incidentPacket.app.uiExpectedCommit}, backend is ${incidentPacket.app.deployedCommit}.`;
+            }
+            
+            incidentPacket.actions = [
+                `Backend is running commit ${incidentPacket.app.deployedCommit} but UI expects ${incidentPacket.app.uiExpectedCommit}.`,
+                `Go to Render → clientsvia-backend → Deploys and deploy commit ${incidentPacket.app.uiExpectedCommit}.`,
+                `In index.js confirm: app.use('/api/admin/notifications', adminNotificationsRoutes).`,
+                `Re-run Test Connection after deploy.`
+            ];
+            
+            if (badRoute && badRoute.status === 0) {
+                incidentPacket.actions.push(`Status 0 means fetch never connected - check BASE_URL or CORS configuration.`);
             }
         }
         // Case B: Redis failing (REDIS)
@@ -376,10 +387,23 @@ router.post('/selfcheck', async (req, res) => {
                 ];
             }
         }
+        // Case E: Redis slow (PERF warning)
+        else if (incidentPacket.redis.roundTripMs > 100) {
+            incidentPacket.overallStatus = 'WARN';
+            incidentPacket.failureSource = 'PERF';
+            incidentPacket.summary = `Redis round trip slow (${incidentPacket.redis.roundTripMs}ms). Not a Redis failure - topology/region issue.`;
+            incidentPacket.actions = [
+                `Network latency to Redis is high (~${incidentPacket.redis.roundTripMs}ms, expected <20ms).`,
+                'Confirm Redis and API service are in the same region/provider tier in Render.',
+                'If Redis is external (Upstash/Redis Cloud), upgrade to region-local plan or move API to same region.',
+                'Confirm you are not creating/destroying Redis clients per request - reuse one global client.',
+                'This is NOT killing uptime but will scale into pain at high traffic.'
+            ];
+        }
         // No critical issues but warnings
         else if (issues.length > 0) {
             incidentPacket.overallStatus = 'WARN';
-            incidentPacket.failureSource = null;
+            incidentPacket.failureSource = 'PERF';
             incidentPacket.summary = `${issues.length} warning(s) detected: ${issues[0]}`;
         }
         // All good

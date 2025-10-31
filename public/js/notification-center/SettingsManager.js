@@ -679,8 +679,89 @@ class SettingsManager {
             thresholdsBtn.addEventListener('click', () => this.saveAlertThresholds());
         }
         
+        // Diagnose Failure button
+        const diagnoseBtn = document.getElementById('diagnose-failure-btn');
+        if (diagnoseBtn) {
+            diagnoseBtn.addEventListener('click', () => this.diagnoseFailure());
+        }
+        
         // Make this instance globally accessible for remove buttons
         window.settingsManager = this;
+    }
+    
+    // ========================================================================
+    // DIAGNOSE FAILURE - SHOW KILL ORDER
+    // ========================================================================
+    
+    diagnoseFailure() {
+        const packet = window.LatestIncidentPacket;
+        
+        if (!packet) {
+            alert('❌ No diagnostic packet available yet.\n\nRun "Test Connection" first to generate a diagnostic report.');
+            return;
+        }
+        
+        if (packet.overallStatus === 'OK') {
+            alert('✅ All systems OK. No active failure to diagnose.\n\nEverything is operational!');
+            return;
+        }
+        
+        // Build the kill order
+        const lines = [
+            '╔══════════════════════════════════════════════════════════════════════════╗',
+            '║ 🚨 DIAGNOSE FAILURE - KILL ORDER                                        ║',
+            '╚══════════════════════════════════════════════════════════════════════════╝',
+            '',
+            `STATUS: ${packet.overallStatus}`,
+            `SOURCE: ${packet.failureSource || 'unknown'}`,
+            `SUMMARY: ${packet.summary || 'n/a'}`,
+            '',
+            '═══════════════════════════════════════════════════════════════════════════',
+            'REQUIRED ACTIONS:',
+            '═══════════════════════════════════════════════════════════════════════════',
+            '',
+            ...(packet.actions && packet.actions.length ? 
+                packet.actions.map((a, i) => `${i + 1}. ${a}`) : 
+                ['(none reported)']),
+            '',
+            '═══════════════════════════════════════════════════════════════════════════',
+            'DEPLOY INFO:',
+            '═══════════════════════════════════════════════════════════════════════════',
+            '',
+            `Deployed Commit: ${packet.app?.deployedCommit || 'n/a'}`,
+            `Expected Commit: ${packet.app?.uiExpectedCommit || 'n/a'}`,
+            `Commit Mismatch: ${packet.app?.commitMismatch ? 'YES ⚠️' : 'NO'}`,
+            '',
+            '═══════════════════════════════════════════════════════════════════════════',
+            'SERVICE IMPACT:',
+            '═══════════════════════════════════════════════════════════════════════════',
+            '',
+            packet.failureSource === 'ROUTE_DEPLOY' ? 
+                'Admin cannot read/save alert thresholds. Live customer traffic is still being served.' :
+            packet.failureSource === 'REDIS' ?
+                'Cache unavailable. Performance degraded. Customer data may not persist between requests.' :
+            packet.failureSource === 'MONGO' ?
+                'Database slow. All operations affected. Customers experiencing delays.' :
+            packet.failureSource === 'NODE_RUNTIME' ?
+                'Server overloaded. Response times high. Scale immediately.' :
+                'See packet details above.',
+            '',
+            '═══════════════════════════════════════════════════════════════════════════',
+            `Generated: ${new Date().toLocaleString()}`,
+            '═══════════════════════════════════════════════════════════════════════════'
+        ];
+        
+        const killOrder = lines.join('\n');
+        
+        // Copy to clipboard
+        navigator.clipboard.writeText(killOrder).then(() => {
+            alert('✅ KILL ORDER COPIED TO CLIPBOARD!\n\nPaste this to your dev team or into a terminal.\n\nThis tells you:\n• What failed\n• Why it failed\n• What to do in next 60 seconds\n• Service impact');
+        }).catch(() => {
+            // Fallback if clipboard fails - show in alert
+            alert(killOrder);
+        });
+        
+        console.log('🚨 [DIAGNOSE] Kill Order:', killOrder);
     }
     
     // ========================================================================
@@ -737,6 +818,9 @@ class SettingsManager {
         try {
             // Call the ER Triage Monitor
             const incidentPacket = await this.nc.apiPost('/api/admin/diag/selfcheck', {});
+            
+            // CRITICAL: Save incident packet globally for Diagnose Failure button
+            window.LatestIncidentPacket = incidentPacket;
             
             console.log('🎯 [SETTINGS] Incident Packet:', incidentPacket);
             
