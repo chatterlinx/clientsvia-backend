@@ -1231,20 +1231,21 @@
                                 Set spending limits for Tier 3 (LLM) fallback to prevent unexpected costs
                             </p>
                             
-                            <div class="space-y-4">
+                            <!-- 3 Column Layout for Compact Display -->
+                            <div class="grid grid-cols-3 gap-4">
                                 <!-- Monthly Budget -->
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700 mb-2 block">Monthly LLM Budget (USD)</label>
-                                    <div class="flex items-center gap-3">
-                                        <span class="text-2xl text-gray-400">$</span>
+                                    <label class="text-xs font-medium text-gray-700 mb-1 block">Monthly LLM Budget (USD)</label>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-lg text-gray-400">$</span>
                                         <input type="number" 
                                                id="learning-llm-budget" 
                                                min="0" 
                                                max="10000" 
                                                value="500" 
                                                step="50"
-                                               class="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 font-semibold">
-                                        <span class="text-sm text-gray-500">per month</span>
+                                               class="flex-1 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 font-semibold text-sm">
+                                        <span class="text-xs text-gray-500">per month</span>
                                     </div>
                                     <p class="text-xs text-gray-500 mt-1">
                                         Max spend on OpenAI API calls per month (resets monthly)
@@ -1253,17 +1254,17 @@
                                 
                                 <!-- Cost Per Call Warning -->
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700 mb-2 block">Cost Per Call Warning (USD)</label>
-                                    <div class="flex items-center gap-3">
-                                        <span class="text-2xl text-gray-400">$</span>
+                                    <label class="text-xs font-medium text-gray-700 mb-1 block">Cost Per Call Warning (USD)</label>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-lg text-gray-400">$</span>
                                         <input type="number" 
                                                id="learning-llm-cost-per-call" 
                                                min="0.01" 
                                                max="5.00" 
                                                value="0.50" 
                                                step="0.05"
-                                               class="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 font-semibold">
-                                        <span class="text-sm text-gray-500">per call</span>
+                                               class="flex-1 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 font-semibold text-sm">
+                                        <span class="text-xs text-gray-500">per call</span>
                                     </div>
                                     <p class="text-xs text-gray-500 mt-1">
                                         Alert sent to Notification Center if a single LLM call exceeds this amount
@@ -1272,16 +1273,16 @@
                                 
                                 <!-- Min Pattern Frequency -->
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700 mb-2 block">Minimum Pattern Frequency</label>
-                                    <div class="flex items-center gap-3">
+                                    <label class="text-xs font-medium text-gray-700 mb-1 block">Minimum Pattern Frequency</label>
+                                    <div class="flex items-center gap-2">
                                         <input type="number" 
                                                id="learning-min-pattern-freq" 
                                                min="1" 
                                                max="20" 
                                                value="3" 
                                                step="1"
-                                               class="w-24 px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 font-semibold text-center">
-                                        <span class="text-sm text-gray-500">occurrences before applying</span>
+                                               class="w-20 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 font-semibold text-center text-sm">
+                                        <span class="text-xs text-gray-500">occurrences before applying</span>
                                     </div>
                                     <p class="text-xs text-gray-500 mt-1">
                                         Pattern must appear this many times before being auto-applied (prevents false positives)
