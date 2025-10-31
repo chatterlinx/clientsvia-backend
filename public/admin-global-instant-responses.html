@@ -490,39 +490,6 @@
     <!-- ============================================ -->
     <main class="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
-        <!-- ============================================ -->
-        <!-- SELECT TEMPLATE PROMPT (Hidden after selection) -->
-        <!-- ============================================ -->
-        <div id="template-selection-prompt" class="mb-8 p-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl shadow-lg text-white" style="display: none;">
-            <div class="text-center">
-                <div class="mb-4">
-                    <i class="fas fa-brain text-6xl opacity-90"></i>
-                </div>
-                <h2 class="text-3xl font-bold mb-2">Global AI Brain Management</h2>
-                <p class="text-xl mb-6 opacity-90">Please select a template to begin editing</p>
-                
-                <div class="max-w-md mx-auto bg-white/10 backdrop-blur-sm rounded-lg p-6">
-                    <label class="block text-sm font-semibold mb-3 text-left">
-                        📋 Select Template:
-                    </label>
-                    <div class="flex gap-3">
-                        <select id="prompt-template-selector" 
-                                class="flex-1 px-4 py-3 border-2 border-white/30 rounded-lg focus:ring-2 focus:ring-white focus:border-white text-lg font-semibold bg-white/20 text-white backdrop-blur-sm">
-                            <option value="" class="text-gray-800">-- Choose a template --</option>
-                        </select>
-                        <button onclick="loadSelectedTemplate()" 
-                                class="px-6 py-3 bg-white text-blue-600 font-bold rounded-lg hover:bg-blue-50 transition-all shadow-lg hover:shadow-xl transform hover:scale-105">
-                            <i class="fas fa-check mr-2"></i>
-                            Load Template
-                        </button>
-                    </div>
-                    <p class="text-sm mt-3 opacity-75 text-left">
-                        💡 This template's categories, fillers, and synonyms will be loaded for editing
-                    </p>
-                </div>
-            </div>
-        </div>
-        
         <!-- Page Header -->
         <div class="mb-8">
             <div class="flex items-center justify-between">
@@ -9431,75 +9398,6 @@ Continue?`;
         // INITIALIZATION
         // ============================================
         // ============================================
-        // TEMPLATE SELECTION PROMPT (BEST PRACTICE UX)
-        // ============================================
-        
-        /**
-         * Show the "Select Template" prompt on page load
-         * User must explicitly choose and load a template
-         */
-        function showTemplateSelectionPrompt() {
-            const prompt = document.getElementById('template-selection-prompt');
-            const mainTemplateSelector = document.getElementById('dashboard-template-selector');
-            const promptTemplateSelector = document.getElementById('prompt-template-selector');
-            
-            if (!prompt || !promptTemplateSelector) {
-                console.error('❌ [TEMPLATE PROMPT] Prompt elements not found in DOM');
-                return;
-            }
-            
-            // Copy all options from main selector to prompt selector
-            if (mainTemplateSelector) {
-                promptTemplateSelector.innerHTML = mainTemplateSelector.innerHTML;
-            }
-            
-            // Show the prompt
-            prompt.style.display = 'block';
-            console.log('📋 [TEMPLATE PROMPT] Showing selection prompt');
-        }
-        
-        /**
-         * Hide the "Select Template" prompt after user makes a selection
-         */
-        function hideTemplateSelectionPrompt() {
-            const prompt = document.getElementById('template-selection-prompt');
-            if (prompt) {
-                prompt.style.display = 'none';
-                console.log('✅ [TEMPLATE PROMPT] Hidden after template loaded');
-            }
-        }
-        
-        /**
-         * Load the selected template from the prompt
-         * Called when user clicks "Load Template" button
-         */
-        async function loadSelectedTemplate() {
-            const promptSelector = document.getElementById('prompt-template-selector');
-            const selectedTemplateId = promptSelector?.value;
-            
-            if (!selectedTemplateId) {
-                window.toastManager?.error('Please select a template first');
-                return;
-            }
-            
-            console.log('🚀 [TEMPLATE PROMPT] User selected template:', selectedTemplateId);
-            
-            // Update main selector to match
-            const mainSelector = document.getElementById('dashboard-template-selector');
-            if (mainSelector) {
-                mainSelector.value = selectedTemplateId;
-            }
-            
-            // Hide prompt and load template
-            hideTemplateSelectionPrompt();
-            
-            // Load the template data
-            await switchTemplate(selectedTemplateId);
-            
-            window.toastManager?.success('Template loaded successfully!');
-        }
-        
-        // ============================================
         // DASHBOARD TEMPLATE SELECTOR
         // ============================================
         async function loadTemplatesIntoSelector() {
@@ -12023,11 +11921,12 @@ ${JSON.stringify(healthData, null, 2)}
             // This was missing, causing "Loading templates..." to get stuck
             await loadTemplatesIntoSelector();
             
-            // 🎯 BEST PRACTICE: Show "Select Template" prompt instead of auto-loading
-            // This prevents accidental edits and gives user explicit control
-            // Template data will load when user clicks "Load Template" button
-            console.log('✅ [PAGE INIT] Template selector ready - waiting for user selection');
-            showTemplateSelectionPrompt();
+            // 🔧 FIX: Auto-load first template on page load (if available)
+            // This ensures data is ready when user lands on page
+            if (activeTemplateId) {
+                console.log('✅ [PAGE INIT] Auto-loading first template:', activeTemplateId);
+                await switchTemplate(activeTemplateId);
+            }
             
             // 🔧 FIX: Load Twilio test config on page load (if template is selected)
             // This ensures Twilio credentials persist after page refresh
