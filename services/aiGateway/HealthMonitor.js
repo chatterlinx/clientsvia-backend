@@ -230,7 +230,7 @@ class AIGatewayHealthMonitor {
         let thresholds = {
             hitRate: 60,    // Default: Alert if hit rate < 60%
             memory: 85,     // Default: Alert if memory > 85%
-            latency: 100    // Default: Alert if latency > 100ms
+            latency: 200    // Default: Alert if latency > 200ms (cross-region tolerance)
         };
         
         try {

@@ -402,18 +402,18 @@ class AlertEngine {
                 },
                 {
                     name: 'Redis High Latency',
-                    description: 'Alert when Redis latency exceeds 100ms',
+                    description: 'Alert when Redis latency exceeds 200ms (cross-region tolerance)',
                     service: 'redis',
                     metric: 'responseTime',
                     condition: {
                         operator: '>',
-                        threshold: 100
+                        threshold: 200
                     },
                     action: {
                         severity: 'WARNING',
                         notifyAdmin: true,
                         createIncident: false,
-                        customMessage: 'Redis latency exceeded 100ms'
+                        customMessage: 'Redis latency exceeded 200ms (check region alignment)'
                     },
                     enabled: true
                 },
