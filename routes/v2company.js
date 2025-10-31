@@ -6,6 +6,24 @@ const path = require('path');
 const { getDB } = require('../db');
 const { ObjectId } = require('mongodb');
 const Company = require('../models/v2Company'); // V2 Company model import
+
+// ============================================================================
+// REDIS HELPER: Safe cache operations with null/cold-start protection
+// ============================================================================
+async function safeRedisDel(key, context = '') {
+    if (!redisClient || !redisClient.isReady) {
+        logger.warn(`⚠️ [CACHE${context ? ' ' + context : ''}] Redis not ready, skipping delete of ${key}`);
+        return false;
+    }
+    try {
+        await redisClient.del(key);
+        logger.debug(`🗑️ [CACHE${context ? ' ' + context : ''}] Cleared cache: ${key}`);
+        return true;
+    } catch (error) {
+        logger.warn(`⚠️ [CACHE${context ? ' ' + context : ''}] Failed to delete ${key}:`, error.message);
+        return false;
+    }
+}
 // V2 DELETED: Google Calendar integration eliminated
 // const { google } = require('googleapis'); // For Google Calendar
 const { normalizePhoneNumber } = require('../utils/phone');
@@ -324,6 +342,12 @@ async function checkCompanyCache(req, res, next) {
     const cacheKey = `company:${id}`;
     logger.debug(`🔍 [CACHE] Checking cache for: ${cacheKey}`);
     try {
+        // Check if Redis is available before trying to use it
+        if (!redisClient || !redisClient.isReady) {
+            logger.warn(`⚠️ [CACHE] Redis not ready, skipping cache check`);
+            throw new Error('Redis not ready'); // Jump to MongoDB fallback
+        }
+        
         const cachedData = await redisClient.get(cacheKey);
         if (cachedData) {
             logger.debug(`✅ [CACHE] CACHE HIT for ${cacheKey} - returning cached data`);
@@ -401,9 +425,18 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
             }).catch(err => logger.error('Failed to send missing credentials alert:', err));
         }
 
+        // Cache in Redis (if available)
         const cacheKey = `company:${companyId}`;
-        await redisClient.setEx(cacheKey, 3600, JSON.stringify(company));
-        logger.debug(`✅ [CACHE] SAVED to cache: ${cacheKey} (TTL: 3600s)`);
+        if (redisClient && redisClient.isReady) {
+            try {
+                await redisClient.setEx(cacheKey, 3600, JSON.stringify(company));
+                logger.debug(`✅ [CACHE] SAVED to cache: ${cacheKey} (TTL: 3600s)`);
+            } catch (cacheError) {
+                logger.warn(`⚠️ [CACHE] Failed to save to Redis (non-critical):`, cacheError.message);
+            }
+        } else {
+            logger.warn(`⚠️ [CACHE] Redis not ready, skipping cache save`);
+        }
         
         // Debug: Log if aiAgentLogic exists
         logger.debug(`🔍 DEBUG: aiAgentLogic exists in response: ${Boolean(company.aiAgentLogic)}`);
@@ -487,11 +520,15 @@ router.delete('/company/:id', async (req, res) => {
             }
             
             // Clear all cache keys
-            for (const key of cacheKeys) {
-                if (key && !key.includes('undefined')) {
-                    await redisClient.del(key);
-                    logger.debug(`[API DELETE /api/company/:id] 🗑️ Cleared cache: ${key}`);
+            if (redisClient && redisClient.isReady) {
+                for (const key of cacheKeys) {
+                    if (key && !key.includes('undefined')) {
+                        await redisClient.del(key);
+                        logger.debug(`[API DELETE /api/company/:id] 🗑️ Cleared cache: ${key}`);
+                    }
                 }
+            } else {
+                logger.warn(`⚠️ [CACHE] Redis not ready, skipping cache clear on delete`);
             }
             
             logger.debug(`[API DELETE /api/company/:id] ✅ Cleared ${cacheKeys.length} cache keys`);
@@ -817,8 +854,7 @@ router.delete('/company/:companyId/account-status/history/:index', authenticateJ
         ];
         
         for (const key of cacheKeys) {
-            await redisClient.del(key);
-            logger.debug(`🗑️ Cleared cache: ${key}`);
+            await safeRedisDel(key, '[PATCH]');
         }
         
         logger.debug(`✅ Deleted status history entry at index ${historyIndex} for company ${companyId}`);
@@ -870,7 +906,7 @@ router.patch('/company/:companyId/configuration', authenticateJWT, async (req, r
         if (!updatedCompany) {return res.status(404).json({ message: 'Company not found' });}
 
         const cacheKey = `company:${companyId}`;
-        await redisClient.del(cacheKey);
+        await safeRedisDel(cacheKey);
         logger.debug(`DELETED from cache: ${cacheKey}`);
 
         res.json(updatedCompany);
@@ -906,7 +942,7 @@ router.patch('/company/:companyId/integrations', authenticateJWT, async (req, re
         if (!updatedCompany) {return res.status(404).json({ message: 'Company not found' });}
 
         const cacheKey = `company:${companyId}`;
-        await redisClient.del(cacheKey);
+        await safeRedisDel(cacheKey);
         logger.debug(`DELETED from cache: ${cacheKey}`);
 
         res.json(updatedCompany);
@@ -978,7 +1014,7 @@ router.patch('/company/:companyId/aisettings', authenticateJWT, async (req, res)
         if (!updatedCompany) {return res.status(404).json({ message: 'Company not found (during update)' });}
 
         const cacheKey = `company:${companyId}`;
-        await redisClient.del(cacheKey);
+        await safeRedisDel(cacheKey);
         logger.debug(`DELETED from cache: ${cacheKey}`);
 
         res.json(updatedCompany);
@@ -1065,13 +1101,13 @@ router.patch('/company/:companyId/voice-settings', authenticateJWT, async (req, 
         
         // Clear cache to ensure Twilio gets fresh data
         const cacheKey = `company:${companyId}`;
-        await redisClient.del(cacheKey);
+        await safeRedisDel(cacheKey);
         logger.debug(`[Voice Settings] Cleared cache for key: ${cacheKey}`);
         
         // ALSO clear phone-based cache used by Twilio
         if (company.twilioConfig?.phoneNumber) {
           const phoneCacheKey = `company-phone:${company.twilioConfig.phoneNumber}`;
-          await redisClient.del(phoneCacheKey);
+          await safeRedisDel(phoneCacheKey);
           logger.debug(`[Voice Settings] Cleared phone cache for key: ${phoneCacheKey}`);
         }
         
@@ -1131,7 +1167,7 @@ router.patch('/company/:companyId/profile', authenticateJWT, async (req, res) =>
         // Clear Redis cache
         try {
             if (redisClient && redisClient.isReady) {
-                await redisClient.del(`company:${companyId}`);
+                await safeRedisDel(`company:${companyId}`);
                 logger.debug(`🗑️ Cache cleared for company ${companyId} after profile update`);
             }
         } catch (cacheError) {
@@ -1221,7 +1257,7 @@ router.patch('/company/:companyId/agentsetup', authenticateJWT, async (req, res)
         const updatedCompany = await companiesCollection.findOne({ _id: new ObjectId(companyId) });
 
         const cacheKey = `company:${companyId}`;
-        await redisClient.del(cacheKey);
+        await safeRedisDel(cacheKey);
         logger.debug(`DELETED from cache: ${cacheKey}`);
 
         res.json(updatedCompany);
@@ -1409,7 +1445,7 @@ router.post('/companies/:companyId/trade-categories', authenticateJWT, apiLimite
         // Clear Redis cache if it exists
         try {
             const cacheKey = `company:${companyId}`;
-            await redisClient.del(cacheKey);
+            await safeRedisDel(cacheKey);
             logger.debug(`[Trade Categories] Cleared cache: ${cacheKey}`);
         } catch (redisError) {
             logger.warn('[Trade Categories] Redis cache clear failed:', redisError.message);
@@ -1786,7 +1822,7 @@ router.post('/company/:companyId/instant-responses', authenticateJWT, async (req
         
         // Clear cache
         try {
-            await redisClient.del(`company:${companyId}`);
+            await safeRedisDel(`company:${companyId}`);
             logger.debug(`[IR-POST-4] ✅ Cache cleared for company: ${companyId}`);
         } catch (cacheError) {
             logger.warn(`[IR-POST-5] ⚠️  Cache clear failed:`, cacheError.message);
@@ -1850,7 +1886,7 @@ router.put('/company/:companyId/instant-responses/:responseId', authenticateJWT,
         
         // Clear cache
         try {
-            await redisClient.del(`company:${companyId}`);
+            await safeRedisDel(`company:${companyId}`);
         } catch (cacheError) {
             logger.warn(`[IR-PUT-3] ⚠️  Cache clear failed:`, cacheError.message);
         }
@@ -1917,7 +1953,7 @@ router.delete('/company/:companyId/instant-responses/:responseId', authenticateJ
         
         // Clear cache
         try {
-            await redisClient.del(`company:${companyId}`);
+            await safeRedisDel(`company:${companyId}`);
         } catch (cacheError) {
             logger.warn(`[IR-DELETE-3] ⚠️  Cache clear failed:`, cacheError.message);
         }
@@ -2047,7 +2083,7 @@ router.post('/company/:companyId/response-templates', authenticateJWT, async (re
         
         // Clear cache
         try {
-            await redisClient.del(`company:${companyId}`);
+            await safeRedisDel(`company:${companyId}`);
             logger.debug(`[RT-POST-4] ✅ Cache cleared for company: ${companyId}`);
         } catch (cacheError) {
             logger.warn(`[RT-POST-5] ⚠️  Cache clear failed:`, cacheError.message);
@@ -2112,7 +2148,7 @@ router.put('/company/:companyId/response-templates/:templateId', authenticateJWT
         
         // Clear cache
         try {
-            await redisClient.del(`company:${companyId}`);
+            await safeRedisDel(`company:${companyId}`);
         } catch (cacheError) {
             logger.warn(`[RT-PUT-3] ⚠️  Cache clear failed:`, cacheError.message);
         }
@@ -2179,7 +2215,7 @@ router.delete('/company/:companyId/response-templates/:templateId', authenticate
         
         // Clear cache
         try {
-            await redisClient.del(`company:${companyId}`);
+            await safeRedisDel(`company:${companyId}`);
         } catch (cacheError) {
             logger.warn(`[RT-DELETE-3] ⚠️  Cache clear failed:`, cacheError.message);
         }
