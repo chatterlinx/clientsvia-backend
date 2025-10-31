@@ -168,24 +168,27 @@ function renderFillerWords(words) {
         
         if (words.length === 0) {
             container.innerHTML = `
-                <div class="text-center w-full text-gray-500 py-8">
+                <div class="col-span-5 text-center text-gray-500 py-8">
                     <i class="fas fa-inbox text-4xl mb-3"></i>
-                    <p>No filler words yet. Click "Add Word" to get started.</p>
+                    <p>No filler words yet. Click "Add" to get started.</p>
                 </div>
             `;
             return;
         }
         
-        // Render as tags
+        // Render as compact text list with columns (max 7 per column)
+        // Grid is 5 columns, each item takes 1 column
         container.innerHTML = words.map(word => `
-            <div class="inline-flex items-center gap-2 px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-medium text-gray-800 transition-all">
-                <span>${word}</span>
-                <button onclick="removeFillerWord('${word}')" class="text-red-600 hover:text-red-800 transition-colors">
-                    <i class="fas fa-times"></i>
+            <div class="flex items-center justify-between py-1 px-2 hover:bg-gray-200 rounded transition-colors group">
+                <span class="text-gray-700 font-medium">${word}</span>
+                <button onclick="removeFillerWord('${word}')" 
+                        class="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Remove">
+                    <i class="fas fa-times text-xs"></i>
                 </button>
             </div>
         `).join('');
-        console.log(`✅ [RENDER FILLERS] Rendered ${words.length} words successfully`);
+        console.log(`✅ [RENDER FILLERS] Rendered ${words.length} words in compact columns`);
     } catch (error) {
         console.error(`❌ [RENDER FILLERS] FATAL ERROR:`, error);
         console.error(`❌ [RENDER FILLERS] Stack:`, error.stack);

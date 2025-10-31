@@ -939,13 +939,11 @@
                                 </button>
                             </div>
                             
-                            <!-- Filler Tags Display -->
+                            <!-- Filler Words List Display (Compact Columns) -->
                             <div id="template-fillers-display" 
-                                 class="flex flex-wrap gap-2 min-h-[80px] p-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                                <!-- Loading skeleton -->
-                                <div class="skeleton skeleton-text w-20"></div>
-                                <div class="skeleton skeleton-text w-16"></div>
-                                <div class="skeleton skeleton-text w-24"></div>
+                                 class="grid grid-cols-5 gap-x-8 gap-y-1 p-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 text-sm">
+                                <!-- Filler words will be rendered here in columns (max 7 per column) -->
+                                <div class="text-gray-400 text-center py-8 col-span-5">Loading filler words...</div>
                             </div>
                         </div>
                         
