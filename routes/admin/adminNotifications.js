@@ -134,7 +134,7 @@ const CriticalDataHealthCheck = require('../../services/CriticalDataHealthCheck'
 // GET NOTIFICATION CENTER STATUS (for dynamic tab coloring)
 // ============================================================================
 
-router.get('/admin/notifications/status', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.get('/status', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         // Count unacknowledged alerts by severity
         const counts = await NotificationLog.getUnacknowledgedCount();
@@ -194,7 +194,7 @@ router.get('/admin/notifications/status', authenticateJWT, requireRole('admin'),
 // GET DASHBOARD STATS
 // ============================================================================
 
-router.get('/admin/notifications/dashboard', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.get('/dashboard', authenticateJWT, requireRole('admin'), async (req, res) => {
     const startTime = Date.now();
     try {
         // ================================================================
@@ -279,7 +279,7 @@ router.get('/admin/notifications/dashboard', authenticateJWT, requireRole('admin
 // GET NOTIFICATION REGISTRY (all registered points)
 // ============================================================================
 
-router.get('/admin/notifications/registry', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.get('/registry', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const grouped = await NotificationRegistry.getAllGrouped();
         const summary = await NotificationRegistry.getValidationSummary();
@@ -330,7 +330,7 @@ router.get('/admin/notifications/registry', authenticateJWT, requireRole('admin'
 // VALIDATE ALL NOTIFICATION POINTS
 // ============================================================================
 
-router.post('/admin/notifications/registry/validate', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
+router.post('/registry/validate', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     try {
         await respondWithIdempotency(req, res, async () => {
             const points = await NotificationRegistry.find({ isActive: true });
@@ -392,7 +392,7 @@ router.post('/admin/notifications/registry/validate', authenticateJWT, requireRo
 // GET ALERT LOGS (paginated, filtered)
 // ============================================================================
 
-router.get('/admin/notifications/logs', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.get('/logs', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const {
             page = 1,
@@ -479,7 +479,7 @@ router.get('/admin/notifications/logs', authenticateJWT, requireRole('admin'), a
 // GET SINGLE ALERT DETAILS
 // ============================================================================
 
-router.get('/admin/notifications/logs/:alertId', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.get('/logs/:alertId', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const { alertId } = req.params;
         
@@ -535,7 +535,7 @@ router.get('/admin/notifications/logs/:alertId', authenticateJWT, requireRole('a
 // ACKNOWLEDGE ALERT
 // ============================================================================
 
-router.post('/admin/notifications/acknowledge', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
+router.post('/acknowledge', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     try {
         const { alertId, acknowledgedBy } = req.body;
         if (!alertId || !acknowledgedBy) {
@@ -592,7 +592,7 @@ router.post('/admin/notifications/acknowledge', authenticateJWT, requireRole('ad
 // SNOOZE ALERT
 // ============================================================================
 
-router.post('/admin/notifications/snooze', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
+router.post('/snooze', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     try {
         const { alertId, minutes, reason } = req.body;
         if (!alertId || !minutes) {
@@ -645,7 +645,7 @@ router.post('/admin/notifications/snooze', authenticateJWT, requireRole('admin')
 // RESOLVE ALERT
 // ============================================================================
 
-router.post('/admin/notifications/resolve', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
+router.post('/resolve', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     try {
         const { alertId, resolvedBy, action, notes } = req.body;
         if (!alertId || !resolvedBy || !action) {
@@ -707,7 +707,7 @@ router.post('/admin/notifications/resolve', authenticateJWT, requireRole('admin'
 // RUN HEALTH CHECK
 // ============================================================================
 
-router.post('/admin/notifications/health-check', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
+router.post('/health-check', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     try {
         const t0 = Date.now();
         const { triggeredBy = 'manual' } = req.body;
@@ -773,7 +773,7 @@ router.post('/admin/notifications/health-check', authenticateJWT, requireRole('a
 // GET HEALTH CHECK HISTORY
 // ============================================================================
 
-router.get('/admin/notifications/health-history', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.get('/health-history', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const { limit = 10, hours = 24 } = req.query;
         
@@ -803,7 +803,7 @@ router.get('/admin/notifications/health-history', authenticateJWT, requireRole('
 // GET NOTIFICATION SETTINGS (Twilio + Admin Contacts)
 // ============================================================================
 
-router.get('/admin/notifications/settings', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.get('/settings', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const AdminSettings = require('../../models/AdminSettings');
         
@@ -1015,7 +1015,7 @@ router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'
 // ============================================================================
 
 // Get default notification policy
-router.get('/admin/notifications/policy/defaults', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.get('/policy/defaults', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const AdminSettings = require('../../models/AdminSettings');
         const defaults = AdminSettings.getDefaultNotificationPolicy();
@@ -1084,7 +1084,7 @@ router.put('/admin/notifications/policy', authenticateJWT, requireRole('admin'),
 // SEND TEST SMS TO ADMIN CONTACT
 // ============================================================================
 
-router.post('/admin/notifications/test-sms', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
+router.post('/test-sms', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
      
     // Console logging intentional for SMS delivery testing
     
@@ -1238,7 +1238,7 @@ Reply STOP to unsubscribe.
 // TEST FULL NOTIFICATION SYSTEM (SMS + EMAIL)
 // ============================================================================
 
-router.post('/admin/notifications/test-all', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.post('/test-all', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         logger.info('🧪 [TEST ALL] Testing full notification system (SMS + Email)...');
         
@@ -1274,7 +1274,7 @@ router.post('/admin/notifications/test-all', authenticateJWT, requireRole('admin
 // SEND DAILY DIGEST EMAIL (Manual Trigger for Testing)
 // ============================================================================
 
-router.post('/admin/notifications/send-digest', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.post('/send-digest', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         logger.info('📧 [SEND DIGEST] Manually triggering daily digest...');
         
@@ -1324,7 +1324,7 @@ const ErrorTrendTrackerModule = require('../../services/ErrorTrendTracker');
 const DependencyHealthMonitorModule = require('../../services/DependencyHealthMonitor');
 
 // Simple test route to verify Phase 3 routes are registered
-router.get('/admin/notifications/_test', authenticateJWT, requireRole('admin'), (req, res) => {
+router.get('/_test', authenticateJWT, requireRole('admin'), (req, res) => {
     res.json({ 
         success: true, 
         message: '🎉 Phase 3 routes are registered and ENABLED!',
@@ -1338,7 +1338,7 @@ router.get('/admin/notifications/_test', authenticateJWT, requireRole('admin'), 
 // GET /api/admin/notifications/root-cause-analysis
 // AI-powered pattern detection and root cause identification
 // ----------------------------------------------------------------------------
-router.get('/admin/notifications/root-cause-analysis', 
+router.get('/root-cause-analysis', 
     authenticateJWT, 
     requireRole('admin'), 
     async (req, res) => {
@@ -1395,7 +1395,7 @@ router.get('/admin/notifications/root-cause-analysis',
 // GET /api/admin/notifications/error-trends
 // Historical trend analysis and regression detection
 // ----------------------------------------------------------------------------
-router.get('/admin/notifications/error-trends', 
+router.get('/error-trends', 
     authenticateJWT, 
     requireRole('admin'), 
     async (req, res) => {
@@ -1453,7 +1453,7 @@ router.get('/admin/notifications/error-trends',
 // GET /api/admin/notifications/dependency-health
 // Real-time monitoring of all external services
 // ----------------------------------------------------------------------------
-router.get('/admin/notifications/dependency-health', 
+router.get('/dependency-health', 
     authenticateJWT, 
     requireRole('admin'), 
     async (req, res) => {
@@ -1528,7 +1528,7 @@ router.get('/admin/notifications/dependency-health',
 // GET /api/admin/notifications/service-status/:serviceName
 // Quick status check for specific service (MongoDB, Redis, Twilio, ElevenLabs)
 // ----------------------------------------------------------------------------
-router.get('/admin/notifications/service-status/:serviceName', 
+router.get('/service-status/:serviceName', 
     authenticateJWT, 
     requireRole('admin'), 
     async (req, res) => {
@@ -1560,7 +1560,7 @@ router.get('/admin/notifications/service-status/:serviceName',
 // ============================================================================
 
 // DELETE SELECTED ALERTS
-router.post('/admin/notifications/bulk-delete', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
+router.post('/bulk-delete', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     try {
         const { alertIds, confirmDelete } = req.body;
         
@@ -1607,7 +1607,7 @@ router.post('/admin/notifications/bulk-delete', authenticateJWT, requireRole('ad
 });
 
 // PURGE RESOLVED ALERTS
-router.post('/admin/notifications/purge-resolved', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
+router.post('/purge-resolved', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     try {
         const { confirmPurge } = req.body;
         
@@ -1647,7 +1647,7 @@ router.post('/admin/notifications/purge-resolved', authenticateJWT, requireRole(
 });
 
 // PURGE OLD ALERTS (older than X days)
-router.post('/admin/notifications/purge-old', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
+router.post('/purge-old', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     try {
         const { days = 90, confirmPurge } = req.body;
         
@@ -1697,7 +1697,7 @@ router.post('/admin/notifications/purge-old', authenticateJWT, requireRole('admi
 });
 
 // CLEAR ALL ALERTS (nuclear option - requires double confirmation)
-router.post('/admin/notifications/clear-all', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
+router.post('/clear-all', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     try {
         const { confirmClearAll, confirmationText } = req.body;
         
@@ -1840,7 +1840,7 @@ router.post('/frontend-error', authenticateJWT, requireRole('admin'), async (req
 // ============================================================================
 // DIAGNOSTIC: List all registered routes (for debugging 404s)
 // ============================================================================
-router.get('/admin/notifications/_routes', authenticateJWT, requireRole('admin'), (req, res) => {
+router.get('/_routes', authenticateJWT, requireRole('admin'), (req, res) => {
     const routes = [];
     router.stack.forEach((r) => {
         if (r.route) {
