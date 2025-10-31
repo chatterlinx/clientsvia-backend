@@ -331,10 +331,29 @@ app.use('/audio', express.static(path.join(__dirname, 'public/audio'), {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Dedicated Twilio request logger (must run before auth-guarded routers)
+const twilioRequestLogger = (req, res, next) => {
+    console.log('🌐 GLOBAL TWILIO REQUEST INTERCEPTED:', {
+        timestamp: new Date().toISOString(),
+        method: req.method,
+        originalUrl: req.originalUrl,
+        ip: req.ip || req.connection.remoteAddress,
+        userAgent: req.headers['user-agent'],
+        twilioSignature: req.headers['x-twilio-signature'],
+        hasBody: Boolean(req.body),
+        bodySize: JSON.stringify(req.body || {}).length
+    });
+    next();
+};
+
 // Routes will be registered after they are loaded asynchronously
 function registerRoutes(routes) {
     console.log('[INIT] Registering all API routes...');
     
+    // Twilio webhooks must bypass JWT-protected tenant routes, so register them first
+    app.use('/api/twilio', twilioRequestLogger);
+    app.use('/api/twilio', routes.v2TwilioRoutes);
+
     // --- API Routes ---
     app.use('/api', routes.v2CompanyRoutes);
     app.use('/api/company', routes.v2VoiceRoutes); // V2 Voice Settings API (must be /api/company for /:companyId/v2-voice-settings)
@@ -417,21 +436,6 @@ function registerRoutes(routes) {
     --- END SMOKE TEST ---
     */
 
-    // 🚨 GLOBAL REQUEST LOGGER for Twilio debugging
-app.use('/api/twilio', (req, res, next) => {
-    console.log('🌐 GLOBAL TWILIO REQUEST INTERCEPTED:', {
-        timestamp: new Date().toISOString(),
-        method: req.method,
-        originalUrl: req.originalUrl,
-        ip: req.ip || req.connection.remoteAddress,
-        userAgent: req.headers['user-agent'],
-        twilioSignature: req.headers['x-twilio-signature'],
-        hasBody: Boolean(req.body),
-        bodySize: JSON.stringify(req.body || {}).length
-    });
-    next();
-});
-
 // 🚨 EMERGENCY: Log ALL incoming requests to catch hidden transfers
 app.use((req, res, next) => {
     // Only log non-static requests to avoid spam
@@ -450,9 +454,6 @@ app.use((req, res, next) => {
     }
     next();
 });
-    
-    // This line will now correctly handle all /api/twilio requests
-    app.use('/api/twilio', routes.v2TwilioRoutes);
     
     // REMOVED: Legacy CRM Management routes - will build V2 version in future
     

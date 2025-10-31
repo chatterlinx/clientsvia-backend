@@ -5776,30 +5776,40 @@ Continue?`;
         // ============================================================================
         
         async function loadTwilioTestConfig() {
-            console.log('📞 [TWILIO TEST - PER-TEMPLATE] loadTwilioTestConfig() CALLED');
-            
-            if (!activeTemplateId) {
-                console.warn('⚠️ [TWILIO TEST] No active template, skipping load');
-                return;
-            }
+            console.log('📞 [TWILIO TEST - GLOBAL] loadTwilioTestConfig() CALLED');
             
             try {
-                // ✅ FIXED: Fetch PER-TEMPLATE config (correct endpoint!)
-                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplateId}/twilio-test`, {
-                    headers: { Authorization: `Bearer ${getAuthToken()}` }
+                const response = await fetch('/api/admin/settings/global-ai-brain-test', {
+                    headers: {
+                        Authorization: `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    }
                 });
 
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
 
                 const result = await response.json();
-                const config = result.twilioTest; // ✅ FIXED: Use correct response key
-                
-                console.log('📞 [TWILIO TEST - GLOBAL] Global config loaded:', {
+                const config = result?.data || {};
+                const configActiveTemplateId = config.activeTemplateId ? config.activeTemplateId.toString() : null;
+                const configActiveTemplateName = config.activeTemplate?.name || config.activeTemplateName || 'Not assigned';
+
+                console.log('📞 [TWILIO TEST - GLOBAL] Config loaded:', {
                     enabled: config.enabled,
-                    hasPhone: !!config.phoneNumber,
-                    activeTemplateId: config.activeTemplateId,
-                    activeTemplateName: config.activeTemplate?.name || 'None'
+                    hasPhone: Boolean(config.phoneNumber),
+                    activeTemplateId: configActiveTemplateId,
+                    activeTemplateName: configActiveTemplateName
                 });
+
+                // Align local active template reference with AdminSettings
+                if (configActiveTemplateId && configActiveTemplateId !== activeTemplateId) {
+                    console.log('📞 [TWILIO TEST - GLOBAL] Updating local activeTemplateId to match AdminSettings setting');
+                    activeTemplateId = configActiveTemplateId;
+                    window.activeTemplateId = configActiveTemplateId;
+                }
+
+                window.globalTwilioTestConfig = config; // Cache for other helpers
 
                 // Populate form (STATIC - doesn't change when switching templates!)
                 document.getElementById('twilio-test-phone').value = config.phoneNumber || '';
@@ -5812,16 +5822,16 @@ Continue?`;
                 updateGreetingCharCount();
                 
                 // Set toggle state
-                const enabled = config.enabled === true;
-                console.log('📞 [TWILIO TEST - GLOBAL] Setting enabled to:', enabled);
-                document.getElementById('twilio-test-enabled').checked = enabled;
+                const isEnabled = config.enabled === true;
+                console.log('📞 [TWILIO TEST - GLOBAL] Setting enabled toggle to:', isEnabled);
+                document.getElementById('twilio-test-enabled').checked = isEnabled;
                 
                 // Update toggle UI
                 const toggleSwitch = document.getElementById('toggle-switch');
                 const toggleCircle = document.getElementById('toggle-circle');
                 const statusText = document.getElementById('toggle-status-text');
                 
-                if (enabled) {
+                if (isEnabled) {
                     toggleSwitch.classList.remove('bg-gray-300');
                     toggleSwitch.classList.add('bg-purple-600');
                     toggleCircle.classList.add('translate-x-7');
@@ -5834,24 +5844,42 @@ Continue?`;
                 }
 
                 // Update stats if available
+                const statsContainer = document.getElementById('twilio-test-stats');
                 if (config.testCallCount > 0) {
-                    document.getElementById('twilio-test-stats').classList.remove('hidden');
+                    statsContainer.classList.remove('hidden');
                     document.getElementById('test-call-count').textContent = config.testCallCount || 0;
-                    
-                    const lastTested = config.lastTestedAt ? 
-                        new Date(config.lastTestedAt).toLocaleString() : 
-                        'Never';
+                    const lastTested = config.lastTestedAt ? new Date(config.lastTestedAt).toLocaleString() : 'Never';
                     document.getElementById('test-last-called').textContent = lastTested;
                 } else {
-                    document.getElementById('twilio-test-stats').classList.add('hidden');
+                    statsContainer.classList.add('hidden');
                 }
 
-                console.log(`✅ [TWILIO TEST - GLOBAL] Config loaded successfully`);
+                // Update active test template banner immediately for clarity
+                const bannerElement = document.getElementById('active-test-template-display');
+                if (bannerElement) {
+                    if (configActiveTemplateId) {
+                        bannerElement.innerHTML = `
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-check-circle text-emerald-100"></i>
+                                <span>${configActiveTemplateName}</span>
+                            </div>
+                        `;
+                    } else {
+                        bannerElement.innerHTML = `
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-exclamation-circle text-yellow-200"></i>
+                                <span>No active template selected</span>
+                            </div>
+                        `;
+                    }
+                }
+
+                console.log('✅ [TWILIO TEST - GLOBAL] Config loaded successfully');
 
             } catch (error) {
                 console.error('❌ [TWILIO TEST - GLOBAL] Error loading config:', error);
-                // If no global config exists yet, show empty form (first-time setup)
                 console.log('ℹ️ [TWILIO TEST - GLOBAL] No config found - showing empty form for first-time setup');
+                window.globalTwilioTestConfig = null;
             }
         }
 
@@ -6336,17 +6364,18 @@ Continue?`;
          * Save Twilio test configuration
          */
         async function saveTwilioTestConfig() {
-            if (!activeTemplateId) {
-                showNotification('❌ No active template selected', 'error');
-                return;
-            }
-
             const phoneNumber = document.getElementById('twilio-test-phone').value.trim();
             const enabled = document.getElementById('twilio-test-enabled').checked;
             const accountSid = document.getElementById('twilio-test-account-sid').value.trim();
             const authToken = document.getElementById('twilio-test-auth-token').value.trim();
             const greeting = document.getElementById('twilio-test-greeting').value.trim();
             const notes = document.getElementById('twilio-test-notes').value.trim();
+            const targetTemplateId = activeTemplateId || window.globalTwilioTestConfig?.activeTemplateId;
+
+            if (!targetTemplateId) {
+                showNotification('❌ No active template selected for routing. Choose a template first.', 'error');
+                return;
+            }
 
             // Validate phone number format if provided
             if (phoneNumber && !phoneNumber.match(/^\+\d{10,15}$/)) {
@@ -6360,45 +6389,57 @@ Continue?`;
                 return;
             }
 
-            console.log(`📞 [TWILIO TEST - GLOBAL] Saving GLOBAL config`, {
+            console.log('📞 [TWILIO TEST - GLOBAL] Saving AdminSettings.globalAIBrainTest config', {
                 phoneNumber,
                 enabled,
-                accountSid: accountSid ? accountSid.substring(0, 10) + '...' : 'none',
+                accountSid: accountSid ? `${accountSid.substring(0, 10)}...` : 'none',
                 authToken: authToken ? '***' : 'none',
-                activeTemplateId: activeTemplateId,
-                activeTemplateName: activeTemplate?.name || 'Unknown',
+                activeTemplateId: targetTemplateId,
+                activeTemplateName: activeTemplate?.name || window.globalTwilioTestConfig?.activeTemplate?.name || 'Unknown',
                 notes
             });
 
             try {
-                // ✅ FIXED: Save to PER-TEMPLATE config (correct endpoint!)
-                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplateId}/twilio-test`, {
+                const response = await fetch('/api/admin/settings/global-ai-brain-test', {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
                         Authorization: `Bearer ${getAuthToken()}`
                     },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         phoneNumber,
                         enabled,
                         accountSid,
                         authToken,
                         greeting,
-                        notes
+                        notes,
+                        activeTemplateId: targetTemplateId
                     })
                 });
 
                 if (!response.ok) {
-                    const errorData = await response.json();
+                    const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.message || `HTTP ${response.status}`);
                 }
 
                 const result = await response.json();
                 console.log('✅ [TWILIO TEST - GLOBAL] Config saved:', result);
 
-                showNotification(`✅ Global test config saved! Test calls will route to: ${activeTemplate?.name || 'this template'}`, 'success');
+                // Optimistically update cached config for downstream helpers
+                window.globalTwilioTestConfig = {
+                    ...(window.globalTwilioTestConfig || {}),
+                    phoneNumber,
+                    enabled,
+                    accountSid,
+                    authToken,
+                    greeting,
+                    notes,
+                    activeTemplateId: targetTemplateId
+                };
 
-                // Reload config to show updated stats
+                const routedTemplateName = activeTemplate?.name || window.globalTwilioTestConfig?.activeTemplate?.name || 'selected template';
+                showNotification(`✅ Global test config saved! Test calls will route to: ${routedTemplateName}`, 'success');
+
                 await loadTwilioTestConfig();
 
             } catch (error) {
