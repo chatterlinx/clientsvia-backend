@@ -690,6 +690,64 @@ class SettingsManager {
     }
     
     // ========================================================================
+    // CRITICAL FAILURE CARD RENDERER
+    // ========================================================================
+    
+    renderCriticalFailureCard(incidentPacket) {
+        const card = document.getElementById('criticalFailureCard');
+        if (!card) return; // fail-safe
+        
+        if (!incidentPacket || incidentPacket.overallStatus !== 'FAIL') {
+            card.style.display = 'none';
+            return;
+        }
+        
+        // show card
+        card.style.display = 'block';
+        
+        // summary line
+        const summaryEl = document.getElementById('criticalSummary');
+        if (summaryEl) {
+            summaryEl.textContent = incidentPacket.summary || 'No summary provided.';
+        }
+        
+        // failure source
+        const sourceEl = document.getElementById('criticalSource');
+        if (sourceEl) {
+            sourceEl.textContent = `Failure Source: ${incidentPacket.failureSource || 'unknown'}`;
+        }
+        
+        // build IMMEDIATE ACTIONS list
+        const actionsEl = document.getElementById('criticalActions');
+        if (actionsEl) {
+            actionsEl.innerHTML = ''; // clear any old
+            const actions = Array.isArray(incidentPacket.actions) && incidentPacket.actions.length
+                ? incidentPacket.actions.slice()
+                : [];
+            
+            // inject the missing step about ensuring the route actually exists
+            // only add if not already present
+            const extraStep =
+                "Also confirm routes/admin/adminNotifications.js defines GET /thresholds and POST /thresholds so the route actually exists.";
+            if (!actions.find(a => a.includes('adminNotifications.js'))) {
+                actions.push(extraStep);
+            }
+            
+            actions.forEach(step => {
+                const li = document.createElement('li');
+                li.textContent = step;
+                actionsEl.appendChild(li);
+            });
+        }
+    }
+    
+    injectKillOrderText(killOrderText) {
+        const pre = document.getElementById('killOrderDetails');
+        if (!pre) return;
+        pre.textContent = killOrderText || '(no details)';
+    }
+    
+    // ========================================================================
     // DIAGNOSE FAILURE - SHOW KILL ORDER
     // ========================================================================
     
@@ -752,6 +810,9 @@ class SettingsManager {
         ];
         
         const killOrder = lines.join('\n');
+        
+        // Inject kill order into the critical failure card
+        this.injectKillOrderText(killOrder);
         
         // Copy to clipboard
         navigator.clipboard.writeText(killOrder).then(() => {
@@ -823,6 +884,9 @@ class SettingsManager {
             window.LatestIncidentPacket = incidentPacket;
             
             console.log('🎯 [SETTINGS] Incident Packet:', incidentPacket);
+            
+            // Render critical failure card if FAIL status
+            this.renderCriticalFailureCard(incidentPacket);
             
             // Display based on overallStatus
             if (incidentPacket.overallStatus === 'OK') {

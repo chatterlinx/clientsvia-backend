@@ -345,6 +345,9 @@ router.post('/selfcheck', async (req, res) => {
             if (badRoute && badRoute.status === 0) {
                 incidentPacket.actions.push(`Status 0 means fetch never connected - check BASE_URL or CORS configuration.`);
             }
+            
+            // CRITICAL: Add the missing step about verifying route file
+            incidentPacket.actions.push(`Also confirm routes/admin/adminNotifications.js defines GET /thresholds and POST /thresholds so the route actually exists.`);
         }
         // Case B: Redis failing (REDIS)
         else if (!incidentPacket.redis.setGetDelOk) {

@@ -996,6 +996,48 @@
                     </button>
                 </div>
                 
+                <!-- CRITICAL FAILURE CARD (PINNED) -->
+                <div id="criticalFailureCard" style="display:none; border:1px solid #7f1d1d; background:#fff1f1; color:#400; border-radius:8px; padding:16px; margin-top:16px;">
+                    <div style="font-weight:600; color:#b91c1c; display:flex; align-items:center; gap:8px; font-size:15px;">
+                        <span style="font-size:16px;">❌ CRITICAL FAILURE DETECTED</span>
+                    </div>
+
+                    <div id="criticalSummary"
+                         style="margin-top:8px; font-size:14px; font-weight:500; color:#000;">
+                        <!-- Summary line here -->
+                    </div>
+
+                    <div id="criticalSource"
+                         style="margin-top:4px; font-size:13px; color:#7f1d1d;">
+                        <!-- Failure source tag here -->
+                    </div>
+
+                    <div style="margin-top:12px; font-size:13px; font-weight:600; color:#000;">
+                        IMMEDIATE ACTIONS:
+                    </div>
+
+                    <ol id="criticalActions"
+                        style="margin-top:4px; font-size:13px; color:#000; padding-left:20px;">
+                        <!-- <li>...</li> gets injected -->
+                    </ol>
+
+                    <pre id="killOrderDetails"
+                         style="
+                            background:#1a1a1a;
+                            color:#fff;
+                            font-size:12px;
+                            line-height:1.4;
+                            padding:12px;
+                            border-radius:6px;
+                            max-height:260px;
+                            overflow:auto;
+                            margin-top:12px;
+                            white-space:pre-wrap;
+                            word-break:break-word;
+                         ">
+                    </pre>
+                </div>
+                
                 <!-- TEST RESULT BANNER -->
                 <div id="threshold-test-banner" class="hidden mt-6 p-4 rounded-lg border-l-4">
                     <div class="flex items-start justify-between">
