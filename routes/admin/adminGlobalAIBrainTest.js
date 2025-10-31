@@ -147,6 +147,9 @@ router.patch('/', async (req, res) => {
         settings.globalAIBrainTest.lastUpdatedBy = adminUser;
         settings.lastUpdated = new Date();
         
+        // 🔧 CRITICAL: Mark nested object as modified so Mongoose saves it
+        settings.markModified('globalAIBrainTest');
+        
         // Save
         await settings.save();
         

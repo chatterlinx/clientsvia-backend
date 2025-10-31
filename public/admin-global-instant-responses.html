@@ -6364,13 +6364,44 @@ Continue?`;
          * Save Twilio test configuration
          */
         async function saveTwilioTestConfig() {
-            const phoneNumber = document.getElementById('twilio-test-phone').value.trim();
-            const enabled = document.getElementById('twilio-test-enabled').checked;
-            const accountSid = document.getElementById('twilio-test-account-sid').value.trim();
-            const authToken = document.getElementById('twilio-test-auth-token').value.trim();
-            const greeting = document.getElementById('twilio-test-greeting').value.trim();
-            const notes = document.getElementById('twilio-test-notes').value.trim();
+            console.log('📞 [SAVE START] Reading form values...');
+            
+            const phoneNumberElement = document.getElementById('twilio-test-phone');
+            const enabledElement = document.getElementById('twilio-test-enabled');
+            const accountSidElement = document.getElementById('twilio-test-account-sid');
+            const authTokenElement = document.getElementById('twilio-test-auth-token');
+            const greetingElement = document.getElementById('twilio-test-greeting');
+            const notesElement = document.getElementById('twilio-test-notes');
+            
+            console.log('📞 [SAVE DEBUG] Form elements found:', {
+                phoneNumberElement: !!phoneNumberElement,
+                enabledElement: !!enabledElement,
+                accountSidElement: !!accountSidElement,
+                authTokenElement: !!authTokenElement,
+                greetingElement: !!greetingElement,
+                notesElement: !!notesElement
+            });
+            
+            const phoneNumber = phoneNumberElement ? phoneNumberElement.value.trim() : '';
+            const enabled = enabledElement ? enabledElement.checked : false;
+            const accountSid = accountSidElement ? accountSidElement.value.trim() : '';
+            const authToken = authTokenElement ? authTokenElement.value.trim() : '';
+            const greeting = greetingElement ? greetingElement.value.trim() : '';
+            const notes = notesElement ? notesElement.value.trim() : '';
             const targetTemplateId = activeTemplateId || window.globalTwilioTestConfig?.activeTemplateId;
+
+            console.log('📞 [SAVE DEBUG] Raw values from form:', {
+                phoneNumber: phoneNumber || '(empty)',
+                phoneNumberLength: phoneNumber.length,
+                enabled,
+                accountSid: accountSid ? `${accountSid.substring(0, 10)}...` : '(empty)',
+                accountSidLength: accountSid.length,
+                authToken: authToken ? '***' : '(empty)',
+                authTokenLength: authToken.length,
+                greetingLength: greeting.length,
+                notesLength: notes.length,
+                targetTemplateId
+            });
 
             if (!targetTemplateId) {
                 showNotification('❌ No active template selected for routing. Choose a template first.', 'error');
