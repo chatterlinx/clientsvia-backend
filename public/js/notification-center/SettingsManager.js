@@ -799,7 +799,7 @@ class SettingsManager {
             const reportText = this.buildFailureReport(report, errorType);
             details.innerHTML = `
                 <div class="flex items-center justify-between mb-2">
-                    <span class="font-semibold">📊 Full Diagnostic Report:</span>
+                    <span class="font-semibold">🤖 Automated Diagnostic Report:</span>
                     <button onclick="navigator.clipboard.writeText(document.getElementById('threshold-report-text').textContent).then(() => alert('✅ Report copied! Paste to your AI assistant for instant fix.'))" class="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded">
                         <i class="fas fa-copy mr-1"></i> Copy Full Report
                     </button>
@@ -857,17 +857,16 @@ class SettingsManager {
     }
     
     async runFullDiagnostics(report) {
-        // Test 2: Check if backend is reachable
+        // Test 2: AUTOMATED Render Environment Check
         try {
-            const healthCheck = await fetch('https://clientsvia-backend.onrender.com/health');
-            report.results.backendReachable = {
-                status: healthCheck.ok ? 'SUCCESS' : 'FAILED',
-                statusCode: healthCheck.status
-            };
+            const envCheck = await this.nc.apiGet('/api/admin/diag/full-health-check');
+            if (envCheck.success) {
+                report.results.renderEnvironment = envCheck.report;
+            }
         } catch (e) {
-            report.results.backendReachable = {
+            report.results.renderEnvironment = {
                 status: 'FAILED',
-                error: 'Cannot reach backend server'
+                error: 'Could not reach automated health check endpoint'
             };
         }
         
@@ -926,9 +925,16 @@ Environment: Production
     }
     
     buildFailureReport(report, errorType) {
+        const env = report.results.renderEnvironment;
+        const mongoStatus = env?.checks?.mongodb?.status || 'UNKNOWN';
+        const redisStatus = env?.checks?.redis?.status || 'UNKNOWN';
+        const envVarStatus = env?.checks?.environment?.status || 'UNKNOWN';
+        const missingVars = env?.checks?.environment?.required?.missing || [];
+        const renderCommit = env?.checks?.renderEnvironment?.commit || 'unknown';
+        
         return `
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║ 🚨 ALERT THRESHOLDS API - DIAGNOSTIC REPORT (FAILURE)                       ║
+║ 🔍 AUTOMATED ENVIRONMENT DIAGNOSTIC REPORT                                   ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
 📅 TIMESTAMP: ${new Date().toLocaleString()}
@@ -936,18 +942,26 @@ Environment: Production
 ❌ STATUS: ${errorType}
 
 ═══════════════════════════════════════════════════════════════════════════════
-📊 TEST RESULTS:
+🤖 AUTOMATED HEALTH CHECKS (FROM RENDER):
 ═══════════════════════════════════════════════════════════════════════════════
 
-❌ Threshold API: FAILED
-   Error: ${report.results.thresholdAPI.error}
-   Type: ${errorType}
+${mongoStatus === 'HEALTHY' ? '✅' : '❌'} MongoDB: ${mongoStatus}
+   ${env?.checks?.mongodb?.host || 'N/A'} | ${env?.checks?.mongodb?.database || 'N/A'}
+   Response Time: ${env?.checks?.mongodb?.responseTime || 'N/A'}
 
-${report.results.backendReachable ? `
-${report.results.backendReachable.status === 'SUCCESS' ? '✅' : '❌'} Backend Server: ${report.results.backendReachable.status}
-   Status Code: ${report.results.backendReachable.statusCode || 'N/A'}
-   ${report.results.backendReachable.error || ''}
-` : ''}
+${redisStatus === 'HEALTHY' ? '✅' : '🔴'} Redis: ${redisStatus}
+   ${redisStatus === 'HEALTHY' ? 
+     `Response Time: ${env?.checks?.redis?.responseTime || 'N/A'}\n   Memory: ${env?.checks?.redis?.memory || 'N/A'}\n   Clients: ${env?.checks?.redis?.clients || 0}` :
+     `Error: ${env?.checks?.redis?.error || 'Not connected'}\n   ⚠️ This is likely causing the issues!`}
+
+${envVarStatus === 'HEALTHY' ? '✅' : '❌'} Environment Variables: ${envVarStatus}
+   Present: ${env?.checks?.environment?.required?.present || 0}/${env?.checks?.environment?.required?.total || 6}
+   ${missingVars.length > 0 ? `Missing: ${missingVars.join(', ')}` : 'All required vars present'}
+
+📦 Render Deployment Info:
+   Commit: ${renderCommit}
+   Service: ${env?.checks?.renderEnvironment?.service || 'unknown'}
+   Region: ${env?.checks?.renderEnvironment?.region || 'unknown'}
 
 ${report.results.authentication ? `
 ${report.results.authentication.tokenPresent ? '✅' : '❌'} Authentication Token: ${report.results.authentication.tokenPresent ? 'Present' : 'Missing'}
@@ -964,7 +978,7 @@ ${this.getRootCauseAnalysis(errorType, report)}
 🔧 RECOMMENDED FIX:
 ═══════════════════════════════════════════════════════════════════════════════
 
-${this.getRecommendedFix(errorType)}
+${this.getRecommendedFix(errorType, report)}
 
 ═══════════════════════════════════════════════════════════════════════════════
 🖥️ ENVIRONMENT INFO:
@@ -998,22 +1012,43 @@ Paste this report to your AI assistant for instant root cause analysis!
     }
     
     getRootCauseAnalysis(errorType, report) {
+        const env = report.results.renderEnvironment;
+        const redisStatus = env?.checks?.redis?.status;
+        const missingVars = env?.checks?.environment?.required?.missing || [];
+        const issues = env?.issues || [];
+        const fixes = env?.fixes || [];
+        
+        // SMART ANALYSIS: Use actual automated checks
+        let smartAnalysis = '';
+        
+        if (redisStatus === 'DOWN' || redisStatus === 'ERROR') {
+            smartAnalysis = `
+🔴 CRITICAL: Redis is DOWN
+   ${env?.checks?.redis?.error || 'Connection failed'}
+   
+   This is the PRIMARY issue affecting your system!`;
+        }
+        
+        if (missingVars.length > 0) {
+            smartAnalysis += `
+   
+❌ Missing Environment Variables: ${missingVars.join(', ')}
+   These must be added in Render dashboard.`;
+        }
+        
+        if (issues.length > 0) {
+            smartAnalysis += `
+   
+📋 Detected Issues:
+${issues.map(i => '   • ' + i).join('\n')}`;
+        }
+        
         const analysis = {
-            '404_NOT_FOUND': `
+            '404_NOT_FOUND': smartAnalysis || `
 The threshold API endpoints (GET/POST /thresholds) are returning 404.
 
-Possible causes:
-1. ⚠️ MOST LIKELY: Render hasn't deployed commit 9799c56d yet
-   - The endpoints were added in routes/admin/adminNotifications.js
-   - Render auto-deploy may be disabled or failed
-   - Build logs might show errors
-
-2. Route mounting issue:
-   - adminNotifications.js routes not mounted in index.js
-   - Middleware blocking the routes
-
-3. Code rollback:
-   - Render deployed old code instead of latest commit`,
+Automated checks show:
+${JSON.stringify(env?.checks, null, 2)}`,
 
             '403_FORBIDDEN': `
 The backend rejected your authentication token.
@@ -1045,25 +1080,35 @@ Possible causes:
         return analysis[errorType] || `Unknown error type: ${errorType}`;
     }
     
-    getRecommendedFix(errorType) {
+    getRecommendedFix(errorType, report) {
+        const env = report?.results?.renderEnvironment;
+        const autoFixes = env?.fixes || [];
+        
+        // Use AUTOMATED fixes if available
+        if (autoFixes.length > 0) {
+            return `
+🤖 AUTOMATED FIX RECOMMENDATIONS:
+
+${autoFixes.map((fix, i) => `${i + 1}. ${fix}`).join('\n\n')}
+
+💡 These are automatically generated based on actual system checks,
+   not generic suggestions!`;
+        }
+        
+        // Fallback to manual steps if automated checks failed
         const fixes = {
             '404_NOT_FOUND': `
 STEP 1: Check Render Deploy Status
    → Go to https://dashboard.render.com
    → Find "clientsvia-backend" service
-   → Check if latest commit (9799c56d) is deployed
+   → Check if latest commit is deployed
    → If not, click "Manual Deploy" → "Deploy latest commit"
 
-STEP 2: Verify Code Exists
-   → Check routes/admin/adminNotifications.js (lines 1902-1995)
-   → Verify GET/POST /thresholds endpoints exist
-   → Confirm router.get('/thresholds', ...) is present
+STEP 2: Check Environment Variables
+   → Render dashboard → Environment tab
+   → Verify all required vars are present
 
-STEP 3: Check Route Mounting
-   → Verify index.js mounts adminNotifications routes:
-     app.use('/api/admin/notifications', adminNotificationsRoutes)
-
-STEP 4: Wait for Deploy
+STEP 3: Wait for Deploy
    → Render deploy takes 2-3 minutes
    → Refresh this page after deploy completes
    → Click "Test Connection" again`,
