@@ -770,7 +770,8 @@ class SettingsManager {
             return;
         }
         
-        const cls = this.classifyRedisHealth(incidentPacket?.redis || null);
+        const redis = incidentPacket?.redis;
+        const cls = this.classifyRedisHealth(redis || null);
         
         // Style banner color depending on severity
         banner.style.background = cls.bg;
@@ -779,7 +780,28 @@ class SettingsManager {
         
         iconEl.textContent = cls.icon;
         headlineEl.textContent = cls.headline;
-        detailEl.textContent = cls.detail;
+        
+        // 🧠 INTELLIGENT DIAGNOSTICS - Enhanced detail with auto-detected configuration
+        if (redis?.diagnostics) {
+            const diag = redis.diagnostics;
+            detailEl.innerHTML = `
+                <div style="line-height: 1.6;">
+                    <div style="font-weight: 600; margin-bottom: 8px;">${cls.detail}</div>
+                    <div style="font-size: 12px; opacity: 0.9;">
+                        <div><strong>Provider:</strong> ${diag.provider}</div>
+                        <div><strong>Backend Region:</strong> ${diag.backendRegion}</div>
+                        <div><strong>Redis Region:</strong> ${diag.providerRegion}</div>
+                        <div style="margin-top: 6px;"><strong>Performance:</strong> ${diag.performanceGrade} (${diag.capacityEstimate})</div>
+                        ${diag.rootCause && diag.rootCause.length > 0 && diag.rootCause[0] !== 'No issues detected' ? 
+                            `<div style="margin-top: 6px; color: #fbbf24;"><strong>⚠️ Issue:</strong> ${diag.rootCause[0]}</div>` : 
+                            ''}
+                        <div style="margin-top: 6px; font-style: italic;">${diag.recommendation}</div>
+                    </div>
+                </div>
+            `;
+        } else {
+            detailEl.textContent = cls.detail;
+        }
         
         // Timestamp for "Last check"
         const ts = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});

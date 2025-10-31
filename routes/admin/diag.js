@@ -199,6 +199,9 @@ router.post('/selfcheck', async (req, res) => {
                 const connectedClientsMatch = info.match(/connected_clients:(\d+)/);
                 const fragmentationRatioMatch = info.match(/mem_fragmentation_ratio:([\d.]+)/);
                 const rdbLastSaveStatusMatch = info.match(/rdb_last_bgsave_status:(\w+)/);
+                const redisVersionMatch = info.match(/redis_version:([^\r\n]+)/);
+                const osMatch = info.match(/os:([^\r\n]+)/);
+                const roleMatch = info.match(/role:([^\r\n]+)/);
                 
                 const usedMemoryBytes = usedMemoryMatch ? parseInt(usedMemoryMatch[1]) : 0;
                 const maxMemoryBytes = maxMemoryMatch ? parseInt(maxMemoryMatch[1]) : 0;
@@ -214,6 +217,92 @@ router.post('/selfcheck', async (req, res) => {
                 // Get key count
                 const dbsize = await redisClient.dbSize();
                 
+                // ════════════════════════════════════════════════════════════════
+                // 🧠 INTELLIGENT DIAGNOSTICS - AUTO-DETECT CONFIGURATION
+                // ════════════════════════════════════════════════════════════════
+                const redisUrl = process.env.REDIS_URL || '';
+                const renderRegion = process.env.RENDER_REGION || process.env.RENDER_SERVICE_REGION || 'unknown';
+                const renderServiceName = process.env.RENDER_SERVICE_NAME || 'unknown';
+                const redisVersion = redisVersionMatch ? redisVersionMatch[1] : 'unknown';
+                const redisRole = roleMatch ? roleMatch[1] : 'unknown';
+                const redisOS = osMatch ? osMatch[1] : 'unknown';
+                
+                // Detect Redis provider
+                let provider = 'Unknown';
+                let providerRegion = 'Unknown';
+                let isRenderInternal = false;
+                
+                if (redisUrl.includes('redis.render.com')) {
+                    provider = 'Render Internal Redis';
+                    isRenderInternal = true;
+                    // Try to extract region from hostname
+                    const regionMatch = redisUrl.match(/([a-z]+-[a-z]+-\d+)\.redis\.render\.com/);
+                    if (regionMatch) {
+                        providerRegion = regionMatch[1];
+                    }
+                } else if (redisUrl.includes('upstash')) {
+                    provider = 'Upstash';
+                    providerRegion = 'External (check Upstash dashboard)';
+                } else if (redisUrl.includes('redis.cloud') || redisUrl.includes('redislabs')) {
+                    provider = 'Redis Cloud / Redis Labs';
+                    providerRegion = 'External (check Redis Cloud dashboard)';
+                } else if (redisUrl.includes('amazonaws.com') || redisUrl.includes('elasticache')) {
+                    provider = 'AWS ElastiCache';
+                    providerRegion = 'AWS (check ElastiCache console)';
+                } else if (redisUrl.includes('localhost') || redisUrl.includes('127.0.0.1')) {
+                    provider = 'Local Redis (Development)';
+                    providerRegion = 'Localhost';
+                } else {
+                    provider = 'Custom / Unknown Provider';
+                }
+                
+                // Performance grading
+                const latency = parseFloat(roundTripMs);
+                let performanceGrade, capacityEstimate, recommendation;
+                
+                if (latency < 20) {
+                    performanceGrade = 'EXCELLENT';
+                    capacityEstimate = '5000+ clients';
+                    recommendation = 'Production-ready. Monitor as you scale.';
+                } else if (latency < 50) {
+                    performanceGrade = 'GOOD';
+                    capacityEstimate = '2000-5000 clients';
+                    recommendation = 'Good performance. Consider optimization for high scale.';
+                } else if (latency < 150) {
+                    performanceGrade = 'ACCEPTABLE';
+                    capacityEstimate = '500-1000 clients';
+                    recommendation = 'Functional but not optimal. Check region alignment.';
+                } else if (latency < 250) {
+                    performanceGrade = 'MARGINAL';
+                    capacityEstimate = '100-500 clients';
+                    recommendation = '⚠️ WILL STRUGGLE AT SCALE - Fix region mismatch or upgrade tier.';
+                } else {
+                    performanceGrade = 'FAILING';
+                    capacityEstimate = '<100 clients';
+                    recommendation = '🚨 CRITICAL - Cannot support production load. Fix immediately!';
+                }
+                
+                // Root cause analysis
+                let rootCause = [];
+                if (latency >= 150) {
+                    if (!isRenderInternal) {
+                        rootCause.push('External Redis provider adds network overhead');
+                    }
+                    if (renderRegion !== 'unknown' && providerRegion !== renderRegion && !providerRegion.includes('unknown')) {
+                        rootCause.push(`Region mismatch: Backend (${renderRegion}) ≠ Redis (${providerRegion})`);
+                    } else if (renderRegion !== 'unknown') {
+                        rootCause.push(`Likely cross-region: Backend in ${renderRegion}, verify Redis region`);
+                    } else {
+                        rootCause.push('High latency suggests cross-region deployment');
+                    }
+                }
+                if (evictedKeys > 0) {
+                    rootCause.push('Memory pressure causing key evictions');
+                }
+                if (rejectedConnections > 0) {
+                    rootCause.push('Connection limit reached (maxclients)');
+                }
+                
                 incidentPacket.redis = {
                     setGetDelOk,
                     roundTripMs: parseFloat(roundTripMs),
@@ -225,7 +314,21 @@ router.post('/selfcheck', async (req, res) => {
                     fragmentationRatio,
                     persistenceOk,
                     dbsize,
-                    notes: []
+                    notes: [],
+                    // 🧠 INTELLIGENT DIAGNOSTICS
+                    diagnostics: {
+                        provider,
+                        providerRegion,
+                        backendRegion: renderRegion,
+                        backendService: renderServiceName,
+                        redisVersion,
+                        redisRole,
+                        isRenderInternal,
+                        performanceGrade,
+                        capacityEstimate,
+                        recommendation,
+                        rootCause: rootCause.length > 0 ? rootCause : ['No issues detected']
+                    }
                 };
                 
                 // Check for critical Redis issues
