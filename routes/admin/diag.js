@@ -414,14 +414,108 @@ router.post('/selfcheck', async (req, res) => {
                 
                 const roundTripMs = (performance.now() - startTime).toFixed(2);
                 
+                // ════════════════════════════════════════════════════════════════
+                // 🧠 INTELLIGENT MONGODB DIAGNOSTICS
+                // ════════════════════════════════════════════════════════════════
+                const mongoUri = process.env.MONGODB_URI || '';
+                const mongoHost = c.host || 'unknown';
+                const mongoDbName = c.name || 'unknown';
+                
+                // Detect MongoDB provider and region
+                let mongoProvider = 'Unknown';
+                let mongoRegion = 'Unknown';
+                let isAtlas = false;
+                
+                if (mongoUri.includes('mongodb.net') || mongoUri.includes('atlas')) {
+                    mongoProvider = 'MongoDB Atlas';
+                    isAtlas = true;
+                    
+                    // Try to extract region from connection string
+                    // Format: cluster0.abc123.mongodb.net
+                    // Or: cluster0-shard-00-00.abc123.mongodb.net
+                    const regionMatch = mongoHost.match(/\.([\w-]+)\.mongodb\.net/);
+                    if (regionMatch) {
+                        const clusterCode = regionMatch[1];
+                        // Atlas uses codes like: xxxxx (random) but we can infer from latency
+                        if (parseFloat(roundTripMs) < 30) {
+                            mongoRegion = 'Same region as backend (low latency)';
+                        } else if (parseFloat(roundTripMs) < 100) {
+                            mongoRegion = 'Nearby region (acceptable latency)';
+                        } else {
+                            mongoRegion = 'Cross-region or distant (high latency)';
+                        }
+                    }
+                } else if (mongoUri.includes('localhost') || mongoUri.includes('127.0.0.1')) {
+                    mongoProvider = 'Local MongoDB';
+                    mongoRegion = 'Localhost';
+                } else if (mongoUri.includes('render.com')) {
+                    mongoProvider = 'Render Internal';
+                    mongoRegion = 'Same datacenter';
+                } else {
+                    mongoProvider = 'Custom MongoDB';
+                    mongoRegion = 'External (check provider)';
+                }
+                
+                // Performance grading for MongoDB
+                const mongoLatency = parseFloat(roundTripMs);
+                let mongoPerformanceGrade, mongoCapacityEstimate, mongoRecommendation;
+                
+                if (mongoLatency < 20) {
+                    mongoPerformanceGrade = 'EXCELLENT';
+                    mongoCapacityEstimate = '10,000+ queries/sec';
+                    mongoRecommendation = 'Optimal database performance.';
+                } else if (mongoLatency < 50) {
+                    mongoPerformanceGrade = 'GOOD';
+                    mongoCapacityEstimate = '5,000+ queries/sec';
+                    mongoRecommendation = 'Good performance for production.';
+                } else if (mongoLatency < 100) {
+                    mongoPerformanceGrade = 'ACCEPTABLE';
+                    mongoCapacityEstimate = '1,000-5,000 queries/sec';
+                    mongoRecommendation = 'Functional but could be optimized.';
+                } else if (mongoLatency < 200) {
+                    mongoPerformanceGrade = 'MARGINAL';
+                    mongoCapacityEstimate = '500-1,000 queries/sec';
+                    mongoRecommendation = '⚠️ Slow queries will impact user experience.';
+                } else {
+                    mongoPerformanceGrade = 'FAILING';
+                    mongoCapacityEstimate = '<500 queries/sec';
+                    mongoRecommendation = '🚨 CRITICAL - Database too slow for production!';
+                }
+                
+                // Root cause analysis for MongoDB
+                let mongoRootCause = [];
+                if (mongoLatency >= 100) {
+                    if (isAtlas) {
+                        mongoRootCause.push('High latency to MongoDB Atlas - likely cross-region');
+                        mongoRootCause.push('Check Atlas cluster region matches backend region');
+                    } else {
+                        mongoRootCause.push('Database queries are slow - check network or database load');
+                    }
+                }
+                if (mongoLatency >= 1000) {
+                    mongoRootCause.push('Database blocking Node.js event loop - investigate slow queries');
+                }
+                
                 incidentPacket.mongo = {
                     quickQueryOk: true,
                     roundTripMs: parseFloat(roundTripMs),
-                    notes: []
+                    notes: [],
+                    // 🧠 INTELLIGENT DIAGNOSTICS
+                    diagnostics: {
+                        provider: mongoProvider,
+                        region: mongoRegion,
+                        host: mongoHost,
+                        database: mongoDbName,
+                        isAtlas,
+                        performanceGrade: mongoPerformanceGrade,
+                        capacityEstimate: mongoCapacityEstimate,
+                        recommendation: mongoRecommendation,
+                        rootCause: mongoRootCause.length > 0 ? mongoRootCause : ['No issues detected']
+                    }
                 };
                 
                 // Check if Mongo is choking the event loop
-                if (parseFloat(roundTripMs) > 1000) {
+                if (mongoLatency > 1000) {
                     criticalIssues.push(`MongoDB query taking ${roundTripMs}ms - choking Node event loop`);
                     incidentPacket.mongo.notes.push('🚨 MongoDB blocking app thread - check Atlas performance/indexes');
                     incidentPacket.actions.push('Investigate MongoDB slow queries before blaming Redis');

@@ -811,6 +811,96 @@ class SettingsManager {
     }
     
     // ========================================================================
+    // MONGODB STATUS BANNER RENDERER
+    // ========================================================================
+    
+    renderMongoStatusBanner(incidentPacket) {
+        const banner = document.getElementById('mongoStatusBanner');
+        const iconEl = document.getElementById('mongoStatusIcon');
+        const headlineEl = document.getElementById('mongoStatusHeadline');
+        const detailEl = document.getElementById('mongoStatusDetail');
+        const metaEl = document.getElementById('mongoStatusMeta');
+        
+        if (!banner || !iconEl || !headlineEl || !detailEl || !metaEl) {
+            console.warn('[MONGO STATUS] Banner container missing in DOM');
+            return;
+        }
+        
+        const mongo = incidentPacket?.mongo;
+        
+        if (!mongo) {
+            banner.style.display = 'none';
+            return;
+        }
+        
+        banner.style.display = 'flex';
+        
+        // Classify MongoDB health
+        let icon = '🟢';
+        let bg = '#065f46'; // green
+        let level = 'HEALTHY';
+        let detail = 'Database operational';
+        
+        if (!mongo.quickQueryOk) {
+            icon = '🔴';
+            bg = '#7f1d1d'; // red
+            level = 'CRITICAL';
+            detail = mongo.error || 'MongoDB not connected';
+        } else if (mongo.roundTripMs >= 200) {
+            icon = '🔴';
+            bg = '#7f1d1d'; // red
+            level = 'FAILING';
+            detail = `Critical latency: ${mongo.roundTripMs}ms`;
+        } else if (mongo.roundTripMs >= 100) {
+            icon = '🟡';
+            bg = '#92400e'; // amber
+            level = 'MARGINAL';
+            detail = `High latency: ${mongo.roundTripMs}ms`;
+        } else if (mongo.roundTripMs >= 50) {
+            icon = '🟡';
+            bg = '#92400e'; // amber
+            level = 'ACCEPTABLE';
+            detail = `Acceptable latency: ${mongo.roundTripMs}ms`;
+        }
+        
+        // Style banner
+        banner.style.background = bg;
+        banner.style.color = '#fff';
+        banner.style.border = `1px solid ${bg}`;
+        
+        iconEl.textContent = icon;
+        headlineEl.textContent = `MONGODB STATUS: ${level}`;
+        
+        // 🧠 INTELLIGENT DIAGNOSTICS - Enhanced detail with auto-detected configuration
+        if (mongo?.diagnostics) {
+            const diag = mongo.diagnostics;
+            detailEl.innerHTML = `
+                <div style="line-height: 1.6;">
+                    <div style="font-weight: 600; margin-bottom: 8px;">${detail}</div>
+                    <div style="font-size: 12px; opacity: 0.9;">
+                        <div><strong>Provider:</strong> ${diag.provider}</div>
+                        <div><strong>Region:</strong> ${diag.region}</div>
+                        <div><strong>Database:</strong> ${diag.database}</div>
+                        <div style="margin-top: 6px;"><strong>Performance:</strong> ${diag.performanceGrade} (${diag.capacityEstimate})</div>
+                        ${diag.rootCause && diag.rootCause.length > 0 && diag.rootCause[0] !== 'No issues detected' ? 
+                            `<div style="margin-top: 6px; color: #fbbf24;"><strong>⚠️ Issue:</strong> ${diag.rootCause[0]}</div>` : 
+                            ''}
+                        <div style="margin-top: 6px; font-style: italic;">${diag.recommendation}</div>
+                    </div>
+                </div>
+            `;
+        } else {
+            detailEl.textContent = detail;
+        }
+        
+        // Timestamp
+        const ts = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+        metaEl.textContent = `Last check: ${ts}`;
+        
+        console.log(`🚦 [MONGO STATUS] ${level} - ${detail}`);
+    }
+    
+    // ========================================================================
     // CRITICAL FAILURE CARD RENDERER
     // ========================================================================
     
@@ -1016,6 +1106,9 @@ class SettingsManager {
             
             // Render Redis status banner (auto-refresh, no button press)
             this.renderRedisStatusBanner(incidentPacket);
+            
+            // Render MongoDB status banner
+            this.renderMongoStatusBanner(incidentPacket);
             
             // Display based on overallStatus
             if (incidentPacket.overallStatus === 'OK') {

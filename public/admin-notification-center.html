@@ -863,11 +863,11 @@
                     Configure when system health alerts are triggered. Adjust these values to reduce false positives.
                 </p>
                 
-                <!-- REDIS THRESHOLDS -->
+                <!-- DATABASE HEALTH (REDIS + MONGODB) -->
                 <div class="bg-gradient-to-r from-red-50 to-orange-50 border-l-4 border-red-500 p-6 rounded-lg mb-6">
                     <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
                         <i class="fas fa-database text-red-600 mr-2"></i>
-                        Redis Cache Health
+                        Database Health (Redis + MongoDB)
                     </h4>
                     
                     <!-- REDIS STATUS BANNER (Auto-refreshes every 30s) -->
@@ -903,6 +903,45 @@
                         </div>
 
                         <div id="redisStatusMeta"
+                             style="font-size:11px; font-weight:400; line-height:1.4; text-align:right; opacity:0.8; white-space:nowrap;">
+                            <!-- e.g. "Last check: 08:23:11" -->
+                        </div>
+                    </div>
+                    
+                    <!-- MONGODB STATUS BANNER (Auto-refreshes with Redis) -->
+                    <div id="mongoStatusBanner"
+                         style="
+                            display:flex;
+                            align-items:flex-start;
+                            gap:12px;
+                            background:#111;
+                            color:#fff;
+                            border-radius:8px;
+                            padding:10px 14px;
+                            margin-top:12px;
+                            margin-bottom:12px;
+                            font-size:14px;
+                            font-weight:500;
+                         ">
+
+                        <div id="mongoStatusIcon"
+                             style="font-size:16px; font-weight:600;">
+                            <!-- 🟢 / 🟡 / 🔴 -->
+                        </div>
+
+                        <div style="flex:1; line-height:1.4;">
+                            <div id="mongoStatusHeadline"
+                                 style="font-size:14px; font-weight:600;">
+                                <!-- MONGODB STATUS: HEALTHY / WARNING / CRITICAL -->
+                            </div>
+
+                            <div id="mongoStatusDetail"
+                                 style="font-size:12px; margin-top:6px; line-height:1.5; opacity:0.95;">
+                                <!-- Detail text or intelligent diagnostics -->
+                            </div>
+                        </div>
+
+                        <div id="mongoStatusMeta"
                              style="font-size:11px; font-weight:400; line-height:1.4; text-align:right; opacity:0.8; white-space:nowrap;">
                             <!-- e.g. "Last check: 08:23:11" -->
                         </div>
