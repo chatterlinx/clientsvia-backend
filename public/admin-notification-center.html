@@ -870,6 +870,44 @@
                         Redis Cache Health
                     </h4>
                     
+                    <!-- REDIS STATUS BANNER (Auto-refreshes every 30s) -->
+                    <div id="redisStatusBanner"
+                         style="
+                            display:flex;
+                            align-items:flex-start;
+                            gap:12px;
+                            background:#111;
+                            color:#fff;
+                            border-radius:8px;
+                            padding:10px 14px;
+                            margin-bottom:12px;
+                            font-size:14px;
+                            font-weight:500;
+                         ">
+
+                        <div id="redisStatusIcon"
+                             style="font-size:16px; font-weight:600;">
+                            <!-- 🟢 / 🟡 / 🔴 -->
+                        </div>
+
+                        <div style="flex:1; line-height:1.4;">
+                            <div id="redisStatusHeadline"
+                                 style="font-size:14px; font-weight:600;">
+                                <!-- REDIS STATUS: HEALTHY / WARNING / CRITICAL -->
+                            </div>
+
+                            <div id="redisStatusDetail"
+                                 style="font-size:13px; font-weight:400; opacity:0.9;">
+                                <!-- human-readable explanation -->
+                            </div>
+                        </div>
+
+                        <div id="redisStatusMeta"
+                             style="font-size:11px; font-weight:400; line-height:1.4; text-align:right; opacity:0.8; white-space:nowrap;">
+                            <!-- e.g. "Last check: 08:23:11" -->
+                        </div>
+                    </div>
+                    
                     <div class="space-y-4">
                         <!-- Hit Rate Threshold -->
                         <div class="bg-white p-4 rounded-lg shadow-sm">

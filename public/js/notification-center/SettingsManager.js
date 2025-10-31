@@ -23,6 +23,10 @@ class SettingsManager {
         ]);
         
         this.attachEventHandlers();
+        
+        // CRITICAL: Auto-run ER Triage Monitor on page load (no button press)
+        // This populates Redis status banner and critical failure card immediately
+        await this.testThresholdConnection();
     }
     
     // ========================================================================
@@ -690,6 +694,117 @@ class SettingsManager {
     }
     
     // ========================================================================
+    // REDIS STATUS BANNER (AUTO-REFRESH, NO BUTTON PRESS)
+    // ========================================================================
+    
+    classifyRedisHealth(redisSection) {
+        // redisSection is incidentPacket.redis
+        
+        if (!redisSection || !redisSection.setGetDelOk) {
+            return {
+                level: 'CRITICAL',
+                icon: '🔴',
+                bg: '#7f1d1d',
+                fg: '#fff',
+                headline: 'REDIS STATUS: CRITICAL',
+                detail: 'Cannot SET/GET/DEL. Redis is unreachable or auth is failing. Live traffic may be impacted.'
+            };
+        }
+        
+        // Extract metrics
+        const usedPct = redisSection.usedMemoryPercent ?? null;
+        const evicted = redisSection.evictedKeys ?? 0;
+        const rejected = redisSection.rejectedConnections ?? 0;
+        const rtt = redisSection.roundTripMs ?? redisSection.roundTripTime ?? null;
+        
+        // CRITICAL conditions
+        if (rejected > 0) {
+            return {
+                level: 'CRITICAL',
+                icon: '🔴',
+                bg: '#7f1d1d',
+                fg: '#fff',
+                headline: 'REDIS STATUS: CRITICAL',
+                detail: 'Redis is rejecting connections (maxclients hit). Users may be getting dropped.'
+            };
+        }
+        
+        if (evicted > 0 && usedPct !== null && usedPct >= 85) {
+            return {
+                level: 'CRITICAL',
+                icon: '🔴',
+                bg: '#7f1d1d',
+                fg: '#fff',
+                headline: 'REDIS STATUS: CRITICAL',
+                detail: `Redis is evicting keys at ~${usedPct}%. Cache data is being dropped to stay alive.`
+            };
+        }
+        
+        // WARNING conditions
+        if (rtt !== null && rtt > 150) {
+            return {
+                level: 'WARNING',
+                icon: '🟡',
+                bg: '#92400e',
+                fg: '#fff',
+                headline: 'REDIS STATUS: WARNING',
+                detail: `High latency: ${Math.round(rtt)}ms round-trip. Redis and API may be in different regions.`
+            };
+        }
+        
+        if (usedPct !== null && usedPct >= 80) {
+            return {
+                level: 'WARNING',
+                icon: '🟡',
+                bg: '#92400e',
+                fg: '#fff',
+                headline: 'REDIS STATUS: WARNING',
+                detail: `High memory usage: ${usedPct}% of max. Approaching eviction zone.`
+            };
+        }
+        
+        // If none of the above triggers:
+        return {
+            level: 'HEALTHY',
+            icon: '🟢',
+            bg: '#065f46',
+            fg: '#fff',
+            headline: 'REDIS STATUS: HEALTHY',
+            detail: 'All tests passed. No evictions, no rejects, latency acceptable.'
+        };
+    }
+    
+    renderRedisStatusBanner(incidentPacket) {
+        const banner = document.getElementById('redisStatusBanner');
+        const iconEl = document.getElementById('redisStatusIcon');
+        const headlineEl = document.getElementById('redisStatusHeadline');
+        const detailEl = document.getElementById('redisStatusDetail');
+        const metaEl = document.getElementById('redisStatusMeta');
+        
+        if (!banner || !iconEl || !headlineEl || !detailEl || !metaEl) {
+            console.warn('[REDIS STATUS] Banner container missing in DOM');
+            return;
+        }
+        
+        const cls = this.classifyRedisHealth(incidentPacket?.redis || null);
+        
+        // Style banner color depending on severity
+        banner.style.background = cls.bg;
+        banner.style.color = cls.fg;
+        banner.style.border = `1px solid ${cls.bg}`;
+        
+        iconEl.textContent = cls.icon;
+        headlineEl.textContent = cls.headline;
+        detailEl.textContent = cls.detail;
+        
+        // Timestamp for "Last check"
+        const ts = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+        metaEl.textContent = `Last check: ${ts}`;
+        
+        console.log(`🚦 [REDIS STATUS] ${cls.level} - ${cls.detail}`);
+    }
+    
+    // ========================================================================
     // CRITICAL FAILURE CARD RENDERER
     // ========================================================================
     
@@ -892,6 +1007,9 @@ class SettingsManager {
             
             // Render critical failure card if FAIL status
             this.renderCriticalFailureCard(incidentPacket);
+            
+            // Render Redis status banner (auto-refresh, no button press)
+            this.renderRedisStatusBanner(incidentPacket);
             
             // Display based on overallStatus
             if (incidentPacket.overallStatus === 'OK') {
