@@ -1075,7 +1075,16 @@
                         <i class="fas fa-stethoscope mr-2"></i>
                         Diagnose Failure
                     </button>
+                    
+                    <!-- TEST MONGODB PERFORMANCE BUTTON -->
+                    <button id="test-mongo-performance-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md transition">
+                        <i class="fas fa-tachometer-alt mr-2"></i>
+                        Test MongoDB Performance
+                    </button>
                 </div>
+                
+                <!-- MONGODB PERFORMANCE TEST RESULTS (Hidden by default) -->
+                <div id="mongo-performance-results" class="hidden mt-6 p-6 border-2 rounded-lg"></div>
                 
                 <!-- CRITICAL FAILURE CARD (PINNED) -->
                 <div id="criticalFailureCard" style="display:none; border:1px solid #7f1d1d; background:#fff1f1; color:#400; border-radius:8px; padding:16px; margin-top:16px;">

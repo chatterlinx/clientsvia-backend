@@ -689,6 +689,12 @@ class SettingsManager {
             diagnoseBtn.addEventListener('click', () => this.diagnoseFailure());
         }
         
+        // Test MongoDB Performance button
+        const mongoPerformanceBtn = document.getElementById('test-mongo-performance-btn');
+        if (mongoPerformanceBtn) {
+            mongoPerformanceBtn.addEventListener('click', () => this.testMongoPerformance());
+        }
+        
         // Make this instance globally accessible for remove buttons
         window.settingsManager = this;
     }
@@ -1775,6 +1781,142 @@ Next 60 seconds:
 
 All systems are operational or have minor warnings.
 Check individual component notes above for optimization opportunities.`;
+        }
+    }
+    
+    // ========================================================================
+    // TEST MONGODB PERFORMANCE (ON-DEMAND)
+    // ========================================================================
+    
+    async testMongoPerformance() {
+        console.log('📊 [SETTINGS] Running MongoDB Performance Test...');
+        
+        const btn = document.getElementById('test-mongo-performance-btn');
+        const resultsDiv = document.getElementById('mongo-performance-results');
+        
+        // Disable button during test
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Testing...';
+        
+        try {
+            // Call MongoDB Performance Monitor API
+            const response = await this.nc.apiPost('/api/admin/diag/test-mongo-performance', {});
+            
+            console.log('📊 [SETTINGS] Performance Test Results:', response);
+            
+            // Show results
+            resultsDiv.classList.remove('hidden');
+            
+            const { metrics, analysis } = response;
+            
+            // Determine color based on severity
+            let borderColor, bgColor, textColor, icon;
+            if (analysis.severity === 'CRITICAL') {
+                borderColor = '#dc2626'; // red-600
+                bgColor = '#fee2e2';     // red-100
+                textColor = '#7f1d1d';   // red-900
+                icon = '🔴';
+            } else if (analysis.severity === 'WARNING') {
+                borderColor = '#f59e0b'; // amber-500
+                bgColor = '#fef3c7';     // amber-100
+                textColor = '#78350f';   // amber-900
+                icon = '🟡';
+            } else {
+                borderColor = '#10b981'; // green-500
+                bgColor = '#d1fae5';     // green-100
+                textColor = '#065f46';   // green-800
+                icon = '🟢';
+            }
+            
+            resultsDiv.style.borderColor = borderColor;
+            resultsDiv.style.backgroundColor = bgColor;
+            resultsDiv.style.color = textColor;
+            
+            // Build HTML
+            let html = `
+                <div style="font-weight: 600; font-size: 18px; margin-bottom: 12px;">
+                    ${icon} MongoDB Performance Report
+                </div>
+                
+                <div style="margin-bottom: 16px;">
+                    <strong>Severity:</strong> ${analysis.severity}<br>
+                    <strong>Current Tier:</strong> ${analysis.currentTier}<br>
+                    ${analysis.recommendedTier ? `<strong>Recommended Tier:</strong> <span style="font-size: 16px; font-weight: 700;">${analysis.recommendedTier}</span><br>` : ''}
+                </div>
+                
+                <div style="margin-bottom: 16px;">
+                    <strong>Current Metrics:</strong>
+                    <ul style="margin: 8px 0; padding-left: 20px;">
+                        <li><strong>Latency:</strong> ${metrics.latency}ms</li>
+                        <li><strong>Memory:</strong> ${metrics.memoryUsedMB}MB</li>
+                        <li><strong>Connections:</strong> ${metrics.currentConnections}/${metrics.totalConnections} (${metrics.connectionUtilization}%)</li>
+                    </ul>
+                </div>
+            `;
+            
+            if (analysis.issues.length > 0) {
+                html += `
+                    <div style="margin-bottom: 16px;">
+                        <strong>Issues Detected:</strong>
+                        <ul style="margin: 8px 0; padding-left: 20px;">
+                            ${analysis.issues.map(issue => `<li>${issue}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            if (analysis.severity === 'CRITICAL') {
+                html += `
+                    <div style="margin-top: 16px; padding: 12px; background: white; border-radius: 6px; border: 1px solid ${borderColor};">
+                        <strong style="color: #dc2626;">⚠️ ACTION REQUIRED:</strong>
+                        <p style="margin: 8px 0;">Upgrade to <strong>${analysis.recommendedTier}</strong> immediately to prevent user-facing issues!</p>
+                        <p style="margin: 8px 0; font-size: 13px;">
+                            <strong>Steps:</strong><br>
+                            1. Log into MongoDB Atlas<br>
+                            2. Select CA Project → Cluster0<br>
+                            3. Click "Edit Configuration"<br>
+                            4. Change tier to ${analysis.recommendedTier}<br>
+                            5. Confirm upgrade (~$389/month for M30)
+                        </p>
+                    </div>
+                `;
+            } else if (analysis.severity === 'WARNING') {
+                html += `
+                    <div style="margin-top: 16px; padding: 12px; background: white; border-radius: 6px; border: 1px solid ${borderColor};">
+                        <strong style="color: #f59e0b;">💡 RECOMMENDATION:</strong>
+                        <p style="margin: 8px 0;">Consider upgrading to <strong>${analysis.recommendedTier}</strong> for improved performance and headroom.</p>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div style="margin-top: 16px; padding: 12px; background: white; border-radius: 6px; border: 1px solid ${borderColor};">
+                        <strong style="color: #10b981;">✅ ALL GOOD:</strong>
+                        <p style="margin: 8px 0;">MongoDB is performing well. No action needed at this time.</p>
+                    </div>
+                `;
+            }
+            
+            resultsDiv.innerHTML = html;
+            
+            // Show alert if critical
+            if (analysis.severity === 'CRITICAL') {
+                this.nc.showError(`CRITICAL: MongoDB needs immediate upgrade to ${analysis.recommendedTier}!`);
+            }
+            
+        } catch (error) {
+            console.error('❌ [SETTINGS] MongoDB performance test failed:', error);
+            resultsDiv.classList.remove('hidden');
+            resultsDiv.style.borderColor = '#dc2626';
+            resultsDiv.style.backgroundColor = '#fee2e2';
+            resultsDiv.style.color = '#7f1d1d';
+            resultsDiv.innerHTML = `
+                <strong>❌ Test Failed</strong><br>
+                <p style="margin-top: 8px;">${error.message}</p>
+            `;
+        } finally {
+            // Re-enable button
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-tachometer-alt mr-2"></i>Test MongoDB Performance';
         }
     }
 }

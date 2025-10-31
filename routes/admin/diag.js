@@ -777,4 +777,26 @@ router.post('/selfcheck', async (req, res) => {
     }
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// TEST MONGODB PERFORMANCE (ON-DEMAND)
+// ════════════════════════════════════════════════════════════════════════════
+
+router.post('/test-mongo-performance', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const MongoDBPerformanceMonitor = require('../../services/MongoDBPerformanceMonitor');
+        const result = await MongoDBPerformanceMonitor.checkPerformanceAndAlert();
+        
+        res.json({
+            success: true,
+            ...result // metrics, analysis
+        });
+    } catch (error) {
+        logger.error('Failed to test MongoDB performance', { error: error.message });
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
 module.exports = router;

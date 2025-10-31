@@ -800,6 +800,30 @@ async function startServer() {
                 }
                 
                 try {
+                    console.log('[Post-Startup] 📊 Starting MongoDB Performance Monitor...');
+                    const MongoDBPerformanceMonitor = require('./services/MongoDBPerformanceMonitor');
+                    
+                    // Run initial check (non-blocking)
+                    MongoDBPerformanceMonitor.checkPerformanceAndAlert()
+                        .then(() => console.log('[MongoDB Monitor] ✅ Initial check completed'))
+                        .catch(err => console.warn('[MongoDB Monitor] ⚠️ Initial check failed (non-critical):', err.message));
+                    
+                    // Run every 6 hours (4x per day)
+                    setInterval(async () => {
+                        try {
+                            await MongoDBPerformanceMonitor.checkPerformanceAndAlert();
+                        } catch (error) {
+                            console.warn('[MongoDB Monitor] ⚠️ Periodic check failed (non-critical):', error.message);
+                        }
+                    }, 6 * 60 * 60 * 1000); // 6 hours in milliseconds
+                    
+                    console.log('[Post-Startup] ✅ MongoDB Performance Monitor scheduled (runs every 6 hours)');
+                } catch (error) {
+                    console.error('[Post-Startup] ❌ Failed to start MongoDB Performance Monitor:', error.message);
+                    // Non-blocking: server continues even if monitor fails
+                }
+                
+                try {
                     console.log('[Post-Startup] 🚀 Initializing AI Gateway LLM Analyzer cron...');
                     const { LLMAnalyzer } = require('./services/aiGateway');
                     
