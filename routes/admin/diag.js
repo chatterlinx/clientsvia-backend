@@ -331,24 +331,46 @@ router.post('/selfcheck', async (req, res) => {
             incidentPacket.failureSource = 'ROUTE_DEPLOY';
             
             if (badRoute) {
-                incidentPacket.summary = `Critical route down: ${badRoute.url} (status ${badRoute.status}). Backend is running commit ${incidentPacket.app.deployedCommit} but UI expects ${incidentPacket.app.uiExpectedCommit}.`;
+                incidentPacket.summary = `Critical route down: ${badRoute.url} (HTTP ${badRoute.status}). Backend is running commit ${incidentPacket.app.deployedCommit} but UI expects ${incidentPacket.app.uiExpectedCommit}.`;
             } else {
                 incidentPacket.summary = `Frontend and backend are running different commits. UI expects ${incidentPacket.app.uiExpectedCommit}, backend is ${incidentPacket.app.deployedCommit}.`;
             }
             
-            incidentPacket.actions = [
-                `Backend is running commit ${incidentPacket.app.deployedCommit} but UI expects ${incidentPacket.app.uiExpectedCommit}.`,
-                `Go to Render → clientsvia-backend → Deploys and deploy commit ${incidentPacket.app.uiExpectedCommit}.`,
-                `In index.js confirm: app.use('/api/admin/notifications', adminNotificationsRoutes).`,
-                `Re-run Test Connection after deploy.`
-            ];
-            
-            if (badRoute && badRoute.status === 0) {
-                incidentPacket.actions.push(`Status 0 means fetch never connected - check BASE_URL or CORS configuration.`);
+            // Branch actions based on actual HTTP status
+            if (badRoute && badRoute.status === 404) {
+                // 404 = Route missing in running backend (deploy/mount issue)
+                incidentPacket.actions = [
+                    `Backend is running commit ${incidentPacket.app.deployedCommit} but UI expects ${incidentPacket.app.uiExpectedCommit}.`,
+                    `Go to Render → clientsvia-backend → Deploys and deploy commit ${incidentPacket.app.uiExpectedCommit}.`,
+                    `In index.js confirm: app.use('/api/admin/notifications', adminNotificationsRoutes).`,
+                    `Confirm routes/admin/adminNotifications.js defines GET /thresholds and POST /thresholds.`,
+                    `Re-run Test Connection after deploy.`
+                ];
+            } else if (badRoute && badRoute.status === 0) {
+                // Status 0 = Fetch never connected (BASE_URL/CORS/DNS issue)
+                incidentPacket.actions = [
+                    `Status 0 means fetch never connected - check BASE_URL or CORS configuration.`,
+                    `Verify BASE_URL environment variable points to correct Render service.`,
+                    `Check browser console for CORS errors.`,
+                    `Confirm Render service is running (not sleeping/crashed).`,
+                    `Backend is running commit ${incidentPacket.app.deployedCommit} but UI expects ${incidentPacket.app.uiExpectedCommit}.`
+                ];
+            } else if (badRoute && badRoute.status >= 500) {
+                // 500+ = Backend crash
+                incidentPacket.actions = [
+                    `Backend returned ${badRoute.status} - server crashed after receiving request.`,
+                    `Check Render logs for stack trace and error details.`,
+                    `This is NOT a routing issue - the route exists but the handler failed.`,
+                    `Fix the crash, then re-run Test Connection.`
+                ];
+            } else {
+                // Commit mismatch but no specific route failure
+                incidentPacket.actions = [
+                    `Backend is running commit ${incidentPacket.app.deployedCommit} but UI expects ${incidentPacket.app.uiExpectedCommit}.`,
+                    `Go to Render → clientsvia-backend → Deploys and deploy commit ${incidentPacket.app.uiExpectedCommit}.`,
+                    `Re-run Test Connection after deploy.`
+                ];
             }
-            
-            // CRITICAL: Add the missing step about verifying route file
-            incidentPacket.actions.push(`Also confirm routes/admin/adminNotifications.js defines GET /thresholds and POST /thresholds so the route actually exists.`);
         }
         // Case B: Redis failing (REDIS)
         else if (!incidentPacket.redis.setGetDelOk) {

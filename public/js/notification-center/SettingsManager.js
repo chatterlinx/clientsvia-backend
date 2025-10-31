@@ -765,6 +765,9 @@ class SettingsManager {
         }
         
         // Build the kill order
+        const httpStatus = packet.app?.routes?.find(r => r.status !== 200)?.status || 'N/A';
+        const timestamp = new Date().toLocaleString();
+        
         const lines = [
             '╔══════════════════════════════════════════════════════════════════════════╗',
             '║ 🚨 DIAGNOSE FAILURE - KILL ORDER                                        ║',
@@ -773,6 +776,8 @@ class SettingsManager {
             `STATUS: ${packet.overallStatus}`,
             `SOURCE: ${packet.failureSource || 'unknown'}`,
             `SUMMARY: ${packet.summary || 'n/a'}`,
+            `HTTP STATUS: ${httpStatus}`,
+            `GENERATED: ${timestamp}`,
             '',
             '═══════════════════════════════════════════════════════════════════════════',
             'REQUIRED ACTIONS:',
@@ -1387,6 +1392,9 @@ STEP 3: Check CORS
     // ========================================================================
     
     buildIncidentReport(packet) {
+        const httpStatus = packet.app?.routes?.find(r => r.status !== 200)?.status || 'N/A';
+        const timestamp = new Date().toLocaleString();
+        
         return `
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║ 🚨 ER TRIAGE MONITOR - INCIDENT PACKET                                      ║
@@ -1395,6 +1403,8 @@ STEP 3: Check CORS
 🎯 OVERALL STATUS: ${packet.overallStatus}
 🔍 FAILURE SOURCE: ${packet.failureSource || 'None'}
 📝 SUMMARY: ${packet.summary}
+🌐 HTTP STATUS: ${httpStatus}
+🕐 GENERATED: ${timestamp}
 
 ═══════════════════════════════════════════════════════════════════════════════
 🔥 IMMEDIATE ACTIONS REQUIRED:
