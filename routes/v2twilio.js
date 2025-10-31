@@ -2155,19 +2155,37 @@ router.get('/test-results/:templateId', (req, res) => {
 
 // 📊 GET endpoint for aggregate quality report
 router.get('/quality-report/:templateId', (req, res) => {
-  const { templateId } = req.params;
-  const limit = parseInt(req.query.limit) || 100; // Analyze more for quality metrics
-  
-  logger.info(`📊 [QUALITY REPORT] Generating report for template ${templateId} (last ${limit} tests)`);
-  
-  const results = getTestResults(templateId, limit);
-  const qualityReport = MatchDiagnostics.generateQualityReport(results);
-  
-  res.json({
-    success: true,
-    templateId,
-    report: qualityReport
-  });
+  try {
+    const { templateId } = req.params;
+    const limit = parseInt(req.query.limit) || 100; // Analyze more for quality metrics
+    
+    logger.info(`📊 [QUALITY REPORT] Generating report for template ${templateId} (last ${limit} tests)`);
+    
+    const results = getTestResults(templateId, limit);
+    logger.info(`📊 [QUALITY REPORT] Retrieved ${results.length} test results`);
+    
+    const qualityReport = MatchDiagnostics.generateQualityReport(results);
+    logger.info(`📊 [QUALITY REPORT] Generated quality report successfully`);
+    
+    res.json({
+      success: true,
+      templateId,
+      report: qualityReport,
+      count: results.length
+    });
+  } catch (error) {
+    logger.error(`❌ [QUALITY REPORT] Error generating report:`, {
+      error: error.message,
+      stack: error.stack,
+      templateId: req.params.templateId
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate quality report',
+      message: error.message
+    });
+  }
 });
 
 // ============================================================================
