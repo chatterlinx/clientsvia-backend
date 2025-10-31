@@ -17,6 +17,7 @@ const HybridScenarioSelector = require('../services/HybridScenarioSelector');
 const IntelligentRouter = require('../services/IntelligentRouter');  // 🧠 3-Tier Self-Improvement System
 const MatchDiagnostics = require('../services/MatchDiagnostics');
 const AdminNotificationService = require('../services/AdminNotificationService');  // 🚨 Critical error reporting
+const { authenticateJWT } = require('../middleware/auth');  // 🔒 Authentication for test/admin endpoints
 // 🚀 V2 SYSTEM: Using V2 AI Agent Runtime instead of legacy agent.js
 const { initializeCall, processUserInput } = require('../services/v2AIAgentRuntime');
 // V2 DELETED: Legacy aiAgentRuntime - replaced with v2AIAgentRuntime
@@ -2137,7 +2138,8 @@ router.post('/test-respond/:templateId', async (req, res) => {
 // ============================================
 // 🧪 GET TEST RESULTS FOR TEMPLATE
 // ============================================
-router.get('/test-results/:templateId', (req, res) => {
+// 🔒 PROTECTED: Requires authentication (admin access to view test results)
+router.get('/test-results/:templateId', authenticateJWT, (req, res) => {
   const { templateId } = req.params;
   const limit = parseInt(req.query.limit) || 20;
   
@@ -2153,8 +2155,11 @@ router.get('/test-results/:templateId', (req, res) => {
   });
 });
 
-// 📊 GET endpoint for aggregate quality report
-router.get('/quality-report/:templateId', (req, res) => {
+// ============================================
+// 📊 GET QUALITY REPORT FOR TEMPLATE
+// ============================================
+// 🔒 PROTECTED: Requires authentication (admin access to view quality reports)
+router.get('/quality-report/:templateId', authenticateJWT, (req, res) => {
   try {
     const { templateId } = req.params;
     const limit = parseInt(req.query.limit) || 100; // Analyze more for quality metrics
