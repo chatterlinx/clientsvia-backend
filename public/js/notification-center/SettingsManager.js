@@ -740,8 +740,8 @@ class SettingsManager {
             };
         }
         
-        // WARNING conditions
-        if (rtt !== null && rtt > 150) {
+        // WARNING conditions (only warn if > 200ms for cross-region tolerance)
+        if (rtt !== null && rtt > 200) {
             return {
                 level: 'WARNING',
                 icon: '🟡',

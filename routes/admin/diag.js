@@ -153,9 +153,9 @@ router.post('/selfcheck', async (req, res) => {
                     incidentPacket.redis.notes.push('Memory fragmentation above 1.5 - consider restart during low traffic');
                 }
                 
-                if (parseFloat(roundTripMs) > 100) {
+                if (parseFloat(roundTripMs) > 200) {
                     issues.push(`Redis slow: ${roundTripMs}ms round trip`);
-                    incidentPacket.redis.notes.push('Round trip > 100ms - check network or Redis load');
+                    incidentPacket.redis.notes.push('Round trip > 200ms - check network or Redis load');
                 }
             }
         } catch (error) {
@@ -378,8 +378,8 @@ router.post('/selfcheck', async (req, res) => {
                 ];
             }
         }
-        // Case E: Redis slow (PERF warning)
-        else if (incidentPacket.redis.roundTripMs > 100) {
+        // Case E: Redis slow (PERF warning) - only warn if > 200ms (cross-region tolerance)
+        else if (incidentPacket.redis.roundTripMs > 200) {
             incidentPacket.overallStatus = 'WARN';
             incidentPacket.failureSource = 'PERF';
             incidentPacket.summary = `Redis round trip slow (${incidentPacket.redis.roundTripMs}ms). Not a Redis failure - topology/region issue.`;
