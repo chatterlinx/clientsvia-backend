@@ -977,14 +977,14 @@
                                     <i class="fas fa-stopwatch text-green-600 mr-2"></i>
                                     Response Time Threshold (ms)
                                 </label>
-                                <span id="latency-value" class="text-2xl font-bold text-green-600">100ms</span>
+                                <span id="latency-value" class="text-2xl font-bold text-green-600">200ms</span>
                             </div>
                             <input 
                                 type="range" 
                                 id="redis-latency-threshold" 
                                 min="50" 
                                 max="500" 
-                                value="100" 
+                                value="200" 
                                 step="50"
                                 class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
                                 oninput="document.getElementById('latency-value').textContent = this.value + 'ms'"

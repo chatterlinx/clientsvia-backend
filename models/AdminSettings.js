@@ -394,10 +394,10 @@ const adminSettingsSchema = new mongoose.Schema({
             },
             latency: {
                 type: Number,
-                default: 100,
+                default: 200,
                 min: 50,
                 max: 500,
-                description: 'Alert if response time exceeds this in ms (default: 100)'
+                description: 'Alert if response time exceeds this in ms (default: 200 - increased for cross-region Redis)'
             }
         }
     },
