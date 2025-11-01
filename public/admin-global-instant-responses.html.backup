@@ -3311,6 +3311,9 @@
                 <button id="tab-advanced" class="scenario-tab" onclick="switchScenarioTab('advanced')" style="padding: 16px 28px; border: none; background: transparent; color: #6c757d; font-weight: 600; font-size: 15px; cursor: pointer; border-radius: 12px 12px 0 0; transition: all 0.3s; border-bottom: 3px solid transparent;">
                     <i class="fas fa-cog mr-2"></i>Advanced Settings
                 </button>
+                <button id="tab-test" class="scenario-tab" onclick="switchScenarioTab('test')" style="padding: 16px 28px; border: none; background: transparent; color: #6c757d; font-weight: 600; font-size: 15px; cursor: pointer; border-radius: 12px 12px 0 0; transition: all 0.3s; border-bottom: 3px solid transparent;">
+                    <i class="fas fa-flask mr-2"></i>🔥 Test & Preview
+                </button>
             </div>
 
             <!-- SCROLLABLE CONTENT -->
@@ -3341,12 +3344,71 @@
                                     <option value="archived">📦 Archived</option>
                                 </select>
                             </div>
-                            <div>
-                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
-                                    <i class="fas fa-flag text-orange-600 mr-2"></i>Priority
+                            <div style="border: 2px solid #fef3c7; background: #fef3c7; border-radius: 10px; padding: 18px;">
+                                <label style="display: block; font-weight: 600; color: #92400e; margin-bottom: 10px; font-size: 15px;">
+                                    <i class="fas fa-flag mr-2"></i>Priority Level ⚡
                                 </label>
-                                <input type="number" id="scenario-priority" value="0" min="-10" max="10" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
-                                <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Tie-breaker (-10 to 10, higher = more priority)</p>
+                                <input type="number" id="scenario-priority" value="0" min="-10" max="10" style="width: 100%; padding: 14px 18px; border: 2px solid #fcd34d; border-radius: 10px; font-size: 18px; font-weight: 700; text-align: center; background: white;">
+                                <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+                                    <span style="font-size: 11px; color: #92400e;">-10 (Low)</span>
+                                    <span style="font-size: 11px; color: #92400e;">0 (Normal)</span>
+                                    <span style="font-size: 11px; color: #92400e;">+10 (Critical)</span>
+                                </div>
+                                <p style="margin: 12px 0 0; font-size: 13px; color: #92400e; font-weight: 500;">
+                                    ⚡ Tie-breaker when multiple scenarios match. Emergency=10, Normal=0, Chitchat=-5
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- 🎯 INHERITED CONFIGURATION (Fillers & Synonyms) -->
+                        <div style="border: 2px solid #dbeafe; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-radius: 12px; padding: 20px; margin: 30px 0;">
+                            <h3 style="font-size: 18px; font-weight: 700; color: #1e40af; margin: 0 0 12px 0; display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-layer-group"></i>
+                                Inherited Configuration
+                                <span style="font-size: 12px; font-weight: 600; background: #3b82f6; color: white; padding: 4px 10px; border-radius: 20px;">Read-Only</span>
+                            </h3>
+                            <p style="font-size: 14px; color: #1e40af; margin: 0 0 16px 0;">
+                                This scenario inherits fillers & synonyms from its template and category
+                            </p>
+                            
+                            <!-- Inherited Fillers -->
+                            <div style="margin-bottom: 20px;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                                    <i class="fas fa-filter text-gray-600"></i>
+                                    <strong style="color: #374151;">Effective Filler Words:</strong>
+                                    <span id="scenario-fillers-count" style="background: #e5e7eb; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">0</span>
+                                    <button onclick="openQuickAddFillerModal()" style="margin-left: auto; background: #059669; color: white; border: none; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#047857'" onmouseout="this.style.background='#059669'">
+                                        <i class="fas fa-plus"></i>
+                                        Quick Add
+                                    </button>
+                                </div>
+                                <div id="scenario-inherited-fillers" style="display: flex; flex-wrap: wrap; gap: 6px; padding: 12px; background: white; border: 1px solid #d1d5db; border-radius: 8px; min-height: 50px; max-height: 120px; overflow-y: auto;">
+                                    <span style="color: #9ca3af; font-size: 13px;">Loading...</span>
+                                </div>
+                                <p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    These words are removed from caller input before matching
+                                </p>
+                            </div>
+                            
+                            <!-- Inherited Synonyms -->
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                                    <i class="fas fa-language text-purple-600"></i>
+                                    <strong style="color: #374151;">Effective Synonyms:</strong>
+                                    <span id="scenario-synonyms-count" style="background: #e5e7eb; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">0 mappings</span>
+                                    <button onclick="openQuickAddSynonymModal()" style="margin-left: auto; background: #7c3aed; color: white; border: none; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#6d28d9'" onmouseout="this.style.background='#7c3aed'">
+                                        <i class="fas fa-plus"></i>
+                                        Quick Add
+                                    </button>
+                                </div>
+                                <div id="scenario-inherited-synonyms" style="padding: 12px; background: white; border: 1px solid #d1d5db; border-radius: 8px; min-height: 50px; max-height: 150px; overflow-y: auto;">
+                                    <span style="color: #9ca3af; font-size: 13px;">Loading...</span>
+                                </div>
+                                <p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Colloquial terms are translated to technical terms before matching
+                                </p>
                             </div>
                         </div>
 
@@ -3363,35 +3425,61 @@ give me a second"></textarea>
                             <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Natural phrases callers might say (one per line)</p>
                         </div>
 
-                        <!-- Negative Triggers (Collapsible) -->
-                        <details style="border: 2px solid #e9ecef; border-radius: 10px; padding: 18px;">
-                            <summary style="cursor: pointer; font-weight: 600; color: #2c3e50; font-size: 15px;">
-                                <i class="fas fa-ban text-red-600 mr-2"></i>Negative Triggers (Optional)
+                        <!-- Negative Triggers (CRITICAL FOR ACCURACY) -->
+                        <div style="border: 2px solid #fef2f2; background: #fef2f2; border-radius: 10px; padding: 18px;">
+                            <label style="display: block; font-weight: 600; color: #991b1b; margin-bottom: 10px; font-size: 15px;">
+                                <i class="fas fa-ban mr-2"></i>Negative Triggers 🚫 (PREVENTS False Matches)
+                            </label>
+                            <textarea id="scenario-negative-triggers" rows="3" style="width: 100%; padding: 14px 18px; border: 2px solid #fca5a5; border-radius: 10px; font-size: 15px; font-family: 'Courier New', monospace; resize: vertical; background: white;" placeholder="One phrase per line (prevents this scenario from firing):
+don't hold
+no hold
+can't hold"></textarea>
+                            <p style="margin: 8px 0 0; font-size: 13px; color: #991b1b; font-weight: 500;">
+                                ⚠️ IMPORTANT: If caller says these phrases, this scenario will NOT match (prevents "don't hold" from triggering "Hold Request")
+                            </p>
+                        </div>
+
+                        <!-- Regex Triggers (POWER USER) -->
+                        <details style="border: 2px solid #eff6ff; background: #eff6ff; border-radius: 10px; padding: 18px;">
+                            <summary style="cursor: pointer; font-weight: 600; color: #1e40af; font-size: 15px;">
+                                <i class="fas fa-code mr-2"></i>Regex Triggers 🔧 (Advanced - Optional)
                             </summary>
-                            <textarea id="scenario-negative-triggers" rows="3" style="width: 100%; margin-top: 15px; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px; font-family: 'Courier New', monospace; resize: vertical;" placeholder="Phrases that PREVENT this scenario (one per line)"></textarea>
-                            <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Avoid false triggers (e.g., "don't hold" won't fire "Hold Request")</p>
+                            <textarea id="scenario-regex-triggers" rows="3" style="width: 100%; margin-top: 15px; padding: 14px 18px; border: 2px solid #93c5fd; border-radius: 10px; font-size: 14px; font-family: 'Courier New', monospace; resize: vertical; background: white;" placeholder="One regex pattern per line (JavaScript regex):
+\\b(hold|wait)\\s*(on|up)?\\b
+^schedule.*appointment$
+\\d{3}-\\d{3}-\\d{4}"></textarea>
+                            <p style="margin: 8px 0 0; font-size: 13px; color: #1e40af;">
+                                💡 Advanced matching with regular expressions. Use for complex patterns (e.g., phone numbers, dates, exact word boundaries).
+                            </p>
                         </details>
 
-                        <!-- Context Weight & Tone -->
+                        <!-- Min Confidence & Priority -->
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                            <div>
-                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
-                                    <i class="fas fa-chart-line text-blue-600 mr-2"></i>Context Weight
+                            <div style="border: 2px solid #ecfdf5; background: #ecfdf5; border-radius: 10px; padding: 18px;">
+                                <label style="display: block; font-weight: 600; color: #065f46; margin-bottom: 10px; font-size: 15px;">
+                                    <i class="fas fa-chart-line mr-2"></i>Min Confidence 🎯
                                 </label>
-                                <input type="number" id="scenario-context-weight" value="0.7" min="0" max="1" step="0.05" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
-                                <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Confidence threshold (0.0 - 1.0)</p>
+                                <input type="range" id="scenario-context-weight" value="0.7" min="0" max="1" step="0.05" style="width: 100%; margin-bottom: 10px;" oninput="document.getElementById('confidence-value').textContent = (parseFloat(this.value) * 100).toFixed(0) + '%'">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-size: 13px; color: #065f46;">0% (Any match)</span>
+                                    <span id="confidence-value" style="font-size: 20px; font-weight: 700; color: #065f46;">70%</span>
+                                    <span style="font-size: 13px; color: #065f46;">100% (Perfect)</span>
+                                </div>
+                                <p style="margin: 12px 0 0; font-size: 13px; color: #065f46; font-weight: 500;">
+                                    💡 How confident the AI must be before using this scenario. Higher = more selective (emergency=95%, chitchat=50%)
+                                </p>
                             </div>
                             <div>
                                 <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
-                                    <i class="fas fa-smile text-pink-600 mr-2"></i>Tone Level
+                                    <i class="fas fa-theater-masks text-purple-600 mr-2"></i>🎭 Behavior <span style="color: #e74c3c;">*</span>
                                 </label>
-                                <select id="scenario-tone-level" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
-                                    <option value="1">1 – Formal / Reserved</option>
-                                    <option value="2" selected>2 – Calm / Polite</option>
-                                    <option value="3">3 – Warm / Friendly</option>
-                                    <option value="4">4 – Enthusiastic</option>
-                                    <option value="5">5 – Excited / Urgent</option>
+                                <select id="scenario-behavior" required style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
+                                    <option value="">Select behavior...</option>
+                                    <!-- Populated dynamically from GlobalAIBehaviorTemplate -->
                                 </select>
+                                <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">
+                                    AI personality: tone, pace, volume, emotion
+                                </p>
                             </div>
                         </div>
 
@@ -3611,63 +3699,6 @@ Just checking in..."></textarea>
                                         <option value="high">High</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <label style="display: block; font-weight: 500; margin-bottom: 8px; font-size: 14px;">Rate</label>
-                                    <select id="scenario-tts-rate" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px;">
-                                        <option value="">Default</option>
-                                        <option value="slow">Slow</option>
-                                        <option value="medium">Medium</option>
-                                        <option value="fast">Fast</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label style="display: block; font-weight: 500; margin-bottom: 8px; font-size: 14px;">Volume</label>
-                                    <select id="scenario-tts-volume" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px;">
-                                        <option value="">Default</option>
-                                        <option value="soft">Soft</option>
-                                        <option value="medium">Medium</option>
-                                        <option value="loud">Loud</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </details>
-
-                        <!-- Preconditions & Effects (JSON) -->
-                        <details style="border: 2px solid #e9ecef; border-radius: 10px; padding: 18px;">
-                            <summary style="cursor: pointer; font-weight: 600; color: #2c3e50; font-size: 15px;">
-                                <i class="fas fa-project-diagram text-purple-600 mr-2"></i>State Machine (Preconditions & Effects)
-                            </summary>
-                            <div style="margin-top: 20px; display: grid; gap: 18px;">
-                                <div>
-                                    <label style="display: block; font-weight: 500; margin-bottom: 8px; font-size: 14px;">Preconditions (JSON)</label>
-                                    <textarea id="scenario-preconditions" rows="3" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px; font-family: 'Courier New', monospace; resize: vertical;" placeholder='{"state": "collecting_phone", "hasEntity": ["name"]}'></textarea>
-                                </div>
-                                <div>
-                                    <label style="display: block; font-weight: 500; margin-bottom: 8px; font-size: 14px;">Effects (JSON)</label>
-                                    <textarea id="scenario-effects" rows="3" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px; font-family: 'Courier New', monospace; resize: vertical;" placeholder='{"setState": "confirming", "increment": {"holdCount": 1}}'></textarea>
-                                </div>
-                            </div>
-                        </details>
-
-                        <!-- Action Hooks -->
-                        <div>
-                            <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
-                                <i class="fas fa-bolt text-yellow-600 mr-2"></i>Action Hooks (comma-separated)
-                            </label>
-                            <input type="text" id="scenario-action-hooks" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;" placeholder="e.g., escalate_to_human, offer_scheduling, log_complaint">
-                            <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Actions to trigger after this response</p>
-                        </div>
-
-                    </div>
-                </div>
-
-            </form>
-
-            <!-- FIXED FOOTER -->
-            <div style="background: #f8f9fa; padding: 24px 40px; border-radius: 0 0 20px 20px; display: flex; align-items: center; justify-content: space-between; border-top: 2px solid #e9ecef;">
-                <button type="button" onclick="closeScenarioModal()" style="background: white; color: #6c757d; border: 2px solid #dee2e6; padding: 14px 32px; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; transition: all 0.3s;">
-                    <i class="fas fa-times mr-2"></i>Cancel
-                </button>
                                 <div>
                                     <label style="display: block; font-weight: 500; margin-bottom: 8px; font-size: 14px;">Rate</label>
                                     <select id="scenario-tts-rate" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px;">
