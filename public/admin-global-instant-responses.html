@@ -4670,10 +4670,24 @@ Just checking in..."></textarea>
         // EDIT CATEGORY MODAL
         // ============================================
         let currentEditingCategoryIndex = null;
+        let currentEditingCategoryId = null; // Store category ID for verification
+        let currentEditingTemplateId = null; // Store template ID for verification
 
         async function editCategory(categoryIndex) {
             currentEditingCategoryIndex = categoryIndex;
             const category = activeTemplate.categories[categoryIndex];
+            
+            // Store IDs for verification on save
+            currentEditingCategoryId = category.id;
+            currentEditingTemplateId = activeTemplate._id || activeTemplate.id;
+            
+            console.log(`✏️ [EDIT CATEGORY] Opening editor for:`, {
+                templateId: currentEditingTemplateId,
+                templateName: activeTemplate.name,
+                categoryIndex,
+                categoryId: currentEditingCategoryId,
+                categoryName: category.name
+            });
             
             // Populate form
             document.getElementById('edit-category-name').value = category.name;
@@ -4687,6 +4701,8 @@ Just checking in..."></textarea>
         function closeEditCategoryModal() {
             document.getElementById('edit-category-modal').style.display = 'none';
             currentEditingCategoryIndex = null;
+            currentEditingCategoryId = null;
+            currentEditingTemplateId = null;
         }
 
         // Safety check: only attach if form exists
@@ -4698,6 +4714,35 @@ Just checking in..."></textarea>
                 if (currentEditingCategoryIndex === null) return;
 
             try {
+                // 🔒 CRITICAL: Verify we're editing the correct template!
+                const currentTemplateId = activeTemplate._id || activeTemplate.id;
+                if (currentTemplateId !== currentEditingTemplateId) {
+                    console.error('❌ [EDIT CATEGORY] Template mismatch!', {
+                        expected: currentEditingTemplateId,
+                        current: currentTemplateId
+                    });
+                    showNotification('❌ Error: Template changed! Please close and reopen the editor.', 'error');
+                    return;
+                }
+                
+                // 🔒 CRITICAL: Verify category ID matches
+                const category = activeTemplate.categories[currentEditingCategoryIndex];
+                if (!category || category.id !== currentEditingCategoryId) {
+                    console.error('❌ [EDIT CATEGORY] Category mismatch!', {
+                        expectedId: currentEditingCategoryId,
+                        foundId: category?.id,
+                        categoryIndex: currentEditingCategoryIndex
+                    });
+                    showNotification('❌ Error: Category mismatch! Please close and reopen the editor.', 'error');
+                    return;
+                }
+                
+                console.log(`💾 [EDIT CATEGORY] Saving changes to:`, {
+                    templateId: currentTemplateId,
+                    categoryId: category.id,
+                    categoryName: category.name
+                });
+                
                 showNotification('⏳ Saving category changes...', 'info');
 
                 // Update category details
