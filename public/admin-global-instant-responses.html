@@ -1031,11 +1031,11 @@
                                     Configure how this template learns from LLM analysis and shares patterns
                                 </p>
                             </div>
-                            <button onclick="showNotification('AI Learning Settings coming soon!', 'info')" 
+                            <button onclick="saveAILearningSettings()" 
                                     id="save-learning-settings-btn"
-                                    class="px-4 py-2 bg-gray-400 text-white rounded-lg font-semibold transition-all flex items-center gap-2 text-sm shadow-md cursor-not-allowed opacity-50">
+                                    class="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold transition-all flex items-center gap-2 text-sm shadow-md hover:bg-indigo-700 active:scale-95">
                                 <i class="fas fa-save"></i>
-                                Save Settings (Coming Soon)
+                                Save Settings
                             </button>
                         </div>
                         
@@ -6102,6 +6102,149 @@ Continue?`;
 
         // =============================================
         // END TWILIO TEST FUNCTIONS
+
+        // ============================================================================
+        // AI LEARNING & OPTIMIZATION SETTINGS FUNCTIONS
+        // ============================================================================
+        
+        /**
+         * Update AI Learning UI based on checkbox states
+         * Shows/hides threshold sliders when checkboxes are toggled
+         */
+        function updateAILearningUI() {
+            // Show/hide industry threshold container
+            const shareIndustry = document.getElementById('learning-share-industry').checked;
+            const industryContainer = document.getElementById('industry-threshold-container');
+            if (shareIndustry) {
+                industryContainer.classList.remove('hidden');
+            } else {
+                industryContainer.classList.add('hidden');
+            }
+            
+            // Show/hide global threshold container
+            const proposeGlobal = document.getElementById('learning-propose-global').checked;
+            const globalContainer = document.getElementById('global-threshold-container');
+            if (proposeGlobal) {
+                globalContainer.classList.remove('hidden');
+            } else {
+                globalContainer.classList.add('hidden');
+            }
+        }
+        
+        /**
+         * Load AI Learning settings for the active template
+         * Called when template is switched or page loads
+         */
+        async function loadAILearningSettings() {
+            if (!activeTemplate || !activeTemplate._id) {
+                console.warn('⚠️ [AI LEARNING] No active template to load settings from');
+                return;
+            }
+            
+            console.log('📥 [AI LEARNING] Loading settings for template:', activeTemplate.name);
+            
+            const settings = activeTemplate.learningSettings || {};
+            
+            // Populate checkboxes
+            document.getElementById('learning-share-industry').checked = settings.shareWithinIndustry || false;
+            document.getElementById('learning-propose-global').checked = settings.proposeForGlobal || false;
+            document.getElementById('learning-auto-approve-industry').checked = settings.autoApproveIndustry !== undefined ? settings.autoApproveIndustry : true;
+            
+            // Populate thresholds
+            const tier1Threshold = Math.round((settings.tier1Threshold || 0.80) * 100);
+            const tier2Threshold = Math.round((settings.tier2Threshold || 0.60) * 100);
+            const industryThreshold = Math.round((settings.industryShareThreshold || 0.85) * 100);
+            const globalThreshold = Math.round((settings.globalProposeThreshold || 0.90) * 100);
+            
+            document.getElementById('learning-tier1-threshold').value = tier1Threshold;
+            document.getElementById('tier1-threshold-value').textContent = tier1Threshold;
+            
+            document.getElementById('learning-tier2-threshold').value = tier2Threshold;
+            document.getElementById('tier2-threshold-value').textContent = tier2Threshold;
+            
+            document.getElementById('learning-industry-threshold').value = industryThreshold;
+            document.getElementById('industry-threshold-value').textContent = industryThreshold;
+            
+            document.getElementById('learning-global-threshold').value = globalThreshold;
+            document.getElementById('global-threshold-value').textContent = globalThreshold;
+            
+            // Populate budget controls
+            document.getElementById('learning-llm-budget').value = settings.llmBudgetMonthly || 500;
+            document.getElementById('learning-llm-cost-per-call').value = settings.llmCostPerCall || 0.50;
+            document.getElementById('learning-min-pattern-frequency').value = settings.minPatternFrequency || 3;
+            
+            // Update UI visibility
+            updateAILearningUI();
+            
+            console.log('✅ [AI LEARNING] Settings loaded successfully');
+        }
+        
+        /**
+         * Save AI Learning settings to the backend
+         * Collects all form values and sends PATCH request
+         */
+        async function saveAILearningSettings() {
+            if (!activeTemplate || !activeTemplate._id) {
+                showNotification('❌ No template selected', 'error');
+                return;
+            }
+            
+            try {
+                console.log('💾 [AI LEARNING] Saving settings for template:', activeTemplate.name);
+                
+                // Collect all settings from form
+                const learningSettings = {
+                    // Sharing settings
+                    shareWithinIndustry: document.getElementById('learning-share-industry').checked,
+                    proposeForGlobal: document.getElementById('learning-propose-global').checked,
+                    autoApproveIndustry: document.getElementById('learning-auto-approve-industry').checked,
+                    
+                    // Tier thresholds (convert from percentage to decimal)
+                    tier1Threshold: parseFloat(document.getElementById('learning-tier1-threshold').value) / 100,
+                    tier2Threshold: parseFloat(document.getElementById('learning-tier2-threshold').value) / 100,
+                    industryShareThreshold: parseFloat(document.getElementById('learning-industry-threshold').value) / 100,
+                    globalProposeThreshold: parseFloat(document.getElementById('learning-global-threshold').value) / 100,
+                    
+                    // Budget controls
+                    llmBudgetMonthly: parseFloat(document.getElementById('learning-llm-budget').value),
+                    llmCostPerCall: parseFloat(document.getElementById('learning-llm-cost-per-call').value),
+                    minPatternFrequency: parseInt(document.getElementById('learning-min-pattern-frequency').value)
+                };
+                
+                console.log('📤 [AI LEARNING] Sending settings:', learningSettings);
+                
+                showNotification('⏳ Saving AI Learning settings...', 'info');
+                
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate._id}/learning-settings`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ learningSettings })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || `HTTP ${response.status}`);
+                }
+                
+                console.log('✅ [AI LEARNING] Settings saved successfully:', result);
+                
+                // Update local template with new settings
+                activeTemplate.learningSettings = result.learningSettings;
+                
+                showNotification('✅ AI Learning settings saved successfully!', 'success');
+                
+            } catch (error) {
+                console.error('❌ [AI LEARNING] Error saving settings:', error);
+                showNotification(`❌ Failed to save settings: ${error.message}`, 'error');
+            }
+        }
+        
+        // END AI LEARNING FUNCTIONS
         // =============================================
         // NOTE: Twilio config is now GLOBAL and STATIC
         // It does NOT reload when switching templates!
@@ -9322,6 +9465,11 @@ Continue?`;
                     console.log('📥 [SWITCH TEMPLATE] Reloading Twilio test config...');
                     await loadTwilioTestConfig();
                     console.log('✅ [SWITCH TEMPLATE] Twilio test config reloaded');
+                    
+                    // 🧠 Reload AI Learning settings for new template
+                    console.log('📥 [SWITCH TEMPLATE] Reloading AI Learning settings...');
+                    await loadAILearningSettings();
+                    console.log('✅ [SWITCH TEMPLATE] AI Learning settings reloaded');
                     
                     // NEW: Silently update activeTemplateId in global Twilio config (form stays static!)
                     console.log('📞 [SWITCH TEMPLATE] Updating activeTemplateId in global test config...');
