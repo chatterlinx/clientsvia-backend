@@ -6139,20 +6139,9 @@ Continue?`;
         let currentEditingCategory = null;
         let currentEditingScenario = null;
 
-        function openEditScenarioModal(categoryId, categoryName, scenarioId = null) {
-            console.log(`✏️ [EDIT SCENARIO MODAL] Opening for category: ${categoryName}, scenario: ${scenarioId || 'NEW'}`);
-            
-            // Store for form submission
-            currentEditingCategory = categoryId;
-            currentEditingScenario = scenarioId;
-            
-            // TODO: Populate form fields if editing existing scenario
-            // For now, just show the modal
-            
-            document.getElementById('edit-scenario-modal').style.display = 'flex';
-        }
 
-        function editScenario(categoryIndex, scenarioIndex) {
+        // ❌ DELETED: Legacy openEditScenarioModal (6142-6155) - opened deleted edit-scenario-modal
+
             console.log(`✏️ [EDIT SCENARIO] Opening BIG scenario-modal (4-page form) for category ${categoryIndex}, scenario ${scenarioIndex}`);
             
             // Get category and scenario from activeTemplate
@@ -6228,11 +6217,9 @@ Continue?`;
             optionsDiv.style.display = enabled ? 'block' : 'none';
         }
 
-        function closeEditScenarioModal() {
-            document.getElementById('edit-scenario-modal').style.display = 'none';
-            currentEditingCategory = null;
-            currentEditingScenario = null;
-        }
+
+        // ❌ DELETED: closeEditScenarioModal (6231-6235) - closed deleted edit-scenario-modal
+
 
         // ============================================
         // ADD SCENARIO MODAL
@@ -6534,10 +6521,9 @@ Continue?`;
         // ============================================
         // RESTORED: EXACT original from commit 88a7ed8d
         
-        function closeAddScenarioModal() {
-            document.getElementById('add-scenario-modal').style.display = 'none';
-            currentAddingCategory = null;
-        }
+
+        // ❌ DELETED: closeAddScenarioModal (6537-6540) - closed deleted add-scenario-modal
+
 
 
         // ❌ DELETED: add-scenario-form addEventListener (lines 6542-6627)
