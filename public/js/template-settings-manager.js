@@ -561,6 +561,21 @@ function renderSynonyms(synonymMap) {
     // Force reflow again
     container.offsetHeight;
     
+    // Update counters
+    const totalCount = synonymMap.size;
+    const visibleCount = Math.min(totalCount, 3); // Show "3 of X" or all if less than 3
+    
+    const totalCountEl = document.getElementById('synonym-total-count');
+    const visibleCountEl = document.getElementById('synonym-visible-count');
+    
+    if (totalCountEl) totalCountEl.textContent = totalCount;
+    if (visibleCountEl) visibleCountEl.textContent = visibleCount;
+    
+    // Update scroll hint
+    if (typeof updateSynonymScrollHint === 'function') {
+        setTimeout(updateSynonymScrollHint, 100);
+    }
+    
     console.log(`✅ [RENDER SYNONYMS] Complete! DOM updated with ${synonymMap.size} mappings`);
     console.log(`🔍 [RENDER DEBUG] Final check - container has ${container.children.length} child elements`);
 }
