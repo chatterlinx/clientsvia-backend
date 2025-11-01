@@ -6622,7 +6622,7 @@ Continue?`;
         let currentAddingCategory = null;
 
         function addScenario(categoryIndex) {
-            console.log(`🔥 [ADD SCENARIO] Opening edit-scenario-modal for category index: ${categoryIndex}`);
+            console.log(`🔥 [ADD SCENARIO] Opening BIG scenario-modal (4-page form) for category index: ${categoryIndex}`);
             
             // Get category details from activeTemplate
             const category = activeTemplate.categories[categoryIndex];
@@ -6631,8 +6631,15 @@ Continue?`;
                 return;
             }
             
-            // Open the edit scenario modal in "add" mode (no scenarioId)
-            openEditScenarioModal(category.id, category.name, null);
+            // Update modal title and category name
+            document.getElementById('scenario-modal-action').textContent = 'Add';
+            document.getElementById('scenario-category-name').textContent = category.name;
+            
+            // Open the BIG 4-page scenario modal
+            document.getElementById('scenario-modal').style.display = 'flex';
+            
+            // Switch to first tab
+            switchScenarioTab('basic');
         }
 
         function closeAddScenarioModal() {
