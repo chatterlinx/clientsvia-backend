@@ -6665,7 +6665,7 @@ Continue?`;
         // ============================================
         // POPULATE SCENARIO FORM (FOR EDIT MODE)
         // ============================================
-        // RESTORED: This function was accidentally deleted during refactor
+        // RESTORED: EXACT original from commit 88a7ed8d
         
         function populateScenarioForm(data) {
             console.log('📝 [POPULATE FORM] Loading scenario data:', data);
@@ -6673,41 +6673,65 @@ Continue?`;
             // Basic Info Tab
             document.getElementById('scenario-name').value = data.name || '';
             document.getElementById('scenario-status').value = data.status || 'draft';
-            const priorityField = document.getElementById('scenario-priority');
-            if (priorityField) priorityField.value = data.priority || 0;
-            
-            const triggersField = document.getElementById('scenario-triggers');
-            if (triggersField) triggersField.value = (data.triggers || []).join('\n');
-            
-            const negTriggersField = document.getElementById('scenario-negative-triggers');
-            if (negTriggersField) negTriggersField.value = (data.negativeTriggers || []).join('\n');
+            document.getElementById('scenario-priority').value = data.priority || 0;
+            document.getElementById('scenario-triggers').value = (data.triggers || []).join('\n');
+            document.getElementById('scenario-negative-triggers').value = (data.negativeTriggers || []).join('\n');
+            document.getElementById('scenario-context-weight').value = data.contextWeight || 0.7;
+            document.getElementById('scenario-tone-level').value = data.toneLevel || 2;
+            document.getElementById('scenario-channel').value = data.channel || 'any';
+            document.getElementById('scenario-language').value = data.language || 'auto';
             
             // Replies & Flow Tab
-            const quickRepliesField = document.getElementById('scenario-quick-replies');
-            if (quickRepliesField) quickRepliesField.value = (data.quickReplies || data.quickReply || []).join('\n');
+            document.getElementById('scenario-quick-replies').value = (data.quickReplies || []).join('\n');
+            document.getElementById('scenario-full-replies').value = (data.fullReplies || []).join('\n');
+            document.getElementById('scenario-followup-funnel').value = data.followUpFunnel || '';
+            document.getElementById('scenario-reply-selection').value = data.replySelection || 'random';
             
-            const fullRepliesField = document.getElementById('scenario-full-replies');
-            if (fullRepliesField) fullRepliesField.value = (data.fullReplies || data.fullReply || []).join('\n');
+            // Entities & Variables Tab
+            document.getElementById('scenario-entity-capture').value = (data.entityCapture || []).join('\n');
             
-            // Try to populate any other fields that exist in the form
-            // Using safe checks in case field IDs have changed
-            const fieldMappings = {
-                'scenario-context-weight': data.contextWeight || 0.7,
-                'scenario-tone-level': data.toneLevel || 2,
-                'scenario-channel': data.channel || 'any',
-                'scenario-language': data.language || 'auto',
-                'scenario-followup-funnel': data.followUpFunnel || '',
-                'scenario-reply-selection': data.replySelection || 'random',
-                'scenario-cooldown': data.cooldownSeconds || 0,
-                'scenario-handoff-policy': data.handoffPolicy || 'low_confidence'
-            };
-            
-            for (const [fieldId, value] of Object.entries(fieldMappings)) {
-                const field = document.getElementById(fieldId);
-                if (field) field.value = value;
+            // Dynamic variables (Map to key=value format)
+            if (data.dynamicVariables && typeof data.dynamicVariables === 'object') {
+                const varLines = Object.entries(data.dynamicVariables).map(([k, v]) => `${k}=${v}`);
+                document.getElementById('scenario-dynamic-variables').value = varLines.join('\n');
             }
             
-            console.log('✅ [POPULATE FORM] All available fields populated');
+            document.getElementById('scenario-entity-validation').value = 
+                data.entityValidation ? JSON.stringify(Object.fromEntries(data.entityValidation), null, 2) : '';
+            
+            // Advanced Settings Tab
+            document.getElementById('scenario-cooldown').value = data.cooldownSeconds || 0;
+            document.getElementById('scenario-handoff-policy').value = data.handoffPolicy || 'low_confidence';
+            
+            // Timed Follow-Up
+            if (data.timedFollowUp) {
+                document.getElementById('scenario-timed-enabled').checked = data.timedFollowUp.enabled || false;
+                document.getElementById('scenario-timed-delay').value = data.timedFollowUp.delaySeconds || 50;
+                document.getElementById('scenario-timed-extension').value = data.timedFollowUp.extensionSeconds || 30;
+                document.getElementById('scenario-timed-messages').value = (data.timedFollowUp.messages || []).join('\n');
+            }
+            
+            // Silence Policy
+            if (data.silencePolicy) {
+                document.getElementById('scenario-silence-max').value = data.silencePolicy.maxConsecutive || 2;
+                document.getElementById('scenario-silence-warning').value = data.silencePolicy.finalWarning || 'Hello? Did I lose you?';
+            }
+            
+            // TTS Override
+            if (data.ttsOverride) {
+                document.getElementById('scenario-tts-pitch').value = data.ttsOverride.pitch || '';
+                document.getElementById('scenario-tts-rate').value = data.ttsOverride.rate || '';
+                document.getElementById('scenario-tts-volume').value = data.ttsOverride.volume || '';
+            }
+            
+            // Preconditions & Effects (JSON)
+            document.getElementById('scenario-preconditions').value = 
+                data.preconditions ? JSON.stringify(Object.fromEntries(data.preconditions), null, 2) : '';
+            document.getElementById('scenario-effects').value = 
+                data.effects ? JSON.stringify(Object.fromEntries(data.effects), null, 2) : '';
+            
+            // Action Hooks
+            document.getElementById('scenario-action-hooks').value = (data.actionHooks || []).join(', ');
         }
 
         // ============================================
