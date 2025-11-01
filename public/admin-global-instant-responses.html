@@ -4780,7 +4780,7 @@ Just checking in..."></textarea>
                 
                 // 🔒 CRITICAL: Reload the SAME template we were editing, not the "active" one!
                 console.log(`🔄 [EDIT CATEGORY] Reloading template ${currentTemplateId} after save...`);
-                await switchTemplate(currentTemplateId);
+                await switchDashboardTemplate(currentTemplateId);
                 console.log(`✅ [EDIT CATEGORY] Template reloaded successfully`);
             } catch (error) {
                 console.error('❌ Error updating category:', error);
