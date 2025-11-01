@@ -6142,6 +6142,7 @@ Continue?`;
 
         // ❌ DELETED: Legacy openEditScenarioModal (6142-6155) - opened deleted edit-scenario-modal
 
+        function editScenario(categoryIndex, scenarioIndex) {
             console.log(`✏️ [EDIT SCENARIO] Opening BIG scenario-modal (4-page form) for category ${categoryIndex}, scenario ${scenarioIndex}`);
             
             // Get category and scenario from activeTemplate
@@ -6205,9 +6206,6 @@ Continue?`;
             
             // Show/hide smart hold options based on toggle
             toggleSmartHoldOptions();
-
-            // Show modal
-            document.getElementById('edit-scenario-modal').style.display = 'flex';
         }
         
         // Toggle Smart Hold options visibility
