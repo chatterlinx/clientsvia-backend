@@ -386,7 +386,7 @@ class IntelligentRouter {
             }
             
             // Match
-            const match = await selector.selectBestScenario(callerInput, allScenarios);
+            const match = await selector.selectScenario(callerInput, allScenarios);
             
             const responseTime = Date.now() - startTime;
             
