@@ -1578,6 +1578,66 @@
                 </div>
 
                 <!-- ========================================================================== -->
+                <!-- 🧪 LIVE TEST MONITOR - Real-time Results & AI Suggestions -->
+                <!-- ========================================================================== -->
+                <div id="live-test-monitor" class="mb-6 bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl shadow-lg border-2 border-purple-400 overflow-hidden">
+                    <!-- Header -->
+                    <div class="bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-4 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-md">
+                                <i class="fas fa-flask text-purple-600 text-lg"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                                    🧪 Live Test Monitor
+                                    <span id="live-test-count" class="text-sm font-semibold bg-purple-700 px-3 py-1 rounded-lg shadow">0 tests</span>
+                                </h3>
+                                <p class="text-xs text-white font-medium">
+                                    Real-time test results and AI-powered improvement suggestions
+                                </p>
+                            </div>
+                        </div>
+                        <button onclick="refreshLiveTestMonitor()" class="px-4 py-2 bg-white text-purple-600 hover:bg-purple-50 rounded-lg font-semibold transition-all flex items-center gap-2 shadow-md">
+                            <i class="fas fa-sync-alt"></i>
+                            Refresh
+                        </button>
+                    </div>
+
+                    <!-- Content -->
+                    <div id="live-test-monitor-content" class="p-6">
+                        <!-- Empty State (shown when no tests yet) -->
+                        <div id="live-test-empty-state" class="text-center py-12">
+                            <i class="fas fa-flask text-6xl text-purple-300 mb-4"></i>
+                            <h4 class="text-xl font-bold text-gray-700 mb-2">No Test Results Yet</h4>
+                            <p class="text-gray-600 mb-4">Call the test number below and your results will appear here instantly!</p>
+                            <div class="inline-block bg-white px-6 py-3 rounded-lg shadow-md border-2 border-purple-300">
+                                <div class="text-sm text-gray-600 mb-1">Test Phone Number:</div>
+                                <div class="text-2xl font-bold text-purple-600" id="live-test-phone-display">Loading...</div>
+                            </div>
+                        </div>
+
+                        <!-- Test Results Grid (shown when tests exist) -->
+                        <div id="live-test-results-grid" class="hidden space-y-4">
+                            <!-- Results will be inserted here by JavaScript -->
+                        </div>
+
+                        <!-- AI Suggestions Panel (shown when suggestions exist) -->
+                        <div id="live-test-suggestions-panel" class="hidden mt-6 bg-yellow-50 rounded-lg border-2 border-yellow-400 p-6">
+                            <div class="flex items-center gap-3 mb-4">
+                                <i class="fas fa-lightbulb text-3xl text-yellow-600"></i>
+                                <div>
+                                    <h4 class="text-lg font-bold text-yellow-900">💡 AI Improvement Suggestions</h4>
+                                    <p class="text-sm text-yellow-700">Based on your recent test results</p>
+                                </div>
+                            </div>
+                            <div id="live-test-suggestions-content" class="space-y-3">
+                                <!-- Suggestions will be inserted here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========================================================================== -->
                 <!-- TEST PHRASE LIBRARY - WORLD-CLASS TESTING COMPANION -->
                 <!-- ========================================================================== -->
                 <div class="mb-6 bg-white rounded-xl shadow-lg border-2 border-green-500 overflow-hidden">
@@ -9688,6 +9748,11 @@ Continue?`;
                         console.warn('⚠️ [SWITCH TEMPLATE] Could not update test routing:', err.message);
                     }
                     
+                    // 🧪 Refresh Live Test Monitor for new template
+                    console.log('🧪 [SWITCH TEMPLATE] Refreshing Live Test Monitor...');
+                    await refreshLiveTestMonitor();
+                    console.log('✅ [SWITCH TEMPLATE] Live Test Monitor refreshed');
+                    
                     showNotification(`✅ Loaded: ${template.name}`, 'success');
                 } else {
                     console.error('❌ [SWITCH TEMPLATE] Failed to load:', result.message || 'No template data found');
@@ -10419,6 +10484,154 @@ Continue?`;
             const days = Math.floor(hours / 24);
             return `${days} day${days > 1 ? 's' : ''} ago`;
         }
+        
+        // ============================================
+        // 🧪 LIVE TEST MONITOR - Real-time Results Right Where You Need Them!
+        // ============================================
+        
+        async function refreshLiveTestMonitor() {
+            if (!activeTemplateId) {
+                console.log('⚠️ [LIVE TEST MONITOR] No active template');
+                return;
+            }
+            
+            try {
+                console.log(`🧪 [LIVE TEST MONITOR] Fetching last 3 tests for template ${activeTemplateId}...`);
+                const token = getAuthToken();
+                
+                const response = await fetch(`/api/twilio/test-results/${activeTemplateId}?limit=3`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log(`🧪 [LIVE TEST MONITOR] Loaded ${data.count} tests`);
+                    renderLiveTestMonitor(data.results);
+                    
+                    // Also update the test phone number
+                    const phoneDisplay = document.getElementById('live-test-phone-display');
+                    if (phoneDisplay && window.globalTwilioTestConfig?.phoneNumber) {
+                        phoneDisplay.textContent = window.globalTwilioTestConfig.phoneNumber;
+                    }
+                } else {
+                    console.error('❌ [LIVE TEST MONITOR] Failed to load');
+                }
+            } catch (error) {
+                console.error('❌ [LIVE TEST MONITOR] Error:', error);
+            }
+        }
+        
+        function renderLiveTestMonitor(results) {
+            const emptyState = document.getElementById('live-test-empty-state');
+            const resultsGrid = document.getElementById('live-test-results-grid');
+            const suggestionsPanel = document.getElementById('live-test-suggestions-panel');
+            const suggestionsContent = document.getElementById('live-test-suggestions-content');
+            const testCount = document.getElementById('live-test-count');
+            
+            if (results.length === 0) {
+                emptyState.classList.remove('hidden');
+                resultsGrid.classList.add('hidden');
+                suggestionsPanel.classList.add('hidden');
+                testCount.textContent = '0 tests';
+                return;
+            }
+            
+            // Hide empty state, show results
+            emptyState.classList.add('hidden');
+            resultsGrid.classList.remove('hidden');
+            testCount.textContent = `${results.length} test${results.length > 1 ? 's' : ''}`;
+            
+            // Render test results (compact cards)
+            resultsGrid.innerHTML = results.map((result, index) => {
+                const timeAgo = getTimeAgo(new Date(result.timestamp));
+                const confidencePercent = Math.round(result.confidence * 100);
+                const statusColor = result.matched ? 'green' : 'red';
+                const statusIcon = result.matched ? '✅' : '❌';
+                
+                return `
+                    <div class="bg-white rounded-lg border-2 border-${statusColor}-200 p-4 shadow-sm hover:shadow-md transition-shadow">
+                        <div class="flex items-start justify-between mb-2">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-xl">${statusIcon}</span>
+                                    <div class="flex-1">
+                                        <div class="font-bold text-${statusColor}-800 text-sm">${result.matched ? 'MATCHED' : 'NO MATCH'}</div>
+                                        <div class="text-xs text-gray-600">${timeAgo}</div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-lg font-bold text-${statusColor}-700">${confidencePercent}%</div>
+                                        ${result.timing?.total ? `<div class="text-xs text-gray-600">${result.timing.total}ms</div>` : ''}
+                                    </div>
+                                </div>
+                                <div class="text-sm text-gray-900 mb-2">
+                                    <strong>Said:</strong> "${escapeHtml(result.phrase)}"
+                                </div>
+                                ${result.matched && result.scenario ? `
+                                    <div class="text-sm bg-${statusColor}-50 px-3 py-2 rounded border border-${statusColor}-200">
+                                        <strong>→</strong> ${escapeHtml(result.scenario.name)}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Collect ALL suggestions from all results
+            const allSuggestions = [];
+            results.forEach(result => {
+                if (result.analysis && result.analysis.suggestions) {
+                    result.analysis.suggestions.forEach(sug => {
+                        allSuggestions.push({
+                            ...sug,
+                            fromPhrase: result.phrase
+                        });
+                    });
+                }
+            });
+            
+            // Show suggestions panel if any exist
+            if (allSuggestions.length > 0) {
+                suggestionsPanel.classList.remove('hidden');
+                suggestionsContent.innerHTML = allSuggestions.map(sug => `
+                    <div class="bg-white rounded-lg border-2 border-yellow-300 p-4 shadow-sm">
+                        <div class="flex items-start justify-between mb-2">
+                            <div class="flex-1">
+                                <div class="text-sm font-bold text-yellow-900 mb-1">
+                                    💡 ${sug.priority === 'high' ? '🔥 HIGH PRIORITY' : 'SUGGESTION'}
+                                </div>
+                                <div class="text-sm text-yellow-900 mb-2">${escapeHtml(sug.message)}</div>
+                                ${sug.fromPhrase ? `
+                                    <div class="text-xs text-yellow-700 bg-yellow-50 px-2 py-1 rounded inline-block">
+                                        From: "${escapeHtml(sug.fromPhrase.substring(0, 50))}..."
+                                    </div>
+                                ` : ''}
+                                ${sug.expectedBoost ? `
+                                    <div class="text-xs text-green-700 mt-2 font-semibold">
+                                        📈 Expected boost: ${sug.expectedBoost}
+                                    </div>
+                                ` : ''}
+                            </div>
+                            ${sug.type === 'add_keyword' && sug.keywords ? `
+                                <button onclick="quickAddKeyword('${sug.scenarioId}', ${JSON.stringify(sug.keywords).replace(/"/g, '&quot;')})" 
+                                        class="ml-3 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-xs font-bold whitespace-nowrap transition-colors shadow-sm">
+                                    Quick Add
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                suggestionsPanel.classList.add('hidden');
+            }
+        }
+        
+        // Auto-refresh Live Test Monitor when template changes
+        // (Will be called by switchDashboardTemplate)
         
         // ============================================
         // 📊 TEMPLATE HEALTH METRICS
