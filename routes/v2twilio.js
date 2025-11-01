@@ -637,7 +637,8 @@ router.post('/voice', async (req, res) => {
         action: `/api/twilio/test-respond/${company.template._id}`,
         method: 'POST',
         timeout: 5,
-        speechTimeout: 'auto'
+        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
+        hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually' // Help recognize common filler words
       });
       gather.say(greeting);
       
@@ -1386,6 +1387,7 @@ router.post('/voice/:companyID', async (req, res) => {
         input: 'speech',
         speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
         speechModel: 'phone_call',
+        hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually', // Help recognize common filler words and pauses
         action: `/api/twilio/v2-agent-respond/${companyID}`,
         method: 'POST',
         partialResultCallback: `/api/twilio/ai-agent-partial/${companyID}`,
@@ -1986,7 +1988,8 @@ router.post('/test-respond/:templateId', async (req, res) => {
         action: `/api/twilio/test-respond/${templateId}`,
         method: 'POST',
         timeout: 5,
-        speechTimeout: 'auto'
+        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty test phrases without being cut off
+        hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually' // Help recognize common filler words
       });
       gather.say('Say something else to test another scenario, or hang up to end the test.');
       logger.info(`🧠 [CHECKPOINT 10] ✅ Gather created`);
@@ -2004,7 +2007,8 @@ router.post('/test-respond/:templateId', async (req, res) => {
         action: `/api/twilio/test-respond/${templateId}`,
         method: 'POST',
         timeout: 5,
-        speechTimeout: 'auto'
+        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty test phrases without being cut off
+        hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually' // Help recognize common filler words
       });
       gather.say('Try saying something else.');
       logger.info(`🧠 [CHECKPOINT 8] ✅ Gather created`);
