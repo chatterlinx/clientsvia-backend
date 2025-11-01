@@ -1606,6 +1606,10 @@
                                 <i class="fas fa-sync-alt"></i>
                                 Refresh
                             </button>
+                            <button onclick="copyLiveTestReport()" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-all flex items-center gap-2 shadow-md">
+                                <i class="fas fa-clipboard"></i>
+                                Copy Full Report
+                            </button>
                             <button onclick="openTestLogModal()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold transition-all flex items-center gap-2 shadow-md">
                                 <i class="fas fa-flask"></i>
                                 Full Test Log
@@ -10667,6 +10671,192 @@ Continue?`;
             }
             
             console.log('✅ [LIVE TEST MONITOR] Display cleared - ready for fresh tests!');
+        }
+        
+        // ============================================
+        // 📋 COPY FULL TEST REPORT
+        // ============================================
+        // Generates a comprehensive, developer-friendly report
+        // that can be pasted to AI for analysis and improvement suggestions
+        // ============================================
+        
+        async function copyLiveTestReport() {
+            try {
+                console.log('📋 [COPY REPORT] Generating full test report...');
+                
+                if (!activeTemplateId) {
+                    showToast('⚠️ No template selected', 'warning');
+                    return;
+                }
+                
+                // Fetch all test results (not just last 3)
+                const token = getAuthToken();
+                const response = await fetch(`/api/twilio/test-results/${activeTemplateId}?limit=20`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (!data.success || !data.results || data.results.length === 0) {
+                    showToast('⚠️ No test results to copy', 'warning');
+                    return;
+                }
+                
+                // Generate comprehensive report
+                const report = generateTestReport(data.results);
+                
+                // Copy to clipboard
+                await navigator.clipboard.writeText(report);
+                
+                showToast(`✅ Report copied! (${data.results.length} tests)`, 'success');
+                console.log('✅ [COPY REPORT] Report copied to clipboard');
+                
+            } catch (error) {
+                console.error('❌ [COPY REPORT] Error:', error);
+                showToast('❌ Failed to copy report', 'error');
+            }
+        }
+        
+        function generateTestReport(results) {
+            const template = activeTemplate || {};
+            const timestamp = new Date().toISOString();
+            
+            // Calculate stats
+            const totalTests = results.length;
+            const matched = results.filter(r => r.matched).length;
+            const failed = totalTests - matched;
+            const matchRate = ((matched / totalTests) * 100).toFixed(1);
+            const avgConfidence = (results.reduce((sum, r) => sum + (r.confidence || 0), 0) / totalTests * 100).toFixed(1);
+            
+            // Collect all unique suggestions
+            const allSuggestions = new Map();
+            results.forEach(result => {
+                if (result.analysis && result.analysis.suggestions) {
+                    result.analysis.suggestions.forEach(sug => {
+                        const key = `${sug.type}-${sug.suggestion}`;
+                        if (!allSuggestions.has(key)) {
+                            allSuggestions.set(key, sug);
+                        }
+                    });
+                }
+            });
+            
+            // Build report
+            let report = '';
+            
+            // Header
+            report += '═══════════════════════════════════════════════════════════════\n';
+            report += '🧪 LIVE TEST MONITOR - FULL REPORT\n';
+            report += '═══════════════════════════════════════════════════════════════\n\n';
+            
+            // Template Info
+            report += '📋 TEMPLATE INFORMATION:\n';
+            report += `   Name: ${template.name || 'Unknown'}\n`;
+            report += `   ID: ${activeTemplateId}\n`;
+            report += `   Categories: ${template.categories?.length || 0}\n`;
+            report += `   Generated: ${timestamp}\n\n`;
+            
+            // Overall Stats
+            report += '📊 OVERALL PERFORMANCE:\n';
+            report += `   Total Tests: ${totalTests}\n`;
+            report += `   ✅ Matched: ${matched} (${matchRate}%)\n`;
+            report += `   ❌ Failed: ${failed} (${(100 - matchRate).toFixed(1)}%)\n`;
+            report += `   📈 Avg Confidence: ${avgConfidence}%\n\n`;
+            
+            // Test Results Detail
+            report += '═══════════════════════════════════════════════════════════════\n';
+            report += '📝 TEST RESULTS (Most Recent First):\n';
+            report += '═══════════════════════════════════════════════════════════════\n\n';
+            
+            results.forEach((result, index) => {
+                const status = result.matched ? '✅ MATCHED' : '❌ NO MATCH';
+                const confidence = `${(result.confidence * 100).toFixed(0)}%`;
+                const timeAgo = formatTimeAgo(new Date(result.timestamp));
+                
+                report += `TEST #${index + 1} - ${status} (${confidence} confidence) - ${timeAgo}\n`;
+                report += `   📞 Said: "${result.phrase}"\n`;
+                
+                if (result.matched) {
+                    report += `   ➡️  Matched: "${result.matchedScenario?.name || 'Unknown'}"\n`;
+                    if (result.timing) {
+                        report += `   ⚡ Speed: ${result.timing.total || 0}ms\n`;
+                    }
+                } else {
+                    report += `   ⚠️  No scenario matched - confidence too low\n`;
+                }
+                
+                // Show suggestions for this specific test
+                if (result.analysis && result.analysis.suggestions && result.analysis.suggestions.length > 0) {
+                    report += `   💡 Suggestions (${result.analysis.suggestions.length}):\n`;
+                    result.analysis.suggestions.forEach(sug => {
+                        report += `      - ${sug.suggestion}\n`;
+                    });
+                }
+                
+                report += '\n';
+            });
+            
+            // AI Improvement Suggestions Summary
+            if (allSuggestions.size > 0) {
+                report += '═══════════════════════════════════════════════════════════════\n';
+                report += '💡 AI IMPROVEMENT SUGGESTIONS (Aggregated):\n';
+                report += '═══════════════════════════════════════════════════════════════\n\n';
+                
+                const suggestionsByType = {
+                    'missing_filler': [],
+                    'missing_synonym': [],
+                    'missing_scenario': [],
+                    'missing_keyword': [],
+                    'missing_negative_keyword': []
+                };
+                
+                allSuggestions.forEach(sug => {
+                    if (suggestionsByType[sug.type]) {
+                        suggestionsByType[sug.type].push(sug);
+                    }
+                });
+                
+                Object.entries(suggestionsByType).forEach(([type, suggestions]) => {
+                    if (suggestions.length > 0) {
+                        const typeLabel = type.replace('missing_', '').replace('_', ' ').toUpperCase();
+                        report += `🔸 ${typeLabel} (${suggestions.length}):\n`;
+                        suggestions.forEach(sug => {
+                            report += `   • ${sug.suggestion}\n`;
+                        });
+                        report += '\n';
+                    }
+                });
+            } else {
+                report += '═══════════════════════════════════════════════════════════════\n';
+                report += '✅ NO AI SUGGESTIONS - Template performing well!\n';
+                report += '═══════════════════════════════════════════════════════════════\n\n';
+            }
+            
+            // Footer
+            report += '═══════════════════════════════════════════════════════════════\n';
+            report += '📌 HOW TO USE THIS REPORT:\n';
+            report += '   1. Review failed tests and low confidence matches\n';
+            report += '   2. Check AI suggestions for quick improvements\n';
+            report += '   3. Add missing fillers/synonyms to improve matching\n';
+            report += '   4. Create new scenarios for common unmatched phrases\n';
+            report += '   5. Share with AI assistant for deeper analysis\n';
+            report += '═══════════════════════════════════════════════════════════════\n';
+            
+            return report;
+        }
+        
+        function formatTimeAgo(date) {
+            const seconds = Math.floor((new Date() - date) / 1000);
+            if (seconds < 60) return `${seconds}s ago`;
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `${minutes}m ago`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours}h ago`;
+            const days = Math.floor(hours / 24);
+            return `${days}d ago`;
         }
         
         // Auto-refresh Live Test Monitor when template changes
