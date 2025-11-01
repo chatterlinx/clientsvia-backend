@@ -5433,11 +5433,6 @@ Continue?`;
                 }
 
                 window.globalTwilioTestConfig = config; // Cache for other helpers
-                window.twilioTestConfig = {
-                    activeTemplateId: configActiveTemplateId,
-                    activeTemplateName: configActiveTemplateName,
-                    enabled: config.enabled
-                }; // For test log modal
 
                 // Populate form (STATIC - doesn't change when switching templates!)
                 document.getElementById('twilio-test-phone').value = config.phoneNumber || '';
@@ -9769,25 +9764,16 @@ Continue?`;
         }
         
         async function refreshTestLog() {
-            // 🎯 CRITICAL: Use the Twilio test config template, NOT the dashboard dropdown template!
-            // Test calls are routed based on AdminSettings.globalTestingConfig.activeTemplateId
-            // This ensures we're viewing results for the ACTUAL template being tested
-            const testTemplateId = window.twilioTestConfig?.activeTemplateId || activeTemplateId;
-            
-            if (!testTemplateId) {
-                console.log('⚠️ No active template for testing');
+            if (!activeTemplateId) {
+                console.log('⚠️ No active template');
                 return;
             }
             
             try {
-                console.log(`🧪 Fetching test results for template ${testTemplateId}...`);
-                console.log(`   📍 Dashboard template: ${activeTemplateId}`);
-                console.log(`   📍 Test config template: ${window.twilioTestConfig?.activeTemplateId}`);
-                console.log(`   ✅ Using: ${testTemplateId}`);
-                
+                console.log(`🧪 Fetching test results for template ${activeTemplateId}...`);
                 const token = getAuthToken();
                 
-                const response = await fetch(`/api/twilio/test-results/${testTemplateId}?limit=20`, {
+                const response = await fetch(`/api/twilio/test-results/${activeTemplateId}?limit=20`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`
