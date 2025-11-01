@@ -6445,6 +6445,305 @@ Continue?`;
         }
         
         // END AI LEARNING FUNCTIONS
+        
+        // ============================================
+        // 📊 AI COST DASHBOARD FUNCTIONS
+        // ============================================
+        
+        /**
+         * Refresh AI Cost Dashboard with latest data
+         */
+        async function refreshAICostDashboard() {
+            if (!activeTemplateId) {
+                console.warn('⚠️ [COST DASHBOARD] No active template');
+                return;
+            }
+            
+            try {
+                console.log('📊 [COST DASHBOARD] Fetching cost data for template:', activeTemplateId);
+                
+                // Show loading state
+                document.getElementById('cost-loading-state').classList.remove('hidden');
+                document.getElementById('cost-dashboard-main').classList.add('hidden');
+                
+                const token = getAuthToken();
+                
+                // Fetch template costs
+                const costResponse = await fetch(`/api/admin/ai-costs/template/${activeTemplateId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!costResponse.ok) {
+                    throw new Error('Failed to fetch cost data');
+                }
+                
+                const costData = await costResponse.json();
+                
+                // Fetch recommendations
+                const recResponse = await fetch(`/api/admin/ai-costs/recommendations/${activeTemplateId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const recData = recResponse.ok ? await recResponse.json() : { data: { recommendations: [] } };
+                
+                // Render dashboard
+                renderCostDashboard(costData.data, recData.data);
+                
+                // Hide loading, show dashboard
+                document.getElementById('cost-loading-state').classList.add('hidden');
+                document.getElementById('cost-dashboard-main').classList.remove('hidden');
+                
+                console.log('✅ [COST DASHBOARD] Data loaded successfully');
+                
+            } catch (error) {
+                console.error('❌ [COST DASHBOARD] Error:', error);
+                document.getElementById('cost-loading-state').innerHTML = `
+                    <i class="fas fa-exclamation-triangle text-6xl text-red-300 mb-4"></i>
+                    <h4 class="text-xl font-bold text-gray-700 mb-2">Failed to Load Cost Data</h4>
+                    <p class="text-gray-600">${error.message}</p>
+                    <button onclick="refreshAICostDashboard()" class="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                        Retry
+                    </button>
+                `;
+            }
+        }
+        
+        /**
+         * Render cost dashboard with data
+         */
+        function renderCostDashboard(costData, recommendationsData) {
+            // Update month label
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                              'July', 'August', 'September', 'October', 'November', 'December'];
+            const [year, month] = costData.month.split('-');
+            document.getElementById('cost-month-label').textContent = 
+                `${monthNames[parseInt(month) - 1]} ${year}`;
+            
+            // Update budget stats
+            const { budget, usage } = costData;
+            
+            document.getElementById('cost-total-spent').textContent = `$${budget.used.toFixed(2)}`;
+            document.getElementById('cost-budget-limit').textContent = `$${budget.limit.toFixed(2)}`;
+            document.getElementById('cost-budget-percentage').textContent = `${budget.percentage.toFixed(1)}%`;
+            document.getElementById('cost-remaining-budget').textContent = `$${budget.remaining.toFixed(2)}`;
+            
+            // Update progress bar
+            const progressBar = document.getElementById('cost-budget-progress-bar');
+            progressBar.style.width = `${Math.min(budget.percentage, 100)}%`;
+            
+            // Color-code based on usage
+            if (budget.percentage >= 90) {
+                progressBar.className = 'absolute top-0 left-0 h-full bg-gradient-to-r from-red-500 to-red-600 transition-all duration-500';
+            } else if (budget.percentage >= 75) {
+                progressBar.className = 'absolute top-0 left-0 h-full bg-gradient-to-r from-yellow-500 to-orange-500 transition-all duration-500';
+            } else if (budget.percentage >= 50) {
+                progressBar.className = 'absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500';
+            } else {
+                progressBar.className = 'absolute top-0 left-0 h-full bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-500';
+            }
+            
+            // Update usage stats
+            document.getElementById('cost-total-calls').textContent = usage.totalCalls.toLocaleString();
+            document.getElementById('cost-avg-per-call').textContent = `$${usage.avgCostPerCall.toFixed(4)}`;
+            document.getElementById('cost-estimated-monthly').textContent = `$${budget.estimatedMonthly.toFixed(2)}`;
+            
+            // Update status badge
+            const statusBadge = document.getElementById('cost-status-badge');
+            if (budget.status === 'EXCEEDED') {
+                statusBadge.textContent = '🔴 EXCEEDED';
+                statusBadge.className = 'text-xs font-semibold bg-red-700 px-3 py-1 rounded-lg shadow';
+            } else if (budget.status === 'CRITICAL') {
+                statusBadge.textContent = '🚨 CRITICAL';
+                statusBadge.className = 'text-xs font-semibold bg-red-600 px-3 py-1 rounded-lg shadow';
+            } else if (budget.status === 'WARNING') {
+                statusBadge.textContent = '⚠️ WARNING';
+                statusBadge.className = 'text-xs font-semibold bg-yellow-600 px-3 py-1 rounded-lg shadow';
+            } else if (budget.status === 'MODERATE') {
+                statusBadge.textContent = '💡 MODERATE';
+                statusBadge.className = 'text-xs font-semibold bg-blue-600 px-3 py-1 rounded-lg shadow';
+            } else {
+                statusBadge.textContent = '🟢 HEALTHY';
+                statusBadge.className = 'text-xs font-semibold bg-green-700 px-3 py-1 rounded-lg shadow';
+            }
+            
+            // Render recommendations
+            if (recommendationsData.recommendations && recommendationsData.recommendations.length > 0) {
+                const container = document.getElementById('cost-recommendations-container');
+                const list = document.getElementById('cost-recommendations-list');
+                
+                list.innerHTML = recommendationsData.recommendations.map(rec => {
+                    const icon = rec.priority === 'HIGH' ? '🔴' : 
+                               rec.priority === 'MEDIUM' ? '🟡' : 
+                               rec.priority === 'EXCELLENT' ? '🏆' : '💡';
+                    
+                    return `
+                        <div class="bg-white rounded-lg border-2 border-yellow-300 p-4">
+                            <div class="flex items-start gap-3">
+                                <div class="text-2xl">${icon}</div>
+                                <div class="flex-1">
+                                    <h5 class="font-bold text-gray-900 mb-1">${rec.title}</h5>
+                                    <p class="text-sm text-gray-700 mb-2">${rec.message}</p>
+                                    <p class="text-xs text-gray-600 mb-2">
+                                        <strong>Action:</strong> ${rec.action}
+                                    </p>
+                                    ${rec.potentialSavings ? `
+                                        <div class="text-xs text-green-700 font-semibold">
+                                            💰 ${rec.potentialSavings}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                container.classList.remove('hidden');
+            } else {
+                document.getElementById('cost-recommendations-container').classList.add('hidden');
+            }
+            
+            // Render tier usage stats if available
+            if (recommendationsData.stats) {
+                const stats = recommendationsData.stats;
+                // Could add a tier breakdown chart here in future
+                console.log('📊 [COST DASHBOARD] Tier stats:', stats);
+            }
+        }
+        
+        /**
+         * Export cost report to clipboard
+         */
+        async function exportCostReport() {
+            if (!activeTemplateId) {
+                if (window.ToastManager) {
+                    window.ToastManager.warning('⚠️ No template selected');
+                }
+                return;
+            }
+            
+            try {
+                console.log('📋 [COST EXPORT] Generating cost report...');
+                
+                const token = getAuthToken();
+                
+                // Fetch all cost data
+                const costResponse = await fetch(`/api/admin/ai-costs/template/${activeTemplateId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!costResponse.ok) {
+                    throw new Error('Failed to fetch cost data');
+                }
+                
+                const costData = await costResponse.json();
+                const { budget, usage, templateName, month } = costData.data;
+                
+                // Fetch recommendations
+                const recResponse = await fetch(`/api/admin/ai-costs/recommendations/${activeTemplateId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const recData = recResponse.ok ? await recResponse.json() : { data: { recommendations: [] } };
+                
+                // Generate report
+                const report = generateCostReportText(costData.data, recData.data);
+                
+                // Copy to clipboard
+                await navigator.clipboard.writeText(report);
+                
+                if (window.ToastManager) {
+                    window.ToastManager.success(`✅ Cost report copied to clipboard!`);
+                }
+                
+                console.log('✅ [COST EXPORT] Report copied to clipboard');
+                
+            } catch (error) {
+                console.error('❌ [COST EXPORT] Error:', error);
+                if (window.ToastManager) {
+                    window.ToastManager.error('❌ Failed to export cost report');
+                }
+            }
+        }
+        
+        /**
+         * Generate cost report as formatted text
+         */
+        function generateCostReportText(costData, recData) {
+            const { budget, usage, templateName, month } = costData;
+            const timestamp = new Date().toISOString();
+            
+            let report = '';
+            
+            // Header
+            report += '═══════════════════════════════════════════════════════════════\n';
+            report += '📊 AI COST REPORT\n';
+            report += '═══════════════════════════════════════════════════════════════\n\n';
+            
+            // Template Info
+            report += '📋 TEMPLATE INFORMATION:\n';
+            report += `   Name: ${templateName}\n`;
+            report += `   ID: ${costData.templateId}\n`;
+            report += `   Month: ${month}\n`;
+            report += `   Generated: ${timestamp}\n\n`;
+            
+            // Budget Overview
+            report += '💰 BUDGET OVERVIEW:\n';
+            report += `   Status: ${budget.status}\n`;
+            report += `   Total Spent: $${budget.used.toFixed(4)}\n`;
+            report += `   Budget Limit: $${budget.limit.toFixed(2)}\n`;
+            report += `   Remaining: $${budget.remaining.toFixed(2)}\n`;
+            report += `   Percentage Used: ${budget.percentage.toFixed(1)}%\n`;
+            report += `   Estimated Month End: $${budget.estimatedMonthly.toFixed(2)}\n\n`;
+            
+            // Usage Stats
+            report += '📊 USAGE STATISTICS:\n';
+            report += `   Total LLM Calls: ${usage.totalCalls}\n`;
+            report += `   Avg Cost Per Call: $${usage.avgCostPerCall.toFixed(4)}\n`;
+            report += `   Total Tokens: ${usage.totalTokens.toLocaleString()}\n`;
+            report += `   Avg Tokens Per Call: ${usage.avgTokensPerCall.toFixed(0)}\n`;
+            report += `   Avg Confidence: ${(usage.avgConfidence * 100).toFixed(1)}%\n\n`;
+            
+            // Recommendations
+            if (recData.recommendations && recData.recommendations.length > 0) {
+                report += '═══════════════════════════════════════════════════════════════\n';
+                report += '💡 OPTIMIZATION RECOMMENDATIONS:\n';
+                report += '═══════════════════════════════════════════════════════════════\n\n';
+                
+                recData.recommendations.forEach((rec, index) => {
+                    report += `${index + 1}. ${rec.title} (${rec.priority})\n`;
+                    report += `   ${rec.message}\n`;
+                    report += `   Action: ${rec.action}\n`;
+                    if (rec.potentialSavings) {
+                        report += `   Savings: ${rec.potentialSavings}\n`;
+                    }
+                    report += '\n';
+                });
+            }
+            
+            // Tier Statistics
+            if (recData.stats) {
+                report += '═══════════════════════════════════════════════════════════════\n';
+                report += '🎯 TIER USAGE BREAKDOWN:\n';
+                report += '═══════════════════════════════════════════════════════════════\n\n';
+                report += `   Tier 1 (Rule-Based): ${recData.stats.tier1Percent}% - FREE ✅\n`;
+                report += `   Tier 2 (Semantic): ${recData.stats.tier2Percent}% - FREE ✅\n`;
+                report += `   Tier 3 (LLM): ${recData.stats.tier3Percent}% - $${usage.avgCostPerCall.toFixed(4)}/call\n`;
+                report += `   Total Calls: ${recData.stats.totalCalls}\n\n`;
+            }
+            
+            // Footer
+            report += '═══════════════════════════════════════════════════════════════\n';
+            report += '📌 NOTES:\n';
+            report += '   - Costs are calculated based on actual OpenAI API usage\n';
+            report += '   - Budget resets monthly on the 1st of each month\n';
+            report += '   - Improving template quality reduces Tier 3 usage and costs\n';
+            report += '   - Target: 95%+ Tier 1 usage for optimal cost efficiency\n';
+            report += '═══════════════════════════════════════════════════════════════\n';
+            
+            return report;
+        }
+        
+        // END AI COST DASHBOARD FUNCTIONS
         // =============================================
         // NOTE: Twilio config is now GLOBAL and STATIC
         // It does NOT reload when switching templates!
@@ -9890,6 +10189,11 @@ Continue?`;
                     console.log('🧪 [SWITCH TEMPLATE] Refreshing Live Test Monitor...');
                     await refreshLiveTestMonitor();
                     console.log('✅ [SWITCH TEMPLATE] Live Test Monitor refreshed');
+                    
+                    // 📊 Refresh AI Cost Dashboard for new template
+                    console.log('📊 [SWITCH TEMPLATE] Refreshing AI Cost Dashboard...');
+                    await refreshAICostDashboard();
+                    console.log('✅ [SWITCH TEMPLATE] AI Cost Dashboard refreshed');
                     
                     showNotification(`✅ Loaded: ${template.name}`, 'success');
                 } else {
