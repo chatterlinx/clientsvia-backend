@@ -4854,10 +4854,13 @@ Just checking in..."></textarea>
             currentEditingCategoryIndex = null;
         }
 
-        document.getElementById('edit-category-form').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            if (currentEditingCategoryIndex === null) return;
+        // Safety check: only attach if form exists
+        const editCategoryForm = document.getElementById('edit-category-form');
+        if (editCategoryForm) {
+            editCategoryForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                if (currentEditingCategoryIndex === null) return;
 
             try {
                 showNotification('⏳ Saving category changes...', 'info');
@@ -4918,6 +4921,7 @@ Just checking in..."></textarea>
                 });
             }
         });
+        } // End safety check for edit-category-form
 
         // ============================================
         // SEEDING FUNCTIONS
