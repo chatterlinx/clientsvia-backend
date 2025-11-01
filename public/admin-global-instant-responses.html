@@ -4778,9 +4778,10 @@ Just checking in..."></textarea>
                 showNotification('✅ Category updated successfully!', 'success');
                 closeEditCategoryModal();
                 
-                // Refresh the UI
-                await fetchActiveTemplate();
-                renderCategories();
+                // 🔒 CRITICAL: Reload the SAME template we were editing, not the "active" one!
+                console.log(`🔄 [EDIT CATEGORY] Reloading template ${currentTemplateId} after save...`);
+                await switchTemplate(currentTemplateId);
+                console.log(`✅ [EDIT CATEGORY] Template reloaded successfully`);
             } catch (error) {
                 console.error('❌ Error updating category:', error);
                 showNotification('❌ Failed to update category: ' + error.message, 'error');
