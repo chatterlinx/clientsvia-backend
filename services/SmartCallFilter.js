@@ -256,6 +256,12 @@ class SmartCallFilter {
      */
     static async checkCallFrequency(phoneNumber, companyId) {
         try {
+            // Safety check: Redis might not be connected yet (cold start)
+            if (!redisClient) {
+                logger.warn('⚠️ [SMART FILTER] Redis not available, skipping frequency check');
+                return { shouldBlock: false, callCount: 0 };
+            }
+            
             const redisKey = `call_freq:${companyId}:${phoneNumber}`;
             
             // Get current count from Redis
@@ -309,6 +315,12 @@ class SmartCallFilter {
             }
 
             // Check if number has suspicious pattern (e.g., sequential calls)
+            // Safety check: Redis might not be connected yet (cold start)
+            if (!redisClient) {
+                logger.warn('⚠️ [SMART FILTER] Redis not available, skipping robocall pattern check');
+                return { isRobocall: false, reason: 'Redis unavailable' };
+            }
+            
             const redisKey = `robo_pattern:${phoneNumber}`;
             const callTimes = await redisClient.lRange(redisKey, 0, -1);
 
