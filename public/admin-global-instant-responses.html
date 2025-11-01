@@ -6642,6 +6642,45 @@ Continue?`;
             switchScenarioTab('basic');
         }
 
+        // ============================================
+        // SCENARIO MODAL TAB SWITCHING
+        // ============================================
+        // RESTORED: These functions were accidentally deleted during refactor
+        
+        function switchScenarioTab(tabName) {
+            console.log(`🔄 [SCENARIO TAB] Switching to: ${tabName}`);
+            
+            // Hide all tab contents
+            document.querySelectorAll('.scenario-tab-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            
+            // Reset all tab buttons
+            document.querySelectorAll('.scenario-tab').forEach(btn => {
+                btn.style.background = 'transparent';
+                btn.style.color = '#6c757d';
+                btn.style.borderBottom = '3px solid transparent';
+            });
+            
+            // Show selected tab content
+            document.getElementById(`content-${tabName}`).style.display = 'block';
+            
+            // Highlight selected tab button
+            const activeBtn = document.getElementById(`tab-${tabName}`);
+            activeBtn.style.background = 'white';
+            activeBtn.style.color = '#667eea';
+            activeBtn.style.borderBottom = '3px solid #667eea';
+        }
+
+        /**
+         * Close scenario modal
+         */
+        function closeScenarioModal() {
+            console.log('❌ [SCENARIO MODAL] Closing...');
+            document.getElementById('scenario-modal').style.display = 'none';
+            document.getElementById('scenario-form').reset();
+        }
+
         function closeAddScenarioModal() {
             document.getElementById('add-scenario-modal').style.display = 'none';
             currentAddingCategory = null;
