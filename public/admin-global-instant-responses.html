@@ -10685,7 +10685,9 @@ Continue?`;
                 console.log('📋 [COPY REPORT] Generating full test report...');
                 
                 if (!activeTemplateId) {
-                    showToast('⚠️ No template selected', 'warning');
+                    if (window.ToastManager) {
+                        window.ToastManager.warning('⚠️ No template selected');
+                    }
                     return;
                 }
                 
@@ -10701,7 +10703,9 @@ Continue?`;
                 const data = await response.json();
                 
                 if (!data.success || !data.results || data.results.length === 0) {
-                    showToast('⚠️ No test results to copy', 'warning');
+                    if (window.ToastManager) {
+                        window.ToastManager.warning('⚠️ No test results to copy');
+                    }
                     return;
                 }
                 
@@ -10711,12 +10715,16 @@ Continue?`;
                 // Copy to clipboard
                 await navigator.clipboard.writeText(report);
                 
-                showToast(`✅ Report copied! (${data.results.length} tests)`, 'success');
+                if (window.ToastManager) {
+                    window.ToastManager.success(`✅ Report copied! (${data.results.length} tests)`);
+                }
                 console.log('✅ [COPY REPORT] Report copied to clipboard');
                 
             } catch (error) {
                 console.error('❌ [COPY REPORT] Error:', error);
-                showToast('❌ Failed to copy report', 'error');
+                if (window.ToastManager) {
+                    window.ToastManager.error('❌ Failed to copy report');
+                }
             }
         }
         
