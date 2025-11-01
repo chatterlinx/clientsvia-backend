@@ -312,7 +312,7 @@ function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I ca
     // Continue conversation instead of hanging up [[memory:8276820]]
     const gather = twiml.gather({
       input: 'speech',
-      speechTimeout: 'auto',
+      speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
       speechModel: 'phone_call',
       action: `/api/twilio/v2-agent-respond/${companyID || 'unknown'}`,
       method: 'POST'
@@ -744,9 +744,10 @@ router.post('/voice', async (req, res) => {
         method: 'POST',
         bargeIn: company.aiAgentLogic?.voiceSettings?.bargeIn ?? false,
         timeout: 5,
-        speechTimeout: 'auto',
+        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' - allows chatty customers to finish their thought without being cut off mid-sentence
         enhanced: true,
         speechModel: 'phone_call',
+        hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually', // Help recognize common filler words and pauses
         partialResultCallback: `https://${req.get('host')}/api/twilio/v2-agent-partial/${company._id}`
       });
 
@@ -807,7 +808,7 @@ router.post('/voice', async (req, res) => {
         method: 'POST',
         bargeIn: false,
         timeout: 5,
-        speechTimeout: 'auto',
+        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
         enhanced: true,
         speechModel: 'phone_call'
       });
@@ -929,7 +930,7 @@ router.post('/handle-speech', async (req, res) => {
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false,
         timeout: 5, // Globally optimized for fast response
-        speechTimeout: 'auto',
+        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
         enhanced: true,
         speechModel: 'phone_call',
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -1038,7 +1039,7 @@ router.post('/handle-speech', async (req, res) => {
           method: 'POST',
           bargeIn: company.aiSettings?.bargeIn ?? false,
           timeout: 5,
-          speechTimeout: 'auto',
+          speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
           enhanced: true,
           speechModel: 'phone_call',
           partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -1063,7 +1064,7 @@ router.post('/handle-speech', async (req, res) => {
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false,
         timeout: 5, // Globally optimized for fast response
-        speechTimeout: 'auto',
+        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
         enhanced: true,
         speechModel: 'phone_call',
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -1173,7 +1174,7 @@ router.post('/handle-speech', async (req, res) => {
       method: 'POST',
       bargeIn: company.aiSettings?.bargeIn ?? false,
       timeout: 5, // Globally optimized for fast response
-      speechTimeout: 'auto',
+      speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
       enhanced: true,
       speechModel: 'phone_call',
       partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -1383,7 +1384,7 @@ router.post('/voice/:companyID', async (req, res) => {
       // Set up gather for AI Agent Logic flow
       const gather = twiml.gather({
         input: 'speech',
-        speechTimeout: 'auto',
+        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
         speechModel: 'phone_call',
         action: `/api/twilio/v2-agent-respond/${companyID}`,
         method: 'POST',
@@ -1582,7 +1583,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // Set up next gather
       const gather = twiml.gather({
         input: 'speech',
-        speechTimeout: 'auto',
+        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
         speechModel: 'phone_call',
         action: `/api/twilio/v2-agent-respond/${companyID}`,
         method: 'POST'
