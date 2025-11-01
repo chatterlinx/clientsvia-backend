@@ -6622,6 +6622,19 @@ Continue?`;
             openAddScenarioModal(category.id, category.name);
         }
 
+        function openAddScenarioModal(categoryId, categoryName) {
+            console.log(`✅ [ADD SCENARIO] Opening modal for category: ${categoryName} (${categoryId})`);
+            
+            // Store the category ID for form submission
+            currentAddingCategory = categoryId;
+            
+            // Reset the form
+            document.getElementById('add-scenario-form').reset();
+            
+            // Show the modal
+            document.getElementById('add-scenario-modal').style.display = 'flex';
+        }
+
         function closeAddScenarioModal() {
             document.getElementById('add-scenario-modal').style.display = 'none';
             currentAddingCategory = null;
