@@ -6547,7 +6547,7 @@ Continue?`;
         }
 
         function editScenario(categoryIndex, scenarioIndex) {
-            console.log(`✏️ [EDIT SCENARIO] Opening V2.0 modal for category ${categoryIndex}, scenario ${scenarioIndex}`);
+            console.log(`✏️ [EDIT SCENARIO] Opening BIG scenario-modal (4-page form) for category ${categoryIndex}, scenario ${scenarioIndex}`);
             
             // Get category and scenario from activeTemplate
             const category = activeTemplate.categories[categoryIndex];
@@ -6558,8 +6558,19 @@ Continue?`;
                 return;
             }
             
-            // Call the new world-class modal in edit mode
-            openEditScenarioModal(category.id, category.name, scenario.scenarioId || scenario.id);
+            // Update modal title and category name for EDIT mode
+            document.getElementById('scenario-modal-action').textContent = 'Edit';
+            document.getElementById('scenario-category-name').textContent = category.name;
+            
+            // Populate the form with existing scenario data
+            document.getElementById('scenario-name').value = scenario.name || '';
+            document.getElementById('scenario-status').value = scenario.status || 'draft';
+            
+            // Open the BIG 4-page scenario modal
+            document.getElementById('scenario-modal').style.display = 'flex';
+            
+            // Switch to first tab
+            switchScenarioTab('basic');
 
             // Populate Smart Hold fields
             const smartHoldEnabled = scenario.enableSmartHold || false;
