@@ -6572,41 +6572,8 @@ Continue?`;
             document.getElementById('scenario-modal-action').textContent = 'Edit';
             document.getElementById('scenario-category-name').textContent = category.name;
             
-            // ============================================
-            // TAB 1: BASIC INFO - Populate all fields
-            // ============================================
-            document.getElementById('scenario-name').value = scenario.name || '';
-            document.getElementById('scenario-status').value = scenario.status || 'draft';
-            
-            // Priority (if field exists)
-            const priorityField = document.getElementById('scenario-priority');
-            if (priorityField) {
-                priorityField.value = scenario.priority || 4;
-            }
-            
-            // ============================================
-            // TAB 2: REPLIES & FLOW - Populate triggers and responses
-            // ============================================
-            
-            // Trigger phrases (join array into newline-separated string)
-            const triggerField = document.getElementById('scenario-triggers');
-            if (triggerField && scenario.triggers) {
-                triggerField.value = Array.isArray(scenario.triggers) 
-                    ? scenario.triggers.join('\n') 
-                    : scenario.triggers;
-            }
-            
-            // Quick replies
-            const quickReplyField = document.getElementById('scenario-quick-reply');
-            if (quickReplyField && scenario.quickReply) {
-                quickReplyField.value = scenario.quickReply;
-            }
-            
-            // Full replies
-            const fullReplyField = document.getElementById('scenario-full-reply');
-            if (fullReplyField && scenario.fullReply) {
-                fullReplyField.value = scenario.fullReply;
-            }
+            // Populate ALL form fields using the restored function
+            populateScenarioForm(scenario);
             
             // Open the BIG 4-page scenario modal
             document.getElementById('scenario-modal').style.display = 'flex';
@@ -6693,6 +6660,54 @@ Continue?`;
             
             // Switch to first tab
             switchScenarioTab('basic');
+        }
+
+        // ============================================
+        // POPULATE SCENARIO FORM (FOR EDIT MODE)
+        // ============================================
+        // RESTORED: This function was accidentally deleted during refactor
+        
+        function populateScenarioForm(data) {
+            console.log('📝 [POPULATE FORM] Loading scenario data:', data);
+            
+            // Basic Info Tab
+            document.getElementById('scenario-name').value = data.name || '';
+            document.getElementById('scenario-status').value = data.status || 'draft';
+            const priorityField = document.getElementById('scenario-priority');
+            if (priorityField) priorityField.value = data.priority || 0;
+            
+            const triggersField = document.getElementById('scenario-triggers');
+            if (triggersField) triggersField.value = (data.triggers || []).join('\n');
+            
+            const negTriggersField = document.getElementById('scenario-negative-triggers');
+            if (negTriggersField) negTriggersField.value = (data.negativeTriggers || []).join('\n');
+            
+            // Replies & Flow Tab
+            const quickRepliesField = document.getElementById('scenario-quick-replies');
+            if (quickRepliesField) quickRepliesField.value = (data.quickReplies || data.quickReply || []).join('\n');
+            
+            const fullRepliesField = document.getElementById('scenario-full-replies');
+            if (fullRepliesField) fullRepliesField.value = (data.fullReplies || data.fullReply || []).join('\n');
+            
+            // Try to populate any other fields that exist in the form
+            // Using safe checks in case field IDs have changed
+            const fieldMappings = {
+                'scenario-context-weight': data.contextWeight || 0.7,
+                'scenario-tone-level': data.toneLevel || 2,
+                'scenario-channel': data.channel || 'any',
+                'scenario-language': data.language || 'auto',
+                'scenario-followup-funnel': data.followUpFunnel || '',
+                'scenario-reply-selection': data.replySelection || 'random',
+                'scenario-cooldown': data.cooldownSeconds || 0,
+                'scenario-handoff-policy': data.handoffPolicy || 'low_confidence'
+            };
+            
+            for (const [fieldId, value] of Object.entries(fieldMappings)) {
+                const field = document.getElementById(fieldId);
+                if (field) field.value = value;
+            }
+            
+            console.log('✅ [POPULATE FORM] All available fields populated');
         }
 
         // ============================================
