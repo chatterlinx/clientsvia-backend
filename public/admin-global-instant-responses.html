@@ -6171,7 +6171,7 @@ Continue?`;
             // Populate budget controls
             document.getElementById('learning-llm-budget').value = settings.llmBudgetMonthly || 500;
             document.getElementById('learning-llm-cost-per-call').value = settings.llmCostPerCall || 0.50;
-            document.getElementById('learning-min-pattern-frequency').value = settings.minPatternFrequency || 3;
+            document.getElementById('learning-min-pattern-freq').value = settings.minPatternFrequency || 3;
             
             // Update UI visibility
             updateAILearningUI();
@@ -6208,7 +6208,7 @@ Continue?`;
                     // Budget controls
                     llmBudgetMonthly: parseFloat(document.getElementById('learning-llm-budget').value),
                     llmCostPerCall: parseFloat(document.getElementById('learning-llm-cost-per-call').value),
-                    minPatternFrequency: parseInt(document.getElementById('learning-min-pattern-frequency').value)
+                    minPatternFrequency: parseInt(document.getElementById('learning-min-pattern-freq').value)
                 };
                 
                 console.log('📤 [AI LEARNING] Sending settings:', learningSettings);
