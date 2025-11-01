@@ -6566,13 +6566,47 @@ Continue?`;
                 return;
             }
             
+            console.log('📋 [EDIT SCENARIO] Scenario data:', scenario);
+            
             // Update modal title and category name for EDIT mode
             document.getElementById('scenario-modal-action').textContent = 'Edit';
             document.getElementById('scenario-category-name').textContent = category.name;
             
-            // Populate the form with existing scenario data
+            // ============================================
+            // TAB 1: BASIC INFO - Populate all fields
+            // ============================================
             document.getElementById('scenario-name').value = scenario.name || '';
             document.getElementById('scenario-status').value = scenario.status || 'draft';
+            
+            // Priority (if field exists)
+            const priorityField = document.getElementById('scenario-priority');
+            if (priorityField) {
+                priorityField.value = scenario.priority || 4;
+            }
+            
+            // ============================================
+            // TAB 2: REPLIES & FLOW - Populate triggers and responses
+            // ============================================
+            
+            // Trigger phrases (join array into newline-separated string)
+            const triggerField = document.getElementById('scenario-triggers');
+            if (triggerField && scenario.triggers) {
+                triggerField.value = Array.isArray(scenario.triggers) 
+                    ? scenario.triggers.join('\n') 
+                    : scenario.triggers;
+            }
+            
+            // Quick replies
+            const quickReplyField = document.getElementById('scenario-quick-reply');
+            if (quickReplyField && scenario.quickReply) {
+                quickReplyField.value = scenario.quickReply;
+            }
+            
+            // Full replies
+            const fullReplyField = document.getElementById('scenario-full-reply');
+            if (fullReplyField && scenario.fullReply) {
+                fullReplyField.value = scenario.fullReply;
+            }
             
             // Open the BIG 4-page scenario modal
             document.getElementById('scenario-modal').style.display = 'flex';
