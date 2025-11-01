@@ -6587,9 +6587,8 @@ Continue?`;
                 if (result.success) {
                     showNotification(`✅ Category "${category.name}" deleted successfully!`, 'success');
                     
-                    // Refresh the active template and re-render
-                    await fetchActiveTemplate();
-                    renderCategories();
+                    // Refresh the current template (not the test pilot active template!)
+                    await switchDashboardTemplate(activeTemplate._id);
                 } else {
                     showNotification(`❌ Failed to delete: ${result.message}`, 'error');
                 }
