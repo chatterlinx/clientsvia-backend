@@ -3138,11 +3138,11 @@
     <!-- ============================================ -->
     <!-- WORLD-CLASS SCENARIO MODAL (V2.0 - 4 TABS) -->
     <!-- ============================================ -->
-    <div id="scenario-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 10001; padding: 20px;">
-        <div style="background: white; border-radius: 20px; max-width: 1200px; width: 95%; margin: 40px auto; box-shadow: 0 25px 80px rgba(0,0,0,0.5);">
+    <div id="scenario-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 10001; overflow-y: auto; padding: 40px 20px;">
+        <div style="background: white; border-radius: 20px; max-width: 1200px; width: 95%; margin: 0 auto; box-shadow: 0 25px 80px rgba(0,0,0,0.5); display: flex; flex-direction: column; max-height: calc(100vh - 80px);">
             
             <!-- FIXED HEADER -->
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 28px 40px; border-radius: 20px 20px 0 0; display: flex; align-items: center; justify-content: space-between;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 28px 40px; border-radius: 20px 20px 0 0; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;">
                 <div>
                     <h2 id="scenario-modal-title" style="font-size: 32px; font-weight: 700; margin: 0 0 8px 0;">
                         <i class="fas fa-robot mr-3"></i><span id="scenario-modal-action">Add</span> AI Scenario
@@ -3155,7 +3155,7 @@
             </div>
 
             <!-- TAB NAVIGATION -->
-            <div style="background: #f8f9fa; border-bottom: 2px solid #e9ecef; padding: 0 40px; display: flex; gap: 8px;">
+            <div style="background: #f8f9fa; border-bottom: 2px solid #e9ecef; padding: 0 40px; display: flex; gap: 8px; flex-shrink: 0;">
                 <button id="tab-basic" class="scenario-tab active" onclick="switchScenarioTab('basic')" style="padding: 16px 28px; border: none; background: white; color: #667eea; font-weight: 600; font-size: 15px; cursor: pointer; border-radius: 12px 12px 0 0; transition: all 0.3s; border-bottom: 3px solid #667eea;">
                     <i class="fas fa-info-circle mr-2"></i>Basic Info
                 </button>
@@ -3174,7 +3174,7 @@
             </div>
 
             <!-- SCROLLABLE CONTENT -->
-            <form id="scenario-form" style="max-height: 600px; overflow-y: auto; padding: 40px;">
+            <form id="scenario-form" style="flex: 1; overflow-y: auto; padding: 40px; min-height: 0;">
                 
                 <!-- TAB 1: BASIC INFO -->
                 <div id="content-basic" class="scenario-tab-content" style="display: block;">
