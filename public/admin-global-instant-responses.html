@@ -6533,6 +6533,19 @@ Continue?`;
         let currentEditingCategory = null;
         let currentEditingScenario = null;
 
+        function openEditScenarioModal(categoryId, categoryName, scenarioId = null) {
+            console.log(`✏️ [EDIT SCENARIO MODAL] Opening for category: ${categoryName}, scenario: ${scenarioId || 'NEW'}`);
+            
+            // Store for form submission
+            currentEditingCategory = categoryId;
+            currentEditingScenario = scenarioId;
+            
+            // TODO: Populate form fields if editing existing scenario
+            // For now, just show the modal
+            
+            document.getElementById('edit-scenario-modal').style.display = 'flex';
+        }
+
         function editScenario(categoryIndex, scenarioIndex) {
             console.log(`✏️ [EDIT SCENARIO] Opening V2.0 modal for category ${categoryIndex}, scenario ${scenarioIndex}`);
             
@@ -6609,7 +6622,7 @@ Continue?`;
         let currentAddingCategory = null;
 
         function addScenario(categoryIndex) {
-            console.log(`🔥 [ADD SCENARIO] Opening V2.0 modal for category index: ${categoryIndex}`);
+            console.log(`🔥 [ADD SCENARIO] Opening edit-scenario-modal for category index: ${categoryIndex}`);
             
             // Get category details from activeTemplate
             const category = activeTemplate.categories[categoryIndex];
@@ -6618,21 +6631,8 @@ Continue?`;
                 return;
             }
             
-            // Call the new world-class modal
-            openAddScenarioModal(category.id, category.name);
-        }
-
-        function openAddScenarioModal(categoryId, categoryName) {
-            console.log(`✅ [ADD SCENARIO] Opening modal for category: ${categoryName} (${categoryId})`);
-            
-            // Store the category ID for form submission
-            currentAddingCategory = categoryId;
-            
-            // Reset the form
-            document.getElementById('add-scenario-form').reset();
-            
-            // Show the modal
-            document.getElementById('add-scenario-modal').style.display = 'flex';
+            // Open the edit scenario modal in "add" mode (no scenarioId)
+            openEditScenarioModal(category.id, category.name, null);
         }
 
         function closeAddScenarioModal() {
