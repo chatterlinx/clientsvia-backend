@@ -523,29 +523,29 @@ function renderSynonyms(synonymMap) {
     const html = [];
     for (const [technicalTerm, colloquialTerms] of synonymMap.entries()) {
         html.push(`
-            <div class="bg-white border-2 border-purple-200 rounded-lg p-4 hover:shadow-md transition-all">
-                <div class="flex items-start justify-between mb-3">
+            <div class="bg-white border border-purple-200 rounded-lg p-3 hover:shadow-md transition-all">
+                <div class="flex items-start justify-between mb-2">
                     <div class="flex-1">
-                        <div class="text-sm text-gray-500 mb-1">Technical Term:</div>
-                        <div class="text-lg font-bold text-purple-700">${technicalTerm}</div>
+                        <div class="text-xs text-gray-500 mb-0.5">Technical Term:</div>
+                        <div class="text-base font-bold text-purple-700">${technicalTerm}</div>
                     </div>
-                    <div class="flex gap-2">
+                    <div class="flex gap-1.5">
                         <button onclick="editSynonymMapping('${technicalTerm}', ${JSON.stringify(colloquialTerms).replace(/"/g, '&quot;')})" 
-                                class="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-semibold transition-colors">
-                            <i class="fas fa-edit mr-1"></i>
+                                class="px-2.5 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-xs font-semibold transition-colors">
+                            <i class="fas fa-edit"></i>
                             Edit
                         </button>
                         <button onclick="removeSynonymMapping('${technicalTerm}')" 
-                                class="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-semibold transition-colors">
-                            <i class="fas fa-trash mr-1"></i>
+                                class="px-2.5 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs font-semibold transition-colors">
+                            <i class="fas fa-trash"></i>
                             Remove
                         </button>
                     </div>
                 </div>
-                <div class="text-sm text-gray-500 mb-2">Colloquial Terms (${colloquialTerms.length}):</div>
-                <div class="flex flex-wrap gap-2">
+                <div class="text-xs text-gray-500 mb-1.5">Colloquial Terms (${colloquialTerms.length}):</div>
+                <div class="flex flex-wrap gap-1.5">
                     ${colloquialTerms.map(term => `
-                        <span class="px-2 py-1 bg-pink-100 text-pink-800 rounded text-xs font-medium">
+                        <span class="px-2 py-0.5 bg-pink-100 text-pink-800 rounded text-xs font-medium">
                             ${term}
                         </span>
                     `).join('')}
