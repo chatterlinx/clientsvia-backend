@@ -37,19 +37,24 @@ class Tier3LLMFallback {
         
         // Configuration
         this.config = {
-            model: process.env.LLM_MODEL || 'gpt-4-turbo-preview',  // or 'gpt-3.5-turbo' for cheaper
+            model: process.env.LLM_MODEL || 'gpt-4o-mini',  // GPT-4o mini is best price/performance
             temperature: 0.3,  // Low temperature for consistent results
             maxTokens: 1000,
             timeout: 15000,  // 15 seconds max
             
-            // Cost tracking
+            // Cost tracking - UPDATED TO CURRENT OPENAI PRICING (Nov 2025)
+            // Source: https://openai.com/api/pricing/
+            gpt4oMiniCostPer1kTokens: {
+                prompt: 0.00015,   // $0.15 per 1M tokens (CURRENT)
+                completion: 0.0006 // $0.60 per 1M tokens (CURRENT)
+            },
             gpt4TurboCostPer1kTokens: {
-                prompt: 0.01,      // $0.01 per 1K prompt tokens
-                completion: 0.03   // $0.03 per 1K completion tokens
+                prompt: 0.01,      // $10 per 1M tokens
+                completion: 0.03   // $30 per 1M tokens
             },
             gpt35TurboCostPer1kTokens: {
-                prompt: 0.0005,    // $0.0005 per 1K prompt tokens
-                completion: 0.0015 // $0.0015 per 1K completion tokens
+                prompt: 0.0005,    // $0.50 per 1M tokens (LEGACY)
+                completion: 0.0015 // $1.50 per 1M tokens (LEGACY)
             }
         };
         
@@ -338,9 +343,15 @@ ${scenarioDescriptions}
      * ============================================================================
      */
     calculateCost(usage, model) {
-        const costs = model.includes('gpt-4') 
-            ? this.config.gpt4TurboCostPer1kTokens 
-            : this.config.gpt35TurboCostPer1kTokens;
+        // Determine pricing based on model
+        let costs;
+        if (model.includes('gpt-4o-mini') || model.includes('gpt-4o-mini')) {
+            costs = this.config.gpt4oMiniCostPer1kTokens;
+        } else if (model.includes('gpt-4')) {
+            costs = this.config.gpt4TurboCostPer1kTokens;
+        } else {
+            costs = this.config.gpt35TurboCostPer1kTokens;
+        }
         
         const promptCost = (usage.prompt_tokens / 1000) * costs.prompt;
         const completionCost = (usage.completion_tokens / 1000) * costs.completion;

@@ -1317,6 +1317,126 @@
                     </div>
                 </div>
                 
+                <!-- ========================================================================== -->
+                <!-- 📊 AI COST DASHBOARD - REAL-TIME COST TRACKING & OPTIMIZATION -->
+                <!-- ========================================================================== -->
+                <div id="ai-cost-dashboard-section" class="mb-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl shadow-lg border-2 border-green-400 overflow-hidden">
+                    <!-- Header -->
+                    <div class="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-md">
+                                <i class="fas fa-chart-line text-green-600 text-lg"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                                    📊 AI Cost Dashboard
+                                    <span id="cost-status-badge" class="text-xs font-semibold bg-green-700 px-3 py-1 rounded-lg shadow">
+                                        LOADING...
+                                    </span>
+                                </h3>
+                                <p class="text-xs text-white font-medium">
+                                    Real-time OpenAI usage, budget tracking, and cost optimization
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="refreshAICostDashboard()" class="px-4 py-2 bg-white text-green-600 hover:bg-green-50 rounded-lg font-semibold transition-all flex items-center gap-2 shadow-md">
+                                <i class="fas fa-sync-alt"></i>
+                                Refresh
+                            </button>
+                            <button onclick="exportCostReport()" class="px-4 py-2 bg-white text-blue-600 hover:bg-blue-50 rounded-lg font-semibold transition-all flex items-center gap-2 shadow-md">
+                                <i class="fas fa-file-download"></i>
+                                Export Report
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Content -->
+                    <div id="ai-cost-dashboard-content" class="p-6">
+                        <!-- Loading State -->
+                        <div id="cost-loading-state" class="text-center py-12">
+                            <i class="fas fa-spinner fa-spin text-6xl text-green-300 mb-4"></i>
+                            <h4 class="text-xl font-bold text-gray-700 mb-2">Loading Cost Data...</h4>
+                            <p class="text-gray-600">Fetching your AI usage and costs from OpenAI</p>
+                        </div>
+
+                        <!-- Main Dashboard (shown when data loaded) -->
+                        <div id="cost-dashboard-main" class="hidden space-y-6">
+                            <!-- Budget Overview Card -->
+                            <div class="bg-white rounded-lg border-2 border-green-300 p-6 shadow-md">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h4 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                        <i class="fas fa-wallet text-green-600"></i>
+                                        Current Month Budget
+                                    </h4>
+                                    <div id="cost-month-label" class="text-sm text-gray-600 font-semibold">
+                                        November 2025
+                                    </div>
+                                </div>
+                                
+                                <!-- Budget Progress Bar -->
+                                <div class="mb-4">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-2xl font-bold text-gray-900" id="cost-total-spent">$0.00</span>
+                                        <span class="text-sm text-gray-600">of <span id="cost-budget-limit" class="font-bold">$500.00</span></span>
+                                    </div>
+                                    <div class="relative w-full h-8 bg-gray-200 rounded-lg overflow-hidden">
+                                        <div id="cost-budget-progress-bar" 
+                                             class="absolute top-0 left-0 h-full bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-500" 
+                                             style="width: 0%">
+                                        </div>
+                                        <div class="absolute inset-0 flex items-center justify-center">
+                                            <span id="cost-budget-percentage" class="text-sm font-bold text-gray-700">0%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Stats Grid -->
+                                <div class="grid grid-cols-4 gap-4">
+                                    <div class="text-center p-3 bg-gray-50 rounded-lg">
+                                        <div class="text-2xl font-bold text-gray-900" id="cost-total-calls">0</div>
+                                        <div class="text-xs text-gray-600">LLM Calls</div>
+                                    </div>
+                                    <div class="text-center p-3 bg-gray-50 rounded-lg">
+                                        <div class="text-2xl font-bold text-gray-900" id="cost-avg-per-call">$0.00</div>
+                                        <div class="text-xs text-gray-600">Avg/Call</div>
+                                    </div>
+                                    <div class="text-center p-3 bg-gray-50 rounded-lg">
+                                        <div class="text-2xl font-bold text-gray-900" id="cost-estimated-monthly">$0.00</div>
+                                        <div class="text-xs text-gray-600">Est. Month End</div>
+                                    </div>
+                                    <div class="text-center p-3 bg-gray-50 rounded-lg">
+                                        <div class="text-2xl font-bold text-gray-900" id="cost-remaining-budget">$500.00</div>
+                                        <div class="text-xs text-gray-600">Remaining</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Optimization Recommendations -->
+                            <div id="cost-recommendations-container" class="hidden bg-gradient-to-br from-yellow-50 to-amber-50 rounded-lg border-2 border-yellow-400 p-6">
+                                <h4 class="text-lg font-bold text-yellow-900 flex items-center gap-2 mb-4">
+                                    <i class="fas fa-lightbulb text-yellow-600"></i>
+                                    💡 Cost Optimization Recommendations
+                                </h4>
+                                <div id="cost-recommendations-list" class="space-y-3">
+                                    <!-- Recommendations inserted here -->
+                                </div>
+                            </div>
+                            
+                            <!-- Cost Trend Chart (Last 7 Days) -->
+                            <div class="bg-white rounded-lg border-2 border-gray-300 p-6 shadow-md">
+                                <h4 class="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4">
+                                    <i class="fas fa-chart-area text-blue-600"></i>
+                                    Cost Trends (Last 7 Days)
+                                </h4>
+                                <div id="cost-trend-chart" class="space-y-2">
+                                    <!-- Chart bars inserted here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- CATEGORY SETTINGS TAB PANEL -->
                 <div id="template-data-panel-categories" 
                      class="template-data-subtab-panel" 
