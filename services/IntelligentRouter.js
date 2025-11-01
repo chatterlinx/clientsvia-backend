@@ -258,7 +258,10 @@ class IntelligentRouter {
                 result.matched = true;
                 result.scenario = result.tier3Result.scenario;
                 result.confidence = result.tier3Result.confidence;
-                result.response = result.tier3Result.scenario;  // Placeholder
+                // Extract actual reply text from scenario (same as Tier 1)
+                result.response = result.tier3Result.scenario?.quickReplies?.[0] || 
+                                 result.tier3Result.scenario?.fullReplies?.[0] || 
+                                 'I understand.';
                 result.success = true;
                 
                 // 🧠 LEARNING: Extract patterns and teach Tier 1
