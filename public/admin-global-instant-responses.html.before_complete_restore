@@ -3311,9 +3311,6 @@
                 <button id="tab-advanced" class="scenario-tab" onclick="switchScenarioTab('advanced')" style="padding: 16px 28px; border: none; background: transparent; color: #6c757d; font-weight: 600; font-size: 15px; cursor: pointer; border-radius: 12px 12px 0 0; transition: all 0.3s; border-bottom: 3px solid transparent;">
                     <i class="fas fa-cog mr-2"></i>Advanced Settings
                 </button>
-                <button id="tab-test" class="scenario-tab" onclick="switchScenarioTab('test')" style="padding: 16px 28px; border: none; background: transparent; color: #6c757d; font-weight: 600; font-size: 15px; cursor: pointer; border-radius: 12px 12px 0 0; transition: all 0.3s; border-bottom: 3px solid transparent;">
-                    <i class="fas fa-flask mr-2"></i>🔥 Test & Preview
-                </button>
             </div>
 
             <!-- SCROLLABLE CONTENT -->
@@ -3344,71 +3341,12 @@
                                     <option value="archived">📦 Archived</option>
                                 </select>
                             </div>
-                            <div style="border: 2px solid #fef3c7; background: #fef3c7; border-radius: 10px; padding: 18px;">
-                                <label style="display: block; font-weight: 600; color: #92400e; margin-bottom: 10px; font-size: 15px;">
-                                    <i class="fas fa-flag mr-2"></i>Priority Level ⚡
-                                </label>
-                                <input type="number" id="scenario-priority" value="0" min="-10" max="10" style="width: 100%; padding: 14px 18px; border: 2px solid #fcd34d; border-radius: 10px; font-size: 18px; font-weight: 700; text-align: center; background: white;">
-                                <div style="display: flex; justify-content: space-between; margin-top: 8px;">
-                                    <span style="font-size: 11px; color: #92400e;">-10 (Low)</span>
-                                    <span style="font-size: 11px; color: #92400e;">0 (Normal)</span>
-                                    <span style="font-size: 11px; color: #92400e;">+10 (Critical)</span>
-                                </div>
-                                <p style="margin: 12px 0 0; font-size: 13px; color: #92400e; font-weight: 500;">
-                                    ⚡ Tie-breaker when multiple scenarios match. Emergency=10, Normal=0, Chitchat=-5
-                                </p>
-                            </div>
-                        </div>
-
-                        <!-- 🎯 INHERITED CONFIGURATION (Fillers & Synonyms) -->
-                        <div style="border: 2px solid #dbeafe; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-radius: 12px; padding: 20px; margin: 30px 0;">
-                            <h3 style="font-size: 18px; font-weight: 700; color: #1e40af; margin: 0 0 12px 0; display: flex; align-items: center; gap: 10px;">
-                                <i class="fas fa-layer-group"></i>
-                                Inherited Configuration
-                                <span style="font-size: 12px; font-weight: 600; background: #3b82f6; color: white; padding: 4px 10px; border-radius: 20px;">Read-Only</span>
-                            </h3>
-                            <p style="font-size: 14px; color: #1e40af; margin: 0 0 16px 0;">
-                                This scenario inherits fillers & synonyms from its template and category
-                            </p>
-                            
-                            <!-- Inherited Fillers -->
-                            <div style="margin-bottom: 20px;">
-                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                                    <i class="fas fa-filter text-gray-600"></i>
-                                    <strong style="color: #374151;">Effective Filler Words:</strong>
-                                    <span id="scenario-fillers-count" style="background: #e5e7eb; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">0</span>
-                                    <button onclick="openQuickAddFillerModal()" style="margin-left: auto; background: #059669; color: white; border: none; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#047857'" onmouseout="this.style.background='#059669'">
-                                        <i class="fas fa-plus"></i>
-                                        Quick Add
-                                    </button>
-                                </div>
-                                <div id="scenario-inherited-fillers" style="display: flex; flex-wrap: wrap; gap: 6px; padding: 12px; background: white; border: 1px solid #d1d5db; border-radius: 8px; min-height: 50px; max-height: 120px; overflow-y: auto;">
-                                    <span style="color: #9ca3af; font-size: 13px;">Loading...</span>
-                                </div>
-                                <p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">
-                                    <i class="fas fa-info-circle mr-1"></i>
-                                    These words are removed from caller input before matching
-                                </p>
-                            </div>
-                            
-                            <!-- Inherited Synonyms -->
                             <div>
-                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                                    <i class="fas fa-language text-purple-600"></i>
-                                    <strong style="color: #374151;">Effective Synonyms:</strong>
-                                    <span id="scenario-synonyms-count" style="background: #e5e7eb; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">0 mappings</span>
-                                    <button onclick="openQuickAddSynonymModal()" style="margin-left: auto; background: #7c3aed; color: white; border: none; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#6d28d9'" onmouseout="this.style.background='#7c3aed'">
-                                        <i class="fas fa-plus"></i>
-                                        Quick Add
-                                    </button>
-                                </div>
-                                <div id="scenario-inherited-synonyms" style="padding: 12px; background: white; border: 1px solid #d1d5db; border-radius: 8px; min-height: 50px; max-height: 150px; overflow-y: auto;">
-                                    <span style="color: #9ca3af; font-size: 13px;">Loading...</span>
-                                </div>
-                                <p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">
-                                    <i class="fas fa-info-circle mr-1"></i>
-                                    Colloquial terms are translated to technical terms before matching
-                                </p>
+                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                    <i class="fas fa-flag text-orange-600 mr-2"></i>Priority
+                                </label>
+                                <input type="number" id="scenario-priority" value="0" min="-10" max="10" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
+                                <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Tie-breaker (-10 to 10, higher = more priority)</p>
                             </div>
                         </div>
 
@@ -3425,61 +3363,35 @@ give me a second"></textarea>
                             <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Natural phrases callers might say (one per line)</p>
                         </div>
 
-                        <!-- Negative Triggers (CRITICAL FOR ACCURACY) -->
-                        <div style="border: 2px solid #fef2f2; background: #fef2f2; border-radius: 10px; padding: 18px;">
-                            <label style="display: block; font-weight: 600; color: #991b1b; margin-bottom: 10px; font-size: 15px;">
-                                <i class="fas fa-ban mr-2"></i>Negative Triggers 🚫 (PREVENTS False Matches)
-                            </label>
-                            <textarea id="scenario-negative-triggers" rows="3" style="width: 100%; padding: 14px 18px; border: 2px solid #fca5a5; border-radius: 10px; font-size: 15px; font-family: 'Courier New', monospace; resize: vertical; background: white;" placeholder="One phrase per line (prevents this scenario from firing):
-don't hold
-no hold
-can't hold"></textarea>
-                            <p style="margin: 8px 0 0; font-size: 13px; color: #991b1b; font-weight: 500;">
-                                ⚠️ IMPORTANT: If caller says these phrases, this scenario will NOT match (prevents "don't hold" from triggering "Hold Request")
-                            </p>
-                        </div>
-
-                        <!-- Regex Triggers (POWER USER) -->
-                        <details style="border: 2px solid #eff6ff; background: #eff6ff; border-radius: 10px; padding: 18px;">
-                            <summary style="cursor: pointer; font-weight: 600; color: #1e40af; font-size: 15px;">
-                                <i class="fas fa-code mr-2"></i>Regex Triggers 🔧 (Advanced - Optional)
+                        <!-- Negative Triggers (Collapsible) -->
+                        <details style="border: 2px solid #e9ecef; border-radius: 10px; padding: 18px;">
+                            <summary style="cursor: pointer; font-weight: 600; color: #2c3e50; font-size: 15px;">
+                                <i class="fas fa-ban text-red-600 mr-2"></i>Negative Triggers (Optional)
                             </summary>
-                            <textarea id="scenario-regex-triggers" rows="3" style="width: 100%; margin-top: 15px; padding: 14px 18px; border: 2px solid #93c5fd; border-radius: 10px; font-size: 14px; font-family: 'Courier New', monospace; resize: vertical; background: white;" placeholder="One regex pattern per line (JavaScript regex):
-\\b(hold|wait)\\s*(on|up)?\\b
-^schedule.*appointment$
-\\d{3}-\\d{3}-\\d{4}"></textarea>
-                            <p style="margin: 8px 0 0; font-size: 13px; color: #1e40af;">
-                                💡 Advanced matching with regular expressions. Use for complex patterns (e.g., phone numbers, dates, exact word boundaries).
-                            </p>
+                            <textarea id="scenario-negative-triggers" rows="3" style="width: 100%; margin-top: 15px; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px; font-family: 'Courier New', monospace; resize: vertical;" placeholder="Phrases that PREVENT this scenario (one per line)"></textarea>
+                            <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Avoid false triggers (e.g., "don't hold" won't fire "Hold Request")</p>
                         </details>
 
-                        <!-- Min Confidence & Priority -->
+                        <!-- Context Weight & Tone -->
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                            <div style="border: 2px solid #ecfdf5; background: #ecfdf5; border-radius: 10px; padding: 18px;">
-                                <label style="display: block; font-weight: 600; color: #065f46; margin-bottom: 10px; font-size: 15px;">
-                                    <i class="fas fa-chart-line mr-2"></i>Min Confidence 🎯
+                            <div>
+                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                    <i class="fas fa-chart-line text-blue-600 mr-2"></i>Context Weight
                                 </label>
-                                <input type="range" id="scenario-context-weight" value="0.7" min="0" max="1" step="0.05" style="width: 100%; margin-bottom: 10px;" oninput="document.getElementById('confidence-value').textContent = (parseFloat(this.value) * 100).toFixed(0) + '%'">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <span style="font-size: 13px; color: #065f46;">0% (Any match)</span>
-                                    <span id="confidence-value" style="font-size: 20px; font-weight: 700; color: #065f46;">70%</span>
-                                    <span style="font-size: 13px; color: #065f46;">100% (Perfect)</span>
-                                </div>
-                                <p style="margin: 12px 0 0; font-size: 13px; color: #065f46; font-weight: 500;">
-                                    💡 How confident the AI must be before using this scenario. Higher = more selective (emergency=95%, chitchat=50%)
-                                </p>
+                                <input type="number" id="scenario-context-weight" value="0.7" min="0" max="1" step="0.05" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
+                                <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Confidence threshold (0.0 - 1.0)</p>
                             </div>
                             <div>
                                 <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
-                                    <i class="fas fa-theater-masks text-purple-600 mr-2"></i>🎭 Behavior <span style="color: #e74c3c;">*</span>
+                                    <i class="fas fa-smile text-pink-600 mr-2"></i>Tone Level
                                 </label>
-                                <select id="scenario-behavior" required style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
-                                    <option value="">Select behavior...</option>
-                                    <!-- Populated dynamically from GlobalAIBehaviorTemplate -->
+                                <select id="scenario-tone-level" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
+                                    <option value="1">1 – Formal / Reserved</option>
+                                    <option value="2" selected>2 – Calm / Polite</option>
+                                    <option value="3">3 – Warm / Friendly</option>
+                                    <option value="4">4 – Enthusiastic</option>
+                                    <option value="5">5 – Excited / Urgent</option>
                                 </select>
-                                <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">
-                                    AI personality: tone, pace, volume, emotion
-                                </p>
                             </div>
                         </div>
 
@@ -3749,89 +3661,6 @@ Just checking in..."></textarea>
                     </div>
                 </div>
 
-                <!-- TAB 5: TEST & PREVIEW (LIVE MATCH TRACE) -->
-                <div id="content-test" class="scenario-tab-content" style="display: none;">
-                    <div style="display: grid; gap: 28px;">
-                        
-                        <!-- Live Test Panel -->
-                        <div style="border: 3px solid #7c3aed; background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border-radius: 16px; padding: 24px;">
-                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
-                                <i class="fas fa-flask" style="font-size: 32px; color: #7c3aed;"></i>
-                                <div>
-                                    <h3 style="margin: 0; font-size: 22px; font-weight: 700; color: #5b21b6;">Live Trigger Testing</h3>
-                                    <p style="margin: 4px 0 0; color: #6b21a8; font-size: 14px;">Test if this scenario would match a caller's phrase</p>
-                                </div>
-                            </div>
-                            
-                            <!-- Test Input -->
-                            <div style="margin-bottom: 20px;">
-                                <label style="display: block; font-weight: 600; color: #5b21b6; margin-bottom: 10px; font-size: 15px;">
-                                    <i class="fas fa-keyboard mr-2"></i>Test Phrase (what caller would say):
-                                </label>
-                                <input type="text" id="test-phrase-input" placeholder='Try: "can you hold for a moment" or "I need to schedule an appointment"' style="width: 100%; padding: 16px 20px; border: 3px solid #a78bfa; border-radius: 12px; font-size: 16px; background: white; font-weight: 500;" onkeypress="if(event.key==='Enter'){event.preventDefault();testScenarioMatch();}">
-                                <button type="button" onclick="testScenarioMatch()" style="margin-top: 12px; background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); color: white; border: none; padding: 14px 28px; border-radius: 10px; font-weight: 700; font-size: 16px; cursor: pointer; box-shadow: 0 4px 12px rgba(124,58,237,0.4); transition: all 0.3s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                                    <i class="fas fa-play mr-2"></i>Test Match
-                                </button>
-                            </div>
-                            
-                            <!-- Results Area -->
-                            <div id="test-results" style="display: none; margin-top: 24px;">
-                                <!-- Results will be injected here by JavaScript -->
-                            </div>
-                        </div>
-
-                        <!-- Current Scenario Preview -->
-                        <div style="border: 2px solid #e9ecef; background: #f8f9fa; border-radius: 12px; padding: 20px;">
-                            <h4 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 700; color: #2c3e50;">
-                                <i class="fas fa-eye text-blue-600 mr-2"></i>Current Scenario Configuration
-                            </h4>
-                            <div id="scenario-preview" style="display: grid; gap: 12px; font-size: 14px;">
-                                <!-- Preview will be dynamically generated -->
-                            </div>
-                            <button type="button" onclick="updateScenarioPreview()" style="margin-top: 16px; background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                                <i class="fas fa-sync mr-2"></i>Refresh Preview
-                            </button>
-                        </div>
-
-                        <!-- Help / Tips -->
-                        <details style="border: 2px solid #dbeafe; background: #eff6ff; border-radius: 10px; padding: 18px;">
-                            <summary style="cursor: pointer; font-weight: 600; color: #1e40af; font-size: 15px;">
-                                <i class="fas fa-lightbulb mr-2"></i>💡 Testing Tips & Best Practices
-                            </summary>
-                            <div style="margin-top: 16px; color: #1e40af; font-size: 14px; line-height: 1.8;">
-                                <p style="margin: 0 0 12px 0;"><strong>🎯 Trigger Matching:</strong></p>
-                                <ul style="margin: 0 0 16px 20px; padding: 0;">
-                                    <li>Triggers are matched using <strong>keyword matching</strong> (not exact phrases)</li>
-                                    <li>Order doesn't matter: "hold please" = "please hold"</li>
-                                    <li>Case-insensitive: "HOLD" = "hold" = "Hold"</li>
-                                </ul>
-                                
-                                <p style="margin: 0 0 12px 0;"><strong>🚫 Negative Triggers:</strong></p>
-                                <ul style="margin: 0 0 16px 20px; padding: 0;">
-                                    <li>If ANY negative trigger appears, scenario will NOT match</li>
-                                    <li>Use to prevent false positives: "don't hold" should NOT trigger "Hold Request"</li>
-                                </ul>
-                                
-                                <p style="margin: 0 0 12px 0;"><strong>🔧 Regex Triggers:</strong></p>
-                                <ul style="margin: 0 0 16px 20px; padding: 0;">
-                                    <li>Advanced pattern matching for power users</li>
-                                    <li>Example: <code>\b(hold|wait)\s*(on|up)?\b</code> matches "hold", "wait", "hold on", "wait up"</li>
-                                    <li>Use for phone numbers, dates, specific patterns</li>
-                                </ul>
-                                
-                                <p style="margin: 0 0 12px 0;"><strong>📊 Confidence & Priority:</strong></p>
-                                <ul style="margin: 0 0 0 20px; padding: 0;">
-                                    <li><strong>Min Confidence:</strong> How sure the AI must be (0.7 = 70% confident)</li>
-                                    <li><strong>Priority:</strong> Tie-breaker if multiple scenarios match at same confidence</li>
-                                    <li>Emergency scenarios: high confidence (0.9+) and high priority (8-10)</li>
-                                    <li>Chitchat scenarios: low confidence (0.5) and low priority (-3 to 0)</li>
-                                </ul>
-                            </div>
-                        </details>
-
-                    </div>
-                </div>
-
             </form>
 
             <!-- FIXED FOOTER -->
@@ -3839,16 +3668,68 @@ Just checking in..."></textarea>
                 <button type="button" onclick="closeScenarioModal()" style="background: white; color: #6c757d; border: 2px solid #dee2e6; padding: 14px 32px; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; transition: all 0.3s;">
                     <i class="fas fa-times mr-2"></i>Cancel
                 </button>
-                <div style="display: flex; gap: 12px;">
-                    <button type="button" onclick="saveScenarioAsDraft()" style="background: #ffc107; color: #000; border: none; padding: 14px 28px; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 12px rgba(255,193,7,0.3);">
-                        <i class="fas fa-save mr-2"></i>Save as Draft
-                    </button>
-                    <button type="button" onclick="saveScenarioAsLive()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 14px 32px; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 12px rgba(102,126,234,0.4);">
-                        <i class="fas fa-rocket mr-2"></i>Save & Publish Live
-                    </button>
-                </div>
+
+    <!-- ============================================ -->
+    <!-- EDIT TEMPLATE MODAL -->
+    <!-- ============================================ -->
+    <!-- ================================================ -->
+    <!-- OLD EDIT TEMPLATE MODAL REMOVED - 2025-10-10    -->
+    <!-- Replaced with edit-template-metadata-modal       -->
+    <!-- ================================================ -->
+
+    <!-- ============================================ -->
+    <!-- EDIT AI BRAIN CATEGORY MODAL (OVERVIEW TAB) -->
+    <!-- ============================================ -->
+    <div id="edit-category-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 16px; max-width: 600px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+            <div style="display: flex; align-items: center; justify-content: between; margin-bottom: 20px;">
+                <h2 style="font-size: 28px; font-weight: 700; color: #2c3e50; margin: 0;">
+                    <i class="fas fa-edit text-blue-600 mr-2"></i>
+                    Edit AI Brain Category
+                </h2>
+                <button onclick="closeEditCategoryModal()" style="background: none; border: none; font-size: 32px; color: #95a5a6; cursor: pointer;">
+                    &times;
+                </button>
             </div>
 
+            <form id="edit-category-form">
+                <!-- Category Name -->
+                <div class="mb-4">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Category Name *</label>
+                    <input type="text" id="edit-category-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+
+                <!-- Description -->
+                <div class="mb-4">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Description *</label>
+                    <textarea id="edit-category-description" required rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
+                </div>
+
+                <!-- Icon & Behavior -->
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Icon (Emoji)</label>
+                        <input type="text" id="edit-category-icon" maxlength="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-center text-3xl">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Behavior Template *</label>
+                        <select id="edit-category-behavior" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="">Loading behaviors...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
+                    <button type="button" onclick="closeEditCategoryModal()" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2">
+                        <i class="fas fa-save"></i>
+                        Save Changes
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -6466,87 +6347,10 @@ Continue?`;
         }
 
         // ============================================
-        // BIG 4-PAGE MODAL FUNCTIONS (RESTORED FROM c75c5db1)
+        // POPULATE SCENARIO FORM (FOR EDIT MODE)
         // ============================================
-
-        async function openAddScenarioModal(categoryId, categoryName) {
-            console.log(`🎨 [ADD SCENARIO] Opening modal for category: ${categoryName} (${categoryId})`);
-            
-            currentScenarioEditMode = 'add';
-            currentScenarioData = { categoryId, categoryName };
-            
-            // Update modal title
-            document.getElementById('scenario-modal-action').textContent = 'Add';
-            document.getElementById('scenario-category-name').textContent = categoryName;
-            
-            // Reset form
-            document.getElementById('scenario-form').reset();
-            
-            // Populate behavior dropdown dynamically from database
-            await fetchBehaviors(); // Refresh from DB
-            populateBehaviorDropdown('scenario-behavior');
-            
-            // Load inherited fillers/synonyms
-            if (typeof loadScenarioInheritedConfig === 'function') {
-                await loadScenarioInheritedConfig(activeTemplateId, categoryId);
-            }
-            
-            // Switch to first tab
-            switchScenarioTab('basic');
-            
-            // Show modal
-            document.getElementById('scenario-modal').style.display = 'flex';
-        }
-
-        /**
-         * Open scenario modal for editing an existing scenario
-         */
-        async function openEditScenarioModal(categoryId, categoryName, scenarioId) {
-            console.log(`✏️ [EDIT SCENARIO] Opening modal for: ${scenarioId} in ${categoryName}`);
-            
-            currentScenarioEditMode = 'edit';
-            currentScenarioData = { categoryId, categoryName, scenarioId };
-            
-            // Update modal title
-            document.getElementById('scenario-modal-action').textContent = 'Edit';
-            document.getElementById('scenario-category-name').textContent = categoryName;
-            
-            // Populate behavior dropdown dynamically from database (must do before fetching scenario data)
-            await fetchBehaviors(); // Refresh from DB
-            populateBehaviorDropdown('scenario-behavior');
-            
-            // Fetch scenario data
-            try {
-                const token = getAuthToken();
-                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplateId}/categories/${categoryId}/scenarios/${scenarioId}`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                
-                const { data } = await response.json();
-                populateScenarioForm(data);
-                
-                // Load inherited fillers/synonyms
-                if (typeof loadScenarioInheritedConfig === 'function') {
-                    await loadScenarioInheritedConfig(activeTemplateId, categoryId);
-                }
-                
-                // Switch to first tab
-                switchScenarioTab('basic');
-                
-                // Show modal
-                document.getElementById('scenario-modal').style.display = 'flex';
-                
-            } catch (error) {
-                console.error('❌ [EDIT SCENARIO] Error:', error);
-                alert('Failed to load scenario data: ' + error.message);
-            }
-        }
-
-        /**
-         * Populate form with scenario data (for edit mode)
-         */
+        // RESTORED: EXACT original from commit 88a7ed8d
+        
         function populateScenarioForm(data) {
             console.log('📝 [POPULATE FORM] Loading scenario data:', data);
             
@@ -6556,14 +6360,8 @@ Continue?`;
             document.getElementById('scenario-priority').value = data.priority || 0;
             document.getElementById('scenario-triggers').value = (data.triggers || []).join('\n');
             document.getElementById('scenario-negative-triggers').value = (data.negativeTriggers || []).join('\n');
-            document.getElementById('scenario-regex-triggers').value = (data.regexTriggers || []).join('\n'); // NEW: Load regex patterns
             document.getElementById('scenario-context-weight').value = data.contextWeight || 0.7;
-            
-            // Update confidence display
-            const confidencePercent = ((data.contextWeight || 0.7) * 100).toFixed(0);
-            document.getElementById('confidence-value').textContent = confidencePercent + '%';
-            
-            document.getElementById('scenario-behavior').value = data.behavior || '';
+            document.getElementById('scenario-tone-level').value = data.toneLevel || 2;
             document.getElementById('scenario-channel').value = data.channel || 'any';
             document.getElementById('scenario-language').value = data.language || 'auto';
             
@@ -6582,25 +6380,8 @@ Continue?`;
                 document.getElementById('scenario-dynamic-variables').value = varLines.join('\n');
             }
             
-            // Entity validation - handle both Map and Object
-            if (data.entityValidation) {
-                try {
-                    let entityValObj;
-                    if (data.entityValidation instanceof Map) {
-                        entityValObj = Object.fromEntries(data.entityValidation);
-                    } else if (typeof data.entityValidation === 'object') {
-                        entityValObj = data.entityValidation;
-                    } else {
-                        entityValObj = {};
-                    }
-                    document.getElementById('scenario-entity-validation').value = JSON.stringify(entityValObj, null, 2);
-                } catch (e) {
-                    console.error('⚠️ [POPULATE] entityValidation error:', e);
-                    document.getElementById('scenario-entity-validation').value = '';
-                }
-            } else {
-                document.getElementById('scenario-entity-validation').value = '';
-            }
+            document.getElementById('scenario-entity-validation').value = 
+                data.entityValidation ? JSON.stringify(Object.fromEntries(data.entityValidation), null, 2) : '';
             
             // Advanced Settings Tab
             document.getElementById('scenario-cooldown').value = data.cooldownSeconds || 0;
@@ -6627,53 +6408,21 @@ Continue?`;
                 document.getElementById('scenario-tts-volume').value = data.ttsOverride.volume || '';
             }
             
-            // Preconditions - handle both Map and Object
-            if (data.preconditions) {
-                try {
-                    let precondObj;
-                    if (data.preconditions instanceof Map) {
-                        precondObj = Object.fromEntries(data.preconditions);
-                    } else if (typeof data.preconditions === 'object') {
-                        precondObj = data.preconditions;
-                    } else {
-                        precondObj = {};
-                    }
-                    document.getElementById('scenario-preconditions').value = JSON.stringify(precondObj, null, 2);
-                } catch (e) {
-                    console.error('⚠️ [POPULATE] preconditions error:', e);
-                    document.getElementById('scenario-preconditions').value = '';
-                }
-            } else {
-                document.getElementById('scenario-preconditions').value = '';
-            }
-            
-            // Effects - handle both Map and Object
-            if (data.effects) {
-                try {
-                    let effectsObj;
-                    if (data.effects instanceof Map) {
-                        effectsObj = Object.fromEntries(data.effects);
-                    } else if (typeof data.effects === 'object') {
-                        effectsObj = data.effects;
-                    } else {
-                        effectsObj = {};
-                    }
-                    document.getElementById('scenario-effects').value = JSON.stringify(effectsObj, null, 2);
-                } catch (e) {
-                    console.error('⚠️ [POPULATE] effects error:', e);
-                    document.getElementById('scenario-effects').value = '';
-                }
-            } else {
-                document.getElementById('scenario-effects').value = '';
-            }
+            // Preconditions & Effects (JSON)
+            document.getElementById('scenario-preconditions').value = 
+                data.preconditions ? JSON.stringify(Object.fromEntries(data.preconditions), null, 2) : '';
+            document.getElementById('scenario-effects').value = 
+                data.effects ? JSON.stringify(Object.fromEntries(data.effects), null, 2) : '';
             
             // Action Hooks
             document.getElementById('scenario-action-hooks').value = (data.actionHooks || []).join(', ');
         }
 
-        /**
-         * Switch between tabs in scenario modal
-         */
+        // ============================================
+        // SCENARIO MODAL TAB SWITCHING
+        // ============================================
+        // RESTORED: These functions were accidentally deleted during refactor
+        
         function switchScenarioTab(tabName) {
             console.log(`🔄 [SCENARIO TAB] Switching to: ${tabName}`);
             
@@ -6706,39 +6455,8 @@ Continue?`;
             console.log('❌ [SCENARIO MODAL] Closing...');
             document.getElementById('scenario-modal').style.display = 'none';
             document.getElementById('scenario-form').reset();
-            currentScenarioData = null;
         }
 
-        // ============================================
-        // QUICK ADD FILLER MODAL
-        // ============================================
-        
-        let quickFillerScope = 'template'; // default: template
-
-        function openQuickAddFillerModal() {
-            console.log('🚀 [QUICK ADD FILLER] Opening modal...');
-            
-            // Reset
-            document.getElementById('quick-filler-input').value = '';
-            quickFillerScope = 'template';
-            selectQuickFillerScope('template');
-            
-            // Show modal
-            document.getElementById('quick-add-filler-modal').style.display = 'flex';
-        }
-
-        function closeQuickAddFillerModal() {
-            console.log('❌ [QUICK ADD FILLER] Closing modal...');
-            document.getElementById('quick-add-filler-modal').style.display = 'none';
-        }
-
-
-
-        // ============================================
-        // POPULATE SCENARIO FORM (FOR EDIT MODE)
-        // ============================================
-        // RESTORED: EXACT original from commit 88a7ed8d
-        
         function closeAddScenarioModal() {
             document.getElementById('add-scenario-modal').style.display = 'none';
             currentAddingCategory = null;
