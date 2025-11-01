@@ -6168,51 +6168,6 @@ Continue?`;
             
             // Switch to first tab
             switchScenarioTab('basic');
-
-            // Populate Smart Hold fields
-            const smartHoldEnabled = scenario.enableSmartHold || false;
-            document.getElementById('edit-scenario-smart-hold-enabled').checked = smartHoldEnabled;
-            
-            if (smartHoldEnabled && scenario.smartHoldConfig) {
-                const config = scenario.smartHoldConfig;
-                
-                // Timeout intervals
-                const intervals = config.timeoutIntervals || [60, 120, 180];
-                document.getElementById('edit-smart-hold-interval-1').value = intervals[0] || 60;
-                document.getElementById('edit-smart-hold-interval-2').value = intervals[1] || 120;
-                document.getElementById('edit-smart-hold-interval-3').value = intervals[2] || 180;
-                
-                // Max duration
-                document.getElementById('edit-smart-hold-max-duration').value = config.maxDuration || 300;
-                
-                // Check-in messages
-                document.getElementById('edit-smart-hold-checkin-messages').value = (config.checkInMessages || []).join('\n');
-                
-                // Max duration message
-                document.getElementById('edit-smart-hold-max-message').value = config.maxDurationMessage || '';
-                
-                // Active listening
-                document.getElementById('edit-smart-hold-active-listening').checked = config.activeListening !== false;
-            } else {
-                // Set defaults
-                document.getElementById('edit-smart-hold-interval-1').value = 60;
-                document.getElementById('edit-smart-hold-interval-2').value = 120;
-                document.getElementById('edit-smart-hold-interval-3').value = 180;
-                document.getElementById('edit-smart-hold-max-duration').value = 300;
-                document.getElementById('edit-smart-hold-checkin-messages').value = "I'm still here — take your time.\nNo rush — I'm right here when you're ready.\nStill here for you — let me know when you're set.";
-                document.getElementById('edit-smart-hold-max-message').value = "I want to make sure I'm still helping — would you like me to call you back when you're ready?";
-                document.getElementById('edit-smart-hold-active-listening').checked = true;
-            }
-            
-            // Show/hide smart hold options based on toggle
-            toggleSmartHoldOptions();
-        }
-        
-        // Toggle Smart Hold options visibility
-        function toggleSmartHoldOptions() {
-            const enabled = document.getElementById('edit-scenario-smart-hold-enabled').checked;
-            const optionsDiv = document.getElementById('smart-hold-options');
-            optionsDiv.style.display = enabled ? 'block' : 'none';
         }
 
 
