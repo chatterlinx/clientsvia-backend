@@ -6983,13 +6983,15 @@ Continue?`;
             // REMOVED: Behavior dropdown population (scenarios control their own behavior)
             
             // Show modal
-            document.getElementById('category-modal').classList.remove('hidden');
-            document.getElementById('category-modal').classList.add('flex');
+            const modal = document.getElementById('category-modal');
+            modal.classList.remove('hidden');
+            modal.style.display = 'block';
         }
 
         function closeCategoryModal() {
-            document.getElementById('category-modal').classList.add('hidden');
-            document.getElementById('category-modal').classList.remove('flex');
+            const modal = document.getElementById('category-modal');
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
             
             // Clear category form data (fillers & synonyms)
             if (typeof clearCategoryForm === 'function') {
