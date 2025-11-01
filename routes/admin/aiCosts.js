@@ -12,11 +12,14 @@ const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const OpenAICostSync = require('../../services/OpenAICostSync');
 const logger = require('../../utils/logger');
 
+// Admin-only middleware
+const adminOnly = requireRole('admin');
+
 /**
  * GET /api/admin/ai-costs/current-month
  * Get current month costs across all templates
  */
-router.get('/current-month', authenticateJWT, requireRole(['admin']), async (req, res) => {
+router.get('/current-month', authenticateJWT, adminOnly, async (req, res) => {
     try {
         logger.info('📊 [AI COSTS API] Fetching current month costs');
         
@@ -41,7 +44,7 @@ router.get('/current-month', authenticateJWT, requireRole(['admin']), async (req
  * GET /api/admin/ai-costs/template/:templateId
  * Get costs and budget status for a specific template
  */
-router.get('/template/:templateId', authenticateJWT, requireRole(['admin']), async (req, res) => {
+router.get('/template/:templateId', authenticateJWT, adminOnly, async (req, res) => {
     try {
         const { templateId } = req.params;
         
@@ -68,7 +71,7 @@ router.get('/template/:templateId', authenticateJWT, requireRole(['admin']), asy
  * GET /api/admin/ai-costs/recommendations/:templateId
  * Get optimization recommendations for a template
  */
-router.get('/recommendations/:templateId', authenticateJWT, requireRole(['admin']), async (req, res) => {
+router.get('/recommendations/:templateId', authenticateJWT, adminOnly, async (req, res) => {
     try {
         const { templateId } = req.params;
         
@@ -95,7 +98,7 @@ router.get('/recommendations/:templateId', authenticateJWT, requireRole(['admin'
  * POST /api/admin/ai-costs/check-budget/:templateId
  * Manually trigger budget check and send alerts if needed
  */
-router.post('/check-budget/:templateId', authenticateJWT, requireRole(['admin']), async (req, res) => {
+router.post('/check-budget/:templateId', authenticateJWT, adminOnly, async (req, res) => {
     try {
         const { templateId } = req.params;
         
