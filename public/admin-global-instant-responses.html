@@ -1597,10 +1597,16 @@
                                 </p>
                             </div>
                         </div>
-                        <button onclick="refreshLiveTestMonitor()" class="px-4 py-2 bg-white text-purple-600 hover:bg-purple-50 rounded-lg font-semibold transition-all flex items-center gap-2 shadow-md">
-                            <i class="fas fa-sync-alt"></i>
-                            Refresh
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <button onclick="clearLiveTestMonitor()" class="px-4 py-2 bg-white text-red-600 hover:bg-red-50 rounded-lg font-semibold transition-all flex items-center gap-2 shadow-md">
+                                <i class="fas fa-trash"></i>
+                                Clear
+                            </button>
+                            <button onclick="refreshLiveTestMonitor()" class="px-4 py-2 bg-white text-purple-600 hover:bg-purple-50 rounded-lg font-semibold transition-all flex items-center gap-2 shadow-md">
+                                <i class="fas fa-sync-alt"></i>
+                                Refresh
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Content -->
@@ -10628,6 +10634,31 @@ Continue?`;
             } else {
                 suggestionsPanel.classList.add('hidden');
             }
+        }
+        
+        function clearLiveTestMonitor() {
+            console.log('🧹 [LIVE TEST MONITOR] Clearing display...');
+            
+            const emptyState = document.getElementById('live-test-empty-state');
+            const resultsGrid = document.getElementById('live-test-results-grid');
+            const suggestionsPanel = document.getElementById('live-test-suggestions-panel');
+            const testCount = document.getElementById('live-test-count');
+            
+            // Show empty state
+            emptyState.classList.remove('hidden');
+            resultsGrid.classList.add('hidden');
+            suggestionsPanel.classList.add('hidden');
+            testCount.textContent = '0 tests';
+            
+            // Update phone number display
+            const phoneDisplay = document.getElementById('live-test-phone-display');
+            if (phoneDisplay && window.globalTwilioTestConfig?.phoneNumber) {
+                phoneDisplay.textContent = window.globalTwilioTestConfig.phoneNumber;
+            } else {
+                phoneDisplay.textContent = 'Loading...';
+            }
+            
+            console.log('✅ [LIVE TEST MONITOR] Display cleared - ready for fresh tests!');
         }
         
         // Auto-refresh Live Test Monitor when template changes
