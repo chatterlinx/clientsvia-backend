@@ -4069,6 +4069,8 @@ Just checking in..."></textarea>
         let activeTemplateId = null;
         let currentScenarioCount = 0;
         let availableBehaviors = []; // Loaded dynamically from database
+        let currentScenarioEditMode = null; // 'add' or 'edit'
+        let currentScenarioData = null; // { categoryId, categoryName, scenarioId }
 
         // ============================================
         // AUTHENTICATION
@@ -6421,9 +6423,19 @@ Continue?`;
                 return;
             }
             
+            // Set edit mode and current data for save functions
+            currentScenarioEditMode = 'add';
+            currentScenarioData = { 
+                categoryId: category.id, 
+                categoryName: category.name 
+            };
+            
             // Update modal title and category name
             document.getElementById('scenario-modal-action').textContent = 'Add';
             document.getElementById('scenario-category-name').textContent = category.name;
+            
+            // Reset form
+            document.getElementById('scenario-form').reset();
             
             // Open the BIG 4-page scenario modal
             document.getElementById('scenario-modal').style.display = 'flex';
@@ -6674,6 +6686,193 @@ Continue?`;
             document.getElementById('scenario-modal').style.display = 'none';
             document.getElementById('scenario-form').reset();
             currentScenarioData = null;
+        }
+
+        /**
+         * Save scenario as DRAFT
+         */
+        async function saveScenarioAsDraft() {
+            console.log('💾 [SAVE DRAFT] Saving scenario as draft...');
+            await saveScenario('draft');
+        }
+
+        /**
+         * Save scenario as LIVE (Published)
+         */
+        async function saveScenarioAsLive() {
+            console.log('🚀 [SAVE LIVE] Publishing scenario as live...');
+            await saveScenario('live');
+        }
+
+        /**
+         * Core save logic for scenarios
+         */
+        async function saveScenario(status) {
+            console.log(`💾 [SAVE SCENARIO] Mode: ${currentScenarioEditMode}, Status: ${status}`);
+            
+            // Validate required fields
+            const name = document.getElementById('scenario-name').value.trim();
+            const triggers = document.getElementById('scenario-triggers').value.trim();
+            const quickReplies = document.getElementById('scenario-quick-replies').value.trim();
+            const fullReplies = document.getElementById('scenario-full-replies').value.trim();
+            
+            if (!name || !triggers || !quickReplies || !fullReplies) {
+                alert('Please fill all required fields: Scenario Name, Triggers, Quick Replies, Full Replies');
+                return;
+            }
+            
+            // Build scenario data object
+            const scenarioData = {
+                name,
+                status,
+                priority: parseInt(document.getElementById('scenario-priority').value) || 0,
+                triggers: triggers.split('\n').filter(t => t.trim()),
+                negativeTriggers: document.getElementById('scenario-negative-triggers').value.split('\n').filter(t => t.trim()),
+                regexTriggers: document.getElementById('scenario-regex-triggers').value.split('\n').filter(t => t.trim()),
+                contextWeight: parseFloat(document.getElementById('scenario-context-weight').value) || 0.7,
+                behavior: document.getElementById('scenario-behavior').value || null,
+                channel: document.getElementById('scenario-channel').value || 'any',
+                language: document.getElementById('scenario-language').value || 'auto',
+                
+                quickReplies: quickReplies.split('\n').filter(r => r.trim()),
+                fullReplies: fullReplies.split('\n').filter(r => r.trim()),
+                followUpFunnel: document.getElementById('scenario-followup-funnel').value.trim(),
+                replySelection: document.getElementById('scenario-reply-selection').value || 'random',
+                
+                entityCapture: document.getElementById('scenario-entity-capture').value.split('\n').filter(e => e.trim()),
+                dynamicVariables: parseDynamicVariables(document.getElementById('scenario-dynamic-variables').value),
+                entityValidation: tryParseJSON(document.getElementById('scenario-entity-validation').value),
+                
+                cooldownSeconds: parseInt(document.getElementById('scenario-cooldown').value) || 0,
+                handoffPolicy: document.getElementById('scenario-handoff-policy').value || 'low_confidence',
+                
+                timedFollowUp: {
+                    enabled: document.getElementById('scenario-timed-enabled').checked,
+                    delaySeconds: parseInt(document.getElementById('scenario-timed-delay').value) || 50,
+                    extensionSeconds: parseInt(document.getElementById('scenario-timed-extension').value) || 30,
+                    messages: document.getElementById('scenario-timed-messages').value.split('\n').filter(m => m.trim())
+                },
+                
+                silencePolicy: {
+                    maxConsecutive: parseInt(document.getElementById('scenario-silence-max').value) || 2,
+                    finalWarning: document.getElementById('scenario-silence-warning').value.trim() || 'Hello? Did I lose you?'
+                },
+                
+                ttsOverride: {
+                    pitch: document.getElementById('scenario-tts-pitch').value || undefined,
+                    rate: document.getElementById('scenario-tts-rate').value || undefined,
+                    volume: document.getElementById('scenario-tts-volume').value || undefined
+                },
+                
+                preconditions: tryParseJSON(document.getElementById('scenario-preconditions').value),
+                effects: tryParseJSON(document.getElementById('scenario-effects').value),
+                
+                actionHooks: document.getElementById('scenario-action-hooks').value.split(',').map(h => h.trim()).filter(Boolean)
+            };
+            
+            console.log('📦 [SAVE SCENARIO] Built data:', scenarioData);
+            
+            try {
+                let response;
+                
+                const token = getAuthToken();
+                
+                if (currentScenarioEditMode === 'add') {
+                    // CREATE new scenario
+                    const url = `/api/admin/global-instant-responses/${activeTemplateId}/categories/${currentScenarioData.categoryId}/scenarios`;
+                    console.log(`🚀 [CREATE] POST to: ${url}`);
+                    
+                    response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`
+                        },
+                        body: JSON.stringify(scenarioData)
+                    });
+                    
+                } else {
+                    // UPDATE existing scenario
+                    const url = `/api/admin/global-instant-responses/${activeTemplateId}/categories/${currentScenarioData.categoryId}/scenarios/${currentScenarioData.scenarioId}`;
+                    console.log(`🔧 [UPDATE] PATCH to: ${url}`);
+                    
+                    response = await fetch(url, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`
+                        },
+                        body: JSON.stringify(scenarioData)
+                    });
+                }
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || `HTTP ${response.status}`);
+                }
+                
+                const result = await response.json();
+                console.log('✅ [SAVE SCENARIO] Success:', result);
+                
+                showNotification(`✅ Scenario "${name}" ${status === 'live' ? 'published' : 'saved as draft'} successfully!`, 'success');
+                
+                // Close modal
+                closeScenarioModal();
+                
+                // Refresh the active template to show new/updated scenario
+                await switchDashboardTemplate(activeTemplateId);
+                
+            } catch (error) {
+                console.error('❌ [SAVE SCENARIO] Error:', error);
+                showNotification('❌ Failed to save scenario: ' + error.message, 'error');
+                
+                // Report error to Notification Center
+                if (window.errorReporters && window.errorReporters.scenarios) {
+                    await errorReporters.scenarios.reportError({
+                        error,
+                        operation: currentScenarioEditMode === 'add' ? 'createScenario' : 'updateScenario',
+                        userMessage: `Failed to ${currentScenarioEditMode === 'add' ? 'create' : 'update'} scenario "${name}". Changes were not saved.`,
+                        retryFunction: () => saveScenario(status),
+                        additionalContext: {
+                            endpoint: currentScenarioEditMode === 'add' 
+                                ? `/api/admin/global-instant-responses/${activeTemplateId}/categories/${currentScenarioData.categoryId}/scenarios`
+                                : `/api/admin/global-instant-responses/${activeTemplateId}/categories/${currentScenarioData.categoryId}/scenarios/${currentScenarioData.scenarioId}`,
+                            templateId: activeTemplateId,
+                            categoryId: currentScenarioData.categoryId,
+                            scenarioId: currentScenarioData.scenarioId,
+                            scenarioName: name,
+                            mode: currentScenarioEditMode,
+                            status: status
+                        }
+                    });
+                }
+            }
+        }
+
+        /**
+         * Parse dynamic variables from key=value format to object
+         */
+        function parseDynamicVariables(text) {
+            const lines = text.split('\n').filter(l => l.trim() && l.includes('='));
+            const obj = {};
+            lines.forEach(line => {
+                const [key, ...valueParts] = line.split('=');
+                obj[key.trim()] = valueParts.join('=').trim();
+            });
+            return obj;
+        }
+
+        /**
+         * Try to parse JSON, return null if invalid
+         */
+        function tryParseJSON(text) {
+            if (!text || !text.trim()) return null;
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.warn('⚠️ Invalid JSON, returning null:', text);
+                return null;
+            }
         }
 
         // ============================================
