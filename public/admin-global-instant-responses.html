@@ -11290,7 +11290,99 @@ Continue?`;
             }
         }
         
+        // ============================================================================
+        // 🎨 COLOR-CODED TRANSCRIPT HELPERS
+        // ============================================================================
+        
+        /**
+         * Generate color-coded transcript HTML from test result
+         * Colors indicate how AI understood each word:
+         * 🔵 BLUE = Filler (ignored)
+         * 🟢 GREEN = Synonym (translated)
+         * 🟡 YELLOW = Keyword (context)
+         * 🔴 RED = Trigger (caused match)
+         * 🟣 PURPLE = LLM suggestion (should add)
+         */
+        function generateColorCodedTranscript(result) {
+            // Check if we have enterprise analysis with colored transcript
+            if (result.enterpriseAnalysis?.coloredTranscript) {
+                const colored = result.enterpriseAnalysis.coloredTranscript;
+                
+                // If we have pre-generated HTML, use it
+                if (colored.html) {
+                    return colored.html;
+                }
+                
+                // Otherwise, generate from coloredWords array
+                if (colored.coloredWords && Array.isArray(colored.coloredWords)) {
+                    return colored.coloredWords.map(wordObj => {
+                        const colorClass = getColorClass(wordObj.colorName || wordObj.classification);
+                        const tooltip = escapeHtml(wordObj.tooltip || wordObj.reason || '');
+                        return `<span class="${colorClass}" title="${tooltip}">${escapeHtml(wordObj.word || wordObj.original)}</span>`;
+                    }).join(' ');
+                }
+            }
+            
+            // Fallback: Simple phrase display without coloring
+            return escapeHtml(result.phrase || 'No transcript available');
+        }
+        
+        /**
+         * Get CSS class for word color coding
+         */
+        function getColorClass(classification) {
+            const colorMap = {
+                'TRIGGER': 'text-red-700 font-bold',
+                'trigger': 'text-red-700 font-bold',
+                'SYNONYM': 'text-green-700 font-semibold',
+                'synonym': 'text-green-700 font-semibold',
+                'KEYWORD': 'text-yellow-700 font-semibold',
+                'keyword': 'text-yellow-700 font-semibold',
+                'FILLER': 'text-blue-500',
+                'filler': 'text-blue-500',
+                'SUGGESTION': 'text-purple-700 font-bold underline',
+                'suggestion': 'text-purple-700 font-bold underline',
+                'CONTEXT': 'text-gray-700',
+                'context': 'text-gray-700'
+            };
+            
+            return colorMap[classification] || 'text-gray-700';
+        }
+        
+        /**
+         * Get priority badge HTML
+         */
+        function getPriorityBadge(priority) {
+            const priorityUpper = (priority || 'MEDIUM').toUpperCase();
+            
+            const badges = {
+                'CRITICAL': '<span class="px-2 py-1 bg-red-600 text-white text-xs font-bold rounded">🔥 CRITICAL</span>',
+                'HIGH': '<span class="px-2 py-1 bg-orange-500 text-white text-xs font-bold rounded">⚠️ HIGH</span>',
+                'MEDIUM': '<span class="px-2 py-1 bg-yellow-500 text-white text-xs font-bold rounded">📌 MEDIUM</span>',
+                'LOW': '<span class="px-2 py-1 bg-blue-500 text-white text-xs font-bold rounded">ℹ️ LOW</span>'
+            };
+            
+            return badges[priorityUpper] || badges['MEDIUM'];
+        }
+        
+        // ============================================================================
+        // 🧪 LIVE TEST MONITOR - MAIN RENDERER
+        // ============================================================================
+        
+        /**
+         * ============================================================================
+         * RENDER LIVE TEST MONITOR - ENTERPRISE EDITION
+         * ============================================================================
+         * Enhanced version with:
+         * - Color-coded transcripts (🔵🟢🟡🔴🟣)
+         * - Enterprise analysis display
+         * - Priority suggestions
+         * - Conflict warnings
+         * ============================================================================
+         */
         function renderLiveTestMonitor(results) {
+            console.log('🎨 [LIVE TEST MONITOR] Rendering', results.length, 'results');
+            
             const emptyState = document.getElementById('live-test-empty-state');
             const resultsGrid = document.getElementById('live-test-results-grid');
             const suggestionsPanel = document.getElementById('live-test-suggestions-panel');
@@ -11310,38 +11402,117 @@ Continue?`;
             resultsGrid.classList.remove('hidden');
             testCount.textContent = `${results.length} test${results.length > 1 ? 's' : ''}`;
             
-            // Render test results (compact cards)
+            // ============================================
+            // RENDER TEST RESULTS WITH ENTERPRISE FEATURES
+            // ============================================
             resultsGrid.innerHTML = results.map((result, index) => {
                 const timeAgo = getTimeAgo(new Date(result.timestamp));
                 const confidencePercent = Math.round(result.confidence * 100);
                 const statusColor = result.matched ? 'green' : 'red';
                 const statusIcon = result.matched ? '✅' : '❌';
                 
+                // Check if enterprise analysis is available
+                const hasEnterpriseAnalysis = result.enterpriseAnalysis && result.enterpriseAnalysis.analyzed;
+                const enterpriseMode = result.enterpriseAnalysis?.mode || 'BASIC';
+                
+                // Generate color-coded transcript HTML
+                const transcriptHTML = generateColorCodedTranscript(result);
+                
+                // Get AI response time if available
+                const aiResponseTime = result.timing?.ai || result.timing?.llm || null;
+                
                 return `
-                    <div class="bg-white rounded-lg border-2 border-${statusColor}-200 p-4 shadow-sm hover:shadow-md transition-shadow">
-                        <div class="flex items-start justify-between mb-2">
-                            <div class="flex-1">
-                                <div class="flex items-center gap-2 mb-2">
-                                    <span class="text-xl">${statusIcon}</span>
-                                    <div class="flex-1">
-                                        <div class="font-bold text-${statusColor}-800 text-sm">${result.matched ? 'MATCHED' : 'NO MATCH'}</div>
-                                        <div class="text-xs text-gray-600">${timeAgo}</div>
+                    <div class="bg-white rounded-lg border-2 border-${statusColor}-200 p-5 shadow-md hover:shadow-xl transition-all">
+                        <!-- Header Row -->
+                        <div class="flex items-start justify-between mb-3">
+                            <div class="flex items-center gap-3 flex-1">
+                                <span class="text-2xl">${statusIcon}</span>
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <div class="font-bold text-${statusColor}-800">${result.matched ? 'MATCHED' : 'NO MATCH'}</div>
+                                        ${hasEnterpriseAnalysis ? `
+                                            <span class="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-bold rounded-full border border-purple-300">
+                                                ${enterpriseMode} MODE
+                                            </span>
+                                        ` : ''}
                                     </div>
-                                    <div class="text-right">
-                                        <div class="text-lg font-bold text-${statusColor}-700">${confidencePercent}%</div>
-                                        ${result.timing?.total ? `<div class="text-xs text-gray-600">${result.timing.total}ms</div>` : ''}
-                                    </div>
+                                    <div class="text-xs text-gray-600 mt-1">${timeAgo}</div>
                                 </div>
-                                <div class="text-sm text-gray-900 mb-2">
-                                    <strong>Said:</strong> "${escapeHtml(result.phrase)}"
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xl font-bold text-${statusColor}-700">${confidencePercent}%</div>
+                                ${aiResponseTime ? `<div class="text-xs text-gray-600">⚡ ${aiResponseTime}ms</div>` : ''}
+                                ${result.timing?.total ? `<div class="text-xs text-gray-500">${result.timing.total}ms total</div>` : ''}
+                            </div>
+                        </div>
+                        
+                        <!-- Color-Coded Transcript -->
+                        <div class="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                            <div class="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-2">
+                                <i class="fas fa-comments"></i>
+                                TRANSCRIPT (Color-Coded Analysis):
+                            </div>
+                            <div class="text-sm leading-relaxed">
+                                ${transcriptHTML}
+                            </div>
+                        </div>
+                        
+                        <!-- Matched Scenario -->
+                        ${result.matched && result.scenario ? `
+                            <div class="mb-3 p-3 bg-${statusColor}-50 rounded-lg border border-${statusColor}-200">
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-bullseye text-${statusColor}-600"></i>
+                                    <div class="font-semibold text-${statusColor}-900">Matched Scenario:</div>
+                                    <div class="text-${statusColor}-800">${escapeHtml(result.scenario.name)}</div>
                                 </div>
-                                ${result.matched && result.scenario ? `
-                                    <div class="text-sm bg-${statusColor}-50 px-3 py-2 rounded border border-${statusColor}-200">
-                                        <strong>→</strong> ${escapeHtml(result.scenario.name)}
+                                ${result.scenario.category ? `
+                                    <div class="text-xs text-${statusColor}-700 mt-1 ml-6">
+                                        Category: ${escapeHtml(result.scenario.category)}
                                     </div>
                                 ` : ''}
                             </div>
-                        </div>
+                        ` : ''}
+                        
+                        <!-- Enterprise Suggestions (if any) -->
+                        ${hasEnterpriseAnalysis && result.enterpriseAnalysis.suggestions?.length > 0 ? `
+                            <div class="mt-3 p-3 bg-purple-50 rounded-lg border border-purple-200">
+                                <div class="text-xs font-semibold text-purple-800 mb-2 flex items-center gap-2">
+                                    <i class="fas fa-magic"></i>
+                                    AI SUGGESTIONS (${result.enterpriseAnalysis.suggestions.length}):
+                                </div>
+                                <div class="space-y-2">
+                                    ${result.enterpriseAnalysis.suggestions.slice(0, 3).map(sug => `
+                                        <div class="text-xs bg-white p-2 rounded border border-purple-200">
+                                            <span class="font-semibold text-purple-900">${getPriorityBadge(sug.priority)}</span>
+                                            <span class="text-gray-800">${escapeHtml(sug.description || sug.reason || 'No description')}</span>
+                                        </div>
+                                    `).join('')}
+                                    ${result.enterpriseAnalysis.suggestions.length > 3 ? `
+                                        <div class="text-xs text-purple-600 font-semibold text-center">
+                                            + ${result.enterpriseAnalysis.suggestions.length - 3} more suggestions
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        <!-- Conflicts (if any) -->
+                        ${hasEnterpriseAnalysis && result.enterpriseAnalysis.conflicts?.length > 0 ? `
+                            <div class="mt-3 p-3 bg-red-50 rounded-lg border border-red-200">
+                                <div class="text-xs font-semibold text-red-800 mb-2 flex items-center gap-2">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    CONFLICTS DETECTED (${result.enterpriseAnalysis.conflicts.length}):
+                                </div>
+                                <div class="space-y-2">
+                                    ${result.enterpriseAnalysis.conflicts.slice(0, 2).map(conflict => `
+                                        <div class="text-xs bg-white p-2 rounded border border-red-200">
+                                            <span class="font-semibold text-red-900">${conflict.severity || 'WARNING'}:</span>
+                                            <span class="text-gray-800">${escapeHtml(conflict.description || 'Conflict detected')}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
                     </div>
                 `;
             }).join('');
