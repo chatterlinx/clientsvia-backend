@@ -61,6 +61,9 @@
     <!-- 🔮 Enterprise Test Pilot - Before/After Simulator -->
     <script src="/js/ai-agent-settings/EnterpriseBeforeAfterSimulator.js"></script>
     
+    <!-- ⚡ Enterprise Test Pilot - Bulk Actions System -->
+    <script src="/js/ai-agent-settings/EnterpriseBulkActions.js"></script>
+    
     <style>
         /* ============================================================================
          * WORLD-CLASS DESIGN SYSTEM - Salesforce/Stripe/Linear Standards
@@ -7016,10 +7019,99 @@ Continue?`;
             // This would call the /api/admin/suggestions/apply endpoint
             
             if (window.ToastManager) {
-                window.ToastManager.info('💡 Apply suggestion feature coming in Phase 3!');
+                window.ToastManager.info('💡 Apply suggestion feature coming soon!');
             }
             
             console.log('✅ [CHECKPOINT 3.2] Suggestion apply triggered');
+        }
+        
+        // ============================================================================
+        // ⚡ BULK ACTIONS - APPLY MULTIPLE SUGGESTIONS
+        // ============================================================================
+        
+        /**
+         * Apply all high priority suggestions from Live Test Monitor
+         */
+        async function applyAllHighPrioritySuggestions() {
+            console.log('🔵 [CHECKPOINT 1] applyAllHighPrioritySuggestions() called');
+            
+            if (!activeTemplate || !activeTemplate._id) {
+                console.error('❌ [CHECKPOINT 1.1] No active template');
+                if (window.ToastManager) {
+                    window.ToastManager.error('❌ Please select a template first');
+                }
+                return;
+            }
+            
+            try {
+                // Collect all high priority suggestions from recent tests
+                console.log('🔵 [CHECKPOINT 1.2] Collecting high priority suggestions...');
+                
+                // TODO: This would fetch suggestions from backend or collect from visible tests
+                // For now, show info message
+                
+                if (window.ToastManager) {
+                    window.ToastManager.info('💡 Analyzing suggestions... This feature integrates with backend API');
+                }
+                
+                // Initialize bulk actions manager
+                const bulkActions = new EnterpriseBulkActions(activeTemplate._id, {
+                    transactional: false,  // Allow partial success
+                    confirmBeforeApply: true,
+                    showProgress: true
+                });
+                
+                // Example: Apply high priority suggestions
+                // const allSuggestions = [...]; // Would come from API
+                // await bulkActions.applyAllHighPriority(allSuggestions);
+                
+                console.log('✅ [CHECKPOINT 1.3] Bulk actions initialized');
+                console.log('💡 Backend integration point ready for Phase 4');
+                
+            } catch (error) {
+                console.error('❌ [CHECKPOINT 1.4] Failed to apply suggestions:', error.message);
+                console.error('❌ [CHECKPOINT 1.5] Stack trace:', error.stack);
+                
+                if (window.ToastManager) {
+                    window.ToastManager.error(`❌ Failed: ${error.message}`);
+                }
+            }
+        }
+        
+        /**
+         * Apply all suggestions (all priorities)
+         */
+        async function applyAllSuggestions() {
+            console.log('🔵 [CHECKPOINT 2] applyAllSuggestions() called');
+            
+            if (!activeTemplate || !activeTemplate._id) {
+                console.error('❌ [CHECKPOINT 2.1] No active template');
+                if (window.ToastManager) {
+                    window.ToastManager.error('❌ Please select a template first');
+                }
+                return;
+            }
+            
+            try {
+                if (window.ToastManager) {
+                    window.ToastManager.info('💡 Apply All feature - Backend integration ready');
+                }
+                
+                const bulkActions = new EnterpriseBulkActions(activeTemplate._id, {
+                    transactional: false,
+                    confirmBeforeApply: true,
+                    showProgress: true
+                });
+                
+                // TODO: Collect and apply all suggestions
+                console.log('✅ [CHECKPOINT 2.2] Ready for bulk apply all');
+                
+            } catch (error) {
+                console.error('❌ [CHECKPOINT 2.3] Failed:', error.message);
+                if (window.ToastManager) {
+                    window.ToastManager.error(`❌ Failed: ${error.message}`);
+                }
+            }
         }
         
         // ============================================================================
@@ -11805,9 +11897,17 @@ Continue?`;
                         <!-- Enterprise Suggestions (if any) -->
                         ${hasEnterpriseAnalysis && result.enterpriseAnalysis.suggestions?.length > 0 ? `
                             <div class="mt-3 p-3 bg-purple-50 rounded-lg border border-purple-200">
-                                <div class="text-xs font-semibold text-purple-800 mb-2 flex items-center gap-2">
-                                    <i class="fas fa-magic"></i>
-                                    AI SUGGESTIONS (${result.enterpriseAnalysis.suggestions.length}):
+                                <div class="text-xs font-semibold text-purple-800 mb-3 flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-magic"></i>
+                                        AI SUGGESTIONS (${result.enterpriseAnalysis.suggestions.length}):
+                                    </div>
+                                    <button onclick="applyAllHighPrioritySuggestions()" 
+                                            class="px-2 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-bold flex items-center gap-1 transition-all"
+                                            title="Apply all high priority suggestions">
+                                        <i class="fas fa-bolt"></i>
+                                        Apply High Priority
+                                    </button>
                                 </div>
                                 <div class="space-y-2">
                                     ${result.enterpriseAnalysis.suggestions.slice(0, 3).map((sug, idx) => `
