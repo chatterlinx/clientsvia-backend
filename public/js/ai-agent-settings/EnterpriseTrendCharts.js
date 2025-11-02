@@ -99,7 +99,7 @@ class EnterpriseTrendCharts {
         console.log('🔵 [CHECKPOINT 2.2] Time range:', this.options.timeRange);
         
         try {
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('adminToken');
             if (!token) {
                 console.error('❌ [CHECKPOINT 2.3] No auth token found');
                 throw new Error('Authentication required - please log in');

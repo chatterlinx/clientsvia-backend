@@ -269,7 +269,7 @@ class EnterpriseBulkActions {
         console.log('🔵 [CHECKPOINT 6.1] Endpoint:', `/api/admin/suggestions/bulk-apply`);
         
         try {
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('adminToken');
             if (!token) {
                 console.error('❌ [CHECKPOINT 6.2] No auth token found');
                 throw new Error('Authentication required - please log in');
