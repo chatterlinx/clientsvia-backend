@@ -214,7 +214,7 @@ class CostImpactCalculator {
             return {
                 analysisCost,
                 monthlySavings,
-                yearlyS avings: costImpact.savings.perYear,
+                yearlySavings: costImpact.savings.perYear,
                 paybackDays: Math.min(paybackDays, 365),
                 roi,
                 roiPercentage: roi * 100,
