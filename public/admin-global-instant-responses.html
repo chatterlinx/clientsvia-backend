@@ -7,12 +7,12 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <!-- DEPLOYMENT VERSION: 5ccadfee - 2025-11-02 18:00:00 UTC - Complete Test System -->
+    <!-- DEPLOYMENT VERSION: f3a1b8dc - 2025-11-02 19:15:00 UTC - Both Toggles Always Visible -->
     <script>
         // 🔥 DEPLOYMENT VERIFICATION SYSTEM
-        const BUILD_VERSION = '5ccadfee';
-        const BUILD_DATE = '2025-11-02 18:00:00 UTC';
-        const BUILD_DESCRIPTION = 'Company Test Greeting + Mutually Exclusive Toggles + Template Auto-Routing + Phone Config';
+        const BUILD_VERSION = 'f3a1b8dc';
+        const BUILD_DATE = '2025-11-02 19:15:00 UTC';
+        const BUILD_DESCRIPTION = 'BOTH TOGGLES VISIBLE - Template & Company Testing Always Shown (Mutually Exclusive)';
         
         console.log('═══════════════════════════════════════════════════');
         console.log('🚀 DEPLOYMENT VERSION:', BUILD_VERSION);
@@ -593,50 +593,20 @@
                 </div>
                 
                 <!-- ================================================================
-                     🔀 TEST MODE SELECTOR (NEW: Unified Test Pilot)
+                     🔀 DUAL TESTING SYSTEM (NEW: Unified Test Pilot)
                      ================================================================
-                     Purpose: Switch between Template Testing and Company Testing
-                     - Template Mode: Test AI templates in isolation
-                     - Company Mode: Test real company production configurations
+                     Purpose: Both Template Testing and Company Testing visible
+                     - Only ONE can be active at a time (mutually exclusive toggles)
+                     - Visual feedback shows which mode is ON
                      ================================================================ -->
                 
-                <!-- Dual Mode Selector -->
-                <div class="mb-6 bg-white rounded-xl shadow-lg border-2 border-blue-500 overflow-hidden">
-                    <!-- Mode Toggle Tabs -->
-                    <div class="flex border-b-2 border-gray-200">
-                        <!-- Template Mode Tab (Default Active) -->
-                        <button onclick="switchTestMode('template')" 
-                                id="template-mode-btn"
-                                class="flex-1 px-6 py-4 font-bold text-lg transition-all duration-300
-                                       bg-gradient-to-r from-purple-600 to-pink-600 text-white
-                                       border-b-4 border-purple-700">
-                            <i class="fas fa-brain mr-2"></i>
-                            🧠 Template Testing
-                            <p class="text-xs mt-1 opacity-90 font-normal">Perfect your AI templates</p>
-                        </button>
-                        
-                        <!-- Company Mode Tab -->
-                        <button onclick="switchTestMode('company')" 
-                                id="company-mode-btn"
-                                class="flex-1 px-6 py-4 font-bold text-lg transition-all duration-300
-                                       bg-gray-100 text-gray-600 hover:bg-gray-200">
-                            <i class="fas fa-building mr-2"></i>
-                            🏢 Company Testing
-                            <p class="text-xs mt-1 font-normal">Test real production setup</p>
-                        </button>
-                    </div>
-                    
-                    <!-- Mode Description Panel -->
-                    <div id="mode-description" class="px-6 py-3 bg-gradient-to-r from-purple-50 to-pink-50">
-                        <!-- Template Mode Description (Default Visible) -->
-                        <p id="template-mode-desc" class="text-sm text-gray-700">
-                            <i class="fas fa-info-circle text-purple-600 mr-2"></i>
-                            <strong>Template Mode:</strong> Test your AI template rules, scenarios, fillers, and synonyms in isolation. Perfect for template development and fine-tuning.
-                        </p>
-                        <!-- Company Mode Description (Hidden by Default) -->
-                        <p id="company-mode-desc" class="hidden text-sm text-gray-700">
-                            <i class="fas fa-info-circle text-blue-600 mr-2"></i>
-                            <strong>Company Mode:</strong> Test a real company's FULL production configuration (Company Q&A, placeholders, voice settings, etc). What you test = what customers get! 100% production simulator.
+                <div class="mb-6 bg-gradient-to-r from-purple-100 to-blue-100 rounded-xl p-4 border-2 border-gray-300">
+                    <div class="flex items-center justify-center gap-3">
+                        <i class="fas fa-info-circle text-gray-700"></i>
+                        <p class="text-sm font-semibold text-gray-800">
+                            <span class="text-purple-700">🧠 Template Testing</span> and 
+                            <span class="text-blue-700">🏢 Company Testing</span> are mutually exclusive.
+                            <strong>Only ONE can be active at a time!</strong>
                         </p>
                     </div>
                 </div>
@@ -649,9 +619,9 @@
                      ================================================================ -->
                 
                 <!-- ================================================================
-                     📋 TEMPLATE SELECTOR (Template Mode Only)
+                     📋 TEMPLATE SELECTOR (Always Visible)
                      ================================================================ -->
-                <div id="top-template-selector" class="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-6 mb-8 shadow-sm" style="display: block;">
+                <div id="top-template-selector" class="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-6 mb-8 shadow-sm">
                     <!-- Small helper message when no template selected -->
                     <div id="template-select-helper" class="mb-3 p-3 bg-purple-100 border border-purple-300 rounded-lg text-sm text-purple-800 flex items-center gap-2" style="display: none;">
                         <i class="fas fa-info-circle"></i>
@@ -671,9 +641,9 @@
                 </div>
                 
                 <!-- ================================================================
-                     🏢 COMPANY SELECTOR (Company Mode Only)
+                     🏢 COMPANY SELECTOR (Always Visible)
                      ================================================================ -->
-                <div id="top-company-selector" class="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-xl p-6 mb-8 shadow-sm" style="display: none;">
+                <div id="top-company-selector" class="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-xl p-6 mb-8 shadow-sm">
                     <div class="mb-4">
                         <label class="block text-sm font-bold text-gray-700 mb-2">
                             <i class="fas fa-building text-blue-600 mr-2"></i>
@@ -1840,12 +1810,11 @@
                 </div>
 
                 <!-- ================================================================
-                     📱 TEMPLATE TEST MODE SECTION
+                     📱 TEMPLATE TEST MODE SECTION (Always Visible)
                      ================================================================
-                     Wrapped for easy show/hide when switching between modes
-                     Default: VISIBLE (Template Mode is default)
+                     Always visible - mutually exclusive toggle with Company Testing
                      ================================================================ -->
-                <div id="template-test-mode" style="display: block;">
+                <div id="template-test-mode">
                 
                 <!-- 📞 TWILIO TEST CONFIGURATION -->
                 <div class="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-lg p-6 mb-8">
@@ -2018,12 +1987,11 @@
                 <!-- END: Template Test Mode Section -->
 
                 <!-- ================================================================
-                     🏢 COMPANY TEST MODE SECTION (NEW)
+                     🏢 COMPANY TEST MODE SECTION (Always Visible)
                      ================================================================
-                     Allows testing REAL company production configurations
-                     Default: HIDDEN (Template Mode is default)
+                     Always visible - mutually exclusive toggle with Template Testing
                      ================================================================ -->
-                <div id="company-test-mode" class="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-400 rounded-lg p-6 mb-8" style="display: none;">
+                <div id="company-test-mode" class="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-400 rounded-lg p-6 mb-8">
                     <div class="flex items-start justify-between">
                         <div class="flex-1">
                             <!-- Header -->
@@ -6886,80 +6854,13 @@ Continue?`;
         // ============================================================================
         
         /**
-         * Switch between Template Mode and Company Mode
-         * @param {string} mode - 'template' or 'company'
+         * DEPRECATED: This function is no longer needed
+         * Both Template and Company modes are now always visible
+         * Only kept for backward compatibility - does nothing
          */
         function switchTestMode(mode) {
-            console.log(`🔄 [TEST MODE] Switching to: ${mode}`);
-            
-            const templateBtn = document.getElementById('template-mode-btn');
-            const companyBtn = document.getElementById('company-mode-btn');
-            const templateSection = document.getElementById('template-test-mode');
-            const companySection = document.getElementById('company-test-mode');
-            const templateDesc = document.getElementById('template-mode-desc');
-            const companyDesc = document.getElementById('company-mode-desc');
-            
-            // NEW: Top selector elements
-            const topTemplateSelector = document.getElementById('top-template-selector');
-            const topCompanySelector = document.getElementById('top-company-selector');
-            
-            // NEW: Intelligence Mode section (template-only)
-            const intelligenceModeSection = document.getElementById('intelligence-mode-section');
-            
-            if (mode === 'template') {
-                // Show template mode sections
-                templateSection.style.display = 'block';
-                companySection.style.display = 'none';
-                templateDesc.classList.remove('hidden');
-                companyDesc.classList.add('hidden');
-                
-                // Show template selector, hide company selector
-                topTemplateSelector.style.display = 'block';
-                topCompanySelector.style.display = 'none';
-                
-                // Show Intelligence Mode (only for templates!)
-                if (intelligenceModeSection) {
-                    intelligenceModeSection.style.display = 'block';
-                }
-                
-                // Update button styles
-                templateBtn.className = 'flex-1 px-6 py-4 font-bold text-lg transition-all duration-300 bg-gradient-to-r from-purple-600 to-pink-600 text-white border-b-4 border-purple-700';
-                companyBtn.className = 'flex-1 px-6 py-4 font-bold text-lg transition-all duration-300 bg-gray-100 text-gray-600 hover:bg-gray-200';
-                
-                // Refresh template test monitor
-                refreshLiveTestMonitor();
-                
-                console.log('✅ [TEST MODE] Switched to Template Mode');
-                
-            } else if (mode === 'company') {
-                // Show company mode sections
-                templateSection.style.display = 'none';
-                companySection.style.display = 'block';
-                templateDesc.classList.add('hidden');
-                companyDesc.classList.remove('hidden');
-                
-                // Show company selector, hide template selector
-                topTemplateSelector.style.display = 'none';
-                topCompanySelector.style.display = 'block';
-                
-                // Hide Intelligence Mode (not for companies!)
-                if (intelligenceModeSection) {
-                    intelligenceModeSection.style.display = 'none';
-                }
-                
-                // Update button styles
-                companyBtn.className = 'flex-1 px-6 py-4 font-bold text-lg transition-all duration-300 bg-gradient-to-r from-blue-600 to-cyan-600 text-white border-b-4 border-blue-700';
-                templateBtn.className = 'flex-1 px-6 py-4 font-bold text-lg transition-all duration-300 bg-gray-100 text-gray-600 hover:bg-gray-200';
-                
-                // Load company list and config if not loaded
-                loadCompanyTestModeConfig();
-                loadTopCompanyList(); // NEW: Load companies into top dropdown too
-                
-                // Refresh company test monitor
-                refreshLiveTestMonitor();
-                
-                console.log('✅ [TEST MODE] Switched to Company Mode');
-            }
+            console.log(`🔄 [TEST MODE] DEPRECATED: Both modes always visible now`);
+            // No-op: Both sections are always visible with mutually exclusive toggles
         }
         
         /**
@@ -14900,22 +14801,24 @@ ${JSON.stringify(healthData, null, 2)}
             }
             
             // ────────────────────────────────────────────────────────────────────
-            // PAGE INIT: Load initial data
+            // PAGE INIT: Load initial data for BOTH testing modes
             // ────────────────────────────────────────────────────────────────────
             
-            // 🔧 FIX: Load templates into selector on page load
-            // This was missing, causing "Loading templates..." to get stuck
+            // 🔧 Load templates into selector on page load
             await loadTemplatesIntoSelector();
             
+            // 🔧 Load company list and test mode configuration
+            await loadCompanyTestModeConfig();
+            await loadTopCompanyList();
+            
             // 🎯 UX: Always show "Select a template" helper message on initial load
-            // User must explicitly select a template (no auto-loading)
             const helper = document.getElementById('template-select-helper');
             if (helper) {
                 helper.style.display = 'flex';
                 console.log('💡 [PAGE INIT] Showing template selection helper message');
             }
             
-            console.log('✅ [PAGE INIT] Page initialization complete');
+            console.log('✅ [PAGE INIT] Page initialization complete (both Template and Company modes loaded)');
         });
         
     </script>
