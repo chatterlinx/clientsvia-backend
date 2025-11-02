@@ -593,6 +593,55 @@
                 </div>
                 
                 <!-- ================================================================
+                     🔀 TEST MODE SELECTOR (NEW: Unified Test Pilot)
+                     ================================================================
+                     Purpose: Switch between Template Testing and Company Testing
+                     - Template Mode: Test AI templates in isolation
+                     - Company Mode: Test real company production configurations
+                     ================================================================ -->
+                
+                <!-- Dual Mode Selector -->
+                <div class="mb-6 bg-white rounded-xl shadow-lg border-2 border-blue-500 overflow-hidden">
+                    <!-- Mode Toggle Tabs -->
+                    <div class="flex border-b-2 border-gray-200">
+                        <!-- Template Mode Tab (Default Active) -->
+                        <button onclick="switchTestMode('template')" 
+                                id="template-mode-btn"
+                                class="flex-1 px-6 py-4 font-bold text-lg transition-all duration-300
+                                       bg-gradient-to-r from-purple-600 to-pink-600 text-white
+                                       border-b-4 border-purple-700">
+                            <i class="fas fa-brain mr-2"></i>
+                            🧠 Template Testing
+                            <p class="text-xs mt-1 opacity-90 font-normal">Perfect your AI templates</p>
+                        </button>
+                        
+                        <!-- Company Mode Tab -->
+                        <button onclick="switchTestMode('company')" 
+                                id="company-mode-btn"
+                                class="flex-1 px-6 py-4 font-bold text-lg transition-all duration-300
+                                       bg-gray-100 text-gray-600 hover:bg-gray-200">
+                            <i class="fas fa-building mr-2"></i>
+                            🏢 Company Testing
+                            <p class="text-xs mt-1 font-normal">Test real production setup</p>
+                        </button>
+                    </div>
+                    
+                    <!-- Mode Description Panel -->
+                    <div id="mode-description" class="px-6 py-3 bg-gradient-to-r from-purple-50 to-pink-50">
+                        <!-- Template Mode Description (Default Visible) -->
+                        <p id="template-mode-desc" class="text-sm text-gray-700">
+                            <i class="fas fa-info-circle text-purple-600 mr-2"></i>
+                            <strong>Template Mode:</strong> Test your AI template rules, scenarios, fillers, and synonyms in isolation. Perfect for template development and fine-tuning.
+                        </p>
+                        <!-- Company Mode Description (Hidden by Default) -->
+                        <p id="company-mode-desc" class="hidden text-sm text-gray-700">
+                            <i class="fas fa-info-circle text-blue-600 mr-2"></i>
+                            <strong>Company Mode:</strong> Test a real company's FULL production configuration (Company Q&A, placeholders, voice settings, etc). What you test = what customers get! 100% production simulator.
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- ================================================================
                      📋 TEMPLATE SELECTOR - Now at TOP (Better UX Flow)
                      ================================================================
                      Purpose: User selects template FIRST, then sees suggestions
@@ -1757,6 +1806,14 @@
                     </div>
                 </div>
 
+                <!-- ================================================================
+                     📱 TEMPLATE TEST MODE SECTION
+                     ================================================================
+                     Wrapped for easy show/hide when switching between modes
+                     Default: VISIBLE (Template Mode is default)
+                     ================================================================ -->
+                <div id="template-test-mode" style="display: block;">
+                
                 <!-- 📞 TWILIO TEST CONFIGURATION -->
                 <div class="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-lg p-6 mb-8">
                     <div class="flex items-start justify-between">
@@ -1923,6 +1980,174 @@
                         </div>
                     </div>
                 </div>
+                
+                </div>
+                <!-- END: Template Test Mode Section -->
+
+                <!-- ================================================================
+                     🏢 COMPANY TEST MODE SECTION (NEW)
+                     ================================================================
+                     Allows testing REAL company production configurations
+                     Default: HIDDEN (Template Mode is default)
+                     ================================================================ -->
+                <div id="company-test-mode" class="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-400 rounded-lg p-6 mb-8" style="display: none;">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <!-- Header -->
+                            <div class="flex items-center gap-3 mb-4">
+                                <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center shadow-md">
+                                    <i class="fas fa-building text-white text-xl"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-lg font-bold text-gray-900">🏢 Company Testing</h4>
+                                    <p class="text-sm text-gray-600">Test a real company's FULL production configuration</p>
+                                </div>
+                            </div>
+                            
+                            <!-- Company Selector -->
+                            <div class="mb-4">
+                                <label class="block text-xs font-semibold text-gray-700 mb-2">
+                                    <i class="fas fa-building text-blue-600 mr-1"></i>
+                                    Select Company to Test:
+                                </label>
+                                <select id="test-company-selector" onchange="onCompanyTestSelected()" 
+                                        class="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm font-semibold bg-white shadow-sm">
+                                    <option value="">-- Select a company to test --</option>
+                                    <!-- Will be populated from MongoDB -->
+                                </select>
+                                <p class="text-xs text-gray-500 mt-2">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    This loads the company's REAL configuration from MongoDB (same as production!)
+                                </p>
+                            </div>
+                            
+                            <!-- Company Info Display (shows after selection) -->
+                            <div id="selected-company-info" class="hidden mb-4 p-4 bg-white rounded-lg border-2 border-blue-300 shadow-sm">
+                                <h5 class="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                    <i class="fas fa-info-circle text-blue-600"></i>
+                                    Company Configuration
+                                </h5>
+                                <div class="grid grid-cols-2 gap-3 text-sm">
+                                    <div class="bg-blue-50 p-3 rounded-lg">
+                                        <div class="text-xs text-gray-600 mb-1">Company Name</div>
+                                        <div class="font-semibold text-gray-900" id="company-info-name">--</div>
+                                    </div>
+                                    <div class="bg-blue-50 p-3 rounded-lg">
+                                        <div class="text-xs text-gray-600 mb-1">Template</div>
+                                        <div class="font-semibold text-gray-900" id="company-info-template">--</div>
+                                    </div>
+                                    <div class="bg-blue-50 p-3 rounded-lg">
+                                        <div class="text-xs text-gray-600 mb-1">Company Q&A</div>
+                                        <div class="font-semibold text-gray-900" id="company-info-qa">--</div>
+                                    </div>
+                                    <div class="bg-blue-50 p-3 rounded-lg">
+                                        <div class="text-xs text-gray-600 mb-1">Placeholders</div>
+                                        <div class="font-semibold text-gray-900" id="company-info-placeholders">--</div>
+                                    </div>
+                                    <div class="bg-blue-50 p-3 rounded-lg">
+                                        <div class="text-xs text-gray-600 mb-1">Voice Settings</div>
+                                        <div class="font-semibold text-gray-900" id="company-info-voice">--</div>
+                                    </div>
+                                    <div class="bg-blue-50 p-3 rounded-lg">
+                                        <div class="text-xs text-gray-600 mb-1">Speech Timeout</div>
+                                        <div class="font-semibold text-gray-900" id="company-info-speech-timeout">--</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Test Phone Display -->
+                            <div class="mb-4 p-4 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg text-white text-center shadow-lg">
+                                <div class="text-xs font-semibold uppercase tracking-wide mb-1 opacity-90">Company Test Phone Number</div>
+                                <div class="text-3xl font-bold font-mono" id="company-test-phone-display">Loading...</div>
+                                <p class="text-xs mt-2 opacity-90">
+                                    <i class="fas fa-shield-alt mr-1"></i>
+                                    Isolated test number - separate from template testing
+                                </p>
+                            </div>
+                            
+                            <!-- Test Options (What to enable/disable) -->
+                            <div class="mb-4 p-4 bg-white rounded-lg border-2 border-blue-300 shadow-sm">
+                                <h5 class="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                    <i class="fas fa-sliders-h text-blue-600"></i>
+                                    Test Options (What to Test)
+                                </h5>
+                                <p class="text-xs text-gray-600 mb-3">
+                                    Enable/disable specific features for focused testing:
+                                </p>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-blue-50 p-2 rounded transition-colors">
+                                        <input type="checkbox" id="test-option-company-qa" checked class="rounded text-blue-600 focus:ring-2 focus:ring-blue-500">
+                                        <span>Company Q&A</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-blue-50 p-2 rounded transition-colors">
+                                        <input type="checkbox" id="test-option-trade-qa" checked class="rounded text-blue-600 focus:ring-2 focus:ring-blue-500">
+                                        <span>Trade Q&A</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-blue-50 p-2 rounded transition-colors">
+                                        <input type="checkbox" id="test-option-templates" checked class="rounded text-blue-600 focus:ring-2 focus:ring-blue-500">
+                                        <span>Templates</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-blue-50 p-2 rounded transition-colors">
+                                        <input type="checkbox" id="test-option-3tier" checked class="rounded text-blue-600 focus:ring-2 focus:ring-blue-500">
+                                        <span>3-Tier Intelligence</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-blue-50 p-2 rounded transition-colors">
+                                        <input type="checkbox" id="test-option-placeholders" checked class="rounded text-blue-600 focus:ring-2 focus:ring-blue-500">
+                                        <span>Placeholders</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-blue-50 p-2 rounded transition-colors">
+                                        <input type="checkbox" id="test-option-personality" checked class="rounded text-blue-600 focus:ring-2 focus:ring-blue-500">
+                                        <span>Personality Tone</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Enable/Disable Toggle -->
+                            <div class="flex items-center gap-3 p-4 bg-white rounded-lg border-2 border-blue-300 shadow-sm">
+                                <label class="relative inline-flex items-center cursor-pointer" onclick="toggleCompanyTestMode()">
+                                    <input type="checkbox" id="company-test-enabled" class="hidden">
+                                    <div id="company-toggle-switch" class="w-14 h-7 bg-gray-300 rounded-full relative transition-all duration-300 shadow-inner">
+                                        <div id="company-toggle-circle" class="absolute top-0.5 left-0.5 bg-white w-6 h-6 rounded-full shadow-md transition-all duration-300 transform"></div>
+                                    </div>
+                                </label>
+                                <div>
+                                    <p class="text-sm font-bold text-gray-700">
+                                        <i class="fas fa-power-off text-blue-600 mr-1"></i>
+                                        <span id="company-toggle-status-text">Enable Company Testing</span>
+                                    </p>
+                                    <p class="text-xs text-gray-500">Toggle to activate/deactivate</p>
+                                </div>
+                            </div>
+                            
+                            <!-- Important Note -->
+                            <div class="mt-4 bg-blue-100 px-4 py-3 rounded border-2 border-blue-300">
+                                <p class="text-sm text-blue-900 leading-relaxed">
+                                    <i class="fas fa-shield-alt mr-1"></i>
+                                    <strong>Production Simulator:</strong> This tests the company's EXACT configuration.
+                                    <br>
+                                    <i class="fas fa-check-circle mr-1 mt-1 inline-block text-blue-700"></i>
+                                    Uses same Mongoose + Redis data as real customer calls.
+                                    <br>
+                                    <i class="fas fa-check-circle mr-1 mt-1 inline-block text-blue-700"></i>
+                                    What you test = what customers get! 100% confidence.
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="ml-6 flex flex-col gap-2">
+                            <button onclick="saveCompanyTestConfig()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                                <i class="fas fa-save"></i>
+                                Save Config
+                            </button>
+                            <button onclick="refreshCompanyList()" class="px-6 py-3 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                                <i class="fas fa-sync-alt"></i>
+                                Refresh Companies
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- END: Company Test Mode Section -->
 
                 <!-- ========================================================================== -->
                 <!-- 🧪 LIVE TEST MONITOR - Real-time Results & AI Suggestions -->
@@ -6529,6 +6754,314 @@ Continue?`;
 
         // =============================================
         // END TWILIO TEST FUNCTIONS
+
+        // ============================================================================
+        // COMPANY TEST MODE FUNCTIONS (NEW: Unified Test Pilot)
+        // ============================================================================
+        
+        /**
+         * Switch between Template Mode and Company Mode
+         * @param {string} mode - 'template' or 'company'
+         */
+        function switchTestMode(mode) {
+            console.log(`🔄 [TEST MODE] Switching to: ${mode}`);
+            
+            const templateBtn = document.getElementById('template-mode-btn');
+            const companyBtn = document.getElementById('company-mode-btn');
+            const templateSection = document.getElementById('template-test-mode');
+            const companySection = document.getElementById('company-test-mode');
+            const templateDesc = document.getElementById('template-mode-desc');
+            const companyDesc = document.getElementById('company-mode-desc');
+            
+            if (mode === 'template') {
+                // Show template mode
+                templateSection.style.display = 'block';
+                companySection.style.display = 'none';
+                templateDesc.classList.remove('hidden');
+                companyDesc.classList.add('hidden');
+                
+                // Update button styles
+                templateBtn.className = 'flex-1 px-6 py-4 font-bold text-lg transition-all duration-300 bg-gradient-to-r from-purple-600 to-pink-600 text-white border-b-4 border-purple-700';
+                companyBtn.className = 'flex-1 px-6 py-4 font-bold text-lg transition-all duration-300 bg-gray-100 text-gray-600 hover:bg-gray-200';
+                
+                // Refresh template test monitor
+                refreshLiveTestMonitor();
+                
+                console.log('✅ [TEST MODE] Switched to Template Mode');
+                
+            } else if (mode === 'company') {
+                // Show company mode
+                templateSection.style.display = 'none';
+                companySection.style.display = 'block';
+                templateDesc.classList.add('hidden');
+                companyDesc.classList.remove('hidden');
+                
+                // Update button styles
+                companyBtn.className = 'flex-1 px-6 py-4 font-bold text-lg transition-all duration-300 bg-gradient-to-r from-blue-600 to-cyan-600 text-white border-b-4 border-blue-700';
+                templateBtn.className = 'flex-1 px-6 py-4 font-bold text-lg transition-all duration-300 bg-gray-100 text-gray-600 hover:bg-gray-200';
+                
+                // Load company list and config if not loaded
+                loadCompanyTestModeConfig();
+                loadCompanyList();
+                
+                // Refresh company test monitor
+                refreshLiveTestMonitor();
+                
+                console.log('✅ [TEST MODE] Switched to Company Mode');
+            }
+        }
+        
+        /**
+         * Load Company Test Mode configuration from backend
+         */
+        async function loadCompanyTestModeConfig() {
+            console.log('📋 [COMPANY TEST] Loading configuration...');
+            
+            try {
+                const response = await fetch('/api/admin/settings/company-test-mode', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const config = data.config || {};
+                
+                console.log('✅ [COMPANY TEST] Configuration loaded:', config);
+                
+                // Update UI
+                document.getElementById('company-test-enabled').checked = config.enabled || false;
+                document.getElementById('company-test-phone-display').textContent = config.phoneNumber || 'Not configured';
+                
+                // Update toggle UI
+                if (config.enabled) {
+                    const toggleSwitch = document.getElementById('company-toggle-switch');
+                    const toggleCircle = document.getElementById('company-toggle-circle');
+                    toggleSwitch.classList.add('bg-blue-600');
+                    toggleSwitch.classList.remove('bg-gray-300');
+                    toggleCircle.style.transform = 'translateX(28px)';
+                    document.getElementById('company-toggle-status-text').textContent = 'Company Testing Enabled';
+                }
+                
+                // Update test options
+                const testOptions = config.testOptions || {};
+                document.getElementById('test-option-company-qa').checked = testOptions.enableCompanyQA !== false;
+                document.getElementById('test-option-trade-qa').checked = testOptions.enableTradeQA !== false;
+                document.getElementById('test-option-templates').checked = testOptions.enableTemplates !== false;
+                document.getElementById('test-option-3tier').checked = testOptions.enable3TierIntelligence !== false;
+                document.getElementById('test-option-placeholders').checked = testOptions.enablePlaceholders !== false;
+                document.getElementById('test-option-personality').checked = testOptions.enablePersonality !== false;
+                
+                // Select active company if set
+                if (config.activeCompanyId) {
+                    document.getElementById('test-company-selector').value = config.activeCompanyId;
+                    // Load company details
+                    await onCompanyTestSelected();
+                }
+                
+            } catch (error) {
+                console.error('❌ [COMPANY TEST] Failed to load configuration:', error);
+                showToast('error', 'Failed to load Company Test Mode configuration');
+            }
+        }
+        
+        /**
+         * Load list of companies for testing dropdown
+         */
+        async function loadCompanyList() {
+            console.log('📋 [COMPANY TEST] Loading company list...');
+            
+            try {
+                const response = await fetch('/api/admin/test-pilot/companies', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const companies = data.companies || [];
+                
+                console.log(`✅ [COMPANY TEST] Loaded ${companies.length} companies`);
+                
+                // Populate dropdown
+                const selector = document.getElementById('test-company-selector');
+                const currentValue = selector.value; // Preserve current selection
+                
+                selector.innerHTML = '<option value="">-- Select a company to test --</option>';
+                
+                companies.forEach(company => {
+                    const option = document.createElement('option');
+                    option.value = company._id;
+                    option.textContent = `${company.name}${company.hasTemplate ? '' : ' (No template)'}`;
+                    if (!company.hasTemplate) {
+                        option.style.color = '#999';
+                    }
+                    selector.appendChild(option);
+                });
+                
+                // Restore selection if it still exists
+                if (currentValue) {
+                    selector.value = currentValue;
+                }
+                
+            } catch (error) {
+                console.error('❌ [COMPANY TEST] Failed to load companies:', error);
+                showToast('error', 'Failed to load company list');
+            }
+        }
+        
+        /**
+         * When company is selected from dropdown
+         */
+        async function onCompanyTestSelected() {
+            const selector = document.getElementById('test-company-selector');
+            const companyId = selector.value;
+            
+            if (!companyId) {
+                document.getElementById('selected-company-info').classList.add('hidden');
+                return;
+            }
+            
+            console.log(`🏢 [COMPANY TEST] Selected company: ${companyId}`);
+            
+            try {
+                // Fetch company details
+                const response = await fetch(`/api/admin/test-pilot/companies/${companyId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const company = data.company;
+                
+                // Display company info
+                document.getElementById('company-info-name').textContent = company.name;
+                document.getElementById('company-info-template').textContent = company.template.name;
+                document.getElementById('company-info-qa').textContent = `${company.companyQA.count} Q&As ${company.companyQA.hasData ? '✅' : '❌'}`;
+                document.getElementById('company-info-placeholders').textContent = `${company.placeholders.count} items ${company.placeholders.hasData ? '✅' : '❌'}`;
+                document.getElementById('company-info-voice').textContent = company.voiceSettings.voiceId;
+                document.getElementById('company-info-speech-timeout').textContent = `${company.voiceSettings.speechTimeout}s`;
+                
+                document.getElementById('selected-company-info').classList.remove('hidden');
+                
+                console.log('✅ [COMPANY TEST] Company details loaded');
+                
+            } catch (error) {
+                console.error('❌ [COMPANY TEST] Failed to load company details:', error);
+                showToast('error', 'Failed to load company details');
+            }
+        }
+        
+        /**
+         * Save company test configuration
+         */
+        async function saveCompanyTestConfig() {
+            console.log('💾 [COMPANY TEST] Saving configuration...');
+            
+            const companyId = document.getElementById('test-company-selector').value;
+            
+            if (!companyId) {
+                showToast('error', 'Please select a company first');
+                return;
+            }
+            
+            const enabled = document.getElementById('company-test-enabled').checked;
+            
+            const testOptions = {
+                enableCompanyQA: document.getElementById('test-option-company-qa').checked,
+                enableTradeQA: document.getElementById('test-option-trade-qa').checked,
+                enableTemplates: document.getElementById('test-option-templates').checked,
+                enable3TierIntelligence: document.getElementById('test-option-3tier').checked,
+                enablePlaceholders: document.getElementById('test-option-placeholders').checked,
+                enablePersonality: document.getElementById('test-option-personality').checked
+            };
+            
+            try {
+                const response = await fetch('/api/admin/settings/company-test-mode', {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    },
+                    body: JSON.stringify({
+                        enabled,
+                        activeCompanyId: companyId,
+                        testOptions
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                console.log('✅ [COMPANY TEST] Configuration saved successfully');
+                showToast('success', '✅ Company Test Mode configured successfully!');
+                
+                // Update phone display if returned
+                if (data.config && data.config.phoneNumber) {
+                    document.getElementById('company-test-phone-display').textContent = data.config.phoneNumber;
+                }
+                
+            } catch (error) {
+                console.error('❌ [COMPANY TEST] Save failed:', error);
+                showToast('error', `Failed to save configuration: ${error.message}`);
+            }
+        }
+        
+        /**
+         * Toggle company test mode on/off
+         */
+        function toggleCompanyTestMode() {
+            const checkbox = document.getElementById('company-test-enabled');
+            const toggleSwitch = document.getElementById('company-toggle-switch');
+            const toggleCircle = document.getElementById('company-toggle-circle');
+            const statusText = document.getElementById('company-toggle-status-text');
+            
+            checkbox.checked = !checkbox.checked;
+            
+            if (checkbox.checked) {
+                toggleSwitch.classList.add('bg-blue-600');
+                toggleSwitch.classList.remove('bg-gray-300');
+                toggleCircle.style.transform = 'translateX(28px)';
+                statusText.textContent = 'Company Testing Enabled';
+                console.log('✅ [COMPANY TEST] Toggle: ENABLED');
+            } else {
+                toggleSwitch.classList.remove('bg-blue-600');
+                toggleSwitch.classList.add('bg-gray-300');
+                toggleCircle.style.transform = 'translateX(0)';
+                statusText.textContent = 'Company Testing Disabled';
+                console.log('⚪ [COMPANY TEST] Toggle: DISABLED');
+            }
+        }
+        
+        /**
+         * Refresh company list
+         */
+        async function refreshCompanyList() {
+            showToast('info', 'Refreshing company list...');
+            await loadCompanyList();
+            showToast('success', 'Company list refreshed!');
+        }
+        
+        // ============================================================================
+        // END COMPANY TEST MODE FUNCTIONS
+        // ============================================================================
 
         // ============================================================================
         // AI LEARNING & OPTIMIZATION SETTINGS FUNCTIONS
