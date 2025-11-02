@@ -11769,10 +11769,11 @@ Continue?`;
                     await loadAILearningSettings();
                     console.log('✅ [SWITCH TEMPLATE] AI Learning settings reloaded');
                     
-                    // NEW: Silently update activeTemplateId in global Twilio config (form stays static!)
-                    console.log('📞 [SWITCH TEMPLATE] Updating activeTemplateId in global test config...');
+                    // 🔥 CRITICAL: Auto-update activeTemplateId in global Twilio config
+                    // This ensures when you call the test number, it uses the NEW template!
+                    console.log('📞 [SWITCH TEMPLATE] Auto-updating Twilio test routing...');
                     try {
-                        await fetch('/api/admin/settings/global-ai-brain-test', {
+                        const routingResponse = await fetch('/api/admin/settings/global-ai-brain-test', {
                             method: 'PATCH',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -11782,9 +11783,23 @@ Continue?`;
                                 activeTemplateId: template._id
                             })
                         });
-                        console.log(`✅ [SWITCH TEMPLATE] Test routing updated to: ${template.name}`);
+                        
+                        // 🔥 NEW: Check if it actually worked!
+                        if (!routingResponse.ok) {
+                            throw new Error(`HTTP ${routingResponse.status}`);
+                        }
+                        
+                        const routingData = await routingResponse.json();
+                        
+                        if (routingData.success) {
+                            console.log(`✅ [SWITCH TEMPLATE] Twilio routing updated to: ${template.name}`);
+                            showToast('success', `📞 Test calls will now use: ${template.name}`);
+                        } else {
+                            throw new Error(routingData.message || 'Update failed');
+                        }
                     } catch (err) {
-                        console.warn('⚠️ [SWITCH TEMPLATE] Could not update test routing:', err.message);
+                        console.error('❌ [SWITCH TEMPLATE] Failed to update test routing:', err);
+                        showToast('error', `⚠️ Test routing update failed: ${err.message}. You may need to manually save test config!`);
                     }
                     
                     // 🧪 Refresh Live Test Monitor for new template
