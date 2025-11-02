@@ -1728,9 +1728,8 @@ router.post('/:companyId/configuration/templates', async (req, res) => {
             }
         });
         
-        // Clear cache
-        const CacheHelper = require('../../utils/cacheHelper');
-        await CacheHelper.clearCompanyCache(req.params.companyId);
+        // Clear cache using the local function (already defined at top of file)
+        await clearCompanyCache(req.params.companyId, 'Template Added');
         
         res.json({ 
             success: true, 
@@ -1793,9 +1792,8 @@ router.delete('/:companyId/configuration/templates/:templateId', async (req, res
         
         await company.save();
         
-        // Clear cache
-        const CacheHelper = require('../../utils/cacheHelper');
-        await CacheHelper.clearCompanyCache(req.params.companyId);
+        // Clear cache using the local function (already defined at top of file)
+        await clearCompanyCache(req.params.companyId, 'Template Removed');
         
         res.json({ 
             success: true, 
