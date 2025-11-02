@@ -85,36 +85,76 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
         logger.info(`📚 [LIVE SCENARIOS API] Loaded ${templates.length} templates`);
         
         // Merge all scenarios from all templates
+        // ARCHITECTURE FIX: Scenarios are nested INSIDE categories!
         const allScenarios = [];
         const categoriesSet = new Set();
         
         templates.forEach(template => {
-            if (!template.scenarios || template.scenarios.length === 0) {
+            // Check if template has categories
+            if (!template.categories || template.categories.length === 0) {
+                logger.warn(`⚠️ [LIVE SCENARIOS API] Template "${template.name}" has no categories`);
                 return;
             }
             
-            template.scenarios.forEach(scenario => {
-                // Extract categories
-                if (scenario.categories && scenario.categories.length > 0) {
-                    scenario.categories.forEach(cat => categoriesSet.add(cat));
+            logger.debug(`📂 [LIVE SCENARIOS API] Processing ${template.categories.length} categories from "${template.name}"`);
+            
+            // Iterate through categories, THEN scenarios
+            template.categories.forEach(category => {
+                // Add category name to set
+                if (category.name) {
+                    categoriesSet.add(category.name);
                 }
                 
-                // Build scenario object
-                allScenarios.push({
-                    _id: scenario._id || `${template._id}-${allScenarios.length}`,
-                    trigger: scenario.trigger || '',
-                    reply: scenario.reply || '',
-                    category: scenario.categories && scenario.categories.length > 0 
-                        ? scenario.categories[0] 
-                        : template.tradeName || 'General',
-                    categories: scenario.categories || [],
-                    templateId: template._id,
-                    templateName: template.name,
-                    tradeName: template.tradeName,
-                    avgConfidence: scenario.avgConfidence || 0,
-                    usageCount: scenario.usageCount || 0
+                // Check if category has scenarios
+                if (!category.scenarios || category.scenarios.length === 0) {
+                    logger.debug(`  ⚠️ Category "${category.name}" has no scenarios`);
+                    return;
+                }
+                
+                logger.debug(`  ✅ Category "${category.name}" has ${category.scenarios.length} scenarios`);
+                
+                // Iterate through scenarios in this category
+                category.scenarios.forEach(scenario => {
+                    // Only include LIVE scenarios
+                    if (scenario.status !== 'live' || !scenario.isActive) {
+                        return;
+                    }
+                    
+                    // Extract first trigger as preview
+                    const trigger = scenario.triggers && scenario.triggers.length > 0 
+                        ? scenario.triggers[0] 
+                        : '';
+                    
+                    // Extract first full reply as preview
+                    const reply = scenario.fullReplies && scenario.fullReplies.length > 0 
+                        ? scenario.fullReplies[0] 
+                        : '';
+                    
+                    // Build scenario object
+                    allScenarios.push({
+                        _id: scenario.scenarioId || scenario._id || `${template._id}-${category.id}-${allScenarios.length}`,
+                        scenarioId: scenario.scenarioId,
+                        name: scenario.name || trigger,
+                        trigger: trigger,
+                        triggers: scenario.triggers || [],
+                        reply: reply,
+                        fullReplies: scenario.fullReplies || [],
+                        quickReplies: scenario.quickReplies || [],
+                        category: category.name || 'General',
+                        categoryId: category.id,
+                        templateId: template._id,
+                        templateName: template.name,
+                        tradeName: template.tradeName,
+                        priority: scenario.priority || 0,
+                        avgConfidence: scenario.avgConfidence || 0,
+                        usageCount: scenario.usageCount || 0,
+                        status: scenario.status,
+                        isActive: scenario.isActive
+                    });
                 });
             });
+            
+            logger.info(`✅ [LIVE SCENARIOS API] Processed template "${template.name}": ${allScenarios.length} total scenarios so far`);
         });
         
         const categories = Array.from(categoriesSet).sort();
