@@ -6092,15 +6092,17 @@ Continue?`;
 
         /**
          * Toggle the test enabled checkbox
+         * NOW: Mutually exclusive with Company Testing!
          */
-        function toggleTestEnabled() {
+        async function toggleTestEnabled() {
             const checkbox = document.getElementById('twilio-test-enabled');
             const toggleSwitch = document.getElementById('toggle-switch');
             const toggleCircle = document.getElementById('toggle-circle');
             const statusText = document.getElementById('toggle-status-text');
             
             // Toggle checkbox
-            checkbox.checked = !checkbox.checked;
+            const newState = !checkbox.checked;
+            checkbox.checked = newState;
             
             // Update UI
             if (checkbox.checked) {
@@ -6109,14 +6111,22 @@ Continue?`;
                 toggleSwitch.classList.add('bg-purple-600');
                 toggleCircle.classList.add('translate-x-7');
                 statusText.textContent = 'Test Calls Enabled ✓';
-                console.log('🟢 Test calls ENABLED');
+                console.log('🟢 [TEMPLATE TEST] Enabled');
+                
+                // 🔥 NEW: Auto-disable Company Testing (mutually exclusive!)
+                console.log('🔄 [TEMPLATE TEST] Auto-disabling Company Testing...');
+                await disableCompanyTestMode();
+                
+                showToast('success', '✅ Template Testing enabled • Company Testing disabled');
             } else {
                 // OFF state
                 toggleSwitch.classList.remove('bg-purple-600');
                 toggleSwitch.classList.add('bg-gray-300');
                 toggleCircle.classList.remove('translate-x-7');
                 statusText.textContent = 'Enable Test Calls';
-                console.log('⚫ Test calls DISABLED');
+                console.log('⚫ [TEMPLATE TEST] Disabled');
+                
+                showToast('info', 'Template Testing disabled');
             }
         }
 
@@ -7155,27 +7165,98 @@ Continue?`;
         
         /**
          * Toggle company test mode on/off
+         * NOW: Mutually exclusive with Template Testing!
          */
-        function toggleCompanyTestMode() {
+        async function toggleCompanyTestMode() {
             const checkbox = document.getElementById('company-test-enabled');
             const toggleSwitch = document.getElementById('company-toggle-switch');
             const toggleCircle = document.getElementById('company-toggle-circle');
             const statusText = document.getElementById('company-toggle-status-text');
             
-            checkbox.checked = !checkbox.checked;
+            const newState = !checkbox.checked;
+            checkbox.checked = newState;
             
             if (checkbox.checked) {
                 toggleSwitch.classList.add('bg-blue-600');
                 toggleSwitch.classList.remove('bg-gray-300');
                 toggleCircle.style.transform = 'translateX(28px)';
                 statusText.textContent = 'Company Testing Enabled';
-                console.log('✅ [COMPANY TEST] Toggle: ENABLED');
+                console.log('✅ [COMPANY TEST] Enabled');
+                
+                // 🔥 NEW: Auto-disable Template Testing (mutually exclusive!)
+                console.log('🔄 [COMPANY TEST] Auto-disabling Template Testing...');
+                await disableTemplateTestMode();
+                
+                showToast('success', '✅ Company Testing enabled • Template Testing disabled');
             } else {
                 toggleSwitch.classList.remove('bg-blue-600');
                 toggleSwitch.classList.add('bg-gray-300');
                 toggleCircle.style.transform = 'translateX(0)';
                 statusText.textContent = 'Company Testing Disabled';
-                console.log('⚪ [COMPANY TEST] Toggle: DISABLED');
+                console.log('⚪ [COMPANY TEST] Disabled');
+                
+                showToast('info', 'Company Testing disabled');
+            }
+        }
+        
+        /**
+         * Helper: Disable Company Testing (called from Template Testing toggle)
+         */
+        async function disableCompanyTestMode() {
+            console.log('🔄 [HELPER] Disabling Company Testing...');
+            
+            // Update Company Testing UI
+            const checkbox = document.getElementById('company-test-enabled');
+            const toggleSwitch = document.getElementById('company-toggle-switch');
+            const toggleCircle = document.getElementById('company-toggle-circle');
+            const statusText = document.getElementById('company-toggle-status-text');
+            
+            if (checkbox && checkbox.checked) {
+                checkbox.checked = false;
+                toggleSwitch.classList.remove('bg-blue-600');
+                toggleSwitch.classList.add('bg-gray-300');
+                toggleCircle.style.transform = 'translateX(0)';
+                statusText.textContent = 'Company Testing Disabled';
+                
+                // Save to backend
+                try {
+                    await fetch('/api/admin/settings/company-test-mode', {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                        },
+                        body: JSON.stringify({ enabled: false })
+                    });
+                    console.log('✅ [HELPER] Company Testing disabled in backend');
+                } catch (error) {
+                    console.error('❌ [HELPER] Failed to disable Company Testing:', error);
+                }
+            }
+        }
+        
+        /**
+         * Helper: Disable Template Testing (called from Company Testing toggle)
+         */
+        async function disableTemplateTestMode() {
+            console.log('🔄 [HELPER] Disabling Template Testing...');
+            
+            // Update Template Testing UI
+            const checkbox = document.getElementById('twilio-test-enabled');
+            const toggleSwitch = document.getElementById('toggle-switch');
+            const toggleCircle = document.getElementById('toggle-circle');
+            const statusText = document.getElementById('toggle-status-text');
+            
+            if (checkbox && checkbox.checked) {
+                checkbox.checked = false;
+                toggleSwitch.classList.remove('bg-purple-600');
+                toggleSwitch.classList.add('bg-gray-300');
+                toggleCircle.classList.remove('translate-x-7');
+                statusText.textContent = 'Enable Test Calls';
+                
+                // Save to backend (calls saveTwilioTestConfig which will save enabled: false)
+                console.log('✅ [HELPER] Template Testing disabled (UI updated)');
+                // Note: Template test saving happens via "Save Config" button, not auto-save
             }
         }
         
