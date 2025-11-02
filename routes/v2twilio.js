@@ -364,10 +364,37 @@ async function getCompanyByPhoneNumber(phoneNumber) {
       };
     }
     
-    // 🧠 CHECK 1: Is this a Global AI Brain test number? (NEW: Global Config)
+    // 🏢 CHECK 1: Is this a Company Test Mode number? (PRIORITY - tests real production setup)
+    logger.info(`[COMPANY TEST MODE CHECK] Checking if ${phoneNumber} is company test number...`);
+    
+    const companyTestConfig = adminSettings?.companyTestMode;
+    
+    if (companyTestConfig?.enabled && companyTestConfig.phoneNumber === phoneNumber) {
+      logger.info(`🏢 [COMPANY TEST MODE] Test number matched! Loading REAL company from MongoDB...`);
+      
+      // Load the REAL company that's being tested
+      const testCompany = await Company.findById(companyTestConfig.activeCompanyId);
+      
+      if (testCompany) {
+        logger.info(`✅ [COMPANY TEST MODE] Test routing to REAL company: ${testCompany.companyName || testCompany.businessName}`);
+        logger.info(`🎯 [COMPANY TEST MODE] Using PRODUCTION code path - this tests the EXACT customer experience!`);
+        logger.info(`📊 [COMPANY TEST MODE] Test options:`, JSON.stringify(companyTestConfig.testOptions, null, 2));
+        
+        // Mark this as test mode for optional debugging/logging
+        testCompany.isTestMode = true;
+        testCompany.testOptions = companyTestConfig.testOptions || {};
+        
+        // Return the REAL company (not a fake one!)
+        // This will use the EXACT same code path as production customer calls!
+        return testCompany;
+      } else {
+        logger.warn(`⚠️ [COMPANY TEST MODE] activeCompanyId points to non-existent company: ${companyTestConfig.activeCompanyId}`);
+      }
+    }
+    
+    // 🧠 CHECK 2: Is this a Global AI Brain test number? (Template testing in isolation)
     logger.info(`[GLOBAL BRAIN CHECK] Checking if ${phoneNumber} is the global test number...`);
     
-    // Use adminSettings already fetched above (line 333)
     const globalTestConfig = adminSettings?.globalAIBrainTest;
     
     if (globalTestConfig?.enabled && globalTestConfig.phoneNumber === phoneNumber) {
@@ -393,7 +420,7 @@ async function getCompanyByPhoneNumber(phoneNumber) {
       }
     }
     
-    // 🏢 CHECK 2: Regular company lookup
+    // 🏢 CHECK 3: Regular company lookup (production customer calls)
     const cacheStartTime = Date.now();
     const cachedCompany = await redisClient.get(cacheKey);
     if (cachedCompany) {

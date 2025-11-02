@@ -478,6 +478,106 @@ const adminSettingsSchema = new mongoose.Schema({
         }
     },
     
+    // ============================================================================
+    // 🏢 COMPANY TEST MODE (NEW - Production Simulator)
+    // ============================================================================
+    // PURPOSE: Test REAL company configurations (not just templates)
+    // ARCHITECTURE: Developer tests EXACT production setup
+    // KEY DIFFERENCE: 
+    //   - Global AI Brain Test = Tests templates in isolation
+    //   - Company Test Mode = Tests FULL company setup (same as production!)
+    // BENEFITS:
+    //   - Tests real company Q&A, placeholders, overrides
+    //   - Uses same Mongoose + Redis as production
+    //   - Uses same v2AIAgentRuntime code path
+    //   - 100% guaranteed what you test = what customers get!
+    // ============================================================================
+    companyTestMode: {
+        // Test Phone Configuration
+        enabled: {
+            type: Boolean,
+            default: false,
+            description: 'Enable/disable company test mode globally'
+        },
+        phoneNumber: {
+            type: String,
+            trim: true,
+            default: '',
+            description: 'Test phone number for company testing (E.164: +15551234567) - separate from template testing'
+        },
+        
+        // ROUTING: Which COMPANY to test (the key difference!)
+        activeCompanyId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'v2Company',
+            default: null,
+            description: 'Currently active company for test routing - loads REAL company from MongoDB!'
+        },
+        
+        // TEST OPTIONS: What to enable during testing
+        testOptions: {
+            // Enable/disable specific features for focused testing
+            enableCompanyQA: {
+                type: Boolean,
+                default: true,
+                description: 'Test company-specific Q&A knowledge base'
+            },
+            enableTradeQA: {
+                type: Boolean,
+                default: true,
+                description: 'Test trade-specific Q&A knowledge base'
+            },
+            enableTemplates: {
+                type: Boolean,
+                default: true,
+                description: 'Test instant response templates'
+            },
+            enable3TierIntelligence: {
+                type: Boolean,
+                default: true,
+                description: 'Test full 3-tier cascade (Tier 1 → 2 → 3)'
+            },
+            enablePlaceholders: {
+                type: Boolean,
+                default: true,
+                description: 'Test placeholder replacement'
+            },
+            enablePersonality: {
+                type: Boolean,
+                default: true,
+                description: 'Test personality tone application'
+            }
+        },
+        
+        // TRACKING: Test call analytics
+        lastTestedAt: {
+            type: Date,
+            description: 'Last time a company test call was made'
+        },
+        testCallCount: {
+            type: Number,
+            default: 0,
+            description: 'Total number of company test calls made'
+        },
+        
+        // METADATA
+        notes: {
+            type: String,
+            trim: true,
+            default: '',
+            description: 'Admin notes about company testing setup'
+        },
+        createdAt: {
+            type: Date,
+            default: Date.now
+        },
+        lastUpdatedBy: {
+            type: String,
+            default: 'Admin',
+            description: 'Who last updated this config'
+        }
+    },
+    
     // Metadata
     lastUpdated: {
         type: Date,
