@@ -2037,21 +2037,24 @@
                                 </div>
                             </div>
                             
-                            <!-- Company Selector -->
-                            <div class="mb-4">
-                                <label class="block text-xs font-semibold text-gray-700 mb-2">
-                                    <i class="fas fa-building text-blue-600 mr-1"></i>
-                                    Select Company to Test:
-                                </label>
-                                <select id="test-company-selector" onchange="onCompanyTestSelected()" 
-                                        class="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm font-semibold bg-white shadow-sm">
-                                    <option value="">-- Select a company to test --</option>
-                                    <!-- Will be populated from MongoDB -->
-                                </select>
-                                <p class="text-xs text-gray-500 mt-2">
-                                    <i class="fas fa-info-circle mr-1"></i>
-                                    This loads the company's REAL configuration from MongoDB (same as production!)
-                                </p>
+                            <!-- Currently Testing Display (syncs with top selector) -->
+                            <div class="mb-4 p-4 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg shadow-lg border-2 border-blue-300">
+                                <div class="text-center">
+                                    <div class="text-xs font-semibold uppercase tracking-wide text-white opacity-90 mb-2">
+                                        <i class="fas fa-building mr-1"></i>
+                                        Currently Testing Company
+                                    </div>
+                                    <div id="company-test-current-name" class="text-2xl font-bold text-white mb-1">
+                                        No company selected
+                                    </div>
+                                    <div id="company-test-current-id" class="text-xs font-mono text-white opacity-75">
+                                        Select a company from the top dropdown
+                                    </div>
+                                    <p class="text-xs text-white opacity-90 mt-3 pt-3 border-t border-white border-opacity-30">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        This loads the company's REAL configuration from MongoDB (same as production!)
+                                    </p>
+                                </div>
                             </div>
                             
                             <!-- Company Info Display (shows after selection) -->
@@ -2173,7 +2176,7 @@
                                 <i class="fas fa-save"></i>
                                 Save Config
                             </button>
-                            <button onclick="refreshCompanyList()" class="px-6 py-3 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                            <button onclick="refreshCompanyList()" class="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
                                 <i class="fas fa-sync-alt"></i>
                                 Refresh Companies
                             </button>
@@ -6914,11 +6917,14 @@ Continue?`;
                 document.getElementById('test-option-placeholders').checked = testOptions.enablePlaceholders !== false;
                 document.getElementById('test-option-personality').checked = testOptions.enablePersonality !== false;
                 
-                // Select active company if set
+                // Select active company if set (in TOP selector)
                 if (config.activeCompanyId) {
-                    document.getElementById('test-company-selector').value = config.activeCompanyId;
-                    // Load company details
-                    await onCompanyTestSelected();
+                    const topSelector = document.getElementById('top-company-selector-dropdown');
+                    if (topSelector) {
+                        topSelector.value = config.activeCompanyId;
+                        // Load company details
+                        await onCompanyTestSelected();
+                    }
                 }
                 
             } catch (error) {
@@ -6949,11 +6955,17 @@ Continue?`;
                 
                 console.log(`✅ [COMPANY TEST] Loaded ${companies.length} companies`);
                 
-                // Populate BOTTOM dropdown (inside Company Mode section)
-                const selector = document.getElementById('test-company-selector');
-                const currentValue = selector.value; // Preserve current selection
+                // NOTE: We removed the bottom dropdown - only populate TOP dropdown now
+                // Populate TOP dropdown (no more bottom selector!)
+                const topSelector = document.getElementById('top-company-selector-dropdown');
+                if (!topSelector) {
+                    console.warn('⚠️ [COMPANY TEST] Top company selector not found');
+                    return;
+                }
                 
-                selector.innerHTML = '<option value="">-- Select a company to test --</option>';
+                const currentValue = topSelector.value; // Preserve current selection
+                
+                topSelector.innerHTML = '<option value="">-- Select a company to test --</option>';
                 
                 companies.forEach(company => {
                     const option = document.createElement('option');
@@ -6962,21 +6974,12 @@ Continue?`;
                     if (!company.hasTemplate) {
                         option.style.color = '#999';
                     }
-                    selector.appendChild(option);
+                    topSelector.appendChild(option);
                 });
                 
                 // Restore selection if it still exists
                 if (currentValue) {
-                    selector.value = currentValue;
-                }
-                
-                // Also sync with TOP dropdown
-                const topSelector = document.getElementById('top-company-selector-dropdown');
-                if (topSelector) {
-                    topSelector.innerHTML = selector.innerHTML;
-                    if (currentValue) {
-                        topSelector.value = currentValue;
-                    }
+                    topSelector.value = currentValue;
                 }
                 
             } catch (error) {
@@ -6986,21 +6989,19 @@ Continue?`;
         }
         
         /**
-         * When company is selected from dropdown (bottom)
+         * When company is selected from dropdown (now from TOP selector only)
          */
         async function onCompanyTestSelected() {
-            const selector = document.getElementById('test-company-selector');
-            const companyId = selector.value;
+            // Get company ID from TOP selector (we removed the bottom dropdown)
+            const selector = document.getElementById('top-company-selector-dropdown');
+            const companyId = selector ? selector.value : null;
             
             if (!companyId) {
                 document.getElementById('selected-company-info').classList.add('hidden');
+                // Reset the "Currently Testing" display
+                document.getElementById('company-test-current-name').textContent = 'No company selected';
+                document.getElementById('company-test-current-id').textContent = 'Select a company from the top dropdown';
                 return;
-            }
-            
-            // Sync with top dropdown
-            const topSelector = document.getElementById('top-company-selector-dropdown');
-            if (topSelector) {
-                topSelector.value = companyId;
             }
             
             console.log(`🏢 [COMPANY TEST] Selected company: ${companyId}`);
@@ -7019,6 +7020,10 @@ Continue?`;
                 
                 const data = await response.json();
                 const company = data.company;
+                
+                // Update "Currently Testing" display at the top of Company Test section
+                document.getElementById('company-test-current-name').textContent = company.name;
+                document.getElementById('company-test-current-id').textContent = `ID: ${companyId.substring(0, 8)}... • Template: ${company.template.name}`;
                 
                 // Display company info
                 document.getElementById('company-info-name').textContent = company.name;
@@ -7044,10 +7049,12 @@ Continue?`;
         async function saveCompanyTestConfig() {
             console.log('💾 [COMPANY TEST] Saving configuration...');
             
-            const companyId = document.getElementById('test-company-selector').value;
+            // Get company ID from TOP selector (we removed the bottom dropdown)
+            const topSelector = document.getElementById('top-company-selector-dropdown');
+            const companyId = topSelector ? topSelector.value : null;
             
             if (!companyId) {
-                showToast('error', 'Please select a company first');
+                showToast('error', 'Please select a company from the top dropdown first');
                 return;
             }
             
@@ -7175,15 +7182,6 @@ Continue?`;
                     topSelector.value = currentValue;
                 }
                 
-                // Also sync with the bottom dropdown
-                const bottomSelector = document.getElementById('test-company-selector');
-                if (bottomSelector) {
-                    bottomSelector.innerHTML = topSelector.innerHTML;
-                    if (currentValue) {
-                        bottomSelector.value = currentValue;
-                    }
-                }
-                
             } catch (error) {
                 console.error('❌ [TOP COMPANY SELECTOR] Failed to load companies:', error);
                 showToast('error', 'Failed to load company list');
@@ -7200,13 +7198,7 @@ Continue?`;
                 return;
             }
             
-            // Sync the bottom dropdown
-            const bottomSelector = document.getElementById('test-company-selector');
-            if (bottomSelector) {
-                bottomSelector.value = companyId;
-            }
-            
-            // Load company details (reuse existing function)
+            // Load company details (this will read from the top selector)
             await onCompanyTestSelected();
         }
         
