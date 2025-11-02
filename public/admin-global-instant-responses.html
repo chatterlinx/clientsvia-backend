@@ -6565,8 +6565,17 @@ Continue?`;
         async function selectIntelligenceMode(mode) {
             console.log('🎯 [INTELLIGENCE MODE] Selecting mode:', mode);
             
+            // Safe toast helper
+            const showToast = (type, message, options) => {
+                if (window.ToastManager && window.ToastManager[type]) {
+                    window.ToastManager[type](message, options);
+                } else {
+                    console.log(`[TOAST ${type.toUpperCase()}] ${message}`);
+                }
+            };
+            
             if (!activeTemplate || !activeTemplate._id) {
-                window.ToastManager.error('❌ No template selected');
+                showToast('error', '❌ No template selected');
                 return;
             }
             
@@ -6596,7 +6605,7 @@ Continue?`;
                 // Check for authentication errors first
                 if (response.status === 401) {
                     console.error('❌ [INTELLIGENCE MODE] Authentication failed - JWT expired or invalid');
-                    window.ToastManager.error('🔐 Session expired. Please log out and log back in.');
+                    showToast('error', '🔐 Session expired. Please log out and log back in.');
                     
                     // Reset visual feedback
                     document.querySelectorAll('.preset-card').forEach(card => {
@@ -6611,7 +6620,7 @@ Continue?`;
                     result = await response.json();
                 } catch (parseError) {
                     console.error('❌ [INTELLIGENCE MODE] Failed to parse response:', parseError);
-                    window.ToastManager.error('❌ Server returned invalid response');
+                    showToast('error', '❌ Server returned invalid response');
                     document.querySelectorAll('.preset-card').forEach(card => {
                         card.classList.remove('opacity-70', 'ring-4', 'ring-purple-500', 'border-purple-500');
                     });
@@ -6641,18 +6650,18 @@ Continue?`;
                     activeTemplate.intelligenceMode = mode;
                     activeTemplate.testPilotSettings = result.data.testPilotSettings;
                     
-                    window.ToastManager.success(`✅ Intelligence Mode set to ${modeNames[mode]}`);
+                    showToast('success', `✅ Intelligence Mode set to ${modeNames[mode]}`);
                     
                     // Show cost estimate
                     setTimeout(() => {
-                        window.ToastManager.info(`💡 Estimated cost: ${result.data.estimatedCostPerTest} per test`, {
+                        showToast('info', `💡 Estimated cost: ${result.data.estimatedCostPerTest} per test`, {
                             duration: 5000
                         });
                     }, 1000);
                     
                 } else {
                     console.error('❌ [INTELLIGENCE MODE] Failed:', result.error || result.message || 'Unknown error');
-                    window.ToastManager.error(`❌ Failed to set intelligence mode: ${result.error || result.message || 'Unknown error'}`);
+                    showToast('error', `❌ Failed to set intelligence mode: ${result.error || result.message || 'Unknown error'}`);
                     
                     // Reset visual feedback
                     document.querySelectorAll('.preset-card').forEach(card => {
@@ -6662,7 +6671,7 @@ Continue?`;
                 
             } catch (error) {
                 console.error('❌ [INTELLIGENCE MODE] Error:', error);
-                window.ToastManager.error(`❌ Network error: ${error.message}`);
+                showToast('error', `❌ Network error: ${error.message}`);
                 
                 // Reset visual feedback
                 document.querySelectorAll('.preset-card').forEach(card => {
