@@ -2082,25 +2082,106 @@ router.post('/test-respond/:templateId', async (req, res) => {
     }
     
     // ============================================
-    // 🤖 LLM-POWERED DEEP ANALYSIS FOR FAILED TESTS
+    // 🎯 ENTERPRISE TEST PILOT: DEEP LLM ANALYSIS
     // ============================================
-    // If the test failed (no match or low confidence), use LLM to analyze WHY
-    // and suggest specific improvements to fillers, synonyms, or scenarios.
-    // This is the CORRECT use of LLM in testing: as a diagnostic tool, not as the matcher.
+    // If the template has Enterprise Test Pilot enabled (intelligenceMode set),
+    // use the EnterpriseAISuggestionEngine for comprehensive analysis.
+    // This provides:
+    // - LLM qualitative analysis (missing fillers, triggers, context confusion)
+    // - Statistical pattern frequency (how often patterns appear in failed tests)
+    // - Impact scoring (priority ranking based on frequency × confidence gain × cost)
+    // - Conflict detection (trigger collisions, routing ambiguity)
+    // - Cost projection (ROI analysis for applying suggestions)
+    // - Before/after simulation (predicted impact)
     // ============================================
-    if (!testResult.matched || testResult.confidence < testResult.threshold) {
-      logger.info(`🤖 [LLM DIAGNOSTIC] Test failed - running LLM analysis for improvement suggestions...`);
+    
+    const shouldRunEnterpriseAnalysis = template.intelligenceMode && 
+                                        template.testPilotSettings &&
+                                        (!testResult.matched || testResult.confidence < testResult.threshold);
+    
+    if (shouldRunEnterpriseAnalysis) {
+      logger.info(`🎯 [ENTERPRISE TEST PILOT] Running deep analysis with ${template.intelligenceMode} mode...`);
+      
+      try {
+        const EnterpriseAISuggestionEngine = require('../services/EnterpriseAISuggestionEngine');
+        const enterpriseEngine = new EnterpriseAISuggestionEngine();
+        
+        // Run comprehensive analysis
+        const enterpriseAnalysis = await enterpriseEngine.analyzeTestCall(
+          speechText,
+          templateId
+        );
+        
+        // Store enterprise analysis
+        testResult.enterpriseAnalysis = {
+          mode: template.intelligenceMode,
+          analyzed: true,
+          analysisId: enterpriseAnalysis.analysis?._id?.toString(),
+          suggestions: enterpriseAnalysis.suggestions || [],
+          conflicts: enterpriseAnalysis.conflicts || [],
+          trends: enterpriseAnalysis.trends || null,
+          costImpact: enterpriseAnalysis.costProjection || null,
+          coloredTranscript: enterpriseAnalysis.coloredTranscript || null,
+          timestamp: new Date().toISOString()
+        };
+        
+        logger.info(`✅ [ENTERPRISE TEST PILOT] Analysis complete: ${enterpriseAnalysis.suggestions.length} suggestions, ${enterpriseAnalysis.conflicts.length} conflicts`);
+        
+        // Backward compatibility: also populate legacy llmDiagnostic
+        testResult.llmDiagnostic = {
+          analyzed: true,
+          reason: !testResult.matched ? 'No match found' : `Confidence ${(testResult.confidence * 100).toFixed(0)}% below threshold ${(testResult.threshold * 100).toFixed(0)}%`,
+          suggestions: enterpriseAnalysis.suggestions.slice(0, 5).map(s => s.description || s.reason), // Top 5 for backward compat
+          enterpriseMode: true,
+          analysisId: enterpriseAnalysis.analysis?._id?.toString(),
+          timestamp: new Date().toISOString()
+        };
+        
+      } catch (enterpriseError) {
+        logger.error(`❌ [ENTERPRISE TEST PILOT] Analysis failed:`, {
+          error: enterpriseError.message,
+          stack: enterpriseError.stack
+        });
+        
+        // Fallback to basic analysis
+        testResult.enterpriseAnalysis = {
+          mode: template.intelligenceMode,
+          analyzed: false,
+          error: enterpriseError.message,
+          fallbackToBasic: true
+        };
+        
+        testResult.llmDiagnostic = {
+          analyzed: true,
+          reason: !testResult.matched ? 'No match found' : `Confidence ${(testResult.confidence * 100).toFixed(0)}% below threshold ${(testResult.threshold * 100).toFixed(0)}%`,
+          suggestions: aiAnalysis.suggestions || [],
+          enterpriseMode: false,
+          enterpriseError: enterpriseError.message,
+          timestamp: new Date().toISOString()
+        };
+        
+        logger.info(`🤖 [FALLBACK] Using basic AI analysis - ${aiAnalysis.suggestions.length} suggestions`);
+      }
+      
+    } else if (!testResult.matched || testResult.confidence < testResult.threshold) {
+      // ============================================
+      // 🤖 BASIC LLM DIAGNOSTIC (Legacy Mode)
+      // ============================================
+      logger.info(`🤖 [LLM DIAGNOSTIC] Test failed - running basic analysis...`);
       testResult.llmDiagnostic = {
         analyzed: true,
         reason: !testResult.matched ? 'No match found' : `Confidence ${(testResult.confidence * 100).toFixed(0)}% below threshold ${(testResult.threshold * 100).toFixed(0)}%`,
         suggestions: aiAnalysis.suggestions || [],
+        enterpriseMode: false,
         timestamp: new Date().toISOString()
       };
       
-      // Note: Full LLM analysis could be added here to provide even more detailed suggestions
-      // For now, we use the rule-based aiAnalysis which is fast and free
       logger.info(`🤖 [LLM DIAGNOSTIC] Generated ${aiAnalysis.suggestions.length} improvement suggestions`);
+      
     } else {
+      // ============================================
+      // ✅ TEST PASSED - NO ANALYSIS NEEDED
+      // ============================================
       testResult.llmDiagnostic = {
         analyzed: false,
         reason: 'Test passed - no LLM analysis needed',
