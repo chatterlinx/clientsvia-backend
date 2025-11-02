@@ -4766,6 +4766,23 @@ Just checking in..."></textarea>
         }
 
         // ============================================
+        // GLOBAL TOAST HELPER
+        // ============================================
+        /**
+         * Safe toast notification helper
+         * @param {string} type - 'success', 'error', 'info', 'warning'
+         * @param {string} message - Toast message
+         * @param {object} options - Additional toast options
+         */
+        function showToast(type, message, options) {
+            if (window.ToastManager && window.ToastManager[type]) {
+                window.ToastManager[type](message, options);
+            } else {
+                console.log(`[TOAST ${type.toUpperCase()}] ${message}`);
+            }
+        }
+
+        // ============================================
         // INITIALIZE ERROR REPORTERS (One per module)
         // ============================================
         const errorReporters = {
@@ -7292,15 +7309,6 @@ Continue?`;
          */
         async function selectIntelligenceMode(mode) {
             console.log('🎯 [INTELLIGENCE MODE] Selecting mode:', mode);
-            
-            // Safe toast helper
-            const showToast = (type, message, options) => {
-                if (window.ToastManager && window.ToastManager[type]) {
-                    window.ToastManager[type](message, options);
-                } else {
-                    console.log(`[TOAST ${type.toUpperCase()}] ${message}`);
-                }
-            };
             
             if (!activeTemplate || !activeTemplate._id) {
                 showToast('error', '❌ No template selected');
