@@ -293,9 +293,9 @@ class AiCoreTemplatesManager {
      */
     renderActiveTemplateCard(template) {
         const stats = template.stats || {};
-        const categories = stats.categories || 0;
-        const scenarios = stats.scenarios || 0;
-        const triggers = stats.triggers || 0;
+        const categories = stats.totalCategories || stats.categories || 0;
+        const scenarios = stats.totalScenarios || stats.scenarios || 0;
+        const triggers = stats.totalTriggers || stats.triggers || 0;
         const version = template.version || 'v1.0.0';
         const icon = template.icon || '🔧';
         const priority = template.priority || 1;
@@ -443,9 +443,9 @@ class AiCoreTemplatesManager {
      */
     renderAvailableTemplateCard(template) {
         const stats = template.stats || {};
-        const categories = stats.categories || 0;
-        const scenarios = stats.scenarios || 0;
-        const triggers = stats.triggers || 0;
+        const categories = stats.totalCategories || stats.categories || 0;
+        const scenarios = stats.totalScenarios || stats.scenarios || 0;
+        const triggers = stats.totalTriggers || stats.triggers || 0;
         const version = template.version || 'v1.0.0';
         const icon = template.icon || '🔧';
         const industry = template.industryLabel || 'General';

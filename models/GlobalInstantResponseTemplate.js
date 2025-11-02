@@ -1351,9 +1351,36 @@ globalInstantResponseTemplateSchema.statics.cloneTemplate = async function(sourc
 };
 
 globalInstantResponseTemplateSchema.statics.getPublishedTemplates = async function() {
-    return await this.find({ isPublished: true })
-        .select('_id name version description templateType industryLabel stats createdAt updatedAt')
+    const templates = await this.find({ isPublished: true })
+        .select('_id name version description templateType industryLabel stats categories createdAt updatedAt')
         .sort({ createdAt: -1 });
+    
+    // Auto-calculate stats if they're 0 (for legacy templates)
+    templates.forEach(template => {
+        if (!template.stats.totalCategories && template.categories && template.categories.length > 0) {
+            let totalScenarios = 0;
+            let totalTriggers = 0;
+            
+            template.categories.forEach(category => {
+                if (category.scenarios && category.scenarios.length > 0) {
+                    totalScenarios += category.scenarios.length;
+                    category.scenarios.forEach(scenario => {
+                        if (scenario.triggers && scenario.triggers.length > 0) {
+                            totalTriggers += scenario.triggers.length;
+                        }
+                    });
+                }
+            });
+            
+            template.stats = {
+                totalCategories: template.categories.length,
+                totalScenarios,
+                totalTriggers
+            };
+        }
+    });
+    
+    return templates;
 };
 
 // ============================================
