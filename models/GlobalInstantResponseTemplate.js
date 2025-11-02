@@ -760,6 +760,155 @@ const globalInstantResponseTemplateSchema = new Schema({
     },
     
     // ============================================================================
+    // 🧠 INTELLIGENCE MODE - TEST PILOT CONFIGURATION
+    // ============================================================================
+    // Controls the depth of LLM analysis during testing (Test Pilot mode).
+    // Three presets: MAXIMUM (deep), BALANCED (selective), MINIMAL (critical-only)
+    // Philosophy: Pay upfront in testing → Get perfect template → Production is free
+    // ============================================================================
+    intelligenceMode: {
+        type: String,
+        enum: ['MAXIMUM', 'BALANCED', 'MINIMAL'],
+        default: 'MAXIMUM'
+        // MAXIMUM: Deep LLM analysis on every test (~$0.10/test)
+        // BALANCED: Selective analysis on failures (~$0.05/test)
+        // MINIMAL: Critical-only analysis (~$0.01/test)
+        // Set via preset selector UI in Test Pilot tab
+    },
+    
+    // ============================================================================
+    // 🔬 TEST PILOT SETTINGS (Advanced - Auto-Configured by Preset)
+    // ============================================================================
+    // These settings are automatically configured when intelligenceMode is selected.
+    // Developers rarely need to touch these directly.
+    // ============================================================================
+    testPilotSettings: {
+        llmModel: {
+            type: String,
+            enum: ['gpt-4o', 'gpt-4o-mini'],
+            default: 'gpt-4o'
+            // Best model for MAXIMUM, cheaper model for BALANCED/MINIMAL
+        },
+        
+        analysisDepth: {
+            type: String,
+            enum: ['DEEP', 'STANDARD', 'SHALLOW'],
+            default: 'DEEP'
+            // DEEP: Full analysis (triggers, fillers, synonyms, edge cases, conflicts)
+            // STANDARD: Normal analysis (triggers, fillers, synonyms)
+            // SHALLOW: Quick analysis (critical issues only)
+        },
+        
+        analysisMode: {
+            type: String,
+            enum: ['ALWAYS', 'ON_FAILURE', 'CRITICAL_ONLY'],
+            default: 'ALWAYS'
+            // ALWAYS: Analyze every test (even 100% confidence)
+            // ON_FAILURE: Only analyze when confidence < minConfidenceForAnalysis
+            // CRITICAL_ONLY: Only analyze catastrophic failures (<40% confidence)
+        },
+        
+        suggestionFilter: {
+            type: String,
+            enum: ['ALL', 'HIGH_PRIORITY', 'CRITICAL_ONLY'],
+            default: 'ALL'
+            // ALL: Show all LLM suggestions
+            // HIGH_PRIORITY: Show important suggestions only
+            // CRITICAL_ONLY: Show critical issues only
+        },
+        
+        minConfidenceForAnalysis: {
+            type: Number,
+            default: 0,
+            min: 0,
+            max: 1
+            // Minimum confidence to trigger analysis (if analysisMode = ON_FAILURE)
+            // 0 = analyze all, 0.70 = analyze if <70%, 0.40 = analyze if <40%
+        },
+        
+        conflictDetection: {
+            type: String,
+            enum: ['AGGRESSIVE', 'STANDARD', 'DISABLED'],
+            default: 'AGGRESSIVE'
+            // AGGRESSIVE: Find all potential conflicts (trigger collisions, synonym overlap)
+            // STANDARD: Basic conflict detection
+            // DISABLED: Skip conflict detection (cost savings)
+        },
+        
+        edgeCasePrediction: {
+            type: Boolean,
+            default: true
+            // If true: LLM predicts edge cases before customers hit them
+            // If false: Only analyze current test phrase
+        },
+        
+        beforeAfterSimulation: {
+            type: Boolean,
+            default: true
+            // If true: Show predicted impact of applying suggestions
+            // If false: Skip simulation (cost savings)
+        },
+        
+        bulkActions: {
+            type: Boolean,
+            default: true
+            // If true: Enable "Apply All" / "Ignore All" bulk actions
+            // If false: Manual review required for each suggestion
+        },
+        
+        costLimit: {
+            type: Number,
+            default: null
+            // Max cost per test (USD). null = no limit
+            // Example: 0.10 = stop analysis if cost exceeds $0.10
+        },
+        
+        maxAnalysisTime: {
+            type: Number,
+            default: 30000
+            // Max time for LLM analysis (ms)
+            // Prevents runaway costs for complex tests
+        }
+    },
+    
+    // ============================================================================
+    // 🌐 AI GATEWAY SETTINGS (Production Tier Thresholds)
+    // ============================================================================
+    // Controls when production calls escalate from Tier 1 → 2 → 3
+    // Also auto-configured by intelligenceMode preset
+    // ============================================================================
+    aiGatewaySettings: {
+        tier1Threshold: {
+            type: Number,
+            default: 0.80,
+            min: 0.60,
+            max: 0.95
+            // Minimum confidence for Tier 1 (rule-based) to accept match
+            // MAXIMUM: 0.80 (higher bar, more testing analysis)
+            // BALANCED: 0.70 (standard)
+            // MINIMAL: 0.60 (lower bar, easier to pass)
+        },
+        
+        tier2Threshold: {
+            type: Number,
+            default: 0.60,
+            min: 0.40,
+            max: 0.80
+            // Minimum confidence for Tier 2 (semantic) to accept match
+            // MAXIMUM: 0.60 (lower bar, catches more edge cases)
+            // BALANCED: 0.75 (standard)
+            // MINIMAL: 0.80 (higher bar, hard to reach Tier 3)
+        },
+        
+        enableTier3: {
+            type: Boolean,
+            default: true
+            // If false: Disable LLM entirely (production will never use Tier 3)
+            // If true: Use LLM as fallback when Tier 1/2 fail
+        }
+    },
+    
+    // ============================================================================
     // 📊 LEARNING STATISTICS (Auto-Calculated)
     // ============================================================================
     // Tracks self-improvement progress over time
