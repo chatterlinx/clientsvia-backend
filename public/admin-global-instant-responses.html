@@ -6581,6 +6581,18 @@ Continue?`;
                     body: JSON.stringify({ intelligenceMode: mode })
                 });
                 
+                // Check for authentication errors first
+                if (response.status === 401) {
+                    console.error('❌ [INTELLIGENCE MODE] Authentication failed - JWT expired or invalid');
+                    window.ToastManager.error('🔐 Session expired. Please log out and log back in.');
+                    
+                    // Reset visual feedback
+                    document.querySelectorAll('.preset-card').forEach(card => {
+                        card.classList.remove('opacity-70', 'ring-4', 'ring-purple-500', 'border-purple-500');
+                    });
+                    return;
+                }
+                
                 const result = await response.json();
                 
                 if (result.success) {
@@ -6616,8 +6628,8 @@ Continue?`;
                     }, 1000);
                     
                 } else {
-                    console.error('❌ [INTELLIGENCE MODE] Failed:', result.error);
-                    window.ToastManager.error(`❌ Failed to set intelligence mode: ${result.error}`);
+                    console.error('❌ [INTELLIGENCE MODE] Failed:', result.error || result.message || 'Unknown error');
+                    window.ToastManager.error(`❌ Failed to set intelligence mode: ${result.error || result.message || 'Unknown error'}`);
                     
                     // Reset visual feedback
                     document.querySelectorAll('.preset-card').forEach(card => {
