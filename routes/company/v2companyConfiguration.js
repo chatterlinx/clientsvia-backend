@@ -1759,16 +1759,32 @@ router.delete('/:companyId/configuration/templates/:templateId', async (req, res
         }
         
         if (!company.aiAgentSettings || !company.aiAgentSettings.templateReferences) {
+            logger.warn(`[TEMPLATE HUB] Company ${req.params.companyId} has no templateReferences array`);
             return res.status(404).json({ error: 'No templates loaded' });
         }
+        
+        // DIAGNOSTIC: Log what we're looking for vs what exists
+        const requestedId = req.params.templateId.toString();
+        logger.info(`[TEMPLATE HUB] Requested templateId to remove: ${requestedId}`);
+        logger.info(`[TEMPLATE HUB] Current templateReferences count: ${company.aiAgentSettings.templateReferences.length}`);
+        company.aiAgentSettings.templateReferences.forEach((ref, index) => {
+            const refId = ref.templateId ? ref.templateId.toString() : 'undefined';
+            logger.info(`[TEMPLATE HUB]   [${index}] templateId: ${refId}, match: ${refId === requestedId}`);
+        });
         
         // Find and remove the template reference
         const initialLength = company.aiAgentSettings.templateReferences.length;
         company.aiAgentSettings.templateReferences = company.aiAgentSettings.templateReferences.filter(
-            ref => ref.templateId.toString() !== req.params.templateId.toString()
+            ref => {
+                const refId = ref.templateId ? ref.templateId.toString() : null;
+                const match = refId === requestedId;
+                logger.info(`[TEMPLATE HUB] Filter: refId=${refId}, requested=${requestedId}, keeping=${!match}`);
+                return !match;
+            }
         );
         
         if (company.aiAgentSettings.templateReferences.length === initialLength) {
+            logger.error(`[TEMPLATE HUB] Template ${requestedId} not found. Available: ${company.aiAgentSettings.templateReferences.map(r => r.templateId).join(', ')}`);
             return res.status(404).json({ error: 'Template not found in company' });
         }
         
