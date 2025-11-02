@@ -10,9 +10,9 @@
     <!-- DEPLOYMENT VERSION: OPTION_B_PERFECT - 2025-11-02 21:15:00 UTC - Template Status Label Fixed -->
     <script>
         // 🔥 DEPLOYMENT VERIFICATION SYSTEM
-        const BUILD_VERSION = 'OPTION_B_PERFECT';
-        const BUILD_DATE = '2025-11-02 21:15:00 UTC';
-        const BUILD_DESCRIPTION = 'Fixed Template Testing status label not updating - All toggle labels working perfectly now';
+        const BUILD_VERSION = 'OPTION_B_NULL_SAFE';
+        const BUILD_DATE = '2025-11-02 21:30:00 UTC';
+        const BUILD_DESCRIPTION = 'Added comprehensive null checks to all toggle functions - No more TypeError crashes';
         
         console.log('═══════════════════════════════════════════════════');
         console.log('🚀 DEPLOYMENT VERSION:', BUILD_VERSION);
@@ -6135,6 +6135,11 @@ Continue?`;
             const toggleCircle = document.getElementById('toggle-circle');
             const statusLabel = document.getElementById('template-toggle-label');
             
+            if (!checkbox) {
+                console.error('❌ [TEMPLATE TEST] Toggle checkbox not found');
+                return;
+            }
+            
             // Toggle checkbox
             const newState = !checkbox.checked;
             checkbox.checked = newState;
@@ -6142,9 +6147,13 @@ Continue?`;
             // Update UI
             if (checkbox.checked) {
                 // ON state
-                toggleSwitch.classList.remove('bg-gray-300');
-                toggleSwitch.classList.add('bg-purple-600');
-                toggleCircle.style.transform = 'translateX(28px)';
+                if (toggleSwitch) {
+                    toggleSwitch.classList.remove('bg-gray-300');
+                    toggleSwitch.classList.add('bg-purple-600');
+                }
+                if (toggleCircle) {
+                    toggleCircle.style.transform = 'translateX(28px)';
+                }
                 if (statusLabel) {
                     statusLabel.innerHTML = 'Status: <span class="text-green-600 font-bold">Enabled</span>';
                 }
@@ -6157,9 +6166,13 @@ Continue?`;
                 showToast('success', '✅ Template Testing enabled • Company Testing disabled');
             } else {
                 // OFF state
-                toggleSwitch.classList.remove('bg-purple-600');
-                toggleSwitch.classList.add('bg-gray-300');
-                toggleCircle.style.transform = 'translateX(0)';
+                if (toggleSwitch) {
+                    toggleSwitch.classList.remove('bg-purple-600');
+                    toggleSwitch.classList.add('bg-gray-300');
+                }
+                if (toggleCircle) {
+                    toggleCircle.style.transform = 'translateX(0)';
+                }
                 if (statusLabel) {
                     statusLabel.innerHTML = 'Status: <span class="text-gray-500">Disabled</span>';
                 }
@@ -6238,16 +6251,24 @@ Continue?`;
                 const statusLabel = document.getElementById('template-toggle-label');
                 
                 if (isEnabled) {
-                    toggleSwitch.classList.remove('bg-gray-300');
-                    toggleSwitch.classList.add('bg-purple-600');
-                    toggleCircle.style.transform = 'translateX(28px)';
+                    if (toggleSwitch) {
+                        toggleSwitch.classList.remove('bg-gray-300');
+                        toggleSwitch.classList.add('bg-purple-600');
+                    }
+                    if (toggleCircle) {
+                        toggleCircle.style.transform = 'translateX(28px)';
+                    }
                     if (statusLabel) {
                         statusLabel.innerHTML = 'Status: <span class="text-green-600 font-bold">Enabled</span>';
                     }
                 } else {
-                    toggleSwitch.classList.remove('bg-purple-600');
-                    toggleSwitch.classList.add('bg-gray-300');
-                    toggleCircle.style.transform = 'translateX(0)';
+                    if (toggleSwitch) {
+                        toggleSwitch.classList.remove('bg-purple-600');
+                        toggleSwitch.classList.add('bg-gray-300');
+                    }
+                    if (toggleCircle) {
+                        toggleCircle.style.transform = 'translateX(0)';
+                    }
                     if (statusLabel) {
                         statusLabel.innerHTML = 'Status: <span class="text-gray-500">Disabled</span>';
                     }
@@ -7203,13 +7224,22 @@ Continue?`;
             const toggleCircle = document.getElementById('company-toggle-circle');
             const statusLabel = document.getElementById('company-toggle-label');
             
+            if (!checkbox) {
+                console.error('❌ [COMPANY TEST] Toggle checkbox not found');
+                return;
+            }
+            
             const newState = !checkbox.checked;
             checkbox.checked = newState;
             
             if (checkbox.checked) {
-                toggleSwitch.classList.add('bg-blue-600');
-                toggleSwitch.classList.remove('bg-gray-300');
-                toggleCircle.style.transform = 'translateX(28px)';
+                if (toggleSwitch) {
+                    toggleSwitch.classList.add('bg-blue-600');
+                    toggleSwitch.classList.remove('bg-gray-300');
+                }
+                if (toggleCircle) {
+                    toggleCircle.style.transform = 'translateX(28px)';
+                }
                 if (statusLabel) {
                     statusLabel.innerHTML = 'Status: <span class="text-green-600 font-bold">Enabled</span>';
                 }
@@ -7221,9 +7251,13 @@ Continue?`;
                 
                 showToast('success', '✅ Company Testing enabled • Template Testing disabled');
             } else {
-                toggleSwitch.classList.remove('bg-blue-600');
-                toggleSwitch.classList.add('bg-gray-300');
-                toggleCircle.style.transform = 'translateX(0)';
+                if (toggleSwitch) {
+                    toggleSwitch.classList.remove('bg-blue-600');
+                    toggleSwitch.classList.add('bg-gray-300');
+                }
+                if (toggleCircle) {
+                    toggleCircle.style.transform = 'translateX(0)';
+                }
                 if (statusLabel) {
                     statusLabel.innerHTML = 'Status: <span class="text-gray-500">Disabled</span>';
                 }
@@ -7247,9 +7281,14 @@ Continue?`;
             
             if (checkbox && checkbox.checked) {
                 checkbox.checked = false;
-                toggleSwitch.classList.remove('bg-blue-600');
-                toggleSwitch.classList.add('bg-gray-300');
-                toggleCircle.style.transform = 'translateX(0)';
+                
+                if (toggleSwitch) {
+                    toggleSwitch.classList.remove('bg-blue-600');
+                    toggleSwitch.classList.add('bg-gray-300');
+                }
+                if (toggleCircle) {
+                    toggleCircle.style.transform = 'translateX(0)';
+                }
                 if (statusLabel) {
                     statusLabel.innerHTML = 'Status: <span class="text-gray-500">Disabled</span>';
                 }
@@ -7285,9 +7324,14 @@ Continue?`;
             
             if (checkbox && checkbox.checked) {
                 checkbox.checked = false;
-                toggleSwitch.classList.remove('bg-purple-600');
-                toggleSwitch.classList.add('bg-gray-300');
-                toggleCircle.style.transform = 'translateX(0)';
+                
+                if (toggleSwitch) {
+                    toggleSwitch.classList.remove('bg-purple-600');
+                    toggleSwitch.classList.add('bg-gray-300');
+                }
+                if (toggleCircle) {
+                    toggleCircle.style.transform = 'translateX(0)';
+                }
                 if (statusLabel) {
                     statusLabel.innerHTML = 'Status: <span class="text-gray-500">Disabled</span>';
                 }
