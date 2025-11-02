@@ -1772,6 +1772,53 @@ const companySchema = new mongoose.Schema({
                     default: 0 // 0 = best quality, higher = lower latency
                 },
                 
+                // 📞 SPEECH DETECTION SETTINGS (Twilio Gather Configuration)
+                // Controls how the AI detects when the caller has finished speaking
+                speechDetection: {
+                    // Speech Timeout: How long to wait (in seconds) after caller stops talking
+                    // before considering their input complete
+                    // Range: 1-10 seconds
+                    // - Lower (1-3s) = Faster responses, but may cut off pauses
+                    // - Higher (7-10s) = Allows long pauses, but feels slower
+                    // - Recommended: 3-5s for most businesses
+                    speechTimeout: {
+                        type: Number,
+                        min: 1,
+                        max: 10,
+                        default: 3 // Optimized for natural conversation flow
+                    },
+                    
+                    // Initial Timeout: How long to wait for ANY speech to start (in seconds)
+                    // If caller says nothing, system will timeout after this duration
+                    initialTimeout: {
+                        type: Number,
+                        min: 3,
+                        max: 15,
+                        default: 5
+                    },
+                    
+                    // Barge-In: Allow caller to interrupt AI while it's speaking
+                    // true = Caller can interrupt mid-sentence (more natural)
+                    // false = AI must finish speaking before caller can respond (more polite)
+                    bargeIn: {
+                        type: Boolean,
+                        default: false
+                    },
+                    
+                    // Enhanced Speech Recognition
+                    enhancedRecognition: {
+                        type: Boolean,
+                        default: true // Uses Twilio's enhanced speech model for better accuracy
+                    },
+                    
+                    // Speech Model: Which Twilio speech model to use
+                    speechModel: {
+                        type: String,
+                        enum: ['default', 'numbers_and_commands', 'phone_call'],
+                        default: 'phone_call' // Optimized for phone conversations
+                    }
+                },
+                
                 // V2 Features
                 enabled: { 
                     type: Boolean, 

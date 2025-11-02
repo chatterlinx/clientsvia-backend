@@ -739,15 +739,17 @@ router.post('/voice', async (req, res) => {
       logger.debug(`[V2 VOICE] Voice settings:`, JSON.stringify(initResult.voiceSettings, null, 2));
       
       // Set up speech gathering with V2 Agent response handler
+      // 📞 SPEECH DETECTION: Now configurable per company in Voice Settings
+      const speechDetection = company.aiAgentLogic?.voiceSettings?.speechDetection || {};
       const gather = twiml.gather({
         input: 'speech',
         action: `https://${req.get('host')}/api/twilio/v2-agent-respond/${company._id}`,
         method: 'POST',
-        bargeIn: company.aiAgentLogic?.voiceSettings?.bargeIn ?? false,
-        timeout: 5,
-        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' - allows chatty customers to finish their thought without being cut off mid-sentence
-        enhanced: true,
-        speechModel: 'phone_call',
+        bargeIn: speechDetection.bargeIn ?? false,
+        timeout: speechDetection.initialTimeout ?? 5,
+        speechTimeout: (speechDetection.speechTimeout ?? 3).toString(), // Configurable: 1-10 seconds (default: 3s)
+        enhanced: speechDetection.enhancedRecognition ?? true,
+        speechModel: speechDetection.speechModel ?? 'phone_call',
         hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually', // Help recognize common filler words and pauses
         partialResultCallback: `https://${req.get('host')}/api/twilio/v2-agent-partial/${company._id}`
       });
@@ -1168,16 +1170,17 @@ router.post('/handle-speech', async (req, res) => {
       answerObj = { text: fallback, escalate: false };
     }
 
-    // Generate TTS and respond immediately
+    // Generate TTS and respond immediately - using configurable speech detection settings
+    const speechDetection = company.aiAgentLogic?.voiceSettings?.speechDetection || {};
     const gather = twiml.gather({
       input: 'speech',
       action: `https://${req.get('host')}/api/twilio/handle-speech`,
       method: 'POST',
-      bargeIn: company.aiSettings?.bargeIn ?? false,
-      timeout: 5, // Globally optimized for fast response
-      speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
-      enhanced: true,
-      speechModel: 'phone_call',
+      bargeIn: speechDetection.bargeIn ?? false,
+      timeout: speechDetection.initialTimeout ?? 5,
+      speechTimeout: (speechDetection.speechTimeout ?? 3).toString(), // Configurable: 1-10 seconds (default: 3s)
+      enhanced: speechDetection.enhancedRecognition ?? true,
+      speechModel: speechDetection.speechModel ?? 'phone_call',
       partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
     });
 
@@ -1382,11 +1385,15 @@ router.post('/voice/:companyID', async (req, res) => {
       }, escapeTwiML(finalGreeting));
       
       logger.info('🎯 CHECKPOINT 7: Setting up speech gathering');
-      // Set up gather for AI Agent Logic flow
+      // Set up gather for AI Agent Logic flow - using configurable speech detection settings
+      const speechDetection = company.aiAgentLogic?.voiceSettings?.speechDetection || {};
       const gather = twiml.gather({
         input: 'speech',
-        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
-        speechModel: 'phone_call',
+        speechTimeout: (speechDetection.speechTimeout ?? 3).toString(), // Configurable: 1-10 seconds (default: 3s)
+        speechModel: speechDetection.speechModel ?? 'phone_call',
+        bargeIn: speechDetection.bargeIn ?? false,
+        timeout: speechDetection.initialTimeout ?? 5,
+        enhanced: speechDetection.enhancedRecognition ?? true,
         hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually', // Help recognize common filler words and pauses
         action: `/api/twilio/v2-agent-respond/${companyID}`,
         method: 'POST',
@@ -1582,11 +1589,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }
       
       logger.info('🎯 CHECKPOINT 21: Setting up next speech gathering');
-      // Set up next gather
+      // Set up next gather - using configurable speech detection settings
+      const speechDetection = company.aiAgentLogic?.voiceSettings?.speechDetection || {};
       const gather = twiml.gather({
         input: 'speech',
-        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
-        speechModel: 'phone_call',
+        speechTimeout: (speechDetection.speechTimeout ?? 3).toString(), // Configurable: 1-10 seconds (default: 3s)
+        speechModel: speechDetection.speechModel ?? 'phone_call',
+        bargeIn: speechDetection.bargeIn ?? false,
+        timeout: speechDetection.initialTimeout ?? 5,
+        enhanced: speechDetection.enhancedRecognition ?? true,
         action: `/api/twilio/v2-agent-respond/${companyID}`,
         method: 'POST'
       });
