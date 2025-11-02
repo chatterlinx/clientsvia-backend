@@ -1118,6 +1118,13 @@
                         </div>
                     </div>
                     
+                    <!-- ================================================================
+                         🎯 INTELLIGENCE MODE (Template Mode ONLY)
+                         ================================================================
+                         This is ONLY for Template Testing - hidden in Company Mode
+                         ================================================================ -->
+                    <div id="intelligence-mode-section" class="template-mode-only" style="display: block;">
+                    
                     <!-- 🎯 INTELLIGENCE MODE PRESET SELECTOR -->
                     <div class="bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-xl p-6 mt-6 shadow-lg">
                         <div class="mb-6">
@@ -1280,6 +1287,9 @@
                             </div>
                         </div>
                     </div>
+                    
+                    </div>
+                    <!-- END: Intelligence Mode Section (Template Mode Only) -->
                     
                     <!-- ========================================================================== -->
                     <!-- 📈 ENTERPRISE TREND ANALYTICS - TEMPLATE PERFORMANCE OVER TIME -->
@@ -6800,6 +6810,9 @@ Continue?`;
             const topTemplateSelector = document.getElementById('top-template-selector');
             const topCompanySelector = document.getElementById('top-company-selector');
             
+            // NEW: Intelligence Mode section (template-only)
+            const intelligenceModeSection = document.getElementById('intelligence-mode-section');
+            
             if (mode === 'template') {
                 // Show template mode sections
                 templateSection.style.display = 'block';
@@ -6810,6 +6823,11 @@ Continue?`;
                 // Show template selector, hide company selector
                 topTemplateSelector.style.display = 'block';
                 topCompanySelector.style.display = 'none';
+                
+                // Show Intelligence Mode (only for templates!)
+                if (intelligenceModeSection) {
+                    intelligenceModeSection.style.display = 'block';
+                }
                 
                 // Update button styles
                 templateBtn.className = 'flex-1 px-6 py-4 font-bold text-lg transition-all duration-300 bg-gradient-to-r from-purple-600 to-pink-600 text-white border-b-4 border-purple-700';
@@ -6830,6 +6848,11 @@ Continue?`;
                 // Show company selector, hide template selector
                 topTemplateSelector.style.display = 'none';
                 topCompanySelector.style.display = 'block';
+                
+                // Hide Intelligence Mode (not for companies!)
+                if (intelligenceModeSection) {
+                    intelligenceModeSection.style.display = 'none';
+                }
                 
                 // Update button styles
                 companyBtn.className = 'flex-1 px-6 py-4 font-bold text-lg transition-all duration-300 bg-gradient-to-r from-blue-600 to-cyan-600 text-white border-b-4 border-blue-700';
