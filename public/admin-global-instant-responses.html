@@ -1019,6 +1019,169 @@
                         </div>
                     </div>
                     
+                    <!-- 🎯 INTELLIGENCE MODE PRESET SELECTOR -->
+                    <div class="bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-xl p-6 mt-6 shadow-lg">
+                        <div class="mb-6">
+                            <h3 class="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                                <i class="fas fa-rocket text-purple-600"></i>
+                                Intelligence Mode
+                            </h3>
+                            <p class="text-sm text-gray-600 mt-2">
+                                Choose how aggressively Test Pilot analyzes your template. This automatically configures LLM analysis depth, cost limits, and quality thresholds.
+                            </p>
+                        </div>
+                        
+                        <!-- Current Mode Display -->
+                        <div id="current-intelligence-mode" class="mb-6 p-4 bg-white rounded-lg border-2 border-gray-200">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <span class="text-sm text-gray-600">Current Mode:</span>
+                                    <span id="current-mode-name" class="text-lg font-bold text-gray-900 ml-2">Not Set</span>
+                                </div>
+                                <span id="current-mode-emoji" class="text-3xl">⚙️</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Preset Cards (3-column grid) -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            
+                            <!-- MAXIMUM MODE -->
+                            <div class="preset-card border-3 rounded-xl p-5 cursor-pointer transition-all hover:shadow-xl hover:-translate-y-1 bg-gradient-to-br from-red-50 to-orange-50 border-red-300"
+                                 onclick="selectIntelligenceMode('MAXIMUM')"
+                                 data-mode="MAXIMUM">
+                                <div class="text-center mb-3">
+                                    <div class="text-5xl mb-2">🔥</div>
+                                    <h4 class="text-xl font-bold text-red-700">MAXIMUM LLM HELP</h4>
+                                    <p class="text-xs text-gray-600 mt-1">Best for perfecting templates</p>
+                                </div>
+                                
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-brain text-red-600 w-4"></i>
+                                        <span class="text-gray-700">Deep LLM analysis (GPT-4o)</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-microscope text-red-600 w-4"></i>
+                                        <span class="text-gray-700">Always analyze (even on success)</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-chart-line text-red-600 w-4"></i>
+                                        <span class="text-gray-700">Conflict detection: AGGRESSIVE</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-magic text-red-600 w-4"></i>
+                                        <span class="text-gray-700">Before/after simulation</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-dollar-sign text-red-600 w-4"></i>
+                                        <span class="text-gray-700 font-semibold">~$0.15/test</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4 p-3 bg-white rounded-lg border border-red-200">
+                                    <p class="text-xs text-gray-600 leading-relaxed">
+                                        <strong class="text-red-700">Best for:</strong> Initial template development, finding hidden issues, perfectionism
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <!-- BALANCED MODE -->
+                            <div class="preset-card border-3 rounded-xl p-5 cursor-pointer transition-all hover:shadow-xl hover:-translate-y-1 bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-300"
+                                 onclick="selectIntelligenceMode('BALANCED')"
+                                 data-mode="BALANCED">
+                                <div class="text-center mb-3">
+                                    <div class="text-5xl mb-2">⚖️</div>
+                                    <h4 class="text-xl font-bold text-blue-700">BALANCED</h4>
+                                    <p class="text-xs text-gray-600 mt-1">Smart cost-quality balance</p>
+                                </div>
+                                
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-brain text-blue-600 w-4"></i>
+                                        <span class="text-gray-700">Standard LLM (GPT-4o-mini)</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-microscope text-blue-600 w-4"></i>
+                                        <span class="text-gray-700">Analyze on failure</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-chart-line text-blue-600 w-4"></i>
+                                        <span class="text-gray-700">Conflict detection: STANDARD</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-magic text-blue-600 w-4"></i>
+                                        <span class="text-gray-700">Impact analysis included</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-dollar-sign text-blue-600 w-4"></i>
+                                        <span class="text-gray-700 font-semibold">~$0.05/test</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4 p-3 bg-white rounded-lg border border-blue-200">
+                                    <p class="text-xs text-gray-600 leading-relaxed">
+                                        <strong class="text-blue-700">Best for:</strong> Ongoing maintenance, periodic improvements, most use cases
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <!-- MINIMAL MODE -->
+                            <div class="preset-card border-3 rounded-xl p-5 cursor-pointer transition-all hover:shadow-xl hover:-translate-y-1 bg-gradient-to-br from-green-50 to-emerald-50 border-green-300"
+                                 onclick="selectIntelligenceMode('MINIMAL')"
+                                 data-mode="MINIMAL">
+                                <div class="text-center mb-3">
+                                    <div class="text-5xl mb-2">💚</div>
+                                    <h4 class="text-xl font-bold text-green-700">MINIMAL</h4>
+                                    <p class="text-xs text-gray-600 mt-1">Cost-optimized testing</p>
+                                </div>
+                                
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-brain text-green-600 w-4"></i>
+                                        <span class="text-gray-700">Fast LLM (GPT-4o-mini)</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-microscope text-green-600 w-4"></i>
+                                        <span class="text-gray-700">Only critical failures</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-chart-line text-green-600 w-4"></i>
+                                        <span class="text-gray-700">Conflict detection: DISABLED</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-magic text-green-600 w-4"></i>
+                                        <span class="text-gray-700">Basic suggestions only</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-dollar-sign text-green-600 w-4"></i>
+                                        <span class="text-gray-700 font-semibold">~$0.02/test</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4 p-3 bg-white rounded-lg border border-green-200">
+                                    <p class="text-xs text-gray-600 leading-relaxed">
+                                        <strong class="text-green-700">Best for:</strong> Mature templates, tight budgets, high-volume testing
+                                    </p>
+                                </div>
+                            </div>
+                            
+                        </div>
+                        
+                        <!-- Comparison Note -->
+                        <div class="mt-4 p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
+                            <div class="flex items-start gap-3">
+                                <i class="fas fa-lightbulb text-yellow-600 text-xl mt-1"></i>
+                                <div class="text-sm">
+                                    <p class="font-semibold text-yellow-900 mb-1">💡 Pro Tip:</p>
+                                    <p class="text-yellow-800 leading-relaxed">
+                                        Start with <strong>MAXIMUM</strong> to perfect your template upfront, then switch to <strong>BALANCED</strong> for ongoing maintenance. 
+                                        The upfront investment pays off with 99% free (Tier 1) production calls!
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- 🧠 AI LEARNING & OPTIMIZATION SECTION -->
                     <div class="bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-xl p-6 mt-6 shadow-sm">
                         <div class="flex items-start justify-between mb-4">
@@ -6379,6 +6542,161 @@ Continue?`;
             console.log('✅ [AI LEARNING] Settings loaded successfully');
         }
         
+        // ============================================================================
+        // 🎯 INTELLIGENCE MODE PRESET SELECTOR
+        // ============================================================================
+        
+        /**
+         * Select an Intelligence Mode preset and apply it to the template
+         * @param {string} mode - 'MAXIMUM', 'BALANCED', or 'MINIMAL'
+         */
+        async function selectIntelligenceMode(mode) {
+            console.log('🎯 [INTELLIGENCE MODE] Selecting mode:', mode);
+            
+            if (!activeTemplate || !activeTemplate._id) {
+                window.ToastManager.error('❌ No template selected');
+                return;
+            }
+            
+            // Visual feedback - highlight selected card
+            document.querySelectorAll('.preset-card').forEach(card => {
+                card.classList.remove('ring-4', 'ring-purple-500', 'border-purple-500');
+                card.classList.add('opacity-70');
+            });
+            
+            const selectedCard = document.querySelector(`.preset-card[data-mode="${mode}"]`);
+            if (selectedCard) {
+                selectedCard.classList.add('ring-4', 'ring-purple-500', 'border-purple-500');
+                selectedCard.classList.remove('opacity-70');
+            }
+            
+            try {
+                // Send to backend
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate._id}/intelligence-mode`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ intelligenceMode: mode })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log('✅ [INTELLIGENCE MODE] Applied successfully:', result.data);
+                    
+                    // Update current mode display
+                    const modeEmojis = {
+                        'MAXIMUM': '🔥',
+                        'BALANCED': '⚖️',
+                        'MINIMAL': '💚'
+                    };
+                    
+                    const modeNames = {
+                        'MAXIMUM': 'Maximum LLM Help',
+                        'BALANCED': 'Balanced',
+                        'MINIMAL': 'Minimal'
+                    };
+                    
+                    document.getElementById('current-mode-name').textContent = modeNames[mode];
+                    document.getElementById('current-mode-emoji').textContent = modeEmojis[mode];
+                    
+                    // Update activeTemplate
+                    activeTemplate.intelligenceMode = mode;
+                    activeTemplate.testPilotSettings = result.data.testPilotSettings;
+                    
+                    window.ToastManager.success(`✅ Intelligence Mode set to ${modeNames[mode]}`);
+                    
+                    // Show cost estimate
+                    setTimeout(() => {
+                        window.ToastManager.info(`💡 Estimated cost: ${result.data.estimatedCostPerTest} per test`, {
+                            duration: 5000
+                        });
+                    }, 1000);
+                    
+                } else {
+                    console.error('❌ [INTELLIGENCE MODE] Failed:', result.error);
+                    window.ToastManager.error(`❌ Failed to set intelligence mode: ${result.error}`);
+                    
+                    // Reset visual feedback
+                    document.querySelectorAll('.preset-card').forEach(card => {
+                        card.classList.remove('opacity-70', 'ring-4', 'ring-purple-500', 'border-purple-500');
+                    });
+                }
+                
+            } catch (error) {
+                console.error('❌ [INTELLIGENCE MODE] Error:', error);
+                window.ToastManager.error(`❌ Network error: ${error.message}`);
+                
+                // Reset visual feedback
+                document.querySelectorAll('.preset-card').forEach(card => {
+                    card.classList.remove('opacity-70', 'ring-4', 'ring-purple-500', 'border-purple-500');
+                });
+            }
+        }
+        
+        /**
+         * Load and display current intelligence mode
+         * Called when template is switched
+         */
+        function loadIntelligenceMode() {
+            console.log('🎯 [INTELLIGENCE MODE] Loading current mode...');
+            
+            if (!activeTemplate) {
+                document.getElementById('current-mode-name').textContent = 'Not Set';
+                document.getElementById('current-mode-emoji').textContent = '⚙️';
+                return;
+            }
+            
+            const mode = activeTemplate.intelligenceMode;
+            
+            if (!mode) {
+                document.getElementById('current-mode-name').textContent = 'Not Set';
+                document.getElementById('current-mode-emoji').textContent = '⚙️';
+                
+                // Remove all highlights
+                document.querySelectorAll('.preset-card').forEach(card => {
+                    card.classList.remove('ring-4', 'ring-purple-500', 'border-purple-500', 'opacity-70');
+                });
+                
+                return;
+            }
+            
+            const modeEmojis = {
+                'MAXIMUM': '🔥',
+                'BALANCED': '⚖️',
+                'MINIMAL': '💚'
+            };
+            
+            const modeNames = {
+                'MAXIMUM': 'Maximum LLM Help',
+                'BALANCED': 'Balanced',
+                'MINIMAL': 'Minimal'
+            };
+            
+            document.getElementById('current-mode-name').textContent = modeNames[mode] || mode;
+            document.getElementById('current-mode-emoji').textContent = modeEmojis[mode] || '⚙️';
+            
+            // Highlight selected card
+            document.querySelectorAll('.preset-card').forEach(card => {
+                card.classList.remove('ring-4', 'ring-purple-500', 'border-purple-500');
+                card.classList.add('opacity-70');
+            });
+            
+            const selectedCard = document.querySelector(`.preset-card[data-mode="${mode}"]`);
+            if (selectedCard) {
+                selectedCard.classList.add('ring-4', 'ring-purple-500', 'border-purple-500');
+                selectedCard.classList.remove('opacity-70');
+            }
+            
+            console.log('✅ [INTELLIGENCE MODE] Current mode:', mode);
+        }
+        
+        // ============================================================================
+        // 🧠 AI LEARNING & OPTIMIZATION
+        // ============================================================================
+        
         /**
          * Save AI Learning settings to the backend
          * Collects all form values and sends PATCH request
@@ -10161,6 +10479,11 @@ Continue?`;
                     console.log('📥 [SWITCH TEMPLATE] Reloading Twilio test config...');
                     await loadTwilioTestConfig();
                     console.log('✅ [SWITCH TEMPLATE] Twilio test config reloaded');
+                    
+                    // 🎯 Reload Intelligence Mode for new template
+                    console.log('📥 [SWITCH TEMPLATE] Reloading Intelligence Mode...');
+                    loadIntelligenceMode();
+                    console.log('✅ [SWITCH TEMPLATE] Intelligence Mode reloaded');
                     
                     // 🧠 Reload AI Learning settings for new template
                     console.log('📥 [SWITCH TEMPLATE] Reloading AI Learning settings...');
