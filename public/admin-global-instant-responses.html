@@ -7,12 +7,12 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <!-- DEPLOYMENT VERSION: OPTION_B_FINAL - 2025-11-02 21:00:00 UTC - All JavaScript Errors Fixed -->
+    <!-- DEPLOYMENT VERSION: OPTION_B_PERFECT - 2025-11-02 21:15:00 UTC - Template Status Label Fixed -->
     <script>
         // 🔥 DEPLOYMENT VERIFICATION SYSTEM
-        const BUILD_VERSION = 'OPTION_B_FINAL';
-        const BUILD_DATE = '2025-11-02 21:00:00 UTC';
-        const BUILD_DESCRIPTION = 'Fixed ALL JavaScript errors - Removed references to deleted company-info elements';
+        const BUILD_VERSION = 'OPTION_B_PERFECT';
+        const BUILD_DATE = '2025-11-02 21:15:00 UTC';
+        const BUILD_DESCRIPTION = 'Fixed Template Testing status label not updating - All toggle labels working perfectly now';
         
         console.log('═══════════════════════════════════════════════════');
         console.log('🚀 DEPLOYMENT VERSION:', BUILD_VERSION);
@@ -6133,7 +6133,7 @@ Continue?`;
             const checkbox = document.getElementById('twilio-test-enabled');
             const toggleSwitch = document.getElementById('toggle-switch');
             const toggleCircle = document.getElementById('toggle-circle');
-            const statusText = document.getElementById('toggle-status-text');
+            const statusLabel = document.getElementById('template-toggle-label');
             
             // Toggle checkbox
             const newState = !checkbox.checked;
@@ -6144,8 +6144,10 @@ Continue?`;
                 // ON state
                 toggleSwitch.classList.remove('bg-gray-300');
                 toggleSwitch.classList.add('bg-purple-600');
-                toggleCircle.classList.add('translate-x-7');
-                statusText.textContent = 'Test Calls Enabled ✓';
+                toggleCircle.style.transform = 'translateX(28px)';
+                if (statusLabel) {
+                    statusLabel.innerHTML = 'Status: <span class="text-green-600 font-bold">Enabled</span>';
+                }
                 console.log('🟢 [TEMPLATE TEST] Enabled');
                 
                 // 🔥 NEW: Auto-disable Company Testing (mutually exclusive!)
@@ -6157,8 +6159,10 @@ Continue?`;
                 // OFF state
                 toggleSwitch.classList.remove('bg-purple-600');
                 toggleSwitch.classList.add('bg-gray-300');
-                toggleCircle.classList.remove('translate-x-7');
-                statusText.textContent = 'Enable Test Calls';
+                toggleCircle.style.transform = 'translateX(0)';
+                if (statusLabel) {
+                    statusLabel.innerHTML = 'Status: <span class="text-gray-500">Disabled</span>';
+                }
                 console.log('⚫ [TEMPLATE TEST] Disabled');
                 
                 showToast('info', 'Template Testing disabled');
@@ -6231,18 +6235,22 @@ Continue?`;
                 // Update toggle UI
                 const toggleSwitch = document.getElementById('toggle-switch');
                 const toggleCircle = document.getElementById('toggle-circle');
-                const statusText = document.getElementById('toggle-status-text');
+                const statusLabel = document.getElementById('template-toggle-label');
                 
                 if (isEnabled) {
                     toggleSwitch.classList.remove('bg-gray-300');
                     toggleSwitch.classList.add('bg-purple-600');
-                    toggleCircle.classList.add('translate-x-7');
-                    statusText.textContent = 'Test Calls Enabled ✓';
+                    toggleCircle.style.transform = 'translateX(28px)';
+                    if (statusLabel) {
+                        statusLabel.innerHTML = 'Status: <span class="text-green-600 font-bold">Enabled</span>';
+                    }
                 } else {
                     toggleSwitch.classList.remove('bg-purple-600');
                     toggleSwitch.classList.add('bg-gray-300');
-                    toggleCircle.classList.remove('translate-x-7');
-                    statusText.textContent = 'Enable Test Calls';
+                    toggleCircle.style.transform = 'translateX(0)';
+                    if (statusLabel) {
+                        statusLabel.innerHTML = 'Status: <span class="text-gray-500">Disabled</span>';
+                    }
                 }
 
                 // Update stats if available
@@ -7273,14 +7281,16 @@ Continue?`;
             const checkbox = document.getElementById('twilio-test-enabled');
             const toggleSwitch = document.getElementById('toggle-switch');
             const toggleCircle = document.getElementById('toggle-circle');
-            const statusText = document.getElementById('toggle-status-text');
+            const statusLabel = document.getElementById('template-toggle-label');
             
             if (checkbox && checkbox.checked) {
                 checkbox.checked = false;
                 toggleSwitch.classList.remove('bg-purple-600');
                 toggleSwitch.classList.add('bg-gray-300');
-                toggleCircle.classList.remove('translate-x-7');
-                statusText.textContent = 'Enable Test Calls';
+                toggleCircle.style.transform = 'translateX(0)';
+                if (statusLabel) {
+                    statusLabel.innerHTML = 'Status: <span class="text-gray-500">Disabled</span>';
+                }
                 
                 // Save to backend (calls saveTwilioTestConfig which will save enabled: false)
                 console.log('✅ [HELPER] Template Testing disabled (UI updated)');
