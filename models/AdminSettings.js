@@ -585,6 +585,132 @@ const adminSettingsSchema = new mongoose.Schema({
         }
     },
     
+    // ============================================================================
+    // 🔬 TEST PILOT INTELLIGENCE CONFIGURATION (NEW - Dual 3-Tier System)
+    // ============================================================================
+    // PURPOSE: Configure 3-Tier Intelligence for Test Pilot testing (NOT production)
+    // ARCHITECTURE: Separate from production settings for aggressive learning
+    // KEY DIFFERENCE:
+    //   - Test Pilot Intelligence = Aggressive learning, higher LLM cost
+    //   - Production Intelligence (per-company) = Conservative, cost-optimized
+    // BENEFITS:
+    //   - Test with aggressive learning to find gaps FAST
+    //   - Production uses conservative settings to minimize cost
+    //   - Presets prevent human mistakes (Conservative, Balanced, Aggressive, YOLO)
+    //   - Safety mechanisms: cost limits, auto-revert, validation
+    // ============================================================================
+    testPilotIntelligence: {
+        // PRESET SELECTION (recommended way to configure)
+        preset: {
+            type: String,
+            enum: ['conservative', 'balanced', 'aggressive', 'yolo'],
+            default: 'balanced',
+            description: 'Intelligence preset: Conservative (5-8% Tier 3), Balanced (10-15%), Aggressive (20-30%), YOLO (50-70%)'
+        },
+        
+        // THRESHOLDS (customizable if not using preset)
+        thresholds: {
+            tier1: {
+                type: Number,
+                min: 0.5,
+                max: 0.95,
+                default: 0.80,
+                description: 'Tier 1 (Rule-Based) confidence threshold (0.50-0.95). Lower = more Tier 2/3 triggers.'
+            },
+            tier2: {
+                type: Number,
+                min: 0.3,
+                max: 0.80,
+                default: 0.60,
+                description: 'Tier 2 (Semantic) confidence threshold (0.30-0.80). Lower = more Tier 3 triggers.'
+            }
+        },
+        
+        // LLM CONFIGURATION
+        llmConfig: {
+            model: {
+                type: String,
+                enum: ['gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'],
+                default: 'gpt-4o-mini',
+                description: 'LLM model for Tier 3: gpt-4o (best quality, $0.10/call), gpt-4o-mini (balanced, $0.04/call), gpt-3.5-turbo (fast, $0.01/call)'
+            },
+            autoApply: {
+                type: String,
+                enum: ['manual', 'high-confidence', 'all'],
+                default: 'manual',
+                description: 'How to handle LLM suggestions: manual (human review), high-confidence (auto-apply 90%+), all (auto-apply everything - risky!)'
+            },
+            maxCallsPerDay: {
+                type: Number,
+                default: null,
+                description: 'Max Tier 3 LLM calls per day (null = unlimited). Safety limit to prevent cost overruns.'
+            },
+            contextWindow: {
+                type: String,
+                enum: ['minimal', 'standard', 'extended', 'maximum'],
+                default: 'standard',
+                description: 'How much context to send to LLM: minimal (cheap), standard (balanced), extended (detailed), maximum (full history - expensive)'
+            }
+        },
+        
+        // COST CONTROLS (safety mechanisms)
+        costControls: {
+            dailyBudget: {
+                type: Number,
+                default: null,
+                description: 'Daily LLM budget in USD (null = unlimited). System auto-disables Tier 3 if exceeded.'
+            },
+            perCallLimit: {
+                type: Number,
+                default: null,
+                description: 'Max LLM cost per single call (null = unlimited). Prevents single call from costing too much.'
+            },
+            alertThreshold: {
+                type: Number,
+                default: null,
+                description: 'Send email alert when daily cost reaches this amount (null = no alerts)'
+            }
+        },
+        
+        // TRACKING
+        lastUpdated: {
+            type: Date,
+            default: Date.now,
+            description: 'When settings were last changed'
+        },
+        updatedBy: {
+            type: String,
+            default: 'Admin',
+            description: 'Who last updated settings'
+        },
+        
+        // YOLO MODE AUTO-REVERT (safety mechanism)
+        yoloModeActivatedAt: {
+            type: Date,
+            default: null,
+            description: 'When YOLO mode was activated (auto-reverts to Balanced after 24h)'
+        },
+        
+        // TODAY'S COST TRACKING
+        todaysCost: {
+            amount: {
+                type: Number,
+                default: 0,
+                description: 'Total LLM cost spent today (resets at midnight)'
+            },
+            date: {
+                type: String,
+                default: () => new Date().toISOString().split('T')[0], // YYYY-MM-DD
+                description: 'Date for cost tracking (resets daily)'
+            },
+            tier3Calls: {
+                type: Number,
+                default: 0,
+                description: 'Number of Tier 3 LLM calls today'
+            }
+        }
+    },
+    
     // Metadata
     lastUpdated: {
         type: Date,

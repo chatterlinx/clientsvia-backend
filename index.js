@@ -195,6 +195,7 @@ async function loadAllRoutes() {
         routes.setupNotificationCenterRoutes = await loadRouteWithTimeout('./routes/admin/setup-notification-center', 'setupNotificationCenterRoutes');
         routes.adminGlobalAIBrainTestRoutes = await loadRouteWithTimeout('./routes/admin/adminGlobalAIBrainTest', 'adminGlobalAIBrainTestRoutes');
         routes.companyTestModeRoutes = await loadRouteWithTimeout('./routes/admin/companyTestMode', 'companyTestModeRoutes'); // ADMIN: Company Test Mode (test real production configurations)
+        routes.v2IntelligenceConfigRoutes = await loadRouteWithTimeout('./routes/admin/v2intelligenceConfig', 'v2IntelligenceConfigRoutes'); // ADMIN: Intelligence Presets (Test Pilot vs Production 3-Tier configs)
         routes.adminIntelligenceRoutes = await loadRouteWithTimeout('./routes/admin/adminIntelligence', 'adminIntelligenceRoutes');
         routes.aiGatewayRoutes = await loadRouteWithTimeout('./routes/admin/aiGateway', 'aiGatewayRoutes');
         routes.enterpriseSuggestionsRoutes = await loadRouteWithTimeout('./routes/admin/enterpriseSuggestions', 'enterpriseSuggestionsRoutes'); // ADMIN: Enterprise Test Pilot (deep analysis, suggestions, trends, conflicts, cost)
@@ -400,6 +401,7 @@ function registerRoutes(routes) {
     app.use('/api', routes.setupNotificationCenterRoutes); // ADMIN: One-time setup endpoint for Notification Center company
     app.use('/api/admin/settings/global-ai-brain-test', routes.adminGlobalAIBrainTestRoutes); // ADMIN: Global AI Brain Test Config (single Twilio test console for all templates)
     app.use('/api/admin', routes.companyTestModeRoutes); // ADMIN: Company Test Mode API (test real company configurations)
+    app.use('/api/admin/intelligence', routes.v2IntelligenceConfigRoutes); // ADMIN: Intelligence Presets API (Test Pilot vs Production 3-Tier configs, cost estimation, recommendations)
     app.use('/api/admin/intelligence', routes.adminIntelligenceRoutes); // ADMIN: 3-Tier Intelligence System (LLM, pattern learning, cost tracking, global patterns)
     app.use('/api/admin/ai-gateway', routes.aiGatewayRoutes); // ADMIN: AI Gateway (LLM health monitoring, suggestion system, call log analysis)
     app.use('/api/admin/suggestions', routes.enterpriseSuggestionsRoutes); // ADMIN: Enterprise Test Pilot (deep analysis, suggestions, trends, conflicts, cost projections)

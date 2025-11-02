@@ -583,6 +583,97 @@ const aiAgentLogicSchema = new mongoose.Schema({
         // ────────────────────────────────────────────────────────────────────────
         version: { type: Number, default: 1 },
         lastUpdated: { type: Date, default: Date.now }
+    },
+    
+    // ============================================================================
+    // 🏭 PRODUCTION INTELLIGENCE CONFIGURATION (NEW - Dual 3-Tier System)
+    // ============================================================================
+    // PURPOSE: Configure 3-Tier Intelligence for PRODUCTION customer calls (NOT testing)
+    // ARCHITECTURE: Separate from Test Pilot settings for cost optimization
+    // KEY DIFFERENCE:
+    //   - Test Pilot Intelligence (AdminSettings) = Aggressive learning, higher LLM cost
+    //   - Production Intelligence (THIS) = Conservative, cost-optimized for real customers
+    // BENEFITS:
+    //   - Optimize production for cost while testing remains aggressive
+    //   - Per-company customization (e.g., high-volume clients use tighter thresholds)
+    //   - Can inherit from Test Pilot settings or use custom config
+    //   - Safety mechanisms: cost limits, circuit breakers, fallbacks
+    // ============================================================================
+    productionIntelligence: {
+        // Enable/disable production 3-tier system
+        enabled: {
+            type: Boolean,
+            default: true,
+            description: 'Enable 3-tier intelligence for production calls (Tier 1 → Tier 2 → Tier 3)'
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // THRESHOLDS (Production-optimized)
+        // ────────────────────────────────────────────────────────────────────────
+        thresholds: {
+            tier1: {
+                type: Number,
+                min: 0.7,
+                max: 0.95,
+                default: 0.80,
+                description: 'Tier 1 (Rule-Based) threshold for production (0.70-0.95). Higher = stricter matching, less Tier 2/3.'
+            },
+            tier2: {
+                type: Number,
+                min: 0.5,
+                max: 0.80,
+                default: 0.60,
+                description: 'Tier 2 (Semantic) threshold for production (0.50-0.80). Higher = stricter matching, less Tier 3.'
+            },
+            enableTier3: {
+                type: Boolean,
+                default: true,
+                description: 'Allow Tier 3 LLM fallback in production. Set to false to disable LLM completely (use only Tier 1/2).'
+            }
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // LLM CONFIGURATION (Production-optimized)
+        // ────────────────────────────────────────────────────────────────────────
+        llmConfig: {
+            model: {
+                type: String,
+                enum: ['gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'],
+                default: 'gpt-4o-mini',
+                description: 'LLM model for production Tier 3: gpt-4o (best), gpt-4o-mini (balanced), gpt-3.5-turbo (cheapest)'
+            },
+            maxCostPerCall: {
+                type: Number,
+                default: 0.10,
+                description: 'Max LLM cost per single customer call (USD). Prevents single call from costing too much. Default: $0.10'
+            }
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // INHERITANCE FROM TEST PILOT
+        // ────────────────────────────────────────────────────────────────────────
+        // If true, company inherits thresholds from AdminSettings.testPilotIntelligence
+        // This ensures what you test is exactly what customers get!
+        // If false, company uses custom thresholds defined above
+        inheritFromTestPilot: {
+            type: Boolean,
+            default: true,
+            description: 'Inherit thresholds from Test Pilot settings (AdminSettings). Recommended for consistency.'
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
+        // METADATA
+        // ────────────────────────────────────────────────────────────────────────
+        lastUpdated: {
+            type: Date,
+            default: Date.now,
+            description: 'When settings were last changed'
+        },
+        updatedBy: {
+            type: String,
+            default: 'System',
+            description: 'Who last updated settings'
+        }
     }
 }, { _id: false });
 
