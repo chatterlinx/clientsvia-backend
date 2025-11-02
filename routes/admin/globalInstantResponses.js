@@ -519,6 +519,69 @@ router.post('/:id/set-default', async (req, res) => {
     }
 });
 
+/**
+ * PATCH /api/admin/global-instant-responses/:id/publish
+ * Toggle publish/unpublish status for a template
+ * Published templates are available to companies in their AiCore Templates tab
+ */
+router.patch('/:id/publish', async (req, res) => {
+    const { id } = req.params;
+    const { isPublished } = req.body;
+    const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
+    
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(id);
+        
+        if (!template) {
+            return res.status(404).json({
+                success: false,
+                message: 'Template not found'
+            });
+        }
+        
+        // Update publish status
+        const oldStatus = template.isPublished;
+        template.isPublished = isPublished;
+        template.lastUpdatedBy = adminUser;
+        
+        // Add changelog entry
+        if (!template.changeLog) {
+            template.changeLog = [];
+        }
+        template.changeLog.push({
+            changes: isPublished 
+                ? 'Template published (made available to companies)' 
+                : 'Template unpublished (hidden from companies)',
+            changedBy: adminUser,
+            date: new Date()
+        });
+        
+        await template.save();
+        await CacheHelper.invalidateTemplate(template._id);
+        
+        const action = isPublished ? 'Published' : 'Unpublished';
+        logger.info(`✅ ${action} template: ${template.name} (${template.version}) by ${adminUser}`);
+        
+        res.json({
+            success: true,
+            message: `Template "${template.name}" ${action.toLowerCase()} successfully`,
+            data: {
+                _id: template._id,
+                name: template.name,
+                version: template.version,
+                isPublished: template.isPublished,
+                wasPublished: oldStatus
+            }
+        });
+    } catch (error) {
+        logger.error('❌ Error toggling publish status:', error.message, error.stack);
+        res.status(500).json({
+            success: false,
+            message: `Error updating publish status: ${error.message}`
+        });
+    }
+});
+
 // ============================================================================
 // PATCH ROUTES - UPDATE OPERATIONS
 // ============================================================================

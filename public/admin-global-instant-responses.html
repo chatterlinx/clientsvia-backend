@@ -9594,6 +9594,50 @@ Continue?`;
                             compareBtn.onclick = () => compareWithParent(template._id, template.name);
                         }
                         
+                        // Publish/Unpublish Toggle - Control template availability to companies
+                        const publishBtn = document.createElement('button');
+                        console.log(`🔍 [PUBLISH TOGGLE] Template "${template.name}" isPublished:`, template.isPublished);
+                        
+                        if (template.isPublished) {
+                            // IS PUBLISHED - Show blue button to unpublish
+                            publishBtn.style.cssText = 'background-color: #2563eb; color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 700; font-size: 0.75rem; border: 2px solid #2563eb; cursor: pointer; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.5rem; transition: all 0.2s;';
+                            publishBtn.title = 'Click to unpublish (hide from companies)';
+                            publishBtn.innerHTML = '<i class="fas fa-broadcast-tower"></i> PUBLISHED';
+                            publishBtn.onclick = () => togglePublishStatus(template._id, template.name, true);
+                            // Hover effect
+                            publishBtn.onmouseover = () => {
+                                publishBtn.style.backgroundColor = '#dc2626';
+                                publishBtn.style.borderColor = '#dc2626';
+                                publishBtn.innerHTML = '<i class="fas fa-eye-slash"></i> UNPUBLISH';
+                            };
+                            publishBtn.onmouseout = () => {
+                                publishBtn.style.backgroundColor = '#2563eb';
+                                publishBtn.style.borderColor = '#2563eb';
+                                publishBtn.innerHTML = '<i class="fas fa-broadcast-tower"></i> PUBLISHED';
+                            };
+                            console.log(`  ✅ Rendering BLUE PUBLISHED button for: ${template.name}`);
+                        } else {
+                            // NOT PUBLISHED - Show gray button to publish
+                            publishBtn.style.cssText = 'background-color: #f3f4f6; color: #6b7280; padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600; font-size: 0.75rem; border: 2px solid #e5e7eb; cursor: pointer; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.5rem; transition: all 0.2s;';
+                            publishBtn.title = 'Click to publish (make available to companies)';
+                            publishBtn.innerHTML = '<i class="fas fa-upload"></i> PUBLISH';
+                            publishBtn.onclick = () => togglePublishStatus(template._id, template.name, false);
+                            // Hover effect
+                            publishBtn.onmouseover = () => {
+                                publishBtn.style.backgroundColor = '#2563eb';
+                                publishBtn.style.color = 'white';
+                                publishBtn.style.borderColor = '#2563eb';
+                                publishBtn.innerHTML = '<i class="fas fa-rocket"></i> PUBLISH';
+                            };
+                            publishBtn.onmouseout = () => {
+                                publishBtn.style.backgroundColor = '#f3f4f6';
+                                publishBtn.style.color = '#6b7280';
+                                publishBtn.style.borderColor = '#e5e7eb';
+                                publishBtn.innerHTML = '<i class="fas fa-upload"></i> PUBLISH';
+                            };
+                            console.log(`  ○ Rendering GRAY DRAFT button for: ${template.name}`);
+                        }
+                        
                         // Set Default Toggle - Radio button style for clear ON/OFF state
                         const defaultBtn = document.createElement('button');
                         console.log(`🔍 [TOGGLE] Template "${template.name}" isDefaultTemplate:`, template.isDefaultTemplate);
@@ -9632,11 +9676,12 @@ Continue?`;
                         deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
                         deleteBtn.onclick = () => deleteTemplate(template._id);
                         
-                        const buttonCount = compareBtn ? 5 : 4;
+                        const buttonCount = compareBtn ? 6 : 5;
                         console.log(`🔘 [BUTTONS] Created ${buttonCount} buttons for template: ${template.name}`);
                         
                         actionsDiv.appendChild(viewBtn);
                         if (compareBtn) actionsDiv.appendChild(compareBtn);
+                        actionsDiv.appendChild(publishBtn);
                         actionsDiv.appendChild(defaultBtn);
                         actionsDiv.appendChild(deleteBtn);
                         
@@ -9717,6 +9762,77 @@ Continue?`;
             }
         }
 
+        /**
+         * Toggle publish/unpublish status for a template
+         * Published templates are available to companies in AiCore Templates tab
+         */
+        async function togglePublishStatus(templateId, templateName, currentlyPublished) {
+            try {
+                const newStatus = !currentlyPublished;
+                const action = newStatus ? 'Publish' : 'Unpublish';
+                const actionPast = newStatus ? 'Published' : 'Unpublished';
+                
+                // Confirmation message
+                const confirmMessage = newStatus
+                    ? `<div style="text-align: left;">
+                        <div style="margin-bottom: 16px;">
+                            <strong style="color: #2563eb;">📢 Publish Template</strong><br>
+                            <span style="font-size: 15px;">${templateName}</span>
+                        </div>
+                        <div style="margin-top: 20px; padding: 12px; background: #dbeafe; border-left: 4px solid #2563eb; border-radius: 4px;">
+                            <strong>✅ Effect:</strong> This template will become available to companies in their <strong>AiCore Templates</strong> tab.
+                        </div>
+                    </div>`
+                    : `<div style="text-align: left;">
+                        <div style="margin-bottom: 16px;">
+                            <strong style="color: #dc2626;">🔒 Unpublish Template</strong><br>
+                            <span style="font-size: 15px;">${templateName}</span>
+                        </div>
+                        <div style="margin-top: 20px; padding: 12px; background: #fee2e2; border-left: 4px solid #dc2626; border-radius: 4px;">
+                            <strong>⚠️ Warning:</strong> This template will be <strong>hidden</strong> from companies. Existing companies that already activated it will keep it.
+                        </div>
+                    </div>`;
+                
+                // Show confirmation
+                const confirmed = await showCustomConfirm(`${action} Template?`, confirmMessage);
+                if (!confirmed) {
+                    return;
+                }
+                
+                // Make API call to toggle publish status
+                showNotification(`⏳ ${action}ing template...`, 'info');
+                
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-instant-responses/${templateId}/publish`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ isPublished: newStatus })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log(`✅ [PUBLISH TOGGLE] API call succeeded for ${templateName}`);
+                    showNotification(`✅ "${templateName}" ${actionPast}!`, 'success');
+                    
+                    // Refresh table to show updated status
+                    setTimeout(async () => {
+                        console.log('🔄 [PUBLISH TOGGLE] Refreshing template table...');
+                        await renderTemplatesTable();
+                        console.log('✅ [PUBLISH TOGGLE] Table refreshed!');
+                    }, 300);
+                } else {
+                    showNotification(`❌ Failed: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                console.error('❌ Error toggling publish status:', error);
+                showNotification('❌ Error: ' + error.message, 'error');
+            }
+        }
+        
         async function setAsDefault(templateId, templateName) {
             try {
                 // First, fetch all templates to find current default
