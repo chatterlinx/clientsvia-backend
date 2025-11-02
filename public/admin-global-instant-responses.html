@@ -10,9 +10,9 @@
     <!-- DEPLOYMENT VERSION: OPTION_B_PERFECT - 2025-11-02 21:15:00 UTC - Template Status Label Fixed -->
     <script>
         // 🔥 DEPLOYMENT VERIFICATION SYSTEM
-        const BUILD_VERSION = 'OPTION_B_NULL_SAFE';
-        const BUILD_DATE = '2025-11-02 21:30:00 UTC';
-        const BUILD_DESCRIPTION = 'Added comprehensive null checks to all toggle functions - No more TypeError crashes';
+        const BUILD_VERSION = 'COMPANY_PRODUCTION_INTELLIGENCE_UI';
+        const BUILD_DATE = '2025-11-02 23:45:00 UTC';
+        const BUILD_DESCRIPTION = '⚡ Added Company Production Intelligence UI - Full 3-tier config for real customer calls (Tier sliders, LLM model, cost limits, inherit toggle)';
         
         console.log('═══════════════════════════════════════════════════');
         console.log('🚀 DEPLOYMENT VERSION:', BUILD_VERSION);
@@ -2274,6 +2274,228 @@
                             </p>
                         </div>
                     </div>
+                    
+                    <!-- ================================================================
+                         ⚡ COMPANY PRODUCTION INTELLIGENCE SETTINGS
+                         ================================================================
+                         Purpose: Configure the 3-tier intelligence system for THIS company
+                         This is what real customers will experience on live calls
+                         Independent from Test Pilot settings (unless "Inherit" is enabled)
+                         ================================================================ -->
+                    <div class="bg-white rounded-xl border-2 border-green-400 p-6 shadow-lg mb-8">
+                        
+                        <!-- Header -->
+                        <div class="flex items-center justify-between mb-6">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg flex items-center justify-center shadow-md">
+                                    <i class="fas fa-rocket text-white text-xl"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-lg font-bold text-gray-900">⚡ Company Production Intelligence</h4>
+                                    <p class="text-sm text-gray-600">Configure 3-tier system for REAL customer calls</p>
+                                </div>
+                            </div>
+                            <button onclick="loadCompanyProductionIntelligence()" 
+                                    class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition-all text-sm">
+                                <i class="fas fa-sync-alt mr-1"></i>
+                                Reload
+                            </button>
+                        </div>
+                        
+                        <!-- Inherit from Test Pilot Toggle -->
+                        <div class="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border-2 border-purple-300">
+                            <div class="flex items-center justify-between">
+                                <div class="flex-1">
+                                    <label class="flex items-center gap-3 cursor-pointer">
+                                        <input type="checkbox" id="inherit-from-test-pilot" onchange="toggleInheritFromTestPilot()" 
+                                               checked
+                                               class="w-5 h-5 text-purple-600 rounded focus:ring-2 focus:ring-purple-500">
+                                        <div>
+                                            <span class="text-sm font-bold text-gray-900">
+                                                <i class="fas fa-link text-purple-600 mr-1"></i>
+                                                Inherit from Test Pilot Settings
+                                            </span>
+                                            <p class="text-xs text-gray-600 mt-1">
+                                                Automatically use the thresholds configured in Test Pilot Intelligence. Recommended for consistency.
+                                            </p>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Settings Container (disabled when inherit is ON) -->
+                        <div id="company-intelligence-settings" class="opacity-50 pointer-events-none">
+                            
+                            <!-- Enable 3-Tier Intelligence Toggle -->
+                            <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <div class="relative">
+                                        <input type="checkbox" id="company-enable-tier3" checked class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-600 transition-colors"></div>
+                                        <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+                                    </div>
+                                    <div>
+                                        <span class="text-sm font-bold text-gray-900">
+                                            <i class="fas fa-brain text-green-600 mr-1"></i>
+                                            Enable 3-Tier Intelligence System
+                                        </span>
+                                        <p class="text-xs text-gray-600 mt-1">
+                                            Turn OFF to disable LLM fallback completely (Tier 1 & 2 only - 100% free, but may fail on edge cases)
+                                        </p>
+                                    </div>
+                                </label>
+                            </div>
+                            
+                            <!-- Tier 1 Threshold Slider -->
+                            <div class="mb-6">
+                                <div class="flex items-center justify-between mb-2">
+                                    <label class="text-sm font-bold text-gray-800">
+                                        <i class="fas fa-layer-group text-blue-600 mr-1"></i>
+                                        Tier 1 Threshold (Rule-Based)
+                                    </label>
+                                    <span class="text-lg font-mono font-bold text-blue-700" id="company-tier1-value">0.80</span>
+                                </div>
+                                <input type="range" id="company-tier1-slider" 
+                                       min="0.70" max="0.95" step="0.01" value="0.80"
+                                       oninput="updateCompanyTier1Value(this.value)"
+                                       class="w-full h-2 bg-gradient-to-r from-blue-300 to-blue-600 rounded-lg appearance-none cursor-pointer">
+                                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                    <span>0.70 (More Tier 2/3)</span>
+                                    <span>0.95 (Stricter)</span>
+                                </div>
+                                <p class="text-xs text-gray-600 mt-2 bg-blue-50 p-2 rounded border border-blue-200">
+                                    <strong>Higher = More strict:</strong> Requires exact keyword matches. Lower = More triggers flow to Tier 2 semantic analysis.
+                                </p>
+                            </div>
+                            
+                            <!-- Tier 2 Threshold Slider -->
+                            <div class="mb-6">
+                                <div class="flex items-center justify-between mb-2">
+                                    <label class="text-sm font-bold text-gray-800">
+                                        <i class="fas fa-brain text-purple-600 mr-1"></i>
+                                        Tier 2 Threshold (Semantic)
+                                    </label>
+                                    <span class="text-lg font-mono font-bold text-purple-700" id="company-tier2-value">0.60</span>
+                                </div>
+                                <input type="range" id="company-tier2-slider" 
+                                       min="0.50" max="0.80" step="0.01" value="0.60"
+                                       oninput="updateCompanyTier2Value(this.value)"
+                                       class="w-full h-2 bg-gradient-to-r from-purple-300 to-purple-600 rounded-lg appearance-none cursor-pointer">
+                                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                    <span>0.50 (More Tier 3)</span>
+                                    <span>0.80 (Stricter)</span>
+                                </div>
+                                <p class="text-xs text-gray-600 mt-2 bg-purple-50 p-2 rounded border border-purple-200">
+                                    <strong>Higher = More strict:</strong> Requires higher semantic similarity. Lower = More queries flow to Tier 3 LLM.
+                                </p>
+                            </div>
+                            
+                            <!-- LLM Model Selector -->
+                            <div class="mb-6">
+                                <label class="block text-sm font-bold text-gray-800 mb-2">
+                                    <i class="fas fa-microchip text-green-600 mr-1"></i>
+                                    Tier 3 LLM Model
+                                </label>
+                                <select id="company-llm-model" 
+                                        class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm font-semibold bg-white">
+                                    <option value="gpt-4o">🚀 GPT-4o (Best Quality - ~$0.10/call)</option>
+                                    <option value="gpt-4o-mini" selected>⚖️ GPT-4o-mini (Balanced - ~$0.04/call)</option>
+                                    <option value="gpt-3.5-turbo">⚡ GPT-3.5-turbo (Fast & Cheap - ~$0.01/call)</option>
+                                </select>
+                                <p class="text-xs text-gray-600 mt-2">
+                                    Model used when Tier 1 & 2 fail to match (edge cases only)
+                                </p>
+                            </div>
+                            
+                            <!-- Cost Limits -->
+                            <div class="grid grid-cols-2 gap-4 mb-6">
+                                <!-- Max Cost Per Call -->
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-800 mb-2">
+                                        <i class="fas fa-dollar-sign text-amber-600 mr-1"></i>
+                                        Max Cost Per Call
+                                    </label>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-gray-700 font-semibold">$</span>
+                                        <input type="number" id="company-max-cost-per-call" 
+                                               min="0.01" max="1.00" step="0.01" value="0.10"
+                                               class="flex-1 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm font-mono">
+                                    </div>
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        Prevents single call from costing too much
+                                    </p>
+                                </div>
+                                
+                                <!-- Daily Budget (Optional) -->
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-800 mb-2">
+                                        <i class="fas fa-calendar-day text-red-600 mr-1"></i>
+                                        Daily LLM Budget
+                                    </label>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-gray-700 font-semibold">$</span>
+                                        <input type="number" id="company-daily-budget" 
+                                               placeholder="No limit"
+                                               min="0" step="1"
+                                               class="flex-1 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm font-mono">
+                                    </div>
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        Auto-pause Tier 3 if exceeded (optional)
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <!-- Live Cost Preview -->
+                            <div class="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg border-2 border-green-300">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-bold text-gray-800">
+                                        <i class="fas fa-chart-line text-green-600 mr-1"></i>
+                                        Estimated Monthly Cost
+                                    </span>
+                                    <span class="text-2xl font-bold text-green-700" id="company-monthly-cost-estimate">$0.00</span>
+                                </div>
+                                <div class="grid grid-cols-3 gap-2 text-xs">
+                                    <div class="bg-white p-2 rounded border border-green-200 text-center">
+                                        <div class="text-blue-600 font-mono font-bold" id="company-tier1-percent">90%</div>
+                                        <div class="text-gray-600">Tier 1 (Free)</div>
+                                    </div>
+                                    <div class="bg-white p-2 rounded border border-green-200 text-center">
+                                        <div class="text-purple-600 font-mono font-bold" id="company-tier2-percent">8%</div>
+                                        <div class="text-gray-600">Tier 2 (Free)</div>
+                                    </div>
+                                    <div class="bg-white p-2 rounded border border-green-200 text-center">
+                                        <div class="text-red-600 font-mono font-bold" id="company-tier3-percent">2%</div>
+                                        <div class="text-gray-600">Tier 3 (Paid)</div>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-gray-600 mt-2">
+                                    Based on 1,000 calls/month. Lower thresholds = more Tier 3 triggers = higher costs.
+                                </p>
+                            </div>
+                            
+                        </div>
+                        <!-- END: Settings Container -->
+                        
+                        <!-- Save Button -->
+                        <div class="mt-6 pt-4 border-t border-gray-200">
+                            <button onclick="saveCompanyProductionIntelligence()" 
+                                    class="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-bold shadow-lg hover:shadow-xl transition-all text-lg">
+                                <i class="fas fa-save mr-2"></i>
+                                Save Production Intelligence Settings
+                            </button>
+                        </div>
+                        
+                        <!-- Warning Note -->
+                        <div class="mt-4 bg-amber-50 px-4 py-3 rounded-lg border border-amber-300">
+                            <p class="text-xs text-amber-900 leading-relaxed">
+                                <i class="fas fa-exclamation-triangle mr-1"></i>
+                                <strong>Production Settings:</strong> These settings affect REAL customer calls. Be conservative unless testing. Lower thresholds = more LLM calls = higher costs.
+                            </p>
+                        </div>
+                        
+                    </div>
+                    <!-- END: Company Production Intelligence Settings -->
                     
                 </div>
                 <!-- END: Company Mode Content -->
@@ -7562,11 +7784,271 @@ Continue?`;
                 
                 console.log('✅ [COMPANY SELECTOR] Company loaded and saved');
                 
+                // 🚀 AUTO-LOAD PRODUCTION INTELLIGENCE SETTINGS
+                await loadCompanyProductionIntelligence();
+                
             } catch (error) {
                 console.error('❌ [COMPANY SELECTOR] Error:', error);
                 showToast('error', `Failed to load company: ${error.message}`);
             }
         }
+        
+        // ================================================================
+        // 🚀 COMPANY PRODUCTION INTELLIGENCE FUNCTIONS
+        // ================================================================
+        
+        /**
+         * Load Company Production Intelligence settings from backend
+         * Called when: Company selected, page load, or manual reload
+         */
+        async function loadCompanyProductionIntelligence() {
+            console.log('📊 [COMPANY INTELLIGENCE] Loading production settings...');
+            
+            // Get currently selected company
+            const companyDropdown = document.getElementById('top-company-selector-dropdown');
+            const companyId = companyDropdown?.value;
+            
+            if (!companyId) {
+                console.log('⚠️ [COMPANY INTELLIGENCE] No company selected');
+                return;
+            }
+            
+            try {
+                // Fetch company data (includes aiAgentLogic.productionIntelligence)
+                const response = await fetch(`/api/admin/test-pilot/companies/${companyId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const company = data.company;
+                const intelligence = company.aiAgentLogic?.productionIntelligence || {};
+                
+                console.log('✅ [COMPANY INTELLIGENCE] Loaded settings:', intelligence);
+                
+                // Populate UI with settings
+                const inheritCheckbox = document.getElementById('inherit-from-test-pilot');
+                const enableTier3Checkbox = document.getElementById('company-enable-tier3');
+                const tier1Slider = document.getElementById('company-tier1-slider');
+                const tier2Slider = document.getElementById('company-tier2-slider');
+                const llmModelSelect = document.getElementById('company-llm-model');
+                const maxCostInput = document.getElementById('company-max-cost-per-call');
+                const dailyBudgetInput = document.getElementById('company-daily-budget');
+                
+                // Set inherit toggle (default: true)
+                if (inheritCheckbox) {
+                    inheritCheckbox.checked = intelligence.inheritFromTestPilot !== false; // Default true
+                }
+                
+                // Set enable Tier 3 toggle (default: true)
+                if (enableTier3Checkbox) {
+                    enableTier3Checkbox.checked = intelligence.thresholds?.enableTier3 !== false; // Default true
+                }
+                
+                // Set thresholds
+                if (tier1Slider) {
+                    tier1Slider.value = intelligence.thresholds?.tier1 || 0.80;
+                    updateCompanyTier1Value(tier1Slider.value);
+                }
+                
+                if (tier2Slider) {
+                    tier2Slider.value = intelligence.thresholds?.tier2 || 0.60;
+                    updateCompanyTier2Value(tier2Slider.value);
+                }
+                
+                // Set LLM model
+                if (llmModelSelect) {
+                    llmModelSelect.value = intelligence.llmConfig?.model || 'gpt-4o-mini';
+                }
+                
+                // Set cost limits
+                if (maxCostInput) {
+                    maxCostInput.value = intelligence.llmConfig?.maxCostPerCall || 0.10;
+                }
+                
+                if (dailyBudgetInput) {
+                    // Daily budget is optional (null = unlimited)
+                    dailyBudgetInput.value = intelligence.llmConfig?.dailyBudget || '';
+                }
+                
+                // Toggle inherit mode UI
+                toggleInheritFromTestPilot();
+                
+                // Update cost estimates
+                updateCompanyCostEstimate();
+                
+                console.log('✅ [COMPANY INTELLIGENCE] UI populated successfully');
+                
+            } catch (error) {
+                console.error('❌ [COMPANY INTELLIGENCE] Failed to load:', error);
+                showToast('error', `Failed to load production intelligence: ${error.message}`);
+            }
+        }
+        
+        /**
+         * Save Company Production Intelligence settings to backend
+         */
+        async function saveCompanyProductionIntelligence() {
+            console.log('💾 [COMPANY INTELLIGENCE] Saving production settings...');
+            
+            // Get currently selected company
+            const companyDropdown = document.getElementById('top-company-selector-dropdown');
+            const companyId = companyDropdown?.value;
+            
+            if (!companyId) {
+                showToast('error', 'Please select a company first');
+                return;
+            }
+            
+            try {
+                // Collect all settings from UI
+                const settings = {
+                    enabled: true,
+                    inheritFromTestPilot: document.getElementById('inherit-from-test-pilot')?.checked || false,
+                    thresholds: {
+                        tier1: parseFloat(document.getElementById('company-tier1-slider')?.value || 0.80),
+                        tier2: parseFloat(document.getElementById('company-tier2-slider')?.value || 0.60),
+                        enableTier3: document.getElementById('company-enable-tier3')?.checked || true
+                    },
+                    llmConfig: {
+                        model: document.getElementById('company-llm-model')?.value || 'gpt-4o-mini',
+                        maxCostPerCall: parseFloat(document.getElementById('company-max-cost-per-call')?.value || 0.10)
+                    }
+                };
+                
+                // Add daily budget if set (optional)
+                const dailyBudget = document.getElementById('company-daily-budget')?.value;
+                if (dailyBudget && parseFloat(dailyBudget) > 0) {
+                    settings.llmConfig.dailyBudget = parseFloat(dailyBudget);
+                }
+                
+                console.log('📤 [COMPANY INTELLIGENCE] Sending settings:', settings);
+                
+                // Send to backend
+                const response = await fetch(`/api/company/${companyId}/intelligence`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    },
+                    body: JSON.stringify({ productionIntelligence: settings })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || `HTTP ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                console.log('✅ [COMPANY INTELLIGENCE] Saved successfully:', result);
+                showToast('success', '✅ Production Intelligence settings saved!');
+                
+            } catch (error) {
+                console.error('❌ [COMPANY INTELLIGENCE] Save failed:', error);
+                showToast('error', `Failed to save: ${error.message}`);
+            }
+        }
+        
+        /**
+         * Toggle "Inherit from Test Pilot" mode
+         * When enabled: Disable custom settings UI, use Test Pilot settings
+         * When disabled: Enable custom settings UI
+         */
+        function toggleInheritFromTestPilot() {
+            const inheritCheckbox = document.getElementById('inherit-from-test-pilot');
+            const settingsContainer = document.getElementById('company-intelligence-settings');
+            
+            if (!inheritCheckbox || !settingsContainer) {
+                console.error('❌ [INHERIT TOGGLE] Elements not found');
+                return;
+            }
+            
+            const isInherit = inheritCheckbox.checked;
+            
+            console.log(`🔄 [INHERIT TOGGLE] Inherit mode: ${isInherit ? 'ON (disabled)' : 'OFF (enabled)'}`);
+            
+            if (isInherit) {
+                // Disable custom settings (use Test Pilot settings)
+                settingsContainer.classList.add('opacity-50', 'pointer-events-none');
+            } else {
+                // Enable custom settings
+                settingsContainer.classList.remove('opacity-50', 'pointer-events-none');
+            }
+            
+            // Update cost estimate
+            updateCompanyCostEstimate();
+        }
+        
+        /**
+         * Update Tier 1 slider value display
+         */
+        function updateCompanyTier1Value(value) {
+            const valueDisplay = document.getElementById('company-tier1-value');
+            if (valueDisplay) {
+                valueDisplay.textContent = parseFloat(value).toFixed(2);
+            }
+            updateCompanyCostEstimate();
+        }
+        
+        /**
+         * Update Tier 2 slider value display
+         */
+        function updateCompanyTier2Value(value) {
+            const valueDisplay = document.getElementById('company-tier2-value');
+            if (valueDisplay) {
+                valueDisplay.textContent = parseFloat(value).toFixed(2);
+            }
+            updateCompanyCostEstimate();
+        }
+        
+        /**
+         * Calculate and update cost estimate
+         * Based on thresholds, predict Tier 1/2/3 distribution and monthly cost
+         */
+        function updateCompanyCostEstimate() {
+            console.log('💰 [COST ESTIMATE] Calculating...');
+            
+            const tier1Threshold = parseFloat(document.getElementById('company-tier1-slider')?.value || 0.80);
+            const tier2Threshold = parseFloat(document.getElementById('company-tier2-slider')?.value || 0.60);
+            const llmModel = document.getElementById('company-llm-model')?.value || 'gpt-4o-mini';
+            const enableTier3 = document.getElementById('company-enable-tier3')?.checked;
+            
+            // Estimate tier distribution based on thresholds
+            // Lower thresholds = more queries escalate to higher tiers
+            const tier1Percent = Math.round(tier1Threshold * 100); // e.g., 0.80 = 80%
+            const tier2Percent = enableTier3 ? Math.round((1 - tier1Threshold) * 100 * 0.7) : Math.round((1 - tier1Threshold) * 100); // 70% of remaining
+            const tier3Percent = enableTier3 ? Math.round((1 - tier1Threshold) * 100 * 0.3) : 0; // 30% of remaining
+            
+            // Cost per LLM call (Tier 3 only)
+            const costPerCall = {
+                'gpt-4o': 0.10,
+                'gpt-4o-mini': 0.04,
+                'gpt-3.5-turbo': 0.01
+            }[llmModel] || 0.04;
+            
+            // Estimate monthly cost (1,000 calls/month)
+            const monthlyCallVolume = 1000;
+            const tier3Calls = (tier3Percent / 100) * monthlyCallVolume;
+            const monthlyCost = tier3Calls * costPerCall;
+            
+            // Update UI
+            document.getElementById('company-tier1-percent').textContent = `${tier1Percent}%`;
+            document.getElementById('company-tier2-percent').textContent = `${tier2Percent}%`;
+            document.getElementById('company-tier3-percent').textContent = `${tier3Percent}%`;
+            document.getElementById('company-monthly-cost-estimate').textContent = `$${monthlyCost.toFixed(2)}`;
+            
+            console.log(`✅ [COST ESTIMATE] T1: ${tier1Percent}%, T2: ${tier2Percent}%, T3: ${tier3Percent}%, Monthly: $${monthlyCost.toFixed(2)}`);
+        }
+        
+        // ================================================================
+        // END: Company Production Intelligence Functions
+        // ================================================================
         
         /**
          * When company is selected from TOP dropdown

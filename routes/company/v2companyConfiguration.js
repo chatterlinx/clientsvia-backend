@@ -1822,5 +1822,120 @@ router.delete('/:companyId/configuration/templates/:templateId', async (req, res
     }
 });
 
+/**
+ * ============================================================================
+ * PATCH /api/company/:companyId/intelligence
+ * ============================================================================
+ * PURPOSE: Update company's production intelligence settings (3-tier system)
+ * 
+ * BODY:
+ * {
+ *   productionIntelligence: {
+ *     enabled: true,
+ *     inheritFromTestPilot: false,
+ *     thresholds: {
+ *       tier1: 0.80,
+ *       tier2: 0.60,
+ *       enableTier3: true
+ *     },
+ *     llmConfig: {
+ *       model: 'gpt-4o-mini',
+ *       maxCostPerCall: 0.10,
+ *       dailyBudget: 50  // optional
+ *     }
+ *   }
+ * }
+ * 
+ * CACHING: Clears company cache in Redis
+ * ============================================================================
+ */
+router.patch('/:companyId/intelligence', async (req, res) => {
+    const { companyId } = req.params;
+    const { productionIntelligence } = req.body;
+    
+    logger.info(`[COMPANY INTELLIGENCE] PATCH request for company: ${companyId}`);
+    
+    // Validation
+    if (!mongoose.Types.ObjectId.isValid(companyId)) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'Invalid company ID' 
+        });
+    }
+    
+    if (!productionIntelligence) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'productionIntelligence object required' 
+        });
+    }
+    
+    try {
+        // Fetch company
+        const company = await Company.findById(companyId);
+        
+        if (!company) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Company not found' 
+            });
+        }
+        
+        // Ensure aiAgentLogic exists
+        if (!company.aiAgentLogic) {
+            company.aiAgentLogic = {};
+        }
+        
+        // Update production intelligence settings
+        company.aiAgentLogic.productionIntelligence = {
+            enabled: productionIntelligence.enabled !== false, // default true
+            inheritFromTestPilot: productionIntelligence.inheritFromTestPilot !== false, // default true
+            thresholds: {
+                tier1: parseFloat(productionIntelligence.thresholds?.tier1) || 0.80,
+                tier2: parseFloat(productionIntelligence.thresholds?.tier2) || 0.60,
+                enableTier3: productionIntelligence.thresholds?.enableTier3 !== false // default true
+            },
+            llmConfig: {
+                model: productionIntelligence.llmConfig?.model || 'gpt-4o-mini',
+                maxCostPerCall: parseFloat(productionIntelligence.llmConfig?.maxCostPerCall) || 0.10
+            },
+            lastUpdated: new Date(),
+            updatedBy: req.user?.email || 'Admin'
+        };
+        
+        // Add daily budget if provided (optional)
+        if (productionIntelligence.llmConfig?.dailyBudget && parseFloat(productionIntelligence.llmConfig.dailyBudget) > 0) {
+            company.aiAgentLogic.productionIntelligence.llmConfig.dailyBudget = parseFloat(productionIntelligence.llmConfig.dailyBudget);
+        }
+        
+        // Save to MongoDB
+        await company.save();
+        
+        logger.info(`✅ [COMPANY INTELLIGENCE] Settings saved for company: ${companyId}`);
+        
+        // Clear Redis cache for this company
+        try {
+            await clearCompanyCache(companyId);
+            logger.info(`🗑️ [COMPANY INTELLIGENCE] Cache cleared for company: ${companyId}`);
+        } catch (cacheError) {
+            logger.warn(`⚠️ [COMPANY INTELLIGENCE] Failed to clear cache:`, cacheError.message);
+        }
+        
+        res.json({ 
+            success: true, 
+            message: 'Production Intelligence settings saved successfully',
+            productionIntelligence: company.aiAgentLogic.productionIntelligence
+        });
+        
+    } catch (error) {
+        logger.error('[COMPANY INTELLIGENCE] Error saving settings:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to save production intelligence settings',
+            error: error.message 
+        });
+    }
+});
+
 module.exports = router;
 
