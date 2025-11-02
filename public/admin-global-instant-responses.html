@@ -6590,10 +6590,21 @@ Continue?`;
                     document.querySelectorAll('.preset-card').forEach(card => {
                         card.classList.remove('opacity-70', 'ring-4', 'ring-purple-500', 'border-purple-500');
                     });
-                    return;
+                    return; // Exit early - don't try to parse JSON
                 }
                 
-                const result = await response.json();
+                // Only parse JSON if we have a successful-ish response
+                let result;
+                try {
+                    result = await response.json();
+                } catch (parseError) {
+                    console.error('❌ [INTELLIGENCE MODE] Failed to parse response:', parseError);
+                    window.ToastManager.error('❌ Server returned invalid response');
+                    document.querySelectorAll('.preset-card').forEach(card => {
+                        card.classList.remove('opacity-70', 'ring-4', 'ring-purple-500', 'border-purple-500');
+                    });
+                    return;
+                }
                 
                 if (result.success) {
                     console.log('✅ [INTELLIGENCE MODE] Applied successfully:', result.data);
