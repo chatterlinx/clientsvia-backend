@@ -1731,6 +1731,14 @@ router.post('/:companyId/configuration/templates', async (req, res) => {
         // Clear cache using the local function (already defined at top of file)
         await clearCompanyCache(req.params.companyId, 'Template Added');
         
+        // CRITICAL: Also clear live-scenarios cache (template activation changes available scenarios)
+        try {
+            await redisClient.del(`live-scenarios:${req.params.companyId}`);
+            logger.debug(`✅ [CACHE CLEAR] Template Added - Cleared live-scenarios cache for company:${req.params.companyId}`);
+        } catch (cacheError) {
+            logger.warn(`⚠️ [CACHE CLEAR] Failed to clear live-scenarios cache:`, cacheError.message);
+        }
+        
         res.json({ 
             success: true, 
             message: 'Template added successfully',
@@ -1794,6 +1802,14 @@ router.delete('/:companyId/configuration/templates/:templateId', async (req, res
         
         // Clear cache using the local function (already defined at top of file)
         await clearCompanyCache(req.params.companyId, 'Template Removed');
+        
+        // CRITICAL: Also clear live-scenarios cache (template removal changes available scenarios)
+        try {
+            await redisClient.del(`live-scenarios:${req.params.companyId}`);
+            logger.debug(`✅ [CACHE CLEAR] Template Removed - Cleared live-scenarios cache for company:${req.params.companyId}`);
+        } catch (cacheError) {
+            logger.warn(`⚠️ [CACHE CLEAR] Failed to clear live-scenarios cache:`, cacheError.message);
+        }
         
         res.json({ 
             success: true, 
