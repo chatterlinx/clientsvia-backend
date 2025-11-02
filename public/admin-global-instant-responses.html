@@ -1527,6 +1527,27 @@
                             </div>
                         </div>
                         
+                        <!-- ⚡ NEW: Intelligence Settings Configuration -->
+                        <div class="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-lg p-5 mb-4 shadow-md">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h4 class="text-md font-semibold text-gray-900 flex items-center gap-2 mb-2">
+                                        <i class="fas fa-brain text-purple-600"></i>
+                                        Test Pilot Intelligence Settings
+                                    </h4>
+                                    <p class="text-sm text-gray-600">
+                                        Configure how aggressively the AI learns during testing. 
+                                        Choose from presets (Conservative, Balanced, Aggressive, YOLO) or customize thresholds.
+                                    </p>
+                                </div>
+                                <button onclick="window.intelligenceSettingsModal.open()" 
+                                        class="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2">
+                                    <i class="fas fa-cog"></i>
+                                    Configure Intelligence
+                                </button>
+                            </div>
+                        </div>
+                        
                         <!-- Tier Confidence Thresholds -->
                         <div class="bg-white border-2 border-gray-200 rounded-lg p-5 mb-4">
                             <h4 class="text-md font-semibold text-gray-900 flex items-center gap-2 mb-3">
