@@ -2132,6 +2132,38 @@
                                 </p>
                             </div>
                             
+                            <!-- Test Call Greeting (Company Mode) -->
+                            <div class="mb-4 p-4 bg-white rounded-lg border-2 border-blue-300 shadow-sm">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h5 class="font-bold text-gray-800 flex items-center gap-2">
+                                        <i class="fas fa-microphone text-blue-600"></i>
+                                        Test Call Greeting
+                                    </h5>
+                                    <button onclick="resetCompanyTestGreeting()" class="text-xs px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-semibold transition-colors flex items-center gap-1">
+                                        <i class="fas fa-undo"></i>
+                                        Reset to Default
+                                    </button>
+                                </div>
+                                <p class="text-xs text-gray-600 mb-3">
+                                    This message will be spoken when you call the test number. Use <code class="bg-blue-100 px-1 rounded">{company_name}</code> to dynamically insert the company name.
+                                </p>
+                                <textarea 
+                                    id="company-test-greeting"
+                                    rows="3"
+                                    maxlength="500"
+                                    oninput="updateCompanyGreetingCharCount()"
+                                    class="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm font-mono resize-none"
+                                    placeholder="Currently testing {company_name}."
+                                >Currently testing {company_name}.</textarea>
+                                <div class="flex items-center justify-between mt-2">
+                                    <p class="text-xs text-gray-500">
+                                        <i class="fas fa-info-circle text-blue-600 mr-1"></i>
+                                        Company name updates automatically in the greeting
+                                    </p>
+                                    <span class="text-xs text-gray-500" id="company-greeting-char-count">29 / 500 chars</span>
+                                </div>
+                            </div>
+                            
                             <!-- Test Options (What to enable/disable) -->
                             <div class="mb-4 p-4 bg-white rounded-lg border-2 border-blue-300 shadow-sm">
                                 <h5 class="font-bold text-gray-800 mb-3 flex items-center gap-2">
@@ -6957,6 +6989,11 @@ Continue?`;
                 document.getElementById('company-test-phone-display').textContent = config.phoneNumber || 'Not configured';
                 document.getElementById('company-test-phone-input').value = config.phoneNumber || '';
                 
+                // Load greeting (with default)
+                const greeting = config.greeting || 'Currently testing {company_name}.';
+                document.getElementById('company-test-greeting').value = greeting;
+                updateCompanyGreetingCharCount();
+                
                 // Update toggle UI
                 if (config.enabled) {
                     const toggleSwitch = document.getElementById('company-toggle-switch');
@@ -7118,6 +7155,7 @@ Continue?`;
             }
             
             const enabled = document.getElementById('company-test-enabled').checked;
+            const greeting = document.getElementById('company-test-greeting').value.trim();
             
             const testOptions = {
                 enableCompanyQA: document.getElementById('test-option-company-qa').checked,
@@ -7138,6 +7176,7 @@ Continue?`;
                     body: JSON.stringify({
                         enabled,
                         activeCompanyId: companyId,
+                        greeting,
                         testOptions
                     })
                 });
@@ -7267,6 +7306,38 @@ Continue?`;
             showToast('info', 'Refreshing company list...');
             await loadCompanyList();
             showToast('success', 'Company list refreshed!');
+        }
+        
+        /**
+         * Update character count for company test greeting
+         */
+        function updateCompanyGreetingCharCount() {
+            const textarea = document.getElementById('company-test-greeting');
+            const counter = document.getElementById('company-greeting-char-count');
+            if (textarea && counter) {
+                const length = textarea.value.length;
+                counter.textContent = `${length} / 500 chars`;
+                
+                // Visual feedback if approaching limit
+                if (length > 450) {
+                    counter.classList.add('text-red-600', 'font-bold');
+                } else if (length > 400) {
+                    counter.classList.remove('text-red-600');
+                    counter.classList.add('text-orange-600', 'font-semibold');
+                } else {
+                    counter.classList.remove('text-red-600', 'text-orange-600', 'font-bold', 'font-semibold');
+                }
+            }
+        }
+        
+        /**
+         * Reset company test greeting to default
+         */
+        function resetCompanyTestGreeting() {
+            const defaultGreeting = 'Currently testing {company_name}.';
+            document.getElementById('company-test-greeting').value = defaultGreeting;
+            updateCompanyGreetingCharCount();
+            showToast('success', 'Greeting reset to default');
         }
         
         /**

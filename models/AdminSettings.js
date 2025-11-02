@@ -505,6 +505,13 @@ const adminSettingsSchema = new mongoose.Schema({
             default: '',
             description: 'Test phone number for company testing (E.164: +15551234567) - separate from template testing'
         },
+        greeting: {
+            type: String,
+            trim: true,
+            default: 'Currently testing {company_name}.',
+            maxlength: 500,
+            description: 'Greeting message spoken when calling test number. Use {company_name} placeholder.'
+        },
         
         // ROUTING: Which COMPANY to test (the key difference!)
         activeCompanyId: {

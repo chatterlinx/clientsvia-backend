@@ -111,11 +111,12 @@ router.get('/settings/company-test-mode', async (req, res) => {
  */
 router.patch('/settings/company-test-mode', async (req, res) => {
     try {
-        const { enabled, phoneNumber, activeCompanyId, testOptions } = req.body;
+        const { enabled, phoneNumber, greeting, activeCompanyId, testOptions } = req.body;
         
         logger.info('💾 [COMPANY TEST MODE] Updating configuration...', {
             enabled,
             activeCompanyId,
+            greeting: greeting ? `${greeting.substring(0, 30)}...` : undefined,
             testOptions
         });
         
@@ -146,6 +147,10 @@ router.patch('/settings/company-test-mode', async (req, res) => {
         
         if (phoneNumber !== undefined) {
             settings.companyTestMode.phoneNumber = phoneNumber;
+        }
+        
+        if (greeting !== undefined) {
+            settings.companyTestMode.greeting = greeting;
         }
         
         if (activeCompanyId !== undefined) {

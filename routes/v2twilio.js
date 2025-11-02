@@ -383,6 +383,7 @@ async function getCompanyByPhoneNumber(phoneNumber) {
         // Mark this as test mode for optional debugging/logging
         testCompany.isTestMode = true;
         testCompany.testOptions = companyTestConfig.testOptions || {};
+        testCompany.testGreeting = companyTestConfig.greeting || 'Currently testing {company_name}.';
         
         // Return the REAL company (not a fake one!)
         // This will use the EXACT same code path as production customer calls!
@@ -580,6 +581,29 @@ router.post('/voice', async (req, res) => {
     }
 
     logger.security(`✅ [SPAM FILTER] Call from ${callerNumber} passed all security checks`);
+
+    // 🏢 COMPANY TEST MODE - Play test greeting
+    if (company.isTestMode && company.testGreeting) {
+      logger.info(`🏢 [COMPANY TEST MODE] Playing test greeting for company: ${company.companyName || company.businessName}`);
+      
+      // Replace {company_name} placeholder with actual company name
+      const companyName = company.companyName || company.businessName || 'Unknown Company';
+      const greeting = company.testGreeting.replace(/{company_name}/g, companyName);
+      
+      logger.info(`🎙️ [COMPANY TEST MODE] Greeting: "${greeting}"`);
+      
+      // Play test greeting
+      twiml.say({
+        voice: 'alice',
+        language: 'en-US'
+      }, greeting);
+      
+      // Brief pause after greeting
+      twiml.pause({ length: 1 });
+      
+      logger.info(`✅ [COMPANY TEST MODE] Test greeting complete, continuing to AI agent...`);
+      // Don't return here - let it continue to the AI agent below!
+    }
 
     // 🔔 NOTIFICATION CENTER TEST MODE (Same pattern as Global AI Brain)
     if (company.isNotificationCenterTest) {
