@@ -165,6 +165,7 @@ async function loadAllRoutes() {
         routes.adminRoutes = await loadRouteWithTimeout('./routes/v2admin', 'adminRoutes');
         routes.globalInstantResponsesRoutes = await loadRouteWithTimeout('./routes/admin/globalInstantResponses', 'globalInstantResponsesRoutes');
         routes.globalAIBehaviorsRoutes = await loadRouteWithTimeout('./routes/admin/globalAIBehaviors', 'globalAIBehaviorsRoutes');
+        routes.llmLearningConsoleRoutes = await loadRouteWithTimeout('./routes/admin/llmLearningConsole', 'llmLearningConsoleRoutes');
         routes.globalActionHooksRoutes = await loadRouteWithTimeout('./routes/admin/globalActionHooks', 'globalActionHooksRoutes');
         routes.globalActionHookDirectoriesRoutes = await loadRouteWithTimeout('./routes/admin/globalActionHookDirectories', 'globalActionHookDirectoriesRoutes');
         routes.dataCenterRoutes = await loadRouteWithTimeout('./routes/admin/dataCenter', 'dataCenterRoutes');
@@ -373,6 +374,7 @@ function registerRoutes(routes) {
     app.use('/api/admin', routes.adminRoutes);
     app.use('/api/admin/global-instant-responses', routes.globalInstantResponsesRoutes); // Global AI Brain Management
     app.use('/api/admin/global-behaviors', routes.globalAIBehaviorsRoutes); // Global AI Behavior Templates
+    app.use('/api/admin/llm-learning', routes.llmLearningConsoleRoutes); // LLM Learning Console
     app.use('/api/admin/global-action-hooks', routes.globalActionHooksRoutes); // Global Action Hooks
     app.use('/api/admin/global-action-hook-directories', routes.globalActionHookDirectoriesRoutes); // Global Action Hook Directories
     app.use('/api/admin/global-industry-types', routes.globalIndustryTypesRoutes); // Global Industry Types
