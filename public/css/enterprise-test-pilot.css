@@ -1,0 +1,583 @@
+/**
+ * ============================================================================
+ * ENTERPRISE TEST PILOT - DEDICATED STYLESHEET
+ * ============================================================================
+ * 
+ * PURPOSE:
+ * Centralized styles for all Enterprise Test Pilot components including:
+ * - Trend Charts
+ * - Before/After Simulator
+ * - Bulk Actions
+ * - Priority Badges
+ * - Color-coded Transcripts
+ * 
+ * ARCHITECTURE:
+ * - BEM-style naming convention
+ * - CSS Custom Properties for theming
+ * - Mobile-first responsive design
+ * - Smooth animations and transitions
+ * 
+ * SECTIONS:
+ * 1. CSS Custom Properties (Theme Variables)
+ * 2. Color-Coded Transcript Styles
+ * 3. Priority Badge Styles
+ * 4. Trend Chart Containers
+ * 5. Before/After Simulator Styles
+ * 6. Bulk Action Progress Modal
+ * 7. Responsive Breakpoints
+ * 8. Animations
+ * 
+ * ============================================================================
+ */
+
+/* ============================================================================
+ * 1. CSS CUSTOM PROPERTIES - THEME VARIABLES
+ * ============================================================================ */
+:root {
+    /* Enterprise Test Pilot Brand Colors */
+    --etp-primary: #7c3aed;      /* Purple 600 */
+    --etp-primary-dark: #6d28d9; /* Purple 700 */
+    --etp-primary-light: #a78bfa; /* Purple 400 */
+    
+    --etp-secondary: #3b82f6;     /* Blue 600 */
+    --etp-secondary-dark: #2563eb; /* Blue 700 */
+    --etp-secondary-light: #60a5fa; /* Blue 400 */
+    
+    /* Priority Colors */
+    --etp-critical: #dc2626;  /* Red 600 */
+    --etp-high: #ea580c;      /* Orange 600 */
+    --etp-medium: #eab308;    /* Yellow 600 */
+    --etp-low: #3b82f6;       /* Blue 600 */
+    
+    /* Transcript Color-Coding */
+    --etp-filler: #3b82f6;    /* Blue - Ignored words */
+    --etp-synonym: #10b981;   /* Green - Translated */
+    --etp-keyword: #eab308;   /* Yellow - Context */
+    --etp-trigger: #dc2626;   /* Red - Matched */
+    --etp-suggestion: #7c3aed; /* Purple - Should add */
+    
+    /* Tier Colors */
+    --etp-tier1: #10b981;     /* Green - FREE */
+    --etp-tier2: #3b82f6;     /* Blue - Semantic */
+    --etp-tier3: #7c3aed;     /* Purple - LLM */
+    
+    /* UI Spacing */
+    --etp-spacing-xs: 0.25rem;  /* 4px */
+    --etp-spacing-sm: 0.5rem;   /* 8px */
+    --etp-spacing-md: 1rem;     /* 16px */
+    --etp-spacing-lg: 1.5rem;   /* 24px */
+    --etp-spacing-xl: 2rem;     /* 32px */
+    
+    /* Border Radius */
+    --etp-radius-sm: 0.375rem;  /* 6px */
+    --etp-radius-md: 0.5rem;    /* 8px */
+    --etp-radius-lg: 0.75rem;   /* 12px */
+    --etp-radius-xl: 1rem;      /* 16px */
+    
+    /* Shadows */
+    --etp-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --etp-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --etp-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    --etp-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* ============================================================================
+ * 2. COLOR-CODED TRANSCRIPT STYLES
+ * ============================================================================ */
+
+/* Base transcript container */
+.etp-transcript {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height: 1.6;
+    padding: var(--etp-spacing-md);
+    background-color: #f9fafb;
+    border-radius: var(--etp-radius-md);
+}
+
+/* Color-coded word styles */
+.etp-word-filler {
+    color: var(--etp-filler);
+    font-weight: 400;
+    opacity: 0.7;
+}
+
+.etp-word-synonym {
+    color: var(--etp-synonym);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-style: solid;
+    text-decoration-thickness: 2px;
+}
+
+.etp-word-keyword {
+    color: var(--etp-keyword);
+    font-weight: 600;
+    background-color: rgba(234, 179, 8, 0.1);
+    padding: 0 0.25rem;
+    border-radius: 0.25rem;
+}
+
+.etp-word-trigger {
+    color: var(--etp-trigger);
+    font-weight: 700;
+    background-color: rgba(220, 38, 38, 0.1);
+    padding: 0 0.25rem;
+    border-radius: 0.25rem;
+}
+
+.etp-word-suggestion {
+    color: var(--etp-suggestion);
+    font-weight: 700;
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    text-decoration-thickness: 2px;
+    cursor: help;
+}
+
+/* Hover tooltips for color-coded words */
+.etp-word-filler:hover,
+.etp-word-synonym:hover,
+.etp-word-keyword:hover,
+.etp-word-trigger:hover,
+.etp-word-suggestion:hover {
+    opacity: 1;
+    transform: scale(1.05);
+    transition: all 0.2s ease;
+}
+
+/* ============================================================================
+ * 3. PRIORITY BADGE STYLES
+ * ============================================================================ */
+
+.etp-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--etp-radius-sm);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.etp-badge-critical {
+    background-color: var(--etp-critical);
+    color: white;
+}
+
+.etp-badge-high {
+    background-color: var(--etp-high);
+    color: white;
+}
+
+.etp-badge-medium {
+    background-color: var(--etp-medium);
+    color: white;
+}
+
+.etp-badge-low {
+    background-color: var(--etp-low);
+    color: white;
+}
+
+/* ============================================================================
+ * 4. TREND CHART CONTAINERS
+ * ============================================================================ */
+
+.etp-chart-container {
+    background: white;
+    border-radius: var(--etp-radius-lg);
+    padding: var(--etp-spacing-lg);
+    box-shadow: var(--etp-shadow-md);
+    border: 2px solid #e5e7eb;
+    transition: all 0.3s ease;
+}
+
+.etp-chart-container:hover {
+    box-shadow: var(--etp-shadow-lg);
+    transform: translateY(-2px);
+}
+
+.etp-chart-header {
+    display: flex;
+    align-items: center;
+    gap: var(--etp-spacing-sm);
+    margin-bottom: var(--etp-spacing-md);
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.etp-chart-icon {
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--etp-radius-md);
+    background-color: var(--etp-primary);
+    color: white;
+}
+
+/* Loading state for charts */
+.etp-chart-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    color: #6b7280;
+}
+
+.etp-chart-loading-spinner {
+    width: 3rem;
+    height: 3rem;
+    border: 4px solid #e5e7eb;
+    border-top-color: var(--etp-primary);
+    border-radius: 50%;
+    animation: etp-spin 1s linear infinite;
+}
+
+/* ============================================================================
+ * 5. BEFORE/AFTER SIMULATOR STYLES
+ * ============================================================================ */
+
+.etp-simulator {
+    background: linear-gradient(135deg, #faf5ff 0%, #eff6ff 100%);
+    border: 2px solid var(--etp-primary);
+    border-radius: var(--etp-radius-lg);
+    padding: var(--etp-spacing-xl);
+}
+
+.etp-simulator-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--etp-spacing-lg);
+}
+
+.etp-simulator-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1f2937;
+    display: flex;
+    align-items: center;
+    gap: var(--etp-spacing-sm);
+}
+
+.etp-simulator-badge {
+    padding: 0.5rem 1rem;
+    background-color: #10b981;
+    color: white;
+    border-radius: var(--etp-radius-md);
+    font-size: 0.875rem;
+    font-weight: 700;
+    border: 2px solid #059669;
+}
+
+/* Before/After comparison cards */
+.etp-comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--etp-spacing-lg);
+    margin-bottom: var(--etp-spacing-lg);
+}
+
+.etp-comparison-card {
+    background: white;
+    border-radius: var(--etp-radius-lg);
+    padding: var(--etp-spacing-lg);
+    box-shadow: var(--etp-shadow-md);
+}
+
+.etp-comparison-card-before {
+    border: 2px solid #fca5a5;
+}
+
+.etp-comparison-card-after {
+    border: 2px solid #86efac;
+}
+
+.etp-comparison-card-header {
+    display: flex;
+    align-items: center;
+    gap: var(--etp-spacing-md);
+    margin-bottom: var(--etp-spacing-md);
+}
+
+.etp-comparison-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+}
+
+.etp-comparison-icon-before {
+    background-color: #fee2e2;
+    color: #dc2626;
+}
+
+.etp-comparison-icon-after {
+    background-color: #dcfce7;
+    color: #16a34a;
+}
+
+/* Progress bars in comparison */
+.etp-progress-bar {
+    width: 100%;
+    height: 0.5rem;
+    background-color: #e5e7eb;
+    border-radius: var(--etp-radius-sm);
+    overflow: hidden;
+}
+
+.etp-progress-fill {
+    height: 100%;
+    border-radius: var(--etp-radius-sm);
+    transition: width 0.5s ease;
+}
+
+.etp-progress-fill-before {
+    background-color: #ef4444;
+}
+
+.etp-progress-fill-after {
+    background-color: #22c55e;
+}
+
+/* ============================================================================
+ * 6. BULK ACTION PROGRESS MODAL
+ * ============================================================================ */
+
+.etp-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    animation: etp-fade-in 0.2s ease;
+}
+
+.etp-modal-content {
+    background: white;
+    border-radius: var(--etp-radius-xl);
+    box-shadow: var(--etp-shadow-xl);
+    max-width: 32rem;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: etp-slide-up 0.3s ease;
+}
+
+.etp-modal-header {
+    padding: var(--etp-spacing-lg);
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.etp-modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1f2937;
+    display: flex;
+    align-items: center;
+    gap: var(--etp-spacing-sm);
+}
+
+.etp-modal-body {
+    padding: var(--etp-spacing-lg);
+}
+
+.etp-modal-footer {
+    padding: var(--etp-spacing-lg);
+    border-top: 2px solid #e5e7eb;
+    display: flex;
+    gap: var(--etp-spacing-md);
+    justify-content: flex-end;
+}
+
+/* Progress indicators in modal */
+.etp-progress-text {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: var(--etp-spacing-sm);
+    font-size: 0.875rem;
+    color: #6b7280;
+    font-weight: 600;
+}
+
+.etp-progress-bar-modal {
+    width: 100%;
+    height: 0.75rem;
+    background-color: #e5e7eb;
+    border-radius: var(--etp-radius-sm);
+    overflow: hidden;
+}
+
+.etp-progress-fill-modal {
+    height: 100%;
+    background-color: var(--etp-primary);
+    border-radius: var(--etp-radius-sm);
+    transition: width 0.3s ease;
+}
+
+/* Success/Failure summary cards */
+.etp-summary-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--etp-spacing-md);
+    border-radius: var(--etp-radius-md);
+    border: 2px solid;
+}
+
+.etp-summary-success {
+    background-color: #dcfce7;
+    border-color: #22c55e;
+}
+
+.etp-summary-failure {
+    background-color: #fee2e2;
+    border-color: #ef4444;
+}
+
+/* ============================================================================
+ * 7. RESPONSIVE BREAKPOINTS
+ * ============================================================================ */
+
+/* Mobile (< 640px) */
+@media (max-width: 639px) {
+    .etp-comparison-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .etp-modal-content {
+        width: 95%;
+        max-height: 95vh;
+    }
+    
+    .etp-chart-container {
+        padding: var(--etp-spacing-md);
+    }
+}
+
+/* Tablet (640px - 1024px) */
+@media (min-width: 640px) and (max-width: 1023px) {
+    .etp-comparison-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Desktop (>= 1024px) */
+@media (min-width: 1024px) {
+    .etp-comparison-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* ============================================================================
+ * 8. ANIMATIONS
+ * ============================================================================ */
+
+@keyframes etp-spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes etp-fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes etp-slide-up {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes etp-pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.etp-animate-pulse {
+    animation: etp-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ============================================================================
+ * 9. UTILITY CLASSES
+ * ============================================================================ */
+
+/* Text utilities */
+.etp-text-critical {
+    color: var(--etp-critical);
+}
+
+.etp-text-high {
+    color: var(--etp-high);
+}
+
+.etp-text-medium {
+    color: var(--etp-medium);
+}
+
+.etp-text-low {
+    color: var(--etp-low);
+}
+
+/* Background utilities */
+.etp-bg-tier1 {
+    background-color: var(--etp-tier1);
+}
+
+.etp-bg-tier2 {
+    background-color: var(--etp-tier2);
+}
+
+.etp-bg-tier3 {
+    background-color: var(--etp-tier3);
+}
+
+/* Icon utilities */
+.etp-icon-critical::before {
+    content: '🔥';
+}
+
+.etp-icon-high::before {
+    content: '⚠️';
+}
+
+.etp-icon-medium::before {
+    content: '📌';
+}
+
+.etp-icon-low::before {
+    content: 'ℹ️';
+}
+
+/* ============================================================================
+ * END OF ENTERPRISE TEST PILOT STYLESHEET
+ * ============================================================================ */
+
