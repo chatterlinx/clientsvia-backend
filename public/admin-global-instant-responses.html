@@ -10,9 +10,9 @@
     <!-- DEPLOYMENT VERSION: OPTION_B_PERFECT - 2025-11-02 21:15:00 UTC - Template Status Label Fixed -->
     <script>
         // 🔥 DEPLOYMENT VERIFICATION SYSTEM
-        const BUILD_VERSION = 'COMPANY_PRODUCTION_INTELLIGENCE_UI';
-        const BUILD_DATE = '2025-11-02 23:45:00 UTC';
-        const BUILD_DESCRIPTION = '⚡ Added Company Production Intelligence UI - Full 3-tier config for real customer calls (Tier sliders, LLM model, cost limits, inherit toggle)';
+        const BUILD_VERSION = 'LLM_LEARNING_CONSOLE_UI';
+        const BUILD_DATE = '2025-11-02 23:59:00 UTC';
+        const BUILD_DESCRIPTION = '🧠 Added LLM Learning Console Tab - Organize suggestions by template, cost dashboard, approve/reject queue (UI structure complete, backend functions pending)';
         
         console.log('═══════════════════════════════════════════════════');
         console.log('🚀 DEPLOYMENT VERSION:', BUILD_VERSION);
@@ -569,6 +569,11 @@
                     <button id="overview-subtab-dashboard" onclick="switchOverviewSubTab('dashboard')" class="px-4 py-2 text-sm font-medium text-blue-700 border-b-2 border-blue-600 bg-white rounded-t">
                         <i class="fas fa-flask mr-1.5 text-xs"></i>
                         Test Pilot
+                    </button>
+                    <button id="overview-subtab-llm-learning" onclick="switchOverviewSubTab('llm-learning')" class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 border-b-2 border-transparent rounded-t">
+                        <i class="fas fa-graduation-cap mr-1.5 text-xs"></i>
+                        LLM Learning Console
+                        <span id="llm-suggestions-badge" class="ml-1.5 px-1.5 py-0.5 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs rounded-full font-bold animate-pulse">0</span>
                     </button>
                     <button id="overview-subtab-ai-gateway" onclick="switchOverviewSubTab('ai-gateway')" class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 border-b-2 border-transparent rounded-t">
                         <i class="fas fa-network-wired mr-1.5 text-xs"></i>
@@ -2706,6 +2711,179 @@
                     </div>
                 </div>
             </div>
+
+            <!-- ========================================================================
+                 🧠 LLM LEARNING CONSOLE - THE MAGIC HAPPENS HERE!
+                 ========================================================================
+                 PURPOSE: Central command for production LLM suggestions
+                 - Organize by template (work on 1 template at a time)
+                 - Review suggestions from 100+ companies
+                 - Approve/reject queue with cost analysis
+                 - Track learning ROI and Tier 3 reduction
+                 ======================================================================== -->
+            <div id="overview-llm-learning-content" class="overview-subtab-content hidden">
+                
+                <!-- Header -->
+                <div class="mb-6">
+                    <h2 class="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+                        <div class="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center shadow-lg">
+                            <i class="fas fa-graduation-cap text-white text-xl"></i>
+                        </div>
+                        LLM Learning Console
+                    </h2>
+                    <p class="text-gray-600">
+                        Review and approve LLM-generated suggestions from real production calls. Teach the AI Brain to handle 100+ companies smarter every day.
+                    </p>
+                </div>
+                
+                <!-- Cost Dashboard Banner -->
+                <div class="bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-300 rounded-xl p-6 mb-6 shadow-md">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <!-- Today's Cost -->
+                        <div class="bg-white rounded-lg p-4 border border-orange-200 text-center">
+                            <div class="text-3xl font-bold text-orange-600" id="llm-cost-today">$0.00</div>
+                            <div class="text-sm text-gray-600 mt-1">
+                                <i class="fas fa-calendar-day text-orange-500 mr-1"></i>
+                                Today's Learning Cost
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1" id="llm-calls-today">0 Tier 3 calls</div>
+                        </div>
+                        
+                        <!-- This Week -->
+                        <div class="bg-white rounded-lg p-4 border border-orange-200 text-center">
+                            <div class="text-3xl font-bold text-orange-600" id="llm-cost-week">$0.00</div>
+                            <div class="text-sm text-gray-600 mt-1">
+                                <i class="fas fa-calendar-week text-orange-500 mr-1"></i>
+                                This Week
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1" id="llm-calls-week">0 calls</div>
+                        </div>
+                        
+                        <!-- ROI Savings -->
+                        <div class="bg-white rounded-lg p-4 border border-green-200 text-center">
+                            <div class="text-3xl font-bold text-green-600" id="llm-roi-savings">$0.00</div>
+                            <div class="text-sm text-gray-600 mt-1">
+                                <i class="fas fa-piggy-bank text-green-500 mr-1"></i>
+                                ROI Savings
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1" id="llm-suggestions-applied">0 suggestions applied</div>
+                        </div>
+                        
+                        <!-- Tier 3 Reduction -->
+                        <div class="bg-white rounded-lg p-4 border border-blue-200 text-center">
+                            <div class="text-3xl font-bold text-blue-600" id="llm-tier3-reduction">0%</div>
+                            <div class="text-sm text-gray-600 mt-1">
+                                <i class="fas fa-chart-line text-blue-500 mr-1"></i>
+                                Tier 3 Reduction
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">Since learning started</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Template Organization Section -->
+                <div class="bg-white rounded-xl border-2 border-gray-300 p-6 shadow-lg mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+                                <i class="fas fa-filter text-blue-600"></i>
+                                Filter by Template
+                            </h3>
+                            <p class="text-sm text-gray-600 mt-1">
+                                Work on one template at a time. Each template shows its pending suggestions and learning cost.
+                            </p>
+                        </div>
+                        <button onclick="refreshLLMTemplates()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all flex items-center gap-2">
+                            <i class="fas fa-sync-alt"></i>
+                            Refresh
+                        </button>
+                    </div>
+                    
+                    <!-- Template Cards Grid -->
+                    <div id="llm-template-cards-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+                        <!-- Template cards will be rendered here by JavaScript -->
+                        
+                        <!-- Loading State -->
+                        <div id="llm-templates-loading" class="col-span-full text-center py-12">
+                            <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-600 mx-auto mb-4"></div>
+                            <p class="text-gray-600 font-semibold">Loading templates...</p>
+                        </div>
+                        
+                        <!-- Empty State -->
+                        <div id="llm-templates-empty" class="hidden col-span-full text-center py-12">
+                            <i class="fas fa-check-circle text-green-500 text-6xl mb-4"></i>
+                            <h3 class="text-xl font-bold text-gray-700 mb-2">No Pending Suggestions!</h3>
+                            <p class="text-gray-600">All caught up! The LLM will generate suggestions as production calls come in.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Suggestion Queue Section (shown when template selected) -->
+                <div id="llm-suggestion-queue-section" class="hidden bg-white rounded-xl border-2 border-orange-400 p-6 shadow-lg mb-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+                                <i class="fas fa-list-check text-orange-600"></i>
+                                Suggestion Queue
+                                <span class="text-sm font-normal text-gray-600">for</span>
+                                <span id="llm-selected-template-name" class="text-blue-600">Universal AI Brain</span>
+                            </h3>
+                            <p class="text-sm text-gray-600 mt-1" id="llm-queue-summary">
+                                47 pending suggestions • $12.50 learning cost
+                            </p>
+                        </div>
+                        <button onclick="closeLLMSuggestionQueue()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition-all">
+                            <i class="fas fa-arrow-left mr-2"></i>
+                            Back to Templates
+                        </button>
+                    </div>
+                    
+                    <!-- Priority Filter Tabs -->
+                    <div class="flex gap-2 mb-4">
+                        <button onclick="filterLLMSuggestions('all')" id="llm-filter-all" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold text-sm">
+                            All <span id="llm-count-all" class="ml-1">(0)</span>
+                        </button>
+                        <button onclick="filterLLMSuggestions('high')" id="llm-filter-high" class="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-red-100 rounded-lg font-semibold text-sm">
+                            🔴 High <span id="llm-count-high" class="ml-1">(0)</span>
+                        </button>
+                        <button onclick="filterLLMSuggestions('medium')" id="llm-filter-medium" class="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-yellow-100 rounded-lg font-semibold text-sm">
+                            🟡 Medium <span id="llm-count-medium" class="ml-1">(0)</span>
+                        </button>
+                        <button onclick="filterLLMSuggestions('low')" id="llm-filter-low" class="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg font-semibold text-sm">
+                            🟢 Low <span id="llm-count-low" class="ml-1">(0)</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Bulk Actions -->
+                    <div class="flex gap-2 mb-4 pb-4 border-b border-gray-200">
+                        <button onclick="approveAllHighConfidence()" class="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-semibold text-sm shadow-md hover:shadow-xl transition-all flex items-center gap-2">
+                            <i class="fas fa-check-double"></i>
+                            Approve All (90%+ Confidence)
+                        </button>
+                        <button onclick="exportLLMSuggestions()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm transition-all flex items-center gap-2">
+                            <i class="fas fa-download"></i>
+                            Export CSV
+                        </button>
+                        <button onclick="dismissLowPriorityLLM()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold text-sm transition-all flex items-center gap-2">
+                            <i class="fas fa-times-circle"></i>
+                            Dismiss Low Priority
+                        </button>
+                    </div>
+                    
+                    <!-- Suggestions List -->
+                    <div id="llm-suggestions-list" class="space-y-4">
+                        <!-- Suggestion cards will be rendered here by JavaScript -->
+                        
+                        <!-- Loading State -->
+                        <div id="llm-suggestions-loading" class="text-center py-12">
+                            <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-600 mx-auto mb-4"></div>
+                            <p class="text-gray-600 font-semibold">Loading suggestions...</p>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+            <!-- END: LLM Learning Console -->
 
             <!-- AI Gateway Sub-Tab Content -->
             <div id="overview-ai-gateway-content" class="overview-subtab-content hidden">
@@ -8050,6 +8228,335 @@ Continue?`;
         // END: Company Production Intelligence Functions
         // ================================================================
         
+        // ================================================================
+        // 🧠 LLM LEARNING CONSOLE FUNCTIONS
+        // ================================================================
+        
+        /**
+         * Load LLM Cost Dashboard
+         * Fetches cost analytics and ROI metrics
+         */
+        async function loadLLMCostDashboard() {
+            console.log('💰 [LLM COST] Loading cost dashboard...');
+            
+            try {
+                const response = await fetch('/api/admin/llm-learning/cost-analytics', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Update cost dashboard
+                document.getElementById('llm-cost-today').textContent = `$${data.today.cost.toFixed(2)}`;
+                document.getElementById('llm-calls-today').textContent = `${data.today.calls} Tier 3 calls`;
+                document.getElementById('llm-cost-week').textContent = `$${data.week.cost.toFixed(2)}`;
+                document.getElementById('llm-calls-week').textContent = `${data.week.calls} calls`;
+                document.getElementById('llm-roi-savings').textContent = `$${data.roi.savings.toFixed(2)}`;
+                document.getElementById('llm-suggestions-applied').textContent = `${data.roi.suggestionsApplied} suggestions applied`;
+                document.getElementById('llm-tier3-reduction').textContent = `${data.tier3Reduction}%`;
+                
+                console.log('✅ [LLM COST] Dashboard loaded:', data);
+                
+            } catch (error) {
+                console.error('❌ [LLM COST] Failed to load:', error);
+                // Show placeholder data
+                document.getElementById('llm-cost-today').textContent = '$0.00';
+                document.getElementById('llm-calls-today').textContent = '0 Tier 3 calls';
+            }
+        }
+        
+        /**
+         * Load LLM Templates with Suggestion Counts
+         */
+        async function loadLLMTemplates() {
+            console.log('📋 [LLM TEMPLATES] Loading templates...');
+            
+            const container = document.getElementById('llm-template-cards-grid');
+            const loading = document.getElementById('llm-templates-loading');
+            const empty = document.getElementById('llm-templates-empty');
+            
+            // Show loading
+            loading.classList.remove('hidden');
+            empty.classList.add('hidden');
+            
+            try {
+                const response = await fetch('/api/admin/llm-learning/templates', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const templates = data.templates || [];
+                
+                // Hide loading
+                loading.classList.add('hidden');
+                
+                if (templates.length === 0) {
+                    empty.classList.remove('hidden');
+                    return;
+                }
+                
+                // Update badge
+                const totalSuggestions = templates.reduce((sum, t) => sum + t.pendingSuggestions, 0);
+                document.getElementById('llm-suggestions-badge').textContent = totalSuggestions;
+                
+                // Render template cards
+                const cardsHTML = templates.map(template => `
+                    <div onclick="openLLMSuggestionQueue('${template._id}', '${template.name.replace(/'/g, "\\'")}')" 
+                         class="bg-gradient-to-br from-white to-gray-50 rounded-lg border-2 border-gray-300 hover:border-orange-500 p-5 cursor-pointer transition-all duration-300 hover:shadow-xl">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="font-bold text-gray-900 text-lg">${template.name}</h4>
+                            <span class="px-3 py-1 bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-bold rounded-full animate-pulse">
+                                ${template.pendingSuggestions}
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between text-sm text-gray-600">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-dollar-sign text-orange-500"></i>
+                                <span class="font-semibold">$${template.learningCost.toFixed(2)}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-building text-blue-500"></i>
+                                <span>${template.companiesUsing} companies</span>
+                            </div>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between text-xs text-gray-500">
+                            <span>Last suggestion: ${new Date(template.lastSuggestion).toLocaleDateString()}</span>
+                            <div class="flex gap-1">
+                                <span class="px-2 py-1 bg-red-100 text-red-700 rounded font-semibold">${template.priority.high} high</span>
+                                <span class="px-2 py-1 bg-yellow-100 text-yellow-700 rounded font-semibold">${template.priority.medium} med</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                
+                container.innerHTML = cardsHTML;
+                
+                console.log('✅ [LLM TEMPLATES] Loaded', templates.length, 'templates');
+                
+            } catch (error) {
+                console.error('❌ [LLM TEMPLATES] Failed to load:', error);
+                loading.classList.add('hidden');
+                container.innerHTML = `
+                    <div class="col-span-full text-center py-12">
+                        <i class="fas fa-exclamation-triangle text-red-500 text-6xl mb-4"></i>
+                        <h3 class="text-xl font-bold text-gray-700 mb-2">Failed to Load Templates</h3>
+                        <p class="text-gray-600">${error.message}</p>
+                        <button onclick="loadLLMTemplates()" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            Retry
+                        </button>
+                    </div>
+                `;
+            }
+        }
+        
+        /**
+         * Refresh LLM Templates
+         */
+        function refreshLLMTemplates() {
+            console.log('🔄 [LLM TEMPLATES] Refreshing...');
+            loadLLMCostDashboard();
+            loadLLMTemplates();
+        }
+        
+        /**
+         * Open LLM Suggestion Queue for Template
+         */
+        function openLLMSuggestionQueue(templateId, templateName) {
+            console.log(`📋 [LLM QUEUE] Opening queue for template: ${templateName} (${templateId})`);
+            
+            // Hide template cards, show suggestion queue
+            document.getElementById('llm-template-cards-grid').parentElement.classList.add('hidden');
+            document.getElementById('llm-suggestion-queue-section').classList.remove('hidden');
+            
+            // Update header
+            document.getElementById('llm-selected-template-name').textContent = templateName;
+            
+            // Load suggestions for this template
+            loadLLMSuggestionsForTemplate(templateId);
+        }
+        
+        /**
+         * Close LLM Suggestion Queue
+         */
+        function closeLLMSuggestionQueue() {
+            console.log('🔙 [LLM QUEUE] Closing queue, back to templates');
+            
+            // Show template cards, hide suggestion queue
+            document.getElementById('llm-suggestion-queue-section').classList.add('hidden');
+            document.getElementById('llm-template-cards-grid').parentElement.classList.remove('hidden');
+        }
+        
+        /**
+         * Load LLM Suggestions for Template
+         */
+        async function loadLLMSuggestionsForTemplate(templateId) {
+            console.log(`📥 [LLM SUGGESTIONS] Loading for template: ${templateId}`);
+            
+            const listContainer = document.getElementById('llm-suggestions-list');
+            const loading = document.getElementById('llm-suggestions-loading');
+            
+            // Show loading
+            loading.classList.remove('hidden');
+            
+            try {
+                const response = await fetch(`/api/admin/llm-learning/suggestions/${templateId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const suggestions = data.suggestions || [];
+                
+                // Hide loading
+                loading.classList.add('hidden');
+                
+                // Update counts
+                const highCount = suggestions.filter(s => s.priority === 'high').length;
+                const mediumCount = suggestions.filter(s => s.priority === 'medium').length;
+                const lowCount = suggestions.filter(s => s.priority === 'low').length;
+                
+                document.getElementById('llm-count-all').textContent = `(${suggestions.length})`;
+                document.getElementById('llm-count-high').textContent = `(${highCount})`;
+                document.getElementById('llm-count-medium').textContent = `(${mediumCount})`;
+                document.getElementById('llm-count-low').textContent = `(${lowCount})`;
+                
+                // Update queue summary
+                const totalCost = suggestions.reduce((sum, s) => sum + (s.cost || 0), 0);
+                document.getElementById('llm-queue-summary').textContent = 
+                    `${suggestions.length} pending suggestions • $${totalCost.toFixed(2)} learning cost`;
+                
+                // Render suggestion cards
+                renderLLMSuggestions(suggestions);
+                
+                console.log('✅ [LLM SUGGESTIONS] Loaded', suggestions.length, 'suggestions');
+                
+            } catch (error) {
+                console.error('❌ [LLM SUGGESTIONS] Failed to load:', error);
+                loading.classList.add('hidden');
+                listContainer.innerHTML = `
+                    <div class="text-center py-12">
+                        <i class="fas fa-exclamation-triangle text-red-500 text-5xl mb-4"></i>
+                        <h3 class="text-lg font-bold text-gray-700 mb-2">Failed to Load Suggestions</h3>
+                        <p class="text-gray-600">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        /**
+         * Render LLM Suggestions (placeholder for now)
+         */
+        function renderLLMSuggestions(suggestions) {
+            console.log('🎨 [LLM SUGGESTIONS] Rendering', suggestions.length, 'suggestions');
+            
+            const listContainer = document.getElementById('llm-suggestions-list');
+            
+            if (suggestions.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="text-center py-12">
+                        <i class="fas fa-check-circle text-green-500 text-6xl mb-4"></i>
+                        <h3 class="text-xl font-bold text-gray-700 mb-2">No Suggestions!</h3>
+                        <p class="text-gray-600">All caught up for this template.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // TODO: Render actual suggestion cards with approve/reject buttons
+            listContainer.innerHTML = suggestions.map(s => `
+                <div class="bg-white rounded-lg border-2 border-${s.priority === 'high' ? 'red' : s.priority === 'medium' ? 'yellow' : 'gray'}-300 p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-bold text-gray-600">Suggestion #${s._id.substring(0, 8)}</span>
+                        <span class="px-2 py-1 bg-${s.priority === 'high' ? 'red' : s.priority === 'medium' ? 'yellow' : 'gray'}-100 text-${s.priority === 'high' ? 'red' : s.priority === 'medium' ? 'yellow' : 'gray'}-700 text-xs font-bold rounded-full">
+                            ${s.priority.toUpperCase()}
+                        </span>
+                    </div>
+                    <p class="text-gray-700 mb-2">${s.suggestion || 'Add new trigger/scenario'}</p>
+                    <div class="text-xs text-gray-500 mb-3">
+                        From: ${s.companyName} • ${new Date(s.createdAt).toLocaleDateString()} • Cost: $${(s.cost || 0).toFixed(3)}
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="approveLLMSuggestion('${s._id}')" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-semibold">
+                            ✅ Approve
+                        </button>
+                        <button onclick="rejectLLMSuggestion('${s._id}')" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-semibold">
+                            ❌ Reject
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        /**
+         * Filter LLM Suggestions (placeholder)
+         */
+        function filterLLMSuggestions(priority) {
+            console.log(`🔍 [LLM FILTER] Filtering by: ${priority}`);
+            // TODO: Implement filtering logic
+            showToast('info', `Filter by ${priority} (coming soon)`);
+        }
+        
+        /**
+         * Approve All High Confidence (placeholder)
+         */
+        function approveAllHighConfidence() {
+            console.log('✅ [LLM BULK] Approving all high confidence suggestions');
+            showToast('info', 'Bulk approve feature coming soon');
+        }
+        
+        /**
+         * Export LLM Suggestions (placeholder)
+         */
+        function exportLLMSuggestions() {
+            console.log('📥 [LLM EXPORT] Exporting suggestions to CSV');
+            showToast('info', 'Export feature coming soon');
+        }
+        
+        /**
+         * Dismiss Low Priority (placeholder)
+         */
+        function dismissLowPriorityLLM() {
+            console.log('🗑️ [LLM DISMISS] Dismissing low priority suggestions');
+            showToast('info', 'Dismiss feature coming soon');
+        }
+        
+        /**
+         * Approve LLM Suggestion (placeholder)
+         */
+        async function approveLLMSuggestion(suggestionId) {
+            console.log(`✅ [LLM APPROVE] Approving suggestion: ${suggestionId}`);
+            showToast('info', 'Approve feature coming soon - will update template and mark as applied');
+        }
+        
+        /**
+         * Reject LLM Suggestion (placeholder)
+         */
+        async function rejectLLMSuggestion(suggestionId) {
+            console.log(`❌ [LLM REJECT] Rejecting suggestion: ${suggestionId}`);
+            showToast('info', 'Reject feature coming soon - will mark as dismissed');
+        }
+        
+        // ================================================================
+        // END: LLM Learning Console Functions
+        // ================================================================
+        
         /**
          * When company is selected from TOP dropdown
          */
@@ -10005,6 +10512,11 @@ Continue?`;
             } else if (subTabName === 'dashboard') {
                 // Load Twilio test config when viewing dashboard
                 loadTwilioTestConfig();
+            } else if (subTabName === 'llm-learning') {
+                // Initialize LLM Learning Console
+                console.log('🧠 [LLM LEARNING] Initializing LLM Learning Console...');
+                loadLLMCostDashboard();
+                loadLLMTemplates();
             } else if (subTabName === 'ai-gateway') {
                 // Initialize AI Gateway Manager
                 if (window.aiGatewayManager && typeof window.aiGatewayManager.initialize === 'function') {
