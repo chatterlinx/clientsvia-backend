@@ -312,7 +312,7 @@ function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I ca
     // Continue conversation instead of hanging up [[memory:8276820]]
     const gather = twiml.gather({
       input: 'speech',
-      speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
+      speechTimeout: '3', // Matches production defaults for consistent experience
       speechModel: 'phone_call',
       action: `/api/twilio/v2-agent-respond/${companyID || 'unknown'}`,
       method: 'POST'
@@ -632,12 +632,17 @@ router.post('/voice', async (req, res) => {
       
       logger.info(`🎙️ [GLOBAL BRAIN] Using greeting: "${greeting.substring(0, 80)}..."`);
       
+      // 🎯 CRITICAL: Test Pilot must use SAME speech detection settings as real customer calls
+      // This ensures testing accuracy - what you test is what customers experience
+      // Using production defaults: 3s speechTimeout, 5s initialTimeout
       const gather = twiml.gather({
         input: 'speech',
         action: `/api/twilio/test-respond/${company.template._id}`,
         method: 'POST',
-        timeout: 5,
-        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
+        timeout: 5, // Initial timeout (how long to wait for ANY speech)
+        speechTimeout: '3', // Speech timeout (how long after they STOP talking) - MATCHES PRODUCTION!
+        enhanced: true, // Enhanced speech recognition
+        speechModel: 'phone_call', // Optimized for phone calls
         hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually' // Help recognize common filler words
       });
       gather.say(greeting);
@@ -811,7 +816,7 @@ router.post('/voice', async (req, res) => {
         method: 'POST',
         bargeIn: false,
         timeout: 5,
-        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
+        speechTimeout: '3', // Matches production defaults for consistent experience
         enhanced: true,
         speechModel: 'phone_call'
       });
@@ -927,15 +932,17 @@ router.post('/handle-speech', async (req, res) => {
         res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
         return;
       }
+      // Use configurable speech detection settings (fallback to defaults if not set)
+      const speechDetection = company.aiAgentLogic?.voiceSettings?.speechDetection || {};
       const gather = twiml.gather({
         input: 'speech',
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
-        bargeIn: company.aiSettings?.bargeIn ?? false,
-        timeout: 5, // Globally optimized for fast response
-        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
-        enhanced: true,
-        speechModel: 'phone_call',
+        bargeIn: speechDetection.bargeIn ?? (company.aiSettings?.bargeIn ?? false),
+        timeout: speechDetection.initialTimeout ?? 5,
+        speechTimeout: (speechDetection.speechTimeout ?? 3).toString(), // Configurable: 1-10s (default: 3s)
+        enhanced: speechDetection.enhancedRecognition ?? true,
+        speechModel: speechDetection.speechModel ?? 'phone_call',
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
       });
 
@@ -1036,15 +1043,17 @@ router.post('/handle-speech', async (req, res) => {
         ];
         const clarification = clarificationResponses[Math.floor(Math.random() * clarificationResponses.length)];
         
+        // Use configurable speech detection settings (fallback to defaults if not set)
+        const speechDetection = company.aiAgentLogic?.voiceSettings?.speechDetection || {};
         const gather = twiml.gather({
           input: 'speech',
           action: `https://${req.get('host')}/api/twilio/handle-speech`,
           method: 'POST',
-          bargeIn: company.aiSettings?.bargeIn ?? false,
-          timeout: 5,
-          speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
-          enhanced: true,
-          speechModel: 'phone_call',
+          bargeIn: speechDetection.bargeIn ?? (company.aiSettings?.bargeIn ?? false),
+          timeout: speechDetection.initialTimeout ?? 5,
+          speechTimeout: (speechDetection.speechTimeout ?? 3).toString(), // Configurable: 1-10s (default: 3s)
+          enhanced: speechDetection.enhancedRecognition ?? true,
+          speechModel: speechDetection.speechModel ?? 'phone_call',
           partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
         });
         
@@ -1061,15 +1070,17 @@ router.post('/handle-speech', async (req, res) => {
       
       logger.info(`[Q&A RESPONSE] [OK] Using Q&A response (no repetition detected)`);
       
+      // Use configurable speech detection settings (fallback to defaults if not set)
+      const speechDetection = company.aiAgentLogic?.voiceSettings?.speechDetection || {};
       const gather = twiml.gather({
         input: 'speech',
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
-        bargeIn: company.aiSettings?.bargeIn ?? false,
-        timeout: 5, // Globally optimized for fast response
-        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty customers to pause and continue without being cut off
-        enhanced: true,
-        speechModel: 'phone_call',
+        bargeIn: speechDetection.bargeIn ?? (company.aiSettings?.bargeIn ?? false),
+        timeout: speechDetection.initialTimeout ?? 5,
+        speechTimeout: (speechDetection.speechTimeout ?? 3).toString(), // Configurable: 1-10s (default: 3s)
+        enhanced: speechDetection.enhancedRecognition ?? true,
+        speechModel: speechDetection.speechModel ?? 'phone_call',
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
       });
 
@@ -1999,7 +2010,9 @@ router.post('/test-respond/:templateId', async (req, res) => {
         action: `/api/twilio/test-respond/${templateId}`,
         method: 'POST',
         timeout: 5,
-        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty test phrases without being cut off
+        speechTimeout: '3', // Matches production defaults - what you test is what customers get!
+        enhanced: true,
+        speechModel: 'phone_call',
         hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually' // Help recognize common filler words
       });
       gather.say('Say something else to test another scenario, or hang up to end the test.');
@@ -2018,7 +2031,9 @@ router.post('/test-respond/:templateId', async (req, res) => {
         action: `/api/twilio/test-respond/${templateId}`,
         method: 'POST',
         timeout: 5,
-        speechTimeout: '10', // FIXED: Changed from 'auto' to '10' seconds - allows chatty test phrases without being cut off
+        speechTimeout: '3', // Matches production defaults - what you test is what customers get!
+        enhanced: true,
+        speechModel: 'phone_call',
         hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually' // Help recognize common filler words
       });
       gather.say('Try saying something else.');
