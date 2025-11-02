@@ -14339,6 +14339,7 @@ Timestamp: ${new Date(timestamp).toISOString()}
                 let issueCount = 0;
                 let issueList = [];
                 
+                // Handle both 'HEALTHY' and 'ALL_HEALTHY' status values
                 if (healthData.overallStatus === 'HEALTHY' || healthData.overallStatus === 'ALL_HEALTHY') {
                     cardClass = 'bg-green-50 border-green-300 text-green-900';
                     icon = '✅';
@@ -14347,7 +14348,13 @@ Timestamp: ${new Date(timestamp).toISOString()}
                     cardClass = 'bg-yellow-50 border-yellow-300 text-yellow-900';
                     icon = '⚠️';
                     title = 'System Partially Operational';
+                } else if (!healthData.overallStatus) {
+                    // Loading state - no status yet
+                    cardClass = 'bg-gray-50 border-gray-300 text-gray-900';
+                    icon = '⏳';
+                    title = 'Checking Systems...';
                 } else {
+                    // Only show error if we have a status and it's bad
                     cardClass = 'bg-red-50 border-red-300 text-red-900';
                     icon = '❌';
                     title = 'System Issues Detected';

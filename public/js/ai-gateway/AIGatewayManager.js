@@ -193,7 +193,8 @@ class AIGatewayManager {
                 }
                 
                 // Show simple success toast (no confusing modal)
-                const statusEmoji = data.overallStatus === 'HEALTHY' ? '✅' : 
+                // Check for both 'HEALTHY' and 'ALL_HEALTHY' status values
+                const statusEmoji = (data.overallStatus === 'HEALTHY' || data.overallStatus === 'ALL_HEALTHY') ? '✅' : 
                                    data.overallStatus === 'DEGRADED' ? '⚠️' : '❌';
                 window.toastManager?.success(
                     `${statusEmoji} System diagnostics complete: ${data.overallStatus}`
