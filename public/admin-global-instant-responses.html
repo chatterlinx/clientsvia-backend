@@ -2091,10 +2091,41 @@
                                 </div>
                             </div>
                             
+                            <!-- Test Phone Configuration -->
+                            <div class="mb-4 p-4 bg-white rounded-lg border-2 border-blue-300 shadow-sm">
+                                <h5 class="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                    <i class="fas fa-phone text-blue-600"></i>
+                                    Test Phone Number Configuration
+                                </h5>
+                                <p class="text-xs text-gray-600 mb-3">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Enter a Twilio phone number for company testing (separate from template testing)
+                                </p>
+                                <div class="flex gap-3">
+                                    <input 
+                                        type="text" 
+                                        id="company-test-phone-input"
+                                        placeholder="+12345678900"
+                                        class="flex-1 px-4 py-3 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm font-mono"
+                                    >
+                                    <button 
+                                        onclick="savePhoneNumber()" 
+                                        class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 whitespace-nowrap">
+                                        <i class="fas fa-save"></i>
+                                        Set Number
+                                    </button>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-2">
+                                    <i class="fas fa-lightbulb text-yellow-600 mr-1"></i>
+                                    <strong>Format:</strong> E.164 format (e.g., +15551234567) • 
+                                    <strong>Tip:</strong> You can use your existing template test number or buy a new one
+                                </p>
+                            </div>
+                            
                             <!-- Test Phone Display -->
                             <div class="mb-4 p-4 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg text-white text-center shadow-lg">
-                                <div class="text-xs font-semibold uppercase tracking-wide mb-1 opacity-90">Company Test Phone Number</div>
-                                <div class="text-3xl font-bold font-mono" id="company-test-phone-display">Loading...</div>
+                                <div class="text-xs font-semibold uppercase tracking-wide mb-1 opacity-90">Current Company Test Number</div>
+                                <div class="text-3xl font-bold font-mono" id="company-test-phone-display">Not configured</div>
                                 <p class="text-xs mt-2 opacity-90">
                                     <i class="fas fa-shield-alt mr-1"></i>
                                     Isolated test number - separate from template testing
@@ -6914,6 +6945,7 @@ Continue?`;
                 // Update UI
                 document.getElementById('company-test-enabled').checked = config.enabled || false;
                 document.getElementById('company-test-phone-display').textContent = config.phoneNumber || 'Not configured';
+                document.getElementById('company-test-phone-input').value = config.phoneNumber || '';
                 
                 // Update toggle UI
                 if (config.enabled) {
@@ -7154,6 +7186,64 @@ Continue?`;
             showToast('info', 'Refreshing company list...');
             await loadCompanyList();
             showToast('success', 'Company list refreshed!');
+        }
+        
+        /**
+         * Save phone number for company testing
+         */
+        async function savePhoneNumber() {
+            console.log('📞 [COMPANY TEST] Saving phone number...');
+            
+            const phoneInput = document.getElementById('company-test-phone-input');
+            const phoneNumber = phoneInput.value.trim();
+            
+            // Validate phone number format (E.164)
+            if (!phoneNumber) {
+                showToast('error', 'Please enter a phone number');
+                return;
+            }
+            
+            if (!phoneNumber.startsWith('+')) {
+                showToast('error', 'Phone number must start with + (E.164 format)');
+                phoneInput.focus();
+                return;
+            }
+            
+            if (phoneNumber.length < 10 || phoneNumber.length > 16) {
+                showToast('error', 'Invalid phone number length (should be 10-16 digits including +)');
+                phoneInput.focus();
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/settings/company-test-mode', {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    },
+                    body: JSON.stringify({
+                        phoneNumber: phoneNumber
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                console.log('✅ [COMPANY TEST] Phone number saved successfully');
+                showToast('success', `✅ Phone number ${phoneNumber} configured successfully!`);
+                
+                // Update display
+                document.getElementById('company-test-phone-display').textContent = phoneNumber;
+                
+            } catch (error) {
+                console.error('❌ [COMPANY TEST] Phone number save failed:', error);
+                showToast('error', `Failed to save phone number: ${error.message}`);
+            }
         }
         
         /**
