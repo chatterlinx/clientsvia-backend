@@ -7,12 +7,12 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <!-- DEPLOYMENT VERSION: OPTION_B_FIXED - 2025-11-02 20:45:00 UTC - Fixed JavaScript Errors -->
+    <!-- DEPLOYMENT VERSION: OPTION_B_FINAL - 2025-11-02 21:00:00 UTC - All JavaScript Errors Fixed -->
     <script>
         // 🔥 DEPLOYMENT VERIFICATION SYSTEM
-        const BUILD_VERSION = 'OPTION_B_FIXED';
-        const BUILD_DATE = '2025-11-02 20:45:00 UTC';
-        const BUILD_DESCRIPTION = 'Fixed JavaScript ID mismatches - Control Panel toggles now working properly';
+        const BUILD_VERSION = 'OPTION_B_FINAL';
+        const BUILD_DATE = '2025-11-02 21:00:00 UTC';
+        const BUILD_DESCRIPTION = 'Fixed ALL JavaScript errors - Removed references to deleted company-info elements';
         
         console.log('═══════════════════════════════════════════════════');
         console.log('🚀 DEPLOYMENT VERSION:', BUILD_VERSION);
@@ -7072,15 +7072,17 @@ Continue?`;
          * When company is selected from dropdown (now from TOP selector only)
          */
         async function onCompanyTestSelected() {
-            // Get company ID from TOP selector (we removed the bottom dropdown)
+            // Get company ID from TOP selector
             const selector = document.getElementById('top-company-selector-dropdown');
             const companyId = selector ? selector.value : null;
             
             if (!companyId) {
-                document.getElementById('selected-company-info').classList.add('hidden');
                 // Reset the "Currently Testing" display
-                document.getElementById('company-test-current-name').textContent = 'No company selected';
-                document.getElementById('company-test-current-id').textContent = 'Select a company from the top dropdown';
+                const currentName = document.getElementById('company-test-current-name');
+                const currentId = document.getElementById('company-test-current-id');
+                
+                if (currentName) currentName.textContent = 'No company selected';
+                if (currentId) currentId.textContent = 'Select a company above';
                 return;
             }
             
@@ -7102,20 +7104,17 @@ Continue?`;
                 const company = data.company;
                 
                 // Update "Currently Testing" display at the top of Company Test section
-                document.getElementById('company-test-current-name').textContent = company.name;
-                document.getElementById('company-test-current-id').textContent = `ID: ${companyId.substring(0, 8)}... • Template: ${company.template.name}`;
+                const currentName = document.getElementById('company-test-current-name');
+                const currentId = document.getElementById('company-test-current-id');
                 
-                // Display company info
-                document.getElementById('company-info-name').textContent = company.name;
-                document.getElementById('company-info-template').textContent = company.template.name;
-                document.getElementById('company-info-qa').textContent = `${company.companyQA.count} Q&As ${company.companyQA.hasData ? '✅' : '❌'}`;
-                document.getElementById('company-info-placeholders').textContent = `${company.placeholders.count} items ${company.placeholders.hasData ? '✅' : '❌'}`;
-                document.getElementById('company-info-voice').textContent = company.voiceSettings.voiceId;
-                document.getElementById('company-info-speech-timeout').textContent = `${company.voiceSettings.speechTimeout}s`;
+                if (currentName) {
+                    currentName.textContent = company.name || company.companyName || company.businessName || 'Unknown Company';
+                }
+                if (currentId) {
+                    currentId.textContent = `ID: ${companyId.substring(0, 8)}... • Template: ${company.template.name}`;
+                }
                 
-                document.getElementById('selected-company-info').classList.remove('hidden');
-                
-                console.log('✅ [COMPANY TEST] Company details loaded');
+                console.log('✅ [COMPANY TEST] Company details loaded - Name:', company.name, 'ID:', companyId);
                 
             } catch (error) {
                 console.error('❌ [COMPANY TEST] Failed to load company details:', error);
