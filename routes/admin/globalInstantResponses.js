@@ -4474,6 +4474,190 @@ router.patch('/:id/learning-settings', authenticateJWT, adminOnly, async (req, r
 });
 
 // ============================================================================
+// 🎯 INTELLIGENCE MODE PRESETS API
+// ============================================================================
+
+/**
+ * PATCH /api/admin/global-instant-responses/:id/intelligence-mode
+ * Update Intelligence Mode preset for a template
+ * Body: { intelligenceMode: 'MAXIMUM' | 'BALANCED' | 'MINIMAL' }
+ * 
+ * This automatically configures testPilotSettings, aiGatewaySettings,
+ * and learningSettings based on the selected preset.
+ */
+router.patch('/:id/intelligence-mode', authenticateJWT, adminOnly, async (req, res) => {
+    console.log('🔵 [INTELLIGENCE MODE] PATCH request received');
+    
+    try {
+        const { intelligenceMode } = req.body;
+        
+        // ============================================
+        // STEP 1: VALIDATE INPUT
+        // ============================================
+        if (!intelligenceMode) {
+            console.error('❌ [INTELLIGENCE MODE] Missing intelligenceMode');
+            return res.status(400).json({
+                success: false,
+                error: 'intelligenceMode is required'
+            });
+        }
+        
+        const validModes = ['MAXIMUM', 'BALANCED', 'MINIMAL'];
+        if (!validModes.includes(intelligenceMode)) {
+            console.error('❌ [INTELLIGENCE MODE] Invalid mode:', intelligenceMode);
+            return res.status(400).json({
+                success: false,
+                error: `intelligenceMode must be one of: ${validModes.join(', ')}`
+            });
+        }
+        
+        // ============================================
+        // STEP 2: FETCH TEMPLATE
+        // ============================================
+        console.log('🔵 [INTELLIGENCE MODE] Fetching template:', req.params.id);
+        
+        const template = await GlobalInstantResponseTemplate.findById(req.params.id);
+        
+        if (!template) {
+            console.error('❌ [INTELLIGENCE MODE] Template not found');
+            return res.status(404).json({
+                success: false,
+                error: 'Template not found'
+            });
+        }
+        
+        console.log('✅ [INTELLIGENCE MODE] Template found:', template.name);
+        
+        // ============================================
+        // STEP 3: LOAD PRESET CONFIGURATION
+        // ============================================
+        console.log('🔵 [INTELLIGENCE MODE] Loading preset configuration...');
+        
+        const IntelligenceModePresets = require('../../services/IntelligenceModePresets');
+        const preset = IntelligenceModePresets.INTELLIGENCE_MODE_PRESETS[intelligenceMode];
+        
+        if (!preset) {
+            console.error('❌ [INTELLIGENCE MODE] Preset not found:', intelligenceMode);
+            return res.status(500).json({
+                success: false,
+                error: 'Preset configuration not found'
+            });
+        }
+        
+        console.log('✅ [INTELLIGENCE MODE] Preset loaded:', preset.displayName);
+        
+        // ============================================
+        // STEP 4: APPLY PRESET TO TEMPLATE
+        // ============================================
+        console.log('🔵 [INTELLIGENCE MODE] Applying preset configuration...');
+        
+        template.intelligenceMode = intelligenceMode;
+        
+        // Test Pilot Settings
+        template.testPilotSettings = {
+            llmModel: preset.testPilot.llmModel,
+            analysisDepth: preset.testPilot.analysisDepth,
+            analysisMode: preset.testPilot.analysisMode,
+            suggestionFilter: preset.testPilot.suggestionFilter,
+            minConfidenceForAnalysis: preset.testPilot.minConfidenceForAnalysis,
+            conflictDetection: preset.testPilot.conflictDetection,
+            edgeCasePrediction: preset.testPilot.edgeCasePrediction,
+            beforeAfterSimulation: preset.testPilot.beforeAfterSimulation,
+            bulkActions: preset.testPilot.bulkActions,
+            costLimit: preset.testPilot.costLimit,
+            maxAnalysisTime: preset.testPilot.maxAnalysisTime
+        };
+        
+        // AI Gateway Settings (Production Tiers)
+        template.learningSettings = template.learningSettings || {};
+        template.learningSettings.tier1Threshold = preset.tiers.tier1Threshold;
+        template.learningSettings.tier2Threshold = preset.tiers.tier2Threshold;
+        template.learningSettings.enableTier3 = preset.tiers.enableTier3;
+        
+        // Learning Settings
+        template.learningSettings.enabled = preset.learning.enabled;
+        template.learningSettings.shareWithinIndustry = preset.learning.shareWithinIndustry;
+        template.learningSettings.proposeGlobal = preset.learning.proposeGlobal;
+        template.learningSettings.minPatternFrequency = preset.learning.minPatternFrequency;
+        template.learningSettings.minConfidence = preset.learning.minConfidence;
+        
+        // ============================================
+        // STEP 5: SAVE TEMPLATE
+        // ============================================
+        console.log('🔵 [INTELLIGENCE MODE] Saving template...');
+        
+        await template.save();
+        
+        console.log('✅ [INTELLIGENCE MODE] Template saved successfully');
+        
+        // ============================================
+        // STEP 6: CLEAR CACHE
+        // ============================================
+        try {
+            await CacheHelper.clearTemplateCache(template._id.toString());
+            console.log('✅ [INTELLIGENCE MODE] Cache cleared');
+        } catch (cacheError) {
+            console.error('⚠️ [INTELLIGENCE MODE] Cache clear failed:', cacheError.message);
+            // Non-fatal, continue
+        }
+        
+        // ============================================
+        // STEP 7: LOG SUCCESS
+        // ============================================
+        logger.info('✅ [INTELLIGENCE MODE] Preset applied successfully', {
+            templateId: template._id,
+            templateName: template.name,
+            mode: intelligenceMode,
+            presetName: preset.displayName,
+            updatedBy: req.user?.username || 'Unknown'
+        });
+        
+        // ============================================
+        // STEP 8: RETURN SUCCESS
+        // ============================================
+        res.json({
+            success: true,
+            message: `Intelligence mode set to ${preset.displayName}`,
+            data: {
+                intelligenceMode,
+                presetName: preset.displayName,
+                emoji: preset.emoji,
+                description: preset.description,
+                estimatedCostPerTest: preset.estimatedCostPerTest,
+                estimatedSpeed: preset.estimatedSpeed,
+                testPilotSettings: template.testPilotSettings,
+                tierSettings: {
+                    tier1Threshold: template.learningSettings.tier1Threshold,
+                    tier2Threshold: template.learningSettings.tier2Threshold,
+                    enableTier3: template.learningSettings.enableTier3
+                },
+                learningSettings: {
+                    enabled: template.learningSettings.enabled,
+                    shareWithinIndustry: template.learningSettings.shareWithinIndustry,
+                    proposeGlobal: template.learningSettings.proposeGlobal
+                }
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ [INTELLIGENCE MODE] Error:', error.message);
+        console.error('Stack trace:', error.stack);
+        
+        logger.error('❌ [INTELLIGENCE MODE] Failed to update intelligence mode', {
+            templateId: req.params.id,
+            error: error.message,
+            stack: error.stack
+        });
+        
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update intelligence mode',
+            message: error.message
+        });
+    }
+});
+
+// ============================================================================
 // 📞 TWILIO TEST CONFIGURATION ROUTES
 // ============================================================================
 
