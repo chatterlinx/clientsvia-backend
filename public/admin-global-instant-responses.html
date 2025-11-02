@@ -7,12 +7,12 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <!-- DEPLOYMENT VERSION: f3a1b8dc - 2025-11-02 19:15:00 UTC - Both Toggles Always Visible -->
+    <!-- DEPLOYMENT VERSION: OPTION_B_COMPLETE - 2025-11-02 20:30:00 UTC - Complete Redesign -->
     <script>
         // 🔥 DEPLOYMENT VERIFICATION SYSTEM
-        const BUILD_VERSION = 'f3a1b8dc';
-        const BUILD_DATE = '2025-11-02 19:15:00 UTC';
-        const BUILD_DESCRIPTION = 'BOTH TOGGLES VISIBLE - Template & Company Testing Always Shown (Mutually Exclusive)';
+        const BUILD_VERSION = 'OPTION_B_COMPLETE';
+        const BUILD_DATE = '2025-11-02 20:30:00 UTC';
+        const BUILD_DESCRIPTION = 'Complete Test Pilot Redesign: Control Panel + Tab Navigation + Clean Company Section';
         
         console.log('═══════════════════════════════════════════════════');
         console.log('🚀 DEPLOYMENT VERSION:', BUILD_VERSION);
@@ -2091,7 +2091,7 @@
                                 <i class="fas fa-building text-blue-600 mr-2"></i>
                                 🏢 Currently Testing Company:
                             </label>
-                            <select id="company-selector-dropdown" onchange="onCompanySelected(this.value)" 
+                            <select id="top-company-selector-dropdown" onchange="onCompanySelected(this.value)" 
                                     class="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-semibold bg-white shadow-sm">
                                 <option value="">-- Select a company to test --</option>
                             </select>
@@ -2102,231 +2102,154 @@
                         </div>
                     </div>
                 
-                    <!-- Company Testing Configuration (NEW: CLEAN REBUILD) -->
-                    <div id="company-test-section" class="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-400 rounded-lg p-6 mb-8">
-                    <div class="flex items-start justify-between">
-                        <div class="flex-1">
-                            <!-- Header -->
-                            <div class="flex items-center gap-3 mb-4">
+                    <!-- ================================================================
+                         🏢 COMPANY TESTING CONFIGURATION (CLEAN REBUILD)
+                         ================================================================
+                         Purpose: Simple, focused configuration for company testing
+                         No duplicates, no confusion, just what's needed
+                         ================================================================ -->
+                    
+                    <div class="bg-white rounded-xl border-2 border-blue-400 p-6 shadow-lg mb-8">
+                        
+                        <!-- Header -->
+                        <div class="flex items-center justify-between mb-6">
+                            <div class="flex items-center gap-3">
                                 <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center shadow-md">
                                     <i class="fas fa-building text-white text-xl"></i>
                                 </div>
                                 <div>
-                                    <h4 class="text-lg font-bold text-gray-900">🏢 Company Testing</h4>
-                                    <p class="text-sm text-gray-600">Test a real company's FULL production configuration</p>
+                                    <h4 class="text-lg font-bold text-gray-900">🏢 Company Testing Configuration</h4>
+                                    <p class="text-sm text-gray-600">Configure testing settings for this company</p>
                                 </div>
                             </div>
+                        </div>
                             
-                            <!-- Currently Testing Display (syncs with top selector) -->
-                            <div class="mb-4 p-4 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg shadow-lg border-2 border-blue-300">
-                                <div class="text-center">
-                                    <div class="text-xs font-semibold uppercase tracking-wide text-white opacity-90 mb-2">
-                                        <i class="fas fa-building mr-1"></i>
-                                        Currently Testing Company
-                                    </div>
-                                    <div id="company-test-current-name" class="text-2xl font-bold text-white mb-1">
-                                        No company selected
-                                    </div>
-                                    <div id="company-test-current-id" class="text-xs font-mono text-white opacity-75">
-                                        Select a company from the top dropdown
-                                    </div>
-                                    <p class="text-xs text-white opacity-90 mt-3 pt-3 border-t border-white border-opacity-30">
-                                        <i class="fas fa-info-circle mr-1"></i>
-                                        This loads the company's REAL configuration from MongoDB (same as production!)
-                                    </p>
+                        <!-- Currently Testing Banner -->
+                        <div class="mb-6 p-4 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg shadow-md">
+                            <div class="text-center text-white">
+                                <div class="text-xs font-semibold uppercase tracking-wide opacity-90 mb-1">
+                                    Currently Testing
+                                </div>
+                                <div id="company-test-current-name" class="text-xl font-bold mb-1">
+                                    No company selected
+                                </div>
+                                <div id="company-test-current-id" class="text-xs font-mono opacity-75">
+                                    Select a company above
                                 </div>
                             </div>
-                            
-                            <!-- Company Info Display (shows after selection) -->
-                            <div id="selected-company-info" class="hidden mb-4 p-4 bg-white rounded-lg border-2 border-blue-300 shadow-sm">
-                                <h5 class="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                                    <i class="fas fa-info-circle text-blue-600"></i>
-                                    Company Configuration
-                                </h5>
-                                <div class="grid grid-cols-2 gap-3 text-sm">
-                                    <div class="bg-blue-50 p-3 rounded-lg">
-                                        <div class="text-xs text-gray-600 mb-1">Company Name</div>
-                                        <div class="font-semibold text-gray-900" id="company-info-name">--</div>
-                                    </div>
-                                    <div class="bg-blue-50 p-3 rounded-lg">
-                                        <div class="text-xs text-gray-600 mb-1">Template</div>
-                                        <div class="font-semibold text-gray-900" id="company-info-template">--</div>
-                                    </div>
-                                    <div class="bg-blue-50 p-3 rounded-lg">
-                                        <div class="text-xs text-gray-600 mb-1">Company Q&A</div>
-                                        <div class="font-semibold text-gray-900" id="company-info-qa">--</div>
-                                    </div>
-                                    <div class="bg-blue-50 p-3 rounded-lg">
-                                        <div class="text-xs text-gray-600 mb-1">Placeholders</div>
-                                        <div class="font-semibold text-gray-900" id="company-info-placeholders">--</div>
-                                    </div>
-                                    <div class="bg-blue-50 p-3 rounded-lg">
-                                        <div class="text-xs text-gray-600 mb-1">Voice Settings</div>
-                                        <div class="font-semibold text-gray-900" id="company-info-voice">--</div>
-                                    </div>
-                                    <div class="bg-blue-50 p-3 rounded-lg">
-                                        <div class="text-xs text-gray-600 mb-1">Speech Timeout</div>
-                                        <div class="font-semibold text-gray-900" id="company-info-speech-timeout">--</div>
-                                    </div>
-                                </div>
+                        </div>
+                        
+                        <!-- Test Phone Number -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-bold text-gray-800 mb-2">
+                                <i class="fas fa-phone text-blue-600 mr-1"></i>
+                                Test Phone Number
+                            </label>
+                            <div class="flex gap-3">
+                                <input 
+                                    type="text" 
+                                    id="company-test-phone-input"
+                                    placeholder="+15551234567"
+                                    class="flex-1 px-4 py-2 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm font-mono"
+                                >
+                                <button 
+                                    onclick="savePhoneNumber()" 
+                                    class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all">
+                                    <i class="fas fa-save mr-1"></i>
+                                    Save
+                                </button>
                             </div>
-                            
-                            <!-- Test Phone Configuration -->
-                            <div class="mb-4 p-4 bg-white rounded-lg border-2 border-blue-300 shadow-sm">
-                                <h5 class="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                                    <i class="fas fa-phone text-blue-600"></i>
-                                    Test Phone Number Configuration
-                                </h5>
-                                <p class="text-xs text-gray-600 mb-3">
-                                    <i class="fas fa-info-circle mr-1"></i>
-                                    Enter a Twilio phone number for company testing (separate from template testing)
-                                </p>
-                                <div class="flex gap-3">
-                                    <input 
-                                        type="text" 
-                                        id="company-test-phone-input"
-                                        placeholder="+12345678900"
-                                        class="flex-1 px-4 py-3 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm font-mono"
-                                    >
-                                    <button 
-                                        onclick="savePhoneNumber()" 
-                                        class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 whitespace-nowrap">
-                                        <i class="fas fa-save"></i>
-                                        Set Number
-                                    </button>
-                                </div>
-                                <p class="text-xs text-gray-500 mt-2">
-                                    <i class="fas fa-lightbulb text-yellow-600 mr-1"></i>
-                                    <strong>Format:</strong> E.164 format (e.g., +15551234567) • 
-                                    <strong>Tip:</strong> You can use your existing template test number or buy a new one
-                                </p>
+                            <div class="mt-2 p-2 bg-blue-50 rounded border border-blue-200 flex items-center justify-between">
+                                <span class="text-xs font-semibold text-gray-700">Current:</span>
+                                <span class="text-sm font-mono font-bold text-blue-700" id="company-test-phone-display">Not configured</span>
                             </div>
+                            <p class="text-xs text-gray-500 mt-1">
+                                E.164 format • Can use same number as template testing
+                            </p>
+                        </div>
                             
-                            <!-- Test Phone Display -->
-                            <div class="mb-4 p-4 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg text-white text-center shadow-lg">
-                                <div class="text-xs font-semibold uppercase tracking-wide mb-1 opacity-90">Current Company Test Number</div>
-                                <div class="text-3xl font-bold font-mono" id="company-test-phone-display">Not configured</div>
-                                <p class="text-xs mt-2 opacity-90">
-                                    <i class="fas fa-shield-alt mr-1"></i>
-                                    Isolated test number - separate from template testing
-                                </p>
-                            </div>
-                            
-                            <!-- Test Call Greeting (Company Mode) -->
-                            <div class="mb-4 p-4 bg-white rounded-lg border-2 border-blue-300 shadow-sm">
-                                <div class="flex items-center justify-between mb-3">
-                                    <h5 class="font-bold text-gray-800 flex items-center gap-2">
-                                        <i class="fas fa-microphone text-blue-600"></i>
-                                        Test Call Greeting
-                                    </h5>
-                                    <button onclick="resetCompanyTestGreeting()" class="text-xs px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-semibold transition-colors flex items-center gap-1">
-                                        <i class="fas fa-undo"></i>
-                                        Reset to Default
-                                    </button>
-                                </div>
-                                <p class="text-xs text-gray-600 mb-3">
-                                    This message will be spoken when you call the test number. Use <code class="bg-blue-100 px-1 rounded">{company_name}</code> to dynamically insert the company name.
-                                </p>
-                                <textarea 
-                                    id="company-test-greeting"
-                                    rows="3"
-                                    maxlength="500"
-                                    oninput="updateCompanyGreetingCharCount()"
-                                    class="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm font-mono resize-none"
-                                    placeholder="Currently testing {company_name}."
-                                >Currently testing {company_name}.</textarea>
-                                <div class="flex items-center justify-between mt-2">
-                                    <p class="text-xs text-gray-500">
-                                        <i class="fas fa-info-circle text-blue-600 mr-1"></i>
-                                        Company name updates automatically in the greeting
-                                    </p>
-                                    <span class="text-xs text-gray-500" id="company-greeting-char-count">29 / 500 chars</span>
-                                </div>
-                            </div>
-                            
-                            <!-- Test Options (What to enable/disable) -->
-                            <div class="mb-4 p-4 bg-white rounded-lg border-2 border-blue-300 shadow-sm">
-                                <h5 class="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                                    <i class="fas fa-sliders-h text-blue-600"></i>
-                                    Test Options (What to Test)
-                                </h5>
-                                <p class="text-xs text-gray-600 mb-3">
-                                    Enable/disable specific features for focused testing:
-                                </p>
-                                <div class="grid grid-cols-2 gap-3">
-                                    <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-blue-50 p-2 rounded transition-colors">
-                                        <input type="checkbox" id="test-option-company-qa" checked class="rounded text-blue-600 focus:ring-2 focus:ring-blue-500">
-                                        <span>Company Q&A</span>
-                                    </label>
-                                    <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-blue-50 p-2 rounded transition-colors">
-                                        <input type="checkbox" id="test-option-trade-qa" checked class="rounded text-blue-600 focus:ring-2 focus:ring-blue-500">
-                                        <span>Trade Q&A</span>
-                                    </label>
-                                    <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-blue-50 p-2 rounded transition-colors">
-                                        <input type="checkbox" id="test-option-templates" checked class="rounded text-blue-600 focus:ring-2 focus:ring-blue-500">
-                                        <span>Templates</span>
-                                    </label>
-                                    <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-blue-50 p-2 rounded transition-colors">
-                                        <input type="checkbox" id="test-option-3tier" checked class="rounded text-blue-600 focus:ring-2 focus:ring-blue-500">
-                                        <span>3-Tier Intelligence</span>
-                                    </label>
-                                    <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-blue-50 p-2 rounded transition-colors">
-                                        <input type="checkbox" id="test-option-placeholders" checked class="rounded text-blue-600 focus:ring-2 focus:ring-blue-500">
-                                        <span>Placeholders</span>
-                                    </label>
-                                    <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-blue-50 p-2 rounded transition-colors">
-                                        <input type="checkbox" id="test-option-personality" checked class="rounded text-blue-600 focus:ring-2 focus:ring-blue-500">
-                                        <span>Personality Tone</span>
-                                    </label>
-                                </div>
-                            </div>
-                            
-                            <!-- Enable/Disable Toggle -->
-                            <div class="flex items-center gap-3 p-4 bg-white rounded-lg border-2 border-blue-300 shadow-sm">
-                                <label class="relative inline-flex items-center cursor-pointer" onclick="toggleCompanyTestMode()">
-                                    <input type="checkbox" id="company-test-enabled" class="hidden">
-                                    <div id="company-toggle-switch" class="w-14 h-7 bg-gray-300 rounded-full relative transition-all duration-300 shadow-inner">
-                                        <div id="company-toggle-circle" class="absolute top-0.5 left-0.5 bg-white w-6 h-6 rounded-full shadow-md transition-all duration-300 transform"></div>
-                                    </div>
+                        <!-- Test Call Greeting -->
+                        <div class="mb-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="text-sm font-bold text-gray-800">
+                                    <i class="fas fa-microphone text-blue-600 mr-1"></i>
+                                    Test Call Greeting
                                 </label>
-                                <div>
-                                    <p class="text-sm font-bold text-gray-700">
-                                        <i class="fas fa-power-off text-blue-600 mr-1"></i>
-                                        <span id="company-toggle-status-text">Enable Company Testing</span>
-                                    </p>
-                                    <p class="text-xs text-gray-500">Toggle to activate/deactivate</p>
-                                </div>
+                                <button onclick="resetCompanyTestGreeting()" class="text-xs px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-semibold">
+                                    Reset
+                                </button>
                             </div>
+                            <textarea 
+                                id="company-test-greeting"
+                                rows="2"
+                                maxlength="500"
+                                oninput="updateCompanyGreetingCharCount()"
+                                class="w-full px-3 py-2 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm font-mono resize-none"
+                                placeholder="Currently testing {company_name}."
+                            >Currently testing {company_name}.</textarea>
+                            <div class="flex justify-between items-center mt-1">
+                                <p class="text-xs text-gray-500">Use {company_name} placeholder</p>
+                                <span class="text-xs text-gray-500" id="company-greeting-char-count">29/500</span>
+                            </div>
+                        </div>
                             
-                            <!-- Important Note -->
-                            <div class="mt-4 bg-blue-100 px-4 py-3 rounded border-2 border-blue-300">
-                                <p class="text-sm text-blue-900 leading-relaxed">
-                                    <i class="fas fa-shield-alt mr-1"></i>
-                                    <strong>Production Simulator:</strong> This tests the company's EXACT configuration.
-                                    <br>
-                                    <i class="fas fa-check-circle mr-1 mt-1 inline-block text-blue-700"></i>
-                                    Uses same Mongoose + Redis data as real customer calls.
-                                    <br>
-                                    <i class="fas fa-check-circle mr-1 mt-1 inline-block text-blue-700"></i>
-                                    What you test = what customers get! 100% confidence.
-                                </p>
+                        <!-- Test Options -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-bold text-gray-800 mb-2">
+                                <i class="fas fa-sliders-h text-blue-600 mr-1"></i>
+                                Test Options
+                            </label>
+                            <div class="grid grid-cols-2 gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-white p-2 rounded">
+                                    <input type="checkbox" id="test-option-company-qa" checked class="rounded text-blue-600">
+                                    <span>Company Q&A</span>
+                                </label>
+                                <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-white p-2 rounded">
+                                    <input type="checkbox" id="test-option-trade-qa" checked class="rounded text-blue-600">
+                                    <span>Trade Q&A</span>
+                                </label>
+                                <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-white p-2 rounded">
+                                    <input type="checkbox" id="test-option-templates" checked class="rounded text-blue-600">
+                                    <span>Templates</span>
+                                </label>
+                                <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-white p-2 rounded">
+                                    <input type="checkbox" id="test-option-3tier" checked class="rounded text-blue-600">
+                                    <span>3-Tier Intelligence</span>
+                                </label>
+                                <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-white p-2 rounded">
+                                    <input type="checkbox" id="test-option-placeholders" checked class="rounded text-blue-600">
+                                    <span>Placeholders</span>
+                                </label>
+                                <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-white p-2 rounded">
+                                    <input type="checkbox" id="test-option-personality" checked class="rounded text-blue-600">
+                                    <span>Personality</span>
+                                </label>
                             </div>
                         </div>
                         
                         <!-- Action Buttons -->
-                        <div class="ml-6 flex flex-col gap-2">
-                            <button onclick="saveCompanyTestConfig()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
-                                <i class="fas fa-save"></i>
-                                Save Config
+                        <div class="flex gap-3 pt-4 border-t border-gray-200">
+                            <button onclick="saveCompanyTestConfig()" class="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold shadow-md transition-all">
+                                <i class="fas fa-save mr-2"></i>
+                                Save Configuration
                             </button>
-                            <button onclick="refreshCompanyList()" class="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
-                                <i class="fas fa-sync-alt"></i>
-                                Refresh Companies
+                            <button onclick="refreshCompanyList()" class="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition-all">
+                                <i class="fas fa-sync-alt mr-2"></i>
+                                Refresh
                             </button>
                         </div>
+                        
+                        <!-- Info Note -->
+                        <div class="mt-4 bg-blue-50 px-4 py-3 rounded-lg border border-blue-200">
+                            <p class="text-xs text-blue-900 leading-relaxed">
+                                <i class="fas fa-shield-alt mr-1"></i>
+                                <strong>Production Simulator:</strong> Tests the company's EXACT MongoDB configuration. What you test = what customers get!
+                            </p>
+                        </div>
                     </div>
+                    
                 </div>
-                <!-- END: Company Test Mode Section -->
+                <!-- END: Company Mode Content -->
 
                 <!-- ========================================================================== -->
                 <!-- 🧪 LIVE TEST MONITOR - Real-time Results & AI Suggestions -->
@@ -6966,13 +6889,53 @@ Continue?`;
         // ============================================================================
         
         /**
-         * DEPRECATED: This function is no longer needed
-         * Both Template and Company modes are now always visible
-         * Only kept for backward compatibility - does nothing
+         * Switch between Template Mode and Company Mode
+         * @param {string} mode - 'template' or 'company'
          */
         function switchTestMode(mode) {
-            console.log(`🔄 [TEST MODE] DEPRECATED: Both modes always visible now`);
-            // No-op: Both sections are always visible with mutually exclusive toggles
+            console.log(`🔄 [TEST MODE] Switching to: ${mode}`);
+            
+            // Get all UI elements
+            const templateBtn = document.getElementById('template-mode-btn');
+            const companyBtn = document.getElementById('company-mode-btn');
+            const templateModeContent = document.getElementById('template-mode-content');
+            const companyModeContent = document.getElementById('company-mode-content');
+            const templateDesc = document.getElementById('template-mode-desc');
+            const companyDesc = document.getElementById('company-mode-desc');
+            
+            if (mode === 'template') {
+                // Show Template Mode content
+                templateModeContent.style.display = 'block';
+                companyModeContent.style.display = 'none';
+                
+                // Update tab styles
+                templateBtn.className = 'flex-1 px-6 py-4 font-bold text-lg transition-all duration-300 bg-gradient-to-r from-purple-600 to-pink-600 text-white border-b-4 border-purple-700';
+                companyBtn.className = 'flex-1 px-6 py-4 font-bold text-lg transition-all duration-300 bg-gray-100 text-gray-600 hover:bg-gray-200';
+                
+                // Update descriptions
+                templateDesc.classList.remove('hidden');
+                companyDesc.classList.add('hidden');
+                
+                console.log('✅ [TEST MODE] Switched to Template Mode');
+                
+            } else if (mode === 'company') {
+                // Show Company Mode content
+                templateModeContent.style.display = 'none';
+                companyModeContent.style.display = 'block';
+                
+                // Update tab styles
+                companyBtn.className = 'flex-1 px-6 py-4 font-bold text-lg transition-all duration-300 bg-gradient-to-r from-blue-600 to-cyan-600 text-white border-b-4 border-blue-700';
+                templateBtn.className = 'flex-1 px-6 py-4 font-bold text-lg transition-all duration-300 bg-gray-100 text-gray-600 hover:bg-gray-200';
+                
+                // Update descriptions
+                templateDesc.classList.add('hidden');
+                companyDesc.classList.remove('hidden');
+                
+                // Load company data if not loaded
+                loadCompanyTestModeConfig();
+                
+                console.log('✅ [TEST MODE] Switched to Company Mode');
+            }
         }
         
         /**
@@ -7457,6 +7420,57 @@ Continue?`;
             } catch (error) {
                 console.error('❌ [TOP COMPANY SELECTOR] Failed to load companies:', error);
                 showToast('error', 'Failed to load company list');
+            }
+        }
+        
+        /**
+         * When company is selected from Company Mode dropdown
+         */
+        async function onCompanySelected(companyId) {
+            console.log(`🏢 [COMPANY SELECTOR] Selected company: ${companyId || 'none'}`);
+            
+            if (!companyId) {
+                document.getElementById('company-test-current-name').textContent = 'No company selected';
+                document.getElementById('company-test-current-id').textContent = 'Select a company above';
+                return;
+            }
+            
+            // Fetch company details
+            try {
+                const response = await fetch(`/api/admin/test-pilot/companies/${companyId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const company = data.company;
+                
+                // Update Currently Testing banner
+                document.getElementById('company-test-current-name').textContent = company.companyName || company.businessName || 'Unknown';
+                document.getElementById('company-test-current-id').textContent = `ID: ${company._id}`;
+                
+                // Save activeCompanyId to backend
+                await fetch('/api/admin/settings/company-test-mode', {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    },
+                    body: JSON.stringify({
+                        activeCompanyId: companyId
+                    })
+                });
+                
+                console.log('✅ [COMPANY SELECTOR] Company loaded and saved');
+                
+            } catch (error) {
+                console.error('❌ [COMPANY SELECTOR] Error:', error);
+                showToast('error', `Failed to load company: ${error.message}`);
             }
         }
         
