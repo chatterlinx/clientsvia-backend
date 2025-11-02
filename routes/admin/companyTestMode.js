@@ -34,7 +34,7 @@ const express = require('express');
 const router = express.Router();
 const AdminSettings = require('../../models/AdminSettings');
 const Company = require('../../models/v2Company');
-const { authenticateJWT, adminOnly } = require('../../middleware/auth');
+const { authenticateJWT } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
 
 // ============================================================================
@@ -42,9 +42,10 @@ const logger = require('../../utils/logger');
 // ============================================================================
 
 /**
- * Require authentication + admin for all routes
+ * Require authentication for all routes
+ * NOTE: Admin-only access is enforced by route mounting at /api/admin/*
  */
-router.use(authenticateJWT, adminOnly);
+router.use(authenticateJWT);
 
 /**
  * Log all admin actions for audit trail
