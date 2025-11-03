@@ -37,6 +37,9 @@ class VariablesManager {
         // Data storage
         this.variableDefinitions = [];
         this.variables = {};
+        this.meta = {};
+        this.stats = null;
+        this.detectedVariables = [];
         this.scanStatus = null;
         this.lastScanResult = null;
         this.isScanning = false;
@@ -382,9 +385,20 @@ class VariablesManager {
         const lastScanText = lastScan ? this.getTimeAgo(new Date(lastScan)) : 'Never';
         
         // Health status
+        const hasScanned = lastScan !== null;
         const isHealthy = totalVars > 0 && missingRequired === 0;
-        const healthIcon = isHealthy ? '🟢' : (totalVars > 0 ? '🟡' : '🔴');
-        const healthText = isHealthy ? 'HEALTHY' : (totalVars > 0 ? 'ACTION REQUIRED' : 'SYSTEM NO DATA');
+        const healthIcon = isHealthy ? '🟢' : (totalVars > 0 ? '🟡' : (hasScanned ? '⚪' : '🔴'));
+        
+        let healthText;
+        if (!hasScanned) {
+            healthText = 'SYSTEM NOT SCANNED';
+        } else if (totalVars === 0) {
+            healthText = 'NO VARIABLES FOUND (0 placeholders in active templates)';
+        } else if (missingRequired > 0) {
+            healthText = 'ACTION REQUIRED';
+        } else {
+            healthText = 'SYSTEM HEALTHY';
+        }
         
         console.log('✅ [VARIABLES] Checkpoint 18: Status calculated:', {
             total: totalVars,
@@ -508,12 +522,13 @@ class VariablesManager {
     }
     
     /**
-     * Render scan result
+     * Render scan result (with rich stats)
      */
     renderScanResult() {
         const result = this.lastScanResult;
         const timestamp = new Date(result.scannedAt);
         const timeAgo = this.getTimeAgo(timestamp);
+        const stats = result.stats || this.stats || {};
         
         let html = `
             <div class="bg-green-50 border-2 border-green-400 rounded-xl p-6 mb-6">
@@ -521,28 +536,82 @@ class VariablesManager {
                     <i class="fas fa-check-circle mr-2"></i>
                     Scan Completed - ${timeAgo}
                 </h3>
-                <div class="grid grid-cols-2 gap-4 mb-4">
-                    <div class="bg-white rounded-lg p-4">
-                        <div class="text-3xl font-bold text-green-600">${result.found || 0}</div>
-                        <div class="text-sm text-gray-600">Variables Found</div>
+                
+                <!-- Scan Stats Summary -->
+                <div class="bg-white rounded-lg p-4 mb-4 border-l-4 border-green-500">
+                    <div class="text-sm text-gray-700 mb-2">
+                        <strong>📊 Scanned:</strong> 
+                        ${stats.templatesCount || 0} template(s) · 
+                        ${stats.categoriesCount || 0} categories · 
+                        ${stats.scenariosCount || 0} scenarios
                     </div>
-                    <div class="bg-white rounded-lg p-4">
-                        <div class="text-3xl font-bold text-blue-600">${result.newCount || 0}</div>
-                        <div class="text-sm text-gray-600">New Variables</div>
+                    <div class="text-sm text-gray-700">
+                        <strong>🔍 Found:</strong> 
+                        ${stats.totalPlaceholderOccurrences || 0} placeholder occurrences · 
+                        ${stats.uniqueVariables || 0} unique variables · 
+                        ${stats.newVariables || 0} new this scan
                     </div>
                 </div>
                 
-                <details class="bg-white rounded-lg p-4">
+                <!-- Variable Counts -->
+                <div class="grid grid-cols-3 gap-4 mb-4">
+                    <div class="bg-white rounded-lg p-4 text-center">
+                        <div class="text-3xl font-bold text-green-600">${stats.uniqueVariables || 0}</div>
+                        <div class="text-sm text-gray-600">Unique Variables</div>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 text-center">
+                        <div class="text-3xl font-bold text-blue-600">${stats.newVariables || 0}</div>
+                        <div class="text-sm text-gray-600">New Variables</div>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 text-center">
+                        <div class="text-3xl font-bold text-purple-600">${stats.totalPlaceholderOccurrences || 0}</div>
+                        <div class="text-sm text-gray-600">Total Uses</div>
+                    </div>
+                </div>
+                
+                <!-- Detected Variables List -->
+                <details class="bg-white rounded-lg p-4" ${stats.uniqueVariables > 0 ? 'open' : ''}>
                     <summary class="font-bold text-gray-900 cursor-pointer hover:text-purple-600">
-                        📋 View All Detected Variables (${result.found || 0})
+                        📋 View All Detected Variables (${stats.uniqueVariables || 0})
                     </summary>
-                    <div class="mt-4 space-y-2 text-sm max-h-64 overflow-y-auto">
-                        ${this.variableDefinitions.map(v => `
-                            <div class="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
-                                <code class="text-blue-700 font-mono">{${v.key}}</code>
-                                <span class="text-gray-600">${v.usageCount || 0} matches</span>
+                    <div class="mt-4">
+                        ${(stats.uniqueVariables || 0) === 0 ? `
+                            <div class="text-center py-8 text-gray-500">
+                                <i class="fas fa-info-circle text-3xl mb-2"></i>
+                                <p>No {placeholder} variables found in your active templates.</p>
+                                <p class="text-sm mt-2">This is normal if your templates don't use dynamic variables yet.</p>
                             </div>
-                        `).join('')}
+                        ` : `
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-gray-50 border-b-2">
+                                        <tr>
+                                            <th class="text-left p-2 font-semibold">Variable</th>
+                                            <th class="text-left p-2 font-semibold">Category</th>
+                                            <th class="text-left p-2 font-semibold">Type</th>
+                                            <th class="text-center p-2 font-semibold">Uses</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="max-h-64 overflow-y-auto">
+                                        ${this.detectedVariables.map(v => `
+                                            <tr class="border-b hover:bg-gray-50">
+                                                <td class="p-2">
+                                                    <code class="text-blue-700 font-mono font-bold">{${v.key}}</code>
+                                                    ${v.required ? '<span class="ml-2 text-xs bg-red-100 text-red-800 px-2 py-1 rounded">REQUIRED</span>' : ''}
+                                                </td>
+                                                <td class="p-2 text-gray-700">${v.category}</td>
+                                                <td class="p-2 text-gray-600">${v.type}</td>
+                                                <td class="p-2 text-center">
+                                                    <span class="inline-block px-2 py-1 bg-blue-100 text-blue-800 rounded-full font-semibold">
+                                                        ${v.usageCount}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `}
                     </div>
                 </details>
             </div>
@@ -806,7 +875,7 @@ class VariablesManager {
                 scannedAt: data.scannedAt
             });
             
-            // Update data - NEW API SHAPE
+            // Update data - NEW API SHAPE WITH STATS
             this.variableDefinitions = data.definitions || [];
             this.variables = data.variables || {};
             this.meta = data.meta || {
@@ -815,12 +884,17 @@ class VariablesManager {
                 totalVariables: 0,
                 totalRequired: 0
             };
+            this.stats = data.stats || null;
+            this.detectedVariables = data.detectedVariables || [];
             this.scanStatus = data.scanStatus || null;
             this.lastScanResult = {
                 scannedAt: data.scannedAt || new Date().toISOString(),
                 found: this.variableDefinitions.length,
-                newCount: data.newCount || 0
+                newCount: data.stats?.newVariables || 0,
+                stats: this.stats
             };
+            
+            console.log('📊 [SCAN] Stats received:', this.stats);
             
             this.updateScanStep(4, 'complete');
             this.updateScanStep(5, 'active');

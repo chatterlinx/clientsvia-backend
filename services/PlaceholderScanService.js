@@ -94,12 +94,25 @@ class PlaceholderScanService {
                 throw new Error(`Company ${companyId} not found`);
             }
             
-            // 2. Get template IDs
-            const templateIds = company.aiAgentSettings?.templateReferences
-                ?.map(ref => ref.templateId) || [];
+            // 2. Get template IDs from aiAgentSettings.templateReferences (NEW multi-template system)
+            const templateRefs = company.aiAgentSettings?.templateReferences || [];
+            const templateIds = templateRefs
+                .filter(ref => ref.enabled !== false)
+                .map(ref => ref.templateId);
+            
+            // Fallback to legacy configuration.clonedFrom if no template references
+            const usingLegacyClonedFrom = templateIds.length === 0 && company.configuration?.clonedFrom;
+            if (usingLegacyClonedFrom) {
+                templateIds.push(company.configuration.clonedFrom);
+            }
+            
+            logger.info(`[VARIABLE SCAN] Starting scan for company ${companyId}`, {
+                templateIds,
+                usingLegacyClonedFrom: !!usingLegacyClonedFrom
+            });
             
             if (templateIds.length === 0) {
-                logger.info(`ℹ️  [PLACEHOLDER SCAN] No templates for company ${companyId}`);
+                logger.info(`ℹ️  [VARIABLE SCAN] No templates configured for company ${companyId}`);
                 return {
                     success: true,
                     placeholders: [],
@@ -107,7 +120,13 @@ class PlaceholderScanService {
                     existingCount: 0,
                     missingRequired: [],
                     hasAlert: false,
-                    message: 'No templates cloned yet'
+                    message: 'No templates configured',
+                    stats: {
+                        templatesCount: 0,
+                        categoriesCount: 0,
+                        scenariosCount: 0,
+                        totalPlaceholderOccurrences: 0
+                    }
                 };
             }
             
@@ -116,22 +135,43 @@ class PlaceholderScanService {
                 .find({ _id: { $in: templateIds } })
                 .lean(); // Plain object for performance
             
-            logger.info(`📋 [PLACEHOLDER SCAN] Loaded ${templates.length} template(s)`);
+            logger.info(`📋 [VARIABLE SCAN] Loaded ${templates.length} template(s)`);
             
-            // 4. Extract placeholders from all templates
+            // 4. Extract placeholders from all templates and track stats
             const combinedPlaceholderMap = new Map();
+            let totalCategories = 0;
+            let totalScenarios = 0;
+            let totalPlaceholderOccurrences = 0;
             
             for (const template of templates) {
+                // Count categories and scenarios for stats
+                const categoriesCount = template.categories?.length || 0;
+                totalCategories += categoriesCount;
+                
+                template.categories?.forEach(category => {
+                    const scenariosCount = category.scenarios?.length || 0;
+                    totalScenarios += scenariosCount;
+                });
+                
                 const templatePlaceholders = extractPlaceholdersFromTemplate(template);
                 
                 // Merge with combined map (sum usage counts)
                 for (const [key, count] of templatePlaceholders.entries()) {
                     const existing = combinedPlaceholderMap.get(key) || 0;
                     combinedPlaceholderMap.set(key, existing + count);
+                    totalPlaceholderOccurrences += count;
                 }
             }
             
-            logger.info(`✅ [PLACEHOLDER SCAN] Found ${combinedPlaceholderMap.size} unique placeholders`);
+            logger.info(`[VARIABLE SCAN] Scan input stats for company ${companyId}`, {
+                templatesCount: templates.length,
+                categoriesCount: totalCategories,
+                scenariosCount: totalScenarios,
+                totalPlaceholderOccurrences,
+                uniqueVariables: combinedPlaceholderMap.size
+            });
+            
+            logger.info(`✅ [VARIABLE SCAN] Found ${combinedPlaceholderMap.size} unique placeholders from ${totalPlaceholderOccurrences} total occurrences`);
             
             // 5. Enrich placeholders with metadata
             const newDefinitions = [];
@@ -256,7 +296,7 @@ class PlaceholderScanService {
                 });
             }
             
-            logger.info(`✅ [PLACEHOLDER SCAN] Scan complete for company ${companyId}`);
+            logger.info(`✅ [VARIABLE SCAN] Scan complete for company ${companyId}`);
             
             return {
                 success: true,
@@ -267,7 +307,14 @@ class PlaceholderScanService {
                 missingRequired,
                 hasAlert: missingRequired.length > 0,
                 newPlaceholders,
-                updatedPlaceholders
+                updatedPlaceholders,
+                stats: {
+                    templatesCount: templates.length,
+                    categoriesCount: totalCategories,
+                    scenariosCount: totalScenarios,
+                    totalPlaceholderOccurrences,
+                    uniqueVariables: combinedPlaceholderMap.size
+                }
             };
             
         } catch (error) {

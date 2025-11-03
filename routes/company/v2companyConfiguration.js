@@ -1461,13 +1461,36 @@ router.post('/:companyId/configuration/variables/scan', async (req, res) => {
         // Get updated variables data (includes meta)
         const result = await CompanyVariablesService.getVariablesForCompany(companyId);
         
+        // Build detected variables summary for frontend
+        const detectedVariablesSummary = result.definitions.map(def => ({
+            key: def.key,
+            label: def.label || def.key,
+            type: def.type || 'text',
+            category: def.category || 'General',
+            usageCount: def.usageCount || 0,
+            required: def.required || false
+        }));
+        
+        // Build stats object
+        const stats = scanResult.stats || {
+            templatesCount: 0,
+            categoriesCount: 0,
+            scenariosCount: 0,
+            totalPlaceholderOccurrences: 0,
+            uniqueVariables: result.meta.totalVariables || 0
+        };
+        stats.uniqueVariables = result.meta.totalVariables || 0;
+        stats.newVariables = scanResult.newCount || 0;
+        
         res.json({
             success: true,
+            message: 'Scan completed',
             scannedAt: new Date().toISOString(),
             variables: result.variables,
             definitions: result.definitions,
             meta: result.meta,
-            ...scanResult
+            stats,
+            detectedVariables: detectedVariablesSummary
         });
         
     } catch (error) {
