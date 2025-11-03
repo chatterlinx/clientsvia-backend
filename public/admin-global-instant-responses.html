@@ -9665,6 +9665,14 @@ Continue?`;
             
             console.log('📋 [EDIT SCENARIO] Scenario data:', scenario);
             
+            // ✅ SET CURRENT SCENARIO DATA (required for save operation)
+            currentScenarioData = { 
+                categoryId: category.id, 
+                categoryName: category.name,
+                scenarioId: scenario.scenarioId 
+            };
+            console.log('✅ [EDIT SCENARIO] currentScenarioData set:', currentScenarioData);
+            
             // Update modal title and category name for EDIT mode
             document.getElementById('scenario-modal-action').textContent = 'Edit';
             document.getElementById('scenario-category-name').textContent = category.name;
