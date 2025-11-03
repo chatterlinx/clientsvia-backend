@@ -39,33 +39,33 @@ async function authenticateJWT(req, res, next) {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    logger.security('🔍 AUTH CHECKPOINT: JWT decoded successfully, userId:', decoded.userId);
     
     const user = await User.findById(decoded.userId).populate('companyId');
-    logger.security('🔍 AUTH CHECKPOINT: User found:', Boolean(user));
-    logger.security('🔍 AUTH CHECKPOINT: User companyId field:', user?.companyId);
-    logger.security('🔍 AUTH CHECKPOINT: User companyId type:', typeof user?.companyId);
-    logger.security('🔍 AUTH CHECKPOINT: User status:', user?.status);
     
     if (!user || user.status !== 'active') {
-      logger.security('❌ AUTH CHECKPOINT: User not found or inactive');
+      logger.security('❌ AUTH: User not found or inactive', { userId: decoded.userId });
       return res.status(401).json({ message: 'User not found or inactive' });
     }
 
-    // Attach user to request - companyId validation moved to specific endpoints that need it
-    // This allows flexibility for endpoints that don't require company association
+    // WARNING: Check for missing company association
+    // Most endpoints in a multi-tenant platform require this
+    if (!user.companyId && user.role !== 'admin') {
+      logger.security('⚠️  AUTH: User missing company association', {
+        userId: user._id.toString(),
+        email: user.email,
+        role: user.role
+      });
+      return res.status(403).json({ 
+        message: 'Your account is not properly configured. Please contact support to complete your account setup.',
+        code: 'MISSING_COMPANY_ASSOCIATION'
+      });
+    }
+
+    // Attach user to request
     req.user = user;
-    logger.security('✅ AUTH CHECKPOINT: Authentication successful, user attached to request');
     next();
   } catch (error) {
     logger.security('❌ JWT Authentication failed:', error.message);
-    logger.security('❌ JWT Error details:', {
-      name: error.name,
-      message: error.message,
-      hasToken: Boolean(token),
-      tokenLength: token ? token.length : 0,
-      hasJWTSecret: Boolean(process.env.JWT_SECRET)
-    });
     return res.status(401).json({ 
       message: 'Invalid token',
       error: error.message,
