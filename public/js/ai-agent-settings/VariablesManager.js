@@ -222,15 +222,17 @@ class VariablesManager {
             <!-- Tab Navigation -->
             <div class="flex gap-4 mb-6 border-b-2 border-gray-200">
                 <button 
+                    id="variables-tab-scan-status"
                     class="px-6 py-3 font-bold transition-all ${this.currentTab === 'scan-status' ? 'border-b-4 border-purple-600 text-purple-600' : 'text-gray-600 hover:text-purple-600'}"
-                    onclick="variablesManager.switchTab('scan-status')"
+                    data-tab="scan-status"
                 >
                     <i class="fas fa-radar mr-2"></i>
                     Scan & Status
                 </button>
                 <button 
+                    id="variables-tab-variables"
                     class="px-6 py-3 font-bold transition-all ${this.currentTab === 'variables' ? 'border-b-4 border-purple-600 text-purple-600' : 'text-gray-600 hover:text-purple-600'}"
-                    onclick="variablesManager.switchTab('variables')"
+                    data-tab="variables"
                 >
                     <i class="fas fa-table mr-2"></i>
                     Variables
@@ -244,8 +246,29 @@ class VariablesManager {
         container.innerHTML = html;
         console.log('✅ [VARIABLES] Checkpoint 13: Tab navigation rendered');
         
+        // Attach event listeners to tabs
+        this.attachTabListeners();
+        
         // Render active tab content
         this.renderTabContent();
+    }
+    
+    /**
+     * Attach event listeners to tab buttons
+     */
+    attachTabListeners() {
+        const scanStatusTab = document.getElementById('variables-tab-scan-status');
+        const variablesTab = document.getElementById('variables-tab-variables');
+        
+        if (scanStatusTab) {
+            scanStatusTab.onclick = () => this.switchTab('scan-status');
+        }
+        
+        if (variablesTab) {
+            variablesTab.onclick = () => this.switchTab('variables');
+        }
+        
+        console.log('✅ [VARIABLES] Tab event listeners attached');
     }
     
     /**
@@ -272,9 +295,66 @@ class VariablesManager {
         
         if (this.currentTab === 'scan-status') {
             this.renderScanStatus(contentContainer);
+            this.attachScanStatusListeners();
         } else if (this.currentTab === 'variables') {
             this.renderVariablesTable(contentContainer);
+            this.attachVariablesTableListeners();
         }
+    }
+    
+    /**
+     * Attach event listeners for Scan & Status tab
+     */
+    attachScanStatusListeners() {
+        // Force Scan button
+        const forceScanBtn = document.getElementById('variables-force-scan-btn');
+        if (forceScanBtn) {
+            forceScanBtn.onclick = () => this.forceScan();
+            console.log('✅ [VARIABLES] Force Scan button listener attached');
+        }
+        
+        // "Fill Now" buttons in alerts
+        const fillNowButtons = document.querySelectorAll('.variables-fill-now-btn');
+        fillNowButtons.forEach(btn => {
+            btn.onclick = () => this.switchTab('variables');
+        });
+        
+        console.log('✅ [VARIABLES] Scan & Status listeners attached');
+    }
+    
+    /**
+     * Attach event listeners for Variables table tab
+     */
+    attachVariablesTableListeners() {
+        // Save All button
+        const saveAllBtn = document.getElementById('variables-save-all-btn');
+        if (saveAllBtn) {
+            saveAllBtn.onclick = () => this.saveAll();
+            console.log('✅ [VARIABLES] Save All button listener attached');
+        }
+        
+        // "Go to Scan & Status" button (if no variables)
+        const gotoScanBtn = document.getElementById('variables-goto-scan-btn');
+        if (gotoScanBtn) {
+            gotoScanBtn.onclick = () => this.switchTab('scan-status');
+            console.log('✅ [VARIABLES] Go to Scan button listener attached');
+        }
+        
+        // Variable input fields
+        const variableInputs = document.querySelectorAll('.variable-input');
+        variableInputs.forEach(input => {
+            input.onchange = (e) => {
+                const key = e.target.dataset.key;
+                const value = e.target.value;
+                this.onVariableChange(key, value);
+            };
+        });
+        
+        if (variableInputs.length > 0) {
+            console.log(`✅ [VARIABLES] Attached listeners to ${variableInputs.length} variable inputs`);
+        }
+        
+        console.log('✅ [VARIABLES] Variables table listeners attached');
     }
     
     /**
@@ -344,7 +424,7 @@ class VariablesManager {
                     </div>
                     <div class="ml-6">
                         <button 
-                            onclick="variablesManager.forceScan()"
+                            id="variables-force-scan-btn"
                             class="bg-white text-purple-700 hover:bg-purple-50 rounded-xl px-8 py-4 font-bold text-lg transition-all shadow-lg hover:shadow-xl ${this.isScanning ? 'opacity-50 cursor-not-allowed' : ''}"
                             ${this.isScanning ? 'disabled' : ''}
                             title="Scan active templates for variables"
@@ -542,8 +622,8 @@ class VariablesManager {
                                 <span class="text-gray-600 text-sm ml-2">${v.usageCount || 0} matches</span>
                             </div>
                             <button 
-                                onclick="variablesManager.switchTab('variables')"
-                                class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all text-sm font-bold"
+                                class="variables-fill-now-btn px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all text-sm font-bold"
+                                data-action="fill-now"
                             >
                                 Fill Now
                             </button>
@@ -573,7 +653,7 @@ class VariablesManager {
                         Run a scan first to detect variables from your active templates.
                     </p>
                     <button 
-                        onclick="variablesManager.switchTab('scan-status')"
+                        id="variables-goto-scan-btn"
                         class="px-8 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl hover:shadow-xl transition-all"
                     >
                         Go to Scan & Status
@@ -591,7 +671,7 @@ class VariablesManager {
                     All Variables (${this.variableDefinitions.length})
                 </h3>
                 <button 
-                    onclick="variablesManager.saveAll()"
+                    id="variables-save-all-btn"
                     class="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl hover:shadow-lg transition-all"
                 >
                     <i class="fas fa-save mr-2"></i>
@@ -651,11 +731,10 @@ class VariablesManager {
                 <td class="p-4">
                     <input 
                         type="text"
-                        class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none transition-all"
+                        class="variable-input w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none transition-all"
                         value="${this.escapeHtml(value)}"
                         placeholder="${varDef.example || 'Enter value...'}"
                         data-key="${varDef.key}"
-                        onchange="variablesManager.onVariableChange('${varDef.key}', this.value)"
                     />
                 </td>
                 <td class="p-4 text-center">
