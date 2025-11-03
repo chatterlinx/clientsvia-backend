@@ -15,7 +15,7 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const Company = require('../models/v2Company');
-const User = require('../models/User');
+const User = require('../models/v2User');
 
 const logger = {
   info: (...args) => console.log('ℹ️ ', ...args),

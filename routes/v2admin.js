@@ -216,4 +216,8 @@ router.use('/ai-agent-monitoring', aiAgentMonitoringRoutes);
 const fixUserCompanyRoutes = require('./admin/fixUserCompany');
 router.use('/', fixUserCompanyRoutes);
 
+// 🧹 NEW: Platform Admin deduplication routes
+const deduplicatePlatformAdminRoutes = require('./admin/deduplicatePlatformAdmin');
+router.use('/', deduplicatePlatformAdminRoutes);
+
 module.exports = router;
