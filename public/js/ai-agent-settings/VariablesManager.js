@@ -403,9 +403,9 @@ class VariablesManager {
         }
         
         // Alerts
-        const missingRequired = this.variableDefinitions.filter(v => v.required && !this.variables[v.key]);
-        if (missingRequired.length > 0) {
-            html += this.renderAlerts(missingRequired);
+        const missingRequiredVars = this.variableDefinitions.filter(v => v.required && !this.variables[v.key]);
+        if (missingRequiredVars.length > 0) {
+            html += this.renderAlerts(missingRequiredVars);
         }
         
         // Empty state
