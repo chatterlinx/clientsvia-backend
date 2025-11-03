@@ -38,7 +38,7 @@ class ScenarioPoolService {
      * @param {Object} options - Reserved for future use
      * @returns {Promise<Object>} - { scenarios: Array, templatesUsed: Array }
      */
-    static async getScenarioPoolForCompany(companyId, options = {}) {
+    static async getScenarioPoolForCompany(companyId, _options = {}) {
         const startTime = Date.now();
         
         logger.info(`📚 [SCENARIO POOL] Building scenario pool for company: ${companyId}`);
@@ -229,7 +229,7 @@ class ScenarioPoolService {
                         // Build standardized scenario object
                         scenarioPool.push({
                             // Company context
-                            companyId: companyId,
+                            companyId,
                             
                             // Template metadata
                             templateId: template._id.toString(),
