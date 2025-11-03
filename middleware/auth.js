@@ -47,8 +47,61 @@ async function authenticateJWT(req, res, next) {
       return res.status(401).json({ message: 'User not found or inactive' });
     }
 
-    // WARNING: Check for missing company association
-    // Most endpoints in a multi-tenant platform require this
+    // 🔥 AUTO-FIX: Admins without companyId get assigned to Platform Admin
+    if (!user.companyId && user.role === 'admin') {
+      logger.security('🔧 AUTO-FIX: Admin user missing companyId, assigning to Platform Admin', {
+        userId: user._id.toString(),
+        email: user.email
+      });
+      
+      try {
+        const Company = require('../models/v2Company');
+        
+        // Find or create Platform Admin company
+        let adminCompany = await Company.findOne({ 
+          $or: [
+            { companyName: 'Platform Admin' },
+            { businessName: 'Platform Admin' },
+            { 'metadata.isPlatformAdmin': true }
+          ]
+        });
+        
+        if (!adminCompany) {
+          logger.security('🏢 AUTO-FIX: Creating Platform Admin company');
+          adminCompany = await Company.create({
+            companyName: 'Platform Admin',
+            businessName: 'Platform Admin',
+            email: 'admin@clientsvia.com',
+            status: 'active',
+            accountStatus: {
+              status: 'active',
+              lastChanged: new Date()
+            },
+            metadata: {
+              isPlatformAdmin: true,
+              purpose: 'Default company for platform administrators',
+              createdBy: 'auto-fix',
+              setupAt: new Date()
+            }
+          });
+        }
+        
+        // Fix the user
+        user.companyId = adminCompany._id;
+        await user.save();
+        
+        logger.security('✅ AUTO-FIX: Admin user fixed', {
+          userId: user._id.toString(),
+          companyId: adminCompany._id.toString()
+        });
+      } catch (error) {
+        logger.error('❌ AUTO-FIX: Failed to fix admin user:', error);
+        // Continue anyway - admins can still access
+      }
+    }
+    
+    // WARNING: Check for missing company association (non-admins only)
+    // Admins are allowed to have no company (they can manage all companies)
     if (!user.companyId && user.role !== 'admin') {
       logger.security('⚠️  AUTH: User missing company association', {
         userId: user._id.toString(),
