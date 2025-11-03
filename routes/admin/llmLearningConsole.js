@@ -22,12 +22,12 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const ProductionLLMSuggestion = require('../../models/ProductionLLMSuggestion');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
-const { authenticateJWT, adminOnly } = require('../../middleware/auth');
+const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
 
 // Apply authentication to all routes
 router.use(authenticateJWT);
-router.use(adminOnly);
+router.use(requireRole('admin'));
 
 /**
  * ============================================================================
