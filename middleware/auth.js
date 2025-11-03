@@ -4,6 +4,10 @@ const logger = require('../utils/logger.js');
 const User = require('../models/v2User');
 const sessionManager = require('./singleSessionManager');
 
+// 🔒 Race condition protection: Global lock for Platform Admin creation
+let platformAdminCreationLock = false;
+const platformAdminCreationPromises = [];
+
 // Extract JWT from either httpOnly cookie or Authorization header
 function getTokenFromRequest(req) {
   const cookies = req.cookies || {};
@@ -57,7 +61,13 @@ async function authenticateJWT(req, res, next) {
       try {
         const Company = require('../models/v2Company');
         
-        // Find or create Platform Admin company
+        // 🔒 RACE CONDITION PROTECTION: Wait if another request is creating Platform Admin
+        while (platformAdminCreationLock) {
+          logger.debug('🔒 AUTO-FIX: Waiting for Platform Admin creation lock...');
+          await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms
+        }
+        
+        // Find Platform Admin company (check again after waiting)
         let adminCompany = await Company.findOne({ 
           $or: [
             { companyName: 'Platform Admin' },
@@ -67,23 +77,45 @@ async function authenticateJWT(req, res, next) {
         });
         
         if (!adminCompany) {
-          logger.security('🏢 AUTO-FIX: Creating Platform Admin company');
-          adminCompany = await Company.create({
-            companyName: 'Platform Admin',
-            businessName: 'Platform Admin',
-            email: 'admin@clientsvia.com',
-            status: 'active',
-            accountStatus: {
-              status: 'active',
-              lastChanged: new Date()
-            },
-            metadata: {
-              isPlatformAdmin: true,
-              purpose: 'Default company for platform administrators',
-              createdBy: 'auto-fix',
-              setupAt: new Date()
+          // 🔒 ACQUIRE LOCK: Only one request can create Platform Admin
+          platformAdminCreationLock = true;
+          
+          try {
+            // Double-check after acquiring lock (another request might have created it)
+            adminCompany = await Company.findOne({ 
+              $or: [
+                { companyName: 'Platform Admin' },
+                { businessName: 'Platform Admin' },
+                { 'metadata.isPlatformAdmin': true }
+              ]
+            });
+            
+            if (!adminCompany) {
+              logger.security('🏢 AUTO-FIX: Creating Platform Admin company (LOCK ACQUIRED)');
+              adminCompany = await Company.create({
+                companyName: 'Platform Admin',
+                businessName: 'Platform Admin',
+                email: 'admin@clientsvia.com',
+                status: 'active',
+                accountStatus: {
+                  status: 'active',
+                  lastChanged: new Date()
+                },
+                metadata: {
+                  isPlatformAdmin: true,
+                  purpose: 'Default company for platform administrators',
+                  createdBy: 'auto-fix-middleware',
+                  setupAt: new Date()
+                }
+              });
+              logger.security('✅ AUTO-FIX: Platform Admin company created successfully');
+            } else {
+              logger.debug('🔒 AUTO-FIX: Platform Admin was created by another request');
             }
-          });
+          } finally {
+            // 🔓 RELEASE LOCK
+            platformAdminCreationLock = false;
+          }
         }
         
         // Fix the user
@@ -96,6 +128,8 @@ async function authenticateJWT(req, res, next) {
         });
       } catch (error) {
         logger.error('❌ AUTO-FIX: Failed to fix admin user:', error);
+        // 🔓 RELEASE LOCK on error
+        platformAdminCreationLock = false;
         // Continue anyway - admins can still access
       }
     }

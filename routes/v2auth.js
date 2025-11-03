@@ -10,6 +10,9 @@ const logger = require('../utils/logger');
 // require('../config/passport');
 // const passport = require('passport');
 
+// 🔒 Race condition protection: Global lock for Platform Admin creation during registration
+let platformAdminCreationLock = false;
+
 /**
  * POST /api/auth/register - Register a new admin user
  * For development/setup purposes
@@ -41,7 +44,13 @@ router.post('/register', async (req, res) => {
         if (role === 'admin') {
             const Company = require('../models/v2Company');
             
-            // Find or create Platform Admin company
+            // 🔒 RACE CONDITION PROTECTION: Wait if another request is creating Platform Admin
+            while (platformAdminCreationLock) {
+                logger.debug('🔒 [AUTH] Waiting for Platform Admin creation lock...');
+                await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms
+            }
+            
+            // Find Platform Admin company (check again after waiting)
             let adminCompany = await Company.findOne({ 
                 $or: [
                     { companyName: 'Platform Admin' },
@@ -51,24 +60,45 @@ router.post('/register', async (req, res) => {
             });
             
             if (!adminCompany) {
-                logger.info('🏢 [AUTH] Creating Platform Admin company for new admin user');
-                adminCompany = await Company.create({
-                    companyName: 'Platform Admin',
-                    businessName: 'Platform Admin',
-                    email: 'admin@clientsvia.com',
-                    status: 'active',
-                    accountStatus: {
-                        status: 'active',
-                        lastChanged: new Date()
-                    },
-                    metadata: {
-                        isPlatformAdmin: true,
-                        purpose: 'Default company for platform administrators',
-                        createdBy: 'auto-registration',
-                        setupAt: new Date()
+                // 🔒 ACQUIRE LOCK: Only one request can create Platform Admin
+                platformAdminCreationLock = true;
+                
+                try {
+                    // Double-check after acquiring lock (another request might have created it)
+                    adminCompany = await Company.findOne({ 
+                        $or: [
+                            { companyName: 'Platform Admin' },
+                            { businessName: 'Platform Admin' },
+                            { 'metadata.isPlatformAdmin': true }
+                        ]
+                    });
+                    
+                    if (!adminCompany) {
+                        logger.info('🏢 [AUTH] Creating Platform Admin company for new admin user (LOCK ACQUIRED)');
+                        adminCompany = await Company.create({
+                            companyName: 'Platform Admin',
+                            businessName: 'Platform Admin',
+                            email: 'admin@clientsvia.com',
+                            status: 'active',
+                            accountStatus: {
+                                status: 'active',
+                                lastChanged: new Date()
+                            },
+                            metadata: {
+                                isPlatformAdmin: true,
+                                purpose: 'Default company for platform administrators',
+                                createdBy: 'auto-registration',
+                                setupAt: new Date()
+                            }
+                        });
+                        logger.info('✅ [AUTH] Platform Admin company created:', adminCompany._id);
+                    } else {
+                        logger.debug('🔒 [AUTH] Platform Admin was created by another request');
                     }
-                });
-                logger.info('✅ [AUTH] Platform Admin company created:', adminCompany._id);
+                } finally {
+                    // 🔓 RELEASE LOCK
+                    platformAdminCreationLock = false;
+                }
             }
             
             adminCompanyId = adminCompany._id;
