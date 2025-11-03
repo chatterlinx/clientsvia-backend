@@ -28,11 +28,12 @@ const logger = require('../../utils/logger.js');
 const router = express.Router();
 const v2Company = require('../../models/v2Company');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
-const { authenticateJWT } = require('../../middleware/auth');
+const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const { redisClient } = require('../../db');
 
-// 🔒 SECURITY: Require authentication for all routes
+// 🔒 SECURITY: Require authentication AND multi-tenant access control
 router.use(authenticateJWT);
+router.use(requireCompanyAccess);
 
 /**
  * GET /api/company/:companyId/live-scenarios

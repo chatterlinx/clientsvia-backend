@@ -34,14 +34,15 @@ const Company = require('../../models/v2Company');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 const IdempotencyLog = require('../../models/IdempotencyLog');
 const AuditLog = require('../../models/AuditLog');
-const { authenticateJWT } = require('../../middleware/auth');
+const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const ConfigurationReadinessService = require('../../services/ConfigurationReadinessService');
 const { generatePreviewToken, verifyPreviewToken } = require('../../utils/previewToken');
 const { validate } = require('../../utils/variableValidators');
 const { redisClient } = require('../../db');
 
-// Apply authentication to all routes
+// Apply authentication AND multi-tenant access control to all routes
 router.use(authenticateJWT);
+router.use(requireCompanyAccess);
 
 /**
  * ============================================================================

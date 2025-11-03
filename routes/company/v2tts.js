@@ -15,10 +15,11 @@ const router = express.Router();
 const { ObjectId } = require('mongodb');
 const Company = require('../../models/v2Company');
 const { synthesizeSpeech } = require('../../services/v2elevenLabsService');
-const { authenticateJWT } = require('../../middleware/auth');
+const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 
-// 🔒 SECURITY: Require authentication for all routes
+// 🔒 SECURITY: Require authentication AND multi-tenant access control
 router.use(authenticateJWT);
+router.use(requireCompanyAccess);
 
 /**
  * @route   POST /api/company/:companyId/v2-tts/generate

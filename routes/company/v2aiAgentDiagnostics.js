@@ -21,11 +21,12 @@ const logger = require('../../utils/logger.js');
 
 const router = express.Router();
 const Company = require('../../models/v2Company');
-const { authenticateJWT } = require('../../middleware/auth');
+const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const { redisClient } = require('../../db');
 
-// Apply authentication to all routes
+// Apply authentication AND multi-tenant access control to all routes
 router.use(authenticateJWT);
+router.use(requireCompanyAccess);
 
 /**
  * ============================================================================

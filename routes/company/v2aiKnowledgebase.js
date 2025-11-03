@@ -33,10 +33,11 @@ const logger = require('../../utils/logger.js');
 
 const router = express.Router();
 const v2AIAgentCallLog = require('../../models/v2AIAgentCallLog');
-const { authenticateJWT } = require('../../middleware/auth');
+const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 
-// 🔒 SECURITY: Require authentication for all routes
+// 🔒 SECURITY: Require authentication AND multi-tenant access control
 router.use(authenticateJWT);
+router.use(requireCompanyAccess);
 const v2Company = require('../../models/v2Company');
 
 /**

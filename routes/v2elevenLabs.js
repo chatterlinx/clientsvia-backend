@@ -3,7 +3,7 @@ const logger = require('../utils/logger.js');
 
 const router = express.Router();
 const Company = require('../models/v2Company');
-const { authenticateJWT } = require('../middleware/auth');
+const { authenticateJWT, requireCompanyAccess } = require('../middleware/auth');
 const { 
   getAvailableVoices, 
   getAvailableModels,
@@ -335,7 +335,8 @@ router.get('/user', getUserSubscription);
 router.post('/synthesize', synthesize);
 router.post('/stream', streamSynthesis);
 router.post('/static', generateStatic);
-router.get('/companies/:companyId/voices', getCompanyVoices);
-router.post('/companies/:companyId/test-connection', testCompanyConnection);
+// Multi-tenant routes require company access validation
+router.get('/companies/:companyId/voices', requireCompanyAccess, getCompanyVoices);
+router.post('/companies/:companyId/test-connection', requireCompanyAccess, testCompanyConnection);
 
 module.exports = router;

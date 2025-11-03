@@ -28,12 +28,13 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const Company = require('../../models/v2Company');
-const { authenticateJWT } = require('../../middleware/auth');
+const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const { redisClient } = require('../../db');
 const logger = require('../../utils/logger');
 
-// Apply authentication to all routes
+// Apply authentication AND multi-tenant access control to all routes
 router.use(authenticateJWT);
+router.use(requireCompanyAccess);
 
 // Configure multer for audio file uploads
 const storage = multer.diskStorage({

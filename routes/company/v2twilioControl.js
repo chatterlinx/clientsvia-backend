@@ -32,13 +32,14 @@ const express = require('express');
 const router = express.Router();
 const Company = require('../../models/v2Company');
 const v2AIAgentCallLog = require('../../models/v2AIAgentCallLog');
-const { authenticateJWT } = require('../../middleware/auth');
+const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const { redisClient } = require('../../db');
 const twilio = require('twilio');
 const logger = require('../../utils/logger');
 
-// Apply authentication to all routes
+// Apply authentication AND multi-tenant access control to all routes
 router.use(authenticateJWT);
+router.use(requireCompanyAccess);
 
 /**
  * ============================================================================

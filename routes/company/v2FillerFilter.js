@@ -28,10 +28,11 @@ const router = express.Router();
 const v2Company = require('../../models/v2Company');
 const GlobalAIBehaviorTemplate = require('../../models/GlobalAIBehaviorTemplate');
 const { redisClient } = require('../../clients/index');
-const { authenticateJWT } = require('../../middleware/auth');
+const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 
-// 🔒 SECURITY: Require authentication for all routes
+// 🔒 SECURITY: Require authentication AND multi-tenant access control
 router.use(authenticateJWT);
+router.use(requireCompanyAccess);
 
 /**
  * GET /api/company/:companyId/configuration/filler-filter
