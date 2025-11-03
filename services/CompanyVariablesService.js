@@ -19,7 +19,7 @@
 
 const Company = require('../models/v2Company');
 const { validateBatch } = require('../utils/variableValidators');
-const CacheHelper = require('../utils/CacheHelper');
+const CacheHelper = require('../utils/cacheHelper');
 const logger = require('../utils/logger');
 
 /**
