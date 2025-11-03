@@ -72,13 +72,20 @@ class VariablesManager {
             const data = await response.json();
             
             console.log('✅ [VARIABLES] Checkpoint 8: Data parsed:', {
-                variableDefinitions: data.variableDefinitions?.length || 0,
-                variables: Object.keys(data.variables || {}).length
+                definitions: data.definitions?.length || 0,
+                variables: Object.keys(data.variables || {}).length,
+                meta: data.meta
             });
             
-            this.variableDefinitions = data.variableDefinitions || [];
+            // REFACTORED: New API shape uses 'definitions' + 'meta'
+            this.variableDefinitions = data.definitions || [];
             this.variables = data.variables || {};
-            this.scanStatus = data.scanStatus || null;
+            this.meta = data.meta || {
+                lastScanDate: null,
+                missingRequiredCount: 0,
+                totalVariables: 0,
+                totalRequired: 0
+            };
             
             console.log('💼 [VARIABLES] Checkpoint 9: Rendering UI...');
             this.render();
@@ -274,24 +281,34 @@ class VariablesManager {
     renderScanStatus(container) {
         console.log('🎨 [VARIABLES] Checkpoint 17: Rendering Scan & Status tab');
         
+        // REFACTORED: Use meta from new API shape
         const totalVars = this.variableDefinitions.length;
+        const totalRequired = this.meta.totalRequired || 0;
+        const missingRequired = this.meta.missingRequiredCount || 0;
+        const filledRequired = totalRequired - missingRequired;
+        
         const filledVars = this.variableDefinitions.filter(v => {
             const value = this.variables[v.key] || '';
             return value.trim() !== '';
         }).length;
-        const completionPercent = totalVars > 0 ? Math.round((filledVars / totalVars) * 100) : 0;
         
-        const lastScan = this.scanStatus?.lastScan || null;
+        const completionPercent = totalRequired > 0 
+            ? Math.round((filledRequired / totalRequired) * 100) 
+            : (totalVars > 0 ? Math.round((filledVars / totalVars) * 100) : 0);
+        
+        const lastScan = this.meta.lastScanDate;
         const lastScanText = lastScan ? this.getTimeAgo(new Date(lastScan)) : 'Never';
         
         // Health status
-        const isHealthy = totalVars > 0 && completionPercent >= 80;
+        const isHealthy = totalVars > 0 && missingRequired === 0;
         const healthIcon = isHealthy ? '🟢' : (totalVars > 0 ? '🟡' : '🔴');
-        const healthText = isHealthy ? 'HEALTHY' : (totalVars > 0 ? 'NEEDS ATTENTION' : 'NO DATA');
+        const healthText = isHealthy ? 'HEALTHY' : (totalVars > 0 ? 'ACTION REQUIRED' : 'SYSTEM NO DATA');
         
         console.log('✅ [VARIABLES] Checkpoint 18: Status calculated:', {
             total: totalVars,
             filled: filledVars,
+            required: totalRequired,
+            missingRequired: missingRequired,
             completion: completionPercent,
             health: healthText
         });
@@ -319,7 +336,7 @@ class VariablesManager {
                             </div>
                             <div>
                                 <div class="text-purple-200">Completion</div>
-                                <div class="font-bold text-lg">${filledVars}/${totalVars} (${completionPercent}%)</div>
+                                <div class="font-bold text-lg">${totalRequired > 0 ? `${filledRequired}/${totalRequired}` : `${filledVars}/${totalVars}`} (${completionPercent}%)</div>
                             </div>
                         </div>
                     </div>

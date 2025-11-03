@@ -23,8 +23,14 @@ const logger = require('./logger');
 
 /**
  * Replace all placeholders in text with their actual values
+ * 
+ * REFACTORED: Now reads exclusively from aiAgentSettings.variables (canonical source)
+ * - Replaces: {variableName} and [variableName]
+ * - Case-insensitive matching
+ * - Handles both Mongoose Map and plain object
+ * 
  * @param {string} text - Text containing placeholders like {Company Name} or [Company Name]
- * @param {Object} company - Company document with aiAgentLogic.placeholders array
+ * @param {Object} company - Company document with aiAgentSettings.variables
  * @returns {string} Text with placeholders replaced
  */
 function replacePlaceholders(text, company) {
@@ -34,36 +40,40 @@ function replacePlaceholders(text, company) {
 
     let processedText = text;
     
-    // Check if company has placeholders configured
-    if (!company?.aiAgentLogic?.placeholders || !Array.isArray(company.aiAgentLogic.placeholders)) {
-        logger.debug(`[PLACEHOLDERS] No placeholders configured for company ${company?._id || 'unknown'}`);
+    // Read from CANONICAL location: aiAgentSettings.variables
+    const variables = company?.aiAgentSettings?.variables;
+    
+    if (!variables) {
+        logger.debug(`[PLACEHOLDERS] No variables configured for company ${company?._id || 'unknown'}`);
         return processedText;
     }
 
-    const placeholders = company.aiAgentLogic.placeholders;
-    logger.debug(`[PLACEHOLDERS] Processing ${placeholders.length} placeholders for company ${company._id}`);
+    // Handle both Mongoose Map and plain object
+    const entries = variables instanceof Map ? Array.from(variables.entries()) : Object.entries(variables);
+    
+    logger.debug(`[PLACEHOLDERS] Processing ${entries.length} variables for company ${company._id}`);
 
     let replacementCount = 0;
 
-    // Replace each placeholder
-    placeholders.forEach(placeholder => {
-        if (!placeholder.name || !placeholder.value) {
-            return; // Skip invalid placeholders
+    // Replace each variable
+    entries.forEach(([key, value]) => {
+        if (!key || !value) {
+            return; // Skip empty values
         }
 
-        // Escape special regex characters in placeholder name
-        const escapedName = placeholder.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Escape special regex characters in key
+        const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         
-        // Match both [Placeholder Name] and {Placeholder Name}, case-insensitive
-        // Pattern: [\[{]placeholder name[\]}]
-        const regex = new RegExp(`[\\[{]\\s*${escapedName}\\s*[\\]}]`, 'gi');
+        // Match both [key] and {key}, case-insensitive
+        // Pattern: [\[{]key[\]}]
+        const regex = new RegExp(`[\\[{]\\s*${escapedKey}\\s*[\\]}]`, 'gi');
         
         const before = processedText;
-        processedText = processedText.replace(regex, placeholder.value);
+        processedText = processedText.replace(regex, value);
         
         if (before !== processedText) {
             replacementCount++;
-            logger.debug(`[PLACEHOLDERS] ✅ Replaced {${placeholder.name}} → ${placeholder.value}`);
+            logger.debug(`[PLACEHOLDERS] ✅ Replaced {${key}} → ${value}`);
         }
     });
 

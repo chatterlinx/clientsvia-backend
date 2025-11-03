@@ -239,39 +239,20 @@ class V2AIAgentRuntime {
 
     /**
      * 🚀 V2 PLACEHOLDER REPLACEMENT SYSTEM
-     * Replaces {placeholder} syntax with actual values from company.aiAgentLogic.placeholders
+     * 
+     * REFACTORED: Now uses canonical placeholderReplacer
+     * - Reads from: company.aiAgentSettings.variables
+     * - Single source of truth for all variable replacement
+     * 
      * @param {string} text - Response text with placeholders
-     * @param {Object} company - Company document with placeholder definitions
+     * @param {Object} company - Company document with variable definitions
      * @returns {string} Response with placeholders replaced
      */
     static buildPureResponse(text, company) {
         if (!text) {return text;}
-
-        let processedText = text;
         
-        // Replace placeholders from company.aiAgentLogic.placeholders
-        if (company.aiAgentLogic?.placeholders && Array.isArray(company.aiAgentLogic.placeholders)) {
-            logger.debug(`🔧 [PLACEHOLDERS] Replacing ${company.aiAgentLogic.placeholders.length} placeholders`);
-            
-            company.aiAgentLogic.placeholders.forEach(placeholder => {
-                // Escape special regex characters in placeholder name
-                const escapedName = placeholder.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                
-                // Match both [Placeholder Name] and {Placeholder Name}, case-insensitive
-                const regex = new RegExp(`[\\[{]\\s*${escapedName}\\s*[\\]}]`, 'gi');
-                
-                const before = processedText;
-                processedText = processedText.replace(regex, placeholder.value);
-                
-                if (before !== processedText) {
-                    logger.debug(`🔧 [PLACEHOLDERS] Replaced {${placeholder.name}} → ${placeholder.value}`);
-                }
-            });
-        } else {
-            logger.debug(`[PLACEHOLDERS] ⚠️ No placeholders configured for company ${company._id}`);
-        }
-        
-        return processedText.trim();
+        const { replacePlaceholders } = require('../utils/placeholderReplacer');
+        return replacePlaceholders(text, company).trim();
     }
 
     /**

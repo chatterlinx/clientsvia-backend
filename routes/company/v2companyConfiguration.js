@@ -129,38 +129,33 @@ router.get('/:companyId/configuration', async (req, res) => {
  * ============================================================================
  * GET /api/company/:companyId/configuration/variables
  * Load variables and their definitions
+ * 
+ * REFACTORED: Now uses CompanyVariablesService (canonical source)
+ * - Reads from: aiAgentSettings.variableDefinitions + aiAgentSettings.variables
+ * - Auto-migrates from legacy configuration.variables if needed
  * ============================================================================
  */
+const CompanyVariablesService = require('../../services/CompanyVariablesService');
+
 router.get('/:companyId/configuration/variables', async (req, res) => {
     logger.info(`[COMPANY CONFIG] GET /configuration/variables for company: ${req.params.companyId}`);
     
     try {
-        const company = await Company.findById(req.params.companyId);
-        
-        if (!company) {
-            return res.status(404).json({ error: 'Company not found' });
-        }
-        
-        // Get variable definitions from cloned template
-        let definitions = [];
-        
-        if (company.configuration?.clonedFrom) {
-            const template = await GlobalInstantResponseTemplate.findById(company.configuration.clonedFrom);
-            if (template && template.availableVariables) {
-                definitions = template.availableVariables;
-            }
-        }
-        
-        // Get current variable values
-        const variables = company.configuration?.variables || {};
+        const result = await CompanyVariablesService.getVariablesForCompany(req.params.companyId);
         
         res.json({
-            variables,
-            definitions
+            variables: result.values,
+            definitions: result.definitions,
+            meta: result.meta
         });
         
     } catch (error) {
         logger.error('[COMPANY CONFIG] Error loading variables:', error);
+        
+        if (error.message.includes('not found')) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
         res.status(500).json({ error: 'Failed to load variables' });
     }
 });
@@ -169,8 +164,15 @@ router.get('/:companyId/configuration/variables', async (req, res) => {
  * ============================================================================
  * PATCH /api/company/:companyId/configuration/variables
  * Update variable values
+ * 
+ * REFACTORED: Now uses CompanyVariablesService + validation
+ * - Writes to: aiAgentSettings.variables
+ * - Validates using variableValidators.js
+ * - Auto-updates configurationAlert for missing required variables
  * ============================================================================
  */
+const { validateBatch } = require('../../utils/variableValidators');
+
 router.patch('/:companyId/configuration/variables', async (req, res) => {
     logger.info(`[COMPANY CONFIG] PATCH /configuration/variables for company: ${req.params.companyId}`);
     
@@ -181,36 +183,41 @@ router.patch('/:companyId/configuration/variables', async (req, res) => {
             return res.status(400).json({ error: 'Invalid variables data' });
         }
         
-        const company = await Company.findById(req.params.companyId);
+        // Load definitions for validation
+        const { definitions } = await CompanyVariablesService.getVariablesForCompany(req.params.companyId);
         
-        if (!company) {
-            return res.status(404).json({ error: 'Company not found' });
+        // Validate all variables
+        const validation = validateBatch(variables, definitions);
+        
+        if (!validation.isValid) {
+            logger.warn(`[COMPANY CONFIG] Validation failed for company ${req.params.companyId}:`, validation.errors);
+            return res.status(400).json({ 
+                error: 'Validation failed',
+                validationErrors: validation.errors
+            });
         }
         
-        // Initialize configuration if needed
-        if (!company.configuration) {
-            company.configuration = {};
-        }
+        // Update variables (uses formatted/normalized values from validation)
+        const result = await CompanyVariablesService.updateVariablesForCompany(
+            req.params.companyId, 
+            validation.formatted
+        );
         
-        // Update variables
-        company.configuration.variables = variables;
-        company.configuration.lastUpdatedAt = new Date();
-        
-        await company.save();
-        
-        // Clear Redis cache
-        await clearCompanyCache(req.params.companyId, 'Variables Updated');
-        
-        logger.debug(`[COMPANY CONFIG] Variables updated for company: ${req.params.companyId}`);
+        logger.info(`✅ [COMPANY CONFIG] Variables updated for company: ${req.params.companyId}`);
         
         res.json({
             success: true,
-            variables: company.configuration.variables,
-            variablesStatus: calculateVariablesStatus(company)
+            variables: result.values,
+            meta: result.meta
         });
         
     } catch (error) {
         logger.error('[COMPANY CONFIG] Error updating variables:', error);
+        
+        if (error.message.includes('not found')) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
         res.status(500).json({ error: 'Failed to update variables' });
     }
 });

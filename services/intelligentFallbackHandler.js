@@ -183,27 +183,29 @@ class IntelligentFallbackHandler {
 
     /**
      * Replace variables in text using company's Variables system
+     * 
+     * REFACTORED: Now uses canonical placeholderReplacer
+     * - Reads from: company.aiAgentSettings.variables
+     * - Single source of truth for all variable replacement
+     * 
      * @param {String} text - Text with variables like {companyname}, {companyid}
      * @param {Object} company - Company document
      * @returns {String} - Text with variables replaced
      */
     replaceVariables(text, company) {
         if (!text) {return text;}
-
+        
+        const { replacePlaceholders } = require('../utils/placeholderReplacer');
+        
         let processedText = text;
-
-        // Always replace built-in variables
+        
+        // Replace built-in variables that might not be in aiAgentSettings.variables
         processedText = processedText.replace(/\{companyname\}/gi, company.companyName || company.businessName || 'Unknown');
         processedText = processedText.replace(/\{companyid\}/gi, company._id || 'Unknown');
-
-        // Replace custom variables from company.aiAgentLogic.variables
-        if (company.aiAgentLogic?.variables && Array.isArray(company.aiAgentLogic.variables)) {
-            company.aiAgentLogic.variables.forEach(variable => {
-                const regex = new RegExp(`\\{${variable.name}\\}`, 'gi');
-                processedText = processedText.replace(regex, variable.value);
-            });
-        }
-
+        
+        // Replace all other variables from canonical source
+        processedText = replacePlaceholders(processedText, company);
+        
         return processedText;
     }
 

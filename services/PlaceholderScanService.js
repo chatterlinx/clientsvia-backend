@@ -186,9 +186,14 @@ class PlaceholderScanService {
             }
             
             // 7. Check for missing required values
-            const currentVariables = company.aiAgentSettings?.variables || {};
+            // Handle both Mongoose Map and plain object
+            const currentVariables = company.aiAgentSettings?.variables || new Map();
+            const getValue = (key) => {
+                return currentVariables instanceof Map ? currentVariables.get(key) : currentVariables[key];
+            };
+            
             const missingRequired = finalDefinitions.filter(def => 
-                def.required && !currentVariables[def.key]
+                def.required && !getValue(def.key)
             );
             
             logger.info(`📊 [PLACEHOLDER SCAN] New: ${newPlaceholders.length}, Updated: ${updatedPlaceholders.length}, Missing: ${missingRequired.length}`);
