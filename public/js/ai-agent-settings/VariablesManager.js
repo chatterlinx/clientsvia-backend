@@ -725,9 +725,15 @@ class VariablesManager {
                 scannedAt: data.scannedAt
             });
             
-            // Update data
-            this.variableDefinitions = data.variableDefinitions || [];
+            // Update data - NEW API SHAPE
+            this.variableDefinitions = data.definitions || [];
             this.variables = data.variables || {};
+            this.meta = data.meta || {
+                lastScanDate: null,
+                missingRequiredCount: 0,
+                totalVariables: 0,
+                totalRequired: 0
+            };
             this.scanStatus = data.scanStatus || null;
             this.lastScanResult = {
                 scannedAt: data.scannedAt || new Date().toISOString(),

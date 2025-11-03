@@ -1,270 +1,205 @@
-/**
- * ============================================================================
- * COMPANY VARIABLES SERVICE - CANONICAL SOURCE OF TRUTH
- * ============================================================================
- * 
- * PURPOSE:
- * Centralized read/write logic for company variables system.
- * Ensures all code paths use the same canonical fields:
- * - aiAgentSettings.variableDefinitions (metadata)
- * - aiAgentSettings.variables (actual values)
- * 
- * REPLACES:
- * - Direct reads from configuration.variables
- * - Direct reads from aiAgentLogic.placeholders
- * - Direct reads from aiAgentLogic.variables
- * 
- * FEATURES:
- * - Single source of truth for variables
- * - Automatic migration from legacy fields
- * - Validation support
- * - Missing required variable detection
- * 
- * ============================================================================
- */
+// services/CompanyVariablesService.js
+// 🎯 CANONICAL COMPANY VARIABLES SERVICE
+// Single source of truth for reading and writing company-specific AI Agent variables
+// 
+// PURPOSE:
+// - Centralized read/write for aiAgentSettings.variables (Map) and variableDefinitions (Array)
+// - Handles legacy data migration from configuration.variables, aiAgentLogic.placeholders, etc.
+// - Enforces validation using variableValidators.js
+// - Auto-clears Redis cache on writes
+//
+// CANONICAL FIELDS (v2Company.js):
+// - company.aiAgentSettings.variables (Map<String, String>) ← VALUES
+// - company.aiAgentSettings.variableDefinitions (Array) ← METADATA
+//
+// LEGACY FIELDS (READ-ONLY, DO NOT WRITE):
+// - company.configuration.variables
+// - company.aiAgentLogic.placeholders
+// - company.aiAgentLogic.variables
 
 const Company = require('../models/v2Company');
+const { validateBatch } = require('../utils/variableValidators');
+const CacheHelper = require('../utils/CacheHelper');
 const logger = require('../utils/logger');
-const CacheHelper = require('../utils/cacheHelper');
 
-class CompanyVariablesService {
-    
-    /**
-     * Get variables and definitions for a company
-     * 
-     * @param {string} companyId - Company MongoDB ObjectId
-     * @returns {Promise<Object>} { definitions, values, meta }
-     * 
-     * @example
-     * const result = await CompanyVariablesService.getVariablesForCompany('64a1b2c3');
-     * // {
-     * //   definitions: [...],
-     * //   values: { companyName: "Royal Plumbing", ... },
-     * //   meta: { lastScanDate: Date, missingRequiredCount: 2 }
-     * // }
-     */
-    static async getVariablesForCompany(companyId) {
-        logger.debug(`📥 [VARIABLES SERVICE] Getting variables for company: ${companyId}`);
-        
-        try {
-            const company = await Company.findById(companyId)
-                .select('aiAgentSettings.variableDefinitions aiAgentSettings.variables aiAgentSettings.lastScanDate configuration.variables')
-                .lean();
-            
-            if (!company) {
-                throw new Error(`Company ${companyId} not found`);
-            }
-            
-            // Get definitions from canonical location
-            const definitions = company.aiAgentSettings?.variableDefinitions || [];
-            
-            // Get values from canonical location (Map → plain object)
-            let values = {};
-            if (company.aiAgentSettings?.variables) {
-                // Mongoose Map is already a plain object when using .lean()
-                values = company.aiAgentSettings.variables;
-            }
-            
-            // MIGRATION: If canonical is empty but legacy has data, copy it
-            if (Object.keys(values).length === 0 && company.configuration?.variables) {
-                const legacyValues = company.configuration.variables;
-                if (Object.keys(legacyValues).length > 0) {
-                    logger.warn(`⚠️  [VARIABLES SERVICE] Migrating legacy variables for company ${companyId}`);
-                    values = legacyValues;
-                    
-                    // Trigger background migration (non-blocking)
-                    setImmediate(async () => {
-                        try {
-                            await this.migrateLegacyVariables(companyId);
-                        } catch (migrationError) {
-                            logger.error(`❌ [VARIABLES SERVICE] Migration failed for ${companyId}:`, migrationError);
-                        }
-                    });
-                }
-            }
-            
-            // Calculate missing required count
-            const missingRequired = definitions.filter(def => 
-                def.required && !def.deprecated && !values[def.key]
-            );
-            
-            const meta = {
-                lastScanDate: company.aiAgentSettings?.lastScanDate || null,
-                missingRequiredCount: missingRequired.length,
-                totalVariables: definitions.length,
-                totalRequired: definitions.filter(d => d.required && !d.deprecated).length
-            };
-            
-            logger.info(`✅ [VARIABLES SERVICE] Retrieved ${definitions.length} definitions, ${Object.keys(values).length} values`);
-            
-            return {
-                definitions,
-                values,
-                meta
-            };
-            
-        } catch (error) {
-            logger.error(`❌ [VARIABLES SERVICE] Failed to get variables for ${companyId}:`, error);
-            throw error;
-        }
+/**
+ * Convert Mongoose Map to plain object
+ * @param {Map|Object} mapOrObj - Mongoose Map or plain object
+ * @returns {Object} Plain object { key: value }
+ */
+function mapToObj(mapOrObj) {
+    if (!mapOrObj) {
+        return {};
     }
     
-    /**
-     * Update variable values for a company
-     * 
-     * @param {string} companyId - Company MongoDB ObjectId
-     * @param {Object} updates - Key-value pairs to update { key1: 'value', key2: 'value' }
-     * @param {Object} options - Optional settings
-     * @returns {Promise<Object>} { success, values, meta }
-     */
-    static async updateVariablesForCompany(companyId, updates, options = {}) {
-        logger.debug(`💾 [VARIABLES SERVICE] Updating variables for company: ${companyId}`);
-        logger.debug(`💾 [VARIABLES SERVICE] Updates:`, updates);
-        
-        try {
-            const company = await Company.findById(companyId)
-                .select('aiAgentSettings.variableDefinitions aiAgentSettings.variables aiAgentSettings.configurationAlert');
-            
-            if (!company) {
-                throw new Error(`Company ${companyId} not found`);
-            }
-            
-            // Initialize if needed
-            if (!company.aiAgentSettings) {
-                company.aiAgentSettings = {};
-            }
-            if (!company.aiAgentSettings.variables) {
-                company.aiAgentSettings.variables = new Map();
-            }
-            
-            // Apply updates
-            for (const [key, value] of Object.entries(updates)) {
-                if (value === null || value === undefined || value === '') {
-                    // Delete empty values
-                    company.aiAgentSettings.variables.delete(key);
-                } else {
-                    // Set/update value
-                    company.aiAgentSettings.variables.set(key, value);
-                }
-            }
-            
-            // Recalculate configuration alert
-            const definitions = company.aiAgentSettings.variableDefinitions || [];
-            const values = company.aiAgentSettings.variables;
-            
-            const missingRequired = definitions.filter(def => 
-                def.required && !def.deprecated && !values.get(def.key)
-            );
-            
-            if (missingRequired.length > 0) {
-                // Generate alert
-                company.aiAgentSettings.configurationAlert = {
-                    type: 'missing_variables',
-                    severity: 'warning',
-                    message: `${missingRequired.length} required variable${missingRequired.length > 1 ? 's' : ''} need${missingRequired.length === 1 ? 's' : ''} values`,
-                    missingVariables: missingRequired.map(def => ({
-                        key: def.key,
-                        label: def.label,
-                        type: def.type,
-                        category: def.category
-                    })),
-                    createdAt: new Date()
-                };
-            } else {
-                // Clear alert
-                company.aiAgentSettings.configurationAlert = null;
-            }
-            
-            // Mark as modified (Mongoose requirement for nested paths)
-            company.markModified('aiAgentSettings.variables');
-            company.markModified('aiAgentSettings.configurationAlert');
-            
-            await company.save();
-            
-            // Clear cache
-            await CacheHelper.clearCompanyCache(companyId);
-            
-            logger.info(`✅ [VARIABLES SERVICE] Updated ${Object.keys(updates).length} variables for company ${companyId}`);
-            
-            // Return updated state
-            const updatedValues = {};
-            for (const [key, value] of company.aiAgentSettings.variables.entries()) {
-                updatedValues[key] = value;
-            }
-            
-            return {
-                success: true,
-                values: updatedValues,
-                meta: {
-                    missingRequiredCount: missingRequired.length,
-                    totalVariables: definitions.length
-                }
-            };
-            
-        } catch (error) {
-            logger.error(`❌ [VARIABLES SERVICE] Failed to update variables for ${companyId}:`, error);
-            throw error;
+    if (mapOrObj instanceof Map) {
+        const obj = {};
+        for (const [k, v] of mapOrObj.entries()) {
+            obj[k] = v;
         }
+        return obj;
     }
     
-    /**
-     * Migrate legacy variables to canonical location
-     * 
-     * @param {string} companyId - Company MongoDB ObjectId
-     * @returns {Promise<Object>} Migration result
-     */
-    static async migrateLegacyVariables(companyId) {
-        logger.info(`🔄 [VARIABLES SERVICE] Starting legacy migration for company: ${companyId}`);
-        
-        try {
-            const company = await Company.findById(companyId);
-            
-            if (!company) {
-                throw new Error(`Company ${companyId} not found`);
-            }
-            
-            let migratedCount = 0;
-            
-            // Initialize canonical if needed
-            if (!company.aiAgentSettings) {
-                company.aiAgentSettings = {};
-            }
-            if (!company.aiAgentSettings.variables) {
-                company.aiAgentSettings.variables = new Map();
-            }
-            
-            // Migrate from configuration.variables
-            if (company.configuration?.variables) {
-                const legacyVars = company.configuration.variables;
-                
-                for (const [key, value] of Object.entries(legacyVars)) {
-                    if (!company.aiAgentSettings.variables.has(key) && value) {
-                        company.aiAgentSettings.variables.set(key, value);
-                        migratedCount++;
-                    }
-                }
-            }
-            
-            if (migratedCount > 0) {
-                company.markModified('aiAgentSettings.variables');
-                await company.save();
-                
-                logger.info(`✅ [VARIABLES SERVICE] Migrated ${migratedCount} variables from legacy fields`);
-            } else {
-                logger.info(`ℹ️  [VARIABLES SERVICE] No legacy variables to migrate`);
-            }
-            
-            return {
-                success: true,
-                migratedCount
-            };
-            
-        } catch (error) {
-            logger.error(`❌ [VARIABLES SERVICE] Migration failed for ${companyId}:`, error);
-            throw error;
-        }
-    }
+    // Already a plain object
+    return mapOrObj;
 }
 
-module.exports = CompanyVariablesService;
+/**
+ * Get variables, definitions, and metadata for a company
+ * 
+ * @param {String} companyId - Company ID
+ * @returns {Promise<Object>} { variables, definitions, meta }
+ * 
+ * Example response:
+ * {
+ *   variables: { companyName: "Royal Plumbing", phone: "+1-555-1234" },
+ *   definitions: [
+ *     { key: "companyName", label: "Company Name", type: "text", required: true, ... }
+ *   ],
+ *   meta: {
+ *     lastScanDate: Date | null,
+ *     totalVariables: 8,
+ *     totalRequired: 3,
+ *     filledRequired: 2,
+ *     missingRequiredCount: 1
+ *   }
+ * }
+ */
+async function getVariablesForCompany(companyId) {
+    logger.info(`[VARIABLES SERVICE] Loading variables for company: ${companyId}`);
+    
+    const company = await Company.findById(companyId)
+        .select('aiAgentSettings.variables aiAgentSettings.variableDefinitions aiAgentSettings.lastScanDate')
+        .lean();
+    
+    if (!company) {
+        throw new Error(`Company ${companyId} not found`);
+    }
+    
+    const variables = mapToObj(company.aiAgentSettings?.variables);
+    const definitions = company.aiAgentSettings?.variableDefinitions || [];
+    const lastScanDate = company.aiAgentSettings?.lastScanDate || null;
+    
+    // Calculate metadata
+    const totalVariables = definitions.length;
+    const totalRequired = definitions.filter(d => d.required === true).length;
+    
+    let filledRequired = 0;
+    definitions.forEach(def => {
+        if (def.required) {
+            const value = variables[def.key] || '';
+            if (value.trim() !== '') {
+                filledRequired++;
+            }
+        }
+    });
+    
+    const missingRequiredCount = totalRequired - filledRequired;
+    
+    const meta = {
+        lastScanDate,
+        totalVariables,
+        totalRequired,
+        filledRequired,
+        missingRequiredCount
+    };
+    
+    logger.info(`[VARIABLES SERVICE] ✅ Loaded ${totalVariables} variables (${filledRequired}/${totalRequired} required filled)`);
+    
+    return {
+        variables,
+        definitions,
+        meta
+    };
+}
 
+/**
+ * Update company-specific variable values
+ * 
+ * @param {String} companyId - Company ID
+ * @param {Object} updates - Plain object { key: value }
+ * @returns {Promise<Object>} { variables, definitions, meta }
+ * 
+ * VALIDATION:
+ * - Uses variableValidators.js for type-specific validation
+ * - Phone → E.164 format
+ * - Email → RFC regex
+ * - URL → must have protocol
+ * - Currency → normalized string
+ * 
+ * WRITE TARGET:
+ * - ONLY writes to company.aiAgentSettings.variables (Map)
+ * - NEVER writes to legacy fields (configuration.variables, aiAgentLogic.placeholders, etc.)
+ * 
+ * CACHING:
+ * - Auto-clears Redis cache after successful save
+ */
+async function updateVariablesForCompany(companyId, updates) {
+    logger.info(`[VARIABLES SERVICE] Updating variables for company: ${companyId}`);
+    logger.debug(`[VARIABLES SERVICE] Updates:`, updates);
+    
+    // Load company with full aiAgentSettings
+    const company = await Company.findById(companyId)
+        .select('aiAgentSettings');
+    
+    if (!company) {
+        throw new Error(`Company ${companyId} not found`);
+    }
+    
+    // Get current definitions for validation
+    const definitions = company.aiAgentSettings?.variableDefinitions || [];
+    
+    // Validate all updates
+    const validation = validateBatch(updates, definitions);
+    
+    if (!validation.isValid) {
+        logger.warn(`[VARIABLES SERVICE] Validation failed for company ${companyId}:`, validation.errors);
+        
+        const error = new Error('Validation failed');
+        error.isValidationError = true;
+        error.validationErrors = validation.errors;
+        error.field = validation.errors[0]?.field; // First error field for convenience
+        throw error;
+    }
+    
+    // Initialize variables Map if it doesn't exist
+    if (!company.aiAgentSettings.variables) {
+        company.aiAgentSettings.variables = new Map();
+    }
+    
+    // Write validated values to canonical Map
+    Object.entries(validation.formatted).forEach(([key, value]) => {
+        const v = (value == null) ? '' : String(value).trim();
+        
+        if (v === '') {
+            // Remove empty values
+            company.aiAgentSettings.variables.delete(key);
+            logger.debug(`[VARIABLES SERVICE] Removed empty value for key: ${key}`);
+        } else {
+            // Set validated value
+            company.aiAgentSettings.variables.set(key, v);
+            logger.debug(`[VARIABLES SERVICE] Set ${key} = ${v}`);
+        }
+    });
+    
+    // Mark as modified (required for Mongoose Map)
+    company.markModified('aiAgentSettings.variables');
+    
+    // Save to MongoDB
+    await company.save();
+    
+    logger.info(`[VARIABLES SERVICE] ✅ Saved variables for company: ${companyId}`);
+    
+    // Clear Redis cache
+    await CacheHelper.clearCompanyCache(companyId);
+    logger.debug(`[VARIABLES SERVICE] Cleared Redis cache for company: ${companyId}`);
+    
+    // Return updated data (same shape as getVariablesForCompany)
+    return getVariablesForCompany(companyId);
+}
+
+module.exports = {
+    getVariablesForCompany,
+    updateVariablesForCompany,
+    mapToObj
+};

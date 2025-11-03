@@ -144,7 +144,8 @@ router.get('/:companyId/configuration/variables', async (req, res) => {
         const result = await CompanyVariablesService.getVariablesForCompany(req.params.companyId);
         
         res.json({
-            variables: result.values,
+            success: true,
+            variables: result.variables,
             definitions: result.definitions,
             meta: result.meta
         });
@@ -207,7 +208,8 @@ router.patch('/:companyId/configuration/variables', async (req, res) => {
         
         res.json({
             success: true,
-            variables: result.values,
+            variables: result.variables,
+            definitions: result.definitions,
             meta: result.meta
         });
         
@@ -1456,15 +1458,15 @@ router.post('/:companyId/configuration/variables/scan', async (req, res) => {
         
         logger.info(`✅ [VARIABLE SCAN] Scan complete:`, scanResult);
         
-        // Reload company to get updated data
-        const updatedCompany = await Company.findById(companyId);
+        // Get updated variables data (includes meta)
+        const result = await CompanyVariablesService.getVariablesForCompany(companyId);
         
         res.json({
             success: true,
             scannedAt: new Date().toISOString(),
-            variableDefinitions: updatedCompany.aiAgentSettings?.variableDefinitions || [],
-            variables: updatedCompany.aiAgentSettings?.variables || {},
-            scanStatus: updatedCompany.aiAgentSettings?.variableScanStatus || null,
+            variables: result.variables,
+            definitions: result.definitions,
+            meta: result.meta,
             ...scanResult
         });
         
