@@ -82,6 +82,36 @@ class CacheHelper {
                 timestamp: new Date().toISOString()
             });
 
+            // ============================================
+            // 🚀 NEW: INVALIDATE COMPANY SCENARIO CACHES
+            // ============================================
+            // When a template changes, all companies using it need fresh scenario lists
+            // This ensures AiCore Live Scenarios and runtime stay in sync
+            try {
+                const Company = require('../models/v2Company');
+                
+                // Find all companies using this template (new or legacy system)
+                const companies = await Company.find({
+                    $or: [
+                        { 'aiAgentSettings.templateReferences.templateId': templateId.toString() },
+                        { 'configuration.clonedFrom': templateId.toString() }
+                    ]
+                }).select('_id companyName').lean();
+                
+                if (companies.length > 0) {
+                    logger.info(`🔄 [CACHE HELPER] Invalidating live-scenarios cache for ${companies.length} companies using template ${templateId}`);
+                    
+                    for (const company of companies) {
+                        const companyKey = `live-scenarios:${company._id.toString()}`;
+                        await redisClient.del(companyKey);
+                        logger.debug(`  ✅ Cleared: ${companyKey} (${company.companyName})`);
+                    }
+                }
+            } catch (companyInvalidationError) {
+                // Log but don't fail - company cache invalidation is bonus, not critical
+                logger.warn('⚠️ [CACHE HELPER] Company scenario cache invalidation failed:', companyInvalidationError.message);
+            }
+
             // Reset failure counter on success
             this._resetFailureCounter();
 

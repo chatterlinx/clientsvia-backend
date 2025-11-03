@@ -28,6 +28,7 @@ const logger = require('../../utils/logger.js');
 const router = express.Router();
 const v2Company = require('../../models/v2Company');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+const ScenarioPoolService = require('../../services/ScenarioPoolService');
 const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const { redisClient } = require('../../db');
 
@@ -67,33 +68,26 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
             // Continue to MongoDB fallback
         }
         
-        logger.debug(`⚪ [LIVE SCENARIOS CACHE] Cache MISS for company ${companyId}, querying MongoDB...`);
+        logger.debug(`⚪ [LIVE SCENARIOS CACHE] Cache MISS for company ${companyId}, querying via ScenarioPoolService...`);
         
         // ============================================================================
-        // STEP 2: QUERY MONGODB (Cache miss - slower path)
+        // STEP 2: USE SCENARIOPOOLSERVICE (CANONICAL SOURCE)
         // ============================================================================
         const dbStartTime = Date.now();
         
-        // Get company with template references
-        const company = await v2Company.findById(companyId)
-            .select('aiAgentSettings.templateReferences companyName businessName')
-            .lean(); // .lean() for better performance (plain JS objects)
+        // Load scenarios using ScenarioPoolService
+        // This handles: multi-template support, legacy fallback, scenario controls
+        const { scenarios, templatesUsed, error, warning } = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
         
-        if (!company) {
-            return res.status(404).json({
+        if (error) {
+            logger.error(`❌ [LIVE SCENARIOS API] ScenarioPoolService error:`, error);
+            return res.status(500).json({
                 success: false,
-                error: 'Company not found'
+                error: `Failed to load scenarios: ${error}`
             });
         }
         
-        const templateRefs = company.aiAgentSettings?.templateReferences || [];
-        const activeTemplateIds = templateRefs
-            .filter(ref => ref.templateId) // Filter out any invalid refs (just check templateId exists)
-            .map(ref => ref.templateId);
-        
-        logger.info(`📊 [LIVE SCENARIOS API] Company "${company.companyName || company.businessName}" has ${activeTemplateIds.length} active templates`);
-        
-        if (activeTemplateIds.length === 0) {
+        if (warning || scenarios.length === 0) {
             const emptyResult = {
                 success: true,
                 scenarios: [],
@@ -101,11 +95,14 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
                 summary: {
                     totalScenarios: 0,
                     totalCategories: 0,
-                    activeTemplates: 0
-                }
+                    activeTemplates: templatesUsed.length,
+                    totalEnabled: 0,
+                    totalDisabled: 0
+                },
+                warning: warning || 'No scenarios configured'
             };
             
-            // Cache empty result too (shorter TTL - 1 minute)
+            // Cache empty result (shorter TTL - 1 minute)
             try {
                 await redisClient.setEx(cacheKey, 60, JSON.stringify(emptyResult));
                 logger.debug(`💾 [LIVE SCENARIOS CACHE] Cached empty result (60s TTL)`);
@@ -116,104 +113,70 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
             return res.json(emptyResult);
         }
         
-        // Fetch all active templates from Global AI Brain
-        const templates = await GlobalInstantResponseTemplate.find({
-            _id: { $in: activeTemplateIds },
-            status: 'published'
-        })
-        .select('name tradeName categories scenarios stats')
-        .lean(); // .lean() for performance
-        
-        const dbQueryTime = Date.now() - dbStartTime;
-        logger.info(`📚 [LIVE SCENARIOS API] Loaded ${templates.length} templates from MongoDB (${dbQueryTime}ms)`);
-        
-        // Merge all scenarios from all templates
-        // ARCHITECTURE FIX: Scenarios are nested INSIDE categories!
-        const allScenarios = [];
+        // Build category list
         const categoriesSet = new Set();
-        
-        templates.forEach(template => {
-            // Check if template has categories
-            if (!template.categories || template.categories.length === 0) {
-                logger.warn(`⚠️ [LIVE SCENARIOS API] Template "${template.name}" has no categories`);
-                return;
+        scenarios.forEach(scenario => {
+            if (scenario.categoryName) {
+                categoriesSet.add(scenario.categoryName);
             }
-            
-            logger.debug(`📂 [LIVE SCENARIOS API] Processing ${template.categories.length} categories from "${template.name}"`);
-            
-            // Iterate through categories, THEN scenarios
-            template.categories.forEach(category => {
-                // Add category name to set
-                if (category.name) {
-                    categoriesSet.add(category.name);
-                }
-                
-                // Check if category has scenarios
-                if (!category.scenarios || category.scenarios.length === 0) {
-                    logger.debug(`  ⚠️ Category "${category.name}" has no scenarios`);
-                    return;
-                }
-                
-                logger.debug(`  ✅ Category "${category.name}" has ${category.scenarios.length} scenarios`);
-                
-                // Iterate through scenarios in this category
-                category.scenarios.forEach(scenario => {
-                    // Only include LIVE scenarios
-                    if (scenario.status !== 'live' || !scenario.isActive) {
-                        return;
-                    }
-                    
-                    // Extract first trigger as preview
-                    const trigger = scenario.triggers && scenario.triggers.length > 0 
-                        ? scenario.triggers[0] 
-                        : '';
-                    
-                    // Extract first full reply as preview
-                    const reply = scenario.fullReplies && scenario.fullReplies.length > 0 
-                        ? scenario.fullReplies[0] 
-                        : '';
-                    
-                    // Build scenario object
-                    allScenarios.push({
-                        _id: scenario.scenarioId || scenario._id || `${template._id}-${category.id}-${allScenarios.length}`,
-                        scenarioId: scenario.scenarioId,
-                        name: scenario.name || trigger,
-                        trigger: trigger,
-                        triggers: scenario.triggers || [],
-                        reply: reply,
-                        fullReplies: scenario.fullReplies || [],
-                        quickReplies: scenario.quickReplies || [],
-                        category: category.name || 'General',
-                        categoryId: category.id,
-                        templateId: template._id,
-                        templateName: template.name,
-                        tradeName: template.tradeName,
-                        priority: scenario.priority || 0,
-                        avgConfidence: scenario.avgConfidence || 0,
-                        usageCount: scenario.usageCount || 0,
-                        status: scenario.status,
-                        isActive: scenario.isActive
-                    });
-                });
-            });
-            
-            logger.info(`✅ [LIVE SCENARIOS API] Processed template "${template.name}": ${allScenarios.length} total scenarios so far`);
         });
-        
         const categories = Array.from(categoriesSet).sort();
         
+        // Build frontend-friendly scenario objects
+        const frontendScenarios = scenarios.map(scenario => {
+            // Extract first trigger and reply as preview
+            const trigger = scenario.triggers && scenario.triggers.length > 0 
+                ? scenario.triggers[0] 
+                : '';
+            const reply = scenario.fullReplies && scenario.fullReplies.length > 0 
+                ? scenario.fullReplies[0] 
+                : '';
+            
+            return {
+                _id: scenario.scenarioId,
+                scenarioId: scenario.scenarioId,
+                name: scenario.name || trigger,
+                trigger: trigger,
+                triggers: scenario.triggers,
+                reply: reply,
+                fullReplies: scenario.fullReplies,
+                quickReplies: scenario.quickReplies,
+                category: scenario.categoryName || 'General',
+                categoryId: scenario.categoryId,
+                templateId: scenario.templateId,
+                templateName: scenario.templateName,
+                priority: scenario.priority,
+                avgConfidence: scenario.avgConfidence || 0,
+                usageCount: scenario.usageCount || 0,
+                status: scenario.status,
+                isActive: scenario.isActive,
+                
+                // NEW: Per-company enable/disable state
+                isEnabledForCompany: scenario.isEnabledForCompany,
+                disabledAt: scenario.disabledAt || null,
+                disabledBy: scenario.disabledBy || null
+            };
+        });
+        
+        // Calculate summary
+        const enabledCount = frontendScenarios.filter(s => s.isEnabledForCompany).length;
+        const disabledCount = frontendScenarios.length - enabledCount;
+        
         const totalTime = Date.now() - dbStartTime;
-        logger.info(`✅ [LIVE SCENARIOS API] Returning ${allScenarios.length} scenarios from ${categories.length} categories (${totalTime}ms total)`);
+        logger.info(`✅ [LIVE SCENARIOS API] Loaded ${frontendScenarios.length} scenarios (${enabledCount} enabled, ${disabledCount} disabled) from ${categories.length} categories, ${templatesUsed.length} templates (${totalTime}ms)`);
         
         const responseData = {
             success: true,
-            scenarios: allScenarios,
+            scenarios: frontendScenarios,
             categories,
             summary: {
-                totalScenarios: allScenarios.length,
+                totalScenarios: frontendScenarios.length,
                 totalCategories: categories.length,
-                activeTemplates: templates.length
+                activeTemplates: templatesUsed.length,
+                totalEnabled: enabledCount,
+                totalDisabled: disabledCount
             },
+            templatesUsed, // Include template metadata for debugging
             cached: false,
             queryTimeMs: totalTime
         };

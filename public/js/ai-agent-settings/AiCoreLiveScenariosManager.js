@@ -34,8 +34,9 @@ class AiCoreLiveScenariosManager {
         this.scenarios = [];
         this.categories = [];
         this.isLoading = false;
-        this.currentFilter = 'all';
+        this.currentFilter = 'all'; // 'all', 'enabled', 'disabled', or category name
         this.searchQuery = '';
+        this.summary = null;
         
         console.log('🎭 [LIVE SCENARIOS] Initialized');
     }
@@ -79,8 +80,10 @@ class AiCoreLiveScenariosManager {
             
             this.scenarios = data.scenarios || [];
             this.categories = data.categories || [];
+            this.summary = data.summary || null;
             
             console.log(`✅ [LIVE SCENARIOS] Checkpoint 9: Loaded ${this.scenarios.length} scenarios from ${this.categories.length} categories`);
+            console.log(`📊 [LIVE SCENARIOS] Summary:`, this.summary);
             
             // Check if there's any data
             if (this.scenarios.length === 0) {
@@ -109,6 +112,8 @@ class AiCoreLiveScenariosManager {
     render() {
         const totalScenarios = this.scenarios.length;
         const totalCategories = this.categories.length;
+        const totalEnabled = this.summary?.totalEnabled || this.scenarios.filter(s => s.isEnabledForCompany).length;
+        const totalDisabled = this.summary?.totalDisabled || (totalScenarios - totalEnabled);
         const avgConfidence = totalScenarios > 0 
             ? (this.scenarios.reduce((sum, s) => sum + (s.avgConfidence || 0), 0) / totalScenarios * 100).toFixed(0)
             : 0;
@@ -122,7 +127,7 @@ class AiCoreLiveScenariosManager {
                             🎭 Live Scenarios Dashboard
                         </h2>
                         <p style="font-size: 16px; opacity: 0.95; margin: 0;">
-                            All active scenarios from your AI Brain templates
+                            Enable/disable scenarios for this company • Read-only (edit in Global AI Brain)
                         </p>
                     </div>
                     <button onclick="aiCoreLiveScenariosManager.refresh()" 
@@ -135,13 +140,31 @@ class AiCoreLiveScenariosManager {
             </div>
             
             <!-- STATUS CARDS -->
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;">
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px;">
                 <div style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; text-align: center;">
                     <div style="font-size: 36px; font-weight: 700; color: #6366f1;">
                         ${totalScenarios}
                     </div>
                     <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">
-                        Live Scenarios
+                        Total Scenarios
+                    </div>
+                </div>
+                
+                <div style="background: white; border: 2px solid #10b981; border-radius: 12px; padding: 20px; text-align: center;">
+                    <div style="font-size: 36px; font-weight: 700; color: #10b981;">
+                        ${totalEnabled}
+                    </div>
+                    <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">
+                        Enabled
+                    </div>
+                </div>
+                
+                <div style="background: white; border: 2px solid #ef4444; border-radius: 12px; padding: 20px; text-align: center;">
+                    <div style="font-size: 36px; font-weight: 700; color: #ef4444;">
+                        ${totalDisabled}
+                    </div>
+                    <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">
+                        Disabled
                     </div>
                 </div>
                 
@@ -153,15 +176,6 @@ class AiCoreLiveScenariosManager {
                         Categories
                     </div>
                 </div>
-                
-                <div style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; text-align: center;">
-                    <div style="font-size: 36px; font-weight: 700; color: #10b981;">
-                        ${avgConfidence}%
-                    </div>
-                    <div style="font-size: 14px; color: #6b7280; margin-top: 4px;">
-                        Avg Confidence
-                    </div>
-                </div>
             </div>
             
             <!-- SEARCH & FILTER -->
@@ -170,14 +184,18 @@ class AiCoreLiveScenariosManager {
                     <div style="flex: 1;">
                         <input type="text" 
                                id="scenario-search-input"
-                               placeholder="Search scenarios by trigger, reply, or category..."
+                               placeholder="Search scenarios by name, trigger, reply, or category..."
+                               value="${this.escapeHtml(this.searchQuery)}"
                                onkeyup="aiCoreLiveScenariosManager.onSearchChange(this.value)"
                                style="width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
                     </div>
-                    <select onchange="aiCoreLiveScenariosManager.onFilterChange(this.value)"
-                            style="padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; cursor: pointer;">
-                        <option value="all">All Categories</option>
-                        ${this.categories.map(cat => `<option value="${this.escapeHtml(cat)}">${this.escapeHtml(cat)}</option>`).join('')}
+                    <select id="status-filter" onchange="aiCoreLiveScenariosManager.onFilterChange(this.value)"
+                            style="padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; cursor: pointer; min-width: 180px;">
+                        <option value="all" ${this.currentFilter === 'all' ? 'selected' : ''}>All Scenarios</option>
+                        <option value="enabled" ${this.currentFilter === 'enabled' ? 'selected' : ''}>✅ Enabled Only</option>
+                        <option value="disabled" ${this.currentFilter === 'disabled' ? 'selected' : ''}>❌ Disabled Only</option>
+                        <option disabled>──────────</option>
+                        ${this.categories.map(cat => `<option value="${this.escapeHtml(cat)}" ${this.currentFilter === cat ? 'selected' : ''}>${this.escapeHtml(cat)}</option>`).join('')}
                     </select>
                 </div>
             </div>
@@ -196,16 +214,25 @@ class AiCoreLiveScenariosManager {
         // Filter scenarios
         let filtered = this.scenarios;
         
-        if (this.currentFilter !== 'all') {
+        // Apply status filter (enabled/disabled)
+        if (this.currentFilter === 'enabled') {
+            filtered = filtered.filter(s => s.isEnabledForCompany !== false);
+        } else if (this.currentFilter === 'disabled') {
+            filtered = filtered.filter(s => s.isEnabledForCompany === false);
+        } else if (this.currentFilter !== 'all') {
+            // Category filter
             filtered = filtered.filter(s => s.category === this.currentFilter);
         }
         
+        // Apply search query
         if (this.searchQuery) {
             const query = this.searchQuery.toLowerCase();
             filtered = filtered.filter(s => 
-                s.trigger.toLowerCase().includes(query) ||
-                s.reply.toLowerCase().includes(query) ||
-                (s.category && s.category.toLowerCase().includes(query))
+                (s.name && s.name.toLowerCase().includes(query)) ||
+                (s.trigger && s.trigger.toLowerCase().includes(query)) ||
+                (s.reply && s.reply.toLowerCase().includes(query)) ||
+                (s.category && s.category.toLowerCase().includes(query)) ||
+                (s.templateName && s.templateName.toLowerCase().includes(query))
             );
         }
         
@@ -250,53 +277,72 @@ class AiCoreLiveScenariosManager {
      * Render single scenario card
      */
     renderScenarioCard(scenario, index) {
+        const isEnabled = scenario.isEnabledForCompany !== false;
         const confidence = scenario.avgConfidence ? (scenario.avgConfidence * 100).toFixed(0) : '--';
         const usageCount = scenario.usageCount || 0;
         
         const confidenceColor = scenario.avgConfidence >= 0.8 ? '#10b981' : 
                                 scenario.avgConfidence >= 0.6 ? '#f59e0b' : '#ef4444';
         
+        // Construct unique toggle ID
+        const toggleId = `toggle-${scenario.templateId}-${scenario.scenarioId}`;
+        
         return `
-            <div style="background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; padding: 16px; transition: all 0.2s;"
-                 onmouseover="this.style.borderColor='#6366f1'; this.style.boxShadow='0 2px 8px rgba(99,102,241,0.1)'"
-                 onmouseout="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'">
+            <div style="background: ${isEnabled ? '#f9fafb' : '#fef2f2'}; border: 2px solid ${isEnabled ? '#e5e7eb' : '#fecaca'}; border-radius: 8px; padding: 16px; transition: all 0.2s; ${!isEnabled ? 'opacity: 0.7;' : ''}"
+                 onmouseover="this.style.borderColor='${isEnabled ? '#6366f1' : '#ef4444'}'; this.style.boxShadow='0 2px 8px rgba(99,102,241,0.1)'"
+                 onmouseout="this.style.borderColor='${isEnabled ? '#e5e7eb' : '#fecaca'}'; this.style.boxShadow='none'">
                 <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
                     <div style="flex: 1;">
-                        <div style="font-size: 16px; font-weight: 600; color: #1f2937; margin-bottom: 8px;">
-                            🎯 ${this.escapeHtml(scenario.trigger)}
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                            <!-- TOGGLE SWITCH -->
+                            <label style="position: relative; display: inline-block; width: 50px; height: 24px; cursor: pointer;">
+                                <input type="checkbox" 
+                                       id="${toggleId}"
+                                       ${isEnabled ? 'checked' : ''}
+                                       onchange="aiCoreLiveScenariosManager.toggleScenario('${scenario.templateId}', '${scenario.scenarioId}', this.checked)"
+                                       style="opacity: 0; width: 0; height: 0;">
+                                <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ${isEnabled ? '#10b981' : '#ef4444'}; transition: 0.3s; border-radius: 24px;">
+                                    <span style="position: absolute; content: ''; height: 18px; width: 18px; left: ${isEnabled ? '26px' : '3px'}; bottom: 3px; background-color: white; transition: 0.3s; border-radius: 50%;"></span>
+                                </span>
+                            </label>
+                            
+                            <div style="font-size: 16px; font-weight: 600; color: ${isEnabled ? '#1f2937' : '#991b1b'};">
+                                ${this.escapeHtml(scenario.name || scenario.trigger)}
+                            </div>
+                            
+                            ${!isEnabled ? `
+                                <span style="background: #ef4444; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+                                    DISABLED
+                                </span>
+                            ` : ''}
                         </div>
+                        
+                        <div style="font-size: 14px; color: #6b7280; margin-bottom: 4px;">
+                            🎯 Trigger: <strong>${this.escapeHtml(scenario.trigger)}</strong>
+                        </div>
+                        
                         <div style="font-size: 14px; color: #374151; line-height: 1.6; margin-bottom: 8px;">
                             💬 ${this.escapeHtml(scenario.reply).substring(0, 200)}${scenario.reply.length > 200 ? '...' : ''}
                         </div>
-                        ${scenario.templateName ? `
-                            <div style="font-size: 13px; color: #6b7280;">
-                                📚 From: <strong>${this.escapeHtml(scenario.templateName)}</strong>
-                            </div>
-                        ` : ''}
+                        
+                        <div style="font-size: 13px; color: #6b7280;">
+                            📚 Template: <strong>${this.escapeHtml(scenario.templateName)}</strong>
+                            ${scenario.disabledBy ? ` • Disabled by ${this.escapeHtml(scenario.disabledBy)}` : ''}
+                        </div>
                     </div>
+                    
                     <div style="display: flex; flex-direction: column; gap: 8px; margin-left: 16px;">
                         <div style="background: ${confidenceColor}; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; text-align: center; white-space: nowrap;">
-                            ${confidence}% Confidence
+                            ${confidence}%
                         </div>
                         <div style="background: #6366f1; color: white; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; text-align: center; white-space: nowrap;">
-                            ${usageCount} Uses
+                            ${usageCount} uses
                         </div>
                     </div>
                 </div>
                 
-                <div style="display: flex; gap: 8px; margin-top: 12px;">
-                    <button onclick="aiCoreLiveScenariosManager.showDetails('${scenario._id || index}')"
-                            style="flex: 1; background: white; border: 2px solid #e5e7eb; color: #374151; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
-                            onmouseover="this.style.borderColor='#6366f1'; this.style.color='#6366f1'"
-                            onmouseout="this.style.borderColor='#e5e7eb'; this.style.color='#374151'">
-                        <i class="fas fa-eye mr-1"></i>View Full Details
-                    </button>
-                    <button onclick="aiCoreLiveScenariosManager.testScenario('${scenario._id || index}')"
-                            style="background: #6366f1; color: white; padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity 0.2s;"
-                            onmouseover="this.style.opacity='0.9'"
-                            onmouseout="this.style.opacity='1'">
-                        <i class="fas fa-vial mr-1"></i>Test
-                    </button>
+                <div style="padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280;">
+                    <strong>Note:</strong> Scenario content is read-only. To edit triggers or replies, go to <strong>Global AI Brain → Templates</strong>.
                 </div>
             </div>
         `;
@@ -383,21 +429,100 @@ class AiCoreLiveScenariosManager {
     }
     
     /**
-     * Show scenario details in modal
+     * Toggle scenario ON/OFF for this company
+     * @param {String} templateId - Template ID
+     * @param {String} scenarioId - Scenario ID
+     * @param {Boolean} isEnabled - New enabled state
      */
-    showDetails(scenarioId) {
-        console.log(`👁️ [LIVE SCENARIOS] Show details for: ${scenarioId}`);
-        // TODO: Implement modal with full scenario details
-        alert('Scenario details modal - Coming soon!');
+    async toggleScenario(templateId, scenarioId, isEnabled) {
+        console.log(`🎯 [LIVE SCENARIOS] Toggle scenario: template=${templateId}, scenario=${scenarioId}, enabled=${isEnabled}`);
+        
+        const toggleId = `toggle-${templateId}-${scenarioId}`;
+        const checkbox = document.getElementById(toggleId);
+        
+        try {
+            // Optimistic UI update
+            const originalState = !isEnabled;
+            
+            const url = `/api/aicore/${this.companyId}/scenarios/${templateId}/${scenarioId}`;
+            const response = await fetch(url, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                },
+                body: JSON.stringify({ isEnabled })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Toggle failed');
+            }
+            
+            console.log(`✅ [LIVE SCENARIOS] Scenario ${isEnabled ? 'enabled' : 'disabled'} successfully`);
+            
+            // Show success toast
+            this.showToast(
+                isEnabled ? '✅ Scenario Enabled' : '❌ Scenario Disabled',
+                `This scenario is now ${isEnabled ? 'active' : 'inactive'} for runtime matching.`,
+                'success'
+            );
+            
+            // Reload to reflect changes
+            await this.load();
+            
+        } catch (error) {
+            console.error('❌ [LIVE SCENARIOS] Toggle failed:', error);
+            
+            // Revert checkbox state on error
+            if (checkbox) {
+                checkbox.checked = !isEnabled;
+            }
+            
+            // Show error toast
+            this.showToast(
+                '❌ Toggle Failed',
+                `Could not ${isEnabled ? 'enable' : 'disable'} scenario: ${error.message}`,
+                'error'
+            );
+        }
     }
     
     /**
-     * Test scenario
+     * Show toast notification
      */
-    testScenario(scenarioId) {
-        console.log(`🧪 [LIVE SCENARIOS] Test scenario: ${scenarioId}`);
-        // TODO: Implement test modal
-        alert('Scenario test - Coming soon!');
+    showToast(title, message, type = 'info') {
+        // Simple toast implementation
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#6366f1'};
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            max-width: 400px;
+            animation: slideIn 0.3s ease-out;
+        `;
+        toast.innerHTML = `
+            <div style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">${title}</div>
+            <div style="font-size: 13px; opacity: 0.9;">${message}</div>
+        `;
+        document.body.appendChild(toast);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            toast.style.animation = 'slideOut 0.3s ease-out';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
     }
     
     /**

@@ -1028,6 +1028,48 @@ const companySchema = new mongoose.Schema({
         },
         
         // -------------------------------------------------------------------
+        // SCENARIO CONTROLS - Per-company enable/disable for scenarios
+        // -------------------------------------------------------------------
+        // Allows companies to disable specific scenarios without editing Global AI Brain templates
+        // Default behavior: All scenarios are ENABLED unless explicitly disabled here
+        scenarioControls: [{
+            templateId: { 
+                type: String, 
+                required: true,
+                trim: true
+                // References GlobalInstantResponseTemplate._id
+            },
+            scenarioId: { 
+                type: String, 
+                required: true,
+                trim: true
+                // scenario.scenarioId from template (stable unique ID)
+            },
+            isEnabled: { 
+                type: Boolean, 
+                default: true
+                // false = "do not use this scenario for this company"
+            },
+            disabledAt: { 
+                type: Date, 
+                default: null
+                // Timestamp when disabled (for audit trail)
+            },
+            disabledBy: { 
+                type: String, 
+                trim: true,
+                default: null
+                // User who disabled it (for audit trail)
+            },
+            notes: { 
+                type: String, 
+                trim: true,
+                default: null
+                // Optional notes explaining why disabled
+            }
+        }],
+        
+        // -------------------------------------------------------------------
         // METADATA - Tracking and debugging
         // -------------------------------------------------------------------
         lastScanDate: { 

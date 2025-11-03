@@ -284,19 +284,23 @@ class PriorityDrivenKnowledgeRouter {
     async queryInstantResponses(companyId, query, context) {
         try {
             const HybridScenarioSelector = require('./HybridScenarioSelector');
+            const ScenarioPoolService = require('./ScenarioPoolService');
             const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
             
             logger.info(`⚡ [V3 HYBRID BRAIN] Querying instant responses for "${query.substring(0, 50)}..."`, {
                 routingId: context.routingId
             });
 
-            // Get company to access template ID, placeholders, filler words, and urgency keywords
-            const company = await Company.findById(companyId)
-                .select('configuration.clonedFrom aiAgentLogic.placeholders configuration.fillerWords configuration.urgencyKeywords')
-                .lean();
-
-            if (!company || !company.configuration?.clonedFrom) {
-                logger.info(`ℹ️ [V3 HYBRID BRAIN] No Global AI Brain template assigned to company`, {
+            // ============================================
+            // 🚀 NEW: USE SCENARIOPOOLSERVICE (CANONICAL SOURCE)
+            // ============================================
+            // Loads scenarios from all active templates (multi-template support)
+            // Applies per-company scenarioControls (enable/disable)
+            // Replaces manual template loading and scenario flattening
+            const { scenarios, templatesUsed } = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
+            
+            if (!templatesUsed || templatesUsed.length === 0) {
+                logger.info(`ℹ️ [V3 HYBRID BRAIN] No templates configured for company`, {
                     routingId: context.routingId,
                     companyId
                 });
@@ -305,122 +309,70 @@ class PriorityDrivenKnowledgeRouter {
                     response: null,
                     metadata: {
                         source: 'instantResponses',
-                        reason: 'No Global AI Brain template assigned'
+                        reason: 'No Global AI Brain templates assigned'
                     }
                 };
             }
 
-            // Fetch Global AI Brain template with all scenarios
-            const template = await GlobalInstantResponseTemplate.findById(company.configuration.clonedFrom)
-                .select('categories')
+            // ============================================
+            // 🎯 FILTER: ONLY USE ENABLED SCENARIOS
+            // ============================================
+            // CRITICAL: Runtime must respect per-company scenario controls
+            // Scenarios with isEnabledForCompany=false are NEVER matched
+            const enabledScenarios = scenarios.filter(s => s.isEnabledForCompany !== false);
+            
+            if (enabledScenarios.length === 0) {
+                logger.info(`ℹ️ [V3 HYBRID BRAIN] No enabled scenarios for company`, {
+                    routingId: context.routingId,
+                    totalScenarios: scenarios.length,
+                    disabledScenarios: scenarios.length - enabledScenarios.length
+                });
+                return {
+                    confidence: 0,
+                    response: null,
+                    metadata: {
+                        source: 'instantResponses',
+                        reason: 'No enabled scenarios (all disabled or no templates)'
+                    }
+                };
+            }
+
+            logger.info(`🧠 [V3 HYBRID BRAIN] Loaded ${enabledScenarios.length} enabled scenarios (${scenarios.length - enabledScenarios.length} disabled) from ${templatesUsed.length} template(s)`);
+
+            // ============================================
+            // 🔇 BUILD EFFECTIVE FILLERS & SYNONYMS
+            // ============================================
+            // Load company configuration for filler words and synonyms
+            const company = await Company.findById(companyId)
+                .select('configuration.fillerWords configuration.urgencyKeywords aiAgentSettings.fillerWords')
                 .lean();
 
-            if (!template || !template.categories || template.categories.length === 0) {
-                logger.info(`ℹ️ [V3 HYBRID BRAIN] Template has no categories`, {
-                    routingId: context.routingId,
-                    templateId: company.configuration.clonedFrom
-                });
-                return {
-                    confidence: 0,
-                    response: null,
-                    metadata: {
-                        source: 'instantResponses',
-                        reason: 'Template has no categories or scenarios'
-                    }
-                };
-            }
-
-            // Flatten all scenarios from all categories
-            let allScenarios = [];
-            for (const category of template.categories) {
-                if (category.scenarios && category.scenarios.length > 0) {
-                    allScenarios = allScenarios.concat(category.scenarios);
-                }
-            }
-
-            if (allScenarios.length === 0) {
-                logger.info(`ℹ️ [V3 HYBRID BRAIN] No scenarios found in template`, {
-                    routingId: context.routingId,
-                    templateId: company.globalInstantResponseTemplate
-                });
-                return {
-                    confidence: 0,
-                    response: null,
-                    metadata: {
-                        source: 'instantResponses',
-                        reason: 'No scenarios configured in template'
-                    }
-                };
-            }
-
-            logger.info(`🧠 [V3 HYBRID BRAIN] Found ${allScenarios.length} scenarios across ${template.categories.length} categories`);
-
-            // ============================================
-            // 🔇 BUILD EFFECTIVE FILLERS (Template + Categories + Company Custom)
-            // ============================================
-            // Priority: Template base + Category additions + Company custom overrides
-            const templateFillers = template.fillerWords || [];
-            const allFillers = [...templateFillers];
-            
-            // Add category-specific fillers
-            template.categories.forEach(category => {
-                if (category.additionalFillerWords && Array.isArray(category.additionalFillerWords)) {
-                    allFillers.push(...category.additionalFillerWords);
-                }
-            });
-            
-            // Add company-specific custom fillers
-            allFillers.push(
-                ...(company.configuration?.fillerWords?.inherited || []),  // Legacy location
-                ...(company.configuration?.fillerWords?.custom || []),     // Legacy location
-                ...(company.aiAgentSettings?.fillerWords?.custom || [])    // NEW location (AiCore Filler Filter)
-            );
-            
-            // Deduplicate
+            // Build filler words (template inherited + company custom)
+            const allFillers = [
+                ...(company.configuration?.fillerWords?.inherited || []),
+                ...(company.configuration?.fillerWords?.custom || []),
+                ...(company.aiAgentSettings?.fillerWords?.custom || [])
+            ];
             const effectiveFillers = [...new Set(allFillers)];
             
-            // ============================================
-            // 🔤 BUILD EFFECTIVE SYNONYM MAP (Template + Categories)
-            // ============================================
-            const effectiveSynonymMap = new Map();
-            
-            // Start with template-level synonyms
-            if (template.synonymMap) {
-                for (const [term, aliases] of Object.entries(template.synonymMap)) {
-                    if (Array.isArray(aliases)) {
-                        effectiveSynonymMap.set(term, [...aliases]);
-                    }
-                }
-            }
-            
-            // Merge category-level synonyms
-            template.categories.forEach(category => {
-                if (category.synonymMap) {
-                    for (const [term, aliases] of Object.entries(category.synonymMap || {})) {
-                        if (Array.isArray(aliases)) {
-                            if (effectiveSynonymMap.has(term)) {
-                                const existing = effectiveSynonymMap.get(term);
-                                effectiveSynonymMap.set(term, [...new Set([...existing, ...aliases])]);
-                            } else {
-                                effectiveSynonymMap.set(term, [...aliases]);
-                            }
-                        }
-                    }
-                }
-            });
-            
-            // 🚨 Load urgency keywords (inherited + custom)
+            // Load urgency keywords
             const urgencyKeywords = [
                 ...(company.configuration?.urgencyKeywords?.inherited || []),
                 ...(company.configuration?.urgencyKeywords?.custom || [])
             ];
             
-            logger.info(`🔇 [V3 HYBRID BRAIN] Loaded ${effectiveFillers.length} effective filler words (template: ${templateFillers.length}), ${urgencyKeywords.length} urgency keywords, ${effectiveSynonymMap.size} synonym mappings`);
+            // TODO: Build effective synonym map from templates
+            // For now, we pass null and let HybridScenarioSelector use defaults
+            const effectiveSynonymMap = null;
             
-            // ✅ Instantiate HybridScenarioSelector with effective fillers, urgency keywords, and synonym map
+            logger.info(`🔇 [V3 HYBRID BRAIN] Loaded ${effectiveFillers.length} filler words, ${urgencyKeywords.length} urgency keywords`);
+            
+            // ============================================
+            // 🧠 INSTANTIATE HYBRID SCENARIO SELECTOR
+            // ============================================
             const selector = new HybridScenarioSelector(effectiveFillers, urgencyKeywords, effectiveSynonymMap);
 
-            // Use HybridScenarioSelector for intelligent matching
+            // Build match context
             const matchContext = {
                 channel: context.channel || 'voice',
                 language: context.language || 'auto',
@@ -430,9 +382,12 @@ class PriorityDrivenKnowledgeRouter {
                 callerProfile: null // TODO: Load caller preferences from DB
             };
 
+            // ============================================
+            // 🎯 MATCH SCENARIO
+            // ============================================
             const result = await selector.selectScenario(
                 query,
-                allScenarios,
+                enabledScenarios, // CRITICAL: Only pass enabled scenarios
                 matchContext
             );
 
