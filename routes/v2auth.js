@@ -36,13 +36,53 @@ router.post('/register', async (req, res) => {
         const saltRounds = 12;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
         
-        // Create new user
+        // 🔥 FIX: Auto-assign admin to default Platform Admin company
+        let adminCompanyId = null;
+        if (role === 'admin') {
+            const Company = require('../models/v2Company');
+            
+            // Find or create Platform Admin company
+            let adminCompany = await Company.findOne({ 
+                $or: [
+                    { companyName: 'Platform Admin' },
+                    { businessName: 'Platform Admin' },
+                    { 'metadata.isPlatformAdmin': true }
+                ]
+            });
+            
+            if (!adminCompany) {
+                logger.info('🏢 [AUTH] Creating Platform Admin company for new admin user');
+                adminCompany = await Company.create({
+                    companyName: 'Platform Admin',
+                    businessName: 'Platform Admin',
+                    email: 'admin@clientsvia.com',
+                    status: 'active',
+                    accountStatus: {
+                        status: 'active',
+                        lastChanged: new Date()
+                    },
+                    metadata: {
+                        isPlatformAdmin: true,
+                        purpose: 'Default company for platform administrators',
+                        createdBy: 'auto-registration',
+                        setupAt: new Date()
+                    }
+                });
+                logger.info('✅ [AUTH] Platform Admin company created:', adminCompany._id);
+            }
+            
+            adminCompanyId = adminCompany._id;
+            logger.info('✅ [AUTH] Assigning admin to Platform Admin company:', adminCompanyId);
+        }
+        
+        // Create new user with companyId
         const newUser = new User({
             email: email.toLowerCase(),
             name,
             password: hashedPassword,
             role,
-            status: 'active'
+            status: 'active',
+            companyId: adminCompanyId // Assign company for admins
         });
         
         await newUser.save();
@@ -51,7 +91,8 @@ router.post('/register', async (req, res) => {
         logger.auth('User registered', { 
             userId: newUser._id, 
             email: newUser.email, 
-            role: newUser.role 
+            role: newUser.role,
+            companyId: adminCompanyId 
         });
         
         res.status(201).json({

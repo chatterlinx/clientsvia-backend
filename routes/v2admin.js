@@ -212,4 +212,8 @@ router.post('/clear-cache/:companyId', authenticateJWT, async (req, res) => {
 router.use('/account-deletion', accountDeletionRoutes);
 router.use('/ai-agent-monitoring', aiAgentMonitoringRoutes);
 
+// 🔥 NEW: Fix user-company association routes
+const fixUserCompanyRoutes = require('./admin/fixUserCompany');
+router.use('/', fixUserCompanyRoutes);
+
 module.exports = router;
