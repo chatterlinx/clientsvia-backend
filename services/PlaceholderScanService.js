@@ -106,6 +106,7 @@ class PlaceholderScanService {
                 templateIds.push(company.configuration.clonedFrom);
             }
             
+            logger.info('[VARIABLE SCAN] Company %s scanning %d templates: %o', companyId, templateIds.length, templateIds);
             logger.info(`[VARIABLE SCAN] Starting scan for company ${companyId}`, {
                 templateIds,
                 usingLegacyClonedFrom: !!usingLegacyClonedFrom
@@ -163,12 +164,20 @@ class PlaceholderScanService {
                 }
             }
             
-            logger.info(`[VARIABLE SCAN] Scan input stats for company ${companyId}`, {
+            logger.info('[VARIABLE SCAN] Scan input stats for company %s', companyId, {
                 templatesCount: templates.length,
                 categoriesCount: totalCategories,
                 scenariosCount: totalScenarios,
                 totalPlaceholderOccurrences,
                 uniqueVariables: combinedPlaceholderMap.size
+            });
+            
+            // Log template details for debugging
+            templates.forEach((template, idx) => {
+                const catCount = template.categories?.length || 0;
+                const scenCount = template.categories?.reduce((sum, cat) => sum + (cat.scenarios?.length || 0), 0) || 0;
+                logger.info('[VARIABLE SCAN]   Template %d: %s (ID: %s) - %d categories, %d scenarios', 
+                    idx + 1, template.name, template._id, catCount, scenCount);
             });
             
             logger.info(`✅ [VARIABLE SCAN] Found ${combinedPlaceholderMap.size} unique placeholders from ${totalPlaceholderOccurrences} total occurrences`);
