@@ -4,10 +4,6 @@ const logger = require('../utils/logger.js');
 const User = require('../models/v2User');
 const sessionManager = require('./singleSessionManager');
 
-// 🔒 Race condition protection: Global lock for Platform Admin creation
-let platformAdminCreationLock = false;
-const platformAdminCreationPromises = [];
-
 // Extract JWT from either httpOnly cookie or Authorization header
 function getTokenFromRequest(req) {
   const cookies = req.cookies || {};
@@ -51,93 +47,10 @@ async function authenticateJWT(req, res, next) {
       return res.status(401).json({ message: 'User not found or inactive' });
     }
 
-    // 🔥 AUTO-FIX: Admins without companyId get assigned to Platform Admin
-    if (!user.companyId && user.role === 'admin') {
-      logger.security('🔧 AUTO-FIX: Admin user missing companyId, assigning to Platform Admin', {
-        userId: user._id.toString(),
-        email: user.email
-      });
-      
-      try {
-        const Company = require('../models/v2Company');
-        
-        // 🔒 RACE CONDITION PROTECTION: Wait if another request is creating Platform Admin
-        while (platformAdminCreationLock) {
-          logger.debug('🔒 AUTO-FIX: Waiting for Platform Admin creation lock...');
-          await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms
-        }
-        
-        // Find Platform Admin company (check again after waiting)
-        let adminCompany = await Company.findOne({ 
-          $or: [
-            { companyName: 'Platform Admin' },
-            { businessName: 'Platform Admin' },
-            { 'metadata.isPlatformAdmin': true }
-          ]
-        });
-        
-        if (!adminCompany) {
-          // 🔒 ACQUIRE LOCK: Only one request can create Platform Admin
-          platformAdminCreationLock = true;
-          
-          try {
-            // Double-check after acquiring lock (another request might have created it)
-            adminCompany = await Company.findOne({ 
-              $or: [
-                { companyName: 'Platform Admin' },
-                { businessName: 'Platform Admin' },
-                { 'metadata.isPlatformAdmin': true }
-              ]
-            });
-            
-            if (!adminCompany) {
-              logger.security('🏢 AUTO-FIX: Creating Platform Admin company (LOCK ACQUIRED)');
-              adminCompany = await Company.create({
-                companyName: 'Platform Admin',
-                businessName: 'Platform Admin',
-                email: 'admin@clientsvia.com',
-                status: 'active',
-                accountStatus: {
-                  status: 'active',
-                  lastChanged: new Date()
-                },
-                metadata: {
-                  isPlatformAdmin: true,
-                  purpose: 'Default company for platform administrators',
-                  createdBy: 'auto-fix-middleware',
-                  setupAt: new Date()
-                }
-              });
-              logger.security('✅ AUTO-FIX: Platform Admin company created successfully');
-            } else {
-              logger.debug('🔒 AUTO-FIX: Platform Admin was created by another request');
-            }
-          } finally {
-            // 🔓 RELEASE LOCK
-            platformAdminCreationLock = false;
-          }
-        }
-        
-        // Fix the user
-        user.companyId = adminCompany._id;
-        await user.save();
-        
-        logger.security('✅ AUTO-FIX: Admin user fixed', {
-          userId: user._id.toString(),
-          companyId: adminCompany._id.toString()
-        });
-      } catch (error) {
-        logger.error('❌ AUTO-FIX: Failed to fix admin user:', error);
-        // 🔓 RELEASE LOCK on error
-        platformAdminCreationLock = false;
-        // Continue anyway - admins can still access
-      }
-    }
-    
-    // WARNING: Check for missing company association (non-admins only)
-    // Admins are allowed to have no company (they can manage all companies)
+    // ✅ PROPER FIX: Admins don't need companyId (they're platform-level superusers)
+    // Only non-admin users require company association for multi-tenant isolation
     if (!user.companyId && user.role !== 'admin') {
-      logger.security('⚠️  AUTH: User missing company association', {
+      logger.security('⚠️  AUTH: Non-admin user missing company association', {
         userId: user._id.toString(),
         email: user.email,
         role: user.role
@@ -145,6 +58,14 @@ async function authenticateJWT(req, res, next) {
       return res.status(403).json({ 
         message: 'Your account is not properly configured. Please contact support to complete your account setup.',
         code: 'MISSING_COMPANY_ASSOCIATION'
+      });
+    }
+    
+    // Log admin access (for audit purposes)
+    if (user.role === 'admin' && !user.companyId) {
+      logger.security('✅ AUTH: Platform admin access granted (no company required)', {
+        userId: user._id.toString(),
+        email: user.email
       });
     }
 
@@ -261,12 +182,24 @@ async function authenticateSingleSession(req, res, next) {
       });
     }
 
-    // Verify user has valid company association
-    if (!user.companyId) {
-      logger.security('❌ Single-session auth: User has no company association', { userId: user._id });
+    // ✅ PROPER FIX: Only non-admin users require company association
+    // Admins are platform-level superusers and don't need to be tied to a company
+    if (!user.companyId && user.role !== 'admin') {
+      logger.security('❌ Single-session auth: Non-admin user has no company association', { 
+        userId: user._id,
+        role: user.role 
+      });
       return res.status(403).json({ 
         message: 'User account is not properly configured. Please contact support.',
         code: 'MISSING_COMPANY_ASSOCIATION'
+      });
+    }
+    
+    // Log admin access (for audit purposes)
+    if (user.role === 'admin' && !user.companyId) {
+      logger.security('✅ Single-session auth: Platform admin access granted (no company required)', {
+        userId: user._id.toString(),
+        email: user.email
       });
     }
 

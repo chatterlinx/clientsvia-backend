@@ -10,9 +10,6 @@ const logger = require('../utils/logger');
 // require('../config/passport');
 // const passport = require('passport');
 
-// 🔒 Race condition protection: Global lock for Platform Admin creation during registration
-let platformAdminCreationLock = false;
-
 /**
  * POST /api/auth/register - Register a new admin user
  * For development/setup purposes
@@ -39,80 +36,15 @@ router.post('/register', async (req, res) => {
         const saltRounds = 12;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
         
-        // 🔥 FIX: Auto-assign admin to default Platform Admin company
-        let adminCompanyId = null;
-        if (role === 'admin') {
-            const Company = require('../models/v2Company');
-            
-            // 🔒 RACE CONDITION PROTECTION: Wait if another request is creating Platform Admin
-            while (platformAdminCreationLock) {
-                logger.debug('🔒 [AUTH] Waiting for Platform Admin creation lock...');
-                await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms
-            }
-            
-            // Find Platform Admin company (check again after waiting)
-            let adminCompany = await Company.findOne({ 
-                $or: [
-                    { companyName: 'Platform Admin' },
-                    { businessName: 'Platform Admin' },
-                    { 'metadata.isPlatformAdmin': true }
-                ]
-            });
-            
-            if (!adminCompany) {
-                // 🔒 ACQUIRE LOCK: Only one request can create Platform Admin
-                platformAdminCreationLock = true;
-                
-                try {
-                    // Double-check after acquiring lock (another request might have created it)
-                    adminCompany = await Company.findOne({ 
-                        $or: [
-                            { companyName: 'Platform Admin' },
-                            { businessName: 'Platform Admin' },
-                            { 'metadata.isPlatformAdmin': true }
-                        ]
-                    });
-                    
-                    if (!adminCompany) {
-                        logger.info('🏢 [AUTH] Creating Platform Admin company for new admin user (LOCK ACQUIRED)');
-                        adminCompany = await Company.create({
-                            companyName: 'Platform Admin',
-                            businessName: 'Platform Admin',
-                            email: 'admin@clientsvia.com',
-                            status: 'active',
-                            accountStatus: {
-                                status: 'active',
-                                lastChanged: new Date()
-                            },
-                            metadata: {
-                                isPlatformAdmin: true,
-                                purpose: 'Default company for platform administrators',
-                                createdBy: 'auto-registration',
-                                setupAt: new Date()
-                            }
-                        });
-                        logger.info('✅ [AUTH] Platform Admin company created:', adminCompany._id);
-                    } else {
-                        logger.debug('🔒 [AUTH] Platform Admin was created by another request');
-                    }
-                } finally {
-                    // 🔓 RELEASE LOCK
-                    platformAdminCreationLock = false;
-                }
-            }
-            
-            adminCompanyId = adminCompany._id;
-            logger.info('✅ [AUTH] Assigning admin to Platform Admin company:', adminCompanyId);
-        }
-        
-        // Create new user with companyId
+        // ✅ PROPER FIX: Admins don't need companyId (platform-level superusers)
+        // Only assign companyId if explicitly provided (for regular users)
         const newUser = new User({
             email: email.toLowerCase(),
             name,
             password: hashedPassword,
             role,
             status: 'active',
-            companyId: adminCompanyId // Assign company for admins
+            companyId: req.body.companyId || null // Only set if provided
         });
         
         await newUser.save();
@@ -122,7 +54,7 @@ router.post('/register', async (req, res) => {
             userId: newUser._id, 
             email: newUser.email, 
             role: newUser.role,
-            companyId: adminCompanyId 
+            companyId: newUser.companyId || 'none (admin)' 
         });
         
         res.status(201).json({
