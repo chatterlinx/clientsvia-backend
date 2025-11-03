@@ -88,7 +88,7 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
         
         const templateRefs = company.aiAgentSettings?.templateReferences || [];
         const activeTemplateIds = templateRefs
-            .filter(ref => ref.enabled)
+            .filter(ref => ref.templateId) // Filter out any invalid refs (just check templateId exists)
             .map(ref => ref.templateId);
         
         logger.info(`📊 [LIVE SCENARIOS API] Company "${company.companyName || company.businessName}" has ${activeTemplateIds.length} active templates`);
