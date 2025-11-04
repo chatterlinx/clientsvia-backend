@@ -144,6 +144,7 @@ class ScenarioPoolService {
      */
     static _determineTemplateIds(company) {
         const templateRefs = company.aiAgentSettings?.templateReferences || [];
+        const legacyActiveTemplates = company.aiAgentSettings?.activeTemplates || [];
         const legacyClonedFrom = company.configuration?.clonedFrom;
         
         // NEW SYSTEM: Multi-template via templateReferences
@@ -161,6 +162,45 @@ class ScenarioPoolService {
                     priority: ref.priority || 999
                 }))
                 .sort((a, b) => a.priority - b.priority);
+        }
+
+        // LEGACY (v1.0) SYSTEM: aiAgentSettings.activeTemplates (array of IDs or objects)
+        if (Array.isArray(legacyActiveTemplates) && legacyActiveTemplates.length > 0) {
+            const normalizedLegacyRefs = legacyActiveTemplates
+                .map((entry, index) => {
+                    if (!entry) { return null; }
+
+                    // String entry → templateId
+                    if (typeof entry === 'string') {
+                        return {
+                            templateId: entry,
+                            priority: index + 1,
+                            enabled: true
+                        };
+                    }
+
+                    // Object entry → may contain templateId/id/enabled/priority
+                    if (typeof entry === 'object') {
+                        const templateId = entry.templateId || entry.id || entry._id || null;
+                        const enabled = entry.enabled !== false;
+                        if (!templateId || !enabled) {
+                            return null;
+                        }
+                        return {
+                            templateId: templateId.toString(),
+                            priority: entry.priority || entry.sortOrder || index + 1,
+                            enabled: true
+                        };
+                    }
+
+                    return null;
+                })
+                .filter(Boolean);
+
+            if (normalizedLegacyRefs.length > 0) {
+                logger.debug(`📚 [SCENARIO POOL] Using LEGACY activeTemplates array: ${normalizedLegacyRefs.length} template(s)`);
+                return normalizedLegacyRefs.sort((a, b) => (a.priority || 999) - (b.priority || 999));
+            }
         }
         
         // LEGACY SYSTEM: Single template via configuration.clonedFrom
