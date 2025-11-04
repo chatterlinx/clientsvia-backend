@@ -54,14 +54,18 @@ class AiCoreLiveScenariosManager {
         const now = Date.now();
         const timeSinceLastLoad = this.lastLoadTime ? now - this.lastLoadTime : Infinity;
         
-        if (!forceRefresh && timeSinceLastLoad < this.CACHE_DURATION && this.scenarios.length >= 0) {
+        if (!forceRefresh && timeSinceLastLoad < this.CACHE_DURATION) {
             console.log(`🎭 [LIVE SCENARIOS] ⚡ Using cached data (loaded ${timeSinceLastLoad}ms ago)`);
             
-            // If we have data, render it immediately
-            if (this.scenarios.length > 0 || this.lastLoadTime) {
+            // Render cached data (even if empty - that's intentional)
+            if (this.scenarios.length === 0) {
+                console.log('🎭 [LIVE SCENARIOS] Cached data is empty - rendering empty state');
+                this.renderEmptyState();
+            } else {
+                console.log(`🎭 [LIVE SCENARIOS] Rendering ${this.scenarios.length} cached scenarios`);
                 this.render();
-                return;
             }
+            return;
         }
         
         this.isLoading = true;
