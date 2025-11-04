@@ -667,6 +667,11 @@ class EnterpriseVariableScanService {
      * Helper: Categorize variable based on name
      */
     categorizeVariable(key) {
+        // Defensive check for undefined/null
+        if (!key || typeof key !== 'string') {
+            return 'General';
+        }
+        
         const lowerKey = key.toLowerCase();
         
         if (lowerKey.includes('company') || lowerKey.includes('business') || lowerKey.includes('name')) {
@@ -692,6 +697,11 @@ class EnterpriseVariableScanService {
      * Helper: Check if variable is required
      */
     isRequired(key) {
+        // Defensive check for undefined/null
+        if (!key || typeof key !== 'string') {
+            return false;
+        }
+        
         const requiredVars = ['companyName', 'phoneNumber', 'businessName', 'phone', 'email'];
         return requiredVars.includes(key);
     }
@@ -700,6 +710,11 @@ class EnterpriseVariableScanService {
      * Helper: Infer variable type from name
      */
     inferType(key) {
+        // Defensive check for undefined/null
+        if (!key || typeof key !== 'string') {
+            return 'text';
+        }
+        
         const lowerKey = key.toLowerCase();
         
         if (lowerKey.includes('email')) return 'email';
@@ -715,6 +730,11 @@ class EnterpriseVariableScanService {
      * Helper: Get example value for variable
      */
     getExample(key) {
+        // Defensive check for undefined/null
+        if (!key || typeof key !== 'string') {
+            return 'Enter value';
+        }
+        
         const lowerKey = key.toLowerCase();
         
         if (lowerKey.includes('company') || lowerKey.includes('business')) return 'e.g., Atlas Air Conditioning';
@@ -732,6 +752,11 @@ class EnterpriseVariableScanService {
      * Helper: Convert camelCase to Human Readable
      */
     humanize(key) {
+        // Defensive check for undefined/null
+        if (!key || typeof key !== 'string') {
+            return 'Unknown';
+        }
+        
         return key
             .replace(/([A-Z])/g, ' $1')
             .replace(/^./, str => str.toUpperCase())
