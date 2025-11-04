@@ -81,9 +81,9 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
         // ============================================================================
         const dbStartTime = Date.now();
         
-        // Load company with active template references
+        // Load company with active template references AND scenario controls
         const company = await v2Company.findById(companyId)
-            .select('aiAgentSettings.templateReferences companyName')
+            .select('aiAgentSettings.templateReferences aiAgentSettings.scenarioControls companyName')
             .lean();
         
         if (!company) {
@@ -95,8 +95,10 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
         
         const templateRefs = company.aiAgentSettings?.templateReferences || [];
         const activeTemplateRefs = templateRefs.filter(ref => ref.enabled !== false);
+        const scenarioControls = company.aiAgentSettings?.scenarioControls || [];
         
         logger.info(`🎭 [LIVE SCENARIOS] Found ${activeTemplateRefs.length} active template(s) for ${company.companyName}`);
+        logger.info(`🎭 [LIVE SCENARIOS] Found ${scenarioControls.length} scenario control(s) (disabled scenarios)`);
         
         if (activeTemplateRefs.length === 0) {
             const emptyResult = {
@@ -170,6 +172,13 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
                                     continue;
                                 }
                                 
+                                // Check if this scenario is disabled via scenarioControls
+                                const control = scenarioControls.find(c => 
+                                    c.templateId === templateRef.templateId && 
+                                    c.scenarioId === scenario.scenarioId
+                                );
+                                const isEnabled = control ? control.isEnabled : true; // Default to enabled if no control exists
+                                
                                 scenarios.push({
                                     scenarioId: scenario.scenarioId,  // ✅ Use scenarioId field (not _id)
                                     name: scenario.name || 'Unnamed Scenario',
@@ -183,9 +192,11 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
                                     priority: templateRef.priority || 1,
                                     avgConfidence: 0, // Can be populated from performance metrics later
                                     usageCount: 0, // Can be populated from call logs later
-                                    status: 'active', // All scenarios from active templates are active
-                                    isActive: true,
-                                    isEnabledForCompany: true // All scenarios from selected templates are enabled
+                                    status: isEnabled ? 'active' : 'disabled',
+                                    isActive: isEnabled,
+                                    isEnabledForCompany: isEnabled,  // ✅ Apply per-company control
+                                    disabledAt: control?.disabledAt || null,
+                                    disabledBy: control?.disabledBy || null
                                 });
                             }
                         }
