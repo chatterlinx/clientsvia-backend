@@ -415,7 +415,95 @@ class VariablesManager {
             health: healthText
         });
         
-        let html = `
+        // ═══════════════════════════════════════════════════════════════════
+        // ENTERPRISE DASHBOARD: Top Stats & Validation
+        // ═══════════════════════════════════════════════════════════════════
+        const templatesCount = this.stats?.templatesCount || 0;
+        const categoriesCount = this.stats?.categoriesCount || 0;
+        const scenariosCount = this.stats?.scenariosCount || 0;
+        
+        // Get validation status from first template
+        const firstTemplate = this.templateBreakdown[0] || {};
+        const expectedCategories = firstTemplate.expected?.categories || 0;
+        const scannedCategories = firstTemplate.scanned?.categories || 0;
+        const expectedScenarios = firstTemplate.expected?.scenarios || 0;
+        const scannedScenarios = firstTemplate.scanned?.scenarios || 0;
+        
+        const categoriesMatch = scannedCategories === expectedCategories;
+        const scenariosMatch = scannedScenarios === expectedScenarios;
+        const hasValidationIssues = this.validationIssues.length > 0;
+        
+        const templateIcon = hasValidationIssues ? '⚠️' : '✅';
+        const categoriesIcon = categoriesMatch ? '✅' : (scannedCategories > 0 ? '⚠️' : '❌');
+        const scenariosIcon = scenariosMatch ? '✅' : (scannedScenarios > 0 ? '⚠️' : '❌');
+        
+        let enterpriseDashboard = `
+            <div class="mb-6 space-y-4">
+                <!-- Top Enterprise Stat Boxes -->
+                <div class="grid grid-cols-3 gap-4">
+                    <!-- Templates Box -->
+                    <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border-2 ${hasValidationIssues ? 'border-yellow-400' : 'border-blue-300'}">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-2xl">${templateIcon}</span>
+                            <span class="text-xs font-medium ${hasValidationIssues ? 'text-yellow-700' : 'text-green-700'}">
+                                ${hasValidationIssues ? 'Issues Found' : 'All Verified'}
+                            </span>
+                        </div>
+                        <div class="text-3xl font-bold text-blue-900">${templatesCount}</div>
+                        <div class="text-sm text-blue-700 font-medium">Template${templatesCount !== 1 ? 's' : ''}</div>
+                    </div>
+                    
+                    <!-- Categories Box -->
+                    <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border-2 ${categoriesMatch ? 'border-green-300' : 'border-yellow-400'}">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-2xl">${categoriesIcon}</span>
+                            <span class="text-xs font-medium ${categoriesMatch ? 'text-green-700' : 'text-yellow-700'}">
+                                ${scannedCategories}/${expectedCategories}
+                            </span>
+                        </div>
+                        <div class="text-3xl font-bold ${categoriesMatch ? 'text-green-900' : 'text-yellow-900'}">${scannedCategories}</div>
+                        <div class="text-sm ${categoriesMatch ? 'text-green-700' : 'text-yellow-700'} font-medium">Categories</div>
+                    </div>
+                    
+                    <!-- Scenarios Box -->
+                    <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 border-2 ${scenariosMatch ? 'border-purple-300' : 'border-yellow-400'}">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-2xl">${scenariosIcon}</span>
+                            <span class="text-xs font-medium ${scenariosMatch ? 'text-purple-700' : 'text-yellow-700'}">
+                                ${scannedScenarios}/${expectedScenarios}
+                            </span>
+                        </div>
+                        <div class="text-3xl font-bold ${scenariosMatch ? 'text-purple-900' : 'text-yellow-900'}">${scannedScenarios}</div>
+                        <div class="text-sm ${scenariosMatch ? 'text-purple-700' : 'text-yellow-700'} font-medium">Scenarios</div>
+                    </div>
+                </div>
+                
+                ${hasValidationIssues ? `
+                <!-- Validation Issues Alert -->
+                <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
+                    <div class="flex items-start">
+                        <span class="text-2xl mr-3">⚠️</span>
+                        <div class="flex-1">
+                            <h3 class="text-sm font-bold text-yellow-800 mb-2">Validation Issues Detected</h3>
+                            <div class="space-y-1">
+                                ${this.validationIssues.map(issue => `
+                                    <div class="text-xs text-yellow-700">
+                                        • <strong>${issue.templateName}</strong>: Expected ${issue.expected.categories} categories / ${issue.expected.scenarios} scenarios, 
+                                        but scanned ${issue.scanned.categories} categories / ${issue.scanned.scenarios} scenarios
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="mt-2 text-xs text-yellow-600">
+                                <strong>Possible causes:</strong> ScenarioPoolService filtering, template integrity issues, or scenario controls blocking scenarios.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+        `;
+        
+        let html = enterpriseDashboard + `
             <!-- Health Check Card -->
             <div class="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl shadow-lg p-6 mb-6 text-white">
                 <div class="flex items-center justify-between">
