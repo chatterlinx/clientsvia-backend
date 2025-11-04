@@ -115,17 +115,26 @@ class PlaceholderScanService {
             const { scenarios, templatesUsed, error, warning } = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
             
             if (error) {
-                logger.error('[VARIABLE SCAN] ScenarioPoolService error:', error);
-                throw new Error(error);
+                logger.error('[VARIABLE SCAN] ❌ ScenarioPoolService error:', error);
+                throw new Error(`Failed to load scenarios: ${error}`);
             }
             
             if (warning) {
-                logger.warn('[VARIABLE SCAN] ScenarioPoolService warning:', warning);
+                logger.warn('[VARIABLE SCAN] ⚠️ ScenarioPoolService warning:', warning);
             }
+            
+            logger.info('[VARIABLE SCAN] ScenarioPoolService returned: %d scenarios, %d templates', 
+                scenarios?.length || 0, 
+                templatesUsed?.length || 0
+            );
+            
+            // Safety check: ensure scenarios and templatesUsed are arrays
+            const safeScenarios = Array.isArray(scenarios) ? scenarios : [];
+            const safeTemplatesUsed = Array.isArray(templatesUsed) ? templatesUsed : [];
             
             // Calculate category count from scenarios
             const categoriesSet = new Set();
-            scenarios.forEach(s => {
+            safeScenarios.forEach(s => {
                 if (s.categoryName) {
                     categoriesSet.add(s.categoryName);
                 }
@@ -134,13 +143,13 @@ class PlaceholderScanService {
             
             logger.info('[VARIABLE SCAN] Company %s scanning %d templates: %o', 
                 companyId, 
-                templatesUsed.length, 
-                templatesUsed.map(t => t.templateId)
+                safeTemplatesUsed.length, 
+                safeTemplatesUsed.map(t => t.templateId)
             );
             
             // Log template details for debugging
-            templatesUsed.forEach((template, idx) => {
-                const templateScenarios = scenarios.filter(s => String(s.templateId) === String(template.templateId));
+            safeTemplatesUsed.forEach((template, idx) => {
+                const templateScenarios = safeScenarios.filter(s => String(s.templateId) === String(template.templateId));
                 const templateCategories = new Set(templateScenarios.map(s => s.categoryName));
                 
                 logger.info('[VARIABLE SCAN]   Template %d: %s (ID: %s) - %d categories, %d scenarios', 
@@ -152,8 +161,42 @@ class PlaceholderScanService {
                 );
             });
             
-            if (scenarios.length === 0) {
+            if (safeScenarios.length === 0) {
                 logger.info(`ℹ️  [VARIABLE SCAN] No scenarios found for company ${companyId}`);
+                
+                // Still need to clear any existing variables and save
+                company.aiAgentSettings.variableDefinitions = [];
+                company.aiAgentSettings.lastScanDate = new Date();
+                company.aiAgentSettings.configurationAlert = null;
+                
+                // Store scan metadata
+                if (!company.aiAgentSettings.scanMetadata) {
+                    company.aiAgentSettings.scanMetadata = {};
+                }
+                company.aiAgentSettings.scanMetadata.lastScan = {
+                    scannedAt: new Date(),
+                    reason,
+                    triggeredBy,
+                    templateId,
+                    stats: {
+                        templatesCount: safeTemplatesUsed.length,
+                        categoriesCount: 0,
+                        scenariosCount: 0,
+                        uniqueVariables: 0,
+                        totalPlaceholderOccurrences: 0
+                    }
+                };
+                
+                company.markModified('aiAgentSettings.variableDefinitions');
+                company.markModified('aiAgentSettings.lastScanDate');
+                company.markModified('aiAgentSettings.configurationAlert');
+                company.markModified('aiAgentSettings.scanMetadata');
+                
+                await company.save();
+                await CacheHelper.clearCompanyCache(companyId);
+                
+                logger.info(`✅ [VARIABLE SCAN] Scan complete for company ${companyId} (0 scenarios, 0 variables)`);
+                
                 return {
                     success: true,
                     placeholders: [],
@@ -162,8 +205,15 @@ class PlaceholderScanService {
                     missingRequired: [],
                     hasAlert: false,
                     message: 'No scenarios configured',
+                    templatesUsed: safeTemplatesUsed, // CRITICAL: Include this for endpoint
+                    scanMetadata: {
+                        scannedAt: new Date(),
+                        reason,
+                        triggeredBy,
+                        templateId
+                    },
                     stats: {
-                        templatesCount: templatesUsed.length,
+                        templatesCount: safeTemplatesUsed.length,
                         categoriesCount: 0,
                         scenariosCount: 0,
                         totalPlaceholderOccurrences: 0,
@@ -183,7 +233,7 @@ class PlaceholderScanService {
             // Regex: Match {anything} or [anything] with any casing
             const PLACEHOLDER_REGEX = /[\{\[]\s*([A-Za-z0-9_]+)\s*[\}\]]/g;
             
-            for (const scenario of scenarios) {
+            for (const scenario of safeScenarios) {
                 // Collect all text fields from scenario
                 const textParts = [
                     scenario.name,
@@ -212,9 +262,9 @@ class PlaceholderScanService {
             }
             
             logger.info('[VARIABLE SCAN] Scan input stats for company %s', companyId, {
-                templatesCount: templatesUsed.length,
+                templatesCount: safeTemplatesUsed.length,
                 categoriesCount: totalCategories,
-                scenariosCount: scenarios.length,
+                scenariosCount: safeScenarios.length,
                 totalPlaceholderOccurrences,
                 uniqueVariables: combinedPlaceholderMap.size
             });
@@ -322,9 +372,9 @@ class PlaceholderScanService {
                 triggeredBy,
                 templateId,
                 stats: {
-                    templatesCount: templatesUsed.length,
+                    templatesCount: safeTemplatesUsed.length,
                     categoriesCount: totalCategories,
-                    scenariosCount: scenarios.length,
+                    scenariosCount: safeScenarios.length,
                     uniqueVariables: combinedPlaceholderMap.size,
                     totalPlaceholderOccurrences
                 }
@@ -375,7 +425,7 @@ class PlaceholderScanService {
                 hasAlert: missingRequired.length > 0,
                 newPlaceholders,
                 updatedPlaceholders,
-                templatesUsed, // Include template metadata for UI
+                templatesUsed: safeTemplatesUsed, // Include template metadata for UI
                 scanMetadata: {
                     scannedAt: new Date(),
                     reason,
@@ -383,9 +433,9 @@ class PlaceholderScanService {
                     templateId
                 },
                 stats: {
-                    templatesCount: templatesUsed.length,
+                    templatesCount: safeTemplatesUsed.length,
                     categoriesCount: totalCategories,
-                    scenariosCount: scenarios.length,
+                    scenariosCount: safeScenarios.length,
                     totalPlaceholderOccurrences,
                     uniqueVariables: combinedPlaceholderMap.size
                 }
