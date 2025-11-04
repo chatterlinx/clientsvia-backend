@@ -42,7 +42,7 @@
  */
 
 const Company = require('../models/v2Company');
-const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
+const GlobalAIBehaviorTemplate = require('../models/GlobalAIBehaviorTemplate');
 const logger = require('../utils/logger');
 const { v4: uuidv4 } = require('uuid');
 const ScenarioPoolService = require('./ScenarioPoolService');
@@ -126,7 +126,7 @@ class EnterpriseVariableScanService {
                 logger.info(`📦 [ENTERPRISE SCAN ${scanId}] Template ID: ${templateId}`);
                 
                 // Load template from Global AI Brain
-                const template = await GlobalInstantResponseTemplate.findById(templateId);
+                const template = await GlobalAIBehaviorTemplate.findById(templateId);
                 
                 if (!template) {
                     logger.warn(`⚠️  [ENTERPRISE SCAN ${scanId}] Template ${templateId} not found - skipping`);
