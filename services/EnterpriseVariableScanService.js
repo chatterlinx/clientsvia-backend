@@ -439,11 +439,15 @@ class EnterpriseVariableScanService {
             // ═══════════════════════════════════════════════════════════════
             logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 15: Clearing Redis cache...`);
             
-            if (redisClient) {
-                await redisClient.del(`company:${companyId}`);
-                logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 16: Cache cleared`);
-            } else {
-                logger.warn(`⚠️  [ENTERPRISE SCAN ${scanId}] Checkpoint 16: Redis not available - skipping cache clear`);
+            try {
+                if (redisClient && redisClient.status === 'ready') {
+                    await redisClient.del(`company:${companyId}`);
+                    logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 16: Cache cleared`);
+                } else {
+                    logger.warn(`⚠️  [ENTERPRISE SCAN ${scanId}] Checkpoint 16: Redis not ready - skipping cache clear`);
+                }
+            } catch (cacheError) {
+                logger.error(`❌ [ENTERPRISE SCAN ${scanId}] Checkpoint 16: Failed to clear Redis cache:`, cacheError.message);
             }
             
             // ═══════════════════════════════════════════════════════════════
