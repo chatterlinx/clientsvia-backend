@@ -36,6 +36,8 @@ const IdempotencyLog = require('../../models/IdempotencyLog');
 const AuditLog = require('../../models/AuditLog');
 const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const ConfigurationReadinessService = require('../../services/ConfigurationReadinessService');
+const EnterpriseVariableScanService = require('../../services/EnterpriseVariableScanService');
+const CompanyVariablesService = require('../../services/CompanyVariablesService');
 const { generatePreviewToken, verifyPreviewToken } = require('../../utils/previewToken');
 const { validate } = require('../../utils/variableValidators');
 const { redisClient } = require('../../db');
@@ -1434,9 +1436,6 @@ router.get('/:companyId/configuration/analytics', async (req, res) => {
  *    - Performance metrics
  * ============================================================================
  */
-const EnterpriseVariableScanService = require('../../services/EnterpriseVariableScanService');
-const CacheHelper = require('../../utils/cacheHelper');
-
 router.post('/:companyId/configuration/variables/scan', async (req, res) => {
     logger.info(`🔍 [ENTERPRISE SCAN] POST /configuration/variables/scan for company: ${req.params.companyId}`);
     
