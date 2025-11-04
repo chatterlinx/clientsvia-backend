@@ -279,63 +279,72 @@ class ConfigurationReadinessService {
             required: 0,
             configured: 0,
             missing: [],
+            blank: [],
             total: 0,
             weight: 30
         };
         
         try {
-            // ✅ CORRECT: Check NEW schema
-            const variableDefinitions = company.aiAgentSettings?.variableDefinitions || [];
+            // Check AiCore Variables (from template scanning)
+            // Location: company.aiAgentSettings.variables (Map)
             const variables = company.aiAgentSettings?.variables || new Map();
             
             // Convert Map to object if needed
-            const variablesObj = variables instanceof Map ? Object.fromEntries(variables) : variables;
+            const variablesObj = variables instanceof Map ? Object.fromEntries(variables) : 
+                                 (typeof variables === 'object' && variables !== null) ? variables : {};
             
-            component.total = variableDefinitions.length;
+            const variableKeys = Object.keys(variablesObj);
+            component.total = variableKeys.length;
             
-            // Count required vs configured
-            const requiredVars = variableDefinitions.filter(v => v.required);
-            component.required = requiredVars.length;
+            logger.info(`[READINESS] 🔧 Variables: ${component.total} total from AiCore Variables tab`);
             
-            logger.info(`[READINESS] 🔧 Variables: ${component.required} required out of ${component.total} total`);
-            
-            if (component.required === 0) {
-                // No required variables - perfect score
+            if (component.total === 0) {
+                // No variables scanned yet - this is OK, just a warning
                 component.score = 100;
-                logger.info(`[READINESS] ✅ VARIABLES OK: No required variables`);
+                component.configured = true;
+                logger.info(`[READINESS] ⚠️ No variables detected (template not scanned yet)`);
             } else {
-                // Check each required variable
-                requiredVars.forEach(varDef => {
-                    const value = variablesObj[varDef.key];
-                    if (value && value.trim() !== '') {
-                        component.configured++;
+                // Check each variable for blank values
+                let variablesWithValues = 0;
+                let variablesBlank = 0;
+                
+                variableKeys.forEach(varKey => {
+                    const value = variablesObj[varKey];
+                    const hasValue = value && String(value).trim().length > 0;
+                    
+                    if (hasValue) {
+                        variablesWithValues++;
                     } else {
-                        component.missing.push({
-                            key: varDef.key,
-                            label: varDef.label || varDef.key,
-                            type: varDef.type || 'text',
-                            category: varDef.category || 'General'
+                        variablesBlank++;
+                        component.blank.push({
+                            key: varKey,
+                            label: varKey
                         });
                     }
                 });
                 
-                // Calculate score
-                component.score = Math.round((component.configured / component.required) * 100);
+                component.configured = variablesWithValues;
+                component.required = component.total; // All variables should have values
                 
-                logger.info(`[READINESS] 📊 Variables configured: ${component.configured}/${component.required} (${component.score}%)`);
+                // Calculate score (% of variables that have values)
+                component.score = Math.round((variablesWithValues / component.total) * 100);
                 
-                // Add blocker if missing required variables
-                if (component.missing.length > 0) {
+                logger.info(`[READINESS] 📊 Variables with values: ${variablesWithValues}/${component.total} (${component.score}%)`);
+                
+                // Add blocker if any variables have blank values
+                if (variablesBlank > 0) {
                     report.blockers.push({
-                        code: 'MISSING_REQUIRED_VARIABLES',
-                        message: `${component.missing.length} required variable(s) not configured`,
-                        severity: 'critical',
+                        code: 'BLANK_VARIABLES',
+                        message: `${variablesBlank} variable(s) exist but have no value`,
+                        severity: 'high',
                         target: '/company-profile.html?id=' + company._id + '#variables',
                         component: 'variables',
-                        details: `Missing: ${component.missing.map(v => v.label).join(', ')}`
+                        details: `Blank: ${component.blank.map(v => v.key).join(', ')}`
                     });
                     
-                    logger.warn(`[READINESS] ❌ MISSING VARIABLES: ${component.missing.map(v => v.key).join(', ')}`);
+                    logger.warn(`[READINESS] ⚠️ BLANK VARIABLES: ${component.blank.map(v => v.key).join(', ')}`);
+                } else {
+                    logger.info(`[READINESS] ✅ VARIABLES OK: All ${component.total} variable(s) have values`);
                 }
             }
             
