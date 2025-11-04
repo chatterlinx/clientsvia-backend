@@ -1446,7 +1446,10 @@ router.post('/:companyId/configuration/variables/scan', async (req, res) => {
         logger.info(`🔍 [VARIABLE SCAN] Starting scan for company ${companyId}`);
         
         // Run the scan using PlaceholderScanService (uses ScenarioPoolService for consistency)
-        const scanResult = await PlaceholderScanService.scanCompany(companyId);
+        const scanResult = await PlaceholderScanService.scanCompany(companyId, {
+            reason: 'manual',
+            triggeredBy: req.user?.email || 'system'
+        });
         
         logger.info(`✅ [VARIABLE SCAN] Scan complete:`, scanResult);
         
@@ -1482,7 +1485,8 @@ router.post('/:companyId/configuration/variables/scan', async (req, res) => {
             meta: result.meta,
             stats,
             detectedVariables: detectedVariablesSummary,
-            templatesUsed: scanResult.templatesUsed || [] // Include template metadata for UI
+            templatesUsed: scanResult.templatesUsed || [], // Include template metadata for UI
+            scanMetadata: scanResult.scanMetadata || { reason: 'manual', triggeredBy: 'system' }
         });
         
     } catch (error) {
@@ -1741,15 +1745,20 @@ router.post('/:companyId/configuration/templates', async (req, res) => {
         
         await company.save();
         
-        // Trigger background variable scan (NEW)
-        const BackgroundVariableScanService = require('../../services/BackgroundVariableScanService');
+        // 🔥 AUTO-SCAN: Trigger variable scan after template activation
+        const PlaceholderScanService = require('../../services/PlaceholderScanService');
         setImmediate(async () => {
             try {
-                logger.info(`🔍 [TEMPLATE ACTIVATED] Triggering background scan for template: ${templateId}`);
-                const scanResult = await BackgroundVariableScanService.scanTemplateForCompany(req.params.companyId, templateId);
-                logger.info(`✅ [TEMPLATE ACTIVATED] Background scan complete:`, scanResult);
+                logger.info(`🔍 [AUTO-SCAN] Template activated (${templateId}), triggering variable scan for company ${req.params.companyId}`);
+                const scanResult = await PlaceholderScanService.scanCompany(req.params.companyId, {
+                    reason: 'template_activated',
+                    triggeredBy: req.user?.email || 'system',
+                    templateId
+                });
+                logger.info(`✅ [AUTO-SCAN] Variable scan complete after template activation: ${scanResult.stats?.uniqueVariables || 0} variables found`);
             } catch (scanError) {
-                logger.error(`❌ [TEMPLATE ACTIVATED] Background scan failed:`, scanError);
+                logger.error(`❌ [AUTO-SCAN] Variable scan failed after template activation:`, scanError.message);
+                // Non-critical - don't block the response
             }
         });
         
@@ -1824,6 +1833,23 @@ router.delete('/:companyId/configuration/templates/:templateId', async (req, res
         company.markModified('aiAgentSettings');
         
         await company.save();
+        
+        // 🔥 AUTO-SCAN: Trigger variable scan after template removal
+        const PlaceholderScanService = require('../../services/PlaceholderScanService');
+        setImmediate(async () => {
+            try {
+                logger.info(`🔍 [AUTO-SCAN] Template removed (${req.params.templateId}), triggering variable scan for company ${req.params.companyId}`);
+                const scanResult = await PlaceholderScanService.scanCompany(req.params.companyId, {
+                    reason: 'template_removed',
+                    triggeredBy: req.user?.email || 'system',
+                    templateId: req.params.templateId
+                });
+                logger.info(`✅ [AUTO-SCAN] Variable scan complete after template removal: ${scanResult.stats?.uniqueVariables || 0} variables found`);
+            } catch (scanError) {
+                logger.error(`❌ [AUTO-SCAN] Variable scan failed after template removal:`, scanError.message);
+                // Non-critical - don't block the response
+            }
+        });
         
         // Clear cache using the local function (already defined at top of file)
         await clearCompanyCache(req.params.companyId, 'Template Removed');

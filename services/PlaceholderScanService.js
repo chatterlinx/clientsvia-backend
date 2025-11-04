@@ -73,10 +73,17 @@ class PlaceholderScanService {
      * PERFORMANCE: 50-150ms
      * 
      * @param {string} companyId - MongoDB ObjectId as string
+     * @param {Object} options - Scan options
+     * @param {string} options.reason - Why the scan was triggered: 'manual', 'template_activated', 'template_removed'
+     * @param {string} options.triggeredBy - Email or userId of who triggered the scan
+     * @param {string} options.templateId - Template ID that triggered the scan (for template_activated/removed)
      * @returns {Promise<Object>} Scan results
      * 
      * @example
-     * const result = await PlaceholderScanService.scanCompany('64a1b2c3d4e5f6');
+     * const result = await PlaceholderScanService.scanCompany('64a1b2c3d4e5f6', {
+     *   reason: 'template_activated',
+     *   triggeredBy: 'admin@example.com'
+     * });
      * // {
      * //   success: true,
      * //   placeholders: [...],
@@ -86,8 +93,10 @@ class PlaceholderScanService {
      * //   hasAlert: true
      * // }
      */
-    static async scanCompany(companyId) {
-        logger.debug(`🔍 [PLACEHOLDER SCAN] Starting scan for company ${companyId}`);
+    static async scanCompany(companyId, options = {}) {
+        const { reason = 'manual', triggeredBy = 'system', templateId = null } = options;
+        
+        logger.debug(`🔍 [PLACEHOLDER SCAN] Starting scan for company ${companyId} (reason: ${reason}, triggeredBy: ${triggeredBy})`);
         
         try {
             // ============================================================================
@@ -299,14 +308,33 @@ class PlaceholderScanService {
                 logger.info(`✅ [PLACEHOLDER SCAN] All required variables filled - alert cleared`);
             }
             
-            // 9. Save updated definitions and alert
+            // 9. Save updated definitions, alert, and scan metadata
             company.aiAgentSettings.variableDefinitions = finalDefinitions;
             company.aiAgentSettings.lastScanDate = new Date();
             
-            // Mark nested path as modified (Mongoose requirement)
+            // Store scan metadata for audit trail and UI display
+            if (!company.aiAgentSettings.scanMetadata) {
+                company.aiAgentSettings.scanMetadata = {};
+            }
+            company.aiAgentSettings.scanMetadata.lastScan = {
+                scannedAt: new Date(),
+                reason,
+                triggeredBy,
+                templateId,
+                stats: {
+                    templatesCount: templatesUsed.length,
+                    categoriesCount: totalCategories,
+                    scenariosCount: scenarios.length,
+                    uniqueVariables: combinedPlaceholderMap.size,
+                    totalPlaceholderOccurrences
+                }
+            };
+            
+            // Mark nested paths as modified (Mongoose requirement)
             company.markModified('aiAgentSettings.variableDefinitions');
             company.markModified('aiAgentSettings.configurationAlert');
             company.markModified('aiAgentSettings.lastScanDate');
+            company.markModified('aiAgentSettings.scanMetadata');
             
             await company.save();
             
@@ -335,7 +363,7 @@ class PlaceholderScanService {
                 });
             }
             
-            logger.info(`✅ [VARIABLE SCAN] Scan complete for company ${companyId}`);
+            logger.info(`✅ [VARIABLE SCAN] Scan complete for company ${companyId} (reason: ${reason})`);
             
             return {
                 success: true,
@@ -348,6 +376,12 @@ class PlaceholderScanService {
                 newPlaceholders,
                 updatedPlaceholders,
                 templatesUsed, // Include template metadata for UI
+                scanMetadata: {
+                    scannedAt: new Date(),
+                    reason,
+                    triggeredBy,
+                    templateId
+                },
                 stats: {
                     templatesCount: templatesUsed.length,
                     categoriesCount: totalCategories,

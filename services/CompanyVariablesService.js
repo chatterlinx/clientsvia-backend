@@ -69,7 +69,7 @@ async function getVariablesForCompany(companyId) {
     logger.info(`[VARIABLES SERVICE] Loading variables for company: ${companyId}`);
     
     const company = await Company.findById(companyId)
-        .select('aiAgentSettings.variables aiAgentSettings.variableDefinitions aiAgentSettings.lastScanDate')
+        .select('aiAgentSettings.variables aiAgentSettings.variableDefinitions aiAgentSettings.lastScanDate aiAgentSettings.scanMetadata')
         .lean();
     
     if (!company) {
@@ -79,6 +79,7 @@ async function getVariablesForCompany(companyId) {
     const variables = mapToObj(company.aiAgentSettings?.variables);
     const definitions = company.aiAgentSettings?.variableDefinitions || [];
     const lastScanDate = company.aiAgentSettings?.lastScanDate || null;
+    const scanMetadata = company.aiAgentSettings?.scanMetadata?.lastScan || null;
     
     // Calculate metadata
     const totalVariables = definitions.length;
@@ -101,7 +102,8 @@ async function getVariablesForCompany(companyId) {
         totalVariables,
         totalRequired,
         filledRequired,
-        missingRequiredCount
+        missingRequiredCount,
+        scanMetadata // Include scan metadata (reason, triggeredBy, etc.)
     };
     
     logger.info(`[VARIABLES SERVICE] ✅ Loaded ${totalVariables} variables (${filledRequired}/${totalRequired} required filled)`);
