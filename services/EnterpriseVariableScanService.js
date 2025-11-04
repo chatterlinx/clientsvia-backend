@@ -383,36 +383,52 @@ class EnterpriseVariableScanService {
             
             // 🧹 CLEANUP: Deduplicate existing variables (removes historical case-insensitive duplicates)
             const rawExistingDefs = company.aiAgentSettings?.variableDefinitions || [];
+            logger.info(`🧹 [ENTERPRISE SCAN ${scanId}] Starting deduplication - raw count: ${rawExistingDefs.length}`);
+            
             const deduplicatedMap = new Map();
             let duplicatesRemoved = 0;
             
-            rawExistingDefs.forEach(def => {
-                const normalizedKey = (def.normalizedKey || def.key.toLowerCase());
+            rawExistingDefs.forEach((def, index) => {
+                const normalizedKey = (def.normalizedKey || def.key?.toLowerCase() || '');
+                
+                if (!normalizedKey) {
+                    logger.warn(`  ⚠️  [DEDUPE ${index}] Skipping entry with no key:`, def);
+                    return;
+                }
+                
+                logger.debug(`  [DEDUPE ${index}] Processing: key="${def.key}" normalized="${normalizedKey}" usageCount=${def.usageCount || 0}`);
                 
                 if (!deduplicatedMap.has(normalizedKey)) {
                     // First occurrence - keep it
                     deduplicatedMap.set(normalizedKey, def);
+                    logger.debug(`  ✅ [DEDUPE ${index}] First occurrence - keeping {${def.key}}`);
                 } else {
                     // Duplicate found - merge values, prefer filled over empty
                     const existing = deduplicatedMap.get(normalizedKey);
                     
+                    logger.warn(`  🧹 [DEDUPE ${index}] DUPLICATE FOUND: {${def.key}} (usage: ${def.usageCount || 0}) → merging into {${existing.key}} (usage: ${existing.usageCount || 0})`);
+                    
                     // Preserve user-entered values (non-empty wins)
                     if (!existing.value && def.value) {
                         existing.value = def.value;
+                        logger.debug(`    ↳ Preserved value from duplicate: "${def.value}"`);
                     }
                     
                     // Merge usage counts (add them up)
-                    existing.usageCount = (existing.usageCount || 0) + (def.usageCount || 0);
+                    const oldUsage = existing.usageCount || 0;
+                    existing.usageCount = oldUsage + (def.usageCount || 0);
+                    logger.debug(`    ↳ Merged usage count: ${oldUsage} + ${def.usageCount || 0} = ${existing.usageCount}`);
                     
                     duplicatesRemoved++;
-                    logger.warn(`  🧹 DEDUPE: Removed duplicate {${def.key}} → merged into {${existing.key}}`);
                 }
             });
             
             const existingDefs = Array.from(deduplicatedMap.values());
             
+            logger.info(`✨ [ENTERPRISE SCAN ${scanId}] Deduplication complete - removed ${duplicatesRemoved} duplicates (${rawExistingDefs.length} → ${existingDefs.length})`);
+            
             if (duplicatesRemoved > 0) {
-                logger.info(`✨ [ENTERPRISE SCAN ${scanId}] Cleaned up ${duplicatesRemoved} duplicate variables from historical data`);
+                logger.info(`🎯 [ENTERPRISE SCAN ${scanId}] Cleaned variables: ${existingDefs.map(d => `{${d.key}}`).join(', ')}`);
             }
             
             let newCount = 0;
