@@ -91,15 +91,15 @@ class EnterpriseVariableScanService {
             const activeTemplates = templateRefs.filter(ref => ref.enabled !== false);
             
             logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 5: Found ${activeTemplates.length} active templates`);
-
-            // Preload scenario pool once for the entire scan (respects scenario controls)
-            const scenarioPoolResult = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
-            const scenarioPool = scenarioPoolResult?.scenarios || [];
-            logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 5.1: Scenario pool loaded with ${scenarioPool.length} scenarios`);
             
             if (activeTemplates.length === 0) {
                 logger.warn(`⚠️  [ENTERPRISE SCAN ${scanId}] No active templates - scan will return 0 variables (valid state)`);
             }
+            
+            // ✨ FIX: Read templates DIRECTLY from Global AI Brain (like AiCore Templates tab)
+            // This ensures 100% consistency with what the AiCore Templates tab shows
+            // NO FILTERING - scan all scenarios in the template
+            logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 5.1: Reading templates directly from Global AI Brain...`);
             
             // ═══════════════════════════════════════════════════════════════
             // STEP 3: Scan Each Template (COMPREHENSIVE)
@@ -120,22 +120,25 @@ class EnterpriseVariableScanService {
                 logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 6.${i + 1}: Scanning template ${i + 1}/${activeTemplates.length}...`);
                 logger.info(`📦 [ENTERPRISE SCAN ${scanId}] Template ID: ${templateId}`);
                 
-                // Load template from Global AI Brain
-                const template = await GlobalInstantResponseTemplate.findById(templateId);
+                // ✨ FIX: Load template DIRECTLY from Global AI Brain (SOURCE OF TRUTH)
+                // This matches exactly what GET /api/company/:id/configuration/templates does
+                const template = await GlobalInstantResponseTemplate.findById(templateId)
+                    .select('_id name version categories')
+                    .lean();
                 
                 if (!template) {
                     logger.warn(`⚠️  [ENTERPRISE SCAN ${scanId}] Template ${templateId} not found - skipping`);
                     continue;
                 }
                 
-                logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 6.${i + 1}.1: Template loaded: ${template.name}`);
+                logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 6.${i + 1}.1: Template loaded: ${template.name} (ID: ${template._id})`);
                 
-                // Use preloaded ScenarioPoolService results (respects filters)
-                const templateScenarios = scenarioPool.filter(s => 
-                    s.templateId === templateId || s.templateId === templateId.toString()
-                );
+                // ✨ FIX: Flatten scenarios DIRECTLY from template.categories (NO FILTERING)
+                // This ensures we scan ALL scenarios, matching AiCore Templates tab logic
+                const allCategories = template.categories || [];
+                const templateScenarios = allCategories.flatMap(category => category.scenarios || []);
                 
-                logger.info(`📊 [ENTERPRISE SCAN ${scanId}] Checkpoint 6.${i + 1}.2: ScenarioPool returned ${templateScenarios.length} scenarios`);
+                logger.info(`📊 [ENTERPRISE SCAN ${scanId}] Checkpoint 6.${i + 1}.2: Template has ${allCategories.length} categories and ${templateScenarios.length} scenarios`);
                 
                 // Initialize template report
                 const templateReport = {
@@ -169,16 +172,15 @@ class EnterpriseVariableScanService {
                     }
                 };
                 
-                // Get categories from template
-                const categoriesSet = new Set();
-                templateScenarios.forEach(s => {
-                    if (s.category) categoriesSet.add(s.category);
-                });
-                templateReport.categories.list = Array.from(categoriesSet);
-                templateReport.categories.total = templateReport.categories.list.length;
-                templateReport.categories.scanned = templateReport.categories.list.length;
+                // ✨ FIX: Count categories DIRECTLY from template (SOURCE OF TRUTH)
+                // This matches exactly what AiCore Templates tab shows
+                templateReport.categories.list = allCategories.map(cat => cat.name || 'Unnamed');
+                templateReport.categories.total = allCategories.length;
+                templateReport.categories.scanned = allCategories.length;
                 
-                totalCategories += templateReport.categories.total;
+                totalCategories += allCategories.length;
+                
+                logger.info(`📂 [ENTERPRISE SCAN ${scanId}] Checkpoint 6.${i + 1}.2.1: Categories: ${allCategories.length} (${templateReport.categories.list.join(', ')})`);
                 
                 // Scan each scenario
                 logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 6.${i + 1}.3: Scanning ${templateScenarios.length} scenarios...`);
@@ -186,10 +188,12 @@ class EnterpriseVariableScanService {
                 for (let j = 0; j < templateScenarios.length; j++) {
                     const scenario = templateScenarios[j];
                     
-                    // Extract all text from scenario
+                    // ✨ FIX: Extract text from direct template scenarios
+                    // Template scenarios have: triggers, quickReplies, fullReplies
                     const triggers = scenario.triggers || [];
-                    const replies = (scenario.replies || []).map(r => r.text || r);
-                    const allText = [...triggers, ...replies].join(' ');
+                    const quickReplies = (scenario.quickReplies || []).map(r => r.text || r);
+                    const fullReplies = (scenario.fullReplies || []).map(r => r.text || r);
+                    const allText = [...triggers, ...quickReplies, ...fullReplies].join(' ');
                     
                     // Word count analysis
                     const words = allText.toLowerCase().match(/\b\w+\b/g) || [];

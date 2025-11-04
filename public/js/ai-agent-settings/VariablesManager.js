@@ -475,6 +475,24 @@ class VariablesManager {
         
         let enterpriseDashboard = `
             <div class="mb-6 space-y-4">
+                ${this.scanReport ? `
+                <!-- Active Template Info Banner -->
+                <div class="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-lg p-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl">📋</span>
+                        <div class="flex-1">
+                            <div class="font-bold text-gray-900 text-lg">Active Template</div>
+                            <div class="text-sm text-gray-700 mt-1">${this.scanReport.templatesScanned.list.map(t => `
+                                <div class="mt-1">
+                                    <span class="font-semibold">${t.templateName}</span>
+                                    <code class="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded ml-2">ID: ${t.templateId}</code>
+                                </div>
+                            `).join('')}</div>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+                
                 <!-- Top Enterprise Stat Boxes -->
                 <div class="grid grid-cols-3 gap-4">
                     <!-- Templates Box -->
@@ -1431,7 +1449,10 @@ class VariablesManager {
         return `
             <div class="bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg p-4 border border-gray-300 hover:border-purple-400 transition-colors">
                 <div class="flex items-center justify-between mb-3">
-                    <h5 class="font-bold text-gray-900 text-lg">${template.templateName}</h5>
+                    <div>
+                        <h5 class="font-bold text-gray-900 text-lg">${template.templateName}</h5>
+                        <code class="text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded mt-1 inline-block">ID: ${template.templateId}</code>
+                    </div>
                     <div class="flex items-center gap-2">
                         <span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded font-medium">${template.version}</span>
                         <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-medium">Priority ${template.priority}</span>
