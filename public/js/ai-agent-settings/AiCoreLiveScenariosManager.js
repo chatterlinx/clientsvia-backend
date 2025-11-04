@@ -37,8 +37,6 @@ class AiCoreLiveScenariosManager {
         this.currentFilter = 'all'; // 'all', 'enabled', 'disabled', or category name
         this.searchQuery = '';
         this.summary = null;
-        this.lastLoadTime = null; // Track when data was last loaded
-        this.CACHE_DURATION = 3000; // 3 seconds - prevent redundant loads
         
         console.log('🎭 [LIVE SCENARIOS] Initialized');
     }
@@ -46,27 +44,9 @@ class AiCoreLiveScenariosManager {
     /**
      * Load all scenarios from activated templates
      */
-    async load(forceRefresh = false) {
+    async load() {
         console.log('🎭 [LIVE SCENARIOS] Checkpoint 1: Starting load...');
         console.log('🎭 [LIVE SCENARIOS] Checkpoint 2: Company ID:', this.companyId);
-        
-        // Check if data is still fresh (avoid redundant loads)
-        const now = Date.now();
-        const timeSinceLastLoad = this.lastLoadTime ? now - this.lastLoadTime : Infinity;
-        
-        if (!forceRefresh && timeSinceLastLoad < this.CACHE_DURATION) {
-            console.log(`🎭 [LIVE SCENARIOS] ⚡ Using cached data (loaded ${timeSinceLastLoad}ms ago)`);
-            
-            // Render cached data (even if empty - that's intentional)
-            if (this.scenarios.length === 0) {
-                console.log('🎭 [LIVE SCENARIOS] Cached data is empty - rendering empty state');
-                this.renderEmptyState();
-            } else {
-                console.log(`🎭 [LIVE SCENARIOS] Rendering ${this.scenarios.length} cached scenarios`);
-                this.render();
-            }
-            return;
-        }
         
         this.isLoading = true;
         this.renderLoading();
@@ -102,7 +82,6 @@ class AiCoreLiveScenariosManager {
             this.categories = data.categories || [];
             this.summary = data.summary || null;
             this.templatesUsed = data.templatesUsed || [];
-            this.lastLoadTime = Date.now(); // Update timestamp
             
             console.log(`✅ [LIVE SCENARIOS] Checkpoint 9: Loaded ${this.scenarios.length} scenarios from ${this.categories.length} categories`);
             console.log(`📊 [LIVE SCENARIOS] Summary:`, this.summary);
@@ -642,7 +621,7 @@ class AiCoreLiveScenariosManager {
      */
     async refresh() {
         console.log('🔄 [LIVE SCENARIOS] Refreshing...');
-        await this.load(true); // Force refresh
+        await this.load();
     }
     
     /**
