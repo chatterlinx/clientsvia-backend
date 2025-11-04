@@ -381,7 +381,40 @@ class EnterpriseVariableScanService {
             // ═══════════════════════════════════════════════════════════════
             logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 11: Merging with existing variables...`);
             
-            const existingDefs = company.aiAgentSettings?.variableDefinitions || [];
+            // 🧹 CLEANUP: Deduplicate existing variables (removes historical case-insensitive duplicates)
+            const rawExistingDefs = company.aiAgentSettings?.variableDefinitions || [];
+            const deduplicatedMap = new Map();
+            let duplicatesRemoved = 0;
+            
+            rawExistingDefs.forEach(def => {
+                const normalizedKey = (def.normalizedKey || def.key.toLowerCase());
+                
+                if (!deduplicatedMap.has(normalizedKey)) {
+                    // First occurrence - keep it
+                    deduplicatedMap.set(normalizedKey, def);
+                } else {
+                    // Duplicate found - merge values, prefer filled over empty
+                    const existing = deduplicatedMap.get(normalizedKey);
+                    
+                    // Preserve user-entered values (non-empty wins)
+                    if (!existing.value && def.value) {
+                        existing.value = def.value;
+                    }
+                    
+                    // Merge usage counts (add them up)
+                    existing.usageCount = (existing.usageCount || 0) + (def.usageCount || 0);
+                    
+                    duplicatesRemoved++;
+                    logger.warn(`  🧹 DEDUPE: Removed duplicate {${def.key}} → merged into {${existing.key}}`);
+                }
+            });
+            
+            const existingDefs = Array.from(deduplicatedMap.values());
+            
+            if (duplicatesRemoved > 0) {
+                logger.info(`✨ [ENTERPRISE SCAN ${scanId}] Cleaned up ${duplicatesRemoved} duplicate variables from historical data`);
+            }
+            
             let newCount = 0;
             
             variableDefinitions.forEach(newDef => {
