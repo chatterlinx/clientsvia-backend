@@ -241,7 +241,7 @@ class EnterpriseVariableScanService {
                         status: scenario.status || 'live',
                         priority: scenario.priority || 5,
                         triggersCount: triggers.length,
-                        repliesCount: replies.length,
+                        repliesCount: quickReplies.length + fullReplies.length,
                         variablesFound: uniqueVarsInScenario.length,
                         wordCount
                     });
