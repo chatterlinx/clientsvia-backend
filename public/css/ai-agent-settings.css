@@ -1141,6 +1141,34 @@
     transform: translateY(-2px);
 }
 
+/* Success state (green) */
+.stat-item.stat-success {
+    background: rgba(16, 185, 129, 0.2);
+    border-color: rgba(16, 185, 129, 0.4);
+}
+
+.stat-item.stat-success:hover {
+    background: rgba(16, 185, 129, 0.3);
+}
+
+.stat-item.stat-success .stat-value {
+    color: #10b981;
+}
+
+/* Error state (red) */
+.stat-item.stat-error {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+.stat-item.stat-error:hover {
+    background: rgba(239, 68, 68, 0.3);
+}
+
+.stat-item.stat-error .stat-value {
+    color: #ef4444;
+}
+
 .stat-icon {
     font-size: 24px;
     line-height: 1;

@@ -416,13 +416,38 @@ class AIAgentSettingsManager {
                 }
             }
             
-            // Update component stats
+            // Update component stats with color coding
             const stats = readiness.components || {};
-            document.getElementById('stat-templates').textContent = stats.templates?.configured ? '✓' : '✗';
-            document.getElementById('stat-variables').textContent = stats.variables?.configured ? '✓' : '✗';
-            document.getElementById('stat-twilio').textContent = stats.twilio?.configured ? '✓' : '✗';
-            document.getElementById('stat-voice').textContent = stats.voice?.configured ? '✓' : '✗';
-            document.getElementById('stat-scenarios').textContent = (stats.scenarios?.active > 0) ? '✓' : '✗';
+            
+            // Templates
+            const templatesEl = document.getElementById('stat-templates');
+            const templatesConfigured = stats.templates?.configured;
+            templatesEl.textContent = templatesConfigured ? '✓' : '✗';
+            templatesEl.parentElement.parentElement.className = 'stat-item ' + (templatesConfigured ? 'stat-success' : 'stat-error');
+            
+            // Variables
+            const variablesEl = document.getElementById('stat-variables');
+            const variablesConfigured = stats.variables?.configured;
+            variablesEl.textContent = variablesConfigured ? '✓' : '✗';
+            variablesEl.parentElement.parentElement.className = 'stat-item ' + (variablesConfigured ? 'stat-success' : 'stat-error');
+            
+            // Twilio
+            const twilioEl = document.getElementById('stat-twilio');
+            const twilioConfigured = stats.twilio?.configured;
+            twilioEl.textContent = twilioConfigured ? '✓' : '✗';
+            twilioEl.parentElement.parentElement.className = 'stat-item ' + (twilioConfigured ? 'stat-success' : 'stat-error');
+            
+            // Voice
+            const voiceEl = document.getElementById('stat-voice');
+            const voiceConfigured = stats.voice?.configured;
+            voiceEl.textContent = voiceConfigured ? '✓' : '✗';
+            voiceEl.parentElement.parentElement.className = 'stat-item ' + (voiceConfigured ? 'stat-success' : 'stat-error');
+            
+            // Scenarios
+            const scenariosEl = document.getElementById('stat-scenarios');
+            const scenariosConfigured = (stats.scenarios?.active > 0);
+            scenariosEl.textContent = scenariosConfigured ? '✓' : '✗';
+            scenariosEl.parentElement.parentElement.className = 'stat-item ' + (scenariosConfigured ? 'stat-success' : 'stat-error');
             
             // Update Go Live button
             const goLiveBtn = document.getElementById('ai-settings-go-live-btn');
