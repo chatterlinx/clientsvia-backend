@@ -555,14 +555,21 @@ class AiCoreTemplatesManager {
                     setTimeout(() => this.parent.variablesManager.load(), 1000);
                 }
                 
-                // Refresh Filler Filter tab
-                if (this.parent.aiCoreFillerFilterManager && typeof this.parent.aiCoreFillerFilterManager.load === 'function') {
+                // Refresh Filler Filter tab (initialize if not exists)
+                if (!this.parent.aiCoreFillerFilterManager) {
+                    console.log('🔄 [AICORE TEMPLATES] Filler Filter manager not initialized yet - skipping refresh');
+                } else if (typeof this.parent.aiCoreFillerFilterManager.load === 'function') {
                     console.log('🔄 [AICORE TEMPLATES] Refreshing Filler Filter tab...');
                     setTimeout(() => this.parent.aiCoreFillerFilterManager.load(), 1000);
                 }
                 
-                // Refresh Live Scenarios tab
-                if (this.parent.aiCoreLiveScenariosManager && typeof this.parent.aiCoreLiveScenariosManager.load === 'function') {
+                // Refresh Live Scenarios tab (initialize if not exists)
+                if (!this.parent.aiCoreLiveScenariosManager) {
+                    console.log('🔄 [AICORE TEMPLATES] Live Scenarios manager not initialized yet - creating it now...');
+                    this.parent.aiCoreLiveScenariosManager = new AiCoreLiveScenariosManager(this.parent);
+                    window.aiCoreLiveScenariosManager = this.parent.aiCoreLiveScenariosManager;
+                }
+                if (typeof this.parent.aiCoreLiveScenariosManager.load === 'function') {
                     console.log('🔄 [AICORE TEMPLATES] Refreshing Live Scenarios tab...');
                     setTimeout(() => this.parent.aiCoreLiveScenariosManager.load(), 1000);
                 }
@@ -633,14 +640,21 @@ class AiCoreTemplatesManager {
                     setTimeout(() => this.parent.variablesManager.load(), 1000);
                 }
                 
-                // Refresh Filler Filter tab
-                if (this.parent.aiCoreFillerFilterManager && typeof this.parent.aiCoreFillerFilterManager.load === 'function') {
+                // Refresh Filler Filter tab (initialize if not exists)
+                if (!this.parent.aiCoreFillerFilterManager) {
+                    console.log('🔄 [AICORE TEMPLATES] Filler Filter manager not initialized yet - skipping refresh');
+                } else if (typeof this.parent.aiCoreFillerFilterManager.load === 'function') {
                     console.log('🔄 [AICORE TEMPLATES] Refreshing Filler Filter tab...');
                     setTimeout(() => this.parent.aiCoreFillerFilterManager.load(), 1000);
                 }
                 
-                // Refresh Live Scenarios tab
-                if (this.parent.aiCoreLiveScenariosManager && typeof this.parent.aiCoreLiveScenariosManager.load === 'function') {
+                // Refresh Live Scenarios tab (initialize if not exists)
+                if (!this.parent.aiCoreLiveScenariosManager) {
+                    console.log('🔄 [AICORE TEMPLATES] Live Scenarios manager not initialized yet - creating it now...');
+                    this.parent.aiCoreLiveScenariosManager = new AiCoreLiveScenariosManager(this.parent);
+                    window.aiCoreLiveScenariosManager = this.parent.aiCoreLiveScenariosManager;
+                }
+                if (typeof this.parent.aiCoreLiveScenariosManager.load === 'function') {
                     console.log('🔄 [AICORE TEMPLATES] Refreshing Live Scenarios tab...');
                     setTimeout(() => this.parent.aiCoreLiveScenariosManager.load(), 1000);
                 }
