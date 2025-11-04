@@ -475,20 +475,32 @@ class VariablesManager {
         
         let enterpriseDashboard = `
             <div class="mb-6 space-y-4">
-                ${this.scanReport ? `
-                <!-- Active Template Info Banner -->
+                ${this.scanReport && this.scanReport.templatesScanned && this.scanReport.templatesScanned.list.length > 0 ? `
+                <!-- Active Templates Scanned Banner -->
                 <div class="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-lg p-4">
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-3 mb-3">
                         <span class="text-3xl">📋</span>
                         <div class="flex-1">
-                            <div class="font-bold text-gray-900 text-lg">Active Template</div>
-                            <div class="text-sm text-gray-700 mt-1">${this.scanReport.templatesScanned.list.map(t => `
-                                <div class="mt-1">
-                                    <span class="font-semibold">${t.templateName}</span>
-                                    <code class="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded ml-2">ID: ${t.templateId}</code>
-                                </div>
-                            `).join('')}</div>
+                            <div class="font-bold text-gray-900 text-lg">Templates Scanned (${this.scanReport.templatesScanned.total})</div>
+                            <div class="text-xs text-gray-600">From AiCore Templates tab</div>
                         </div>
+                    </div>
+                    <div class="space-y-2">
+                        ${this.scanReport.templatesScanned.list.map((t, index) => `
+                            <div class="bg-white rounded-lg p-3 border border-indigo-200 flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-2xl font-bold text-indigo-600">#${index + 1}</span>
+                                    <div>
+                                        <div class="font-semibold text-gray-900">${t.templateName}</div>
+                                        <code class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">ID: ${t.templateId}</code>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded font-medium">${t.version || 'v1.0.0'}</span>
+                                    <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium">Priority ${t.priority || 1}</span>
+                                </div>
+                            </div>
+                        `).join('')}
                     </div>
                 </div>
                 ` : ''}
