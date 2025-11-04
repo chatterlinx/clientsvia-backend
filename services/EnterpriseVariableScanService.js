@@ -419,9 +419,9 @@ class EnterpriseVariableScanService {
             await Company.findByIdAndUpdate(companyId, {
                 'aiAgentSettings.variableDefinitions': existingDefs,
                 'aiAgentSettings.lastScanDate': endTime,
-                'aiAgentSettings.scanMetadata.lastScan': scanReport,
+                'aiAgentSettings.variableScanStatus.lastReport': scanReport,
                 $push: {
-                    'aiAgentSettings.scanMetadata.history': {
+                    'aiAgentSettings.variableScanStatus.history': {
                         $each: [scanReport],
                         $slice: -20 // Keep last 20 scans
                     }
