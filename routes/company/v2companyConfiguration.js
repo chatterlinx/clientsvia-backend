@@ -137,8 +137,6 @@ router.get('/:companyId/configuration', async (req, res) => {
  * - Auto-migrates from legacy configuration.variables if needed
  * ============================================================================
  */
-const CompanyVariablesService = require('../../services/CompanyVariablesService');
-
 router.get('/:companyId/configuration/variables', async (req, res) => {
     logger.info(`[COMPANY CONFIG] GET /configuration/variables for company: ${req.params.companyId}`);
     
