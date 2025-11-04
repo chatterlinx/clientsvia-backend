@@ -327,7 +327,11 @@ class DiagnosticService {
         let variablesBlank = 0;
         
         for (const [varName, varValue] of Object.entries(variables)) {
-            const hasValue = varValue && varValue.trim().length > 0;
+            // Check if value is truly filled (not empty, not whitespace, not placeholder)
+            const valueStr = varValue ? String(varValue).trim() : '';
+            const hasValue = valueStr.length > 0 && 
+                             !valueStr.startsWith('e.g.,') && // Not placeholder text
+                             valueStr !== 'e.g.';
             
             if (!hasValue) {
                 // Variable exists but is BLANK - RED X WARNING
@@ -337,12 +341,12 @@ class DiagnosticService {
                     status: 'failed',
                     severity: 'high',
                     field: varName,
-                    message: `Variable "${varName}" exists but has no value`,
-                    currentValue: varValue || '(empty)',
-                    expectedValue: 'Non-empty value to replace placeholder',
+                    message: `Variable "{${varName}}" has no value`,
+                    currentValue: valueStr || '(empty)',
+                    expectedValue: 'Actual value to use in scenarios',
                     impact: [
-                        `Placeholder {${varName}} will not be replaced in scenarios`,
-                        'Customers may see template placeholders in responses'
+                        `Placeholder {${varName}} will not be replaced`,
+                        'Customers may see {${varName}} in responses'
                     ],
                     codeReference: {
                         file: 'models/v2Company.js',
@@ -353,7 +357,7 @@ class DiagnosticService {
                         action: 'navigate',
                         target: 'variables',
                         field: varName,
-                        description: `Fill in value for {${varName}} variable`
+                        description: `Fill in actual value for {${varName}}`
                     }
                 });
                 variablesBlank++;
@@ -365,12 +369,12 @@ class DiagnosticService {
                     status: 'passed',
                     severity: 'info',
                     field: varName,
-                    message: `Variable "${varName}" has value configured`,
-                    currentValue: varValue,
+                    message: `Variable "{${varName}}" = "${valueStr}"`,
+                    currentValue: valueStr,
                     details: {
                         variableName: varName,
-                        value: varValue,
-                        length: varValue.length
+                        value: valueStr,
+                        length: valueStr.length
                     }
                 });
                 variablesWithValues++;
@@ -384,44 +388,8 @@ class DiagnosticService {
             ? Math.round((variablesWithValues / totalVariables) * 100)
             : 0;
         
-        // ────────────────────────────────────────────────────────────────────
-        // SUMMARY CHECK
-        // ────────────────────────────────────────────────────────────────────
-        if (variablesBlank === 0 && totalVariables > 0) {
-            checks.unshift({
-                id: 'var_all_filled',
-                type: 'summary',
-                status: 'passed',
-                severity: 'info',
-                message: `All ${totalVariables} variable(s) have values configured`,
-                details: {
-                    total: totalVariables,
-                    withValues: variablesWithValues,
-                    blank: variablesBlank,
-                    note: 'All template placeholders will be properly replaced'
-                }
-            });
-        } else if (variablesBlank > 0) {
-            checks.unshift({
-                id: 'var_some_blank',
-                type: 'summary',
-                status: 'failed',
-                severity: 'high',
-                message: `${variablesBlank} of ${totalVariables} variable(s) have blank values`,
-                currentValue: `${variablesBlank} blank`,
-                expectedValue: 'All variables should have values',
-                impact: [
-                    'Template placeholders will not be replaced',
-                    'Customers may see {variableName} in responses',
-                    'Professional appearance compromised'
-                ],
-                fix: {
-                    action: 'navigate',
-                    target: 'variables',
-                    description: 'Fill in all blank variable values in AiCore Variables tab'
-                }
-            });
-        }
+        // NO SUMMARY CHECK - Just show individual variables
+        // Users want to see ONLY what's in the Variables tab list
         
         const failed = checks.filter(c => c.status === 'failed').length;
         const passed = checks.filter(c => c.status === 'passed').length;

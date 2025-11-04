@@ -310,7 +310,11 @@ class ConfigurationReadinessService {
                 
                 variableKeys.forEach(varKey => {
                     const value = variablesObj[varKey];
-                    const hasValue = value && String(value).trim().length > 0;
+                    // Check if value is truly filled (not empty, not whitespace, not placeholder)
+                    const valueStr = value ? String(value).trim() : '';
+                    const hasValue = valueStr.length > 0 && 
+                                     !valueStr.startsWith('e.g.,') && // Not placeholder text
+                                     valueStr !== 'e.g.';
                     
                     if (hasValue) {
                         variablesWithValues++;
