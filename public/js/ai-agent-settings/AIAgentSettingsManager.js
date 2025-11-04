@@ -908,6 +908,17 @@ class AIAgentSettingsManager {
     }
     
     /**
+     * Show detailed diagnostics for a component
+     * @param {string} component - Component name (templates|variables|twilio|voice|scenarios)
+     */
+    showDiagnostics(component) {
+        console.log(`[AI AGENT SETTINGS] Opening diagnostics for: ${component}`);
+        
+        // Open diagnostic modal
+        diagnosticModal.show(component, this.companyId);
+    }
+    
+    /**
      * Refresh configuration (called after updates)
      */
     async refresh() {

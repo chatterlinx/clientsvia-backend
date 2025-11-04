@@ -1483,6 +1483,70 @@ router.post('/:companyId/configuration/go-live', async (req, res) => {
 
 /**
  * ============================================================================
+ * GET /api/company/:companyId/configuration/diagnostics/:component
+ * Get detailed diagnostic report for a specific component
+ * COMPONENTS: templates | variables | twilio | voice | scenarios
+ * ============================================================================
+ */
+router.get('/:companyId/configuration/diagnostics/:component', async (req, res) => {
+    const { companyId, component } = req.params;
+    
+    logger.info(`[COMPANY CONFIG] GET /configuration/diagnostics/${component} for company: ${companyId}`);
+    
+    try {
+        // Import diagnostic service
+        const DiagnosticService = require('../../services/DiagnosticService');
+        
+        // Validate component parameter
+        const validComponents = ['templates', 'variables', 'twilio', 'voice', 'scenarios'];
+        if (!validComponents.includes(component.toLowerCase())) {
+            return res.status(400).json({ 
+                error: `Invalid component: ${component}`,
+                validComponents: validComponents
+            });
+        }
+        
+        // Check Redis cache first (30 second TTL for diagnostics)
+        const cacheKey = `diagnostics:${companyId}:${component}`;
+        
+        try {
+            const cachedDiagnostics = await redisClient.get(cacheKey);
+            if (cachedDiagnostics) {
+                logger.debug(`[COMPANY CONFIG] ✅ Cache HIT for diagnostics: ${component}`);
+                return res.json(JSON.parse(cachedDiagnostics));
+            }
+        } catch (cacheError) {
+            logger.warn('[COMPANY CONFIG] Redis cache error (non-critical):', cacheError.message);
+        }
+        
+        logger.debug(`[COMPANY CONFIG] Cache MISS - Running diagnostic for: ${component}`);
+        
+        // Run diagnostic
+        const diagnostics = await DiagnosticService.getDiagnostics(companyId, component);
+        
+        // Cache result for 30 seconds
+        try {
+            await redisClient.setex(cacheKey, 30, JSON.stringify(diagnostics));
+            logger.debug(`[COMPANY CONFIG] Cached diagnostics for ${component} (30s TTL)`);
+        } catch (cacheError) {
+            logger.warn('[COMPANY CONFIG] Failed to cache diagnostics:', cacheError.message);
+        }
+        
+        logger.debug(`[COMPANY CONFIG] ✅ Diagnostic complete: ${component} - Status: ${diagnostics.status}, Score: ${diagnostics.score}`);
+        
+        res.json(diagnostics);
+        
+    } catch (error) {
+        logger.error('[COMPANY CONFIG] Error running diagnostics:', error);
+        res.status(500).json({ 
+            error: 'Failed to run diagnostics',
+            message: error.message 
+        });
+    }
+});
+
+/**
+ * ============================================================================
  * GET /api/company/:companyId/configuration/analytics
  * Load analytics data
  * ============================================================================

@@ -1173,6 +1173,7 @@
                         
                         <!-- Link isolated CSS -->
                         <link rel="stylesheet" href="/css/ai-agent-settings.css">
+                        <link rel="stylesheet" href="/css/diagnostic-modal.css">
                         <link rel="stylesheet" href="/css/twilio-control-center.css">
                         <link rel="stylesheet" href="/css/voicecore.css">
                         <link rel="stylesheet" href="/css/system-diagnostics.css">
@@ -1258,40 +1259,55 @@
                                             <p class="mission-subtitle">Checking system readiness...</p>
                                         </div>
                                         <div class="mission-stats">
-                                            <div class="stat-item">
+                                            <div class="stat-item clickable" 
+                                                 onclick="aiAgentSettings.showDiagnostics('templates')"
+                                                 title="Click for detailed diagnostics">
                                                 <div class="stat-icon">📋</div>
                                                 <div class="stat-content">
                                                     <span class="stat-value" id="stat-templates">-</span>
                                                     <span class="stat-label">Templates</span>
                                                 </div>
+                                                <div class="stat-chevron">›</div>
                                             </div>
-                                            <div class="stat-item">
+                                            <div class="stat-item clickable" 
+                                                 onclick="aiAgentSettings.showDiagnostics('variables')"
+                                                 title="Click for detailed diagnostics">
                                                 <div class="stat-icon">🔧</div>
                                                 <div class="stat-content">
                                                     <span class="stat-value" id="stat-variables">-</span>
                                                     <span class="stat-label">Variables</span>
                                                 </div>
+                                                <div class="stat-chevron">›</div>
                                             </div>
-                                            <div class="stat-item">
+                                            <div class="stat-item clickable" 
+                                                 onclick="aiAgentSettings.showDiagnostics('twilio')"
+                                                 title="Click for detailed diagnostics">
                                                 <div class="stat-icon">📞</div>
                                                 <div class="stat-content">
                                                     <span class="stat-value" id="stat-twilio">-</span>
                                                     <span class="stat-label">Twilio</span>
                                                 </div>
+                                                <div class="stat-chevron">›</div>
                                             </div>
-                                            <div class="stat-item">
+                                            <div class="stat-item clickable" 
+                                                 onclick="aiAgentSettings.showDiagnostics('voice')"
+                                                 title="Click for detailed diagnostics">
                                                 <div class="stat-icon">🎙️</div>
                                                 <div class="stat-content">
                                                     <span class="stat-value" id="stat-voice">-</span>
                                                     <span class="stat-label">Voice</span>
                                                 </div>
+                                                <div class="stat-chevron">›</div>
                                             </div>
-                                            <div class="stat-item">
+                                            <div class="stat-item clickable" 
+                                                 onclick="aiAgentSettings.showDiagnostics('scenarios')"
+                                                 title="Click for detailed diagnostics">
                                                 <div class="stat-icon">🎭</div>
                                                 <div class="stat-content">
                                                     <span class="stat-value" id="stat-scenarios">-</span>
                                                     <span class="stat-label">Scenarios</span>
                                                 </div>
+                                                <div class="stat-chevron">›</div>
                                             </div>
                                         </div>
                                     </div>
@@ -1555,6 +1571,7 @@
                         <script src="/js/ai-agent-settings/AIPerformanceDashboard.js?v=1.1"></script>
                         <script src="/js/ai-agent-settings/SpamFilterManager.js?v=1.0"></script>
                         <script src="/js/ai-agent-settings/AIAgentSettingsManager.js?v=5.3"></script>
+                        <script src="/js/ai-agent-settings/DiagnosticModal.js?v=1.0"></script>
                         
                         <!-- Load Voice Settings Manager -->
                         <script src="/js/ai-voice-settings/VoiceSettingsManager.js?v=1.0"></script>
