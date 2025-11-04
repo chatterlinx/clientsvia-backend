@@ -44,44 +44,70 @@ router.get('/company/:companyId/configuration/filler-filter', async (req, res) =
     logger.info(`🔇 [FILLER FILTER] GET for company: ${companyId}`);
     
     try {
-        const company = await v2Company.findById(companyId);
+        const company = await v2Company.findById(companyId)
+            .select('aiAgentSettings.templateReferences aiAgentSettings.fillerWords companyName')
+            .lean();
+        
         if (!company) {
             return res.status(404).json({ success: false, error: 'Company not found' });
         }
         
-        // Get active template IDs
-        const activeTemplateIds = company.aiAgentSettings?.activeTemplates || [];
+        // Get active template IDs from templateReferences (NEW FIELD - matches AiCore Templates tab)
+        const templateRefs = company.aiAgentSettings?.templateReferences || [];
+        const activeTemplateRefs = templateRefs.filter(ref => ref.enabled !== false);
+        const activeTemplateIds = activeTemplateRefs.map(ref => ref.templateId);
         
-        logger.debug(`🔇 [FILLER FILTER] Active templates: ${activeTemplateIds.length}`);
+        logger.info(`🔇 [FILLER FILTER] Found ${activeTemplateRefs.length} active template(s) for ${company.companyName}`);
+        logger.debug(`🔇 [FILLER FILTER] Template IDs:`, activeTemplateIds);
         
         let inheritedFillers = [];
+        const templatesUsed = [];
         
-        // Fetch inherited filler words from active templates
+        // Fetch inherited filler words from active templates (DIRECT LOAD from Global AI Brain)
         if (activeTemplateIds.length > 0) {
-            const templates = await GlobalAIBehaviorTemplate.find({
+            const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+            const templates = await GlobalInstantResponseTemplate.find({
                 _id: { $in: activeTemplateIds }
-            }).select('fillerWords categories');
+            }).select('name version fillerWords categories').lean();
             
-            logger.info(`🔇 [FILLER FILTER] Found ${templates.length} active templates`);
+            logger.info(`🔇 [FILLER FILTER] Loaded ${templates.length} template(s) from Global AI Brain`);
             
             // Merge all filler words from all templates
             const allFillers = new Set();
             
-            // Get fillerWords from template root level
+            // Process each template
             templates.forEach(template => {
-                if (template.fillerWords && Array.isArray(template.fillerWords)) {
-                    template.fillerWords.forEach(word => {
+                // Get fillerWords from template root level
+                const templateFillerWords = template.fillerWords || [];
+                
+                if (Array.isArray(templateFillerWords)) {
+                    templateFillerWords.forEach(word => {
                         if (word && typeof word === 'string') {
                             allFillers.add(word.toLowerCase().trim());
                         }
                     });
                 }
                 
-                // ALSO scan scenarios for any embedded filler references
-                // (Future enhancement: extract fillers from scenario trigger words)
+                // Count categories and scenarios for template metadata
+                const categories = template.categories || [];
+                const scenariosCount = categories.reduce((sum, cat) => 
+                    sum + (cat.scenarios ? cat.scenarios.length : 0), 0
+                );
+                
+                // Build template metadata for frontend cards
+                templatesUsed.push({
+                    templateId: template._id.toString(),
+                    templateName: template.name || 'Unknown Template',
+                    version: template.version || 'v1.0.0',
+                    categoriesCount: categories.length,
+                    scenariosCount: scenariosCount,
+                    fillersCount: templateFillerWords.length
+                });
+                
+                logger.debug(`📘 [FILLER FILTER] Template: ${template.name} → ${templateFillerWords.length} fillers, ${categories.length} categories, ${scenariosCount} scenarios`);
             });
             
-            logger.info(`🔇 [FILLER FILTER] Extracted ${allFillers.size} unique inherited fillers`);
+            logger.info(`✅ [FILLER FILTER] Extracted ${allFillers.size} unique inherited fillers from ${templates.length} templates`);
             
             inheritedFillers = Array.from(allFillers).sort();
         }
@@ -93,38 +119,20 @@ router.get('/company/:companyId/configuration/filler-filter', async (req, res) =
         
         const customFillers = (company.aiAgentSettings?.fillerWords?.custom || []).sort();
         
-        logger.debug(`🔇 [FILLER FILTER DEBUG] Final customFillers array:`, customFillers);
-        
-        // Build detailed scan report
-        const scanReport = [];
-        if (activeTemplateIds.length > 0) {
-            templates.forEach(template => {
-                const templateFillers = template.fillerWords || [];
-                const categoryCount = template.categories ? template.categories.length : 0;
-                const scenarioCount = template.categories ? 
-                    template.categories.reduce((sum, cat) => sum + (cat.scenarios ? cat.scenarios.length : 0), 0) : 0;
-                
-                scanReport.push({
-                    templateName: template.name || 'Unknown Template',
-                    templateId: template._id.toString(),
-                    categories: categoryCount,
-                    scenarios: scenarioCount,
-                    fillers: templateFillers.length
-                });
-            });
-        }
-        
-        logger.info(`✅ [FILLER FILTER] Inherited: ${inheritedFillers.length}, Custom: ${customFillers.length}`);
-        logger.info(`📋 [FILLER FILTER] Scan report:`, scanReport);
+        logger.info(`✅ [FILLER FILTER] Inherited: ${inheritedFillers.length} fillers from ${templatesUsed.length} templates`);
+        logger.info(`✅ [FILLER FILTER] Custom: ${customFillers.length} company-specific fillers`);
+        logger.info(`📋 [FILLER FILTER] Templates loaded:`, templatesUsed.map(t => `${t.templateName} (${t.fillersCount} fillers)`));
         
         res.json({
             success: true,
             inheritedFillers,
             customFillers,
+            templatesUsed,  // NEW: Template metadata for frontend banners
             scanStatus: {
                 lastScan: company.aiAgentSettings?.fillerWords?.lastScan || null,
-                activeTemplatesScanned: activeTemplateIds.length,
-                scanReport
+                activeTemplatesScanned: templatesUsed.length,
+                totalInheritedFillers: inheritedFillers.length,
+                totalCustomFillers: customFillers.length
             }
         });
         

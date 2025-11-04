@@ -65,6 +65,7 @@ class AiCoreFillerFilterManager {
             this.inheritedFillers = data.inheritedFillers || [];
             this.customFillers = data.customFillers || [];
             this.scanStatus = data.scanStatus || {};
+            this.templatesUsed = data.templatesUsed || [];
             
             console.log('🔇 [FILLER FILTER] Checkpoint 9: Rendering UI...');
             this.render();
@@ -280,16 +281,14 @@ class AiCoreFillerFilterManager {
     }
 
     /**
-     * Render scan report
+     * Render template cards (NEW - matches Live Scenarios architecture)
      */
     renderScanReport() {
-        const scanReport = this.scanStatus?.scanReport || [];
-        
-        if (scanReport.length === 0) {
+        if (!this.templatesUsed || this.templatesUsed.length === 0) {
             return `
                 <div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
                     <h3 style="font-size: 16px; font-weight: 700; color: #92400e; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                        📋 Last Scan Report
+                        📘 Active Templates
                     </h3>
                     <p style="font-size: 14px; color: #78350f; margin: 0;">
                         <strong>No templates activated.</strong> Activate a template in the <strong>AiCore Templates</strong> tab to inherit filler words.
@@ -299,42 +298,76 @@ class AiCoreFillerFilterManager {
         }
         
         return `
-            <div style="background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 24px; margin-bottom: 24px;">
-                <h3 style="font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
-                    📋 Last Scan Report
+            <div style="margin-bottom: 32px;">
+                <h3 style="font-size: 18px; font-weight: 600; color: #111827; margin-bottom: 16px;">
+                    📘 Active Templates (${this.templatesUsed.length})
                 </h3>
-                <div style="display: flex; flex-direction: column; gap: 12px;">
-                    ${scanReport.map(report => `
-                        <div style="padding: 16px; background: ${report.fillers > 0 ? '#d1fae5' : '#fee2e2'}; border-left: 4px solid ${report.fillers > 0 ? '#10b981' : '#ef4444'}; border-radius: 8px;">
-                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
-                                <div style="flex: 1;">
-                                    <p style="font-size: 15px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
-                                        ${report.fillers > 0 ? '✅' : '⚠️'} ${report.templateName}
-                                    </p>
-                                    <p style="font-size: 13px; color: #6b7280; margin: 0;">
-                                        Scanned: <strong>${report.categories} categories</strong>, 
-                                        <strong>${report.scenarios} scenarios</strong>
-                                    </p>
-                                </div>
-                                <div style="text-align: right;">
-                                    <div style="font-size: 24px; font-weight: 700; color: ${report.fillers > 0 ? '#10b981' : '#ef4444'};">
-                                        ${report.fillers}
-                                    </div>
-                                    <div style="font-size: 11px; color: #6b7280; text-transform: uppercase; font-weight: 600;">
-                                        fillers
+                <div style="display: grid; gap: 16px;">
+                    ${this.templatesUsed.map(template => `
+                        <div style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; transition: all 0.2s;"
+                             onmouseover="this.style.borderColor='#6366f1'; this.style.boxShadow='0 4px 12px rgba(99, 102, 241, 0.1)'"
+                             onmouseout="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'">
+                            
+                            <!-- Template Header -->
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                                <div>
+                                    <h4 style="font-size: 16px; font-weight: 600; color: #111827; margin: 0 0 4px 0;">
+                                        📘 ${this.escapeHtml(template.templateName)}
+                                    </h4>
+                                    <div style="font-size: 12px; color: #6b7280;">
+                                        <code style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: monospace;">
+                                            ID: ${this.escapeHtml(template.templateId)}
+                                        </code>
+                                        <span style="margin: 0 8px; color: #d1d5db;">•</span>
+                                        <span style="font-weight: 500;">Version: ${this.escapeHtml(template.version || 'v1.0.0')}</span>
                                     </div>
                                 </div>
                             </div>
-                            ${report.fillers === 0 ? `
-                                <p style="font-size: 12px; color: #991b1b; margin: 8px 0 0 0; padding-top: 8px; border-top: 1px solid #fecaca;">
-                                    💡 This template has no filler words defined. Add custom fillers below to improve AI accuracy.
-                                </p>
-                            ` : ''}
+                            
+                            <!-- Template Stats -->
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px;">
+                                <div style="text-align: center; padding: 12px; background: #fef3c7; border-radius: 8px;">
+                                    <div style="font-size: 24px; font-weight: 700; color: #92400e;">
+                                        ${template.categoriesCount || 0}
+                                    </div>
+                                    <div style="font-size: 12px; color: #78350f; margin-top: 4px;">
+                                        Categories
+                                    </div>
+                                </div>
+                                
+                                <div style="text-align: center; padding: 12px; background: #dbeafe; border-radius: 8px;">
+                                    <div style="font-size: 24px; font-weight: 700; color: #1e40af;">
+                                        ${template.scenariosCount || 0}
+                                    </div>
+                                    <div style="font-size: 12px; color: #1e3a8a; margin-top: 4px;">
+                                        Scenarios
+                                    </div>
+                                </div>
+                                
+                                <div style="text-align: center; padding: 12px; background: #dcfce7; border-radius: 8px;">
+                                    <div style="font-size: 24px; font-weight: 700; color: #15803d;">
+                                        ${template.fillersCount || 0}
+                                    </div>
+                                    <div style="font-size: 12px; color: #166534; margin-top: 4px;">
+                                        Filler Words
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     `).join('')}
                 </div>
             </div>
         `;
+    }
+    
+    /**
+     * Escape HTML for safe rendering
+     */
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     /**
