@@ -152,20 +152,20 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
                     for (const category of template.categories) {
                         if (category.scenarios && Array.isArray(category.scenarios)) {
                             for (const scenario of category.scenarios) {
-                                // Defensive check: Skip scenarios without IDs
-                                if (!scenario._id) {
-                                    logger.warn(`⚠️ [LIVE SCENARIOS] Skipping scenario without ID in category "${category.name || 'Unknown'}" of template "${template.name}"`);
+                                // Defensive check: Skip scenarios without scenarioId
+                                if (!scenario.scenarioId) {
+                                    logger.warn(`⚠️ [LIVE SCENARIOS] Skipping scenario without scenarioId in category "${category.name || 'Unknown'}" of template "${template.name}"`);
                                     continue;
                                 }
                                 
                                 scenarios.push({
-                                    scenarioId: scenario._id.toString(),
+                                    scenarioId: scenario.scenarioId,  // ✅ Use scenarioId field (not _id)
                                     name: scenario.name || 'Unnamed Scenario',
                                     triggers: scenario.triggers || [],
                                     quickReplies: scenario.quickReplies || [],
                                     fullReplies: scenario.fullReplies || [],
                                     categoryName: category.name || 'General',
-                                    categoryId: category._id?.toString(),
+                                    categoryId: category.categoryId || category.name,  // Categories also don't have _id
                                     templateId: templateRef.templateId,
                                     templateName: template.name,
                                     priority: templateRef.priority || 1,
