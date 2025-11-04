@@ -319,9 +319,15 @@ class EnterpriseVariableScanService {
             
             for (const [normalizedKey, data] of allVariables.entries()) {
                 // Use preferred format (most common) as the canonical key
-                const canonicalKey = data.preferredFormat;
-                const formatVariations = Array.from(data.formatVariations);
+                const canonicalKey = data.preferredFormat || normalizedKey;  // Fallback to normalizedKey
+                const formatVariations = data.formatVariations ? Array.from(data.formatVariations) : [canonicalKey];
                 const hasMultipleFormats = formatVariations.length > 1;
+                
+                // Defensive check
+                if (!canonicalKey) {
+                    logger.error(`❌ [ENTERPRISE SCAN ${scanId}] Invalid variable data: normalizedKey=${normalizedKey}, data=`, data);
+                    continue;
+                }
                 
                 const varDef = {
                     key: canonicalKey,                          // Use preferred format
