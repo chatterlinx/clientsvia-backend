@@ -243,209 +243,209 @@ class DiagnosticService {
     
     /**
      * ========================================================================
-     * VARIABLES DIAGNOSTIC
+     * VARIABLES DIAGNOSTIC - AICORE VARIABLES TAB
      * ========================================================================
+     * Checks AiCore Variables (from template scanning)
+     * Location: company.configuration.variables (Map)
+     * Purpose: Developer alert - warn if variables exist but values are blank
+     * NOTE: This is a warning system only, does NOT block calls
      */
     static async checkVariables(company) {
         const checks = [];
         let score = 0;
-        const maxScore = 100;
         
-        const variables = company.configuration?.variables?.values || {};
+        // Get AiCore Variables (Map object from configuration.variables)
+        const variablesMap = company.configuration?.variables || {};
+        
+        // Convert Map to object if needed
+        let variables = {};
+        if (variablesMap instanceof Map) {
+            variables = Object.fromEntries(variablesMap);
+        } else {
+            variables = variablesMap;
+        }
+        
         const variableKeys = Object.keys(variables);
+        const totalVariables = variableKeys.length;
         
-        // Define required variables and their validation rules
-        const requiredVariables = [
-            {
-                key: 'companyName',
-                label: 'Company Name',
-                required: true,
-                validation: (val) => val && val.trim().length > 0,
-                format: 'Non-empty string',
-                usedBy: ['All AI responses', 'Pre-activation message', 'Voice greetings']
-            },
-            {
-                key: 'phoneNumber',
-                label: 'Phone Number',
-                required: true,
-                validation: (val) => val && /^\+?[1-9]\d{1,14}$/.test(val.replace(/[\s\-()]/g, '')),
-                format: 'E.164 format: +1-XXX-XXX-XXXX',
-                usedBy: ['Pre-activation message', 'Voice responses', 'SMS notifications']
-            },
-            {
-                key: 'email',
-                label: 'Email Address',
-                required: true,
-                validation: (val) => val && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val),
-                format: 'Valid email: name@domain.com',
-                usedBy: ['Contact information', 'Appointment confirmations']
-            },
-            {
-                key: 'address',
-                label: 'Business Address',
-                required: false,
-                validation: (val) => !val || val.trim().length > 0,
-                format: 'Complete address string',
-                usedBy: ['Location queries', 'Directions']
-            },
-            {
-                key: 'website',
-                label: 'Website URL',
-                required: false,
-                validation: (val) => !val || /^https?:\/\/.+\..+/.test(val),
-                format: 'Valid URL: https://example.com',
-                usedBy: ['Information queries', 'Appointment booking links']
-            }
-        ];
+        logger.debug(`[DIAGNOSTICS] Checking ${totalVariables} AiCore variables`);
         
-        let passedCount = 0;
-        let failedCount = 0;
-        
-        // Check each required variable
-        for (const varDef of requiredVariables) {
-            const currentValue = variables[varDef.key];
-            const exists = currentValue !== undefined && currentValue !== null && currentValue !== '';
-            const isValid = exists ? varDef.validation(currentValue) : false;
+        // ────────────────────────────────────────────────────────────────────
+        // CHECK 1: No Variables Found
+        // ────────────────────────────────────────────────────────────────────
+        if (totalVariables === 0) {
+            checks.push({
+                id: 'var_none_found',
+                type: 'configuration',
+                status: 'warning',
+                severity: 'medium',
+                message: 'No variables detected from template scan',
+                currentValue: 0,
+                expectedValue: 'Variables from scanned templates',
+                impact: [
+                    'Template placeholders may not be replaced',
+                    'Scenarios using variables will have placeholder text'
+                ],
+                codeReference: {
+                    file: 'models/v2Company.js',
+                    line: 2066,
+                    path: 'configuration.variables'
+                },
+                fix: {
+                    action: 'navigate',
+                    target: 'variables',
+                    description: 'Scan templates to detect variables or add them manually'
+                }
+            });
             
-            if (varDef.required && !exists) {
-                // Required but missing
+            return {
+                component: 'variables',
+                companyId: company._id,
+                companyName: company.companyName,
+                status: 'warning',
+                score: 0,
+                timestamp: new Date().toISOString(),
+                checks,
+                summary: {
+                    total: 1,
+                    passed: 0,
+                    failed: 0,
+                    warnings: 1
+                },
+                metadata: {
+                    totalVariables: 0,
+                    withValues: 0,
+                    blank: 0
+                }
+            };
+        }
+        
+        // ────────────────────────────────────────────────────────────────────
+        // CHECK 2: Variables with Blank/Empty Values
+        // ────────────────────────────────────────────────────────────────────
+        let variablesWithValues = 0;
+        let variablesBlank = 0;
+        
+        for (const [varName, varValue] of Object.entries(variables)) {
+            const hasValue = varValue && varValue.trim().length > 0;
+            
+            if (!hasValue) {
+                // Variable exists but is BLANK - RED X WARNING
                 checks.push({
-                    id: `var_missing_${varDef.key}`,
-                    type: 'required_field',
+                    id: `var_blank_${varName}`,
+                    type: 'missing_value',
                     status: 'failed',
-                    severity: 'critical',
-                    field: varDef.key,
-                    label: varDef.label,
-                    message: `${varDef.label} is required but not configured`,
-                    currentValue: null,
-                    expectedFormat: varDef.format,
-                    impact: varDef.usedBy,
+                    severity: 'high',
+                    field: varName,
+                    message: `Variable "${varName}" exists but has no value`,
+                    currentValue: varValue || '(empty)',
+                    expectedValue: 'Non-empty value to replace placeholder',
+                    impact: [
+                        `Placeholder {${varName}} will not be replaced in scenarios`,
+                        'Customers may see template placeholders in responses'
+                    ],
                     codeReference: {
                         file: 'models/v2Company.js',
-                        line: 2053,
-                        path: `configuration.variables.values.${varDef.key}`
+                        line: 2066,
+                        path: `configuration.variables.${varName}`
                     },
                     fix: {
                         action: 'navigate',
                         target: 'variables',
-                        field: varDef.key,
-                        description: `Set ${varDef.label} in Variables tab`
+                        field: varName,
+                        description: `Fill in value for {${varName}} variable`
                     }
                 });
-                failedCount++;
-            } else if (exists && !isValid) {
-                // Exists but invalid format
+                variablesBlank++;
+            } else {
+                // Variable has value - GREEN CHECKMARK
                 checks.push({
-                    id: `var_invalid_${varDef.key}`,
-                    type: 'validation',
-                    status: 'failed',
-                    severity: 'high',
-                    field: varDef.key,
-                    label: varDef.label,
-                    message: `${varDef.label} has invalid format`,
-                    currentValue: currentValue,
-                    expectedFormat: varDef.format,
-                    impact: varDef.usedBy,
-                    codeReference: {
-                        file: 'models/v2Company.js',
-                        line: 2053,
-                        path: `configuration.variables.values.${varDef.key}`
-                    },
-                    fix: {
-                        action: 'edit',
-                        target: 'variables',
-                        field: varDef.key,
-                        description: `Correct ${varDef.label} format to: ${varDef.format}`
-                    }
-                });
-                failedCount++;
-            } else if (exists && isValid) {
-                // Valid
-                checks.push({
-                    id: `var_valid_${varDef.key}`,
+                    id: `var_valid_${varName}`,
                     type: 'validation',
                     status: 'passed',
                     severity: 'info',
-                    field: varDef.key,
-                    label: varDef.label,
-                    message: `${varDef.label} is properly configured`,
-                    currentValue: currentValue,
+                    field: varName,
+                    message: `Variable "${varName}" has value configured`,
+                    currentValue: varValue,
                     details: {
-                        format: varDef.format,
-                        usedBy: varDef.usedBy
+                        variableName: varName,
+                        value: varValue,
+                        length: varValue.length
                     }
                 });
-                passedCount++;
-            } else if (!varDef.required && !exists) {
-                // Optional and not set - not a failure
-                checks.push({
-                    id: `var_optional_${varDef.key}`,
-                    type: 'optional',
-                    status: 'warning',
-                    severity: 'low',
-                    field: varDef.key,
-                    label: varDef.label,
-                    message: `${varDef.label} is optional but not configured`,
-                    currentValue: null,
-                    expectedFormat: varDef.format,
-                    fix: {
-                        action: 'navigate',
-                        target: 'variables',
-                        field: varDef.key,
-                        description: `Optionally set ${varDef.label} for enhanced responses`
-                    }
-                });
+                variablesWithValues++;
             }
         }
         
-        // Check for extra variables (custom)
-        const customVars = variableKeys.filter(key => 
-            !requiredVariables.find(v => v.key === key)
-        );
+        // ────────────────────────────────────────────────────────────────────
+        // CALCULATE SCORE
+        // ────────────────────────────────────────────────────────────────────
+        score = totalVariables > 0 
+            ? Math.round((variablesWithValues / totalVariables) * 100)
+            : 0;
         
-        if (customVars.length > 0) {
-            checks.push({
-                id: 'var_custom_found',
-                type: 'info',
+        // ────────────────────────────────────────────────────────────────────
+        // SUMMARY CHECK
+        // ────────────────────────────────────────────────────────────────────
+        if (variablesBlank === 0 && totalVariables > 0) {
+            checks.unshift({
+                id: 'var_all_filled',
+                type: 'summary',
                 status: 'passed',
                 severity: 'info',
-                message: `${customVars.length} custom variable(s) configured`,
+                message: `All ${totalVariables} variable(s) have values configured`,
                 details: {
-                    customVariables: customVars,
-                    note: 'Custom variables are available for use in scenarios and responses'
+                    total: totalVariables,
+                    withValues: variablesWithValues,
+                    blank: variablesBlank,
+                    note: 'All template placeholders will be properly replaced'
+                }
+            });
+        } else if (variablesBlank > 0) {
+            checks.unshift({
+                id: 'var_some_blank',
+                type: 'summary',
+                status: 'failed',
+                severity: 'high',
+                message: `${variablesBlank} of ${totalVariables} variable(s) have blank values`,
+                currentValue: `${variablesBlank} blank`,
+                expectedValue: 'All variables should have values',
+                impact: [
+                    'Template placeholders will not be replaced',
+                    'Customers may see {variableName} in responses',
+                    'Professional appearance compromised'
+                ],
+                fix: {
+                    action: 'navigate',
+                    target: 'variables',
+                    description: 'Fill in all blank variable values in AiCore Variables tab'
                 }
             });
         }
         
-        // Calculate score
-        const totalRequired = requiredVariables.filter(v => v.required).length;
-        const requiredPassed = requiredVariables.filter(v => {
-            const val = variables[v.key];
-            return v.required && val && v.validation(val);
-        }).length;
-        
-        score = totalRequired > 0 ? Math.round((requiredPassed / totalRequired) * 100) : 100;
-        
+        const failed = checks.filter(c => c.status === 'failed').length;
+        const passed = checks.filter(c => c.status === 'passed').length;
         const warnings = checks.filter(c => c.status === 'warning').length;
         
         return {
             component: 'variables',
             companyId: company._id,
             companyName: company.companyName,
-            status: failedCount > 0 ? 'failed' : (warnings > 0 ? 'warning' : 'passed'),
+            status: variablesBlank > 0 ? 'failed' : 'passed',
             score,
             timestamp: new Date().toISOString(),
             checks,
             summary: {
                 total: checks.length,
-                passed: passedCount,
-                failed: failedCount,
+                passed,
+                failed,
                 warnings
             },
             metadata: {
-                totalVariables: variableKeys.length,
-                requiredVariables: totalRequired,
-                customVariables: customVars.length
+                totalVariables,
+                withValues: variablesWithValues,
+                blank: variablesBlank,
+                dataSource: 'configuration.variables (AiCore Variables tab)'
             }
         };
     }
