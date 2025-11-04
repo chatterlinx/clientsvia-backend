@@ -143,12 +143,36 @@ router.get('/:companyId/configuration/variables', async (req, res) => {
     try {
         const result = await CompanyVariablesService.getVariablesForCompany(req.params.companyId);
         
-        res.json({
+        // ✨ ENTERPRISE: Include last scan report if available
+        const Company = require('../../models/v2Company');
+        const company = await Company.findById(req.params.companyId)
+            .select('aiAgentSettings.variableScanStatus.lastReport');
+        
+        const response = {
             success: true,
             variables: result.variables,
             definitions: result.definitions,
             meta: result.meta
-        });
+        };
+        
+        // Include scanReport if it exists (for enterprise dashboard)
+        if (company?.aiAgentSettings?.variableScanStatus?.lastReport) {
+            response.scanReport = company.aiAgentSettings.variableScanStatus.lastReport;
+            
+            // ✨ Also include stats summary (for backward compatibility with UI)
+            response.stats = {
+                templatesCount: response.scanReport.aggregated.totalTemplates || 0,
+                categoriesCount: response.scanReport.aggregated.totalCategories || 0,
+                scenariosCount: response.scanReport.aggregated.totalScenarios || 0
+            };
+            
+            logger.info(`📊 [COMPANY CONFIG] Including scan report: ${response.scanReport.scanId}`);
+            logger.info(`📊 [COMPANY CONFIG] Stats: ${response.stats.templatesCount} templates, ${response.stats.categoriesCount} categories, ${response.stats.scenariosCount} scenarios`);
+        } else {
+            logger.info(`📊 [COMPANY CONFIG] No scan report available yet - run Force Scan Now to generate`);
+        }
+        
+        res.json(response);
         
     } catch (error) {
         logger.error('[COMPANY CONFIG] Error loading variables:', error);
