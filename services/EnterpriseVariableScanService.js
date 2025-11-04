@@ -86,7 +86,7 @@ class EnterpriseVariableScanService {
             }
             
             // Get previous scan for differential analysis
-            const previousScan = company.aiAgentSettings?.scanMetadata?.lastScan || null;
+            const previousScan = company.aiAgentSettings?.variableScanStatus?.lastReport || null;
             const previousScanId = previousScan?.scanId || null;
             
             logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 3: Company loaded`);
@@ -101,6 +101,11 @@ class EnterpriseVariableScanService {
             const activeTemplates = templateRefs.filter(ref => ref.enabled !== false);
             
             logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 5: Found ${activeTemplates.length} active templates`);
+
+            // Preload scenario pool once for the entire scan (respects scenario controls)
+            const scenarioPoolResult = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
+            const scenarioPool = scenarioPoolResult?.scenarios || [];
+            logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 5.1: Scenario pool loaded with ${scenarioPool.length} scenarios`);
             
             if (activeTemplates.length === 0) {
                 logger.warn(`⚠️  [ENTERPRISE SCAN ${scanId}] No active templates - scan will return 0 variables (valid state)`);
@@ -135,9 +140,8 @@ class EnterpriseVariableScanService {
                 
                 logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 6.${i + 1}.1: Template loaded: ${template.name}`);
                 
-                // Use ScenarioPoolService to get scenarios (respects filters)
-                const scenarioPool = await ScenarioPoolService.getScenarioPool(companyId);
-                const templateScenarios = scenarioPool.scenarios.filter(s => 
+                // Use preloaded ScenarioPoolService results (respects filters)
+                const templateScenarios = scenarioPool.filter(s => 
                     s.templateId === templateId || s.templateId === templateId.toString()
                 );
                 
