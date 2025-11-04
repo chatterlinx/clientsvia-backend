@@ -246,7 +246,7 @@ class DiagnosticService {
      * VARIABLES DIAGNOSTIC - AICORE VARIABLES TAB
      * ========================================================================
      * Checks AiCore Variables (from template scanning)
-     * Location: company.configuration.variables (Map)
+     * Location: company.aiAgentSettings.variables (Map)
      * Purpose: Developer alert - warn if variables exist but values are blank
      * NOTE: This is a warning system only, does NOT block calls
      */
@@ -254,21 +254,21 @@ class DiagnosticService {
         const checks = [];
         let score = 0;
         
-        // Get AiCore Variables (Map object from configuration.variables)
-        const variablesMap = company.configuration?.variables || {};
+        // Get AiCore Variables (Map object from aiAgentSettings.variables)
+        const variablesMap = company.aiAgentSettings?.variables || {};
         
         // Convert Map to object if needed
         let variables = {};
         if (variablesMap instanceof Map) {
             variables = Object.fromEntries(variablesMap);
-        } else {
+        } else if (typeof variablesMap === 'object' && variablesMap !== null) {
             variables = variablesMap;
         }
         
         const variableKeys = Object.keys(variables);
         const totalVariables = variableKeys.length;
         
-        logger.debug(`[DIAGNOSTICS] Checking ${totalVariables} AiCore variables`);
+        logger.debug(`[DIAGNOSTICS] Checking ${totalVariables} AiCore variables from aiAgentSettings.variables`);
         
         // ────────────────────────────────────────────────────────────────────
         // CHECK 1: No Variables Found
@@ -288,8 +288,8 @@ class DiagnosticService {
                 ],
                 codeReference: {
                     file: 'models/v2Company.js',
-                    line: 2066,
-                    path: 'configuration.variables'
+                    line: 1833,
+                    path: 'aiAgentSettings.variables'
                 },
                 fix: {
                     action: 'navigate',
@@ -346,8 +346,8 @@ class DiagnosticService {
                     ],
                     codeReference: {
                         file: 'models/v2Company.js',
-                        line: 2066,
-                        path: `configuration.variables.${varName}`
+                        line: 1833,
+                        path: `aiAgentSettings.variables.${varName}`
                     },
                     fix: {
                         action: 'navigate',
@@ -445,7 +445,7 @@ class DiagnosticService {
                 totalVariables,
                 withValues: variablesWithValues,
                 blank: variablesBlank,
-                dataSource: 'configuration.variables (AiCore Variables tab)'
+                dataSource: 'aiAgentSettings.variables (AiCore Variables tab)'
             }
         };
     }
