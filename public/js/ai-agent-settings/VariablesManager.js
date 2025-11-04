@@ -1057,7 +1057,7 @@ class VariablesManager {
             await this.clearCache();
             
             // ✨ SMART MESSAGING based on differential analysis
-            if (this.scanReport && this.scanReport.differential) {
+            if (this.scanReport && this.scanReport.differential && this.scanReport.differential.summary && this.scanReport.aggregated) {
                 const diff = this.scanReport.differential.summary;
                 const agg = this.scanReport.aggregated;
                 
