@@ -547,9 +547,25 @@ class AiCoreTemplatesManager {
             // Show success message
             this.showSuccess('Template activated! Variables are being scanned automatically.');
             
-            // Notify parent to refresh variables tab
-            if (this.parent && typeof this.parent.refresh === 'function') {
-                setTimeout(() => this.parent.refresh(), 1000);
+            // Notify all relevant tabs to refresh their data
+            if (this.parent) {
+                // Refresh Variables tab
+                if (this.parent.variablesManager && typeof this.parent.variablesManager.load === 'function') {
+                    console.log('🔄 [AICORE TEMPLATES] Refreshing Variables tab...');
+                    setTimeout(() => this.parent.variablesManager.load(), 1000);
+                }
+                
+                // Refresh Filler Filter tab
+                if (this.parent.aiCoreFillerFilterManager && typeof this.parent.aiCoreFillerFilterManager.load === 'function') {
+                    console.log('🔄 [AICORE TEMPLATES] Refreshing Filler Filter tab...');
+                    setTimeout(() => this.parent.aiCoreFillerFilterManager.load(), 1000);
+                }
+                
+                // Refresh Live Scenarios tab
+                if (this.parent.aiCoreLiveScenariosManager && typeof this.parent.aiCoreLiveScenariosManager.load === 'function') {
+                    console.log('🔄 [AICORE TEMPLATES] Refreshing Live Scenarios tab...');
+                    setTimeout(() => this.parent.aiCoreLiveScenariosManager.load(), 1000);
+                }
             }
             
         } catch (error) {
@@ -609,9 +625,25 @@ class AiCoreTemplatesManager {
             // Show success message
             this.showSuccess(`"${templateName}" has been removed successfully.`);
             
-            // Notify parent to refresh variables tab
-            if (this.parent && typeof this.parent.refresh === 'function') {
-                setTimeout(() => this.parent.refresh(), 1000);
+            // Notify all relevant tabs to refresh their data
+            if (this.parent) {
+                // Refresh Variables tab
+                if (this.parent.variablesManager && typeof this.parent.variablesManager.load === 'function') {
+                    console.log('🔄 [AICORE TEMPLATES] Refreshing Variables tab...');
+                    setTimeout(() => this.parent.variablesManager.load(), 1000);
+                }
+                
+                // Refresh Filler Filter tab
+                if (this.parent.aiCoreFillerFilterManager && typeof this.parent.aiCoreFillerFilterManager.load === 'function') {
+                    console.log('🔄 [AICORE TEMPLATES] Refreshing Filler Filter tab...');
+                    setTimeout(() => this.parent.aiCoreFillerFilterManager.load(), 1000);
+                }
+                
+                // Refresh Live Scenarios tab
+                if (this.parent.aiCoreLiveScenariosManager && typeof this.parent.aiCoreLiveScenariosManager.load === 'function') {
+                    console.log('🔄 [AICORE TEMPLATES] Refreshing Live Scenarios tab...');
+                    setTimeout(() => this.parent.aiCoreLiveScenariosManager.load(), 1000);
+                }
             }
             
         } catch (error) {
