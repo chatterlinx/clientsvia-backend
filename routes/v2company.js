@@ -345,7 +345,7 @@ async function checkCompanyCache(req, res, next) {
         // Check if Redis is available before trying to use it
         if (!redisClient || !redisClient.isReady) {
             logger.warn(`⚠️ [CACHE] Redis not ready, skipping cache check`);
-            throw new Error('Redis not ready'); // Jump to MongoDB fallback
+            return next(); // Skip cache, proceed to MongoDB
         }
         
         const cachedData = await redisClient.get(cacheKey);
