@@ -1425,13 +1425,20 @@ router.get('/:companyId/configuration/analytics', async (req, res) => {
  * ============================================================================
  * POST /api/company/:companyId/configuration/variables/scan
  * Trigger background scan for all active templates
+ * 
+ * ✨ ENTERPRISE EDITION: Uses EnterpriseVariableScanService
+ *    - Comprehensive scan reports
+ *    - Differential analysis
+ *    - Word count analysis
+ *    - Template breakdown
+ *    - Performance metrics
  * ============================================================================
  */
-const PlaceholderScanService = require('../../services/PlaceholderScanService');
+const EnterpriseVariableScanService = require('../../services/EnterpriseVariableScanService');
 const CacheHelper = require('../../utils/cacheHelper');
 
 router.post('/:companyId/configuration/variables/scan', async (req, res) => {
-    logger.debug(`🔍 [VARIABLE SCAN] POST /configuration/variables/scan for company: ${req.params.companyId}`);
+    logger.info(`🔍 [ENTERPRISE SCAN] POST /configuration/variables/scan for company: ${req.params.companyId}`);
     
     try {
         const companyId = req.params.companyId;
@@ -1443,20 +1450,21 @@ router.post('/:companyId/configuration/variables/scan', async (req, res) => {
             return res.status(404).json({ error: 'Company not found' });
         }
         
-        logger.info(`🔍 [VARIABLE SCAN] Starting scan for company ${companyId}`);
+        logger.info(`🔍 [ENTERPRISE SCAN] Starting comprehensive scan for company ${companyId}`);
         
-        // Run the scan using PlaceholderScanService (uses ScenarioPoolService for consistency)
-        const scanResult = await PlaceholderScanService.scanCompany(companyId, {
+        // ✨ USE ENTERPRISE SERVICE - Returns comprehensive scan report
+        const scanReport = await EnterpriseVariableScanService.scanCompany(companyId, {
             reason: 'manual',
             triggeredBy: req.user?.email || 'system'
         });
         
-        logger.info(`✅ [VARIABLE SCAN] Scan complete:`, scanResult);
+        logger.info(`✅ [ENTERPRISE SCAN] Scan complete - ID: ${scanReport.scanId}`);
+        logger.info(`📊 [ENTERPRISE SCAN] Found ${scanReport.aggregated.uniqueVariables} variables across ${scanReport.aggregated.totalScenarios} scenarios`);
         
         // Get updated variables data (includes meta)
         const result = await CompanyVariablesService.getVariablesForCompany(companyId);
         
-        // Build detected variables summary for frontend
+        // Build detected variables summary for frontend (backward compatibility)
         const detectedVariablesSummary = result.definitions.map(def => ({
             key: def.key,
             label: def.label || def.key,
@@ -1466,33 +1474,36 @@ router.post('/:companyId/configuration/variables/scan', async (req, res) => {
             required: def.required || false
         }));
         
-        // Build stats object from scanResult
-        const stats = scanResult.stats || {
-            templatesCount: 0,
-            categoriesCount: 0,
-            scenariosCount: 0,
-            totalPlaceholderOccurrences: 0,
-            uniqueVariables: 0
-        };
-        stats.newVariables = scanResult.newCount || 0;
-        
+        // Return comprehensive enterprise report + backward compatible fields
         res.json({
             success: true,
-            message: 'Scan completed',
-            scannedAt: new Date().toISOString(),
+            message: scanReport.differential.summary.noChangesDetected 
+                ? 'No new findings - scan matches previous'
+                : 'Scan completed with changes',
+            
+            // ✨ ENTERPRISE SCAN REPORT
+            scanReport,
+            
+            // Backward compatibility (for existing frontend)
+            scannedAt: scanReport.timestamp,
             variables: result.variables,
             definitions: result.definitions,
             meta: result.meta,
-            stats,
+            stats: scanReport.aggregated,
             detectedVariables: detectedVariablesSummary,
-            templatesUsed: scanResult.templatesUsed || [],
-            templateBreakdown: scanResult.templateBreakdown || [], // ENTERPRISE: Expected vs Actual validation
-            validationIssues: scanResult.validationIssues || [], // ENTERPRISE: List of validation issues
-            scanMetadata: scanResult.scanMetadata || { reason: 'manual', triggeredBy: 'system' }
+            templateBreakdown: scanReport.templatesScanned.list,
+            validationIssues: scanReport.validation.issues,
+            differential: scanReport.differential,
+            scanMetadata: {
+                scanId: scanReport.scanId,
+                reason: scanReport.triggerReason,
+                triggeredBy: scanReport.triggeredBy,
+                duration: scanReport.duration
+            }
         });
         
     } catch (error) {
-        logger.error('❌ [VARIABLE SCAN] Error scanning company:', error);
+        logger.error('❌ [ENTERPRISE SCAN] Error scanning company:', error);
         res.status(500).json({ 
             error: 'Failed to scan variables',
             message: error.message
@@ -1797,19 +1808,29 @@ router.post('/:companyId/configuration/templates', async (req, res) => {
         
         await company.save();
         
-        // 🔥 AUTO-SCAN: Trigger variable scan after template activation
-        const PlaceholderScanService = require('../../services/PlaceholderScanService');
+        // 🔥 ✨ ENTERPRISE AUTO-SCAN: Trigger comprehensive variable scan after template activation
         setImmediate(async () => {
             try {
-                logger.info(`🔍 [AUTO-SCAN] Template activated (${templateId}), triggering variable scan for company ${req.params.companyId}`);
-                const scanResult = await PlaceholderScanService.scanCompany(req.params.companyId, {
-                    reason: 'template_activated',
+                logger.info(`🔍 [ENTERPRISE AUTO-SCAN] Template activated: ${template.name} (${templateId})`);
+                logger.info(`🔍 [ENTERPRISE AUTO-SCAN] Triggering comprehensive scan for company ${req.params.companyId}`);
+                
+                const scanReport = await EnterpriseVariableScanService.scanCompany(req.params.companyId, {
+                    reason: 'template_added',
                     triggeredBy: req.user?.email || 'system',
-                    templateId
+                    templateId,
+                    templateName: template.name
                 });
-                logger.info(`✅ [AUTO-SCAN] Variable scan complete after template activation: ${scanResult.stats?.uniqueVariables || 0} variables found`);
+                
+                logger.info(`✅ [ENTERPRISE AUTO-SCAN] Scan complete - ID: ${scanReport.scanId}`);
+                logger.info(`📊 [ENTERPRISE AUTO-SCAN] Found ${scanReport.aggregated.uniqueVariables} variables across ${scanReport.aggregated.totalScenarios} scenarios`);
+                logger.info(`📊 [ENTERPRISE AUTO-SCAN] Scanned ${scanReport.aggregated.totalWords.toLocaleString()} words, ${scanReport.aggregated.uniqueWords.toLocaleString()} unique`);
+                
+                if (scanReport.differential.summary.newVariablesCount > 0) {
+                    logger.info(`✨ [ENTERPRISE AUTO-SCAN] +${scanReport.differential.summary.newVariablesCount} new variables discovered!`);
+                }
             } catch (scanError) {
-                logger.error(`❌ [AUTO-SCAN] Variable scan failed after template activation:`, scanError.message);
+                logger.error(`❌ [ENTERPRISE AUTO-SCAN] Variable scan failed after template activation:`, scanError.message);
+                logger.error(`❌ [ENTERPRISE AUTO-SCAN] Stack trace:`, scanError.stack);
                 // Non-critical - don't block the response
             }
         });
@@ -1886,19 +1907,31 @@ router.delete('/:companyId/configuration/templates/:templateId', async (req, res
         
         await company.save();
         
-        // 🔥 AUTO-SCAN: Trigger variable scan after template removal
-        const PlaceholderScanService = require('../../services/PlaceholderScanService');
+        // 🔥 ✨ ENTERPRISE AUTO-SCAN: Trigger cleanup scan after template removal
         setImmediate(async () => {
             try {
-                logger.info(`🔍 [AUTO-SCAN] Template removed (${req.params.templateId}), triggering variable scan for company ${req.params.companyId}`);
-                const scanResult = await PlaceholderScanService.scanCompany(req.params.companyId, {
+                logger.info(`🔍 [ENTERPRISE AUTO-SCAN] Template removed (${req.params.templateId})`);
+                logger.info(`🔍 [ENTERPRISE AUTO-SCAN] Triggering cleanup scan for company ${req.params.companyId}`);
+                
+                const scanReport = await EnterpriseVariableScanService.scanCompany(req.params.companyId, {
                     reason: 'template_removed',
                     triggeredBy: req.user?.email || 'system',
-                    templateId: req.params.templateId
+                    removedTemplateId: req.params.templateId
                 });
-                logger.info(`✅ [AUTO-SCAN] Variable scan complete after template removal: ${scanResult.stats?.uniqueVariables || 0} variables found`);
+                
+                logger.info(`✅ [ENTERPRISE AUTO-SCAN] Cleanup scan complete - ID: ${scanReport.scanId}`);
+                logger.info(`📊 [ENTERPRISE AUTO-SCAN] Remaining: ${scanReport.aggregated.uniqueVariables} variables across ${scanReport.aggregated.totalScenarios} scenarios`);
+                
+                if (scanReport.differential.summary.removedVariablesCount > 0) {
+                    logger.info(`🗑️  [ENTERPRISE AUTO-SCAN] -${scanReport.differential.summary.removedVariablesCount} variables removed (orphaned by template removal)`);
+                }
+                
+                if (scanReport.aggregated.uniqueVariables === 0) {
+                    logger.info(`ℹ️  [ENTERPRISE AUTO-SCAN] No templates remaining - 0 variables is valid state`);
+                }
             } catch (scanError) {
-                logger.error(`❌ [AUTO-SCAN] Variable scan failed after template removal:`, scanError.message);
+                logger.error(`❌ [ENTERPRISE AUTO-SCAN] Cleanup scan failed after template removal:`, scanError.message);
+                logger.error(`❌ [ENTERPRISE AUTO-SCAN] Stack trace:`, scanError.stack);
                 // Non-critical - don't block the response
             }
         });

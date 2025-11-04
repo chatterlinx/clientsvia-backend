@@ -422,16 +422,27 @@ class VariablesManager {
         const categoriesCount = this.stats?.categoriesCount || 0;
         const scenariosCount = this.stats?.scenariosCount || 0;
         
-        // Get validation status from first template
-        const firstTemplate = this.templateBreakdown[0] || {};
-        const expectedCategories = firstTemplate.expected?.categories || 0;
-        const scannedCategories = firstTemplate.scanned?.categories || 0;
-        const expectedScenarios = firstTemplate.expected?.scenarios || 0;
-        const scannedScenarios = firstTemplate.scanned?.scenarios || 0;
+        // ✅ FIX: Use stats object directly (not templateBreakdown which may be empty)
+        let scannedCategories = categoriesCount;
+        let expectedCategories = categoriesCount; // Expected = scanned (from stats)
+        let scannedScenarios = scenariosCount;
+        let expectedScenarios = scenariosCount; // Expected = scanned (from stats)
+        
+        // Check for validation issues from templateBreakdown if available
+        const hasValidationIssues = this.validationIssues.length > 0;
+        
+        // For more detailed validation, check templateBreakdown if it exists
+        if (this.templateBreakdown && this.templateBreakdown.length > 0) {
+            const firstTemplate = this.templateBreakdown[0];
+            if (firstTemplate.expected && firstTemplate.scanned) {
+                // Use actual expected vs scanned if available
+                expectedCategories = firstTemplate.expected.categories || categoriesCount;
+                expectedScenarios = firstTemplate.expected.scenarios || scenariosCount;
+            }
+        }
         
         const categoriesMatch = scannedCategories === expectedCategories;
         const scenariosMatch = scannedScenarios === expectedScenarios;
-        const hasValidationIssues = this.validationIssues.length > 0;
         
         const templateIcon = hasValidationIssues ? '⚠️' : '✅';
         const categoriesIcon = categoriesMatch ? '✅' : (scannedCategories > 0 ? '⚠️' : '❌');
