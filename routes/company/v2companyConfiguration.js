@@ -1485,7 +1485,9 @@ router.post('/:companyId/configuration/variables/scan', async (req, res) => {
             meta: result.meta,
             stats,
             detectedVariables: detectedVariablesSummary,
-            templatesUsed: scanResult.templatesUsed || [], // Include template metadata for UI
+            templatesUsed: scanResult.templatesUsed || [],
+            templateBreakdown: scanResult.templateBreakdown || [], // ENTERPRISE: Expected vs Actual validation
+            validationIssues: scanResult.validationIssues || [], // ENTERPRISE: List of validation issues
             scanMetadata: scanResult.scanMetadata || { reason: 'manual', triggeredBy: 'system' }
         });
         
@@ -1493,6 +1495,56 @@ router.post('/:companyId/configuration/variables/scan', async (req, res) => {
         logger.error('❌ [VARIABLE SCAN] Error scanning company:', error);
         res.status(500).json({ 
             error: 'Failed to scan variables',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * ============================================================================
+ * GET /api/company/:companyId/configuration/variables/scan-history
+ * Get scan history for audit trail and validation (ENTERPRISE)
+ * ============================================================================
+ */
+router.get('/:companyId/configuration/variables/scan-history', async (req, res) => {
+    logger.info(`📊 [VARIABLE SCAN HISTORY] GET /configuration/variables/scan-history for company: ${req.params.companyId}`);
+    
+    try {
+        const company = await Company.findById(req.params.companyId)
+            .select('aiAgentSettings.scanMetadata')
+            .lean();
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        const scanHistory = company.aiAgentSettings?.scanMetadata?.history || [];
+        const lastScan = company.aiAgentSettings?.scanMetadata?.lastScan || null;
+        
+        // Calculate summary stats across all scans
+        const summary = {
+            totalScans: scanHistory.length,
+            lastScanDate: lastScan?.scannedAt || null,
+            lastScanStatus: lastScan?.validation?.status || 'unknown',
+            totalIssues: scanHistory.reduce((sum, scan) => sum + (scan.validation?.issueCount || 0), 0),
+            scansByReason: {
+                manual: scanHistory.filter(s => s.reason === 'manual').length,
+                template_activated: scanHistory.filter(s => s.reason === 'template_activated').length,
+                template_removed: scanHistory.filter(s => s.reason === 'template_removed').length
+            }
+        };
+        
+        res.json({
+            success: true,
+            lastScan,
+            history: scanHistory,
+            summary
+        });
+        
+    } catch (error) {
+        logger.error('❌ [VARIABLE SCAN HISTORY] Error loading scan history:', error);
+        res.status(500).json({ 
+            error: 'Failed to load scan history',
             message: error.message
         });
     }

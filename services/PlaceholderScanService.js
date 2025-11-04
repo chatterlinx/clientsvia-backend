@@ -95,6 +95,7 @@ class PlaceholderScanService {
      */
     static async scanCompany(companyId, options = {}) {
         const { reason = 'manual', triggeredBy = 'system', templateId = null } = options;
+        const startTime = Date.now();
         
         logger.debug(`🔍 [PLACEHOLDER SCAN] Starting scan for company ${companyId} (reason: ${reason}, triggeredBy: ${triggeredBy})`);
         
@@ -147,33 +148,125 @@ class PlaceholderScanService {
                 safeTemplatesUsed.map(t => t.templateId)
             );
             
-            // Log template details for debugging
+            // ============================================================================
+            // ENTERPRISE VALIDATION: Load actual templates for expected vs actual comparison
+            // ============================================================================
+            logger.info('[VARIABLE SCAN] Loading template schemas for validation...');
+            
+            const templateIds = safeTemplatesUsed.map(t => t.templateId);
+            const actualTemplates = await GlobalInstantResponseTemplate
+                .find({ _id: { $in: templateIds } })
+                .select('_id name categories')
+                .lean();
+            
+            logger.info('[VARIABLE SCAN] Loaded %d template schemas from database', actualTemplates.length);
+            
+            // Build validation report: expected vs actual
+            const templateBreakdown = [];
+            const validationIssues = [];
+            
             safeTemplatesUsed.forEach((template, idx) => {
                 const templateScenarios = safeScenarios.filter(s => String(s.templateId) === String(template.templateId));
                 const templateCategories = new Set(templateScenarios.map(s => s.categoryName));
                 
-                logger.info('[VARIABLE SCAN]   Template %d: %s (ID: %s) - %d categories, %d scenarios', 
+                // Find actual template schema
+                const actualTemplate = actualTemplates.find(t => String(t._id) === String(template.templateId));
+                
+                let expectedCategories = 0;
+                let expectedScenarios = 0;
+                
+                if (actualTemplate && actualTemplate.categories) {
+                    expectedCategories = actualTemplate.categories.length;
+                    expectedScenarios = actualTemplate.categories.reduce((sum, cat) => {
+                        return sum + (cat.scenarios?.length || 0);
+                    }, 0);
+                }
+                
+                const categoriesMatch = templateCategories.size === expectedCategories;
+                const scenariosMatch = templateScenarios.length === expectedScenarios;
+                
+                const breakdown = {
+                    templateId: template.templateId,
+                    templateName: template.templateName || actualTemplate?.name || 'Unknown',
+                    expected: {
+                        categories: expectedCategories,
+                        scenarios: expectedScenarios
+                    },
+                    scanned: {
+                        categories: templateCategories.size,
+                        scenarios: templateScenarios.length
+                    },
+                    validation: {
+                        categoriesMatch,
+                        scenariosMatch,
+                        status: (categoriesMatch && scenariosMatch) ? 'complete' : 'partial'
+                    },
+                    categoryNames: Array.from(templateCategories)
+                };
+                
+                templateBreakdown.push(breakdown);
+                
+                // Log validation result
+                const statusIcon = breakdown.validation.status === 'complete' ? '✅' : '⚠️';
+                logger.info('[VARIABLE SCAN]   %s Template %d: %s (ID: %s)', 
+                    statusIcon,
                     idx + 1, 
-                    template.templateName || 'Unknown', 
-                    template.templateId, 
-                    templateCategories.size,
-                    templateScenarios.length
+                    breakdown.templateName, 
+                    breakdown.templateId
                 );
+                logger.info('[VARIABLE SCAN]      Categories: %d/%d | Scenarios: %d/%d', 
+                    breakdown.scanned.categories,
+                    breakdown.expected.categories,
+                    breakdown.scanned.scenarios,
+                    breakdown.expected.scenarios
+                );
+                
+                // Track validation issues
+                if (!categoriesMatch || !scenariosMatch) {
+                    const issue = {
+                        templateId: template.templateId,
+                        templateName: breakdown.templateName,
+                        type: !categoriesMatch && !scenariosMatch ? 'categories_and_scenarios_mismatch' : 
+                              !categoriesMatch ? 'categories_mismatch' : 'scenarios_mismatch',
+                        expected: breakdown.expected,
+                        scanned: breakdown.scanned,
+                        severity: 'warning'
+                    };
+                    validationIssues.push(issue);
+                    
+                    logger.warn('[VARIABLE SCAN] ⚠️ Validation issue: %s - Expected %d categories, scanned %d | Expected %d scenarios, scanned %d',
+                        breakdown.templateName,
+                        breakdown.expected.categories,
+                        breakdown.scanned.categories,
+                        breakdown.expected.scenarios,
+                        breakdown.scanned.scenarios
+                    );
+                }
             });
             
             if (safeScenarios.length === 0) {
-                logger.info(`ℹ️  [VARIABLE SCAN] No scenarios found for company ${companyId}`);
+                logger.warn(`⚠️ [VARIABLE SCAN] No scenarios found for company ${companyId} - Possible validation issue`);
                 
                 // Still need to clear any existing variables and save
                 company.aiAgentSettings.variableDefinitions = [];
                 company.aiAgentSettings.lastScanDate = new Date();
                 company.aiAgentSettings.configurationAlert = null;
                 
-                // Store scan metadata
+                // Store scan metadata with validation issue
                 if (!company.aiAgentSettings.scanMetadata) {
                     company.aiAgentSettings.scanMetadata = {};
                 }
-                company.aiAgentSettings.scanMetadata.lastScan = {
+                
+                const emptyIssue = {
+                    type: 'no_scenarios_found',
+                    templateId: templateBreakdown[0]?.templateId,
+                    templateName: templateBreakdown[0]?.templateName,
+                    severity: 'error',
+                    message: 'ScenarioPoolService returned 0 scenarios'
+                };
+                
+                const emptyScanEntry = {
+                    scanId: `scan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                     scannedAt: new Date(),
                     reason,
                     triggeredBy,
@@ -184,8 +277,28 @@ class PlaceholderScanService {
                         scenariosCount: 0,
                         uniqueVariables: 0,
                         totalPlaceholderOccurrences: 0
+                    },
+                    templates: templateBreakdown,
+                    validation: {
+                        status: 'error',
+                        issues: [emptyIssue],
+                        issueCount: 1
+                    },
+                    performance: {
+                        scanDurationMs: Date.now() - startTime
                     }
                 };
+                
+                company.aiAgentSettings.scanMetadata.lastScan = emptyScanEntry;
+                
+                // Store in history
+                if (!company.aiAgentSettings.scanMetadata.history) {
+                    company.aiAgentSettings.scanMetadata.history = [];
+                }
+                company.aiAgentSettings.scanMetadata.history.unshift(emptyScanEntry);
+                if (company.aiAgentSettings.scanMetadata.history.length > 20) {
+                    company.aiAgentSettings.scanMetadata.history = company.aiAgentSettings.scanMetadata.history.slice(0, 20);
+                }
                 
                 company.markModified('aiAgentSettings.variableDefinitions');
                 company.markModified('aiAgentSettings.lastScanDate');
@@ -195,7 +308,7 @@ class PlaceholderScanService {
                 await company.save();
                 await CacheHelper.clearCompanyCache(companyId);
                 
-                logger.info(`✅ [VARIABLE SCAN] Scan complete for company ${companyId} (0 scenarios, 0 variables)`);
+                logger.info(`✅ [VARIABLE SCAN] Scan complete for company ${companyId} (0 scenarios, 0 variables, 1 validation issue)`);
                 
                 return {
                     success: true,
@@ -205,12 +318,17 @@ class PlaceholderScanService {
                     missingRequired: [],
                     hasAlert: false,
                     message: 'No scenarios configured',
-                    templatesUsed: safeTemplatesUsed, // CRITICAL: Include this for endpoint
+                    templatesUsed: safeTemplatesUsed,
+                    templateBreakdown,
+                    validationIssues: [emptyIssue],
                     scanMetadata: {
-                        scannedAt: new Date(),
+                        scanId: emptyScanEntry.scanId,
+                        scannedAt: emptyScanEntry.scannedAt,
                         reason,
                         triggeredBy,
-                        templateId
+                        templateId,
+                        validation: emptyScanEntry.validation,
+                        performance: emptyScanEntry.performance
                     },
                     stats: {
                         templatesCount: safeTemplatesUsed.length,
@@ -362,11 +480,15 @@ class PlaceholderScanService {
             company.aiAgentSettings.variableDefinitions = finalDefinitions;
             company.aiAgentSettings.lastScanDate = new Date();
             
-            // Store scan metadata for audit trail and UI display
+            // ============================================================================
+            // ENTERPRISE AUDIT TRAIL: Store comprehensive scan history
+            // ============================================================================
             if (!company.aiAgentSettings.scanMetadata) {
                 company.aiAgentSettings.scanMetadata = {};
             }
-            company.aiAgentSettings.scanMetadata.lastScan = {
+            
+            const scanEntry = {
+                scanId: `scan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                 scannedAt: new Date(),
                 reason,
                 triggeredBy,
@@ -377,8 +499,36 @@ class PlaceholderScanService {
                     scenariosCount: safeScenarios.length,
                     uniqueVariables: combinedPlaceholderMap.size,
                     totalPlaceholderOccurrences
+                },
+                templates: templateBreakdown,
+                validation: {
+                    status: validationIssues.length === 0 ? 'complete' : 'partial',
+                    issues: validationIssues,
+                    issueCount: validationIssues.length
+                },
+                performance: {
+                    scanDurationMs: Date.now() - startTime
                 }
             };
+            
+            // Store last scan for quick access
+            company.aiAgentSettings.scanMetadata.lastScan = scanEntry;
+            
+            // Store scan history (keep last 20 scans for audit trail)
+            if (!company.aiAgentSettings.scanMetadata.history) {
+                company.aiAgentSettings.scanMetadata.history = [];
+            }
+            
+            company.aiAgentSettings.scanMetadata.history.unshift(scanEntry);
+            
+            // Trim history to last 20 scans (enterprise audit trail)
+            if (company.aiAgentSettings.scanMetadata.history.length > 20) {
+                company.aiAgentSettings.scanMetadata.history = company.aiAgentSettings.scanMetadata.history.slice(0, 20);
+            }
+            
+            logger.info('[VARIABLE SCAN] Scan history updated: %d entries stored', 
+                company.aiAgentSettings.scanMetadata.history.length
+            );
             
             // Mark nested paths as modified (Mongoose requirement)
             company.markModified('aiAgentSettings.variableDefinitions');
@@ -413,7 +563,9 @@ class PlaceholderScanService {
                 });
             }
             
-            logger.info(`✅ [VARIABLE SCAN] Scan complete for company ${companyId} (reason: ${reason})`);
+            const scanDuration = Date.now() - startTime;
+            
+            logger.info(`✅ [VARIABLE SCAN] Scan complete for company ${companyId} (reason: ${reason}, duration: ${scanDuration}ms)`);
             
             return {
                 success: true,
@@ -426,11 +578,16 @@ class PlaceholderScanService {
                 newPlaceholders,
                 updatedPlaceholders,
                 templatesUsed: safeTemplatesUsed, // Include template metadata for UI
+                templateBreakdown, // ENTERPRISE: Template validation breakdown
+                validationIssues, // ENTERPRISE: List of validation issues
                 scanMetadata: {
-                    scannedAt: new Date(),
+                    scanId: scanEntry.scanId,
+                    scannedAt: scanEntry.scannedAt,
                     reason,
                     triggeredBy,
-                    templateId
+                    templateId,
+                    validation: scanEntry.validation,
+                    performance: scanEntry.performance
                 },
                 stats: {
                     templatesCount: safeTemplatesUsed.length,
