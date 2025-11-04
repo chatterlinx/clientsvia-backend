@@ -442,9 +442,10 @@ class VariablesManager {
         // ═══════════════════════════════════════════════════════════════════
         // ENTERPRISE DASHBOARD: Top Stats & Validation
         // ═══════════════════════════════════════════════════════════════════
-        const templatesCount = this.stats?.templatesCount || 0;
-        const categoriesCount = this.stats?.categoriesCount || 0;
-        const scenariosCount = this.stats?.scenariosCount || 0;
+        // ✅ FIX: Map stats correctly - backend sends aggregated object, not flat stats
+        const templatesCount = this.scanReport?.templatesScanned?.total || this.stats?.templatesCount || 0;
+        const categoriesCount = this.scanReport?.aggregated?.totalCategories || this.stats?.categoriesCount || 0;
+        const scenariosCount = this.scanReport?.aggregated?.totalScenarios || this.stats?.scenariosCount || 0;
         
         // ✅ FIX: Use stats object directly (not templateBreakdown which may be empty)
         let scannedCategories = categoriesCount;
@@ -664,6 +665,14 @@ class VariablesManager {
         const timeAgo = this.getTimeAgo(timestamp);
         const stats = result.stats || this.stats || {};
         
+        // ✅ FIX: Map stats correctly from scanReport if available
+        const templatesCount = this.scanReport?.templatesScanned?.total || stats.templatesCount || 0;
+        const categoriesCount = this.scanReport?.aggregated?.totalCategories || stats.categoriesCount || 0;
+        const scenariosCount = this.scanReport?.aggregated?.totalScenarios || stats.scenariosCount || 0;
+        const totalPlaceholders = this.scanReport?.aggregated?.totalPlaceholders || stats.totalPlaceholderOccurrences || 0;
+        const uniqueVariables = this.scanReport?.aggregated?.uniqueVariables || stats.uniqueVariables || 0;
+        const newVariables = this.scanReport?.differential?.summary?.newVariablesCount || stats.newVariables || 0;
+        
         let html = `
             <div class="bg-green-50 border-2 border-green-400 rounded-xl p-6 mb-6">
                 <h3 class="text-xl font-bold text-green-900 mb-4">
@@ -675,41 +684,41 @@ class VariablesManager {
                 <div class="bg-white rounded-lg p-4 mb-4 border-l-4 border-green-500">
                     <div class="text-sm text-gray-700 mb-2">
                         <strong>📊 Scanned:</strong> 
-                        ${stats.templatesCount || 0} template(s) · 
-                        ${stats.categoriesCount || 0} categories · 
-                        ${stats.scenariosCount || 0} scenarios
+                        ${templatesCount} template(s) · 
+                        ${categoriesCount} categories · 
+                        ${scenariosCount} scenarios
                     </div>
                     <div class="text-sm text-gray-700">
                         <strong>🔍 Found:</strong> 
-                        ${stats.totalPlaceholderOccurrences || 0} placeholder occurrences · 
-                        ${stats.uniqueVariables || 0} unique variables · 
-                        ${stats.newVariables || 0} new this scan
+                        ${totalPlaceholders} placeholder occurrences · 
+                        ${uniqueVariables} unique variables · 
+                        ${newVariables} new this scan
                     </div>
                 </div>
                 
                 <!-- Variable Counts -->
                 <div class="grid grid-cols-3 gap-4 mb-4">
                     <div class="bg-white rounded-lg p-4 text-center">
-                        <div class="text-3xl font-bold text-green-600">${stats.uniqueVariables || 0}</div>
+                        <div class="text-3xl font-bold text-green-600">${uniqueVariables}</div>
                         <div class="text-sm text-gray-600">Unique Variables</div>
                     </div>
                     <div class="bg-white rounded-lg p-4 text-center">
-                        <div class="text-3xl font-bold text-blue-600">${stats.newVariables || 0}</div>
+                        <div class="text-3xl font-bold text-blue-600">${newVariables}</div>
                         <div class="text-sm text-gray-600">New Variables</div>
                     </div>
                     <div class="bg-white rounded-lg p-4 text-center">
-                        <div class="text-3xl font-bold text-purple-600">${stats.totalPlaceholderOccurrences || 0}</div>
+                        <div class="text-3xl font-bold text-purple-600">${totalPlaceholders}</div>
                         <div class="text-sm text-gray-600">Total Uses</div>
                     </div>
                 </div>
                 
                 <!-- Detected Variables List -->
-                <details class="bg-white rounded-lg p-4" ${stats.uniqueVariables > 0 ? 'open' : ''}>
+                <details class="bg-white rounded-lg p-4" ${uniqueVariables > 0 ? 'open' : ''}>
                     <summary class="font-bold text-gray-900 cursor-pointer hover:text-purple-600">
-                        📋 View All Detected Variables (${stats.uniqueVariables || 0})
+                        📋 View All Detected Variables (${uniqueVariables})
                     </summary>
                     <div class="mt-4">
-                        ${(stats.uniqueVariables || 0) === 0 ? `
+                        ${uniqueVariables === 0 ? `
                             <div class="text-center py-8 text-gray-500">
                                 <i class="fas fa-info-circle text-3xl mb-2"></i>
                                 <p>No {placeholder} variables found in your active templates.</p>
@@ -1063,40 +1072,42 @@ class VariablesManager {
                 
                 if (diff.noChangesDetected) {
                     // Exact match with previous scan
-                    this.parent.showInfo(`
-                        <div class="space-y-2">
-                            <div class="font-bold text-lg">✅ No New Findings</div>
-                            <div>This scan found the exact same <strong>${agg.uniqueVariables} variables</strong> as the previous scan.</div>
-                            <div class="text-sm opacity-75">All templates, scenarios, and variables are unchanged.</div>
-                        </div>
-                    `, 8000);
+                    const message = `✅ No New Findings - This scan found the exact same ${agg.uniqueVariables} variables as the previous scan.`;
+                    console.log('✅ [SCAN SUCCESS]', message);
+                    if (this.parent.showInfo) {
+                        this.parent.showInfo(message, 8000);
+                    } else if (this.parent.showSuccess) {
+                        this.parent.showSuccess(message);
+                    }
                 } else if (agg.uniqueVariables === 0) {
                     // Zero variables found (valid state)
-                    this.parent.showInfo(`
-                        <div class="space-y-2">
-                            <div class="font-bold text-lg">ℹ️ Zero Variables Found</div>
-                            <div>No <code>{variable}</code> placeholders were found in your active templates.</div>
-                            <div class="text-sm opacity-75">This is valid if your templates don't use dynamic content.</div>
-                        </div>
-                    `, 8000);
+                    const message = `ℹ️ Zero Variables Found - No {variable} placeholders were found in your active templates.`;
+                    console.log('ℹ️ [SCAN INFO]', message);
+                    if (this.parent.showInfo) {
+                        this.parent.showInfo(message, 8000);
+                    } else if (this.parent.showSuccess) {
+                        this.parent.showSuccess(message);
+                    }
                 } else {
                     // Changes detected
                     const changes = [];
-                    if (diff.newVariablesCount > 0) changes.push(`<span class="text-green-600 font-bold">+${diff.newVariablesCount} new</span>`);
-                    if (diff.removedVariablesCount > 0) changes.push(`<span class="text-red-600 font-bold">-${diff.removedVariablesCount} removed</span>`);
-                    if (diff.modifiedVariablesCount > 0) changes.push(`<span class="text-yellow-600 font-bold">↕️${diff.modifiedVariablesCount} modified</span>`);
+                    if (diff.newVariablesCount > 0) changes.push(`+${diff.newVariablesCount} new`);
+                    if (diff.removedVariablesCount > 0) changes.push(`-${diff.removedVariablesCount} removed`);
+                    if (diff.modifiedVariablesCount > 0) changes.push(`${diff.modifiedVariablesCount} modified`);
                     
-                    this.parent.showSuccess(`
-                        <div class="space-y-2">
-                            <div class="font-bold text-lg">🔄 Changes Detected</div>
-                            <div>${changes.join(', ')}</div>
-                            <div class="text-sm opacity-75">Total: <strong>${agg.uniqueVariables}</strong> unique variables</div>
-                        </div>
-                    `);
+                    const message = `🔄 Scan Complete! Changes: ${changes.join(', ')} - Total: ${agg.uniqueVariables} unique variables`;
+                    console.log('🔄 [SCAN SUCCESS]', message);
+                    if (this.parent.showSuccess) {
+                        this.parent.showSuccess(message);
+                    }
                 }
             } else {
                 // Fallback for backward compatibility
-                this.parent.showSuccess(`Scan complete! Found ${this.variableDefinitions.length} variables.`);
+                const message = `Scan complete! Found ${this.variableDefinitions.length} variables.`;
+                console.log('✅ [SCAN SUCCESS]', message);
+                if (this.parent.showSuccess) {
+                    this.parent.showSuccess(message);
+                }
             }
             
             // Start polling to catch any background scans
@@ -1227,30 +1238,30 @@ class VariablesManager {
                     </div>
                 </div>
                 
-                <!-- Aggregated Stats Grid -->
-                <div class="grid grid-cols-6 gap-3 mb-6">
-                    <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 text-center border border-blue-200 hover:shadow-md transition-shadow">
-                        <div class="text-3xl font-bold text-blue-900">${report.templatesScanned.total}</div>
+                <!-- Aggregated Stats Grid - HORIZONTAL BOX LAYOUT -->
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+                    <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-3 text-center border border-blue-200 hover:shadow-md transition-shadow">
+                        <div class="text-2xl md:text-3xl font-bold text-blue-900">${report.templatesScanned.total}</div>
                         <div class="text-xs text-blue-700 font-medium mt-1">Templates</div>
                     </div>
-                    <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 text-center border border-green-200 hover:shadow-md transition-shadow">
-                        <div class="text-3xl font-bold text-green-900">${agg.totalScenarios}</div>
+                    <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-3 text-center border border-green-200 hover:shadow-md transition-shadow">
+                        <div class="text-2xl md:text-3xl font-bold text-green-900">${agg.totalScenarios}</div>
                         <div class="text-xs text-green-700 font-medium mt-1">Scenarios</div>
                     </div>
-                    <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 text-center border border-purple-200 hover:shadow-md transition-shadow">
-                        <div class="text-3xl font-bold text-purple-900">${agg.totalWords.toLocaleString()}</div>
+                    <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-3 text-center border border-purple-200 hover:shadow-md transition-shadow">
+                        <div class="text-2xl md:text-3xl font-bold text-purple-900">${agg.totalWords.toLocaleString()}</div>
                         <div class="text-xs text-purple-700 font-medium mt-1">Total Words</div>
                     </div>
-                    <div class="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-4 text-center border border-yellow-200 hover:shadow-md transition-shadow">
-                        <div class="text-3xl font-bold text-yellow-900">${agg.uniqueWords.toLocaleString()}</div>
+                    <div class="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-3 text-center border border-yellow-200 hover:shadow-md transition-shadow">
+                        <div class="text-2xl md:text-3xl font-bold text-yellow-900">${agg.uniqueWords.toLocaleString()}</div>
                         <div class="text-xs text-yellow-700 font-medium mt-1">Unique Words</div>
                     </div>
-                    <div class="bg-gradient-to-br from-pink-50 to-pink-100 rounded-lg p-4 text-center border border-pink-200 hover:shadow-md transition-shadow">
-                        <div class="text-3xl font-bold text-pink-900">${agg.totalPlaceholders}</div>
+                    <div class="bg-gradient-to-br from-pink-50 to-pink-100 rounded-lg p-3 text-center border border-pink-200 hover:shadow-md transition-shadow">
+                        <div class="text-2xl md:text-3xl font-bold text-pink-900">${agg.totalPlaceholders}</div>
                         <div class="text-xs text-pink-700 font-medium mt-1">Placeholders</div>
                     </div>
-                    <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg p-4 text-center border border-indigo-200 hover:shadow-md transition-shadow">
-                        <div class="text-3xl font-bold text-indigo-900">${agg.uniqueVariables}</div>
+                    <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg p-3 text-center border border-indigo-200 hover:shadow-md transition-shadow">
+                        <div class="text-2xl md:text-3xl font-bold text-indigo-900">${agg.uniqueVariables}</div>
                         <div class="text-xs text-indigo-700 font-medium mt-1">Variables</div>
                     </div>
                 </div>
