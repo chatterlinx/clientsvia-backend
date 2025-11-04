@@ -45,6 +45,12 @@ class VariablesManager {
         this.isScanning = false;
         this.pollInterval = null; // For real-time scan progress polling
         
+        // ENTERPRISE: Validation & audit trail
+        this.templateBreakdown = [];
+        this.validationIssues = [];
+        this.scanHistory = [];
+        this.scanHistoryVisible = false;
+        
         console.log('✅ [VARIABLES] Checkpoint 2: Initialized for company:', this.companyId);
     }
     
@@ -875,7 +881,7 @@ class VariablesManager {
                 scannedAt: data.scannedAt
             });
             
-            // Update data - NEW API SHAPE WITH STATS
+            // Update data - NEW API SHAPE WITH STATS + ENTERPRISE VALIDATION
             this.variableDefinitions = data.definitions || [];
             this.variables = data.variables || {};
             this.meta = data.meta || {
@@ -887,11 +893,22 @@ class VariablesManager {
             this.stats = data.stats || null;
             this.detectedVariables = data.detectedVariables || [];
             this.scanStatus = data.scanStatus || null;
+            
+            // ENTERPRISE: Store validation data
+            this.templateBreakdown = data.templateBreakdown || [];
+            this.validationIssues = data.validationIssues || [];
+            
+            console.log('📊 [SCAN] ENTERPRISE validation data received:', {
+                templateBreakdown: this.templateBreakdown.length,
+                validationIssues: this.validationIssues.length
+            });
+            
             this.lastScanResult = {
                 scannedAt: data.scannedAt || new Date().toISOString(),
                 found: this.variableDefinitions.length,
                 newCount: data.stats?.newVariables || 0,
-                stats: this.stats
+                stats: this.stats,
+                validationStatus: this.validationIssues.length === 0 ? 'complete' : 'partial'
             };
             
             console.log('📊 [SCAN] Stats received:', this.stats);
