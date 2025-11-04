@@ -769,8 +769,16 @@ class VariablesManager {
                                         ${this.detectedVariables.map(v => `
                                             <tr class="border-b hover:bg-gray-50">
                                                 <td class="p-2">
-                                                    <code class="text-blue-700 font-mono font-bold">{${v.key}}</code>
-                                                    ${v.required ? '<span class="ml-2 text-xs bg-red-100 text-red-800 px-2 py-1 rounded">REQUIRED</span>' : ''}
+                                                    <div class="flex items-center gap-2">
+                                                        <code class="text-blue-700 font-mono font-bold">{${v.key}}</code>
+                                                        ${v.usageCount > 1 ? `<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-semibold">×${v.usageCount}</span>` : ''}
+                                                        ${v.required ? '<span class="ml-2 text-xs bg-red-100 text-red-800 px-2 py-1 rounded">REQUIRED</span>' : ''}
+                                                    </div>
+                                                    ${v.hasMultipleFormats ? `
+                                                        <div class="mt-1 text-xs text-yellow-700 bg-yellow-50 px-2 py-1 rounded inline-block">
+                                                            ⚠️ Found as: ${(v.formatVariations || []).map(f => `{${f}}`).join(', ')}
+                                                        </div>
+                                                    ` : ''}
                                                 </td>
                                                 <td class="p-2 text-gray-700">${v.category}</td>
                                                 <td class="p-2 text-gray-600">${v.type}</td>
@@ -952,6 +960,11 @@ class VariablesManager {
         const isEmpty = value.trim() === '';
         const isRequired = varDef.required || false;
         
+        // ✨ NEW: Format variation warning
+        const hasMultipleFormats = varDef.hasMultipleFormats || false;
+        const formatVariations = varDef.formatVariations || [];
+        const occurrenceCount = varDef.usageCount || 0;
+        
         let statusBadge = '';
         let rowClass = '';
         
@@ -967,7 +980,15 @@ class VariablesManager {
         return `
             <tr class="border-b border-gray-200 hover:bg-gray-50 ${rowClass}">
                 <td class="p-4">
-                    <code class="text-blue-700 font-mono font-bold">{${varDef.key}}</code>
+                    <div class="flex items-center gap-2">
+                        <code class="text-blue-700 font-mono font-bold">{${varDef.key}}</code>
+                        ${occurrenceCount > 1 ? `<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-semibold">×${occurrenceCount}</span>` : ''}
+                    </div>
+                    ${hasMultipleFormats ? `
+                        <div class="mt-1 text-xs text-yellow-700 bg-yellow-50 px-2 py-1 rounded inline-block">
+                            ⚠️ Found as: ${formatVariations.map(f => `{${f}}`).join(', ')}
+                        </div>
+                    ` : ''}
                 </td>
                 <td class="p-4 text-gray-700">${varDef.category || 'General'}</td>
                 <td class="p-4">

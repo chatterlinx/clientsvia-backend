@@ -210,26 +210,45 @@ class EnterpriseVariableScanService {
                     templateReport.wordAnalysis.placeholderWords += variableMatches.length;
                     totalPlaceholders += variableMatches.length;
                     
-                    // Track variable locations
+                    // ✨ SMART CASE-INSENSITIVE VARIABLE GROUPING
+                    // Group by lowercase key: {companyName}, {CompanyName}, {companyname} → ONE variable
                     const uniqueVarsInScenario = [...new Set(variablesInScenario)];
                     uniqueVarsInScenario.forEach(varKey => {
                         const count = variablesInScenario.filter(v => v === varKey).length;
                         
-                        if (!allVariables.has(varKey)) {
-                            allVariables.set(varKey, {
-                                key: varKey,
-                                occurrences: 0,
+                        // Use lowercase as grouping key (case-insensitive)
+                        const normalizedKey = varKey.toLowerCase();
+                        
+                        if (!allVariables.has(normalizedKey)) {
+                            allVariables.set(normalizedKey, {
+                                normalizedKey: normalizedKey,           // Lowercase for grouping
+                                preferredFormat: varKey,                 // Start with first format seen
+                                formatVariations: new Set([varKey]),     // Track all format variations
+                                formatCounts: { [varKey]: 0 },          // Count uses per format
+                                occurrences: 0,                          // Total occurrences across all formats
                                 locations: []
                             });
                         }
                         
-                        const varData = allVariables.get(varKey);
+                        const varData = allVariables.get(normalizedKey);
+                        
+                        // Track this format variation
+                        varData.formatVariations.add(varKey);
+                        varData.formatCounts[varKey] = (varData.formatCounts[varKey] || 0) + count;
                         varData.occurrences += count;
+                        
+                        // Update preferred format (most used format wins)
+                        const currentPreferredCount = varData.formatCounts[varData.preferredFormat] || 0;
+                        if (varData.formatCounts[varKey] > currentPreferredCount) {
+                            varData.preferredFormat = varKey;
+                        }
+                        
                         varData.locations.push({
                             scenarioId: scenario.scenarioId,
                             scenarioName: scenario.name || 'Unnamed',
                             category: scenario.category || 'General',
-                            count
+                            count,
+                            format: varKey  // Track which format was used
                         });
                     });
                     
@@ -298,22 +317,38 @@ class EnterpriseVariableScanService {
             
             const variableDefinitions = [];
             
-            for (const [key, data] of allVariables.entries()) {
+            for (const [normalizedKey, data] of allVariables.entries()) {
+                // Use preferred format (most common) as the canonical key
+                const canonicalKey = data.preferredFormat;
+                const formatVariations = Array.from(data.formatVariations);
+                const hasMultipleFormats = formatVariations.length > 1;
+                
                 const varDef = {
-                    key,
-                    label: this.humanize(key),
-                    category: this.categorizeVariable(key),
-                    usageCount: data.occurrences,
-                    required: this.isRequired(key),
-                    type: this.inferType(key),
-                    example: this.getExample(key),
+                    key: canonicalKey,                          // Use preferred format
+                    normalizedKey: normalizedKey,                // Lowercase for lookups
+                    label: this.humanize(canonicalKey),
+                    category: this.categorizeVariable(canonicalKey),
+                    usageCount: data.occurrences,                // Total across all formats
+                    required: this.isRequired(canonicalKey),
+                    type: this.inferType(canonicalKey),
+                    example: this.getExample(canonicalKey),
                     locations: data.locations,
                     source: data.locations.length > 0 
                         ? templatesScanned.find(t => 
                             t.scenarios.list.some(s => s.scenarioId === data.locations[0].scenarioId)
                           )?.templateName || 'Unknown'
-                        : 'Unknown'
+                        : 'Unknown',
+                    
+                    // ✨ NEW: Format variation tracking
+                    formatVariations: formatVariations,          // All formats found
+                    formatCounts: data.formatCounts,             // Usage per format
+                    hasMultipleFormats: hasMultipleFormats,      // Warning flag
+                    preferredFormat: data.preferredFormat        // Most common format
                 };
+                
+                if (hasMultipleFormats) {
+                    logger.warn(`⚠️  [ENTERPRISE SCAN ${scanId}] Variable format mismatch: ${formatVariations.join(', ')} → standardized to {${canonicalKey}}`);
+                }
                 
                 variableDefinitions.push(varDef);
             }
@@ -344,19 +379,28 @@ class EnterpriseVariableScanService {
             let newCount = 0;
             
             variableDefinitions.forEach(newDef => {
-                const existingIndex = existingDefs.findIndex(d => d.key === newDef.key);
+                // ✨ CASE-INSENSITIVE MATCHING: Compare using normalizedKey
+                const existingIndex = existingDefs.findIndex(d => 
+                    (d.normalizedKey || d.key.toLowerCase()) === newDef.normalizedKey
+                );
                 
                 if (existingIndex === -1) {
                     // New variable - add it
                     existingDefs.push(newDef);
                     newCount++;
-                    logger.info(`  ➕ NEW: {${newDef.key}} - ${newDef.usageCount} occurrences`);
+                    logger.info(`  ➕ NEW: {${newDef.key}} - ${newDef.usageCount} occurrences${newDef.hasMultipleFormats ? ` (⚠️ ${newDef.formatVariations.length} formats)` : ''}`);
                 } else {
                     // Existing variable - update metadata only
+                    existingDefs[existingIndex].key = newDef.key;  // Update to preferred format
+                    existingDefs[existingIndex].normalizedKey = newDef.normalizedKey;
                     existingDefs[existingIndex].usageCount = newDef.usageCount;
                     existingDefs[existingIndex].locations = newDef.locations;
                     existingDefs[existingIndex].source = newDef.source;
-                    logger.debug(`  🔄 UPDATE: {${newDef.key}} - usage count: ${newDef.usageCount}`);
+                    existingDefs[existingIndex].formatVariations = newDef.formatVariations;
+                    existingDefs[existingIndex].formatCounts = newDef.formatCounts;
+                    existingDefs[existingIndex].hasMultipleFormats = newDef.hasMultipleFormats;
+                    existingDefs[existingIndex].preferredFormat = newDef.preferredFormat;
+                    logger.debug(`  🔄 UPDATE: {${newDef.key}} - usage count: ${newDef.usageCount}${newDef.hasMultipleFormats ? ` (⚠️ ${newDef.formatVariations.length} formats)` : ''}`);
                 }
             });
             
@@ -495,9 +539,9 @@ class EnterpriseVariableScanService {
             unchanged: currentTemplates.filter(t => previousTemplateIds.has(t.templateId)).map(t => t.templateName)
         };
         
-        // Variable changes
-        const currentVarMap = new Map(currentVariables.map(v => [v.key, v]));
-        const previousVarMap = new Map(previousVars.map(v => [v.key, v]));
+        // ✨ CASE-INSENSITIVE Variable changes: Use normalizedKey for comparison
+        const currentVarMap = new Map(currentVariables.map(v => [v.normalizedKey || v.key.toLowerCase(), v]));
+        const previousVarMap = new Map(previousVars.map(v => [(v.normalizedKey || v.key.toLowerCase()), v]));
         
         const variablesChanged = {
             new: [],
@@ -507,36 +551,42 @@ class EnterpriseVariableScanService {
         };
         
         // Find new and modified
-        for (const [key, currentVar] of currentVarMap.entries()) {
-            if (!previousVarMap.has(key)) {
+        for (const [normalizedKey, currentVar] of currentVarMap.entries()) {
+            if (!previousVarMap.has(normalizedKey)) {
                 variablesChanged.new.push({
-                    key,
+                    key: currentVar.key,                    // Display preferred format
+                    normalizedKey: normalizedKey,
                     occurrences: currentVar.usageCount,
-                    addedBy: currentVar.source
+                    addedBy: currentVar.source,
+                    hasMultipleFormats: currentVar.hasMultipleFormats || false,
+                    formatVariations: currentVar.formatVariations || [currentVar.key]
                 });
             } else {
-                const previousVar = previousVarMap.get(key);
+                const previousVar = previousVarMap.get(normalizedKey);
                 if (currentVar.usageCount !== previousVar.usageCount) {
                     variablesChanged.modified.push({
-                        key,
+                        key: currentVar.key,                // Display preferred format
+                        normalizedKey: normalizedKey,
                         oldCount: previousVar.usageCount,
                         newCount: currentVar.usageCount,
                         delta: currentVar.usageCount - previousVar.usageCount
                     });
                 } else {
                     variablesChanged.unchanged.push({
-                        key,
+                        key: currentVar.key,                // Display preferred format
+                        normalizedKey: normalizedKey,
                         occurrences: currentVar.usageCount
                     });
                 }
             }
         }
         
-        // Find removed
-        for (const [key, previousVar] of previousVarMap.entries()) {
-            if (!currentVarMap.has(key)) {
+        // Find removed (using normalizedKey for comparison)
+        for (const [normalizedKey, previousVar] of previousVarMap.entries()) {
+            if (!currentVarMap.has(normalizedKey)) {
                 variablesChanged.removed.push({
-                    key,
+                    key: previousVar.key,           // Display original format
+                    normalizedKey: normalizedKey,
                     reason: templatesChanged.removed.length > 0 ? 'template_removed' : 'no_longer_used'
                 });
             }
