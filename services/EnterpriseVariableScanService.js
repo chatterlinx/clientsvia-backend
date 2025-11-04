@@ -386,6 +386,7 @@ class EnterpriseVariableScanService {
                 
                 // Aggregated statistics
                 aggregated: {
+                    totalTemplates: templatesScanned.length,
                     totalCategories,
                     totalScenarios,
                     totalWords,
