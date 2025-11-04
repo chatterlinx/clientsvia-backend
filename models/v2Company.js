@@ -1070,6 +1070,21 @@ const companySchema = new mongoose.Schema({
         }],
         
         // -------------------------------------------------------------------
+        // VARIABLE SCAN STATUS - Enterprise scan tracking
+        // -------------------------------------------------------------------
+        variableScanStatus: {
+            lastReport: {
+                type: mongoose.Schema.Types.Mixed,
+                default: null
+                // Full scan report from last enterprise scan
+            },
+            history: [{
+                type: mongoose.Schema.Types.Mixed
+                // Last 20 scan reports for differential analysis
+            }]
+        },
+        
+        // -------------------------------------------------------------------
         // METADATA - Tracking and debugging
         // -------------------------------------------------------------------
         lastScanDate: { 
