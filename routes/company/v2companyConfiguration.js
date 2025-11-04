@@ -249,6 +249,67 @@ router.patch('/:companyId/configuration/variables', async (req, res) => {
 
 /**
  * ============================================================================
+ * DELETE /api/company/:companyId/configuration/variables/:key
+ * Delete a specific variable
+ * ============================================================================
+ */
+router.delete('/:companyId/configuration/variables/:key', async (req, res) => {
+    logger.info(`[COMPANY CONFIG] DELETE /configuration/variables/${req.params.key} for company: ${req.params.companyId}`);
+    
+    try {
+        const { companyId, key } = req.params;
+        
+        // Load company
+        const company = await Company.findById(companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Remove from variables map
+        if (company.aiAgentSettings?.variables) {
+            company.aiAgentSettings.variables.delete(key);
+        }
+        
+        // Remove from variableDefinitions array
+        if (company.aiAgentSettings?.variableDefinitions) {
+            company.aiAgentSettings.variableDefinitions = company.aiAgentSettings.variableDefinitions.filter(
+                def => def.key !== key
+            );
+        }
+        
+        // Save
+        await company.save();
+        
+        // Clear cache
+        try {
+            const cacheKey = `company:${companyId}`;
+            await redisClient.del(cacheKey);
+            logger.info(`✅ [COMPANY CONFIG] Cache cleared for: ${cacheKey}`);
+        } catch (cacheError) {
+            logger.warn('⚠️ [COMPANY CONFIG] Cache clear failed (non-critical):', cacheError.message);
+        }
+        
+        logger.info(`✅ [COMPANY CONFIG] Variable {${key}} deleted for company: ${companyId}`);
+        
+        res.json({
+            success: true,
+            message: `Variable {${key}} deleted successfully`
+        });
+        
+    } catch (error) {
+        logger.error('[COMPANY CONFIG] Error deleting variable:', error);
+        
+        if (error.message.includes('not found')) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        res.status(500).json({ error: 'Failed to delete variable' });
+    }
+});
+
+/**
+ * ============================================================================
  * POST /api/company/:companyId/configuration/variables/preview
  * Preview variable changes before applying
  * ============================================================================

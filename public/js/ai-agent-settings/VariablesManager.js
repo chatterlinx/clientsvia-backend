@@ -387,6 +387,19 @@ class VariablesManager {
             console.log(`✅ [VARIABLES] Attached listeners to ${variableInputs.length} variable inputs`);
         }
         
+        // Delete buttons
+        const deleteButtons = document.querySelectorAll('.variable-delete-btn');
+        deleteButtons.forEach(btn => {
+            btn.onclick = (e) => {
+                const key = e.currentTarget.dataset.key;
+                this.deleteVariable(key);
+            };
+        });
+        
+        if (deleteButtons.length > 0) {
+            console.log(`✅ [VARIABLES] Attached listeners to ${deleteButtons.length} delete buttons`);
+        }
+        
         console.log('✅ [VARIABLES] Variables table listeners attached');
     }
     
@@ -939,6 +952,7 @@ class VariablesManager {
                             <th class="text-left p-4 font-bold text-gray-700">Value</th>
                             <th class="text-center p-4 font-bold text-gray-700">Matches</th>
                             <th class="text-center p-4 font-bold text-gray-700">Status</th>
+                            <th class="text-center p-4 font-bold text-gray-700">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1007,6 +1021,15 @@ class VariablesManager {
                 </td>
                 <td class="p-4 text-center">
                     ${statusBadge}
+                </td>
+                <td class="p-4 text-center">
+                    <button 
+                        class="variable-delete-btn px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        data-key="${varDef.key}"
+                        title="Delete this variable"
+                    >
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
                 </td>
             </tr>
         `;
@@ -1237,6 +1260,52 @@ class VariablesManager {
         } catch (error) {
             console.error('❌ [SAVE] Failed:', error);
             this.parent.showError('Failed to save variables. Please try again.');
+        }
+    }
+    
+    /**
+     * Delete a variable
+     */
+    async deleteVariable(key) {
+        console.log('🗑️ [DELETE] Delete variable clicked:', key);
+        
+        // Confirmation dialog
+        const confirmed = confirm(`Delete variable {${key}}?\n\nThis will remove the value and metadata. If the placeholder still exists in your templates, it will be re-detected on the next scan.`);
+        
+        if (!confirmed) {
+            console.log('🗑️ [DELETE] User cancelled deletion');
+            return;
+        }
+        
+        try {
+            const token = localStorage.getItem('adminToken');
+            
+            console.log('🗑️ [DELETE] Calling API DELETE /variables/' + key);
+            const response = await fetch(`/api/company/${this.companyId}/configuration/variables/${encodeURIComponent(key)}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            console.log('🗑️ [DELETE] Response received - HTTP', response.status);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            console.log('🗑️ [DELETE] Clearing cache...');
+            await this.clearCache();
+            
+            console.log('✅ [DELETE] Delete complete!');
+            this.parent.showSuccess(`Variable {${key}} deleted successfully!`);
+            
+            // Reload to refresh display
+            await this.load();
+            
+        } catch (error) {
+            console.error('❌ [DELETE] Failed:', error);
+            this.parent.showError('Failed to delete variable. Please try again.');
         }
     }
     
