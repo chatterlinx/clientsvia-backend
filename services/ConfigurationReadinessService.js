@@ -1,20 +1,23 @@
 /**
  * ============================================================================
- * CONFIGURATION READINESS SERVICE
+ * CONFIGURATION READINESS SERVICE V2.0
  * ============================================================================
  * 
  * PURPOSE: Calculate if company is ready to go live with AI Agent
  * 
+ * CRITICAL: This service checks the CORRECT schema (aiAgentSettings)
+ * 
  * SCORING ALGORITHM:
- * - Variables (45%): Required variables configured
- * - Filler Words (10%): Filler words active
- * - Scenarios (25%): Template scenarios loaded
+ * - Templates (30%): At least one active template
+ * - Variables (30%): Required variables configured
+ * - Twilio (20%): Phone number and credentials configured
  * - Voice (10%): Voice settings configured
- * - Test Calls (10%): Test calls completed
+ * - Scenarios (10%): Active scenarios available
  * 
  * GO LIVE CRITERIA:
  * - Score >= 80/100
  * - Zero critical blockers
+ * - Account status = ACTIVE
  * 
  * BLOCKERS:
  * - CRITICAL: Prevents Go Live (missing required config)
@@ -25,9 +28,8 @@
  */
 
 const Company = require('../models/v2Company');
-const logger = require('../utils/logger.js');
-
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
+const logger = require('../utils/logger.js');
 
 class ConfigurationReadinessService {
     
@@ -37,7 +39,7 @@ class ConfigurationReadinessService {
      * @returns {Object} Readiness report
      */
     static async calculateReadiness(company) {
-        logger.info(`[READINESS] 🎯 Calculating readiness for: ${company.companyName}`);
+        logger.info(`[READINESS] 🎯 Calculating readiness for: ${company.companyName} (${company._id})`);
         
         const report = {
             calculatedAt: new Date(),
@@ -48,155 +50,302 @@ class ConfigurationReadinessService {
             blockers: [],
             warnings: [],
             components: {
-                accountStatus: null,
+                templates: null,
                 variables: null,
-                fillerWords: null,
-                scenarios: null,
+                twilio: null,
                 voice: null,
-                testCalls: null
+                scenarios: null,
+                readiness: null
             }
         };
         
-        // 🚨 GATEKEEPER: Check account status FIRST (Configuration tab)
+        // 🚨 GATEKEEPER: Check account status FIRST
         this.checkAccountStatus(company, report);
         
-        // Calculate each component
+        // Calculate each component in parallel
         await Promise.all([
-            this.calculateVariablesScore(company, report),
-            this.calculateFillerWordsScore(company, report),
-            this.calculateScenariosScore(company, report),
-            this.calculateVoiceScore(company, report),
-            this.calculateTestCallsScore(company, report)
+            this.checkTemplates(company, report),
+            this.checkVariables(company, report),
+            this.checkTwilio(company, report),
+            this.checkVoice(company, report),
+            this.checkScenarios(company, report)
         ]);
         
         // Calculate total score (weighted sum)
         const totalScore = 
-            (report.components.variables.score * 0.45) +
-            (report.components.fillerWords.score * 0.10) +
-            (report.components.scenarios.score * 0.25) +
+            (report.components.templates.score * 0.30) +
+            (report.components.variables.score * 0.30) +
+            (report.components.twilio.score * 0.20) +
             (report.components.voice.score * 0.10) +
-            (report.components.testCalls.score * 0.10);
+            (report.components.scenarios.score * 0.10);
         
         report.score = Math.round(totalScore);
         
         // Determine if can go live
         const hasCriticalBlockers = report.blockers.some(b => b.severity === 'critical');
-        report.canGoLive = report.score >= 80 && !hasCriticalBlockers;
+        const isAccountActive = report.components.readiness?.isActive || false;
+        report.canGoLive = report.score >= 80 && !hasCriticalBlockers && isAccountActive;
         
+        // Log summary
         logger.info(`[READINESS] ✅ Score: ${report.score}/100 | Can Go Live: ${report.canGoLive}`);
         logger.info(`[READINESS] 📊 Components:`);
-        logger.info(`   - Variables: ${report.components.variables.score}/100 (${report.components.variables.configured}/${report.components.variables.required})`);
-        logger.info(`   - Filler Words: ${report.components.fillerWords.score}/100 (${report.components.fillerWords.active} active)`);
-        logger.info(`   - Scenarios: ${report.components.scenarios.score}/100 (${report.components.scenarios.active} active)`);
-        logger.info(`   - Voice: ${report.components.voice.score}/100 (${report.components.voice.configured ? 'configured' : 'not configured'})`);
-        logger.info(`   - Test Calls: ${report.components.testCalls.score}/100 (${report.components.testCalls.made}/${report.components.testCalls.required})`);
+        logger.info(`   - Templates:  ${report.components.templates.score}/100 (${report.components.templates.active} active)`);
+        logger.info(`   - Variables:  ${report.components.variables.score}/100 (${report.components.variables.configured}/${report.components.variables.required})`);
+        logger.info(`   - Twilio:     ${report.components.twilio.score}/100 (${report.components.twilio.configured ? 'configured' : 'not configured'})`);
+        logger.info(`   - Voice:      ${report.components.voice.score}/100 (${report.components.voice.configured ? 'configured' : 'not configured'})`);
+        logger.info(`   - Scenarios:  ${report.components.scenarios.score}/100 (${report.components.scenarios.active} active)`);
         
         if (report.blockers.length > 0) {
-            logger.info(`[READINESS] 🚫 Blockers: ${report.blockers.length}`);
-            report.blockers.forEach(b => logger.info(`   - ${b.code}: ${b.message}`));
+            logger.warn(`[READINESS] 🚫 Blockers: ${report.blockers.length}`);
+            report.blockers.forEach(b => logger.warn(`   - [${b.severity}] ${b.code}: ${b.message}`));
         }
         
         return report;
     }
     
     /**
-     * Calculate variables score (45% of total)
+     * 🚨 GATEKEEPER: Check account status (Configuration tab)
+     * This is checked FIRST before all other components
+     * SUSPENDED or CALL_FORWARD status prevents Go Live
      */
-    static async calculateVariablesScore(company, report) {
+    static checkAccountStatus(company, report) {
+        const component = {
+            name: 'Account Status',
+            score: 0,
+            status: 'unknown',
+            isActive: false,
+            isLive: false,
+            weight: 0 // Doesn't contribute to score, but blocks Go Live
+        };
+        
+        try {
+            const accountStatus = company.accountStatus || {};
+            const status = accountStatus.status || 'active';
+            const readiness = company.configuration?.readiness || {};
+            
+            component.status = status;
+            component.isActive = (status === 'active');
+            component.isLive = readiness.isLive || false;
+            
+            logger.info(`[READINESS] 🚨 GATEKEEPER: Account status = ${status}, isLive = ${component.isLive}`);
+            
+            // CRITICAL: Account must be ACTIVE to go live
+            if (status === 'suspended') {
+                component.score = 0;
+                report.blockers.push({
+                    code: 'ACCOUNT_SUSPENDED',
+                    message: 'Account is SUSPENDED - All incoming calls are blocked',
+                    severity: 'critical',
+                    target: '/company-profile.html',
+                    component: 'accountStatus',
+                    details: `Reason: ${accountStatus.reason || 'Not specified'}. Change status to ACTIVE in Configuration tab to go live.`
+                });
+                
+                logger.security(`[READINESS] 🚫 BLOCKED: Account suspended`);
+                
+            } else if (status === 'call_forward') {
+                component.score = 0;
+                report.blockers.push({
+                    code: 'ACCOUNT_CALL_FORWARD',
+                    message: 'Account is set to CALL FORWARD - Calls are being forwarded, not handled by AI',
+                    severity: 'critical',
+                    target: '/company-profile.html',
+                    component: 'accountStatus',
+                    details: `Currently forwarding to: ${accountStatus.callForwardNumber || 'unknown'}. Change status to ACTIVE to enable AI Agent.`
+                });
+                
+                logger.security(`[READINESS] 🚫 BLOCKED: Account in call forward mode`);
+                
+            } else if (status === 'active') {
+                component.score = 100;
+                logger.security(`[READINESS] ✅ GATEKEEPER PASSED: Account is active`);
+            } else {
+                // Unknown status - block as precaution
+                component.score = 0;
+                report.blockers.push({
+                    code: 'ACCOUNT_STATUS_UNKNOWN',
+                    message: `Unknown account status: "${status}"`,
+                    severity: 'critical',
+                    target: '/company-profile.html',
+                    component: 'accountStatus',
+                    details: 'Please set account status to ACTIVE in Configuration tab.'
+                });
+                
+                logger.security(`[READINESS] 🚫 BLOCKED: Unknown account status`);
+            }
+            
+        } catch (error) {
+            logger.security(`[READINESS] ❌ Account status check error:`, error);
+            component.score = 0;
+            report.blockers.push({
+                code: 'ACCOUNT_STATUS_ERROR',
+                message: `Error checking account status: ${error.message}`,
+                severity: 'critical',
+                component: 'accountStatus'
+            });
+        }
+        
+        report.components.readiness = component;
+    }
+    
+    /**
+     * Check templates (30% of total)
+     * CRITICAL FIX: Now checks aiAgentSettings.templateReferences (not legacy clonedFrom)
+     */
+    static async checkTemplates(company, report) {
+        const component = {
+            name: 'Templates',
+            score: 0,
+            active: 0,
+            total: 0,
+            configured: false,
+            templateIds: [],
+            weight: 30
+        };
+        
+        try {
+            // ✅ CORRECT: Check NEW schema
+            const templateRefs = company.aiAgentSettings?.templateReferences || [];
+            const activeTemplates = templateRefs.filter(ref => ref.enabled !== false);
+            
+            component.total = templateRefs.length;
+            component.active = activeTemplates.length;
+            component.configured = component.active > 0;
+            component.templateIds = activeTemplates.map(ref => ref.templateId);
+            
+            logger.info(`[READINESS] 📋 Templates: ${component.active} active out of ${component.total} total`);
+            
+            if (component.active === 0) {
+                component.score = 0;
+                report.blockers.push({
+                    code: 'NO_TEMPLATE',
+                    message: 'No templates activated - AI Agent has no scenarios to match against',
+                    severity: 'critical',
+                    target: '/company-profile.html?id=' + company._id + '#aicore-templates',
+                    component: 'templates',
+                    details: 'Navigate to AI Agent Settings → AiCore Templates and activate at least one template.'
+                });
+                
+                logger.warn(`[READINESS] ❌ NO TEMPLATES: Company has no active templates`);
+            } else {
+                // Verify templates actually exist in database
+                const existingTemplates = await GlobalInstantResponseTemplate.find({
+                    _id: { $in: component.templateIds }
+                }).select('_id name version').lean();
+                
+                const existingIds = existingTemplates.map(t => t._id.toString());
+                const missingIds = component.templateIds.filter(id => !existingIds.includes(id.toString()));
+                
+                if (missingIds.length > 0) {
+                    component.score = 50; // Partial credit
+                    report.warnings.push({
+                        code: 'TEMPLATE_NOT_FOUND',
+                        message: `${missingIds.length} template(s) not found in Global AI Brain`,
+                        severity: 'major',
+                        target: '/company-profile.html?id=' + company._id + '#aicore-templates',
+                        component: 'templates',
+                        details: `Missing template IDs: ${missingIds.join(', ')}. Remove invalid references.`
+                    });
+                    
+                    logger.warn(`[READINESS] ⚠️ MISSING TEMPLATES: ${missingIds.length} templates not found`);
+                } else {
+                    component.score = 100;
+                    logger.info(`[READINESS] ✅ TEMPLATES OK: ${component.active} valid templates`);
+                }
+            }
+            
+        } catch (error) {
+            logger.error(`[READINESS] ❌ Templates check error:`, error);
+            component.score = 0;
+            report.blockers.push({
+                code: 'TEMPLATES_ERROR',
+                message: `Error checking templates: ${error.message}`,
+                severity: 'critical',
+                component: 'templates'
+            });
+        }
+        
+        report.components.templates = component;
+    }
+    
+    /**
+     * Check variables (30% of total)
+     * CRITICAL FIX: Now checks aiAgentSettings.variables and variableDefinitions
+     */
+    static async checkVariables(company, report) {
         const component = {
             name: 'Variables',
             score: 0,
             required: 0,
             configured: 0,
             missing: [],
-            weight: 45
+            total: 0,
+            weight: 30
         };
         
         try {
-            // Load template to get variable definitions
-            if (!company.configuration?.clonedFrom) {
-                // No template cloned - critical blocker
-                component.score = 0;
-                component.required = 0;
-                component.configured = 0;
-                
-                report.blockers.push({
-                    code: 'NO_TEMPLATE',
-                    message: 'No Global AI Brain template cloned',
-                    severity: 'CRITICAL',
-                    target: '/company/:companyId/ai-agent-settings/template-info',
-                    component: 'template'
-                });
-                
-                report.components.variables = component;
-                return;
-            }
-            
-            const template = await GlobalInstantResponseTemplate.findById(company.configuration.clonedFrom);
-            
-            if (!template) {
-                component.score = 0;
-                report.blockers.push({
-                    code: 'TEMPLATE_NOT_FOUND',
-                    message: 'Cloned template no longer exists',
-                    severity: 'CRITICAL',
-                    target: '/company/:companyId/ai-agent-settings/template-info',
-                    component: 'template'
-                });
-                report.components.variables = component;
-                return;
-            }
-            
-            // Get variable definitions
-            const variableDefinitions = template.variableDefinitions || template.availableVariables || [];
-            const variables = company.configuration?.variables || {};
+            // ✅ CORRECT: Check NEW schema
+            const variableDefinitions = company.aiAgentSettings?.variableDefinitions || [];
+            const variables = company.aiAgentSettings?.variables || new Map();
             
             // Convert Map to object if needed
-            const variablesObj = variables.toObject ? variables.toObject() : variables;
+            const variablesObj = variables instanceof Map ? Object.fromEntries(variables) : variables;
+            
+            component.total = variableDefinitions.length;
             
             // Count required vs configured
             const requiredVars = variableDefinitions.filter(v => v.required);
             component.required = requiredVars.length;
             
-            requiredVars.forEach(varDef => {
-                const value = variablesObj[varDef.key];
-                if (value && value.trim() !== '') {
-                    component.configured++;
-                } else {
-                    component.missing.push({
-                        key: varDef.key,
-                        label: varDef.label || varDef.key,
-                        type: varDef.type || 'text'
-                    });
-                }
-            });
+            logger.info(`[READINESS] 🔧 Variables: ${component.required} required out of ${component.total} total`);
             
-            // Calculate score
             if (component.required === 0) {
-                component.score = 100; // No required variables
+                // No required variables - perfect score
+                component.score = 100;
+                logger.info(`[READINESS] ✅ VARIABLES OK: No required variables`);
             } else {
-                component.score = Math.round((component.configured / component.required) * 100);
-            }
-            
-            // Add blockers for missing required variables
-            if (component.missing.length > 0) {
-                report.blockers.push({
-                    code: 'MISSING_REQUIRED_VARIABLES',
-                    message: `${component.missing.length} required variable(s) not configured`,
-                    severity: 'CRITICAL',
-                    target: `/company/:companyId/ai-agent-settings/variables`,
-                    component: 'variables',
-                    details: component.missing.map(v => v.label).join(', ')
+                // Check each required variable
+                requiredVars.forEach(varDef => {
+                    const value = variablesObj[varDef.key];
+                    if (value && value.trim() !== '') {
+                        component.configured++;
+                    } else {
+                        component.missing.push({
+                            key: varDef.key,
+                            label: varDef.label || varDef.key,
+                            type: varDef.type || 'text',
+                            category: varDef.category || 'General'
+                        });
+                    }
                 });
+                
+                // Calculate score
+                component.score = Math.round((component.configured / component.required) * 100);
+                
+                logger.info(`[READINESS] 📊 Variables configured: ${component.configured}/${component.required} (${component.score}%)`);
+                
+                // Add blocker if missing required variables
+                if (component.missing.length > 0) {
+                    report.blockers.push({
+                        code: 'MISSING_REQUIRED_VARIABLES',
+                        message: `${component.missing.length} required variable(s) not configured`,
+                        severity: 'critical',
+                        target: '/company-profile.html?id=' + company._id + '#variables',
+                        component: 'variables',
+                        details: `Missing: ${component.missing.map(v => v.label).join(', ')}`
+                    });
+                    
+                    logger.warn(`[READINESS] ❌ MISSING VARIABLES: ${component.missing.map(v => v.key).join(', ')}`);
+                }
             }
             
         } catch (error) {
-            logger.error(`[READINESS] ❌ Variables calculation error:`, error);
+            logger.error(`[READINESS] ❌ Variables check error:`, error);
             component.score = 0;
             report.blockers.push({
                 code: 'VARIABLES_ERROR',
-                message: `Error calculating variables: ${error.message}`,
-                severity: 'CRITICAL',
+                message: `Error checking variables: ${error.message}`,
+                severity: 'critical',
                 component: 'variables'
             });
         }
@@ -205,141 +354,107 @@ class ConfigurationReadinessService {
     }
     
     /**
-     * Calculate filler words score (10% of total)
+     * Check Twilio (20% of total)
+     * NEW: This was missing from the original service!
      */
-    static async calculateFillerWordsScore(company, report) {
+    static async checkTwilio(company, report) {
         const component = {
-            name: 'Filler Words',
-            score: 100, // Default to 100 (not critical)
-            active: 0,
-            inherited: 0,
-            custom: 0,
-            weight: 10
-        };
-        
-        try {
-            const fillerWords = company.configuration?.fillerWords || {};
-            const inherited = fillerWords.inherited || [];
-            const custom = fillerWords.custom || [];
-            
-            component.inherited = inherited.length;
-            component.custom = custom.length;
-            component.active = inherited.length + custom.length;
-            
-            // Filler words are optional but recommended
-            if (component.active === 0) {
-                component.score = 50; // Half score if none configured
-                report.warnings.push({
-                    code: 'NO_FILLER_WORDS',
-                    message: 'No filler words configured - may affect speech recognition accuracy',
-                    severity: 'major',
-                    target: `/company/:companyId/ai-agent-settings/filler-words`,
-                    component: 'fillerWords'
-                });
-            } else if (component.active < 20) {
-                component.score = 75; // Low count warning
-                report.warnings.push({
-                    code: 'FEW_FILLER_WORDS',
-                    message: `Only ${component.active} filler words configured (recommended: 20+)`,
-                    severity: 'WARNING',
-                    target: `/company/:companyId/ai-agent-settings/filler-words`,
-                    component: 'fillerWords'
-                });
-            } else {
-                component.score = 100;
-            }
-            
-        } catch (error) {
-            logger.error(`[READINESS] ❌ Filler words calculation error:`, error);
-            component.score = 50;
-        }
-        
-        report.components.fillerWords = component;
-    }
-    
-    /**
-     * Calculate scenarios score (25% of total)
-     */
-    static async calculateScenariosScore(company, report) {
-        const component = {
-            name: 'Scenarios',
+            name: 'Twilio',
             score: 0,
-            active: 0,
-            total: 0,
-            categories: 0,
-            weight: 25
+            configured: false,
+            hasCredentials: false,
+            hasPhoneNumber: false,
+            phoneNumbers: [],
+            weight: 20
         };
         
         try {
-            // Load template to get scenarios
-            if (!company.configuration?.clonedFrom) {
-                component.score = 0;
-                // Blocker already added in variables check
-                report.components.scenarios = component;
-                return;
+            const twilioConfig = company.twilioConfig || {};
+            
+            // Check credentials
+            component.hasCredentials = Boolean(
+                twilioConfig.accountSid && 
+                twilioConfig.authToken
+            );
+            
+            // Check phone numbers (new multi-number system or legacy single number)
+            const phoneNumbers = twilioConfig.phoneNumbers || [];
+            const legacyPhone = twilioConfig.phoneNumber;
+            
+            if (phoneNumbers.length > 0) {
+                component.hasPhoneNumber = true;
+                component.phoneNumbers = phoneNumbers.map(p => p.phoneNumber);
+            } else if (legacyPhone) {
+                component.hasPhoneNumber = true;
+                component.phoneNumbers = [legacyPhone];
             }
             
-            const template = await GlobalInstantResponseTemplate.findById(company.configuration.clonedFrom);
+            component.configured = component.hasCredentials && component.hasPhoneNumber;
             
-            if (!template) {
-                component.score = 0;
-                report.components.scenarios = component;
-                return;
-            }
+            logger.info(`[READINESS] 📞 Twilio: Credentials=${component.hasCredentials}, Phone=${component.hasPhoneNumber}`);
             
-            // Count scenarios
-            const categories = template.categories || [];
-            component.categories = categories.length;
-            
-            categories.forEach(category => {
-                const scenarios = category.scenarios || [];
-                component.total += scenarios.length;
-                component.active += scenarios.filter(s => s.status === 'active').length;
-            });
-            
-            // Calculate score
-            if (component.active === 0) {
+            // Calculate score and add blockers
+            if (!component.hasCredentials && !component.hasPhoneNumber) {
                 component.score = 0;
                 report.blockers.push({
-                    code: 'NO_SCENARIOS',
-                    message: 'No active scenarios found in template',
-                    severity: 'CRITICAL',
-                    target: `/company/:companyId/ai-agent-settings/scenarios`,
-                    component: 'scenarios'
+                    code: 'NO_TWILIO',
+                    message: 'Twilio not configured - No phone number or credentials',
+                    severity: 'critical',
+                    target: '/company-profile.html?id=' + company._id + '#twilio-control',
+                    component: 'twilio',
+                    details: 'Navigate to VoiceCore → Twilio Control and configure your Twilio account.'
                 });
-            } else if (component.active < 10) {
-                component.score = 50;
-                report.warnings.push({
-                    code: 'FEW_SCENARIOS',
-                    message: `Only ${component.active} active scenarios (recommended: 50+)`,
-                    severity: 'major',
-                    target: `/company/:companyId/ai-agent-settings/scenarios`,
-                    component: 'scenarios'
+                
+                logger.warn(`[READINESS] ❌ NO TWILIO: No credentials or phone number`);
+            } else if (!component.hasCredentials) {
+                component.score = 25;
+                report.blockers.push({
+                    code: 'NO_TWILIO_CREDENTIALS',
+                    message: 'Twilio credentials missing (Account SID / Auth Token)',
+                    severity: 'critical',
+                    target: '/company-profile.html?id=' + company._id + '#twilio-control',
+                    component: 'twilio',
+                    details: 'Add your Twilio Account SID and Auth Token.'
                 });
+                
+                logger.warn(`[READINESS] ❌ NO TWILIO CREDENTIALS`);
+            } else if (!component.hasPhoneNumber) {
+                component.score = 25;
+                report.blockers.push({
+                    code: 'NO_TWILIO_PHONE',
+                    message: 'No Twilio phone number configured',
+                    severity: 'critical',
+                    target: '/company-profile.html?id=' + company._id + '#twilio-control',
+                    component: 'twilio',
+                    details: 'Add at least one Twilio phone number to receive calls.'
+                });
+                
+                logger.warn(`[READINESS] ❌ NO PHONE NUMBER`);
             } else {
                 component.score = 100;
+                logger.info(`[READINESS] ✅ TWILIO OK: ${component.phoneNumbers.join(', ')}`);
             }
             
         } catch (error) {
-            logger.error(`[READINESS] ❌ Scenarios calculation error:`, error);
+            logger.error(`[READINESS] ❌ Twilio check error:`, error);
             component.score = 0;
             report.blockers.push({
-                code: 'SCENARIOS_ERROR',
-                message: `Error loading scenarios: ${error.message}`,
-                severity: 'CRITICAL',
-                component: 'scenarios'
+                code: 'TWILIO_ERROR',
+                message: `Error checking Twilio: ${error.message}`,
+                severity: 'critical',
+                component: 'twilio'
             });
         }
         
-        report.components.scenarios = component;
+        report.components.twilio = component;
     }
     
     /**
-     * Calculate voice score (10% of total)
+     * Check voice settings (10% of total)
      */
-    static async calculateVoiceScore(company, report) {
+    static async checkVoice(company, report) {
         const component = {
-            name: 'Voice Settings',
+            name: 'Voice',
             score: 0,
             configured: false,
             voiceId: null,
@@ -354,26 +469,32 @@ class ConfigurationReadinessService {
             component.apiSource = voiceSettings.apiSource || null;
             component.configured = Boolean(voiceSettings.voiceId);
             
+            logger.info(`[READINESS] 🎙️ Voice: ${component.configured ? component.voiceId : 'not configured'}`);
+            
             if (!component.configured) {
                 component.score = 0;
                 report.blockers.push({
                     code: 'NO_VOICE',
                     message: 'No voice selected for AI Agent',
-                    severity: 'CRITICAL',
-                    target: `/company/:companyId/ai-voice`,
-                    component: 'voice'
+                    severity: 'critical',
+                    target: '/company-profile.html?id=' + company._id + '#voice-settings',
+                    component: 'voice',
+                    details: 'Navigate to VoiceCore → Voice Settings and select a voice.'
                 });
+                
+                logger.warn(`[READINESS] ❌ NO VOICE`);
             } else {
                 component.score = 100;
+                logger.info(`[READINESS] ✅ VOICE OK: ${component.voiceId}`);
             }
             
         } catch (error) {
-            logger.error(`[READINESS] ❌ Voice calculation error:`, error);
+            logger.error(`[READINESS] ❌ Voice check error:`, error);
             component.score = 0;
             report.blockers.push({
                 code: 'VOICE_ERROR',
                 message: `Error checking voice settings: ${error.message}`,
-                severity: 'CRITICAL',
+                severity: 'critical',
                 component: 'voice'
             });
         }
@@ -382,131 +503,108 @@ class ConfigurationReadinessService {
     }
     
     /**
-     * Calculate test calls score (10% of total)
+     * Check scenarios (10% of total)
+     * Checks that active templates have live scenarios
      */
-    static async calculateTestCallsScore(company, report) {
+    static async checkScenarios(company, report) {
         const component = {
-            name: 'Test Calls',
+            name: 'Scenarios',
             score: 0,
-            made: 0,
-            required: 3, // Recommended minimum
+            active: 0,
+            total: 0,
+            categories: 0,
+            disabled: 0,
             weight: 10
         };
         
         try {
-            component.made = company.configuration?.testCallsMade || 0;
+            // Get active template IDs
+            const templateRefs = company.aiAgentSettings?.templateReferences || [];
+            const activeTemplateIds = templateRefs
+                .filter(ref => ref.enabled !== false)
+                .map(ref => ref.templateId);
             
-            // Calculate score based on test calls made
-            if (component.made === 0) {
+            if (activeTemplateIds.length === 0) {
+                // No templates - scenarios check is N/A (blocker already added in templates check)
                 component.score = 0;
+                logger.info(`[READINESS] 🎭 Scenarios: N/A (no templates)`);
+                report.components.scenarios = component;
+                return;
+            }
+            
+            // Load templates and count scenarios
+            const templates = await GlobalInstantResponseTemplate.find({
+                _id: { $in: activeTemplateIds }
+            }).select('categories').lean();
+            
+            const scenarioControls = company.aiAgentSettings?.scenarioControls || {};
+            
+            templates.forEach(template => {
+                const categories = template.categories || [];
+                component.categories += categories.length;
+                
+                categories.forEach(category => {
+                    const scenarios = category.scenarios || [];
+                    scenarios.forEach(scenario => {
+                        component.total++;
+                        
+                        // Check if scenario is disabled by company
+                        const isDisabledByCompany = scenarioControls[scenario.scenarioId]?.isEnabled === false;
+                        const isActiveInTemplate = scenario.status === 'live' || scenario.status === 'active';
+                        
+                        if (!isDisabledByCompany && isActiveInTemplate) {
+                            component.active++;
+                        } else {
+                            component.disabled++;
+                        }
+                    });
+                });
+            });
+            
+            logger.info(`[READINESS] 🎭 Scenarios: ${component.active} active out of ${component.total} total`);
+            
+            // Calculate score
+            if (component.active === 0) {
+                component.score = 0;
+                report.blockers.push({
+                    code: 'NO_SCENARIOS',
+                    message: 'No active scenarios - AI Agent cannot match customer requests',
+                    severity: 'critical',
+                    target: '/company-profile.html?id=' + company._id + '#aicore-live-scenarios',
+                    component: 'scenarios',
+                    details: 'All scenarios are disabled. Enable scenarios in AI Agent Settings → AiCore Live Scenarios.'
+                });
+                
+                logger.warn(`[READINESS] ❌ NO SCENARIOS: All scenarios disabled`);
+            } else if (component.active < 5) {
+                component.score = 50;
                 report.warnings.push({
-                    code: 'NO_TEST_CALLS',
-                    message: 'No test calls made - strongly recommended before going live',
+                    code: 'FEW_SCENARIOS',
+                    message: `Only ${component.active} active scenarios (recommended: 10+)`,
                     severity: 'major',
-                    target: `/company/:companyId/ai-agent-settings/dashboard`,
-                    component: 'testCalls'
+                    target: '/company-profile.html?id=' + company._id + '#aicore-live-scenarios',
+                    component: 'scenarios',
+                    details: 'Enable more scenarios for better AI coverage.'
                 });
-            } else if (component.made < component.required) {
-                component.score = Math.round((component.made / component.required) * 100);
-                report.warnings.push({
-                    code: 'FEW_TEST_CALLS',
-                    message: `Only ${component.made} test call(s) made (recommended: ${component.required}+)`,
-                    severity: 'WARNING',
-                    target: `/company/:companyId/ai-agent-settings/dashboard`,
-                    component: 'testCalls'
-                });
+                
+                logger.warn(`[READINESS] ⚠️ FEW SCENARIOS: Only ${component.active} active`);
             } else {
                 component.score = 100;
+                logger.info(`[READINESS] ✅ SCENARIOS OK: ${component.active} active scenarios`);
             }
             
         } catch (error) {
-            logger.error(`[READINESS] ❌ Test calls calculation error:`, error);
-            component.score = 0;
-        }
-        
-        report.components.testCalls = component;
-    }
-    
-    /**
-     * 🚨 GATEKEEPER: Check account status (Configuration tab)
-     * This is checked FIRST before all other components
-     * SUSPENDED or CALL_FORWARD status prevents Go Live
-     */
-    static checkAccountStatus(company, report) {
-        const component = {
-            name: 'Account Status',
-            score: 0,
-            status: 'unknown',
-            isActive: false,
-            weight: 0 // Doesn't contribute to score, but blocks Go Live
-        };
-        
-        try {
-            const accountStatus = company.accountStatus || {};
-            const status = accountStatus.status || 'active';
-            
-            component.status = status;
-            component.isActive = (status === 'active');
-            
-            logger.info(`[READINESS] 🚨 GATEKEEPER: Account status = ${status}`);
-            
-            // CRITICAL: Account must be ACTIVE to go live
-            if (status === 'suspended') {
-                component.score = 0;
-                report.blockers.push({
-                    code: 'ACCOUNT_SUSPENDED',
-                    message: 'Account is SUSPENDED - All incoming calls are blocked',
-                    severity: 'CRITICAL',
-                    target: '/company/:companyId/config#account-status',
-                    component: 'accountStatus',
-                    details: `Reason: ${accountStatus.reason || 'Not specified'}. Change status to ACTIVE in Configuration tab to go live.`
-                });
-                
-                logger.security(`[READINESS] 🚫 BLOCKED: Account suspended`);
-                
-            } else if (status === 'call_forward') {
-                component.score = 0;
-                report.blockers.push({
-                    code: 'ACCOUNT_CALL_FORWARD',
-                    message: 'Account is set to CALL FORWARD - Calls are being forwarded, not handled by AI',
-                    severity: 'CRITICAL',
-                    target: '/company/:companyId/config#account-status',
-                    component: 'accountStatus',
-                    details: `Currently forwarding to: ${accountStatus.callForwardNumber || 'unknown'}. Change status to ACTIVE in Configuration tab to enable AI Agent.`
-                });
-                
-                logger.security(`[READINESS] 🚫 BLOCKED: Account in call forward mode`);
-                
-            } else if (status === 'active') {
-                component.score = 100;
-                logger.security(`[READINESS] ✅ GATEKEEPER PASSED: Account is active`);
-            } else {
-                // Unknown status - block as precaution
-                component.score = 0;
-                report.blockers.push({
-                    code: 'ACCOUNT_STATUS_UNKNOWN',
-                    message: `Unknown account status: "${status}"`,
-                    severity: 'CRITICAL',
-                    target: '/company/:companyId/config#account-status',
-                    component: 'accountStatus',
-                    details: 'Please set account status to ACTIVE in Configuration tab.'
-                });
-                
-                logger.security(`[READINESS] 🚫 BLOCKED: Unknown account status`);
-            }
-            
-        } catch (error) {
-            logger.security(`[READINESS] ❌ Account status check error:`, error);
+            logger.error(`[READINESS] ❌ Scenarios check error:`, error);
             component.score = 0;
             report.blockers.push({
-                code: 'ACCOUNT_STATUS_ERROR',
-                message: `Error checking account status: ${error.message}`,
-                severity: 'CRITICAL',
-                component: 'accountStatus'
+                code: 'SCENARIOS_ERROR',
+                message: `Error checking scenarios: ${error.message}`,
+                severity: 'critical',
+                component: 'scenarios'
             });
         }
         
-        report.components.accountStatus = component;
+        report.components.scenarios = component;
     }
 }
 

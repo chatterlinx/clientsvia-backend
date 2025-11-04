@@ -412,6 +412,7 @@ class AIAgentSettingsManager {
             document.getElementById('stat-variables').textContent = stats.variables?.configured ? '✓' : '✗';
             document.getElementById('stat-twilio').textContent = stats.twilio?.configured ? '✓' : '✗';
             document.getElementById('stat-voice').textContent = stats.voice?.configured ? '✓' : '✗';
+            document.getElementById('stat-scenarios').textContent = (stats.scenarios?.active > 0) ? '✓' : '✗';
             
             // Update Go Live button
             const goLiveBtn = document.getElementById('ai-settings-go-live-btn');
@@ -511,10 +512,37 @@ class AIAgentSettingsManager {
         
         // Map blocker codes to icons and priorities
         const blockerMeta = {
+            // Account Status
+            'ACCOUNT_SUSPENDED': { icon: '🔒', priority: 'critical', category: 'Account', impact: 0 },
+            'ACCOUNT_CALL_FORWARD': { icon: '📞', priority: 'critical', category: 'Account', impact: 0 },
+            'ACCOUNT_STATUS_UNKNOWN': { icon: '❓', priority: 'critical', category: 'Account', impact: 0 },
+            'ACCOUNT_STATUS_ERROR': { icon: '❌', priority: 'critical', category: 'Account', impact: 0 },
+            
+            // Templates
             'NO_TEMPLATE': { icon: '📋', priority: 'critical', category: 'Templates', impact: 30 },
-            'MISSING_VARIABLES': { icon: '🔧', priority: 'critical', category: 'Configuration', impact: 25 },
-            'NO_TWILIO': { icon: '📞', priority: 'critical', category: 'Telephony', impact: 30 },
-            'NO_VOICE': { icon: '🎙️', priority: 'warning', category: 'Voice', impact: 15 },
+            'TEMPLATE_NOT_FOUND': { icon: '🔍', priority: 'major', category: 'Templates', impact: 15 },
+            'TEMPLATES_ERROR': { icon: '❌', priority: 'critical', category: 'Templates', impact: 30 },
+            
+            // Variables
+            'MISSING_REQUIRED_VARIABLES': { icon: '🔧', priority: 'critical', category: 'Variables', impact: 30 },
+            'VARIABLES_ERROR': { icon: '❌', priority: 'critical', category: 'Variables', impact: 30 },
+            
+            // Twilio
+            'NO_TWILIO': { icon: '📞', priority: 'critical', category: 'Twilio', impact: 20 },
+            'NO_TWILIO_CREDENTIALS': { icon: '🔑', priority: 'critical', category: 'Twilio', impact: 10 },
+            'NO_TWILIO_PHONE': { icon: '📱', priority: 'critical', category: 'Twilio', impact: 10 },
+            'TWILIO_ERROR': { icon: '❌', priority: 'critical', category: 'Twilio', impact: 20 },
+            
+            // Voice
+            'NO_VOICE': { icon: '🎙️', priority: 'critical', category: 'Voice', impact: 10 },
+            'VOICE_ERROR': { icon: '❌', priority: 'critical', category: 'Voice', impact: 10 },
+            
+            // Scenarios
+            'NO_SCENARIOS': { icon: '🎭', priority: 'critical', category: 'Scenarios', impact: 10 },
+            'FEW_SCENARIOS': { icon: '⚠️', priority: 'major', category: 'Scenarios', impact: 5 },
+            'SCENARIOS_ERROR': { icon: '❌', priority: 'critical', category: 'Scenarios', impact: 10 },
+            
+            // Default fallback
             'DEFAULT': { icon: '⚠️', priority: 'warning', category: 'Configuration', impact: 10 }
         };
         
