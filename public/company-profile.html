@@ -1317,6 +1317,56 @@
                             <div id="ai-settings-blockers" class="action-center" style="display: none;"></div>
                             
                             <!-- ========================================== -->
+                            <!-- GO LIVE SETTINGS -->
+                            <!-- ========================================== -->
+                            <div class="ai-settings-section" style="margin-top: 2rem;">
+                                <div class="section-header">
+                                    <h3 style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <span>📞</span>
+                                        <span>Pre-Activation Message</span>
+                                    </h3>
+                                    <p style="color: #6b7280; font-size: 0.875rem; margin-top: 0.25rem;">
+                                        What callers hear when they call BEFORE you click "Go Live"
+                                    </p>
+                                </div>
+                                <div class="section-content" style="margin-top: 1rem;">
+                                    <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 1rem;">
+                                        <label for="pre-activation-message" style="display: block; font-weight: 500; margin-bottom: 0.5rem; color: #374151;">
+                                            Message Text
+                                        </label>
+                                        <textarea
+                                            id="pre-activation-message"
+                                            rows="4"
+                                            style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; font-family: inherit; font-size: 0.875rem; resize: vertical;"
+                                            placeholder="Thank you for calling {companyName}. Our AI receptionist is currently being configured..."
+                                        ></textarea>
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem;">
+                                            <div style="font-size: 0.75rem; color: #6b7280;">
+                                                💡 Tip: Use <code>{companyName}</code> to insert your company name
+                                            </div>
+                                            <div style="display: flex; gap: 0.5rem;">
+                                                <button
+                                                    id="reset-pre-activation-message-btn"
+                                                    onclick="aiAgentSettings.resetPreActivationMessage()"
+                                                    style="padding: 0.5rem 1rem; background: #6b7280; color: white; border: none; border-radius: 0.375rem; font-size: 0.875rem; cursor: pointer;">
+                                                    Reset to Default
+                                                </button>
+                                                <button
+                                                    id="save-pre-activation-message-btn"
+                                                    onclick="aiAgentSettings.savePreActivationMessage()"
+                                                    style="padding: 0.5rem 1rem; background: #3b82f6; color: white; border: none; border-radius: 0.375rem; font-size: 0.875rem; cursor: pointer;">
+                                                    Save Message
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div style="margin-top: 0.75rem; padding: 0.75rem; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 0.375rem; font-size: 0.875rem; color: #1e40af;">
+                                            <strong>📞 Preview:</strong> This message will play when someone calls your Twilio number before you activate the AI Agent. Use this to direct callers to an alternate number or inform them when the service will be ready.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- ========================================== -->
                             <!-- AICORE CONTROL CENTER TITLE -->
                             <!-- ========================================== -->
                             <div class="my-8 p-6 bg-blue-600 rounded-xl shadow-lg">

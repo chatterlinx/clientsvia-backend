@@ -2124,6 +2124,14 @@ const companySchema = new mongoose.Schema({
             isLive: { type: Boolean, default: false },
             goLiveAt: { type: Date, default: null },
             goLiveBy: { type: String, default: null }, // userId who triggered go-live
+            
+            // Pre-Activation Message (what callers hear before "Go Live" is clicked)
+            preActivationMessage: { 
+                type: String, 
+                trim: true,
+                default: "Thank you for calling {companyName}. Our AI receptionist is currently being configured and will be available shortly. For immediate assistance, please call our main office line. Thank you for your patience."
+            },
+            
             components: {
                 variables: { type: mongoose.Schema.Types.Mixed, default: {} },
                 fillerWords: { type: mongoose.Schema.Types.Mixed, default: {} },

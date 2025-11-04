@@ -83,8 +83,16 @@ class AIAgentSettingsManager {
             
             console.log('✅ [AI AGENT SETTINGS] Configuration loaded:', this.configuration);
             
+            // Load company data (includes preActivationMessage)
+            if (this.parent && this.parent.companyData) {
+                this.company = this.parent.companyData;
+            }
+            
             // Update status banner
             this.updateStatusBanner();
+            
+            // Load pre-activation message into UI
+            this.loadPreActivationMessage();
             
             return this.configuration;
             
@@ -772,6 +780,78 @@ class AIAgentSettingsManager {
         } finally {
             this.hideLoadingState();
         }
+    }
+    
+    /**
+     * Load pre-activation message into UI
+     */
+    loadPreActivationMessage() {
+        const textarea = document.getElementById('pre-activation-message');
+        if (!textarea) return;
+        
+        const message = this.company?.configuration?.readiness?.preActivationMessage || '';
+        textarea.value = message;
+        
+        console.log('📞 [PRE-ACTIVATION] Loaded message:', message.substring(0, 50) + '...');
+    }
+    
+    /**
+     * Save pre-activation message
+     */
+    async savePreActivationMessage() {
+        const textarea = document.getElementById('pre-activation-message');
+        if (!textarea) return;
+        
+        const message = textarea.value.trim();
+        
+        if (!message) {
+            this.showError('Please enter a pre-activation message');
+            return;
+        }
+        
+        try {
+            console.log('📞 [PRE-ACTIVATION] Saving message...');
+            
+            const response = await fetch(`/api/company/${this.companyId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    'configuration.readiness.preActivationMessage': message
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to save message');
+            }
+            
+            console.log('✅ [PRE-ACTIVATION] Message saved successfully');
+            this.showSuccess('Pre-activation message saved!');
+            
+            // Reload company data
+            await this.loadConfiguration();
+            
+        } catch (error) {
+            console.error('❌ [PRE-ACTIVATION] Save failed:', error);
+            this.showError(`Failed to save message: ${error.message}`);
+        }
+    }
+    
+    /**
+     * Reset pre-activation message to default
+     */
+    async resetPreActivationMessage() {
+        const defaultMessage = "Thank you for calling {companyName}. Our AI receptionist is currently being configured and will be available shortly. For immediate assistance, please call our main office line. Thank you for your patience.";
+        
+        const textarea = document.getElementById('pre-activation-message');
+        if (!textarea) return;
+        
+        textarea.value = defaultMessage;
+        
+        console.log('🔄 [PRE-ACTIVATION] Reset to default message');
+        this.showInfo('Message reset to default. Click "Save Message" to apply.');
     }
     
     /**

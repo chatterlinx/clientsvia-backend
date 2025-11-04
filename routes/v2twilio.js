@@ -702,8 +702,43 @@ router.post('/voice', async (req, res) => {
       res.send(twiml.toString());
       return;
     }
-
+    
     logger.info(`[COMPANY FOUND] [OK] Company: ${company.companyName} (ID: ${company._id})`);
+    
+    // 🚦 CHECK IF AI AGENT IS LIVE (Go Live Gate)
+    const isLive = company.configuration?.readiness?.isLive;
+    logger.info(`[GO LIVE CHECK] AI Agent status: ${isLive ? '🟢 LIVE' : '🔴 NOT LIVE YET'}`);
+    
+    if (!isLive) {
+        logger.warn(`[NOT LIVE] Company ${company.companyName} has not activated AI Agent yet (isLive = false)`);
+        
+        // Get custom pre-activation message or use default
+        let preActivationMessage = company.configuration?.readiness?.preActivationMessage;
+        
+        if (!preActivationMessage || !preActivationMessage.trim()) {
+            // Fallback to default
+            preActivationMessage = "Thank you for calling {companyName}. Our AI receptionist is currently being configured and will be available shortly. For immediate assistance, please call our main office line. Thank you for your patience.";
+        }
+        
+        // Replace {companyName} placeholder
+        const companyName = company.companyName || company.businessName || 'our office';
+        preActivationMessage = preActivationMessage.replace(/\{companyName\}/gi, companyName);
+        
+        logger.info(`[NOT LIVE] Playing pre-activation message: "${preActivationMessage.substring(0, 100)}..."`);
+        
+        twiml.say({
+            voice: 'alice',
+            language: 'en-US'
+        }, escapeTwiML(preActivationMessage));
+        
+        twiml.hangup();
+        
+        res.type('text/xml');
+        res.send(twiml.toString());
+        return;
+    }
+    
+    logger.info(`[GO LIVE CHECK] ✅ AI Agent is LIVE - proceeding to handle call`);
     
     // 🚨 CHECK ACCOUNT STATUS - Handle suspended/forwarded accounts
     if (company.accountStatus && company.accountStatus.status) {
