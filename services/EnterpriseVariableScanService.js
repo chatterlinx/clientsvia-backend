@@ -362,24 +362,9 @@ class EnterpriseVariableScanService {
             logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 8: Built ${variableDefinitions.length} variable definitions`);
             
             // ═══════════════════════════════════════════════════════════════
-            // STEP 5: Differential Analysis
+            // STEP 5: Deduplicate Existing Variables FIRST (for accurate differential)
             // ═══════════════════════════════════════════════════════════════
-            logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 9: Performing differential analysis...`);
-            
-            const differential = await this.performDifferentialAnalysis(
-                company,
-                previousScan,
-                variableDefinitions,
-                templatesScanned
-            );
-            
-            logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 10: Differential analysis complete`);
-            logger.info(`📊 [ENTERPRISE SCAN ${scanId}] New: ${differential.variablesChanged.new.length}, Removed: ${differential.variablesChanged.removed.length}, Modified: ${differential.variablesChanged.modified.length}`);
-            
-            // ═══════════════════════════════════════════════════════════════
-            // STEP 6: Merge with Existing Variables (Preserve User Values!)
-            // ═══════════════════════════════════════════════════════════════
-            logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 11: Merging with existing variables...`);
+            logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 9: Deduplicating existing variables...`);
             
             // 🧹 CLEANUP: Deduplicate existing variables (removes historical case-insensitive duplicates)
             const rawExistingDefs = company.aiAgentSettings?.variableDefinitions || [];
@@ -431,6 +416,26 @@ class EnterpriseVariableScanService {
                 logger.info(`🎯 [ENTERPRISE SCAN ${scanId}] Cleaned variables: ${existingDefs.map(d => `{${d.key}}`).join(', ')}`);
             }
             
+            // ═══════════════════════════════════════════════════════════════
+            // STEP 6: Differential Analysis (NOW uses deduplicated baseline!)
+            // ═══════════════════════════════════════════════════════════════
+            logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 10: Performing differential analysis (against deduplicated baseline)...`);
+            
+            const differential = await this.performDifferentialAnalysis(
+                existingDefs,  // ✨ Use deduplicated variables as baseline!
+                previousScan,
+                variableDefinitions,
+                templatesScanned
+            );
+            
+            logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 11: Differential analysis complete`);
+            logger.info(`📊 [ENTERPRISE SCAN ${scanId}] New: ${differential.variablesChanged.new.length}, Removed: ${differential.variablesChanged.removed.length}, Modified: ${differential.variablesChanged.modified.length}`);
+            
+            // ═══════════════════════════════════════════════════════════════
+            // STEP 7: Merge with Deduplicated Variables (Preserve User Values!)
+            // ═══════════════════════════════════════════════════════════════
+            logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 12: Merging new variables with deduplicated baseline...`);
+            
             let newCount = 0;
             
             variableDefinitions.forEach(newDef => {
@@ -459,10 +464,10 @@ class EnterpriseVariableScanService {
                 }
             });
             
-            logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 12: Merge complete - ${newCount} new variables added`);
+            logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 13: Merge complete - ${newCount} new variables added`);
             
             // ═══════════════════════════════════════════════════════════════
-            // STEP 7: Build Comprehensive Scan Report
+            // STEP 8: Build Comprehensive Scan Report
             // ═══════════════════════════════════════════════════════════════
             const endTime = new Date();
             const duration = (endTime - startTime) / 1000; // seconds
@@ -509,9 +514,9 @@ class EnterpriseVariableScanService {
             };
             
             // ═══════════════════════════════════════════════════════════════
-            // STEP 8: Save to MongoDB
+            // STEP 9: Save to MongoDB
             // ═══════════════════════════════════════════════════════════════
-            logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 13: Saving to MongoDB...`);
+            logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 14: Saving to MongoDB...`);
             
             await Company.findByIdAndUpdate(companyId, {
                 'aiAgentSettings.variableDefinitions': existingDefs,
@@ -564,11 +569,16 @@ class EnterpriseVariableScanService {
      * DIFFERENTIAL ANALYSIS
      * ═══════════════════════════════════════════════════════════════════════
      */
-    async performDifferentialAnalysis(company, previousScan, currentVariables, currentTemplates) {
-        if (!previousScan) {
+    async performDifferentialAnalysis(previousVars, previousScan, currentVariables, currentTemplates) {
+        // previousVars: Array of deduplicated variable definitions from database
+        // previousScan: Last scan report (for template comparison)
+        // currentVariables: Newly scanned variable definitions
+        // currentTemplates: Currently active templates
+        
+        if (!previousScan || previousVars.length === 0) {
             return {
-                previousScanId: null,
-                previousScanDate: null,
+                previousScanId: previousScan?.scanId || null,
+                previousScanDate: previousScan?.timestamp || null,
                 templatesChanged: { added: [], removed: [], unchanged: [] },
                 variablesChanged: { new: [], removed: [], modified: [], unchanged: [] },
                 summary: {
@@ -580,8 +590,6 @@ class EnterpriseVariableScanService {
                 }
             };
         }
-        
-        const previousVars = company.aiAgentSettings?.variableDefinitions || [];
         const previousTemplates = previousScan.templatesScanned?.list || [];
         
         // Template changes
