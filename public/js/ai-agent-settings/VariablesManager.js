@@ -538,7 +538,16 @@ class VariablesManager {
             </div>
         `;
         
-        let html = enterpriseDashboard + `
+        let html = `
+            <!-- 🚀 PROOF OF WORK BANNER - CODE UPDATED NOV 4, 2025 @ 9:30 PM -->
+            <div class="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl shadow-2xl p-4 mb-6 text-white animate-pulse">
+                <div class="text-center">
+                    <div class="text-3xl font-black mb-1">🚀 ENTERPRISE VARIABLES v8.0 - ACTIVE 🚀</div>
+                    <div class="text-lg font-bold">✅ CODE UPDATED: NOVEMBER 4, 2025 @ 9:30 PM PST</div>
+                    <div class="text-sm mt-1 opacity-90">Working in: /Users/marc/MyProjects/clientsvia-backend/public/js/ai-agent-settings/VariablesManager.js</div>
+                </div>
+            </div>
+        ` + enterpriseDashboard + `
             <!-- Health Check Card -->
             <div class="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl shadow-lg p-6 mb-6 text-white">
                 <div class="flex items-center justify-between">
