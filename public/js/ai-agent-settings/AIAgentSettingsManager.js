@@ -91,8 +91,10 @@ class AIAgentSettingsManager {
             // Update status banner
             this.updateStatusBanner();
             
-            // Load pre-activation message into UI
-            this.loadPreActivationMessage();
+            // Load pre-activation message into UI (with small delay to ensure DOM is ready)
+            setTimeout(() => {
+                this.loadPreActivationMessage();
+            }, 500);
             
             return this.configuration;
             
@@ -785,14 +787,40 @@ class AIAgentSettingsManager {
     /**
      * Load pre-activation message into UI
      */
-    loadPreActivationMessage() {
+    async loadPreActivationMessage() {
         const textarea = document.getElementById('pre-activation-message');
-        if (!textarea) return;
+        if (!textarea) {
+            console.log('📞 [PRE-ACTIVATION] Textarea not found yet, will try again later');
+            return;
+        }
         
-        const message = this.company?.configuration?.readiness?.preActivationMessage || '';
-        textarea.value = message;
-        
-        console.log('📞 [PRE-ACTIVATION] Loaded message:', message.substring(0, 50) + '...');
+        try {
+            // Fetch company data to get the message
+            const response = await fetch(`/api/company/${this.companyId}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch company data');
+            }
+            
+            const company = await response.json();
+            
+            // Get message from correct path
+            const message = company.configuration?.readiness?.preActivationMessage || 
+                          "Thank you for calling {companyName}. Our AI receptionist is currently being configured and will be available shortly. For immediate assistance, please call our main office line. Thank you for your patience.";
+            
+            textarea.value = message;
+            
+            console.log('📞 [PRE-ACTIVATION] Loaded message:', message.substring(0, 50) + '...');
+            
+        } catch (error) {
+            console.error('❌ [PRE-ACTIVATION] Failed to load message:', error);
+            // Set default message on error
+            textarea.value = "Thank you for calling {companyName}. Our AI receptionist is currently being configured and will be available shortly. For immediate assistance, please call our main office line. Thank you for your patience.";
+        }
     }
     
     /**
@@ -861,6 +889,11 @@ class AIAgentSettingsManager {
         console.log('🔄 [AI AGENT SETTINGS] Refreshing configuration...');
         await this.loadConfiguration();
         await this.loadSubTab(this.currentSubTab);
+        
+        // Reload pre-activation message
+        setTimeout(() => {
+            this.loadPreActivationMessage();
+        }, 300);
     }
 }
 
