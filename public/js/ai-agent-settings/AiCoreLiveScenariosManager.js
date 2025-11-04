@@ -81,6 +81,7 @@ class AiCoreLiveScenariosManager {
             this.scenarios = data.scenarios || [];
             this.categories = data.categories || [];
             this.summary = data.summary || null;
+            this.templatesUsed = data.templatesUsed || [];
             
             console.log(`✅ [LIVE SCENARIOS] Checkpoint 9: Loaded ${this.scenarios.length} scenarios from ${this.categories.length} categories`);
             console.log(`📊 [LIVE SCENARIOS] Summary:`, this.summary);
@@ -178,6 +179,9 @@ class AiCoreLiveScenariosManager {
                 </div>
             </div>
             
+            <!-- ACTIVE TEMPLATES BREAKDOWN -->
+            ${this.renderTemplateCards()}
+            
             <!-- SEARCH & FILTER -->
             <div style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
                 <div style="display: flex; gap: 16px; align-items: center;">
@@ -204,6 +208,77 @@ class AiCoreLiveScenariosManager {
                 <!-- SCENARIOS LIST -->
                 ${this.renderScenarios()}
             `}
+        `;
+    }
+    
+    /**
+     * Render template cards showing per-template breakdown
+     */
+    renderTemplateCards() {
+        if (!this.templatesUsed || this.templatesUsed.length === 0) {
+            return '';
+        }
+        
+        return `
+            <div style="margin-bottom: 32px;">
+                <h3 style="font-size: 18px; font-weight: 600; color: #111827; margin-bottom: 16px;">
+                    📘 Active Templates (${this.templatesUsed.length})
+                </h3>
+                <div style="display: grid; gap: 16px;">
+                    ${this.templatesUsed.map(template => `
+                        <div style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; transition: all 0.2s;"
+                             onmouseover="this.style.borderColor='#6366f1'; this.style.boxShadow='0 4px 12px rgba(99, 102, 241, 0.1)'"
+                             onmouseout="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'">
+                            
+                            <!-- Template Header -->
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                                <div>
+                                    <h4 style="font-size: 16px; font-weight: 600; color: #111827; margin: 0 0 4px 0;">
+                                        📘 ${this.escapeHtml(template.templateName)}
+                                    </h4>
+                                    <div style="font-size: 12px; color: #6b7280;">
+                                        <code style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: monospace;">
+                                            ID: ${this.escapeHtml(template.templateId)}
+                                        </code>
+                                        <span style="margin: 0 8px; color: #d1d5db;">•</span>
+                                        <span style="font-weight: 500;">Version: ${this.escapeHtml(template.version || 'v1.0.0')}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Template Stats -->
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px;">
+                                <div style="text-align: center; padding: 12px; background: #fef3c7; border-radius: 8px;">
+                                    <div style="font-size: 24px; font-weight: 700; color: #92400e;">
+                                        ${template.categoriesCount || 0}
+                                    </div>
+                                    <div style="font-size: 12px; color: #78350f; margin-top: 4px;">
+                                        Categories
+                                    </div>
+                                </div>
+                                
+                                <div style="text-align: center; padding: 12px; background: #dbeafe; border-radius: 8px;">
+                                    <div style="font-size: 24px; font-weight: 700; color: #1e40af;">
+                                        ${template.scenariosCount || 0}
+                                    </div>
+                                    <div style="font-size: 12px; color: #1e3a8a; margin-top: 4px;">
+                                        Scenarios
+                                    </div>
+                                </div>
+                                
+                                <div style="text-align: center; padding: 12px; background: #dcfce7; border-radius: 8px;">
+                                    <div style="font-size: 24px; font-weight: 700; color: #15803d;">
+                                        ${template.triggersCount || 0}
+                                    </div>
+                                    <div style="font-size: 12px; color: #166534; margin-top: 4px;">
+                                        Triggers
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
         `;
     }
     

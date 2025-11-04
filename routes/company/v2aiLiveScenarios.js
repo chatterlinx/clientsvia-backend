@@ -141,10 +141,18 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
                 
                 logger.info(`📦 [LIVE SCENARIOS] Loading template: ${template.name} (ID: ${templateRef.templateId})`);
                 
+                // Count template stats BEFORE flattening
+                const templateCategories = template.categories || [];
+                const templateScenarios = templateCategories.flatMap(cat => cat.scenarios || []);
+                const templateTriggersCount = templateScenarios.reduce((sum, s) => sum + (s.triggers?.length || 0), 0);
+                
                 templatesUsed.push({
                     templateId: templateRef.templateId,
                     templateName: template.name,
-                    version: template.version
+                    version: template.version,
+                    categoriesCount: templateCategories.length,
+                    scenariosCount: templateScenarios.length,
+                    triggersCount: templateTriggersCount
                 });
                 
                 // Flatten all scenarios from all categories
