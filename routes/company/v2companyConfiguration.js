@@ -143,8 +143,7 @@ router.get('/:companyId/configuration/variables', async (req, res) => {
     try {
         const result = await CompanyVariablesService.getVariablesForCompany(req.params.companyId);
         
-        // ✨ ENTERPRISE: Include last scan report if available
-        const Company = require('../../models/v2Company');
+        // ✨ ENTERPRISE: Include last scan report if available  
         const company = await Company.findById(req.params.companyId)
             .select('aiAgentSettings.variableScanStatus.lastReport');
         
