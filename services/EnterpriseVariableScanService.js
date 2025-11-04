@@ -47,16 +47,6 @@ const logger = require('../utils/logger');
 const { v4: uuidv4 } = require('uuid');
 const ScenarioPoolService = require('./ScenarioPoolService');
 
-// Import Redis client
-let redisClient;
-try {
-    const clients = require('../clients/index');
-    redisClient = clients.redisClient;
-} catch (error) {
-    logger.warn('⚠️  [ENTERPRISE SCAN] Redis import failed:', error.message);
-    redisClient = null;
-}
-
 class EnterpriseVariableScanService {
     
     /**
@@ -435,25 +425,15 @@ class EnterpriseVariableScanService {
             logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 14: Saved to MongoDB`);
             
             // ═══════════════════════════════════════════════════════════════
-            // STEP 9: Clear Redis Cache
+            // NOTE: Redis cache NOT cleared - variables are MongoDB-only
+            // Live calls load company doc from MongoDB (Redis caches full doc if available)
+            // Variable changes take effect on next company doc load (acceptable latency)
             // ═══════════════════════════════════════════════════════════════
-            logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 15: Clearing Redis cache...`);
-            
-            try {
-                if (redisClient && redisClient.status === 'ready') {
-                    await redisClient.del(`company:${companyId}`);
-                    logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 16: Cache cleared`);
-                } else {
-                    logger.warn(`⚠️  [ENTERPRISE SCAN ${scanId}] Checkpoint 16: Redis not ready - skipping cache clear`);
-                }
-            } catch (cacheError) {
-                logger.error(`❌ [ENTERPRISE SCAN ${scanId}] Checkpoint 16: Failed to clear Redis cache:`, cacheError.message);
-            }
             
             // ═══════════════════════════════════════════════════════════════
             // FINAL: Log Summary
             // ═══════════════════════════════════════════════════════════════
-            logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 17: SCAN COMPLETE!`);
+            logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 15: SCAN COMPLETE!`);
             logger.info(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
             logger.info(`📊 [ENTERPRISE SCAN ${scanId}] SCAN SUMMARY:`);
             logger.info(`   Duration: ${duration.toFixed(2)}s`);

@@ -19,7 +19,6 @@
 
 const Company = require('../models/v2Company');
 const { validateBatch } = require('../utils/variableValidators');
-const CacheHelper = require('../utils/cacheHelper');
 const logger = require('../utils/logger');
 
 /**
@@ -191,10 +190,7 @@ async function updateVariablesForCompany(companyId, updates) {
     await company.save();
     
     logger.info(`[VARIABLES SERVICE] ✅ Saved variables for company: ${companyId}`);
-    
-    // Clear Redis cache
-    await CacheHelper.clearCompanyCache(companyId);
-    logger.debug(`[VARIABLES SERVICE] Cleared Redis cache for company: ${companyId}`);
+    logger.debug(`[VARIABLES SERVICE] Variables saved to MongoDB - no Redis cache clearing (MongoDB-only architecture)`);
     
     // Return updated data (same shape as getVariablesForCompany)
     return getVariablesForCompany(companyId);
