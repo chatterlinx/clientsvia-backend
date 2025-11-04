@@ -277,7 +277,7 @@ class EnterpriseVariableScanService {
                 // Calculate template-specific variable stats
                 const templateVars = Array.from(allVariables.values())
                     .map(v => ({
-                        key: v.key,
+                        key: v.preferredFormat || v.normalizedKey,  // Use preferred format as key
                         occurrences: v.locations.filter(loc => 
                             templateReport.scenarios.list.some(s => s.scenarioId === loc.scenarioId)
                         ).reduce((sum, loc) => sum + loc.count, 0),
