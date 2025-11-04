@@ -26,7 +26,7 @@ const logger = require('../../utils/logger.js');
 
 const router = express.Router();
 const v2Company = require('../../models/v2Company');
-const GlobalAIBehaviorTemplate = require('../../models/GlobalAIBehaviorTemplate');
+const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 const { redisClient } = require('../../clients/index');
 const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 
@@ -65,7 +65,6 @@ router.get('/company/:companyId/configuration/filler-filter', async (req, res) =
         
         // Fetch inherited filler words from active templates (DIRECT LOAD from Global AI Brain)
         if (activeTemplateIds.length > 0) {
-            const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
             const templates = await GlobalInstantResponseTemplate.find({
                 _id: { $in: activeTemplateIds }
             }).select('name version fillerWords categories').lean();
@@ -171,9 +170,11 @@ router.post('/company/:companyId/configuration/filler-filter/scan', async (req, 
         }
         logger.debug(`✅ [SCAN STEP 1/6] Company found: ${company.companyName}`);
         
-        // Step 2: Get active templates
+        // Step 2: Get active templates (from templateReferences - NEW FIELD)
         logger.debug(`🔇 [SCAN STEP 2/6] Checking active templates...`);
-        const activeTemplateIds = company.aiAgentSettings?.activeTemplates || [];
+        const templateRefs = company.aiAgentSettings?.templateReferences || [];
+        const activeTemplateRefs = templateRefs.filter(ref => ref.enabled !== false);
+        const activeTemplateIds = activeTemplateRefs.map(ref => ref.templateId);
         logger.debug(`📊 [SCAN STEP 2/6] Active templates count: ${activeTemplateIds.length}`);
         
         if (activeTemplateIds.length === 0) {
@@ -230,11 +231,11 @@ router.post('/company/:companyId/configuration/filler-filter/scan', async (req, 
             });
         }
         
-        // Step 3: Fetch templates from database
+        // Step 3: Fetch templates from database (DIRECT LOAD from Global AI Brain)
         logger.debug(`🔇 [SCAN STEP 3/6] Fetching template data from Global AI Brain...`);
-        const templates = await GlobalAIBehaviorTemplate.find({
+        const templates = await GlobalInstantResponseTemplate.find({
             _id: { $in: activeTemplateIds }
-        }).select('name fillerWords categories');
+        }).select('name version fillerWords categories').lean();
         
         logger.debug(`✅ [SCAN STEP 3/6] Retrieved ${templates.length} templates`);
         
