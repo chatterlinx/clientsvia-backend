@@ -1514,4 +1514,4 @@ class VariablesManager {
 window.VariablesManager = VariablesManager;
 
 // Verification log
-console.log('✅ [VARIABLES MANAGER] v7.0 loaded successfully - Class exported to window.VariablesManager');
+console.log('✅ [VARIABLES MANAGER] v8.0.0-ENTERPRISE loaded successfully - Class exported to window.VariablesManager');
