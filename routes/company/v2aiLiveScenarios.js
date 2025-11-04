@@ -146,14 +146,18 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
                 const templateScenarios = templateCategories.flatMap(cat => cat.scenarios || []);
                 const templateTriggersCount = templateScenarios.reduce((sum, s) => sum + (s.triggers?.length || 0), 0);
                 
-                templatesUsed.push({
+                // Initialize template metadata (will update disabled count after all scenarios are processed)
+                const templateMeta = {
                     templateId: templateRef.templateId,
                     templateName: template.name,
                     version: template.version,
                     categoriesCount: templateCategories.length,
                     scenariosCount: templateScenarios.length,
-                    triggersCount: templateTriggersCount
-                });
+                    triggersCount: templateTriggersCount,
+                    disabledCount: 0  // Will calculate after scenarios are built
+                };
+                
+                templatesUsed.push(templateMeta);
                 
                 // Flatten all scenarios from all categories
                 if (template.categories && Array.isArray(template.categories)) {
@@ -265,6 +269,13 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
                 disabledAt: scenario.disabledAt || null,
                 disabledBy: scenario.disabledBy || null
             };
+        });
+        
+        // Calculate per-template disabled counts
+        templatesUsed.forEach(template => {
+            const templateScenarios = frontendScenarios.filter(s => s.templateId === template.templateId);
+            template.disabledCount = templateScenarios.filter(s => !s.isEnabledForCompany).length;
+            template.enabledCount = templateScenarios.filter(s => s.isEnabledForCompany).length;
         });
         
         // Calculate summary

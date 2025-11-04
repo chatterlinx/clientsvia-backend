@@ -247,7 +247,7 @@ class AiCoreLiveScenariosManager {
                             </div>
                             
                             <!-- Template Stats -->
-                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px;">
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px;">
                                 <div style="text-align: center; padding: 12px; background: #fef3c7; border-radius: 8px;">
                                     <div style="font-size: 24px; font-weight: 700; color: #92400e;">
                                         ${template.categoriesCount || 0}
@@ -272,6 +272,15 @@ class AiCoreLiveScenariosManager {
                                     </div>
                                     <div style="font-size: 12px; color: #166534; margin-top: 4px;">
                                         Triggers
+                                    </div>
+                                </div>
+                                
+                                <div style="text-align: center; padding: 12px; background: #fee2e2; border-radius: 8px;">
+                                    <div style="font-size: 24px; font-weight: 700; color: #991b1b;">
+                                        ${template.disabledCount || 0}
+                                    </div>
+                                    <div style="font-size: 12px; color: #7f1d1d; margin-top: 4px;">
+                                        Disabled
                                     </div>
                                 </div>
                             </div>
