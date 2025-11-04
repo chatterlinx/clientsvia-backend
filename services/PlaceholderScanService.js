@@ -42,9 +42,11 @@ const logger = require('../utils/logger.js');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const CacheHelper = require('../utils/cacheHelper');
 const AdminNotificationService = require('./AdminNotificationService');
+const ScenarioPoolService = require('./ScenarioPoolService');
 const { 
     extractPlaceholdersFromTemplate, 
-    enrichPlaceholder 
+    enrichPlaceholder,
+    normalizePlaceholderName
 } = require('../utils/placeholderUtils');
 
 // ============================================================================
@@ -88,32 +90,61 @@ class PlaceholderScanService {
         logger.debug(`🔍 [PLACEHOLDER SCAN] Starting scan for company ${companyId}`);
         
         try {
-            // 1. Load company
+            // ============================================================================
+            // STEP 1: LOAD COMPANY & SCENARIOS VIA SCENARIOPOOLSERVICE
+            // ============================================================================
+            // CRITICAL: Use the same service as Live Scenarios to ensure consistency
+            
             const company = await Company.findById(companyId);
             if (!company) {
                 throw new Error(`Company ${companyId} not found`);
             }
             
-            // 2. Get template IDs from aiAgentSettings.templateReferences (NEW multi-template system)
-            const templateRefs = company.aiAgentSettings?.templateReferences || [];
-            const templateIds = templateRefs
-                .filter(ref => ref.enabled !== false)
-                .map(ref => ref.templateId);
+            logger.info('[VARIABLE SCAN] Loading scenario pool for company %s', companyId);
             
-            // Fallback to legacy configuration.clonedFrom if no template references
-            const usingLegacyClonedFrom = templateIds.length === 0 && company.configuration?.clonedFrom;
-            if (usingLegacyClonedFrom) {
-                templateIds.push(company.configuration.clonedFrom);
+            // Use ScenarioPoolService - same source as Live Scenarios endpoint
+            const { scenarios, templatesUsed, error, warning } = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
+            
+            if (error) {
+                logger.error('[VARIABLE SCAN] ScenarioPoolService error:', error);
+                throw new Error(error);
             }
             
-            logger.info('[VARIABLE SCAN] Company %s scanning %d templates: %o', companyId, templateIds.length, templateIds);
-            logger.info(`[VARIABLE SCAN] Starting scan for company ${companyId}`, {
-                templateIds,
-                usingLegacyClonedFrom: !!usingLegacyClonedFrom
+            if (warning) {
+                logger.warn('[VARIABLE SCAN] ScenarioPoolService warning:', warning);
+            }
+            
+            // Calculate category count from scenarios
+            const categoriesSet = new Set();
+            scenarios.forEach(s => {
+                if (s.categoryName) {
+                    categoriesSet.add(s.categoryName);
+                }
+            });
+            const totalCategories = categoriesSet.size;
+            
+            logger.info('[VARIABLE SCAN] Company %s scanning %d templates: %o', 
+                companyId, 
+                templatesUsed.length, 
+                templatesUsed.map(t => t.templateId)
+            );
+            
+            // Log template details for debugging
+            templatesUsed.forEach((template, idx) => {
+                const templateScenarios = scenarios.filter(s => String(s.templateId) === String(template.templateId));
+                const templateCategories = new Set(templateScenarios.map(s => s.categoryName));
+                
+                logger.info('[VARIABLE SCAN]   Template %d: %s (ID: %s) - %d categories, %d scenarios', 
+                    idx + 1, 
+                    template.templateName || 'Unknown', 
+                    template.templateId, 
+                    templateCategories.size,
+                    templateScenarios.length
+                );
             });
             
-            if (templateIds.length === 0) {
-                logger.info(`ℹ️  [VARIABLE SCAN] No templates configured for company ${companyId}`);
+            if (scenarios.length === 0) {
+                logger.info(`ℹ️  [VARIABLE SCAN] No scenarios found for company ${companyId}`);
                 return {
                     success: true,
                     placeholders: [],
@@ -121,63 +152,62 @@ class PlaceholderScanService {
                     existingCount: 0,
                     missingRequired: [],
                     hasAlert: false,
-                    message: 'No templates configured',
+                    message: 'No scenarios configured',
                     stats: {
-                        templatesCount: 0,
+                        templatesCount: templatesUsed.length,
                         categoriesCount: 0,
                         scenariosCount: 0,
-                        totalPlaceholderOccurrences: 0
+                        totalPlaceholderOccurrences: 0,
+                        uniqueVariables: 0
                     }
                 };
             }
             
-            // 3. Load templates
-            const templates = await GlobalInstantResponseTemplate
-                .find({ _id: { $in: templateIds } })
-                .lean(); // Plain object for performance
+            // ============================================================================
+            // STEP 2: EXTRACT PLACEHOLDERS FROM FLATTENED SCENARIOS
+            // ============================================================================
+            // Scan over the same scenario structure that Live Scenarios uses
             
-            logger.info(`📋 [VARIABLE SCAN] Loaded ${templates.length} template(s)`);
-            
-            // 4. Extract placeholders from all templates and track stats
             const combinedPlaceholderMap = new Map();
-            let totalCategories = 0;
-            let totalScenarios = 0;
             let totalPlaceholderOccurrences = 0;
             
-            for (const template of templates) {
-                // Count categories and scenarios for stats
-                const categoriesCount = template.categories?.length || 0;
-                totalCategories += categoriesCount;
+            // Regex: Match {anything} or [anything] with any casing
+            const PLACEHOLDER_REGEX = /[\{\[]\s*([A-Za-z0-9_]+)\s*[\}\]]/g;
+            
+            for (const scenario of scenarios) {
+                // Collect all text fields from scenario
+                const textParts = [
+                    scenario.name,
+                    ...(scenario.triggers || []),
+                    ...(scenario.quickReplies || []),
+                    ...(scenario.fullReplies || []),
+                    scenario.description,
+                    scenario.notes
+                ].filter(Boolean);
                 
-                template.categories?.forEach(category => {
-                    const scenariosCount = category.scenarios?.length || 0;
-                    totalScenarios += scenariosCount;
-                });
-                
-                const templatePlaceholders = extractPlaceholdersFromTemplate(template);
-                
-                // Merge with combined map (sum usage counts)
-                for (const [key, count] of templatePlaceholders.entries()) {
-                    const existing = combinedPlaceholderMap.get(key) || 0;
-                    combinedPlaceholderMap.set(key, existing + count);
-                    totalPlaceholderOccurrences += count;
+                // Scan each text part
+                for (const text of textParts) {
+                    if (!text || typeof text !== 'string') {continue;}
+                    
+                    const matches = text.matchAll(PLACEHOLDER_REGEX);
+                    
+                    for (const match of matches) {
+                        const rawKey = match[1]; // e.g. "CompanyName", "company_name", "COMPANY"
+                        const normalizedKey = normalizePlaceholderName(rawKey); // All become "companyname"
+                        
+                        const currentCount = combinedPlaceholderMap.get(normalizedKey) || 0;
+                        combinedPlaceholderMap.set(normalizedKey, currentCount + 1);
+                        totalPlaceholderOccurrences += 1;
+                    }
                 }
             }
             
             logger.info('[VARIABLE SCAN] Scan input stats for company %s', companyId, {
-                templatesCount: templates.length,
+                templatesCount: templatesUsed.length,
                 categoriesCount: totalCategories,
-                scenariosCount: totalScenarios,
+                scenariosCount: scenarios.length,
                 totalPlaceholderOccurrences,
                 uniqueVariables: combinedPlaceholderMap.size
-            });
-            
-            // Log template details for debugging
-            templates.forEach((template, idx) => {
-                const catCount = template.categories?.length || 0;
-                const scenCount = template.categories?.reduce((sum, cat) => sum + (cat.scenarios?.length || 0), 0) || 0;
-                logger.info('[VARIABLE SCAN]   Template %d: %s (ID: %s) - %d categories, %d scenarios', 
-                    idx + 1, template.name, template._id, catCount, scenCount);
             });
             
             logger.info(`✅ [VARIABLE SCAN] Found ${combinedPlaceholderMap.size} unique placeholders from ${totalPlaceholderOccurrences} total occurrences`);
@@ -317,10 +347,11 @@ class PlaceholderScanService {
                 hasAlert: missingRequired.length > 0,
                 newPlaceholders,
                 updatedPlaceholders,
+                templatesUsed, // Include template metadata for UI
                 stats: {
-                    templatesCount: templates.length,
+                    templatesCount: templatesUsed.length,
                     categoriesCount: totalCategories,
-                    scenariosCount: totalScenarios,
+                    scenariosCount: scenarios.length,
                     totalPlaceholderOccurrences,
                     uniqueVariables: combinedPlaceholderMap.size
                 }

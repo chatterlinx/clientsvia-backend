@@ -1427,7 +1427,7 @@ router.get('/:companyId/configuration/analytics', async (req, res) => {
  * Trigger background scan for all active templates
  * ============================================================================
  */
-const BackgroundVariableScanService = require('../../services/BackgroundVariableScanService');
+const PlaceholderScanService = require('../../services/PlaceholderScanService');
 const CacheHelper = require('../../utils/cacheHelper');
 
 router.post('/:companyId/configuration/variables/scan', async (req, res) => {
@@ -1443,18 +1443,10 @@ router.post('/:companyId/configuration/variables/scan', async (req, res) => {
             return res.status(404).json({ error: 'Company not found' });
         }
         
-        // Check if company has templates
-        if (!company.aiAgentSettings?.templateReferences || company.aiAgentSettings.templateReferences.length === 0) {
-            return res.status(400).json({ 
-                error: 'No templates configured',
-                message: 'Please activate a template first before scanning for variables'
-            });
-        }
+        logger.info(`🔍 [VARIABLE SCAN] Starting scan for company ${companyId}`);
         
-        logger.info(`🔍 [VARIABLE SCAN] Scanning ${company.aiAgentSettings.templateReferences.length} template(s) for company ${companyId}`);
-        
-        // Run the scan for all templates
-        const scanResult = await BackgroundVariableScanService.scanAllTemplatesForCompany(companyId);
+        // Run the scan using PlaceholderScanService (uses ScenarioPoolService for consistency)
+        const scanResult = await PlaceholderScanService.scanCompany(companyId);
         
         logger.info(`✅ [VARIABLE SCAN] Scan complete:`, scanResult);
         
@@ -1471,15 +1463,14 @@ router.post('/:companyId/configuration/variables/scan', async (req, res) => {
             required: def.required || false
         }));
         
-        // Build stats object
+        // Build stats object from scanResult
         const stats = scanResult.stats || {
             templatesCount: 0,
             categoriesCount: 0,
             scenariosCount: 0,
             totalPlaceholderOccurrences: 0,
-            uniqueVariables: result.meta.totalVariables || 0
+            uniqueVariables: 0
         };
-        stats.uniqueVariables = result.meta.totalVariables || 0;
         stats.newVariables = scanResult.newCount || 0;
         
         res.json({
@@ -1490,7 +1481,8 @@ router.post('/:companyId/configuration/variables/scan', async (req, res) => {
             definitions: result.definitions,
             meta: result.meta,
             stats,
-            detectedVariables: detectedVariablesSummary
+            detectedVariables: detectedVariablesSummary,
+            templatesUsed: scanResult.templatesUsed || [] // Include template metadata for UI
         });
         
     } catch (error) {
