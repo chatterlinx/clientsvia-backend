@@ -4,20 +4,23 @@
  * ============================================================================
  * 
  * PURPOSE: Fetch all active scenarios from activated Global AI Brain templates
+ *          PRODUCTION ENDPOINT - Used by AI Agent to respond to live calls
  * 
  * ENDPOINTS:
  * GET  /api/company/:companyId/live-scenarios
  *      → Returns merged list of all scenarios from active templates
  * 
  * DATA SOURCES:
- * - company.aiAgentSettings.templateReferences (active templates)
- * - GlobalInstantResponseTemplate (template data with scenarios)
+ * - company.aiAgentSettings.templateReferences (active templates by ID)
+ * - GlobalInstantResponseTemplate (direct load from AI Brain - NO FILTERS)
  * 
  * ARCHITECTURE:
- * - Fetches all active template IDs from company
- * - Loads template data from Global AI Brain
- * - Merges all scenarios into single list
- * - Includes metadata: category, template name, usage stats
+ * - Redis caching (5 min TTL) for production performance
+ * - Direct template load (bypasses ScenarioPoolService filters)
+ * - Same data source as AiCore Templates tab and Variables tab
+ * - Matches template by ID (not name) for accuracy
+ * - Flattens all scenarios from all categories
+ * - Includes metadata: template name, template ID, category, replies
  * 
  * ============================================================================
  */
@@ -28,7 +31,6 @@ const logger = require('../../utils/logger.js');
 const router = express.Router();
 const v2Company = require('../../models/v2Company');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
-const ScenarioPoolService = require('../../services/ScenarioPoolService');
 const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const { redisClient } = require('../../db');
 
@@ -68,26 +70,119 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
             // Continue to MongoDB fallback
         }
         
-        logger.debug(`⚪ [LIVE SCENARIOS CACHE] Cache MISS for company ${companyId}, querying via ScenarioPoolService...`);
+        logger.debug(`⚪ [LIVE SCENARIOS CACHE] Cache MISS for company ${companyId}, loading directly from AI Brain...`);
         
         // ============================================================================
-        // STEP 2: USE SCENARIOPOOLSERVICE (CANONICAL SOURCE)
+        // STEP 2: LOAD DIRECTLY FROM GLOBAL AI BRAIN (SOURCE OF TRUTH)
+        // ============================================================================
+        // Same architecture as Variables tab - bypass ScenarioPoolService filters
+        // Read from: company.aiAgentSettings.templateReferences
+        // Load from: GlobalInstantResponseTemplate (by template ID)
         // ============================================================================
         const dbStartTime = Date.now();
         
-        // Load scenarios using ScenarioPoolService
-        // This handles: multi-template support, legacy fallback, scenario controls
-        const { scenarios, templatesUsed, error, warning } = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
+        // Load company with active template references
+        const company = await v2Company.findById(companyId)
+            .select('aiAgentSettings.templateReferences companyName')
+            .lean();
         
-        if (error) {
-            logger.error(`❌ [LIVE SCENARIOS API] ScenarioPoolService error:`, error);
-            return res.status(500).json({
+        if (!company) {
+            return res.status(404).json({
                 success: false,
-                error: `Failed to load scenarios: ${error}`
+                error: 'Company not found'
             });
         }
         
-        if (warning || scenarios.length === 0) {
+        const templateRefs = company.aiAgentSettings?.templateReferences || [];
+        const activeTemplateRefs = templateRefs.filter(ref => ref.enabled !== false);
+        
+        logger.info(`🎭 [LIVE SCENARIOS] Found ${activeTemplateRefs.length} active template(s) for ${company.companyName}`);
+        
+        if (activeTemplateRefs.length === 0) {
+            const emptyResult = {
+                success: true,
+                scenarios: [],
+                categories: [],
+                summary: {
+                    totalScenarios: 0,
+                    totalCategories: 0,
+                    activeTemplates: 0,
+                    totalEnabled: 0,
+                    totalDisabled: 0
+                },
+                warning: 'No active templates configured'
+            };
+            
+            // Cache empty result (shorter TTL - 1 minute)
+            try {
+                await redisClient.setEx(cacheKey, 60, JSON.stringify(emptyResult));
+                logger.debug(`💾 [LIVE SCENARIOS CACHE] Cached empty result (60s TTL)`);
+            } catch (cacheError) {
+                logger.warn(`⚠️ [LIVE SCENARIOS CACHE] Failed to cache empty result:`, cacheError.message);
+            }
+            
+            return res.json(emptyResult);
+        }
+        
+        // Load templates directly from Global AI Brain
+        const scenarios = [];
+        const templatesUsed = [];
+        
+        for (const templateRef of activeTemplateRefs) {
+            try {
+                const template = await GlobalInstantResponseTemplate.findById(templateRef.templateId)
+                    .select('name categories version')
+                    .lean();
+                
+                if (!template) {
+                    logger.warn(`⚠️ [LIVE SCENARIOS] Template ${templateRef.templateId} not found, skipping`);
+                    continue;
+                }
+                
+                logger.info(`📦 [LIVE SCENARIOS] Loading template: ${template.name} (ID: ${templateRef.templateId})`);
+                
+                templatesUsed.push({
+                    templateId: templateRef.templateId,
+                    templateName: template.name,
+                    version: template.version
+                });
+                
+                // Flatten all scenarios from all categories
+                if (template.categories && Array.isArray(template.categories)) {
+                    for (const category of template.categories) {
+                        if (category.scenarios && Array.isArray(category.scenarios)) {
+                            for (const scenario of category.scenarios) {
+                                scenarios.push({
+                                    scenarioId: scenario._id.toString(),
+                                    name: scenario.name,
+                                    triggers: scenario.triggers || [],
+                                    quickReplies: scenario.quickReplies || [],
+                                    fullReplies: scenario.fullReplies || [],
+                                    categoryName: category.name || 'General',
+                                    categoryId: category._id?.toString(),
+                                    templateId: templateRef.templateId,
+                                    templateName: template.name,
+                                    priority: templateRef.priority || 1,
+                                    avgConfidence: 0, // Can be populated from performance metrics later
+                                    usageCount: 0, // Can be populated from call logs later
+                                    status: 'active', // All scenarios from active templates are active
+                                    isActive: true,
+                                    isEnabledForCompany: true // All scenarios from selected templates are enabled
+                                });
+                            }
+                        }
+                    }
+                }
+                
+            } catch (templateError) {
+                logger.error(`❌ [LIVE SCENARIOS] Error loading template ${templateRef.templateId}:`, templateError);
+                // Continue with other templates
+            }
+        }
+        
+        logger.info(`✅ [LIVE SCENARIOS] Loaded ${scenarios.length} scenarios from ${templatesUsed.length} templates`);
+        
+        if (scenarios.length === 0) {
             const emptyResult = {
                 success: true,
                 scenarios: [],
@@ -99,7 +194,7 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
                     totalEnabled: 0,
                     totalDisabled: 0
                 },
-                warning: warning || 'No scenarios configured'
+                warning: 'No scenarios found in active templates'
             };
             
             // Cache empty result (shorter TTL - 1 minute)
