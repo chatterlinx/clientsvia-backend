@@ -1,0 +1,12 @@
+{
+  "version": "8.0.0-ENTERPRISE",
+  "lastDeployed": "2025-11-04T02:45:00Z",
+  "commit": "bb0c92b0",
+  "criticalFixes": [
+    "EnterpriseVariableScanService uses GlobalAIBehaviorTemplate (not legacy model)",
+    "GET /configuration/variables returns scanReport + stats",
+    "VariablesManager v8.0.0-ENTERPRISE with full enterprise dashboard"
+  ],
+  "checkEndpoint": "/api/company/:companyId/configuration/variables should return scanReport field"
+}
+
