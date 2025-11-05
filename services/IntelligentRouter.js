@@ -296,6 +296,53 @@ class IntelligentRouter {
                     patternsLearned: result.patternsLearned.length
                 });
                 
+                // 🎯 Phase 4: Log to LLM Learning System
+                try {
+                    const ProductionLLMSuggestion = require('../models/ProductionLLMSuggestion');
+                    const callSource = context.callSource || 'production'; // From callState
+                    
+                    // Create suggestion record for LLM Learning Console
+                    await ProductionLLMSuggestion.create({
+                        templateId: template._id,
+                        templateName: template.name,
+                        companyId: company?._id || null,
+                        companyName: company?.companyName || company?.businessName || 'Unknown',
+                        callSource,  // 'company-test' | 'production'
+                        
+                        // Suggestion details (simplified for now)
+                        suggestionType: 'trigger',  // Default to trigger type
+                        suggestion: `Add missing trigger patterns for: "${callerInput.substring(0, 100)}"`,
+                        suggestedValue: callerInput.substring(0, 100),
+                        targetCategory: result.scenario?.categoryName || 'General',
+                        targetScenario: result.scenario?.name || 'Unknown',
+                        confidence: result.confidence,
+                        priority: result.confidence > 0.8 ? 'high' : (result.confidence > 0.6 ? 'medium' : 'low'),
+                        
+                        // Context from call
+                        customerPhrase: callerInput,
+                        tier1Score: result.tier1Result?.confidence || 0,
+                        tier2Score: result.tier2Result?.confidence || 0,
+                        llmResponse: result.response,
+                        callDate: new Date(),
+                        
+                        // Cost tracking
+                        llmModel: result.tier3Result.llmModel || 'gpt-4o',
+                        cost: result.cost.tier3 || 0,
+                        
+                        // Status
+                        status: 'pending'
+                    });
+                    
+                    logger.info('📝 [LLM LEARNING] Tier 3 usage logged', {
+                        routingId,
+                        callSource,
+                        cost: `$${result.cost.tier3.toFixed(4)}`
+                    });
+                } catch (loggingError) {
+                    logger.error('❌ [LLM LEARNING] Failed to log Tier 3 usage:', loggingError.message);
+                    // Non-fatal - don't block the call
+                }
+                
             } else {
                 // ❌ EVEN LLM FAILED (rare, but possible)
                 result.tierUsed = 3;
