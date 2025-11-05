@@ -202,7 +202,7 @@ router.get('/test-pilot/companies', async (req, res) => {
             isDeleted: { $ne: true },
             isActive: { $ne: false }
         })
-        .select('_id companyName businessName aiAgentLogic.templateReferences')
+        .select('_id companyName businessName aiAgentSettings.templateReferences')
         .sort({ companyName: 1, businessName: 1 })
         .limit(1000) // Safety limit
         .lean();
@@ -211,8 +211,9 @@ router.get('/test-pilot/companies', async (req, res) => {
         const formattedCompanies = companies.map(c => ({
             _id: c._id,
             name: c.companyName || c.businessName || 'Unnamed Company',
-            hasTemplate: Array.isArray(c.aiAgentLogic?.templateReferences) && 
-                        c.aiAgentLogic.templateReferences.length > 0
+            hasTemplate: Array.isArray(c.aiAgentSettings?.templateReferences) && 
+                        c.aiAgentSettings.templateReferences.length > 0 &&
+                        c.aiAgentSettings.templateReferences.some(ref => ref.enabled !== false)
         }));
         
         logger.info(`✅ [TEST PILOT] Loaded ${formattedCompanies.length} companies`);
@@ -244,7 +245,7 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
         logger.info(`📋 [TEST PILOT] Fetching company details: ${id}`);
         
         const company = await Company.findById(id)
-            .select('_id companyName businessName aiAgentLogic')
+            .select('_id companyName businessName aiAgentLogic aiAgentSettings')
             .lean();
         
         if (!company) {
@@ -255,15 +256,18 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
         }
         
         // Extract relevant testing info
-        const templateReferences = company.aiAgentLogic?.templateReferences || [];
-        const activeTemplates = templateReferences.filter(ref => ref.isActive);
+        const templateReferences = company.aiAgentSettings?.templateReferences || [];
+        const activeTemplates = templateReferences.filter(ref => ref.enabled !== false);
         
         const companyInfo = {
             _id: company._id,
             name: company.companyName || company.businessName,
             templates: {
                 count: activeTemplates.length,
-                names: activeTemplates.map(ref => ref.name || 'Unnamed Template').join(', ') || 'None assigned',
+                templateIds: activeTemplates.map(ref => ref.templateId),
+                names: activeTemplates.length > 0 
+                    ? `${activeTemplates.length} template${activeTemplates.length > 1 ? 's' : ''} loaded`
+                    : 'None assigned',
                 hasTemplates: activeTemplates.length > 0
             },
             companyQA: {
