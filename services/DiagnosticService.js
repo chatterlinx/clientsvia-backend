@@ -39,7 +39,7 @@ class DiagnosticService {
         try {
             // Load company data
             const company = await Company.findById(companyId)
-                .select('companyName configuration aiAgentSettings aiAgentLogic twilioAccountSid twilioAuthToken twilioPhoneNumber')
+                .select('companyName configuration aiAgentSettings aiAgentLogic twilioConfig')
                 .lean();
             
             if (!company) {
