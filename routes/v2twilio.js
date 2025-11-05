@@ -2263,10 +2263,63 @@ router.post('/test-respond/:templateId', async (req, res) => {
         const EnterpriseAISuggestionEngine = require('../services/EnterpriseAISuggestionEngine');
         const enterpriseEngine = new EnterpriseAISuggestionEngine();
         
-        // Run comprehensive analysis
+        // ============================================
+        // 🛡️ CONSTRUCT TIER RESULTS FOR ANALYSIS
+        // ============================================
+        // Build tierResults object from available data (either 3-tier routing or test mode)
+        let tierResults;
+        
+        if (ENABLE_3_TIER_INTELLIGENCE && routingDetails.tierUsed) {
+          // 3-tier mode: Use routing details
+          tierResults = {
+            finalTier: `tier${routingDetails.tierUsed}`,
+            finalConfidence: result.confidence,
+            tier1: {
+              confidence: routingDetails.tier1Confidence || 0,
+              matchedFillers: result.trace?.matchedFillers || [],
+              matchedTriggers: result.trace?.matchedTriggers || [],
+              matchedKeywords: result.trace?.matchedKeywords || []
+            },
+            tier2: {
+              confidence: routingDetails.tier2Confidence || 0
+            },
+            tier3: {
+              confidence: routingDetails.tier3Confidence || 0,
+              scenario: result.scenario || null
+            }
+          };
+        } else {
+          // Test mode: Construct from result object (HybridScenarioSelector output)
+          tierResults = {
+            finalTier: 'tier1',
+            finalConfidence: result.confidence,
+            tier1: {
+              confidence: result.confidence,
+              matchedFillers: result.trace?.matchedFillers || [],
+              matchedTriggers: result.trace?.matchedTriggers || [],
+              matchedKeywords: result.trace?.matchedKeywords || []
+            },
+            tier2: {
+              confidence: 0
+            },
+            tier3: {
+              confidence: 0,
+              scenario: null
+            }
+          };
+        }
+        
+        logger.info(`🧠 [ENTERPRISE TEST PILOT] Built tierResults:`, {
+          finalTier: tierResults.finalTier,
+          finalConfidence: tierResults.finalConfidence,
+          mode: ENABLE_3_TIER_INTELLIGENCE ? '3-tier' : 'test'
+        });
+        
+        // Run comprehensive analysis with tierResults
         const enterpriseAnalysis = await enterpriseEngine.analyzeTestCall(
           speechText,
-          templateId
+          templateId,
+          tierResults
         );
         
         // Store enterprise analysis

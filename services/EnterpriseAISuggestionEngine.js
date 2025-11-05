@@ -80,6 +80,29 @@ class EnterpriseAISuggestionEngine {
     normalizeTierResults(tierResults) {
         console.log('🛡️ [NORMALIZE] Normalizing tier results...');
         
+        // ============================================
+        // DEFENSIVE: Handle completely missing tierResults
+        // ============================================
+        if (!tierResults || typeof tierResults !== 'object') {
+            console.error('❌ [NORMALIZE] tierResults is undefined, null, or not an object!');
+            console.error('❌ [NORMALIZE] Creating safe default structure...');
+            
+            return {
+                finalTier: 'tier1',
+                finalConfidence: 0.0,
+                tier1: { 
+                    confidence: 0.0, 
+                    matchedFillers: [], 
+                    matchedTriggers: [], 
+                    matchedKeywords: [] 
+                },
+                tier2: { confidence: 0.0 },
+                tier3: { confidence: 0.0, scenario: null },
+                hadMissingData: true,
+                _error: 'tierResults was undefined or invalid'
+            };
+        }
+        
         // Check if we already have the expected structure
         if (tierResults.finalTier && tierResults.finalConfidence !== undefined) {
             console.log('✅ [NORMALIZE] Tier results already in expected format');
