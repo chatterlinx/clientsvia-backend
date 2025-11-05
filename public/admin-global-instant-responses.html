@@ -7370,13 +7370,18 @@ Continue?`;
             const companyDesc = document.getElementById('company-mode-desc');
             
             if (mode === 'template') {
-                // 🔥 VALIDATION: Check if template is selected
-                const activeTemplateId = document.getElementById('dashboard-template-selector')?.value;
-                if (!activeTemplateId) {
+                // 🔥 VALIDATION: Check if template is selected (dropdown OR already loaded from backend)
+                const dropdownTemplateId = document.getElementById('dashboard-template-selector')?.value;
+                const loadedTemplateId = window.activeTemplateId || window.globalTwilioTestConfig?.activeTemplateId;
+                const finalTemplateId = dropdownTemplateId || loadedTemplateId;
+                
+                if (!finalTemplateId) {
                     showToast('error', '⚠️ Please select a template from the dropdown first');
                     console.error('❌ [TEMPLATE TEST] No template selected');
                     return;
                 }
+                
+                console.log('✅ [TEMPLATE TEST] Using template:', finalTemplateId);
                 
                 // Show Template Mode content
                 templateModeContent.style.display = 'block';
@@ -7401,7 +7406,7 @@ Continue?`;
                         body: JSON.stringify({
                             enabled: true,
                             mode: 'template',
-                            activeTemplateId: activeTemplateId
+                            activeTemplateId: finalTemplateId
                         })
                     });
                     console.log('✅ [TEMPLATE TEST] Enabled in backend (enabled: true, mode: template)');
