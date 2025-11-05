@@ -182,16 +182,34 @@ class DiagnosticService {
         if (activeTemplates.length > 0) {
             const template = activeTemplates[0];
             const lastSynced = template.lastSynced ? new Date(template.lastSynced) : null;
+            const clonedAt = template.clonedAt ? new Date(template.clonedAt) : null;
             const now = new Date();
-            const daysSinceSync = lastSynced ? Math.floor((now - lastSynced) / (1000 * 60 * 60 * 24)) : 999;
             
-            if (daysSinceSync > 30) {
+            // ✅ FIX: Calculate days correctly - check activation date if never synced
+            let daysSinceSync = 0;
+            let isNewTemplate = false;
+            
+            if (lastSynced) {
+                // Template has been synced - calculate days since last sync
+                daysSinceSync = Math.floor((now - lastSynced) / (1000 * 60 * 60 * 24));
+            } else if (clonedAt) {
+                // Never synced - check if it's a new template (< 7 days old)
+                const daysSinceActivation = Math.floor((now - clonedAt) / (1000 * 60 * 60 * 24));
+                isNewTemplate = daysSinceActivation < 7;
+                daysSinceSync = daysSinceActivation;
+            } else {
+                // No sync date AND no clone date - unknown age
+                daysSinceSync = 999;
+            }
+            
+            // Only show warning if template is old AND not synced recently
+            if (!isNewTemplate && daysSinceSync > 30) {
                 checks.push({
                     id: 'tmpl_sync_old',
                     type: 'maintenance',
                     status: 'warning',
                     severity: 'medium',
-                    message: `Template not synced in ${daysSinceSync} days`,
+                    message: lastSynced ? `Template not synced in ${daysSinceSync} days` : `Template activated ${daysSinceSync} days ago but never synced`,
                     currentValue: lastSynced ? lastSynced.toISOString() : 'Never synced',
                     expectedValue: 'Synced within last 30 days',
                     impact: ['May miss latest template updates', 'Scenarios could be outdated'],
@@ -210,6 +228,19 @@ class DiagnosticService {
                     details: {
                         lastSynced: lastSynced.toISOString(),
                         syncFrequency: 'Recommended: Every 30 days'
+                    }
+                });
+            } else if (isNewTemplate) {
+                // New template (< 7 days) - no warning needed
+                checks.push({
+                    id: 'tmpl_new',
+                    type: 'info',
+                    status: 'passed',
+                    severity: 'info',
+                    message: `Template recently activated (${daysSinceSync} day(s) ago)`,
+                    details: {
+                        clonedAt: clonedAt?.toISOString(),
+                        note: 'Sync recommended after 30 days'
                     }
                 });
             }
