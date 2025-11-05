@@ -6617,40 +6617,6 @@ Continue?`;
                     updateTwilioConfigBadge();
                 }, 100);
                 
-                // Set toggle state
-                const isEnabled = config.enabled === true;
-                console.log('📞 [TWILIO TEST - GLOBAL] Setting enabled toggle to:', isEnabled);
-                document.getElementById('twilio-test-enabled').checked = isEnabled;
-                
-                // Update toggle UI
-                const toggleSwitch = document.getElementById('toggle-switch');
-                const toggleCircle = document.getElementById('toggle-circle');
-                const statusLabel = document.getElementById('template-toggle-label');
-                
-                if (isEnabled) {
-                    if (toggleSwitch) {
-                        toggleSwitch.classList.remove('bg-gray-300');
-                        toggleSwitch.classList.add('bg-purple-600');
-                    }
-                    if (toggleCircle) {
-                        toggleCircle.style.transform = 'translateX(28px)';
-                    }
-                    if (statusLabel) {
-                        statusLabel.innerHTML = 'Status: <span class="text-green-600 font-bold">Enabled</span>';
-                    }
-                } else {
-                    if (toggleSwitch) {
-                        toggleSwitch.classList.remove('bg-purple-600');
-                        toggleSwitch.classList.add('bg-gray-300');
-                    }
-                    if (toggleCircle) {
-                        toggleCircle.style.transform = 'translateX(0)';
-                    }
-                    if (statusLabel) {
-                        statusLabel.innerHTML = 'Status: <span class="text-gray-500">Disabled</span>';
-                    }
-                }
-
                 // Update stats if available (in new accordion layout)
                 const testCallCountEl = document.getElementById('test-call-count');
                 const lastCalledEl = document.getElementById('test-last-called');
@@ -7156,7 +7122,6 @@ Continue?`;
             console.log('📞 [SAVE START] Reading form values...');
             
             const phoneNumberElement = document.getElementById('twilio-test-phone');
-            const enabledElement = document.getElementById('twilio-test-enabled');
             const accountSidElement = document.getElementById('twilio-test-account-sid');
             const authTokenElement = document.getElementById('twilio-test-auth-token');
             const greetingElement = document.getElementById('twilio-test-greeting');
@@ -7164,7 +7129,6 @@ Continue?`;
             
             console.log('📞 [SAVE DEBUG] Form elements found:', {
                 phoneNumberElement: !!phoneNumberElement,
-                enabledElement: !!enabledElement,
                 accountSidElement: !!accountSidElement,
                 authTokenElement: !!authTokenElement,
                 greetingElement: !!greetingElement,
@@ -7172,7 +7136,6 @@ Continue?`;
             });
             
             const phoneNumber = phoneNumberElement ? phoneNumberElement.value.trim() : '';
-            const enabled = enabledElement ? enabledElement.checked : false;
             const accountSid = accountSidElement ? accountSidElement.value.trim() : '';
             const authToken = authTokenElement ? authTokenElement.value.trim() : '';
             const greeting = greetingElement ? greetingElement.value.trim() : '';
@@ -7182,7 +7145,6 @@ Continue?`;
             console.log('📞 [SAVE DEBUG] Raw values from form:', {
                 phoneNumber: phoneNumber || '(empty)',
                 phoneNumberLength: phoneNumber.length,
-                enabled,
                 accountSid: accountSid ? `${accountSid.substring(0, 10)}...` : '(empty)',
                 accountSidLength: accountSid.length,
                 authToken: authToken ? '***' : '(empty)',
@@ -7212,7 +7174,6 @@ Continue?`;
 
             console.log('📞 [TWILIO TEST - GLOBAL] Saving AdminSettings.globalAIBrainTest config', {
                 phoneNumber,
-                enabled,
                 accountSid: accountSid ? `${accountSid.substring(0, 10)}...` : 'none',
                 authToken: authToken ? '***' : 'none',
                 activeTemplateId: targetTemplateId,
@@ -7222,9 +7183,9 @@ Continue?`;
 
             try {
                 // Build request body (only include activeTemplateId if it exists)
+                // NOTE: 'enabled' is controlled by banner tabs via switchTestMode(), not this save function
                 const requestBody = {
                     phoneNumber,
-                    enabled,
                     accountSid,
                     authToken,
                     greeting,
@@ -7523,32 +7484,12 @@ Continue?`;
                 
                 console.log('✅ [COMPANY TEST] Configuration loaded:', config);
                 
-                // Update UI
-                document.getElementById('company-test-enabled').checked = config.enabled || false;
-                document.getElementById('company-test-phone-display').textContent = config.phoneNumber || 'Not configured';
-                document.getElementById('company-test-phone-input').value = config.phoneNumber || '';
-                
                 // Load greeting (with default)
                 const greeting = config.greeting || 'Currently testing {company_name}.';
-                document.getElementById('company-test-greeting').value = greeting;
-                updateCompanyGreetingCharCount();
-                
-                // Update toggle UI
-                if (config.enabled) {
-                    const toggleSwitch = document.getElementById('company-toggle-switch');
-                    const toggleCircle = document.getElementById('company-toggle-circle');
-                    const statusLabel = document.getElementById('company-toggle-label');
-                    
-                    if (toggleSwitch) {
-                        toggleSwitch.classList.add('bg-blue-600');
-                        toggleSwitch.classList.remove('bg-gray-300');
-                    }
-                    if (toggleCircle) {
-                        toggleCircle.style.transform = 'translateX(28px)';
-                    }
-                    if (statusLabel) {
-                        statusLabel.innerHTML = 'Status: <span class="text-green-600 font-bold">Enabled</span>';
-                    }
+                const greetingElement = document.getElementById('company-test-greeting');
+                if (greetingElement) {
+                    greetingElement.value = greeting;
+                    updateCompanyGreetingCharCount();
                 }
                 
                 // Update test options
@@ -7704,19 +7645,20 @@ Continue?`;
                 return;
             }
             
-            const enabled = document.getElementById('company-test-enabled').checked;
-            const greeting = document.getElementById('company-test-greeting').value.trim();
+            const greetingElement = document.getElementById('company-test-greeting');
+            const greeting = greetingElement ? greetingElement.value.trim() : 'Currently testing {company_name}.';
             
             const testOptions = {
-                enableCompanyQA: document.getElementById('test-option-company-qa').checked,
-                enableTradeQA: document.getElementById('test-option-trade-qa').checked,
-                enableTemplates: document.getElementById('test-option-templates').checked,
-                enable3TierIntelligence: document.getElementById('test-option-3tier').checked,
-                enablePlaceholders: document.getElementById('test-option-placeholders').checked,
-                enablePersonality: document.getElementById('test-option-personality').checked
+                enableCompanyQA: document.getElementById('test-option-company-qa')?.checked ?? true,
+                enableTradeQA: document.getElementById('test-option-trade-qa')?.checked ?? true,
+                enableTemplates: document.getElementById('test-option-templates')?.checked ?? true,
+                enable3TierIntelligence: document.getElementById('test-option-3tier')?.checked ?? true,
+                enablePlaceholders: document.getElementById('test-option-placeholders')?.checked ?? true,
+                enablePersonality: document.getElementById('test-option-personality')?.checked ?? true
             };
             
             try {
+                // NOTE: 'enabled' is controlled by banner tabs via switchTestMode(), not this save function
                 const response = await fetch('/api/admin/settings/company-test-mode', {
                     method: 'PATCH',
                     headers: {
@@ -7724,7 +7666,6 @@ Continue?`;
                         'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                     },
                     body: JSON.stringify({
-                        enabled,
                         activeCompanyId: companyId,
                         greeting,
                         testOptions
@@ -7749,81 +7690,6 @@ Continue?`;
             } catch (error) {
                 console.error('❌ [COMPANY TEST] Save failed:', error);
                 showToast('error', `Failed to save configuration: ${error.message}`);
-            }
-        }
-        
-        /**
-         * Helper: Disable Company Testing (called from Template Testing toggle)
-         */
-        async function disableCompanyTestMode() {
-            console.log('🔄 [HELPER] Disabling Company Testing...');
-            
-            // Update Company Testing UI
-            const checkbox = document.getElementById('company-test-enabled');
-            const toggleSwitch = document.getElementById('company-toggle-switch');
-            const toggleCircle = document.getElementById('company-toggle-circle');
-            const statusLabel = document.getElementById('company-toggle-label');
-            
-            if (checkbox && checkbox.checked) {
-                checkbox.checked = false;
-                
-                if (toggleSwitch) {
-                    toggleSwitch.classList.remove('bg-blue-600');
-                    toggleSwitch.classList.add('bg-gray-300');
-                }
-                if (toggleCircle) {
-                    toggleCircle.style.transform = 'translateX(0)';
-                }
-                if (statusLabel) {
-                    statusLabel.innerHTML = 'Status: <span class="text-gray-500">Disabled</span>';
-                }
-                
-                // Save to backend
-                try {
-                    await fetch('/api/admin/settings/company-test-mode', {
-                        method: 'PATCH',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-                        },
-                        body: JSON.stringify({ enabled: false })
-                    });
-                    console.log('✅ [HELPER] Company Testing disabled in backend');
-                } catch (error) {
-                    console.error('❌ [HELPER] Failed to disable Company Testing:', error);
-                }
-            }
-        }
-        
-        /**
-         * Helper: Disable Template Testing (called from Company Testing toggle)
-         */
-        async function disableTemplateTestMode() {
-            console.log('🔄 [HELPER] Disabling Template Testing...');
-            
-            // Update Template Testing UI
-            const checkbox = document.getElementById('twilio-test-enabled');
-            const toggleSwitch = document.getElementById('toggle-switch');
-            const toggleCircle = document.getElementById('toggle-circle');
-            const statusLabel = document.getElementById('template-toggle-label');
-            
-            if (checkbox && checkbox.checked) {
-                checkbox.checked = false;
-                
-                if (toggleSwitch) {
-                    toggleSwitch.classList.remove('bg-purple-600');
-                    toggleSwitch.classList.add('bg-gray-300');
-                }
-                if (toggleCircle) {
-                    toggleCircle.style.transform = 'translateX(0)';
-                }
-                if (statusLabel) {
-                    statusLabel.innerHTML = 'Status: <span class="text-gray-500">Disabled</span>';
-                }
-                
-                // Save to backend (calls saveTwilioTestConfig which will save enabled: false)
-                console.log('✅ [HELPER] Template Testing disabled (UI updated)');
-                // Note: Template test saving happens via "Save Config" button, not auto-save
             }
         }
         
