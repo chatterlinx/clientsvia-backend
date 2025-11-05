@@ -6793,8 +6793,11 @@ Continue?`;
                 // Update character count for greeting
                 updateGreetingCharCount();
                 
-                // 🎨 UPDATE: Dynamic badge status
-                updateTwilioConfigBadge();
+                // 🎨 UPDATE: Dynamic badge status (with slight delay to ensure DOM updates)
+                setTimeout(() => {
+                    console.log('🎨 [LOAD CONFIG] Updating badge after fields populated...');
+                    updateTwilioConfigBadge();
+                }, 100);
                 
                 // Set toggle state
                 const isEnabled = config.enabled === true;
@@ -7492,32 +7495,45 @@ Continue?`;
          * ================================================================
          */
         function updateTwilioConfigBadge() {
-            const phoneNumber = document.getElementById('twilio-test-phone')?.value.trim();
-            const accountSid = document.getElementById('twilio-test-account-sid')?.value.trim();
-            const authToken = document.getElementById('twilio-test-auth-token')?.value.trim();
+            const phoneNumber = document.getElementById('twilio-test-phone')?.value?.trim() || '';
+            const accountSid = document.getElementById('twilio-test-account-sid')?.value?.trim() || '';
+            const authToken = document.getElementById('twilio-test-auth-token')?.value?.trim() || '';
             const badge = document.getElementById('twilio-config-status-badge');
             
-            if (!badge) return;
+            console.log('🎨 [BADGE UPDATE] Checking config:', {
+                hasPhoneElement: !!document.getElementById('twilio-test-phone'),
+                hasSidElement: !!document.getElementById('twilio-test-account-sid'),
+                hasTokenElement: !!document.getElementById('twilio-test-auth-token'),
+                hasBadgeElement: !!badge,
+                phoneLength: phoneNumber.length,
+                sidLength: accountSid.length,
+                tokenLength: authToken.length
+            });
+            
+            if (!badge) {
+                console.error('❌ [BADGE] Badge element not found!');
+                return;
+            }
             
             // Check configuration completeness
-            const hasPhone = phoneNumber && phoneNumber.length > 0;
-            const hasCredentials = accountSid && accountSid.length > 0 && authToken && authToken.length > 0;
+            const hasPhone = phoneNumber.length > 0;
+            const hasCredentials = accountSid.length > 0 && authToken.length > 0;
             
             if (hasPhone && hasCredentials) {
                 // FULLY CONFIGURED
                 badge.className = 'px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-full shadow-md';
                 badge.textContent = '✓ CONFIGURED';
-                console.log('✅ [BADGE] Status: CONFIGURED');
+                console.log('✅ [BADGE] Status: CONFIGURED (phone + credentials present)');
             } else if (hasPhone || hasCredentials) {
                 // PARTIALLY CONFIGURED
                 badge.className = 'px-3 py-1 bg-yellow-500 text-white text-xs font-bold rounded-full shadow-md';
                 badge.textContent = '⚠ INCOMPLETE';
-                console.log('⚠️ [BADGE] Status: INCOMPLETE');
+                console.log('⚠️ [BADGE] Status: INCOMPLETE (missing phone or credentials)');
             } else {
                 // NOT CONFIGURED
                 badge.className = 'px-3 py-1 bg-gray-400 text-white text-xs font-bold rounded-full shadow-md';
                 badge.textContent = '○ NOT SET';
-                console.log('○ [BADGE] Status: NOT SET');
+                console.log('○ [BADGE] Status: NOT SET (all fields empty)');
             }
         }
         
@@ -7569,9 +7585,11 @@ Continue?`;
                 icon.style.transform = 'rotate(180deg)';
                 button.setAttribute('aria-expanded', 'true');
                 
-                // Smooth transition completion
+                // Smooth transition completion + badge update
                 setTimeout(() => {
                     console.log('✅ [ACCORDION] Expanded');
+                    // 🎨 Update badge when accordion opens (fields are now visible)
+                    updateTwilioConfigBadge();
                 }, 500);
             }
         }
@@ -16521,18 +16539,30 @@ ${JSON.stringify(healthData, null, 2)}
             
             if (twilioPhoneInput) {
                 twilioPhoneInput.addEventListener('input', updateTwilioConfigBadge);
+                twilioPhoneInput.addEventListener('change', updateTwilioConfigBadge);
                 twilioPhoneInput.addEventListener('blur', updateTwilioConfigBadge);
+                twilioPhoneInput.addEventListener('keyup', updateTwilioConfigBadge);
             }
             if (twilioSidInput) {
                 twilioSidInput.addEventListener('input', updateTwilioConfigBadge);
+                twilioSidInput.addEventListener('change', updateTwilioConfigBadge);
                 twilioSidInput.addEventListener('blur', updateTwilioConfigBadge);
+                twilioSidInput.addEventListener('keyup', updateTwilioConfigBadge);
             }
             if (twilioTokenInput) {
                 twilioTokenInput.addEventListener('input', updateTwilioConfigBadge);
+                twilioTokenInput.addEventListener('change', updateTwilioConfigBadge);
                 twilioTokenInput.addEventListener('blur', updateTwilioConfigBadge);
+                twilioTokenInput.addEventListener('keyup', updateTwilioConfigBadge);
             }
             
             console.log('✅ [BADGE] Real-time update listeners attached to Twilio config fields');
+            
+            // 🎨 Initial badge update after short delay to ensure fields are populated
+            setTimeout(() => {
+                console.log('🎨 [BADGE] Running initial status check...');
+                updateTwilioConfigBadge();
+            }, 500);
             
             // 🎯 UX: Always show "Select a template" helper message on initial load
             const helper = document.getElementById('template-select-helper');
