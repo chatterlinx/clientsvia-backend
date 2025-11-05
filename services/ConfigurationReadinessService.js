@@ -575,11 +575,11 @@ class ConfigurationReadinessService {
                     scenarios.forEach(scenario => {
                         component.total++;
                         
-                        // Check if scenario is disabled by company
+                        // ✅ FIX: Only check company-level disabling, ignore template-level status
+                        // This matches the UI behavior (Live Scenarios shows ALL scenarios from template)
                         const isDisabledByCompany = scenarioControls[scenario.scenarioId]?.isEnabled === false;
-                        const isActiveInTemplate = scenario.status === 'live' || scenario.status === 'active';
                         
-                        if (!isDisabledByCompany && isActiveInTemplate) {
+                        if (!isDisabledByCompany) {
                             component.active++;
                         } else {
                             component.disabled++;

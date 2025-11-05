@@ -889,9 +889,9 @@ class DiagnosticService {
             // Total unique categories across all templates
             categoryCount = allCategories.size;
             
-            // Check for disabled scenarios
+            // ✅ FIX: Check for disabled scenarios (only count where isEnabled === false)
             const scenarioControls = company.aiAgentSettings?.scenarioControls || [];
-            disabledScenarios = scenarioControls.length;
+            disabledScenarios = scenarioControls.filter(c => c.isEnabled === false).length;
             activeScenarios = totalScenarios - disabledScenarios;
         }
         
