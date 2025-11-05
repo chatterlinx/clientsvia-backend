@@ -1257,6 +1257,13 @@ class VariablesManager {
             // Reload to refresh stats
             await this.load();
             
+            // ✨ AUTO-TRIGGER: Refresh dashboard readiness in real-time
+            console.log('🔄 [AUTO-REFRESH] Triggering dashboard update...');
+            if (this.parent && typeof this.parent.updateStatusBanner === 'function') {
+                await this.parent.updateStatusBanner();
+                console.log('✅ [AUTO-REFRESH] Dashboard updated automatically!');
+            }
+            
         } catch (error) {
             console.error('❌ [SAVE] Failed:', error);
             this.parent.showError('Failed to save variables. Please try again.');
@@ -1302,6 +1309,13 @@ class VariablesManager {
             
             // Reload to refresh display
             await this.load();
+            
+            // ✨ AUTO-TRIGGER: Refresh dashboard readiness in real-time
+            console.log('🔄 [AUTO-REFRESH] Triggering dashboard update after delete...');
+            if (this.parent && typeof this.parent.updateStatusBanner === 'function') {
+                await this.parent.updateStatusBanner();
+                console.log('✅ [AUTO-REFRESH] Dashboard updated automatically!');
+            }
             
         } catch (error) {
             console.error('❌ [DELETE] Failed:', error);
