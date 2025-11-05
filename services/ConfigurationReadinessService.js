@@ -221,7 +221,7 @@ class ConfigurationReadinessService {
                     code: 'NO_TEMPLATE',
                     message: 'No templates activated - AI Agent has no scenarios to match against',
                     severity: 'critical',
-                    target: '/company-profile.html?id=' + company._id + '#aicore-templates',
+                    target: 'aicore-templates',  // ✨ FIX: Navigate to AiCore Templates tab
                     component: 'templates',
                     details: 'Navigate to AI Agent Settings → AiCore Templates and activate at least one template.'
                 });
@@ -242,7 +242,7 @@ class ConfigurationReadinessService {
                         code: 'TEMPLATE_NOT_FOUND',
                         message: `${missingIds.length} template(s) not found in Global AI Brain`,
                         severity: 'major',
-                        target: '/company-profile.html?id=' + company._id + '#aicore-templates',
+                        target: 'aicore-templates',  // ✨ FIX: Navigate to AiCore Templates tab
                         component: 'templates',
                         details: `Missing template IDs: ${missingIds.join(', ')}. Remove invalid references.`
                     });
@@ -355,7 +355,7 @@ class ConfigurationReadinessService {
                         code: 'BLANK_VARIABLES',
                         message: `${variablesBlank} variable(s) exist but have no value`,
                         severity: 'high',
-                        target: '/company-profile.html?id=' + company._id + '#variables',
+                        target: 'variables',  // ✨ FIX: Navigate to AiCore Variables tab
                         component: 'variables',
                         details: `Blank: ${component.blank.map(v => v.key).join(', ')}`
                     });
@@ -427,7 +427,7 @@ class ConfigurationReadinessService {
                     code: 'NO_TWILIO',
                     message: 'Twilio not configured - No phone number or credentials',
                     severity: 'critical',
-                    target: '/company-profile.html?id=' + company._id + '#twilio-control',
+                    target: 'twilio-control',  // ✨ FIX: Navigate to Twilio Control tab
                     component: 'twilio',
                     details: 'Navigate to VoiceCore → Twilio Control and configure your Twilio account.'
                 });
@@ -439,7 +439,7 @@ class ConfigurationReadinessService {
                     code: 'NO_TWILIO_CREDENTIALS',
                     message: 'Twilio credentials missing (Account SID / Auth Token)',
                     severity: 'critical',
-                    target: '/company-profile.html?id=' + company._id + '#twilio-control',
+                    target: 'twilio-control',  // ✨ FIX: Navigate to Twilio Control tab
                     component: 'twilio',
                     details: 'Add your Twilio Account SID and Auth Token.'
                 });
@@ -451,7 +451,7 @@ class ConfigurationReadinessService {
                     code: 'NO_TWILIO_PHONE',
                     message: 'No Twilio phone number configured',
                     severity: 'critical',
-                    target: '/company-profile.html?id=' + company._id + '#twilio-control',
+                    target: 'twilio-control',  // ✨ FIX: Navigate to Twilio Control tab
                     component: 'twilio',
                     details: 'Add at least one Twilio phone number to receive calls.'
                 });
@@ -504,7 +504,7 @@ class ConfigurationReadinessService {
                     code: 'NO_VOICE',
                     message: 'No voice selected for AI Agent',
                     severity: 'critical',
-                    target: '/company-profile.html?id=' + company._id + '#voice-settings',
+                    target: 'voice-settings',  // ✨ FIX: Navigate to Voice Settings tab
                     component: 'voice',
                     details: 'Navigate to VoiceCore → Voice Settings and select a voice.'
                 });
@@ -597,7 +597,7 @@ class ConfigurationReadinessService {
                     code: 'NO_SCENARIOS',
                     message: 'No active scenarios - AI Agent cannot match customer requests',
                     severity: 'critical',
-                    target: '/company-profile.html?id=' + company._id + '#aicore-live-scenarios',
+                    target: 'aicore-live-scenarios',  // ✨ FIX: Navigate to AiCore Live Scenarios tab
                     component: 'scenarios',
                     details: 'All scenarios are disabled. Enable scenarios in AI Agent Settings → AiCore Live Scenarios.'
                 });
@@ -609,7 +609,7 @@ class ConfigurationReadinessService {
                     code: 'FEW_SCENARIOS',
                     message: `Only ${component.active} active scenarios (recommended: 10+)`,
                     severity: 'major',
-                    target: '/company-profile.html?id=' + company._id + '#aicore-live-scenarios',
+                    target: 'aicore-live-scenarios',  // ✨ FIX: Navigate to AiCore Live Scenarios tab
                     component: 'scenarios',
                     details: 'Enable more scenarios for better AI coverage.'
                 });
