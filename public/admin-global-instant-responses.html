@@ -6833,35 +6833,16 @@ Continue?`;
                     }
                 }
 
-                // Update stats if available
-                const statsContainer = document.getElementById('twilio-test-stats');
-                if (config.testCallCount > 0) {
-                    statsContainer.classList.remove('hidden');
-                    document.getElementById('test-call-count').textContent = config.testCallCount || 0;
-                    const lastTested = config.lastTestedAt ? new Date(config.lastTestedAt).toLocaleString() : 'Never';
-                    document.getElementById('test-last-called').textContent = lastTested;
-                } else {
-                    statsContainer.classList.add('hidden');
+                // Update stats if available (in new accordion layout)
+                const testCallCountEl = document.getElementById('test-call-count');
+                const lastCalledEl = document.getElementById('test-last-called');
+                
+                if (testCallCountEl) {
+                    testCallCountEl.textContent = config.testCallCount || 0;
                 }
-
-                // Update active test template banner immediately for clarity
-                const bannerElement = document.getElementById('active-test-template-display');
-                if (bannerElement) {
-                    if (configActiveTemplateId) {
-                        bannerElement.innerHTML = `
-                            <div class="flex items-center gap-2">
-                                <i class="fas fa-check-circle text-emerald-100"></i>
-                                <span>${configActiveTemplateName}</span>
-                            </div>
-                        `;
-                    } else {
-                        bannerElement.innerHTML = `
-                            <div class="flex items-center gap-2">
-                                <i class="fas fa-exclamation-circle text-yellow-200"></i>
-                                <span>No active template selected</span>
-                            </div>
-                        `;
-                    }
+                if (lastCalledEl) {
+                    const lastTested = config.lastTestedAt ? new Date(config.lastTestedAt).toLocaleString() : 'Never';
+                    lastCalledEl.textContent = lastTested;
                 }
 
                 console.log('✅ [TWILIO TEST - GLOBAL] Config loaded successfully');
