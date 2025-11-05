@@ -6793,6 +6793,9 @@ Continue?`;
                 // Update character count for greeting
                 updateGreetingCharCount();
                 
+                // 🎨 UPDATE: Dynamic badge status
+                updateTwilioConfigBadge();
+                
                 // Set toggle state
                 const isEnabled = config.enabled === true;
                 console.log('📞 [TWILIO TEST - GLOBAL] Setting enabled toggle to:', isEnabled);
@@ -7384,12 +7387,13 @@ Continue?`;
                 authTokenLength: authToken.length,
                 greetingLength: greeting.length,
                 notesLength: notes.length,
-                targetTemplateId
+                targetTemplateId: targetTemplateId || '(none - will be set when template selected)'
             });
 
+            // 🔥 FIX: Allow saving configuration even without template selected (initial setup)
+            // Template will be set when user selects one in Template Testing mode
             if (!targetTemplateId) {
-                showNotification('❌ No active template selected for routing. Choose a template first.', 'error');
-                return;
+                console.log('⚠️ [SAVE] No active template yet - saving config for later use');
             }
 
             // Validate phone number format if provided
@@ -7415,21 +7419,28 @@ Continue?`;
             });
 
             try {
+                // Build request body (only include activeTemplateId if it exists)
+                const requestBody = {
+                    phoneNumber,
+                    enabled,
+                    accountSid,
+                    authToken,
+                    greeting,
+                    notes
+                };
+                
+                // Only include activeTemplateId if one is selected
+                if (targetTemplateId) {
+                    requestBody.activeTemplateId = targetTemplateId;
+                }
+                
                 const response = await fetch('/api/admin/settings/global-ai-brain-test', {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
                         Authorization: `Bearer ${getAuthToken()}`
                     },
-                    body: JSON.stringify({
-                        phoneNumber,
-                        enabled,
-                        accountSid,
-                        authToken,
-                        greeting,
-                        notes,
-                        activeTemplateId: targetTemplateId
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
                 if (!response.ok) {
@@ -7439,6 +7450,9 @@ Continue?`;
 
                 const result = await response.json();
                 console.log('✅ [TWILIO TEST - GLOBAL] Config saved:', result);
+                
+                // 🎨 UPDATE: Update badge status after successful save
+                updateTwilioConfigBadge();
 
                 // Optimistically update cached config for downstream helpers
                 window.globalTwilioTestConfig = {
@@ -7469,6 +7483,43 @@ Continue?`;
         // ============================================================================
         // COMPANY TEST MODE FUNCTIONS (NEW: Unified Test Pilot)
         // ============================================================================
+        
+        /**
+         * ================================================================
+         * TWILIO CONFIG BADGE - DYNAMIC STATUS INDICATOR
+         * ================================================================
+         * Update the status badge based on configuration completeness
+         * ================================================================
+         */
+        function updateTwilioConfigBadge() {
+            const phoneNumber = document.getElementById('twilio-test-phone')?.value.trim();
+            const accountSid = document.getElementById('twilio-test-account-sid')?.value.trim();
+            const authToken = document.getElementById('twilio-test-auth-token')?.value.trim();
+            const badge = document.getElementById('twilio-config-status-badge');
+            
+            if (!badge) return;
+            
+            // Check configuration completeness
+            const hasPhone = phoneNumber && phoneNumber.length > 0;
+            const hasCredentials = accountSid && accountSid.length > 0 && authToken && authToken.length > 0;
+            
+            if (hasPhone && hasCredentials) {
+                // FULLY CONFIGURED
+                badge.className = 'px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-full shadow-md';
+                badge.textContent = '✓ CONFIGURED';
+                console.log('✅ [BADGE] Status: CONFIGURED');
+            } else if (hasPhone || hasCredentials) {
+                // PARTIALLY CONFIGURED
+                badge.className = 'px-3 py-1 bg-yellow-500 text-white text-xs font-bold rounded-full shadow-md';
+                badge.textContent = '⚠ INCOMPLETE';
+                console.log('⚠️ [BADGE] Status: INCOMPLETE');
+            } else {
+                // NOT CONFIGURED
+                badge.className = 'px-3 py-1 bg-gray-400 text-white text-xs font-bold rounded-full shadow-md';
+                badge.textContent = '○ NOT SET';
+                console.log('○ [BADGE] Status: NOT SET');
+            }
+        }
         
         /**
          * ================================================================
@@ -16462,6 +16513,26 @@ ${JSON.stringify(healthData, null, 2)}
             // 🔧 Load company list and test mode configuration
             await loadCompanyTestModeConfig();
             await loadTopCompanyList();
+            
+            // 🎨 Add real-time badge update listeners for Twilio config
+            const twilioPhoneInput = document.getElementById('twilio-test-phone');
+            const twilioSidInput = document.getElementById('twilio-test-account-sid');
+            const twilioTokenInput = document.getElementById('twilio-test-auth-token');
+            
+            if (twilioPhoneInput) {
+                twilioPhoneInput.addEventListener('input', updateTwilioConfigBadge);
+                twilioPhoneInput.addEventListener('blur', updateTwilioConfigBadge);
+            }
+            if (twilioSidInput) {
+                twilioSidInput.addEventListener('input', updateTwilioConfigBadge);
+                twilioSidInput.addEventListener('blur', updateTwilioConfigBadge);
+            }
+            if (twilioTokenInput) {
+                twilioTokenInput.addEventListener('input', updateTwilioConfigBadge);
+                twilioTokenInput.addEventListener('blur', updateTwilioConfigBadge);
+            }
+            
+            console.log('✅ [BADGE] Real-time update listeners attached to Twilio config fields');
             
             // 🎯 UX: Always show "Select a template" helper message on initial load
             const helper = document.getElementById('template-select-helper');
