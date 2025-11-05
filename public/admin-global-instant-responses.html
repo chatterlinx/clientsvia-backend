@@ -6688,14 +6688,30 @@ Continue?`;
                                 'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                             },
                             body: JSON.stringify({
+                                enabled: true,  // 🔥 CRITICAL: Backend needs this to recognize test number!
                                 mode: 'template',
                                 activeTemplateId: activeTemplateId
                             })
                         });
-                        console.log('✅ [TEMPLATE TEST] Mode saved to backend: template-test');
+                        console.log('✅ [TEMPLATE TEST] Mode saved to backend: template-test (enabled: true)');
                     } catch (error) {
                         console.error('❌ [TEMPLATE TEST] Failed to save mode:', error);
                     }
+                } else {
+                    showToast('error', 'Please select a template first');
+                    // Revert toggle
+                    checkbox.checked = false;
+                    if (toggleSwitch) {
+                        toggleSwitch.classList.remove('bg-purple-600');
+                        toggleSwitch.classList.add('bg-gray-300');
+                    }
+                    if (toggleCircle) {
+                        toggleCircle.style.transform = 'translateX(0)';
+                    }
+                    if (statusLabel) {
+                        statusLabel.innerHTML = 'Status: <span class="text-gray-500">Disabled</span>';
+                    }
+                    return;
                 }
                 
                 showToast('success', '✅ Template Testing enabled • Company Testing disabled');
@@ -7926,11 +7942,12 @@ Continue?`;
                                 'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                             },
                             body: JSON.stringify({
+                                enabled: true,  // 🔥 CRITICAL: Backend needs this to recognize test number!
                                 mode: 'company',
                                 testCompanyId: testCompanyId
                             })
                         });
-                        console.log('✅ [COMPANY TEST] Mode saved to backend: company-test');
+                        console.log('✅ [COMPANY TEST] Mode saved to backend: company-test (enabled: true)');
                     } catch (error) {
                         console.error('❌ [COMPANY TEST] Failed to save mode:', error);
                     }
