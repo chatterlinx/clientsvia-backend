@@ -59,6 +59,15 @@ const ProductionLLMSuggestionSchema = new mongoose.Schema({
         description: 'Company name (denormalized for fast display)'
     },
     
+    // 🎯 TEST PILOT INTEGRATION (Phase 1)
+    callSource: {
+        type: String,
+        enum: ['company-test', 'production'],
+        required: true,
+        index: true,
+        description: 'Whether this suggestion came from Test Pilot testing or real production calls'
+    },
+    
     // ========================================================================
     // SUGGESTION DETAILS
     // ========================================================================
@@ -254,14 +263,14 @@ const ProductionLLMSuggestionSchema = new mongoose.Schema({
 // INDEXES FOR PERFORMANCE
 // ============================================================================
 
-// Compound index for LLM Learning Console main query
-ProductionLLMSuggestionSchema.index({ templateId: 1, status: 1, priority: -1, createdAt: -1 });
+// Compound index for LLM Learning Console main query (with callSource filtering)
+ProductionLLMSuggestionSchema.index({ templateId: 1, callSource: 1, status: 1, priority: -1, createdAt: -1 });
 
 // Index for cost analytics queries
 ProductionLLMSuggestionSchema.index({ callDate: -1, cost: 1 });
 
-// Index for company-specific queries
-ProductionLLMSuggestionSchema.index({ companyId: 1, createdAt: -1 });
+// Index for company-specific queries (with callSource)
+ProductionLLMSuggestionSchema.index({ companyId: 1, callSource: 1, createdAt: -1 });
 
 // Index for duplicate detection
 ProductionLLMSuggestionSchema.index({ templateId: 1, suggestionType: 1, suggestedValue: 1 });
