@@ -2175,40 +2175,6 @@
                                 <span class="text-xs text-gray-500" id="company-greeting-char-count">151 / 500 chars</span>
                             </div>
                         </div>
-                            
-                        <!-- Test Options -->
-                        <div class="mb-4">
-                            <label class="block text-sm font-bold text-gray-800 mb-2">
-                                <i class="fas fa-sliders-h text-blue-600 mr-1"></i>
-                                Test Options
-                            </label>
-                            <div class="grid grid-cols-2 gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-white p-2 rounded">
-                                    <input type="checkbox" id="test-option-company-qa" checked class="rounded text-blue-600">
-                                    <span>Company Q&A</span>
-                                </label>
-                                <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-white p-2 rounded">
-                                    <input type="checkbox" id="test-option-trade-qa" checked class="rounded text-blue-600">
-                                    <span>Trade Q&A</span>
-                                </label>
-                                <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-white p-2 rounded">
-                                    <input type="checkbox" id="test-option-templates" checked class="rounded text-blue-600">
-                                    <span>Templates</span>
-                                </label>
-                                <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-white p-2 rounded">
-                                    <input type="checkbox" id="test-option-3tier" checked class="rounded text-blue-600">
-                                    <span>3-Tier Intelligence</span>
-                                </label>
-                                <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-white p-2 rounded">
-                                    <input type="checkbox" id="test-option-placeholders" checked class="rounded text-blue-600">
-                                    <span>Placeholders</span>
-                                </label>
-                                <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-white p-2 rounded">
-                                    <input type="checkbox" id="test-option-personality" checked class="rounded text-blue-600">
-                                    <span>Personality</span>
-                                </label>
-                            </div>
-                        </div>
                         
                         <!-- Action Buttons -->
                         <div class="flex gap-3 pt-4 border-t border-gray-200">
@@ -7455,15 +7421,6 @@ Continue?`;
                     updateCompanyGreetingCharCount();
                 }
                 
-                // Update test options
-                const testOptions = config.testOptions || {};
-                document.getElementById('test-option-company-qa').checked = testOptions.enableCompanyQA !== false;
-                document.getElementById('test-option-trade-qa').checked = testOptions.enableTradeQA !== false;
-                document.getElementById('test-option-templates').checked = testOptions.enableTemplates !== false;
-                document.getElementById('test-option-3tier').checked = testOptions.enable3TierIntelligence !== false;
-                document.getElementById('test-option-placeholders').checked = testOptions.enablePlaceholders !== false;
-                document.getElementById('test-option-personality').checked = testOptions.enablePersonality !== false;
-                
                 // Select active company if set (in TOP selector)
                 if (config.activeCompanyId) {
                     const topSelector = document.getElementById('top-company-selector-dropdown');
@@ -7611,17 +7568,9 @@ Continue?`;
             const greetingElement = document.getElementById('company-test-greeting');
             const greeting = greetingElement ? greetingElement.value.trim() : 'You are now testing {company_name} with all live settings. This includes templates, Q&A, AI intelligence, and company-specific configurations.';
             
-            const testOptions = {
-                enableCompanyQA: document.getElementById('test-option-company-qa')?.checked ?? true,
-                enableTradeQA: document.getElementById('test-option-trade-qa')?.checked ?? true,
-                enableTemplates: document.getElementById('test-option-templates')?.checked ?? true,
-                enable3TierIntelligence: document.getElementById('test-option-3tier')?.checked ?? true,
-                enablePlaceholders: document.getElementById('test-option-placeholders')?.checked ?? true,
-                enablePersonality: document.getElementById('test-option-personality')?.checked ?? true
-            };
-            
             try {
                 // NOTE: 'enabled' is controlled by banner tabs via switchTestMode(), not this save function
+                // NOTE: No test options - company testing always uses FULL production configuration
                 const response = await fetch('/api/admin/settings/company-test-mode', {
                     method: 'PATCH',
                     headers: {
@@ -7630,8 +7579,7 @@ Continue?`;
                     },
                     body: JSON.stringify({
                         activeCompanyId: companyId,
-                        greeting,
-                        testOptions
+                        greeting
                     })
                 });
                 
