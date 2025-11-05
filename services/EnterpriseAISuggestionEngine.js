@@ -68,6 +68,93 @@ class EnterpriseAISuggestionEngine {
     
     /**
      * ============================================================================
+     * NORMALIZE TIER RESULTS (DEFENSIVE PROGRAMMING)
+     * ============================================================================
+     * Template-Test calls may not have finalTier/finalConfidence in the expected format.
+     * This method extracts tier data from alternative locations and sets safe defaults.
+     * 
+     * @param {Object} tierResults - Raw tier results from runtime
+     * @returns {Object} Normalized tier results with guaranteed fields
+     * ============================================================================
+     */
+    normalizeTierResults(tierResults) {
+        console.log('🛡️ [NORMALIZE] Normalizing tier results...');
+        
+        // Check if we already have the expected structure
+        if (tierResults.finalTier && tierResults.finalConfidence !== undefined) {
+            console.log('✅ [NORMALIZE] Tier results already in expected format');
+            return {
+                ...tierResults,
+                hadMissingData: false
+            };
+        }
+        
+        console.warn('⚠️ [NORMALIZE] Missing finalTier or finalConfidence - extracting from alternative sources');
+        
+        // Try to extract from tierSummary (alternative location)
+        const tierData = tierResults.tierSummary || tierResults;
+        
+        // Determine final tier from available data
+        let finalTier = tierData.finalTier || 'tier1'; // Default to tier1
+        let finalConfidence = tierData.finalConfidence || 0.5; // Default to medium confidence
+        
+        // If we have individual tier results, try to infer the final tier
+        if (!tierData.finalTier && (tierResults.tier1 || tierResults.tier2 || tierResults.tier3)) {
+            console.log('🔍 [NORMALIZE] Inferring finalTier from individual tier results');
+            
+            // Check tier3 first (LLM)
+            if (tierResults.tier3?.success) {
+                finalTier = 'tier3';
+                finalConfidence = tierResults.tier3.confidence || 0.7;
+            }
+            // Then tier2 (semantic)
+            else if (tierResults.tier2?.confidence >= 0.75) {
+                finalTier = 'tier2';
+                finalConfidence = tierResults.tier2.confidence;
+            }
+            // Finally tier1 (rule-based)
+            else if (tierResults.tier1?.confidence >= 0.70) {
+                finalTier = 'tier1';
+                finalConfidence = tierResults.tier1.confidence;
+            }
+            // If nothing matched, default to tier1 with low confidence
+            else {
+                finalTier = 'tier1';
+                finalConfidence = tierResults.tier1?.confidence || 0.3;
+            }
+        }
+        
+        // Ensure tier1, tier2, tier3 objects exist
+        const tier1 = tierResults.tier1 || { 
+            confidence: 0.3, 
+            matchedFillers: [], 
+            matchedTriggers: [], 
+            matchedKeywords: [] 
+        };
+        const tier2 = tierResults.tier2 || { confidence: 0.0 };
+        const tier3 = tierResults.tier3 || { confidence: 0.0, scenario: null };
+        
+        const normalized = {
+            finalTier,
+            finalConfidence,
+            tier1,
+            tier2,
+            tier3,
+            hadMissingData: true, // Flag to track that we normalized
+            _originalData: tierResults // Keep reference for debugging
+        };
+        
+        console.log('✅ [NORMALIZE] Normalized to:', {
+            finalTier: normalized.finalTier,
+            finalConfidence: normalized.finalConfidence,
+            hadMissingData: true
+        });
+        
+        return normalized;
+    }
+    
+    /**
+     * ============================================================================
      * MAIN ANALYSIS ENTRY POINT
      * ============================================================================
      * Analyzes a test call and generates comprehensive suggestions
@@ -92,11 +179,19 @@ class EnterpriseAISuggestionEngine {
      */
     async analyzeTestCall(testPhrase, templateId, tierResults) {
         console.log('🔵 [CHECKPOINT 1] analyzeTestCall() started');
+        
+        // ============================================
+        // STEP 0: NORMALIZE TIER DATA (DEFENSIVE)
+        // ============================================
+        // Handle missing finalTier gracefully - template-test calls may not have it
+        const normalizedTierResults = this.normalizeTierResults(tierResults);
+        
         console.log('🔵 [CHECKPOINT 1.1] Inputs:', {
             testPhrase: testPhrase.substring(0, 50) + '...',
             templateId,
-            finalTier: tierResults.finalTier,
-            finalConfidence: tierResults.finalConfidence
+            finalTier: normalizedTierResults.finalTier,
+            finalConfidence: normalizedTierResults.finalConfidence,
+            hadMissingData: normalizedTierResults.hadMissingData
         });
         
         try {
@@ -115,9 +210,9 @@ class EnterpriseAISuggestionEngine {
                 throw new Error('templateId is required');
             }
             
-            if (!tierResults || !tierResults.finalTier) {
-                console.error('❌ [CHECKPOINT 2.3] Invalid tierResults');
-                throw new Error('tierResults must include finalTier and confidence data');
+            if (!tierResults) {
+                console.error('❌ [CHECKPOINT 2.3] Missing tierResults entirely');
+                throw new Error('tierResults is required');
             }
             
             console.log('✅ [CHECKPOINT 2.4] Input validation passed');
@@ -146,7 +241,7 @@ class EnterpriseAISuggestionEngine {
             console.log('🔵 [CHECKPOINT 4] Checking if analysis is needed...');
             
             const shouldAnalyze = this.shouldAnalyze(
-                tierResults.finalConfidence,
+                normalizedTierResults.finalConfidence,
                 preset.testPilot.analysisMode,
                 preset.testPilot.minConfidenceForAnalysis
             );
@@ -155,7 +250,7 @@ class EnterpriseAISuggestionEngine {
                 console.log('⏭️ [CHECKPOINT 4.1] Skipping analysis (preset mode: ' + preset.testPilot.analysisMode + ')');
                 return {
                     analyzed: false,
-                    reason: `Confidence ${tierResults.finalConfidence} above threshold ${preset.testPilot.minConfidenceForAnalysis}`,
+                    reason: `Confidence ${normalizedTierResults.finalConfidence} above threshold ${preset.testPilot.minConfidenceForAnalysis}`,
                     mode: preset.displayName
                 };
             }
@@ -169,7 +264,7 @@ class EnterpriseAISuggestionEngine {
             
             const llmAnalysis = await this.runLLMAnalysis(
                 testPhrase,
-                tierResults,
+                normalizedTierResults,
                 template,
                 preset.testPilot
             );
@@ -197,7 +292,7 @@ class EnterpriseAISuggestionEngine {
             const impactScores = this.calculateImpactScores(
                 llmAnalysis,
                 frequencyData,
-                tierResults.finalConfidence
+                normalizedTierResults.finalConfidence
             );
             
             console.log('✅ [CHECKPOINT 7.1] Impact scores calculated:', impactScores.length);
@@ -229,7 +324,7 @@ class EnterpriseAISuggestionEngine {
             const costAnalysis = this.projectCostImpact(
                 impactScores,
                 llmAnalysis.cost,
-                tierResults
+                normalizedTierResults
             );
             
             console.log('✅ [CHECKPOINT 9.1] Cost projection complete');
@@ -258,11 +353,12 @@ class EnterpriseAISuggestionEngine {
                 templateId,
                 testPhrase,
                 intelligenceMode,
-                tierResults,
+                tierResults: normalizedTierResults,
                 llmAnalysis,
                 suggestions,
                 conflicts,
-                costAnalysis
+                costAnalysis,
+                hadMissingData: normalizedTierResults.hadMissingData
             });
             
             console.log('✅ [CHECKPOINT 11.1] Analysis saved with ID:', analysis._id);
@@ -280,7 +376,8 @@ class EnterpriseAISuggestionEngine {
                 conflicts,
                 costAnalysis,
                 llmAnalysis,
-                tierResults
+                tierResults: normalizedTierResults,
+                hadMissingData: normalizedTierResults.hadMissingData
             };
             
         } catch (error) {
