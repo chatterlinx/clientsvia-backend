@@ -306,27 +306,13 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
         // Filter out failed template loads
         const loadedTemplates = templatesWithDetails.filter(t => t !== null);
         
+        // ✅ TEMPLATE-BASED ARCHITECTURE: All content comes from templates
+        // Company Q&A, Trade Q&A, Placeholders are now part of templates
+        // Companies just reference templates via aiAgentSettings.templateReferences
         const companyInfo = {
             _id: company._id,
             name: company.companyName || company.businessName,
-            templates: loadedTemplates,
-            companyQA: {
-                count: company.aiAgentLogic?.companyQA?.length || 0,
-                hasData: (company.aiAgentLogic?.companyQA?.length || 0) > 0
-            },
-            tradeQA: {
-                count: company.aiAgentLogic?.tradeQA?.length || 0,
-                hasData: (company.aiAgentLogic?.tradeQA?.length || 0) > 0
-            },
-            placeholders: {
-                count: company.aiAgentLogic?.placeholders?.length || 0,
-                hasData: (company.aiAgentLogic?.placeholders?.length || 0) > 0
-            },
-            voiceSettings: {
-                configured: !!company.aiAgentLogic?.voiceSettings?.voiceId,
-                voiceId: company.aiAgentLogic?.voiceSettings?.voiceId || 'Default',
-                speechTimeout: company.aiAgentLogic?.voiceSettings?.speechDetection?.speechTimeout || 3
-            }
+            templates: loadedTemplates
         };
         
         logger.info(`✅ [TEST PILOT] Company details loaded: ${companyInfo.name}`);
