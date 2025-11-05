@@ -604,6 +604,205 @@
                 </div>
                 
                 <!-- ================================================================
+                     📞 SHARED TEST PHONE CONFIGURATION (COLLAPSIBLE)
+                     ================================================================
+                     Purpose: Single source of truth for test phone number
+                     Features:
+                     - Collapsed by default ("set it and forget it")
+                     - Smooth accordion animation
+                     - Used by BOTH Template & Company Testing modes
+                     - Enterprise-grade UI/UX
+                     ================================================================ -->
+                
+                <div id="twilio-config-accordion" class="mb-6 bg-white rounded-xl shadow-lg border-2 border-indigo-400 overflow-hidden transition-all duration-300">
+                    <!-- Accordion Header (Always Visible) -->
+                    <button onclick="toggleTwilioConfigAccordion()" 
+                            class="w-full px-6 py-4 flex items-center justify-between bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 cursor-pointer group"
+                            aria-expanded="false"
+                            aria-controls="twilio-config-content">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-white rounded-lg flex items-center justify-center shadow-md">
+                                <i class="fas fa-phone-alt text-indigo-600 text-xl"></i>
+                            </div>
+                            <div class="text-left">
+                                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                                    📞 Shared Test Phone Configuration
+                                    <span class="px-2 py-0.5 bg-white/20 text-xs rounded-full font-semibold">Shared by Both Modes</span>
+                                </h3>
+                                <p class="text-sm text-indigo-100 mt-0.5">
+                                    Configure once • Used by Template & Company Testing
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span id="twilio-config-status-badge" class="px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-full shadow-md">
+                                ✓ CONFIGURED
+                            </span>
+                            <i id="twilio-accordion-icon" class="fas fa-chevron-down text-white text-xl transition-transform duration-300"></i>
+                        </div>
+                    </button>
+                    
+                    <!-- Accordion Content (Collapsible) -->
+                    <div id="twilio-config-content" 
+                         class="max-h-0 overflow-hidden transition-all duration-500 ease-in-out"
+                         style="transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1);">
+                        <div class="p-6 bg-gradient-to-br from-indigo-50 to-purple-50 border-t-2 border-indigo-200">
+                            
+                            <!-- Alert Banner -->
+                            <div class="mb-4 p-3 bg-blue-100 border-l-4 border-blue-600 rounded-r-lg">
+                                <div class="flex items-start gap-2">
+                                    <i class="fas fa-info-circle text-blue-600 text-lg mt-0.5"></i>
+                                    <div class="text-sm text-blue-900">
+                                        <strong class="font-bold">Important:</strong> This phone number is used by <strong>BOTH</strong> Template Testing and Company Testing modes.
+                                        The toggle switches above control which configuration this number routes to.
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                <!-- Left Column: Phone & Credentials -->
+                                <div class="lg:col-span-2 space-y-4">
+                                    <!-- Phone Number -->
+                                    <div>
+                                        <label class="block text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
+                                            <i class="fas fa-hashtag text-indigo-600"></i>
+                                            Test Phone Number (E.164 format)
+                                        </label>
+                                        <input type="tel" 
+                                               id="twilio-test-phone" 
+                                               placeholder="+15551234567" 
+                                               class="w-full px-4 py-3 border-2 border-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-base font-mono bg-white shadow-sm transition-all">
+                                        <p class="text-xs text-gray-600 mt-1.5 flex items-center gap-1">
+                                            <i class="fas fa-info-circle text-indigo-500"></i>
+                                            This number routes to either Template or Company Testing based on toggle selection
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Twilio Credentials -->
+                                    <div class="bg-white border-2 border-indigo-200 rounded-lg p-4 shadow-sm">
+                                        <h5 class="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                            <i class="fas fa-key text-indigo-600"></i>
+                                            Twilio Integration Credentials
+                                        </h5>
+                                        <p class="text-xs text-gray-600 mb-3">
+                                            Get these from your Twilio console. Required for voice call handling.
+                                        </p>
+                                        <div class="grid grid-cols-1 gap-3">
+                                            <!-- Account SID -->
+                                            <div>
+                                                <label class="block text-xs font-semibold text-gray-700 mb-1">
+                                                    Account SID:
+                                                </label>
+                                                <input type="text" 
+                                                       id="twilio-test-account-sid" 
+                                                       placeholder="AC18c622a49f28d9abf8952ecf06ba59f2" 
+                                                       class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-xs font-mono bg-white">
+                                            </div>
+                                            
+                                            <!-- Auth Token -->
+                                            <div>
+                                                <label class="block text-xs font-semibold text-gray-700 mb-1">
+                                                    Auth Token:
+                                                </label>
+                                                <input type="password" 
+                                                       id="twilio-test-auth-token" 
+                                                       placeholder="••••••••••••••••••••••••••••••••" 
+                                                       class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-xs font-mono bg-white">
+                                            </div>
+                                        </div>
+                                        <p class="text-xs text-indigo-600 mt-3 flex items-center gap-1">
+                                            <i class="fas fa-lock"></i>
+                                            Encrypted and stored securely
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Test Call Greeting -->
+                                    <div class="bg-white border-2 border-indigo-200 rounded-lg p-4 shadow-sm">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <label class="block text-sm font-bold text-gray-800 flex items-center gap-2">
+                                                <i class="fas fa-microphone text-indigo-600"></i>
+                                                Test Call Greeting
+                                            </label>
+                                            <button type="button" 
+                                                    onclick="resetGreetingToDefault()" 
+                                                    class="text-xs px-3 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg font-semibold transition-colors">
+                                                <i class="fas fa-undo mr-1"></i>
+                                                Reset to Default
+                                            </button>
+                                        </div>
+                                        <p class="text-xs text-gray-600 mb-2">
+                                            Spoken when calling the test number. Use <code class="bg-indigo-100 px-1.5 py-0.5 rounded text-indigo-800 font-mono text-xs">{template_name}</code> for dynamic insertion.
+                                        </p>
+                                        <textarea id="twilio-test-greeting" 
+                                                  rows="3" 
+                                                  class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white resize-none"
+                                                  placeholder="Enter custom greeting message..."></textarea>
+                                        <div class="flex justify-between items-center mt-1.5">
+                                            <p class="text-xs text-gray-500">
+                                                <i class="fas fa-info-circle mr-1"></i>
+                                                Greeting updates automatically based on active testing mode
+                                            </p>
+                                            <span id="greeting-char-count" class="text-xs text-gray-500 font-mono">0 / 500</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Testing Notes -->
+                                    <div>
+                                        <label class="block text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
+                                            <i class="fas fa-sticky-note text-indigo-600"></i>
+                                            Testing Notes (Optional)
+                                        </label>
+                                        <textarea id="twilio-test-notes" 
+                                                  rows="2" 
+                                                  placeholder="e.g., Testing appointment booking flow, hold scenarios..."
+                                                  class="w-full px-3 py-2 border-2 border-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white resize-none"></textarea>
+                                    </div>
+                                </div>
+                                
+                                <!-- Right Column: Stats & Actions -->
+                                <div class="space-y-4">
+                                    <!-- Quick Stats -->
+                                    <div class="bg-white border-2 border-indigo-200 rounded-lg p-4 shadow-sm">
+                                        <h5 class="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                            <i class="fas fa-chart-bar text-indigo-600"></i>
+                                            Quick Stats
+                                        </h5>
+                                        <div class="space-y-3">
+                                            <div class="text-center bg-gradient-to-br from-green-50 to-emerald-50 px-3 py-3 rounded-lg border-2 border-green-200">
+                                                <div class="text-2xl font-bold text-green-600" id="test-call-count">0</div>
+                                                <div class="text-xs text-gray-700 font-semibold">Total Test Calls</div>
+                                            </div>
+                                            <div class="text-center bg-gradient-to-br from-blue-50 to-cyan-50 px-3 py-3 rounded-lg border-2 border-blue-200">
+                                                <div class="text-xs text-gray-700 font-semibold" id="test-last-called">Never</div>
+                                                <div class="text-xs text-gray-500 mt-0.5">Last Tested</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Action Button -->
+                                    <button onclick="saveTwilioTestConfig()" 
+                                            class="w-full px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg font-bold shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2">
+                                        <i class="fas fa-save text-lg"></i>
+                                        Save Configuration
+                                    </button>
+                                    
+                                    <!-- Security Notice -->
+                                    <div class="bg-green-50 border-2 border-green-300 rounded-lg p-3">
+                                        <p class="text-xs text-green-800 font-semibold flex items-start gap-2">
+                                            <i class="fas fa-shield-alt text-green-600 mt-0.5"></i>
+                                            <span>
+                                                <strong>Isolated & Secure:</strong> This test number is completely isolated from production.
+                                                Zero crossover with customer phone numbers.
+                                            </span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- ================================================================
                      🎛️ TESTING CONTROL PANEL (NEW ARCHITECTURE)
                      ================================================================
                      Purpose: Centralized toggle controls with tab navigation
@@ -1938,172 +2137,7 @@
                      ================================================================ -->
                 <div id="template-test-mode">
                 
-                <!-- 📞 TWILIO TEST CONFIGURATION -->
-                <div class="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-lg p-6 mb-8">
-                    <div class="flex items-start justify-between">
-                        <div class="flex-1">
-                            <div class="flex items-center gap-3 mb-3">
-                                <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                                    <i class="fas fa-phone-alt text-white text-xl"></i>
-                                </div>
-                                <div>
-                                    <h4 class="text-lg font-bold text-gray-900">📞 Live Twilio Testing</h4>
-                                    <p class="text-sm text-gray-600">Call in and test this template's scenarios with real Twilio voice calls</p>
-                                </div>
-                            </div>
-                            
-                            <!-- Test Configuration Form -->
-                            <div class="space-y-3 text-sm">
-                                
-                                <!-- Phone Number + Enable Toggle (Inline) -->
-                                <div class="flex items-start gap-4">
-                                    <!-- Phone Number Input -->
-                                    <div class="flex-1">
-                                        <label class="block text-xs font-semibold text-gray-700 mb-1">
-                                            <i class="fas fa-hashtag text-purple-600 mr-1"></i>
-                                            Test Phone Number (E.164 format):
-                                        </label>
-                                        <input type="tel" id="twilio-test-phone" placeholder="+15551234567" 
-                                               class="w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm font-mono bg-white">
-                                        <p class="text-xs text-gray-500 mt-1">
-                                            <i class="fas fa-info-circle mr-1"></i>
-                                            This number is ONLY for testing this template. No production crossover.
-                                        </p>
-                                    </div>
-                                    
-                                    <!-- Enable/Disable Toggle -->
-                                    <div class="flex-shrink-0 pt-6">
-                                        <div class="flex items-center gap-3 bg-white px-4 py-3 rounded-lg border-2 border-purple-200 shadow-sm">
-                                            <label class="relative inline-flex items-center cursor-pointer" onclick="toggleTestEnabled()">
-                                                <input type="checkbox" id="twilio-test-enabled" class="hidden">
-                                                <div id="toggle-switch" class="w-14 h-7 bg-gray-300 rounded-full relative transition-all duration-300 shadow-inner">
-                                                    <div id="toggle-circle" class="absolute top-0.5 left-0.5 bg-white w-6 h-6 rounded-full shadow-md transition-all duration-300 transform"></div>
-                                                </div>
-                                            </label>
-                                            <div>
-                                                <p class="text-xs font-bold text-gray-700 whitespace-nowrap">
-                                                    <i class="fas fa-power-off text-purple-600 mr-1"></i>
-                                                    <span id="toggle-status-text">Enable Test Calls</span>
-                                                </p>
-                                                <p class="text-xs text-gray-500 whitespace-nowrap">Toggle OFF to disable</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Twilio Credentials -->
-                                <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
-                                    <h5 class="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
-                                        <i class="fas fa-key text-blue-600"></i>
-                                        Twilio Integration Credentials
-                                    </h5>
-                                    <p class="text-xs text-gray-600 mb-3">
-                                        Enter the Twilio credentials that this test phone number will use. Get these from your Twilio console.
-                                    </p>
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        <!-- Account SID -->
-                                        <div>
-                                            <label class="block text-xs font-semibold text-gray-700 mb-1">
-                                                Account SID:
-                                            </label>
-                                            <input type="text" id="twilio-test-account-sid" placeholder="AC18c622a49f28d9abf8952ecf06ba59f2" 
-                                                   class="w-full px-3 py-2 border-2 border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs font-mono bg-white">
-                                        </div>
-                                        
-                                        <!-- Auth Token -->
-                                        <div>
-                                            <label class="block text-xs font-semibold text-gray-700 mb-1">
-                                                Auth Token:
-                                            </label>
-                                            <input type="password" id="twilio-test-auth-token" placeholder="••••••••••••c0de" 
-                                                   class="w-full px-3 py-2 border-2 border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs font-mono bg-white">
-                                        </div>
-                                    </div>
-                                    <p class="text-xs text-blue-600 mt-2">
-                                        <i class="fas fa-lock mr-1"></i>
-                                        These credentials are encrypted and stored securely per template.
-                                    </p>
-                                    
-                                    <!-- Test Call Greeting -->
-                                    <div class="mt-4 pt-4 border-t-2 border-blue-200">
-                                        <div class="flex items-center justify-between mb-2">
-                                            <label class="block text-xs font-bold text-gray-800 flex items-center gap-2">
-                                                <i class="fas fa-microphone text-blue-600"></i>
-                                                Test Call Greeting
-                                            </label>
-                                            <button type="button" onclick="resetGreetingToDefault()" 
-                                                    class="text-xs px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg font-semibold transition-colors">
-                                                <i class="fas fa-undo mr-1"></i>
-                                                Reset to Default
-                                            </button>
-                                        </div>
-                                        <p class="text-xs text-gray-600 mb-2">
-                                            This message will be spoken when someone calls the test number. Use <code class="bg-blue-100 px-1 rounded text-blue-800">{template_name}</code> to dynamically insert the template name.
-                                        </p>
-                                        <textarea id="twilio-test-greeting" rows="3" 
-                                                  class="w-full px-3 py-2 border-2 border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white resize-none"
-                                                  placeholder="Enter custom greeting message..."></textarea>
-                                        <div class="flex justify-between items-center mt-1">
-                                            <p class="text-xs text-gray-500">
-                                                <i class="fas fa-info-circle mr-1"></i>
-                                                Template name updates automatically in the greeting
-                                            </p>
-                                            <span id="greeting-char-count" class="text-xs text-gray-500">0 / 500 chars</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Test Notes -->
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-700 mb-1">
-                                        <i class="fas fa-sticky-note text-purple-600 mr-1"></i>
-                                        Testing Notes (Optional):
-                                    </label>
-                                    <textarea id="twilio-test-notes" rows="2" placeholder="e.g., Testing hold scenarios, appointment booking flow, etc."
-                                              class="w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm bg-white resize-none"></textarea>
-                                </div>
-                                
-                                <!-- Test Stats (if available) -->
-                                <div id="twilio-test-stats" class="hidden grid grid-cols-2 gap-3 pt-3 border-t border-purple-200">
-                                    <div class="text-center bg-white px-3 py-2 rounded border border-purple-100">
-                                        <div class="text-lg font-bold text-purple-600" id="test-call-count">0</div>
-                                        <div class="text-xs text-gray-600">Test Calls Made</div>
-                                    </div>
-                                    <div class="text-center bg-white px-3 py-2 rounded border border-purple-100">
-                                        <div class="text-xs text-gray-600" id="test-last-called">Never</div>
-                                        <div class="text-xs text-gray-500">Last Tested</div>
-                                    </div>
-                                </div>
-                                
-                                <div class="bg-purple-100 px-3 py-2 rounded border border-purple-300 mt-3">
-                                    <p class="text-xs text-purple-800 font-semibold">
-                                        <i class="fas fa-shield-alt mr-1"></i>
-                                        <strong>Isolated Testing:</strong> This phone number routes ONLY to this template's scenarios.
-                                        <br>
-                                        <i class="fas fa-check-circle mr-1 mt-1 inline-block"></i>
-                                        Zero crossover with production company phone numbers.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Action Buttons -->
-                        <div class="ml-6 flex flex-col gap-2">
-                            <button onclick="saveTwilioTestConfig()" class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
-                                <i class="fas fa-save"></i>
-                                Save Config
-                            </button>
-                            <button onclick="openTestLogModal()" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
-                                <i class="fas fa-flask"></i>
-                                View Test Log
-                            </button>
-                            <button onclick="openQualityDashboard()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
-                                <i class="fas fa-chart-line"></i>
-                                Quality Dashboard
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <!-- OLD TWILIO CONFIG REMOVED - NOW AT TOP AS COLLAPSIBLE ACCORDION -->
                 
                 </div>
                 <!-- END: Template Test Mode Section -->
@@ -7435,6 +7469,61 @@ Continue?`;
         // ============================================================================
         // COMPANY TEST MODE FUNCTIONS (NEW: Unified Test Pilot)
         // ============================================================================
+        
+        /**
+         * ================================================================
+         * TWILIO CONFIG ACCORDION - ENTERPRISE-GRADE COLLAPSIBLE UI
+         * ================================================================
+         * Toggle the Twilio configuration accordion with smooth animation
+         * Features:
+         * - Cubic-bezier easing for professional feel
+         * - Dynamic max-height calculation
+         * - Icon rotation animation
+         * - ARIA accessibility attributes
+         * - State persistence (optional)
+         * ================================================================
+         */
+        function toggleTwilioConfigAccordion() {
+            const content = document.getElementById('twilio-config-content');
+            const icon = document.getElementById('twilio-accordion-icon');
+            const button = content.previousElementSibling;
+            
+            if (!content || !icon) {
+                console.error('❌ [ACCORDION] Required elements not found');
+                return;
+            }
+            
+            const isExpanded = content.style.maxHeight && content.style.maxHeight !== '0px';
+            
+            if (isExpanded) {
+                // COLLAPSE
+                console.log('🔽 [ACCORDION] Collapsing Twilio config...');
+                content.style.maxHeight = '0px';
+                icon.style.transform = 'rotate(0deg)';
+                button.setAttribute('aria-expanded', 'false');
+                
+                // Smooth transition completion
+                setTimeout(() => {
+                    console.log('✅ [ACCORDION] Collapsed');
+                }, 500);
+            } else {
+                // EXPAND
+                console.log('🔼 [ACCORDION] Expanding Twilio config...');
+                
+                // Calculate content height dynamically
+                const contentInner = content.firstElementChild;
+                const height = contentInner ? contentInner.scrollHeight : 2000;
+                
+                content.style.maxHeight = `${height + 50}px`; // +50px buffer for safety
+                icon.style.transform = 'rotate(180deg)';
+                button.setAttribute('aria-expanded', 'true');
+                
+                // Smooth transition completion
+                setTimeout(() => {
+                    console.log('✅ [ACCORDION] Expanded');
+                }, 500);
+            }
+        }
         
         /**
          * Switch between Template Mode and Company Mode
