@@ -254,7 +254,9 @@ class DiagnosticService {
         const checks = [];
         let score = 0;
         
-        // Get AiCore Variables (Map object from aiAgentSettings.variables)
+        // ✨ FIX: Check DEFINITIONS first (source of truth for which variables exist)
+        // Then verify each has a value in the VALUES Map
+        const variableDefinitions = company.aiAgentSettings?.variableDefinitions || [];
         const variablesMap = company.aiAgentSettings?.variables || {};
         
         // Convert Map to object if needed
@@ -265,10 +267,10 @@ class DiagnosticService {
             variables = variablesMap;
         }
         
-        const variableKeys = Object.keys(variables);
-        const totalVariables = variableKeys.length;
+        const totalVariables = variableDefinitions.length;
         
-        logger.debug(`[DIAGNOSTICS] Checking ${totalVariables} AiCore variables from aiAgentSettings.variables`);
+        logger.debug(`[DIAGNOSTICS] Checking ${totalVariables} AiCore variables from aiAgentSettings.variableDefinitions`);
+        logger.debug(`[DIAGNOSTICS] Current values in Map: ${Object.keys(variables).length}`);
         
         // ────────────────────────────────────────────────────────────────────
         // CHECK 1: No Variables Found
@@ -283,18 +285,18 @@ class DiagnosticService {
                 currentValue: 0,
                 expectedValue: 'Variables from scanned templates',
                 impact: [
-                    'Template placeholders may not be replaced',
-                    'Scenarios using variables will have placeholder text'
+                    'No template placeholders detected',
+                    'If templates use {variables}, run Force Scan to detect them'
                 ],
                 codeReference: {
                     file: 'models/v2Company.js',
                     line: 1833,
-                    path: 'aiAgentSettings.variables'
+                    path: 'aiAgentSettings.variableDefinitions'
                 },
                 fix: {
                     action: 'navigate',
                     target: 'variables',
-                    description: 'Scan templates to detect variables or add them manually'
+                    description: 'Run Force Scan to detect variables from templates'
                 }
             });
             
@@ -321,12 +323,17 @@ class DiagnosticService {
         }
         
         // ────────────────────────────────────────────────────────────────────
-        // CHECK 2: Variables with Blank/Empty Values
+        // CHECK 2: Iterate over DEFINITIONS and check if each has a VALUE
         // ────────────────────────────────────────────────────────────────────
         let variablesWithValues = 0;
         let variablesBlank = 0;
         
-        for (const [varName, varValue] of Object.entries(variables)) {
+        for (const definition of variableDefinitions) {
+            const varName = definition.key;
+            
+            // ✨ FIX: Look up value in VALUES Map using the definition key
+            const varValue = variables[varName];
+            
             // Check if value is truly filled (not empty, not whitespace, not placeholder)
             const valueStr = varValue ? String(varValue).trim() : '';
             const lowerValue = valueStr.toLowerCase();
@@ -342,7 +349,7 @@ class DiagnosticService {
             const hasValue = valueStr.length > 0 && !isPlaceholder;
             
             if (!hasValue) {
-                // Variable exists but is BLANK - RED X WARNING
+                // Variable exists in definitions but has NO VALUE - RED X WARNING
                 checks.push({
                     id: `var_blank_${varName}`,
                     type: 'missing_value',
@@ -382,7 +389,9 @@ class DiagnosticService {
                     details: {
                         variableName: varName,
                         value: valueStr,
-                        length: valueStr.length
+                        length: valueStr.length,
+                        category: definition.category || 'General',
+                        usageCount: definition.usageCount || 0
                     }
                 });
                 variablesWithValues++;
