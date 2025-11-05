@@ -814,82 +814,6 @@
                      ================================================================ -->
                 
                 <!-- CONTROL PANEL: Toggle Switches -->
-                <div class="mb-6 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-6 border-2 border-gray-300 shadow-lg">
-                    <div class="flex items-center justify-between mb-4">
-                        <div>
-                            <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                <i class="fas fa-power-off text-gray-700"></i>
-                                Testing Control Panel
-                            </h3>
-                            <p class="text-sm text-gray-600 mt-1">
-                                <i class="fas fa-info-circle mr-1"></i>
-                                Click a card to activate that testing mode. Only ONE mode can be active at a time.
-                            </p>
-                        </div>
-                    </div>
-                    
-                    <!-- Clickable Mode Cards -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        
-                        <!-- TEMPLATE TESTING CARD (CLICKABLE) -->
-                        <div id="template-testing-card" 
-                             onclick="activateTemplateTestMode()"
-                             class="bg-white rounded-lg p-5 border-2 border-gray-300 shadow-sm cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]">
-                            <div class="flex items-center gap-3 mb-3">
-                                <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                                    <i class="fas fa-brain text-white text-xl"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <h4 class="font-bold text-gray-900 text-lg">📞 Template Testing</h4>
-                                    <p class="text-xs text-gray-600">Test AI templates in isolation</p>
-                                </div>
-                            </div>
-                            
-                            <!-- Status Badge -->
-                            <div class="mt-3 pt-3 border-t border-gray-200">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-sm font-semibold text-gray-700">Status:</span>
-                                    <span id="template-status-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-600">
-                                        ○ Disabled
-                                    </span>
-                                </div>
-                                <p class="text-xs text-gray-500 mt-2 text-center">
-                                    <i class="fas fa-hand-pointer mr-1"></i>Click card to activate
-                                </p>
-                            </div>
-                        </div>
-                        
-                        <!-- COMPANY TESTING CARD (CLICKABLE) -->
-                        <div id="company-testing-card" 
-                             onclick="activateCompanyTestMode()"
-                             class="bg-white rounded-lg p-5 border-2 border-gray-300 shadow-sm cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]">
-                            <div class="flex items-center gap-3 mb-3">
-                                <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                                    <i class="fas fa-building text-white text-xl"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <h4 class="font-bold text-gray-900 text-lg">🏢 Company Testing</h4>
-                                    <p class="text-xs text-gray-600">Test real production configs</p>
-                                </div>
-                            </div>
-                            
-                            <!-- Status Badge -->
-                            <div class="mt-3 pt-3 border-t border-gray-200">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-sm font-semibold text-gray-700">Status:</span>
-                                    <span id="company-status-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-600">
-                                        ○ Disabled
-                                    </span>
-                                </div>
-                                <p class="text-xs text-gray-500 mt-2 text-center">
-                                    <i class="fas fa-hand-pointer mr-1"></i>Click card to activate
-                                </p>
-                            </div>
-                        </div>
-                        
-                    </div>
-                </div>
-                
                 <!-- TAB NAVIGATION -->
                 <div class="mb-6 bg-white rounded-xl shadow-lg border-2 border-blue-500 overflow-hidden">
                     <div class="flex border-b-2 border-gray-200">
@@ -6630,95 +6554,6 @@ Continue?`;
         // =============================================
 
         /**
-         * 🎯 ACTIVATE TEMPLATE TEST MODE (Simple Card Click)
-         */
-        async function activateTemplateTestMode() {
-            console.log('🎯 [TEMPLATE TEST] Card clicked!');
-            
-            // Get card and badge elements
-            const templateCard = document.getElementById('template-testing-card');
-            const templateBadge = document.getElementById('template-status-badge');
-            const companyCard = document.getElementById('company-testing-card');
-            const companyBadge = document.getElementById('company-status-badge');
-            
-            // Check if template is selected
-            const activeTemplateId = document.getElementById('dashboard-template-selector')?.value;
-            if (!activeTemplateId) {
-                showToast('error', '⚠️ Please select a template from the dropdown first');
-                console.error('❌ [TEMPLATE TEST] No template selected');
-                return;
-            }
-            
-            // Check if already active (clicking again = disable)
-            const isActive = templateCard.classList.contains('border-purple-500');
-            
-            if (isActive) {
-                // DISABLE Template Testing
-                console.log('⚫ [TEMPLATE TEST] Disabling...');
-                templateCard.classList.remove('border-purple-500', 'bg-purple-50', 'shadow-purple-200');
-                templateCard.classList.add('border-gray-300');
-                templateBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-600';
-                templateBadge.textContent = '○ Disabled';
-                
-                // Clear backend
-                try {
-                    await fetch('/api/admin/settings/global-ai-brain-test', {
-                        method: 'PATCH',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-                        },
-                        body: JSON.stringify({ enabled: false, mode: null })
-                    });
-                    console.log('✅ [TEMPLATE TEST] Disabled in backend');
-                } catch (error) {
-                    console.error('❌ [TEMPLATE TEST] Failed to disable:', error);
-                }
-                
-                showToast('info', 'Template Testing disabled');
-            } else {
-                // ENABLE Template Testing
-                console.log('🟢 [TEMPLATE TEST] Enabling...');
-                
-                // Deactivate company card
-                companyCard.classList.remove('border-blue-500', 'bg-blue-50', 'shadow-blue-200');
-                companyCard.classList.add('border-gray-300');
-                companyBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-600';
-                companyBadge.textContent = '○ Disabled';
-                
-                // Activate template card
-                templateCard.classList.remove('border-gray-300');
-                templateCard.classList.add('border-purple-500', 'bg-purple-50', 'shadow-purple-200');
-                templateBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-purple-600 text-white';
-                templateBadge.textContent = '✓ Enabled';
-                
-                // Switch banner
-                switchTestMode('template');
-                
-                // Save to backend
-                try {
-                    await fetch('/api/admin/settings/global-ai-brain-test', {
-                        method: 'PATCH',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-                        },
-                        body: JSON.stringify({
-                            enabled: true,
-                            mode: 'template',
-                            activeTemplateId: activeTemplateId
-                        })
-                    });
-                    console.log('✅ [TEMPLATE TEST] Enabled in backend (enabled: true)');
-                } catch (error) {
-                    console.error('❌ [TEMPLATE TEST] Failed to enable:', error);
-                }
-                
-                showToast('success', '✅ Template Testing enabled');
-            }
-        }
-
-        /**
          * Load Twilio test configuration (GLOBAL - loads once on page init)
          * NOTE: No longer needs manual refresh - config is global and static!
          */
@@ -7562,7 +7397,7 @@ Continue?`;
          * Switch between Template Mode and Company Mode
          * @param {string} mode - 'template' or 'company'
          */
-        function switchTestMode(mode) {
+        async function switchTestMode(mode) {
             console.log(`🔄 [TEST MODE] Switching to: ${mode}`);
             
             // Get all UI elements
@@ -7574,6 +7409,14 @@ Continue?`;
             const companyDesc = document.getElementById('company-mode-desc');
             
             if (mode === 'template') {
+                // 🔥 VALIDATION: Check if template is selected
+                const activeTemplateId = document.getElementById('dashboard-template-selector')?.value;
+                if (!activeTemplateId) {
+                    showToast('error', '⚠️ Please select a template from the dropdown first');
+                    console.error('❌ [TEMPLATE TEST] No template selected');
+                    return;
+                }
+                
                 // Show Template Mode content
                 templateModeContent.style.display = 'block';
                 companyModeContent.style.display = 'none';
@@ -7586,9 +7429,38 @@ Continue?`;
                 templateDesc.classList.remove('hidden');
                 companyDesc.classList.add('hidden');
                 
+                // 🔥 SAVE TO BACKEND
+                try {
+                    await fetch('/api/admin/settings/global-ai-brain-test', {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                        },
+                        body: JSON.stringify({
+                            enabled: true,
+                            mode: 'template',
+                            activeTemplateId: activeTemplateId
+                        })
+                    });
+                    console.log('✅ [TEMPLATE TEST] Enabled in backend (enabled: true, mode: template)');
+                    showToast('success', '✅ Template Testing enabled');
+                } catch (error) {
+                    console.error('❌ [TEMPLATE TEST] Failed to enable:', error);
+                    showToast('error', 'Failed to enable Template Testing');
+                }
+                
                 console.log('✅ [TEST MODE] Switched to Template Mode');
                 
             } else if (mode === 'company') {
+                // 🔥 VALIDATION: Check if company is selected
+                const testCompanyId = document.getElementById('top-company-selector-dropdown')?.value;
+                if (!testCompanyId) {
+                    showToast('error', '⚠️ Please select a company from the dropdown first');
+                    console.error('❌ [COMPANY TEST] No company selected');
+                    return;
+                }
+                
                 // Show Company Mode content
                 templateModeContent.style.display = 'none';
                 companyModeContent.style.display = 'block';
@@ -7600,6 +7472,27 @@ Continue?`;
                 // Update descriptions
                 templateDesc.classList.add('hidden');
                 companyDesc.classList.remove('hidden');
+                
+                // 🔥 SAVE TO BACKEND
+                try {
+                    await fetch('/api/admin/settings/global-ai-brain-test', {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                        },
+                        body: JSON.stringify({
+                            enabled: true,
+                            mode: 'company',
+                            testCompanyId: testCompanyId
+                        })
+                    });
+                    console.log('✅ [COMPANY TEST] Enabled in backend (enabled: true, mode: company)');
+                    showToast('success', '✅ Company Testing enabled');
+                } catch (error) {
+                    console.error('❌ [COMPANY TEST] Failed to enable:', error);
+                    showToast('error', 'Failed to enable Company Testing');
+                }
                 
                 // Load company data if not loaded
                 loadCompanyTestModeConfig();
@@ -7856,95 +7749,6 @@ Continue?`;
             } catch (error) {
                 console.error('❌ [COMPANY TEST] Save failed:', error);
                 showToast('error', `Failed to save configuration: ${error.message}`);
-            }
-        }
-        
-        /**
-         * 🎯 ACTIVATE COMPANY TEST MODE (Simple Card Click)
-         */
-        async function activateCompanyTestMode() {
-            console.log('🎯 [COMPANY TEST] Card clicked!');
-            
-            // Get card and badge elements
-            const templateCard = document.getElementById('template-testing-card');
-            const templateBadge = document.getElementById('template-status-badge');
-            const companyCard = document.getElementById('company-testing-card');
-            const companyBadge = document.getElementById('company-status-badge');
-            
-            // Check if company is selected
-            const testCompanyId = document.getElementById('top-company-selector-dropdown')?.value;
-            if (!testCompanyId) {
-                showToast('error', '⚠️ Please select a company from the dropdown first');
-                console.error('❌ [COMPANY TEST] No company selected');
-                return;
-            }
-            
-            // Check if already active (clicking again = disable)
-            const isActive = companyCard.classList.contains('border-blue-500');
-            
-            if (isActive) {
-                // DISABLE Company Testing
-                console.log('⚫ [COMPANY TEST] Disabling...');
-                companyCard.classList.remove('border-blue-500', 'bg-blue-50', 'shadow-blue-200');
-                companyCard.classList.add('border-gray-300');
-                companyBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-600';
-                companyBadge.textContent = '○ Disabled';
-                
-                // Clear backend
-                try {
-                    await fetch('/api/admin/settings/global-ai-brain-test', {
-                        method: 'PATCH',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-                        },
-                        body: JSON.stringify({ enabled: false, mode: null })
-                    });
-                    console.log('✅ [COMPANY TEST] Disabled in backend');
-                } catch (error) {
-                    console.error('❌ [COMPANY TEST] Failed to disable:', error);
-                }
-                
-                showToast('info', 'Company Testing disabled');
-            } else {
-                // ENABLE Company Testing
-                console.log('🟢 [COMPANY TEST] Enabling...');
-                
-                // Deactivate template card
-                templateCard.classList.remove('border-purple-500', 'bg-purple-50', 'shadow-purple-200');
-                templateCard.classList.add('border-gray-300');
-                templateBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-600';
-                templateBadge.textContent = '○ Disabled';
-                
-                // Activate company card
-                companyCard.classList.remove('border-gray-300');
-                companyCard.classList.add('border-blue-500', 'bg-blue-50', 'shadow-blue-200');
-                companyBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-blue-600 text-white';
-                companyBadge.textContent = '✓ Enabled';
-                
-                // Switch banner
-                switchTestMode('company');
-                
-                // Save to backend
-                try {
-                    await fetch('/api/admin/settings/global-ai-brain-test', {
-                        method: 'PATCH',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-                        },
-                        body: JSON.stringify({
-                            enabled: true,
-                            mode: 'company',
-                            testCompanyId: testCompanyId
-                        })
-                    });
-                    console.log('✅ [COMPANY TEST] Enabled in backend (enabled: true)');
-                } catch (error) {
-                    console.error('❌ [COMPANY TEST] Failed to enable:', error);
-                }
-                
-                showToast('success', '✅ Company Testing enabled');
             }
         }
         
