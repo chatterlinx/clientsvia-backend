@@ -823,73 +823,67 @@
                             </h3>
                             <p class="text-sm text-gray-600 mt-1">
                                 <i class="fas fa-info-circle mr-1"></i>
-                                Enable ONE testing mode at a time. Toggles are mutually exclusive.
+                                Click a card to activate that testing mode. Only ONE mode can be active at a time.
                             </p>
                         </div>
                     </div>
                     
-                    <!-- Toggle Controls Grid -->
+                    <!-- Clickable Mode Cards -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         
-                        <!-- TEMPLATE TESTING TOGGLE -->
-                        <div id="template-toggle-card" class="bg-white rounded-lg p-4 border-2 border-purple-300 shadow-sm transition-all duration-300">
-                            <div class="flex items-center justify-between mb-3">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                                        <i class="fas fa-brain text-white"></i>
-                                    </div>
-                                    <div>
-                                        <h4 class="font-bold text-gray-900">📞 Template Testing</h4>
-                                        <p class="text-xs text-gray-600">Test AI templates in isolation</p>
-                                    </div>
+                        <!-- TEMPLATE TESTING CARD (CLICKABLE) -->
+                        <div id="template-testing-card" 
+                             onclick="activateTemplateTestMode()"
+                             class="bg-white rounded-lg p-5 border-2 border-gray-300 shadow-sm cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]">
+                            <div class="flex items-center gap-3 mb-3">
+                                <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-brain text-white text-xl"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <h4 class="font-bold text-gray-900 text-lg">📞 Template Testing</h4>
+                                    <p class="text-xs text-gray-600">Test AI templates in isolation</p>
                                 </div>
                             </div>
                             
-                            <!-- Toggle Switch -->
-                            <div class="flex items-center justify-between bg-purple-50 p-3 rounded-lg">
-                                <div>
-                                    <p class="text-sm font-semibold text-gray-800" id="template-toggle-label">
-                                        Status: <span class="text-gray-500">Disabled</span>
-                                    </p>
-                                    <p class="text-xs text-gray-500">Click to enable</p>
+                            <!-- Status Badge -->
+                            <div class="mt-3 pt-3 border-t border-gray-200">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm font-semibold text-gray-700">Status:</span>
+                                    <span id="template-status-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-600">
+                                        ○ Disabled
+                                    </span>
                                 </div>
-                                <label class="relative inline-flex items-center cursor-pointer" onclick="toggleTestEnabled()">
-                                    <input type="checkbox" id="twilio-test-enabled" class="hidden">
-                                    <div id="toggle-switch" class="w-14 h-7 bg-gray-300 rounded-full relative transition-all duration-300 shadow-inner">
-                                        <div id="toggle-circle" class="absolute top-0.5 left-0.5 bg-white w-6 h-6 rounded-full shadow-md transition-all duration-300 transform"></div>
-                                    </div>
-                                </label>
+                                <p class="text-xs text-gray-500 mt-2 text-center">
+                                    <i class="fas fa-hand-pointer mr-1"></i>Click card to activate
+                                </p>
                             </div>
                         </div>
                         
-                        <!-- COMPANY TESTING TOGGLE -->
-                        <div id="company-toggle-card" class="bg-white rounded-lg p-4 border-2 border-blue-300 shadow-sm transition-all duration-300">
-                            <div class="flex items-center justify-between mb-3">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center">
-                                        <i class="fas fa-building text-white"></i>
-                                    </div>
-                                    <div>
-                                        <h4 class="font-bold text-gray-900">🏢 Company Testing</h4>
-                                        <p class="text-xs text-gray-600">Test real production configs</p>
-                                    </div>
+                        <!-- COMPANY TESTING CARD (CLICKABLE) -->
+                        <div id="company-testing-card" 
+                             onclick="activateCompanyTestMode()"
+                             class="bg-white rounded-lg p-5 border-2 border-gray-300 shadow-sm cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]">
+                            <div class="flex items-center gap-3 mb-3">
+                                <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-building text-white text-xl"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <h4 class="font-bold text-gray-900 text-lg">🏢 Company Testing</h4>
+                                    <p class="text-xs text-gray-600">Test real production configs</p>
                                 </div>
                             </div>
                             
-                            <!-- Toggle Switch -->
-                            <div class="flex items-center justify-between bg-blue-50 p-3 rounded-lg">
-                                <div>
-                                    <p class="text-sm font-semibold text-gray-800" id="company-toggle-label">
-                                        Status: <span class="text-gray-500">Disabled</span>
-                                    </p>
-                                    <p class="text-xs text-gray-500">Click to enable</p>
+                            <!-- Status Badge -->
+                            <div class="mt-3 pt-3 border-t border-gray-200">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm font-semibold text-gray-700">Status:</span>
+                                    <span id="company-status-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-600">
+                                        ○ Disabled
+                                    </span>
                                 </div>
-                                <label class="relative inline-flex items-center cursor-pointer" onclick="toggleCompanyTestMode()">
-                                    <input type="checkbox" id="company-test-enabled" class="hidden">
-                                    <div id="company-toggle-switch" class="w-14 h-7 bg-gray-300 rounded-full relative transition-all duration-300 shadow-inner">
-                                        <div id="company-toggle-circle" class="absolute top-0.5 left-0.5 bg-white w-6 h-6 rounded-full shadow-md transition-all duration-300 transform"></div>
-                                    </div>
-                                </label>
+                                <p class="text-xs text-gray-500 mt-2 text-center">
+                                    <i class="fas fa-hand-pointer mr-1"></i>Click card to activate
+                                </p>
                             </div>
                         </div>
                         
@@ -6636,62 +6630,72 @@ Continue?`;
         // =============================================
 
         /**
-         * Toggle the test enabled checkbox
-         * NOW: Mutually exclusive with Company Testing!
+         * 🎯 ACTIVATE TEMPLATE TEST MODE (Simple Card Click)
          */
-        async function toggleTestEnabled() {
-            const checkbox = document.getElementById('twilio-test-enabled');
-            const toggleSwitch = document.getElementById('toggle-switch');
-            const toggleCircle = document.getElementById('toggle-circle');
-            const statusLabel = document.getElementById('template-toggle-label');
+        async function activateTemplateTestMode() {
+            console.log('🎯 [TEMPLATE TEST] Card clicked!');
             
-            if (!checkbox) {
-                console.error('❌ [TEMPLATE TEST] Toggle checkbox not found');
+            // Get card and badge elements
+            const templateCard = document.getElementById('template-testing-card');
+            const templateBadge = document.getElementById('template-status-badge');
+            const companyCard = document.getElementById('company-testing-card');
+            const companyBadge = document.getElementById('company-status-badge');
+            
+            // Check if template is selected
+            const activeTemplateId = document.getElementById('dashboard-template-selector')?.value;
+            if (!activeTemplateId) {
+                showToast('error', '⚠️ Please select a template from the dropdown first');
+                console.error('❌ [TEMPLATE TEST] No template selected');
                 return;
             }
             
-            // Check if we're trying to enable
-            const willEnable = !checkbox.checked;
+            // Check if already active (clicking again = disable)
+            const isActive = templateCard.classList.contains('border-purple-500');
             
-            // 🔥 PRE-CHECK: If enabling, verify template is selected
-            if (willEnable) {
-                const activeTemplateId = document.getElementById('dashboard-template-selector')?.value;
-                if (!activeTemplateId) {
-                    showToast('error', 'Please select a template from the dropdown first');
-                    console.error('❌ [TEMPLATE TEST] Cannot enable - no template selected');
-                    return; // Exit early, don't toggle
-                }
-            }
-            
-            // Toggle checkbox
-            const newState = !checkbox.checked;
-            checkbox.checked = newState;
-            
-            // Update UI
-            if (checkbox.checked) {
-                // ON state
-                if (toggleSwitch) {
-                    toggleSwitch.classList.remove('bg-gray-300');
-                    toggleSwitch.classList.add('bg-purple-600');
-                }
-                if (toggleCircle) {
-                    toggleCircle.style.transform = 'translateX(28px)';
-                }
-                if (statusLabel) {
-                    statusLabel.innerHTML = 'Status: <span class="text-green-600 font-bold">Enabled</span>';
-                }
-                console.log('🟢 [TEMPLATE TEST] Enabled');
+            if (isActive) {
+                // DISABLE Template Testing
+                console.log('⚫ [TEMPLATE TEST] Disabling...');
+                templateCard.classList.remove('border-purple-500', 'bg-purple-50', 'shadow-purple-200');
+                templateCard.classList.add('border-gray-300');
+                templateBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-600';
+                templateBadge.textContent = '○ Disabled';
                 
-                // 🔥 NEW: Auto-disable Company Testing (mutually exclusive!)
-                console.log('🔄 [TEMPLATE TEST] Auto-disabling Company Testing...');
-                await disableCompanyTestMode();
+                // Clear backend
+                try {
+                    await fetch('/api/admin/settings/global-ai-brain-test', {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                        },
+                        body: JSON.stringify({ enabled: false, mode: null })
+                    });
+                    console.log('✅ [TEMPLATE TEST] Disabled in backend');
+                } catch (error) {
+                    console.error('❌ [TEMPLATE TEST] Failed to disable:', error);
+                }
                 
-                // 🎨 CRITICAL FIX: Switch to Template Testing tab/banner
-                console.log('🎨 [TEMPLATE TEST] Switching to Template Testing banner...');
+                showToast('info', 'Template Testing disabled');
+            } else {
+                // ENABLE Template Testing
+                console.log('🟢 [TEMPLATE TEST] Enabling...');
+                
+                // Deactivate company card
+                companyCard.classList.remove('border-blue-500', 'bg-blue-50', 'shadow-blue-200');
+                companyCard.classList.add('border-gray-300');
+                companyBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-600';
+                companyBadge.textContent = '○ Disabled';
+                
+                // Activate template card
+                templateCard.classList.remove('border-gray-300');
+                templateCard.classList.add('border-purple-500', 'bg-purple-50', 'shadow-purple-200');
+                templateBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-purple-600 text-white';
+                templateBadge.textContent = '✓ Enabled';
+                
+                // Switch banner
                 switchTestMode('template');
                 
-                // 💾 CRITICAL FIX: Save mode to backend for Twilio routing
-                const activeTemplateId = document.getElementById('dashboard-template-selector')?.value;
+                // Save to backend
                 try {
                     await fetch('/api/admin/settings/global-ai-brain-test', {
                         method: 'PATCH',
@@ -6700,50 +6704,17 @@ Continue?`;
                             'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                         },
                         body: JSON.stringify({
-                            enabled: true,  // 🔥 CRITICAL: Backend needs this to recognize test number!
+                            enabled: true,
                             mode: 'template',
                             activeTemplateId: activeTemplateId
                         })
                     });
-                    console.log('✅ [TEMPLATE TEST] Mode saved to backend: template-test (enabled: true)');
+                    console.log('✅ [TEMPLATE TEST] Enabled in backend (enabled: true)');
                 } catch (error) {
-                    console.error('❌ [TEMPLATE TEST] Failed to save mode:', error);
+                    console.error('❌ [TEMPLATE TEST] Failed to enable:', error);
                 }
                 
-                showToast('success', '✅ Template Testing enabled • Company Testing disabled');
-            } else {
-                // OFF state
-                if (toggleSwitch) {
-                    toggleSwitch.classList.remove('bg-purple-600');
-                    toggleSwitch.classList.add('bg-gray-300');
-                }
-                if (toggleCircle) {
-                    toggleCircle.style.transform = 'translateX(0)';
-                }
-                if (statusLabel) {
-                    statusLabel.innerHTML = 'Status: <span class="text-gray-500">Disabled</span>';
-                }
-                console.log('⚫ [TEMPLATE TEST] Disabled');
-                
-                // 💾 Clear mode from backend (no test mode active)
-                try {
-                    await fetch('/api/admin/settings/global-ai-brain-test', {
-                        method: 'PATCH',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-                        },
-                        body: JSON.stringify({
-                            enabled: false,
-                            mode: null
-                        })
-                    });
-                    console.log('✅ [TEMPLATE TEST] Mode cleared in backend');
-                } catch (error) {
-                    console.error('❌ [TEMPLATE TEST] Failed to clear mode:', error);
-                }
-                
-                showToast('info', 'Template Testing disabled');
+                showToast('success', '✅ Template Testing enabled');
             }
         }
 
@@ -7889,59 +7860,72 @@ Continue?`;
         }
         
         /**
-         * Toggle company test mode on/off
-         * NOW: Mutually exclusive with Template Testing!
+         * 🎯 ACTIVATE COMPANY TEST MODE (Simple Card Click)
          */
-        async function toggleCompanyTestMode() {
-            const checkbox = document.getElementById('company-test-enabled');
-            const toggleSwitch = document.getElementById('company-toggle-switch');
-            const toggleCircle = document.getElementById('company-toggle-circle');
-            const statusLabel = document.getElementById('company-toggle-label');
+        async function activateCompanyTestMode() {
+            console.log('🎯 [COMPANY TEST] Card clicked!');
             
-            if (!checkbox) {
-                console.error('❌ [COMPANY TEST] Toggle checkbox not found');
+            // Get card and badge elements
+            const templateCard = document.getElementById('template-testing-card');
+            const templateBadge = document.getElementById('template-status-badge');
+            const companyCard = document.getElementById('company-testing-card');
+            const companyBadge = document.getElementById('company-status-badge');
+            
+            // Check if company is selected
+            const testCompanyId = document.getElementById('top-company-selector-dropdown')?.value;
+            if (!testCompanyId) {
+                showToast('error', '⚠️ Please select a company from the dropdown first');
+                console.error('❌ [COMPANY TEST] No company selected');
                 return;
             }
             
-            // Check if we're trying to enable
-            const willEnable = !checkbox.checked;
+            // Check if already active (clicking again = disable)
+            const isActive = companyCard.classList.contains('border-blue-500');
             
-            // 🔥 PRE-CHECK: If enabling, verify company is selected
-            if (willEnable) {
-                const testCompanyId = document.getElementById('top-company-selector-dropdown')?.value;
-                if (!testCompanyId) {
-                    showToast('error', 'Please select a company from the dropdown first');
-                    console.error('❌ [COMPANY TEST] Cannot enable - no company selected');
-                    return; // Exit early, don't toggle
-                }
-            }
-            
-            const newState = !checkbox.checked;
-            checkbox.checked = newState;
-            
-            if (checkbox.checked) {
-                if (toggleSwitch) {
-                    toggleSwitch.classList.add('bg-blue-600');
-                    toggleSwitch.classList.remove('bg-gray-300');
-                }
-                if (toggleCircle) {
-                    toggleCircle.style.transform = 'translateX(28px)';
-                }
-                if (statusLabel) {
-                    statusLabel.innerHTML = 'Status: <span class="text-green-600 font-bold">Enabled</span>';
-                }
-                console.log('✅ [COMPANY TEST] Enabled');
+            if (isActive) {
+                // DISABLE Company Testing
+                console.log('⚫ [COMPANY TEST] Disabling...');
+                companyCard.classList.remove('border-blue-500', 'bg-blue-50', 'shadow-blue-200');
+                companyCard.classList.add('border-gray-300');
+                companyBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-600';
+                companyBadge.textContent = '○ Disabled';
                 
-                // 🔥 NEW: Auto-disable Template Testing (mutually exclusive!)
-                console.log('🔄 [COMPANY TEST] Auto-disabling Template Testing...');
-                await disableTemplateTestMode();
+                // Clear backend
+                try {
+                    await fetch('/api/admin/settings/global-ai-brain-test', {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                        },
+                        body: JSON.stringify({ enabled: false, mode: null })
+                    });
+                    console.log('✅ [COMPANY TEST] Disabled in backend');
+                } catch (error) {
+                    console.error('❌ [COMPANY TEST] Failed to disable:', error);
+                }
                 
-                // 🎨 CRITICAL FIX: Switch to Company Testing tab/banner
-                console.log('🎨 [COMPANY TEST] Switching to Company Testing banner...');
+                showToast('info', 'Company Testing disabled');
+            } else {
+                // ENABLE Company Testing
+                console.log('🟢 [COMPANY TEST] Enabling...');
+                
+                // Deactivate template card
+                templateCard.classList.remove('border-purple-500', 'bg-purple-50', 'shadow-purple-200');
+                templateCard.classList.add('border-gray-300');
+                templateBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-600';
+                templateBadge.textContent = '○ Disabled';
+                
+                // Activate company card
+                companyCard.classList.remove('border-gray-300');
+                companyCard.classList.add('border-blue-500', 'bg-blue-50', 'shadow-blue-200');
+                companyBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-blue-600 text-white';
+                companyBadge.textContent = '✓ Enabled';
+                
+                // Switch banner
                 switchTestMode('company');
                 
-                // 💾 CRITICAL FIX: Save mode to backend for Twilio routing
-                const testCompanyId = document.getElementById('top-company-selector-dropdown')?.value;
+                // Save to backend
                 try {
                     await fetch('/api/admin/settings/global-ai-brain-test', {
                         method: 'PATCH',
@@ -7950,49 +7934,17 @@ Continue?`;
                             'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                         },
                         body: JSON.stringify({
-                            enabled: true,  // 🔥 CRITICAL: Backend needs this to recognize test number!
+                            enabled: true,
                             mode: 'company',
                             testCompanyId: testCompanyId
                         })
                     });
-                    console.log('✅ [COMPANY TEST] Mode saved to backend: company-test (enabled: true)');
+                    console.log('✅ [COMPANY TEST] Enabled in backend (enabled: true)');
                 } catch (error) {
-                    console.error('❌ [COMPANY TEST] Failed to save mode:', error);
+                    console.error('❌ [COMPANY TEST] Failed to enable:', error);
                 }
                 
-                showToast('success', '✅ Company Testing enabled • Template Testing disabled');
-            } else {
-                if (toggleSwitch) {
-                    toggleSwitch.classList.remove('bg-blue-600');
-                    toggleSwitch.classList.add('bg-gray-300');
-                }
-                if (toggleCircle) {
-                    toggleCircle.style.transform = 'translateX(0)';
-                }
-                if (statusLabel) {
-                    statusLabel.innerHTML = 'Status: <span class="text-gray-500">Disabled</span>';
-                }
-                console.log('⚪ [COMPANY TEST] Disabled');
-                
-                // 💾 Clear mode from backend (no test mode active)
-                try {
-                    await fetch('/api/admin/settings/global-ai-brain-test', {
-                        method: 'PATCH',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-                        },
-                        body: JSON.stringify({
-                            enabled: false,
-                            mode: null
-                        })
-                    });
-                    console.log('✅ [COMPANY TEST] Mode cleared in backend');
-                } catch (error) {
-                    console.error('❌ [COMPANY TEST] Failed to clear mode:', error);
-                }
-                
-                showToast('info', 'Company Testing disabled');
+                showToast('success', '✅ Company Testing enabled');
             }
         }
         
