@@ -333,6 +333,14 @@ class IntelligentRouter {
                         status: 'pending'
                     });
                     
+                    // 🔍 TASK 5: Clear log marker for manual verification
+                    console.log('[TIER3 LLM LOG]', {
+                        companyId: company?._id?.toString() || 'Unknown',
+                        callSource,
+                        templateId: template._id.toString(),
+                        costUsd: result.cost.tier3 || 0,
+                    });
+                    
                     logger.info('📝 [LLM LEARNING] Tier 3 usage logged', {
                         routingId,
                         callSource,

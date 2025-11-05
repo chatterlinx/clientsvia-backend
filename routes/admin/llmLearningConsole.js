@@ -108,12 +108,15 @@ router.get('/templates', async (req, res) => {
  * 
  * QUERY PARAMS:
  * - priority: 'high' | 'medium' | 'low' | 'all' (default: 'all')
+ * - callSource: 'company-test' | 'production' | 'all' (default: 'all')
+ * - companyId: MongoDB ObjectId (optional)
  * - limit: number (default: 100)
  * - skip: number (default: 0)
+ * - page: number (default: 1)
  * 
  * RESPONSE:
  * {
- *   suggestions: [
+ *   items: [
  *     {
  *       _id: '...',
  *       suggestion: 'Add trigger: leaky pipe',
@@ -123,43 +126,84 @@ router.get('/templates', async (req, res) => {
  *       confidence: 0.95,
  *       customerPhrase: 'Can you come fix my leaky pipe?',
  *       companyName: 'Royal Plumbing',
+ *       callSource: 'production',
  *       cost: 0.08,
  *       callDate: '2025-11-02T...',
  *       ...
  *     }
  *   ],
- *   total: 47,
- *   filtered: 23
+ *   meta: {
+ *     total: 47,
+ *     filtered: 23,
+ *     page: 1,
+ *     limit: 100
+ *   }
  * }
  * ============================================================================
  */
 router.get('/suggestions/:templateId', async (req, res) => {
     try {
         const { templateId } = req.params;
-        const { priority = 'all', limit = 100, skip = 0 } = req.query;
+        const { 
+            priority = 'all', 
+            callSource = 'all', 
+            companyId = null,
+            limit = 100, 
+            skip = 0,
+            page = 1
+        } = req.query;
         
-        logger.info(`[LLM LEARNING] Fetching suggestions for template: ${templateId}, priority: ${priority}`);
+        logger.info(`[LLM LEARNING] Fetching suggestions for template: ${templateId}, priority: ${priority}, callSource: ${callSource}`);
         
-        // Validate templateId
+        // 🎯 TASK 4.1: Validate templateId
         if (!mongoose.Types.ObjectId.isValid(templateId)) {
-            return res.status(400).json({ error: 'Invalid template ID' });
+            return res.status(400).json({ 
+                error: 'Invalid template ID',
+                message: 'Template ID must be a valid MongoDB ObjectId'
+            });
         }
         
-        // Build query
+        // 🎯 TASK 4.1: Build query with filters
         const query = {
             templateId: new mongoose.Types.ObjectId(templateId),
             status: 'pending'
         };
         
+        // Filter by priority
         if (priority !== 'all') {
             query.priority = priority;
         }
         
-        // Get suggestions
+        // 🎯 TASK 4.1: Filter by callSource
+        if (callSource !== 'all') {
+            if (!['company-test', 'production'].includes(callSource)) {
+                return res.status(400).json({
+                    error: 'Invalid callSource',
+                    message: 'callSource must be "company-test", "production", or "all"'
+                });
+            }
+            query.callSource = callSource;
+        }
+        
+        // 🎯 TASK 4.1: Filter by companyId
+        if (companyId) {
+            if (!mongoose.Types.ObjectId.isValid(companyId)) {
+                return res.status(400).json({
+                    error: 'Invalid companyId',
+                    message: 'companyId must be a valid MongoDB ObjectId'
+                });
+            }
+            query.companyId = new mongoose.Types.ObjectId(companyId);
+        }
+        
+        // Calculate skip from page or use direct skip
+        const actualSkip = page > 1 ? (parseInt(page) - 1) * parseInt(limit) : parseInt(skip);
+        
+        // 🎯 TASK 4.1: Get suggestions (return empty array [] if none, not 500)
         const suggestions = await ProductionLLMSuggestion.find(query)
             .sort({ priority: -1, confidence: -1, createdAt: -1 }) // High priority first, then by confidence
             .limit(parseInt(limit))
-            .skip(parseInt(skip))
+            .skip(actualSkip)
             .lean();
         
         // Get total count (for pagination)
@@ -170,10 +214,15 @@ router.get('/suggestions/:templateId', async (req, res) => {
         
         const filtered = await ProductionLLMSuggestion.countDocuments(query);
         
+        // 🎯 TASK 4.1: Return proper structure with items[] and meta{}
         res.json({
-            suggestions,
-            total,
-            filtered
+            items: suggestions, // Return [] if empty, never throw 500
+            meta: {
+                total,
+                filtered,
+                page: parseInt(page),
+                limit: parseInt(limit)
+            }
         });
         
     } catch (error) {

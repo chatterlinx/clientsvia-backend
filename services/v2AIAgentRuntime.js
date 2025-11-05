@@ -9,6 +9,7 @@
  */
 
 const Company = require('../models/v2Company');
+const AdminSettings = require('../models/AdminSettings');
 const logger = require('../utils/logger.js');
 
 const { redisClient } = require('../clients');
@@ -342,16 +343,57 @@ class V2AIAgentRuntime {
         const aiLogic = company.aiAgentLogic;
         const personality = aiLogic.agentPersonality || {};
         
+        // 🎯 TASK 2.2: Build effectiveIntelligence from company or Test Pilot settings
+        let effectiveIntelligence = {};
+        try {
+            const prodInt = aiLogic.productionIntelligence || {};
+            
+            // If inheritFromTestPilot is true, load global Test Pilot settings
+            if (prodInt.inheritFromTestPilot) {
+                logger.info(`📊 [INTELLIGENCE CONFIG] Company ${company._id} inherits from Test Pilot`);
+                const adminSettings = await AdminSettings.getSettings();
+                effectiveIntelligence = adminSettings.testPilotIntelligence || prodInt;
+                logger.info(`✅ [INTELLIGENCE CONFIG] Using Test Pilot settings:`, {
+                    preset: effectiveIntelligence.preset,
+                    tier1: effectiveIntelligence.thresholds?.tier1,
+                    tier2: effectiveIntelligence.thresholds?.tier2,
+                    enableTier3: effectiveIntelligence.thresholds?.enableTier3,
+                    model: effectiveIntelligence.llmConfig?.model
+                });
+            } else {
+                effectiveIntelligence = prodInt;
+                logger.info(`✅ [INTELLIGENCE CONFIG] Using company-specific settings:`, {
+                    tier1: effectiveIntelligence.thresholds?.tier1,
+                    tier2: effectiveIntelligence.thresholds?.tier2,
+                    enableTier3: effectiveIntelligence.thresholds?.enableTier3,
+                    model: effectiveIntelligence.llmConfig?.model
+                });
+            }
+        } catch (intError) {
+            logger.warn(`⚠️ [INTELLIGENCE CONFIG] Failed to load intelligence settings:`, intError.message);
+            // Use defaults if loading fails
+            effectiveIntelligence = {
+                thresholds: { tier1: 0.80, tier2: 0.60, enableTier3: true },
+                llmConfig: { model: 'gpt-4o-mini', maxCostPerCall: 0.10 }
+            };
+        }
+        
         // 🚀 V2 ENHANCED: Use Priority-Driven Knowledge Router for intelligent responses
         try {
             const PriorityRouter = require('./v2priorityDrivenKnowledgeRouter');
             const router = new PriorityRouter();
             
-            // Execute priority routing with V2 enhanced matching
+            // 🎯 TASK 3.1: Pass callSource and intelligenceConfig into router context
             const context = {
                 companyId: company._id.toString(),
+                company,
                 query: userInput,
                 callState,
+                // 🎯 NEW: Pass call source for Test Pilot vs Production tracking
+                callSource: callState.callSource || 'production',
+                isTest: callState.isTest || false,
+                // 🎯 NEW: Pass effective intelligence configuration
+                intelligenceConfig: effectiveIntelligence,
                 priorities: aiLogic.knowledgeSourcePriorities || {
                     priorityFlow: [
                         { source: 'companyQnA', priority: 1, threshold: 0.8, enabled: true },
@@ -361,6 +403,8 @@ class V2AIAgentRuntime {
                     ]
                 }
             };
+            
+            logger.info(`🎯 [ROUTER CONTEXT] Routing with callSource: ${context.callSource} | Test: ${context.isTest}`);
             
             const routingResult = await router.executePriorityRouting(context);
             

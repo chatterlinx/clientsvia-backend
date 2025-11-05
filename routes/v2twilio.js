@@ -590,6 +590,13 @@ router.post('/voice', async (req, res) => {
     const callSource = company.isTestMode ? 'company-test' : 'production';
     const isTest = callSource === 'company-test';
     
+    // 🔍 TASK 5: Clear log marker for manual verification
+    console.log('[CALL SOURCE]', {
+      inboundNumber: calledNumber,
+      callSource,
+      companyId: company._id.toString(),
+    });
+    
     logger.info(`🎯 [CALL SOURCE] Detected: ${callSource.toUpperCase()} | Test Mode: ${isTest}`);
     
     // 🏢 COMPANY TEST MODE - Play test greeting
