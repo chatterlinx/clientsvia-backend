@@ -29,6 +29,7 @@ const express = require('express');
 const router = express.Router();
 const AdminSettings = require('../../models/AdminSettings');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+const Company = require('../../models/v2Company');
 const { authenticateJWT } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
 
@@ -108,12 +109,22 @@ router.patch('/', async (req, res) => {
             admin: adminUser,
             updates: {
                 enabled: updates.enabled,
+                mode: updates.mode,
                 hasPhone: !!updates.phoneNumber,
                 hasSid: !!updates.accountSid,
                 hasToken: !!updates.authToken,
-                activeTemplateId: updates.activeTemplateId
+                activeTemplateId: updates.activeTemplateId,
+                testCompanyId: updates.testCompanyId
             }
         });
+        
+        // Validate mode if provided
+        if (updates.mode && !['template', 'company'].includes(updates.mode)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid mode: Must be "template" or "company"'
+            });
+        }
         
         // Validate activeTemplateId if provided
         if (updates.activeTemplateId) {
@@ -122,6 +133,17 @@ router.patch('/', async (req, res) => {
                 return res.status(400).json({
                     success: false,
                     message: 'Invalid activeTemplateId: Template not found'
+                });
+            }
+        }
+        
+        // Validate testCompanyId if provided
+        if (updates.testCompanyId) {
+            const companyExists = await Company.findById(updates.testCompanyId);
+            if (!companyExists) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid testCompanyId: Company not found'
                 });
             }
         }
@@ -136,12 +158,14 @@ router.patch('/', async (req, res) => {
         
         // Update fields
         if (updates.enabled !== undefined) settings.globalAIBrainTest.enabled = updates.enabled;
+        if (updates.mode !== undefined) settings.globalAIBrainTest.mode = updates.mode;
         if (updates.phoneNumber !== undefined) settings.globalAIBrainTest.phoneNumber = updates.phoneNumber;
         if (updates.accountSid !== undefined) settings.globalAIBrainTest.accountSid = updates.accountSid;
         if (updates.authToken !== undefined) settings.globalAIBrainTest.authToken = updates.authToken;
         if (updates.greeting !== undefined) settings.globalAIBrainTest.greeting = updates.greeting;
         if (updates.notes !== undefined) settings.globalAIBrainTest.notes = updates.notes;
         if (updates.activeTemplateId !== undefined) settings.globalAIBrainTest.activeTemplateId = updates.activeTemplateId;
+        if (updates.testCompanyId !== undefined) settings.globalAIBrainTest.testCompanyId = updates.testCompanyId;
         
         // Update metadata
         settings.globalAIBrainTest.lastUpdatedBy = adminUser;

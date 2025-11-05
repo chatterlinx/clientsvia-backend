@@ -447,12 +447,28 @@ const adminSettingsSchema = new mongoose.Schema({
             description: 'Admin notes about testing setup'
         },
         
-        // ROUTING: Which template receives test calls
+        // ROUTING MODE: Template Testing vs Company Testing
+        mode: {
+            type: String,
+            enum: ['template', 'company'],
+            default: 'template',
+            description: 'Test mode: "template" = test global templates in isolation, "company" = test real company configurations'
+        },
+        
+        // ROUTING: Which template receives test calls (for template mode)
         activeTemplateId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'GlobalInstantResponseTemplate',
             default: null,
-            description: 'Currently active template for test routing (changes when user switches templates)'
+            description: 'Currently active template for test routing (when mode = "template")'
+        },
+        
+        // ROUTING: Which company receives test calls (for company mode)
+        testCompanyId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'v2Company',
+            default: null,
+            description: 'Company to test (when mode = "company") - tests REAL production configuration'
         },
         
         // TRACKING: Test call analytics

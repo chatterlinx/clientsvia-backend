@@ -364,60 +364,74 @@ async function getCompanyByPhoneNumber(phoneNumber) {
       };
     }
     
-    // 🏢 CHECK 1: Is this a Company Test Mode number? (PRIORITY - tests real production setup)
-    logger.info(`[COMPANY TEST MODE CHECK] Checking if ${phoneNumber} is company test number...`);
+    // ============================================================================
+    // 🎯 UNIFIED TEST PILOT MODE SWITCHING (Template vs Company Testing)
+    // ============================================================================
+    // ONE phone number, TWO modes based on UI toggle:
+    // - mode='template' → Test global templates in isolation (template-test)
+    // - mode='company' → Test real company configurations (company-test)
+    // ============================================================================
     
-    const companyTestConfig = adminSettings?.companyTestMode;
+    logger.info(`[TEST PILOT CHECK] Checking if ${phoneNumber} is the Test Pilot number...`);
     
-    if (companyTestConfig?.enabled && companyTestConfig.phoneNumber === phoneNumber) {
-      logger.info(`🏢 [COMPANY TEST MODE] Test number matched! Loading REAL company from MongoDB...`);
+    const testPilotConfig = adminSettings?.globalAIBrainTest;
+    
+    if (testPilotConfig?.enabled && testPilotConfig.phoneNumber === phoneNumber) {
+      const mode = testPilotConfig.mode || 'template'; // Default to template mode
       
-      // Load the REAL company that's being tested
-      const testCompany = await Company.findById(companyTestConfig.activeCompanyId);
+      logger.info(`🎯 [TEST PILOT] Test number matched! Mode: ${mode.toUpperCase()}`);
       
-      if (testCompany) {
-        logger.info(`✅ [COMPANY TEST MODE] Test routing to REAL company: ${testCompany.companyName || testCompany.businessName}`);
-        logger.info(`🎯 [COMPANY TEST MODE] Using PRODUCTION code path - this tests the EXACT customer experience!`);
-        logger.info(`📊 [COMPANY TEST MODE] Test options:`, JSON.stringify(companyTestConfig.testOptions, null, 2));
+      // ========================================
+      // MODE 1: TEMPLATE TESTING
+      // ========================================
+      if (mode === 'template') {
+        logger.info(`🧠 [TEST PILOT - TEMPLATE MODE] Loading global template...`);
         
-        // Mark this as test mode for optional debugging/logging
-        testCompany.isTestMode = true;
-        testCompany.testOptions = companyTestConfig.testOptions || {};
-        testCompany.testGreeting = companyTestConfig.greeting || 'Currently testing {company_name}.';
+        // Load the template that's currently being tested
+        const testTemplate = await GlobalInstantResponseTemplate.findById(
+          testPilotConfig.activeTemplateId
+        );
         
-        // Return the REAL company (not a fake one!)
-        // This will use the EXACT same code path as production customer calls!
-        return testCompany;
-      } else {
-        logger.warn(`⚠️ [COMPANY TEST MODE] activeCompanyId points to non-existent company: ${companyTestConfig.activeCompanyId}`);
+        if (testTemplate) {
+          logger.info(`✅ [TEST PILOT - TEMPLATE MODE] Test routing to: ${testTemplate.name}`);
+          // Return a special "company" object that signals this is a test template
+          return {
+            isGlobalTestTemplate: true,
+            template: testTemplate,
+            _id: testTemplate._id,
+            name: testTemplate.name,
+            globalTestConfig: testPilotConfig, // Include config for greeting, etc.
+            callSource: 'template-test' // Explicit call source
+          };
+        } else {
+          logger.warn(`⚠️ [TEST PILOT - TEMPLATE MODE] activeTemplateId points to non-existent template: ${testPilotConfig.activeTemplateId}`);
+        }
       }
-    }
-    
-    // 🧠 CHECK 2: Is this a Global AI Brain test number? (Template testing in isolation)
-    logger.info(`[GLOBAL BRAIN CHECK] Checking if ${phoneNumber} is the global test number...`);
-    
-    const globalTestConfig = adminSettings?.globalAIBrainTest;
-    
-    if (globalTestConfig?.enabled && globalTestConfig.phoneNumber === phoneNumber) {
-      logger.info(`🧠 [GLOBAL BRAIN] Global test number matched! Loading active template...`);
       
-      // Load the template that's currently being tested
-      const testTemplate = await GlobalInstantResponseTemplate.findById(
-        globalTestConfig.activeTemplateId
-      );
-      
-      if (testTemplate) {
-        logger.info(`✅ [GLOBAL BRAIN] Test routing to: ${testTemplate.name}`);
-        // Return a special "company" object that signals this is a test template
-        return {
-          isGlobalTestTemplate: true,
-          template: testTemplate,
-          _id: testTemplate._id,
-          name: testTemplate.name,
-          globalTestConfig: globalTestConfig // Include config for greeting, etc.
-        };
-      } else {
-        logger.warn(`⚠️ [GLOBAL BRAIN] activeTemplateId points to non-existent template: ${globalTestConfig.activeTemplateId}`);
+      // ========================================
+      // MODE 2: COMPANY TESTING
+      // ========================================
+      else if (mode === 'company') {
+        logger.info(`🏢 [TEST PILOT - COMPANY MODE] Loading REAL company from MongoDB...`);
+        
+        // Load the REAL company that's being tested
+        const testCompany = await Company.findById(testPilotConfig.testCompanyId);
+        
+        if (testCompany) {
+          logger.info(`✅ [TEST PILOT - COMPANY MODE] Test routing to REAL company: ${testCompany.companyName || testCompany.businessName}`);
+          logger.info(`🎯 [TEST PILOT - COMPANY MODE] Using PRODUCTION code path - this tests the EXACT customer experience!`);
+          
+          // Mark this as test mode for optional debugging/logging
+          testCompany.isTestMode = true;
+          testCompany.testGreeting = testPilotConfig.greeting || 'Currently testing {company_name}.';
+          testCompany.callSource = 'company-test'; // Explicit call source
+          
+          // Return the REAL company (not a fake one!)
+          // This will use the EXACT same code path as production customer calls!
+          return testCompany;
+        } else {
+          logger.warn(`⚠️ [TEST PILOT - COMPANY MODE] testCompanyId points to non-existent company: ${testPilotConfig.testCompanyId}`);
+        }
       }
     }
     
