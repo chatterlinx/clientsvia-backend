@@ -860,31 +860,39 @@ class DiagnosticService {
         let activeScenarios = 0;
         let disabledScenarios = 0;
         let categoryCount = 0;
+        const allCategories = new Set();
         
+        // ✅ FIX: Loop through ALL active templates (not just first one)
         if (activeTemplates.length > 0) {
-            try {
-                const template = await GlobalInstantResponseTemplate.findById(activeTemplates[0].templateId)
-                    .select('name categories')
-                    .lean();
-                
-                if (template && template.categories) {
-                    categoryCount = template.categories.length;
+            for (const templateRef of activeTemplates) {
+                try {
+                    const template = await GlobalInstantResponseTemplate.findById(templateRef.templateId)
+                        .select('name categories')
+                        .lean();
                     
-                    // Count scenarios
-                    for (const category of template.categories) {
-                        if (category.scenarios) {
-                            totalScenarios += category.scenarios.length;
+                    if (template && template.categories) {
+                        // Count scenarios from this template
+                        for (const category of template.categories) {
+                            // Track unique categories
+                            allCategories.add(category.categoryId || category.name);
+                            
+                            if (category.scenarios) {
+                                totalScenarios += category.scenarios.length;
+                            }
                         }
                     }
-                    
-                    // Check for disabled scenarios
-                    const scenarioControls = company.aiAgentSettings?.scenarioControls || [];
-                    disabledScenarios = scenarioControls.length;
-                    activeScenarios = totalScenarios - disabledScenarios;
+                } catch (error) {
+                    logger.warn(`[DIAGNOSTICS] Could not load template ${templateRef.templateId}:`, error.message);
                 }
-            } catch (error) {
-                logger.warn('[DIAGNOSTICS] Could not load template for scenario count:', error.message);
             }
+            
+            // Total unique categories across all templates
+            categoryCount = allCategories.size;
+            
+            // Check for disabled scenarios
+            const scenarioControls = company.aiAgentSettings?.scenarioControls || [];
+            disabledScenarios = scenarioControls.length;
+            activeScenarios = totalScenarios - disabledScenarios;
         }
         
         // ────────────────────────────────────────────────────────────────────
