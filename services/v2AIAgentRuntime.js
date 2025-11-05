@@ -21,10 +21,13 @@ class V2AIAgentRuntime {
      * @param {string} callId - Twilio call SID
      * @param {string} from - Caller phone number
      * @param {string} to - Called phone number
+     * @param {string} callSource - Call source: 'company-test' | 'production'
+     * @param {boolean} isTest - Test mode flag
      * @returns {Object} Initialization result with V2 greeting
      */
-    static async initializeCall(companyID, callId, from, to) {
+    static async initializeCall(companyID, callId, from, to, callSource = 'production', isTest = false) {
         logger.debug(`[V2 AGENT] 🚀 Initializing call for company ${companyID}`);
+        logger.info(`🎯 [V2 AGENT] Call source: ${callSource.toUpperCase()} | Test: ${isTest}`);
         
         try {
             // Load company with V2 configuration
@@ -70,7 +73,10 @@ class V2AIAgentRuntime {
                     startTime: new Date(),
                     stage: 'greeting',
                     v2System: true,
-                    greetingMode: greetingConfig.mode
+                    greetingMode: greetingConfig.mode,
+                    // 🎯 Phase 1: Test Pilot Integration
+                    callSource,  // 'company-test' | 'production'
+                    isTest       // boolean flag
                 },
                 voiceSettings: company.aiAgentLogic.voiceSettings || null,
                 personality: company.aiAgentLogic.agentPersonality || null

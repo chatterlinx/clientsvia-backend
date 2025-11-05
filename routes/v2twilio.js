@@ -582,6 +582,16 @@ router.post('/voice', async (req, res) => {
 
     logger.security(`✅ [SPAM FILTER] Call from ${callerNumber} passed all security checks`);
 
+    // ============================================================================
+    // 🎯 CALL SOURCE DETECTION (Phase 1: Test Pilot Implementation)
+    // ============================================================================
+    // Determine if this is a test call or production call
+    // This context is passed to the AI runtime for proper 3-tier routing
+    const callSource = company.isTestMode ? 'company-test' : 'production';
+    const isTest = callSource === 'company-test';
+    
+    logger.info(`🎯 [CALL SOURCE] Detected: ${callSource.toUpperCase()} | Test Mode: ${isTest}`);
+    
     // 🏢 COMPANY TEST MODE - Play test greeting
     if (company.isTestMode && company.testGreeting) {
       logger.info(`🏢 [COMPANY TEST MODE] Playing test greeting for company: ${company.companyName || company.businessName}`);
@@ -809,11 +819,14 @@ router.post('/voice', async (req, res) => {
       const { initializeCall } = require('../services/v2AIAgentRuntime');
       
       // Initialize call with V2 Agent Personality system
+      // 🎯 Phase 1: Pass callSource context for Test Pilot integration
       const initResult = await initializeCall(
         company._id.toString(),
         req.body.CallSid,
         req.body.From,
-        req.body.To
+        req.body.To,
+        callSource,  // 'company-test' | 'production'
+        isTest       // boolean flag
       );
       
       logger.debug(`🔍 [CALL-1] Call initialized successfully`);
