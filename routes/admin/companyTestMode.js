@@ -34,6 +34,7 @@ const express = require('express');
 const router = express.Router();
 const AdminSettings = require('../../models/AdminSettings');
 const Company = require('../../models/v2Company');
+const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 const { authenticateJWT } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
 
@@ -259,17 +260,56 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
         const templateReferences = company.aiAgentSettings?.templateReferences || [];
         const activeTemplates = templateReferences.filter(ref => ref.enabled !== false);
         
+        // Fetch FULL template details for rich UI cards
+        const templatesWithDetails = await Promise.all(
+            activeTemplates.map(async (ref) => {
+                try {
+                    const template = await GlobalInstantResponseTemplate.findById(ref.templateId)
+                        .select('name description version categories stats fillerWords synonymMap createdAt updatedAt')
+                        .lean();
+                    
+                    if (!template) return null;
+                    
+                    // Calculate stats
+                    const totalScenarios = template.categories?.reduce((sum, cat) => 
+                        sum + (cat.scenarios?.length || 0), 0) || 0;
+                    
+                    const totalTriggers = template.categories?.reduce((sum, cat) => {
+                        const scenarioTriggers = cat.scenarios?.reduce((s, sc) => 
+                            s + (sc.triggers?.length || 0), 0) || 0;
+                        return sum + scenarioTriggers;
+                    }, 0) || 0;
+                    
+                    return {
+                        _id: template._id,
+                        name: template.name,
+                        description: template.description || 'No description',
+                        version: template.version || 'v1.0.0',
+                        priority: ref.priority,
+                        enabled: ref.enabled,
+                        stats: {
+                            categories: template.categories?.length || 0,
+                            scenarios: totalScenarios,
+                            triggers: totalTriggers,
+                            fillerWords: template.fillerWords?.length || 0,
+                            synonyms: template.synonymMap?.size || 0
+                        },
+                        activatedAt: ref.clonedAt || template.createdAt
+                    };
+                } catch (error) {
+                    logger.error(`❌ [TEST PILOT] Failed to load template ${ref.templateId}:`, error);
+                    return null;
+                }
+            })
+        );
+        
+        // Filter out failed template loads
+        const loadedTemplates = templatesWithDetails.filter(t => t !== null);
+        
         const companyInfo = {
             _id: company._id,
             name: company.companyName || company.businessName,
-            templates: {
-                count: activeTemplates.length,
-                templateIds: activeTemplates.map(ref => ref.templateId),
-                names: activeTemplates.length > 0 
-                    ? `${activeTemplates.length} template${activeTemplates.length > 1 ? 's' : ''} loaded`
-                    : 'None assigned',
-                hasTemplates: activeTemplates.length > 0
-            },
+            templates: loadedTemplates,
             companyQA: {
                 count: company.aiAgentLogic?.companyQA?.length || 0,
                 hasData: (company.aiAgentLogic?.companyQA?.length || 0) > 0
