@@ -202,7 +202,7 @@ router.get('/test-pilot/companies', async (req, res) => {
             isDeleted: { $ne: true },
             isActive: { $ne: false }
         })
-        .select('_id companyName businessName aiAgentLogic.templateId')
+        .select('_id companyName businessName aiAgentLogic.templateReferences')
         .sort({ companyName: 1, businessName: 1 })
         .limit(1000) // Safety limit
         .lean();
@@ -211,7 +211,8 @@ router.get('/test-pilot/companies', async (req, res) => {
         const formattedCompanies = companies.map(c => ({
             _id: c._id,
             name: c.companyName || c.businessName || 'Unnamed Company',
-            hasTemplate: !!c.aiAgentLogic?.templateId
+            hasTemplate: Array.isArray(c.aiAgentLogic?.templateReferences) && 
+                        c.aiAgentLogic.templateReferences.length > 0
         }));
         
         logger.info(`✅ [TEST PILOT] Loaded ${formattedCompanies.length} companies`);
@@ -254,12 +255,16 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
         }
         
         // Extract relevant testing info
+        const templateReferences = company.aiAgentLogic?.templateReferences || [];
+        const activeTemplates = templateReferences.filter(ref => ref.isActive);
+        
         const companyInfo = {
             _id: company._id,
             name: company.companyName || company.businessName,
-            template: {
-                id: company.aiAgentLogic?.templateId || null,
-                name: company.aiAgentLogic?.templateName || 'None assigned'
+            templates: {
+                count: activeTemplates.length,
+                names: activeTemplates.map(ref => ref.name || 'Unnamed Template').join(', ') || 'None assigned',
+                hasTemplates: activeTemplates.length > 0
             },
             companyQA: {
                 count: company.aiAgentLogic?.companyQA?.length || 0,
