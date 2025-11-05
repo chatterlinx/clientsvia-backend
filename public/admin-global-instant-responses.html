@@ -6650,6 +6650,19 @@ Continue?`;
                 return;
             }
             
+            // Check if we're trying to enable
+            const willEnable = !checkbox.checked;
+            
+            // 🔥 PRE-CHECK: If enabling, verify template is selected
+            if (willEnable) {
+                const activeTemplateId = document.getElementById('dashboard-template-selector')?.value;
+                if (!activeTemplateId) {
+                    showToast('error', 'Please select a template from the dropdown first');
+                    console.error('❌ [TEMPLATE TEST] Cannot enable - no template selected');
+                    return; // Exit early, don't toggle
+                }
+            }
+            
             // Toggle checkbox
             const newState = !checkbox.checked;
             checkbox.checked = newState;
@@ -6679,39 +6692,22 @@ Continue?`;
                 
                 // 💾 CRITICAL FIX: Save mode to backend for Twilio routing
                 const activeTemplateId = document.getElementById('dashboard-template-selector')?.value;
-                if (activeTemplateId) {
-                    try {
-                        await fetch('/api/admin/settings/global-ai-brain-test', {
-                            method: 'PATCH',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-                            },
-                            body: JSON.stringify({
-                                enabled: true,  // 🔥 CRITICAL: Backend needs this to recognize test number!
-                                mode: 'template',
-                                activeTemplateId: activeTemplateId
-                            })
-                        });
-                        console.log('✅ [TEMPLATE TEST] Mode saved to backend: template-test (enabled: true)');
-                    } catch (error) {
-                        console.error('❌ [TEMPLATE TEST] Failed to save mode:', error);
-                    }
-                } else {
-                    showToast('error', 'Please select a template first');
-                    // Revert toggle
-                    checkbox.checked = false;
-                    if (toggleSwitch) {
-                        toggleSwitch.classList.remove('bg-purple-600');
-                        toggleSwitch.classList.add('bg-gray-300');
-                    }
-                    if (toggleCircle) {
-                        toggleCircle.style.transform = 'translateX(0)';
-                    }
-                    if (statusLabel) {
-                        statusLabel.innerHTML = 'Status: <span class="text-gray-500">Disabled</span>';
-                    }
-                    return;
+                try {
+                    await fetch('/api/admin/settings/global-ai-brain-test', {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                        },
+                        body: JSON.stringify({
+                            enabled: true,  // 🔥 CRITICAL: Backend needs this to recognize test number!
+                            mode: 'template',
+                            activeTemplateId: activeTemplateId
+                        })
+                    });
+                    console.log('✅ [TEMPLATE TEST] Mode saved to backend: template-test (enabled: true)');
+                } catch (error) {
+                    console.error('❌ [TEMPLATE TEST] Failed to save mode:', error);
                 }
                 
                 showToast('success', '✅ Template Testing enabled • Company Testing disabled');
@@ -7907,6 +7903,19 @@ Continue?`;
                 return;
             }
             
+            // Check if we're trying to enable
+            const willEnable = !checkbox.checked;
+            
+            // 🔥 PRE-CHECK: If enabling, verify company is selected
+            if (willEnable) {
+                const testCompanyId = document.getElementById('top-company-selector-dropdown')?.value;
+                if (!testCompanyId) {
+                    showToast('error', 'Please select a company from the dropdown first');
+                    console.error('❌ [COMPANY TEST] Cannot enable - no company selected');
+                    return; // Exit early, don't toggle
+                }
+            }
+            
             const newState = !checkbox.checked;
             checkbox.checked = newState;
             
@@ -7933,39 +7942,22 @@ Continue?`;
                 
                 // 💾 CRITICAL FIX: Save mode to backend for Twilio routing
                 const testCompanyId = document.getElementById('top-company-selector-dropdown')?.value;
-                if (testCompanyId) {
-                    try {
-                        await fetch('/api/admin/settings/global-ai-brain-test', {
-                            method: 'PATCH',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-                            },
-                            body: JSON.stringify({
-                                enabled: true,  // 🔥 CRITICAL: Backend needs this to recognize test number!
-                                mode: 'company',
-                                testCompanyId: testCompanyId
-                            })
-                        });
-                        console.log('✅ [COMPANY TEST] Mode saved to backend: company-test (enabled: true)');
-                    } catch (error) {
-                        console.error('❌ [COMPANY TEST] Failed to save mode:', error);
-                    }
-                } else {
-                    showToast('error', 'Please select a company first');
-                    // Revert toggle
-                    checkbox.checked = false;
-                    if (toggleSwitch) {
-                        toggleSwitch.classList.remove('bg-blue-600');
-                        toggleSwitch.classList.add('bg-gray-300');
-                    }
-                    if (toggleCircle) {
-                        toggleCircle.style.transform = 'translateX(0)';
-                    }
-                    if (statusLabel) {
-                        statusLabel.innerHTML = 'Status: <span class="text-gray-500">Disabled</span>';
-                    }
-                    return;
+                try {
+                    await fetch('/api/admin/settings/global-ai-brain-test', {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                        },
+                        body: JSON.stringify({
+                            enabled: true,  // 🔥 CRITICAL: Backend needs this to recognize test number!
+                            mode: 'company',
+                            testCompanyId: testCompanyId
+                        })
+                    });
+                    console.log('✅ [COMPANY TEST] Mode saved to backend: company-test (enabled: true)');
+                } catch (error) {
+                    console.error('❌ [COMPANY TEST] Failed to save mode:', error);
                 }
                 
                 showToast('success', '✅ Company Testing enabled • Template Testing disabled');
