@@ -2172,35 +2172,6 @@
                             
                         </div>
                         
-                        <!-- Test Phone Number -->
-                        <div class="mb-4">
-                            <label class="block text-sm font-bold text-gray-800 mb-2">
-                                <i class="fas fa-phone text-blue-600 mr-1"></i>
-                                Test Phone Number
-                            </label>
-                            <div class="flex gap-3">
-                                <input 
-                                    type="text" 
-                                    id="company-test-phone-input"
-                                    placeholder="+15551234567"
-                                    class="flex-1 px-4 py-2 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm font-mono"
-                                >
-                                <button 
-                                    onclick="savePhoneNumber()" 
-                                    class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all">
-                                    <i class="fas fa-save mr-1"></i>
-                                    Save
-                                </button>
-                            </div>
-                            <div class="mt-2 p-2 bg-blue-50 rounded border border-blue-200 flex items-center justify-between">
-                                <span class="text-xs font-semibold text-gray-700">Current:</span>
-                                <span class="text-sm font-mono font-bold text-blue-700" id="company-test-phone-display">Not configured</span>
-                            </div>
-                            <p class="text-xs text-gray-500 mt-1">
-                                E.164 format • Can use same number as template testing
-                            </p>
-                        </div>
-                            
                         <!-- Test Call Greeting -->
                         <div class="mb-4">
                             <div class="flex items-center justify-between mb-2">
@@ -2214,15 +2185,15 @@
                             </div>
                             <textarea 
                                 id="company-test-greeting"
-                                rows="2"
+                                rows="3"
                                 maxlength="500"
                                 oninput="updateCompanyGreetingCharCount()"
                                 class="w-full px-3 py-2 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm font-mono resize-none"
-                                placeholder="Currently testing {company_name}."
-                            >Currently testing {company_name}.</textarea>
+                                placeholder="You are now testing {company_name} with all live settings. This includes templates, Q&A, AI intelligence, and company-specific configurations."
+                            >You are now testing {company_name} with all live settings. This includes templates, Q&A, AI intelligence, and company-specific configurations.</textarea>
                             <div class="flex justify-between items-center mt-1">
                                 <p class="text-xs text-gray-500">Use {company_name} placeholder</p>
-                                <span class="text-xs text-gray-500" id="company-greeting-char-count">29/500</span>
+                                <span class="text-xs text-gray-500" id="company-greeting-char-count">151 / 500 chars</span>
                             </div>
                         </div>
                             
@@ -7498,7 +7469,7 @@ Continue?`;
                 window.companyTestConfig = config;
                 
                 // Load greeting (with default)
-                const greeting = config.greeting || 'Currently testing {company_name}.';
+                const greeting = config.greeting || 'You are now testing {company_name} with all live settings. This includes templates, Q&A, AI intelligence, and company-specific configurations.';
                 const greetingElement = document.getElementById('company-test-greeting');
                 if (greetingElement) {
                     greetingElement.value = greeting;
@@ -7659,7 +7630,7 @@ Continue?`;
             }
             
             const greetingElement = document.getElementById('company-test-greeting');
-            const greeting = greetingElement ? greetingElement.value.trim() : 'Currently testing {company_name}.';
+            const greeting = greetingElement ? greetingElement.value.trim() : 'You are now testing {company_name} with all live settings. This includes templates, Q&A, AI intelligence, and company-specific configurations.';
             
             const testOptions = {
                 enableCompanyQA: document.getElementById('test-option-company-qa')?.checked ?? true,
@@ -7694,11 +7665,6 @@ Continue?`;
                 
                 console.log('✅ [COMPANY TEST] Configuration saved successfully');
                 showToast('success', '✅ Company Test Mode configured successfully!');
-                
-                // Update phone display if returned
-                if (data.config && data.config.phoneNumber) {
-                    document.getElementById('company-test-phone-display').textContent = data.config.phoneNumber;
-                }
                 
             } catch (error) {
                 console.error('❌ [COMPANY TEST] Save failed:', error);
@@ -7741,68 +7707,10 @@ Continue?`;
          * Reset company test greeting to default
          */
         function resetCompanyTestGreeting() {
-            const defaultGreeting = 'Currently testing {company_name}.';
+            const defaultGreeting = 'You are now testing {company_name} with all live settings. This includes templates, Q&A, AI intelligence, and company-specific configurations.';
             document.getElementById('company-test-greeting').value = defaultGreeting;
             updateCompanyGreetingCharCount();
             showToast('success', 'Greeting reset to default');
-        }
-        
-        /**
-         * Save phone number for company testing
-         */
-        async function savePhoneNumber() {
-            console.log('📞 [COMPANY TEST] Saving phone number...');
-            
-            const phoneInput = document.getElementById('company-test-phone-input');
-            const phoneNumber = phoneInput.value.trim();
-            
-            // Validate phone number format (E.164)
-            if (!phoneNumber) {
-                showToast('error', 'Please enter a phone number');
-                return;
-            }
-            
-            if (!phoneNumber.startsWith('+')) {
-                showToast('error', 'Phone number must start with + (E.164 format)');
-                phoneInput.focus();
-                return;
-            }
-            
-            if (phoneNumber.length < 10 || phoneNumber.length > 16) {
-                showToast('error', 'Invalid phone number length (should be 10-16 digits including +)');
-                phoneInput.focus();
-                return;
-            }
-            
-            try {
-                const response = await fetch('/api/admin/settings/company-test-mode', {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-                    },
-                    body: JSON.stringify({
-                        phoneNumber: phoneNumber
-                    })
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `HTTP ${response.status}`);
-                }
-                
-                const data = await response.json();
-                
-                console.log('✅ [COMPANY TEST] Phone number saved successfully');
-                showToast('success', `✅ Phone number ${phoneNumber} configured successfully!`);
-                
-                // Update display
-                document.getElementById('company-test-phone-display').textContent = phoneNumber;
-                
-            } catch (error) {
-                console.error('❌ [COMPANY TEST] Phone number save failed:', error);
-                showToast('error', `Failed to save phone number: ${error.message}`);
-            }
         }
         
         /**
