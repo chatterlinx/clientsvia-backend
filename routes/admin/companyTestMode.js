@@ -312,7 +312,7 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
         
         // Calculate company-specific customizations (overrides from templates)
         const customFillers = company.aiAgentSettings?.fillerWords?.custom || [];
-        const disabledScenarios = (company.aiAgentSettings?.scenarioControls || [])
+        const disabledScenarioControls = (company.aiAgentSettings?.scenarioControls || [])
             .filter(sc => sc.isEnabled === false);
         const variables = company.aiAgentSettings?.variables || {};
         
@@ -321,6 +321,72 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
             ? Object.fromEntries(variables) 
             : variables;
         const variablesCount = Object.keys(variablesObj).length;
+        
+        // 🔍 LOOKUP DISABLED SCENARIO DETAILS - Get human-readable names
+        const disabledScenariosWithDetails = await Promise.all(
+            disabledScenarioControls.map(async (control) => {
+                try {
+                    // Find the template
+                    const template = await GlobalInstantResponseTemplate.findById(control.templateId)
+                        .select('name categories')
+                        .lean();
+                    
+                    if (!template) {
+                        return {
+                            scenarioId: control.scenarioId,
+                            scenarioName: 'Unknown Scenario',
+                            templateName: 'Unknown Template',
+                            category: 'Unknown',
+                            trigger: null,
+                            disabledAt: control.disabledAt
+                        };
+                    }
+                    
+                    // Find the specific scenario in the template
+                    let foundScenario = null;
+                    let foundCategory = null;
+                    
+                    for (const category of (template.categories || [])) {
+                        const scenario = (category.scenarios || []).find(s => s.scenarioId === control.scenarioId);
+                        if (scenario) {
+                            foundScenario = scenario;
+                            foundCategory = category.name;
+                            break;
+                        }
+                    }
+                    
+                    if (!foundScenario) {
+                        return {
+                            scenarioId: control.scenarioId,
+                            scenarioName: 'Scenario Not Found',
+                            templateName: template.name,
+                            category: 'Unknown',
+                            trigger: null,
+                            disabledAt: control.disabledAt
+                        };
+                    }
+                    
+                    return {
+                        scenarioId: control.scenarioId,
+                        scenarioName: foundScenario.name,
+                        templateName: template.name,
+                        category: foundCategory,
+                        trigger: foundScenario.triggers?.[0] || null, // First trigger as example
+                        disabledAt: control.disabledAt
+                    };
+                } catch (error) {
+                    logger.error(`❌ Failed to lookup disabled scenario ${control.scenarioId}:`, error);
+                    return {
+                        scenarioId: control.scenarioId,
+                        scenarioName: 'Error Loading',
+                        templateName: 'Unknown',
+                        category: 'Unknown',
+                        trigger: null,
+                        disabledAt: control.disabledAt
+                    };
+                }
+            })
+        );
         
         const companyInfo = {
             _id: company._id,
@@ -332,12 +398,8 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
                     items: customFillers
                 },
                 disabledScenarios: {
-                    count: disabledScenarios.length,
-                    items: disabledScenarios.map(sc => ({
-                        templateId: sc.templateId,
-                        scenarioId: sc.scenarioId,
-                        disabledAt: sc.disabledAt
-                    }))
+                    count: disabledScenariosWithDetails.length,
+                    items: disabledScenariosWithDetails
                 },
                 variables: {
                     count: variablesCount,
