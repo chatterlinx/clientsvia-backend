@@ -315,7 +315,12 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
         const disabledScenarios = (company.aiAgentSettings?.scenarioControls || [])
             .filter(sc => sc.isEnabled === false);
         const variables = company.aiAgentSettings?.variables || {};
-        const variablesCount = variables instanceof Map ? variables.size : Object.keys(variables).length;
+        
+        // Convert Map to Object if needed (Mongoose sometimes returns Map)
+        const variablesObj = variables instanceof Map 
+            ? Object.fromEntries(variables) 
+            : variables;
+        const variablesCount = Object.keys(variablesObj).length;
         
         const companyInfo = {
             _id: company._id,
@@ -336,6 +341,7 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
                 },
                 variables: {
                     count: variablesCount,
+                    data: variablesObj,
                     configured: variablesCount > 0
                 }
             }
