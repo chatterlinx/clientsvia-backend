@@ -284,113 +284,142 @@ ProductionLLMSuggestionSchema.index({ templateId: 1, suggestionType: 1, suggeste
  * Used for LLM Learning Console main view
  */
 ProductionLLMSuggestionSchema.statics.getTemplatesSummary = async function() {
-    const GlobalTemplate = mongoose.model('GlobalInstantResponseTemplate');
-    
-    // Get all templates
-    const templates = await GlobalTemplate.find({ isPublished: true })
-        .select('name')
-        .lean();
-    
-    // Get suggestion counts for each template
-    const summaries = await Promise.all(templates.map(async (template) => {
-        const suggestions = await this.find({
-            templateId: template._id,
-            status: 'pending'
-        }).lean();
+    try {
+        const GlobalTemplate = mongoose.model('GlobalInstantResponseTemplate');
         
-        const highCount = suggestions.filter(s => s.priority === 'high').length;
-        const mediumCount = suggestions.filter(s => s.priority === 'medium').length;
-        const lowCount = suggestions.filter(s => s.priority === 'low').length;
+        // Get all templates
+        const templates = await GlobalTemplate.find({ isPublished: true })
+            .select('name')
+            .lean();
         
-        const totalCost = suggestions.reduce((sum, s) => sum + (s.cost || 0), 0);
+        // 🎯 Phase 5: Handle empty templates gracefully
+        if (!templates || templates.length === 0) {
+            return []; // No templates - return empty array instead of failing
+        }
         
-        // Count unique companies using this template
-        const Company = mongoose.model('v2Company');
-        const companiesUsing = await Company.countDocuments({
-            'aiAgentSettings.templateReferences.templateId': template._id,
-            'aiAgentSettings.templateReferences.isActive': true
-        });
-        
-        const lastSuggestion = suggestions.length > 0 
-            ? suggestions.sort((a, b) => b.createdAt - a.createdAt)[0].createdAt
-            : new Date(0);
-        
-        return {
-            _id: template._id,
-            name: template.name,
-            pendingSuggestions: suggestions.length,
-            learningCost: totalCost,
-            companiesUsing,
-            lastSuggestion,
-            priority: {
-                high: highCount,
-                medium: mediumCount,
-                low: lowCount
+        // Get suggestion counts for each template
+        const summaries = await Promise.all(templates.map(async (template) => {
+            try {
+                const suggestions = await this.find({
+                    templateId: template._id,
+                    status: 'pending'
+                }).lean();
+                
+                const highCount = suggestions.filter(s => s.priority === 'high').length;
+                const mediumCount = suggestions.filter(s => s.priority === 'medium').length;
+                const lowCount = suggestions.filter(s => s.priority === 'low').length;
+                
+                const totalCost = suggestions.reduce((sum, s) => sum + (s.cost || 0), 0);
+                
+                // Count unique companies using this template
+                const Company = mongoose.model('v2Company');
+                const companiesUsing = await Company.countDocuments({
+                    'aiAgentSettings.templateReferences.templateId': template._id,
+                    'aiAgentSettings.templateReferences.isActive': true
+                });
+                
+                const lastSuggestion = suggestions.length > 0 
+                    ? suggestions.sort((a, b) => b.createdAt - a.createdAt)[0].createdAt
+                    : new Date(0);
+                
+                return {
+                    _id: template._id,
+                    name: template.name,
+                    pendingSuggestions: suggestions.length,
+                    learningCost: totalCost,
+                    companiesUsing,
+                    lastSuggestion,
+                    priority: {
+                        high: highCount,
+                        medium: mediumCount,
+                        low: lowCount
+                    }
+                };
+            } catch (templateError) {
+                // Log error but don't fail entire request
+                console.error(`Error processing template ${template._id}:`, templateError.message);
+                return null;
             }
-        };
-    }));
-    
-    // Filter out templates with no suggestions
-    return summaries.filter(s => s.pendingSuggestions > 0)
-        .sort((a, b) => b.pendingSuggestions - a.pendingSuggestions);
+        }));
+        
+        // Filter out null entries (failed templates) and templates with no suggestions
+        return summaries
+            .filter(s => s !== null && s.pendingSuggestions > 0)
+            .sort((a, b) => b.pendingSuggestions - a.pendingSuggestions);
+            
+    } catch (error) {
+        console.error('Error in getTemplatesSummary:', error);
+        return []; // Return empty array instead of throwing
+    }
 };
 
 /**
  * Get cost analytics for dashboard
  */
 ProductionLLMSuggestionSchema.statics.getCostAnalytics = async function() {
-    const now = new Date();
-    const todayStart = new Date(now.setHours(0, 0, 0, 0));
-    const weekStart = new Date(now.setDate(now.getDate() - 7));
-    
-    // Today's stats
-    const todayStats = await this.aggregate([
-        { $match: { callDate: { $gte: todayStart } } },
-        { $group: {
-            _id: null,
-            cost: { $sum: '$cost' },
-            calls: { $sum: 1 }
-        }}
-    ]);
-    
-    // This week's stats
-    const weekStats = await this.aggregate([
-        { $match: { callDate: { $gte: weekStart } } },
-        { $group: {
-            _id: null,
-            cost: { $sum: '$cost' },
-            calls: { $sum: 1 }
-        }}
-    ]);
-    
-    // ROI stats (applied suggestions)
-    const roiStats = await this.aggregate([
-        { $match: { status: 'applied' } },
-        { $group: {
-            _id: null,
-            savings: { $sum: '$estimatedMonthlySavings' },
-            suggestionsApplied: { $sum: 1 }
-        }}
-    ]);
-    
-    // Tier 3 reduction (placeholder - would need historical data)
-    const tier3Reduction = 0; // TODO: Calculate from historical metrics
-    
-    return {
-        today: {
-            cost: todayStats[0]?.cost || 0,
-            calls: todayStats[0]?.calls || 0
-        },
-        week: {
-            cost: weekStats[0]?.cost || 0,
-            calls: weekStats[0]?.calls || 0
-        },
-        roi: {
-            savings: roiStats[0]?.savings || 0,
-            suggestionsApplied: roiStats[0]?.suggestionsApplied || 0
-        },
-        tier3Reduction
-    };
+    try {
+        const now = new Date();
+        const todayStart = new Date(now.setHours(0, 0, 0, 0));
+        const weekStart = new Date(now.setDate(now.getDate() - 7));
+        
+        // Today's stats
+        const todayStats = await this.aggregate([
+            { $match: { callDate: { $gte: todayStart } } },
+            { $group: {
+                _id: null,
+                cost: { $sum: '$cost' },
+                calls: { $sum: 1 }
+            }}
+        ]);
+        
+        // This week's stats
+        const weekStats = await this.aggregate([
+            { $match: { callDate: { $gte: weekStart } } },
+            { $group: {
+                _id: null,
+                cost: { $sum: '$cost' },
+                calls: { $sum: 1 }
+            }}
+        ]);
+        
+        // ROI stats (applied suggestions)
+        const roiStats = await this.aggregate([
+            { $match: { status: 'applied' } },
+            { $group: {
+                _id: null,
+                savings: { $sum: '$estimatedMonthlySavings' },
+                suggestionsApplied: { $sum: 1 }
+            }}
+        ]);
+        
+        // Tier 3 reduction (placeholder - would need historical data)
+        const tier3Reduction = 0; // TODO: Calculate from historical metrics
+        
+        return {
+            today: {
+                cost: todayStats[0]?.cost || 0,
+                calls: todayStats[0]?.calls || 0
+            },
+            week: {
+                cost: weekStats[0]?.cost || 0,
+                calls: weekStats[0]?.calls || 0
+            },
+            roi: {
+                savings: roiStats[0]?.savings || 0,
+                suggestionsApplied: roiStats[0]?.suggestionsApplied || 0
+            },
+            tier3Reduction
+        };
+    } catch (error) {
+        console.error('Error in getCostAnalytics:', error);
+        // Return zero stats instead of throwing
+        return {
+            today: { cost: 0, calls: 0 },
+            week: { cost: 0, calls: 0 },
+            roi: { savings: 0, suggestionsApplied: 0 },
+            tier3Reduction: 0
+        };
+    }
 };
 
 /**
