@@ -2151,43 +2151,6 @@
                             
                         </div>
                         
-                        <!-- Test Call Greeting -->
-                        <div class="mb-4">
-                            <div class="flex items-center justify-between mb-2">
-                                <label class="text-sm font-bold text-gray-800">
-                                    <i class="fas fa-microphone text-blue-600 mr-1"></i>
-                                    Test Call Greeting
-                                </label>
-                                <button onclick="resetCompanyTestGreeting()" class="text-xs px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-semibold">
-                                    Reset
-                                </button>
-                            </div>
-                            <textarea 
-                                id="company-test-greeting"
-                                rows="3"
-                                maxlength="500"
-                                oninput="updateCompanyGreetingCharCount()"
-                                class="w-full px-3 py-2 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm font-mono resize-none"
-                                placeholder="You are now testing {company_name} with all live settings. This includes templates, Q&A, AI intelligence, and company-specific configurations."
-                            >You are now testing {company_name} with all live settings. This includes templates, Q&A, AI intelligence, and company-specific configurations.</textarea>
-                            <div class="flex justify-between items-center mt-1">
-                                <p class="text-xs text-gray-500">Use {company_name} placeholder</p>
-                                <span class="text-xs text-gray-500" id="company-greeting-char-count">151 / 500 chars</span>
-                            </div>
-                        </div>
-                        
-                        <!-- Action Buttons -->
-                        <div class="flex gap-3 pt-4 border-t border-gray-200">
-                            <button onclick="saveCompanyTestConfig()" class="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold shadow-md transition-all">
-                                <i class="fas fa-save mr-2"></i>
-                                Save Configuration
-                            </button>
-                            <button onclick="refreshCompanyList()" class="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition-all">
-                                <i class="fas fa-sync-alt mr-2"></i>
-                                Refresh
-                            </button>
-                        </div>
-                        
                         <!-- Info Note -->
                         <div class="mt-4 bg-blue-50 px-4 py-3 rounded-lg border border-blue-200">
                             <p class="text-xs text-blue-900 leading-relaxed">
@@ -7413,14 +7376,6 @@ Continue?`;
                 // Cache config globally for banner validation
                 window.companyTestConfig = config;
                 
-                // Load greeting (with default)
-                const greeting = config.greeting || 'You are now testing {company_name} with all live settings. This includes templates, Q&A, AI intelligence, and company-specific configurations.';
-                const greetingElement = document.getElementById('company-test-greeting');
-                if (greetingElement) {
-                    greetingElement.value = greeting;
-                    updateCompanyGreetingCharCount();
-                }
-                
                 // Select active company if set (in TOP selector)
                 if (config.activeCompanyId) {
                     const topSelector = document.getElementById('top-company-selector-dropdown');
@@ -7434,61 +7389,6 @@ Continue?`;
             } catch (error) {
                 console.error('❌ [COMPANY TEST] Failed to load configuration:', error);
                 showToast('error', 'Failed to load Company Test Mode configuration');
-            }
-        }
-        
-        /**
-         * Load list of companies for testing dropdown
-         */
-        async function loadCompanyList() {
-            console.log('📋 [COMPANY TEST] Loading company list...');
-            
-            try {
-                const response = await fetch('/api/admin/test-pilot/companies', {
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-                    }
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                
-                const data = await response.json();
-                const companies = data.companies || [];
-                
-                console.log(`✅ [COMPANY TEST] Loaded ${companies.length} companies`);
-                
-                // NOTE: We removed the bottom dropdown - only populate TOP dropdown now
-                // Populate TOP dropdown (no more bottom selector!)
-                const topSelector = document.getElementById('top-company-selector-dropdown');
-                if (!topSelector) {
-                    console.warn('⚠️ [COMPANY TEST] Top company selector not found');
-                    return;
-                }
-                
-                const currentValue = topSelector.value; // Preserve current selection
-                
-                topSelector.innerHTML = '<option value="">-- Select a company to test --</option>';
-                
-                companies.forEach(company => {
-                    const option = document.createElement('option');
-                    option.value = company._id;
-                    option.textContent = `${company.name}${company.hasTemplate ? '' : ' (No template)'}`;
-                    if (!company.hasTemplate) {
-                        option.style.color = '#999';
-                    }
-                    topSelector.appendChild(option);
-                });
-                
-                // Restore selection if it still exists
-                if (currentValue) {
-                    topSelector.value = currentValue;
-                }
-                
-            } catch (error) {
-                console.error('❌ [COMPANY TEST] Failed to load companies:', error);
-                showToast('error', 'Failed to load company list');
             }
         }
         
@@ -7548,96 +7448,6 @@ Continue?`;
                 console.error('❌ [COMPANY TEST] Failed to load company details:', error);
                 showToast('error', 'Failed to load company details');
             }
-        }
-        
-        /**
-         * Save company test configuration
-         */
-        async function saveCompanyTestConfig() {
-            console.log('💾 [COMPANY TEST] Saving configuration...');
-            
-            // Get company ID from TOP selector (we removed the bottom dropdown)
-            const topSelector = document.getElementById('top-company-selector-dropdown');
-            const companyId = topSelector ? topSelector.value : null;
-            
-            if (!companyId) {
-                showToast('error', 'Please select a company from the top dropdown first');
-                return;
-            }
-            
-            const greetingElement = document.getElementById('company-test-greeting');
-            const greeting = greetingElement ? greetingElement.value.trim() : 'You are now testing {company_name} with all live settings. This includes templates, Q&A, AI intelligence, and company-specific configurations.';
-            
-            try {
-                // NOTE: 'enabled' is controlled by banner tabs via switchTestMode(), not this save function
-                // NOTE: No test options - company testing always uses FULL production configuration
-                const response = await fetch('/api/admin/settings/company-test-mode', {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-                    },
-                    body: JSON.stringify({
-                        activeCompanyId: companyId,
-                        greeting
-                    })
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `HTTP ${response.status}`);
-                }
-                
-                const data = await response.json();
-                
-                console.log('✅ [COMPANY TEST] Configuration saved successfully');
-                showToast('success', '✅ Company Test Mode configured successfully!');
-                
-            } catch (error) {
-                console.error('❌ [COMPANY TEST] Save failed:', error);
-                showToast('error', `Failed to save configuration: ${error.message}`);
-            }
-        }
-        
-        /**
-         * Refresh company list
-         */
-        async function refreshCompanyList() {
-            showToast('info', 'Refreshing company list...');
-            await loadCompanyList();
-            showToast('success', 'Company list refreshed!');
-        }
-        
-        /**
-         * Update character count for company test greeting
-         */
-        function updateCompanyGreetingCharCount() {
-            const textarea = document.getElementById('company-test-greeting');
-            const counter = document.getElementById('company-greeting-char-count');
-            if (textarea && counter) {
-                const length = textarea.value.length;
-                counter.textContent = `${length} / 500 chars`;
-                
-                // Visual feedback if approaching limit
-                if (length > 450) {
-                    counter.classList.add('text-red-600', 'font-bold');
-                } else if (length > 400) {
-                    counter.classList.remove('text-red-600');
-                    counter.classList.add('text-orange-600', 'font-semibold');
-                } else {
-                    counter.classList.remove('text-red-600', 'text-orange-600', 'font-bold', 'font-semibold');
-                }
-            }
-        }
-        
-        /**
-         * Reset company test greeting to default
-         */
-        function resetCompanyTestGreeting() {
-            const defaultGreeting = 'You are now testing {company_name} with all live settings. This includes templates, Q&A, AI intelligence, and company-specific configurations.';
-            document.getElementById('company-test-greeting').value = defaultGreeting;
-            updateCompanyGreetingCharCount();
-            showToast('success', 'Greeting reset to default');
         }
         
         /**
