@@ -285,18 +285,19 @@ class ConfigurationReadinessService {
         };
         
         try {
-            // Check AiCore Variables (from template scanning)
-            // Location: company.aiAgentSettings.variables (Map)
-            const variables = company.aiAgentSettings?.variables || new Map();
+            // ✨ FIX: Check DEFINITIONS first (source of truth for which variables exist)
+            // Then verify each has a value in the VALUES Map
+            const variableDefinitions = company.aiAgentSettings?.variableDefinitions || [];
+            const variablesMap = company.aiAgentSettings?.variables || new Map();
             
             // Convert Map to object if needed
-            const variablesObj = variables instanceof Map ? Object.fromEntries(variables) : 
-                                 (typeof variables === 'object' && variables !== null) ? variables : {};
+            const variablesObj = variablesMap instanceof Map ? Object.fromEntries(variablesMap) : 
+                                 (typeof variablesMap === 'object' && variablesMap !== null) ? variablesMap : {};
             
-            const variableKeys = Object.keys(variablesObj);
-            component.total = variableKeys.length;
+            component.total = variableDefinitions.length;
             
-            logger.info(`[READINESS] 🔧 Variables: ${component.total} total from AiCore Variables tab`);
+            logger.info(`[READINESS] 🔧 Variables: ${component.total} total from variableDefinitions`);
+            logger.info(`[READINESS] 🔧 Values in Map: ${Object.keys(variablesObj).length}`);
             
             if (component.total === 0) {
                 // No variables scanned yet - this is OK, just a warning
@@ -304,12 +305,16 @@ class ConfigurationReadinessService {
                 component.configured = true;
                 logger.info(`[READINESS] ⚠️ No variables detected (template not scanned yet)`);
             } else {
-                // Check each variable for blank values
+                // ✨ FIX: Iterate over DEFINITIONS and check if each has a VALUE
                 let variablesWithValues = 0;
                 let variablesBlank = 0;
                 
-                variableKeys.forEach(varKey => {
+                variableDefinitions.forEach(definition => {
+                    const varKey = definition.key;
+                    
+                    // ✨ FIX: Look up value in VALUES Map using the definition key
                     const value = variablesObj[varKey];
+                    
                     // Check if value is truly filled (not empty, not whitespace, not placeholder)
                     const valueStr = value ? String(value).trim() : '';
                     const lowerValue = valueStr.toLowerCase();
@@ -330,7 +335,8 @@ class ConfigurationReadinessService {
                         variablesBlank++;
                         component.blank.push({
                             key: varKey,
-                            label: varKey
+                            label: definition.label || varKey,
+                            category: definition.category || 'General'
                         });
                     }
                 });
