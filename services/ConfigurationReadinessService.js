@@ -312,9 +312,17 @@ class ConfigurationReadinessService {
                     const value = variablesObj[varKey];
                     // Check if value is truly filled (not empty, not whitespace, not placeholder)
                     const valueStr = value ? String(value).trim() : '';
-                    const hasValue = valueStr.length > 0 && 
-                                     !valueStr.startsWith('e.g.,') && // Not placeholder text
-                                     valueStr !== 'e.g.';
+                    const lowerValue = valueStr.toLowerCase();
+                    
+                    // Detect placeholder patterns (case-insensitive)
+                    const isPlaceholder = lowerValue.startsWith('e.g') ||      // e.g., e.g., E.g., etc.
+                                          lowerValue.startsWith('ex.') ||      // ex., example
+                                          lowerValue.startsWith('example') ||
+                                          valueStr === '(empty)' ||
+                                          valueStr === 'N/A' ||
+                                          lowerValue === 'n/a';
+                    
+                    const hasValue = valueStr.length > 0 && !isPlaceholder;
                     
                     if (hasValue) {
                         variablesWithValues++;
