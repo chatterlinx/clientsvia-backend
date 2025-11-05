@@ -951,12 +951,28 @@ Why did Tier 1 fail? What should be added to improve matching?`;
         console.log('🔵 [CHECKPOINT - SAVE] Saving analysis to database...');
         
         try {
+            // ============================================
+            // 🛡️ NORMALIZE LLM ANALYSIS DATA
+            // ============================================
+            // The LLM might return lowercase enum values (e.g., "high" instead of "HIGH")
+            // Normalize to match Mongoose schema enums
+            const normalizedLLMAnalysis = { ...data.llmAnalysis };
+            
+            if (normalizedLLMAnalysis.edgeCases && Array.isArray(normalizedLLMAnalysis.edgeCases)) {
+                normalizedLLMAnalysis.edgeCases = normalizedLLMAnalysis.edgeCases.map(edge => ({
+                    ...edge,
+                    likelihood: edge.likelihood ? edge.likelihood.toUpperCase() : 'MEDIUM'
+                }));
+                
+                console.log('✅ [CHECKPOINT - SAVE] Normalized', normalizedLLMAnalysis.edgeCases.length, 'edge case likelihood values');
+            }
+            
             const analysis = await TestPilotAnalysis.create({
                 templateId: data.templateId,
                 testPhrase: data.testPhrase,
                 intelligenceMode: data.intelligenceMode,
                 tierResults: data.tierResults,
-                llmAnalysis: data.llmAnalysis,
+                llmAnalysis: normalizedLLMAnalysis,
                 suggestions: data.suggestions,
                 suggestionsSummary: {
                     total: data.suggestions.length,
