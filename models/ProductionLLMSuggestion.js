@@ -59,13 +59,24 @@ const ProductionLLMSuggestionSchema = new mongoose.Schema({
         description: 'Company name (denormalized for fast display)'
     },
     
-    // 🎯 TEST PILOT INTEGRATION (Phase 1)
+    // 🎯 TEST PILOT INTEGRATION (Phase 1 + Enhanced)
     callSource: {
         type: String,
-        enum: ['company-test', 'production'],
+        enum: ['template-test', 'company-test', 'production'],
         required: true,
         index: true,
-        description: 'Whether this suggestion came from Test Pilot testing or real production calls'
+        description: 'Call source: template-test (Global AI Brain), company-test (Test Pilot), or production (real customers)'
+    },
+    
+    callId: {
+        type: String,
+        index: true,
+        description: 'Internal call/session ID for this conversation'
+    },
+    
+    turnIndex: {
+        type: Number,
+        description: 'Which turn in the conversation triggered Tier 3 (1-indexed)'
     },
     
     // ========================================================================
@@ -100,6 +111,11 @@ const ProductionLLMSuggestionSchema = new mongoose.Schema({
     targetScenario: {
         type: String,
         description: 'Which scenario this should be added to (if applicable)'
+    },
+    
+    scenarioId: {
+        type: String,
+        description: 'Scenario ObjectId (if scenario was matched)'
     },
     
     confidence: {
@@ -145,6 +161,26 @@ const ProductionLLMSuggestionSchema = new mongoose.Schema({
         description: 'Tier 2 confidence score for this phrase (failed to match)'
     },
     
+    tier1Threshold: {
+        type: Number,
+        description: 'Tier 1 threshold configured at runtime (for context)'
+    },
+    
+    tier2Threshold: {
+        type: Number,
+        description: 'Tier 2 threshold configured at runtime (for context)'
+    },
+    
+    rootCauseReason: {
+        type: String,
+        description: 'LLM-generated explanation of why Tier 3 was needed and what to fix'
+    },
+    
+    fullCallTranscript: {
+        type: String,
+        description: 'Full or condensed call transcript for context'
+    },
+    
     llmResponse: {
         type: String,
         description: 'What the LLM actually responded with'
@@ -178,6 +214,11 @@ const ProductionLLMSuggestionSchema = new mongoose.Schema({
         required: true,
         min: 0,
         description: 'Cost of this LLM call in USD (e.g., 0.08 = 8 cents)'
+    },
+    
+    tokens: {
+        type: Number,
+        description: 'Total token count for this LLM call (prompt + completion)'
     },
     
     estimatedMonthlySavings: {

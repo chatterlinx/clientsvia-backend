@@ -296,54 +296,110 @@ class IntelligentRouter {
                     patternsLearned: result.patternsLearned.length
                 });
                 
-                // 🎯 Phase 4: Log to LLM Learning System
+                // 🎯 Phase 4: Log to LLM Learning System (Enhanced with AI Analysis)
                 try {
                     const ProductionLLMSuggestion = require('../models/ProductionLLMSuggestion');
-                    const callSource = context.callSource || 'production'; // From callState
+                    const { generateSuggestionAnalysis, generateBasicSuggestion } = require('./LearningAnalyzer');
+                    const Tier3LLMFallback = require('./Tier3LLMFallback');
                     
-                    // Create suggestion record for LLM Learning Console
+                    const callSource = context.callSource || 'production'; // 'template-test' | 'company-test' | 'production'
+                    
+                    // Get thresholds from context or use defaults
+                    const tier1Threshold = context.intelligenceConfig?.thresholds?.tier1 ?? this.config.defaultTier1Threshold;
+                    const tier2Threshold = context.intelligenceConfig?.thresholds?.tier2 ?? this.config.defaultTier2Threshold;
+                    
+                    // Generate AI analysis of why Tier 3 was needed
+                    let analysis;
+                    try {
+                        analysis = await generateSuggestionAnalysis({
+                            userText: callerInput,
+                            tier1Score: result.tier1Result?.confidence || 0,
+                            tier2Score: result.tier2Result?.confidence || 0,
+                            tier1Threshold,
+                            tier2Threshold,
+                            matchedScenario: result.scenario,
+                            templateName: template.name,
+                            callLLM: Tier3LLMFallback.callLLM.bind(Tier3LLMFallback) // Use existing LLM gateway
+                        });
+                    } catch (analysisError) {
+                        logger.warn('[LLM LEARNING] AI analysis failed, using basic suggestion:', analysisError.message);
+                        analysis = generateBasicSuggestion({
+                            userText: callerInput,
+                            tier1Score: result.tier1Result?.confidence || 0,
+                            tier2Score: result.tier2Result?.confidence || 0,
+                            tier1Threshold,
+                            tier2Threshold,
+                            matchedScenario: result.scenario
+                        });
+                    }
+                    
+                    // Create enriched suggestion record
                     await ProductionLLMSuggestion.create({
+                        // IDs & names
                         templateId: template._id,
                         templateName: template.name,
                         companyId: company?._id || null,
                         companyName: company?.companyName || company?.businessName || 'Unknown',
-                        callSource,  // 'company-test' | 'production'
                         
-                        // Suggestion details (simplified for now)
-                        suggestionType: 'trigger',  // Default to trigger type
-                        suggestion: `Add missing trigger patterns for: "${callerInput.substring(0, 100)}"`,
-                        suggestedValue: callerInput.substring(0, 100),
-                        targetCategory: result.scenario?.categoryName || 'General',
-                        targetScenario: result.scenario?.name || 'Unknown',
-                        confidence: result.confidence,
-                        priority: result.confidence > 0.8 ? 'high' : (result.confidence > 0.6 ? 'medium' : 'low'),
+                        // Call source tracking (3 modes)
+                        callSource,  // 'template-test' | 'company-test' | 'production'
+                        callId: context.callId || callId || null,
+                        turnIndex: context.turnIndex || null,
+                        
+                        // AI-generated suggestion
+                        suggestionType: analysis.type,
+                        suggestion: analysis.reason,
+                        suggestedValue: Array.isArray(analysis.changes) 
+                            ? analysis.changes.join(', ') 
+                            : String(analysis.changes || callerInput.substring(0, 100)),
+                        
+                        // Target location
+                        targetCategory: result.scenario?.categoryName || null,
+                        targetScenario: result.scenario?.name || null,
+                        scenarioId: result.scenario?._id?.toString() || null,
+                        
+                        // Confidence & priority from AI analysis
+                        confidence: analysis.confidence || result.confidence,
+                        priority: analysis.priority || (result.confidence > 0.8 ? 'high' : 'medium'),
                         
                         // Context from call
                         customerPhrase: callerInput,
                         tier1Score: result.tier1Result?.confidence || 0,
                         tier2Score: result.tier2Result?.confidence || 0,
-                        llmResponse: result.response,
-                        callDate: new Date(),
+                        tier1Threshold,
+                        tier2Threshold,
                         
-                        // Cost tracking
+                        // AI analysis result
+                        rootCauseReason: analysis.reason,
+                        
+                        // LLM response
+                        llmResponse: result.response,
+                        fullCallTranscript: context.transcript || context.fullCallTranscript || '',
+                        
+                        // Cost & token tracking
                         llmModel: result.tier3Result.llmModel || 'gpt-4o',
                         cost: result.cost.tier3 || 0,
+                        tokens: result.tier3Result.tokens || null,
                         
-                        // Status
+                        // Metadata
+                        callDate: new Date(),
                         status: 'pending'
                     });
                     
-                    // 🔍 TASK 5: Clear log marker for manual verification
+                    // 🔍 Clear log marker for manual verification
                     console.log('[TIER3 LLM LOG]', {
                         companyId: company?._id?.toString() || 'Unknown',
                         callSource,
                         templateId: template._id.toString(),
+                        suggestionType: analysis.type,
                         costUsd: result.cost.tier3 || 0,
                     });
                     
-                    logger.info('📝 [LLM LEARNING] Tier 3 usage logged', {
+                    logger.info('📝 [LLM LEARNING] Tier 3 usage logged with AI analysis', {
                         routingId,
                         callSource,
+                        suggestionType: analysis.type,
+                        priority: analysis.priority,
                         cost: `$${result.cost.tier3.toFixed(4)}`
                     });
                 } catch (loggingError) {

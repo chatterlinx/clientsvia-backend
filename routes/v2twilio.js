@@ -583,18 +583,34 @@ router.post('/voice', async (req, res) => {
     logger.security(`✅ [SPAM FILTER] Call from ${callerNumber} passed all security checks`);
 
     // ============================================================================
-    // 🎯 CALL SOURCE DETECTION (Phase 1: Test Pilot Implementation)
+    // 🎯 CALL SOURCE DETECTION (Phase 2: 3-Mode System)
     // ============================================================================
-    // Determine if this is a test call or production call
-    // This context is passed to the AI runtime for proper 3-tier routing
-    const callSource = company.isTestMode ? 'company-test' : 'production';
-    const isTest = callSource === 'company-test';
+    // Determine call source: template-test | company-test | production
+    // This context is passed to the AI runtime for proper 3-tier routing and LLM Learning
+    let callSource = 'production';
+    let isTest = false;
     
-    // 🔍 TASK 5: Clear log marker for manual verification
+    if (company.isGlobalTestTemplate) {
+      // Global AI Brain template testing (isolated template, no company)
+      callSource = 'template-test';
+      isTest = true;
+    } else if (company.isTestMode) {
+      // Company Test Mode (real company setup, test phone number)
+      callSource = 'company-test';
+      isTest = true;
+    } else {
+      // Real customer calling production number
+      callSource = 'production';
+      isTest = false;
+    }
+    
+    // 🔍 Clear log marker for manual verification
     console.log('[CALL SOURCE]', {
       inboundNumber: calledNumber,
       callSource,
-      companyId: company._id.toString(),
+      companyId: company._id?.toString() || 'template-test',
+      isGlobalTest: company.isGlobalTestTemplate || false,
+      isCompanyTest: company.isTestMode || false
     });
     
     logger.info(`🎯 [CALL SOURCE] Detected: ${callSource.toUpperCase()} | Test Mode: ${isTest}`);
