@@ -7567,7 +7567,11 @@ Continue?`;
                     currentName.textContent = company.name || company.companyName || company.businessName || 'Unknown Company';
                 }
                 if (currentId) {
-                    currentId.textContent = `ID: ${companyId.substring(0, 8)}... • Template: ${company.template.name}`;
+                    // Updated to use new templates structure (plural)
+                    const templateInfo = company.templates?.hasTemplates 
+                        ? company.templates.names 
+                        : 'No templates';
+                    currentId.textContent = `ID: ${companyId.substring(0, 8)}... • Templates: ${templateInfo}`;
                 }
                 
                 console.log('✅ [COMPANY TEST] Company details loaded - Name:', company.name, 'ID:', companyId);
