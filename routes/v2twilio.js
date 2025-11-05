@@ -890,6 +890,11 @@ router.post('/voice', async (req, res) => {
         gather.say(escapeTwiML(fallbackGreeting));
       }
       
+      // ✅ FIX: Add fallback if no speech detected (gather timeout)
+      logger.debug(`[GATHER FALLBACK] Setting up timeout fallback...`);
+      twiml.say("I didn't hear anything. Please try calling back later.");
+      twiml.hangup();
+      
     } catch (v2Error) {
       logger.error(`[V2 AGENT ERROR] Failed to initialize V2 Agent: ${v2Error.message}`);
       logger.debug(`[FALLBACK] Using simple fallback for call`);
@@ -907,6 +912,10 @@ router.post('/voice', async (req, res) => {
         speechModel: 'phone_call'
       });
       gather.say(escapeTwiML(fallbackGreeting));
+      
+      // ✅ FIX: Add fallback if no speech detected (gather timeout)
+      twiml.say("I didn't hear anything. Please try calling back later.");
+      twiml.hangup();
     }
 
     res.type('text/xml');
