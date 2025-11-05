@@ -7519,8 +7519,8 @@ Continue?`;
                     const topSelector = document.getElementById('top-company-selector-dropdown');
                     if (topSelector) {
                         topSelector.value = config.activeCompanyId;
-                        // Load company details
-                        await onCompanyTestSelected();
+                        // Load company details with RICH rendering (templates, stats, etc.)
+                        await onCompanySelected(config.activeCompanyId);
                     }
                 }
                 
