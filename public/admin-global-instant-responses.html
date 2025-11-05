@@ -2137,6 +2137,44 @@
                                 </div>
                             </div>
                             
+                            <!-- Company-Specific Configuration Stats -->
+                            <div id="company-config-stats" class="mt-6">
+                                <div class="flex items-center gap-2 mb-3">
+                                    <i class="fas fa-cog text-blue-600 text-lg"></i>
+                                    <h3 class="text-lg font-bold text-gray-800">Company Customizations</h3>
+                                    <span class="text-xs text-gray-500 ml-2">(Overrides from Templates)</span>
+                                </div>
+                                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                    <!-- Custom Fillers Card -->
+                                    <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 border-2 border-indigo-300 rounded-lg p-4 text-center hover:shadow-lg transition-all">
+                                        <div class="text-3xl font-bold text-indigo-600" id="custom-fillers-count">0</div>
+                                        <div class="text-xs text-gray-700 font-semibold mt-1">Custom Fillers</div>
+                                        <div class="text-[10px] text-gray-500 mt-0.5">Beyond Templates</div>
+                                    </div>
+                                    
+                                    <!-- Disabled Scenarios Card -->
+                                    <div class="bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-300 rounded-lg p-4 text-center hover:shadow-lg transition-all">
+                                        <div class="text-3xl font-bold text-red-600" id="disabled-scenarios-count">0</div>
+                                        <div class="text-xs text-gray-700 font-semibold mt-1">Disabled Scenarios</div>
+                                        <div class="text-[10px] text-gray-500 mt-0.5">Won't Respond</div>
+                                    </div>
+                                    
+                                    <!-- Variables Card -->
+                                    <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-300 rounded-lg p-4 text-center hover:shadow-lg transition-all">
+                                        <div class="text-3xl font-bold text-emerald-600" id="variables-count">0</div>
+                                        <div class="text-xs text-gray-700 font-semibold mt-1">Variables</div>
+                                        <div class="text-[10px] text-gray-500 mt-0.5">Placeholders Set</div>
+                                    </div>
+                                    
+                                    <!-- Synonyms Card (Coming Soon) -->
+                                    <div class="bg-gradient-to-br from-amber-50 to-amber-100 border-2 border-amber-300 rounded-lg p-4 text-center hover:shadow-lg transition-all opacity-50">
+                                        <div class="text-3xl font-bold text-amber-600" id="synonyms-count">—</div>
+                                        <div class="text-xs text-gray-700 font-semibold mt-1">Custom Synonyms</div>
+                                        <div class="text-[10px] text-amber-600 mt-0.5 font-bold">Coming Soon</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
                         </div>
                         
                         <!-- Test Call Greeting -->
@@ -7822,6 +7860,18 @@ Continue?`;
                 
                 // Render template cards
                 renderTemplateCards(company.templates);
+                
+                // Update company customization stats
+                if (company.customizations) {
+                    document.getElementById('custom-fillers-count').textContent = company.customizations.customFillers?.count || 0;
+                    document.getElementById('disabled-scenarios-count').textContent = company.customizations.disabledScenarios?.count || 0;
+                    document.getElementById('variables-count').textContent = company.customizations.variables?.count || 0;
+                } else {
+                    // Default to 0 if no customizations data
+                    document.getElementById('custom-fillers-count').textContent = 0;
+                    document.getElementById('disabled-scenarios-count').textContent = 0;
+                    document.getElementById('variables-count').textContent = 0;
+                }
                 
                 console.log('✅ [COMPANY SELECTOR] Rich details rendered');
                 

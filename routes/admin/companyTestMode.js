@@ -309,10 +309,36 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
         // ✅ TEMPLATE-BASED ARCHITECTURE: All content comes from templates
         // Company Q&A, Trade Q&A, Placeholders are now part of templates
         // Companies just reference templates via aiAgentSettings.templateReferences
+        
+        // Calculate company-specific customizations (overrides from templates)
+        const customFillers = company.aiAgentSettings?.fillerWords?.custom || [];
+        const disabledScenarios = (company.aiAgentSettings?.scenarioControls || [])
+            .filter(sc => sc.isEnabled === false);
+        const variables = company.aiAgentSettings?.variables || {};
+        const variablesCount = variables instanceof Map ? variables.size : Object.keys(variables).length;
+        
         const companyInfo = {
             _id: company._id,
             name: company.companyName || company.businessName,
-            templates: loadedTemplates
+            templates: loadedTemplates,
+            customizations: {
+                customFillers: {
+                    count: customFillers.length,
+                    items: customFillers
+                },
+                disabledScenarios: {
+                    count: disabledScenarios.length,
+                    items: disabledScenarios.map(sc => ({
+                        templateId: sc.templateId,
+                        scenarioId: sc.scenarioId,
+                        disabledAt: sc.disabledAt
+                    }))
+                },
+                variables: {
+                    count: variablesCount,
+                    configured: variablesCount > 0
+                }
+            }
         };
         
         logger.info(`✅ [TEST PILOT] Company details loaded: ${companyInfo.name}`);
