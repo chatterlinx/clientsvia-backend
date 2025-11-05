@@ -16509,6 +16509,9 @@ ${JSON.stringify(healthData, null, 2)}
             // 🔧 Load templates into selector on page load
             await loadTemplatesIntoSelector();
             
+            // 🔧 Load Twilio test configuration (phone number, credentials, etc.)
+            await loadTwilioTestConfig();
+            
             // 🔧 Load company list and test mode configuration
             await loadCompanyTestModeConfig();
             await loadTopCompanyList();
