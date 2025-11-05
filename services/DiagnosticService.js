@@ -444,10 +444,13 @@ class DiagnosticService {
         const checks = [];
         let score = 0;
         
+        // ✨ FIX: Check twilioConfig object (CORRECT location in schema)
+        const twilioConfig = company.twilioConfig || {};
+        
         // ────────────────────────────────────────────────────────────────────
         // CHECK 1: Twilio Account SID
         // ────────────────────────────────────────────────────────────────────
-        const accountSid = company.twilioAccountSid;
+        const accountSid = twilioConfig.accountSid;
         
         if (!accountSid) {
             checks.push({
@@ -461,8 +464,8 @@ class DiagnosticService {
                 impact: ['Cannot receive calls', 'Cannot send SMS', 'AI Agent non-functional'],
                 codeReference: {
                     file: 'models/v2Company.js',
-                    line: 800,
-                    path: 'twilioAccountSid'
+                    line: 44,
+                    path: 'twilioConfig.accountSid'
                 },
                 fix: {
                     action: 'manual',
@@ -503,7 +506,7 @@ class DiagnosticService {
         // ────────────────────────────────────────────────────────────────────
         // CHECK 2: Twilio Auth Token
         // ────────────────────────────────────────────────────────────────────
-        const authToken = company.twilioAuthToken;
+        const authToken = twilioConfig.authToken;
         
         if (!authToken) {
             checks.push({
@@ -517,8 +520,8 @@ class DiagnosticService {
                 impact: ['Cannot authenticate with Twilio', 'API calls will fail'],
                 codeReference: {
                     file: 'models/v2Company.js',
-                    line: 801,
-                    path: 'twilioAuthToken'
+                    line: 45,
+                    path: 'twilioConfig.authToken'
                 },
                 fix: {
                     action: 'manual',
@@ -558,7 +561,12 @@ class DiagnosticService {
         // ────────────────────────────────────────────────────────────────────
         // CHECK 3: Twilio Phone Number
         // ────────────────────────────────────────────────────────────────────
-        const phoneNumber = company.twilioPhoneNumber;
+        // Check both new multi-phone system and legacy single number
+        const phoneNumbers = twilioConfig.phoneNumbers || [];
+        const legacyPhone = twilioConfig.phoneNumber;
+        const phoneNumber = phoneNumbers.length > 0 
+            ? phoneNumbers[0].phoneNumber 
+            : legacyPhone;
         
         if (!phoneNumber) {
             checks.push({
@@ -572,8 +580,8 @@ class DiagnosticService {
                 impact: ['No incoming call routing', 'Cannot test AI Agent'],
                 codeReference: {
                     file: 'models/v2Company.js',
-                    line: 802,
-                    path: 'twilioPhoneNumber'
+                    line: 49,
+                    path: 'twilioConfig.phoneNumbers / twilioConfig.phoneNumber'
                 },
                 fix: {
                     action: 'manual',
@@ -630,7 +638,10 @@ class DiagnosticService {
             },
             metadata: {
                 accountSid: accountSid ? `${accountSid.substring(0, 10)}...` : null,
-                phoneNumber: phoneNumber || null
+                phoneNumber: phoneNumber || null,
+                phoneNumbersCount: phoneNumbers.length,
+                hasLegacyPhone: Boolean(legacyPhone),
+                hasMultiPhone: phoneNumbers.length > 0
             }
         };
     }
