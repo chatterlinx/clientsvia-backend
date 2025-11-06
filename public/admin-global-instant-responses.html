@@ -8038,7 +8038,9 @@ Continue?`;
                 
                 // Set enable Tier 3 toggle (default: true)
                 if (enableTier3Checkbox) {
-                    enableTier3Checkbox.checked = intelligence.thresholds?.enableTier3 !== false; // Default true
+                    const tier3Value = intelligence.thresholds?.enableTier3 !== false; // Default true
+                    enableTier3Checkbox.checked = tier3Value;
+                    console.log('📥 [COMPANY INTELLIGENCE] Loaded Tier 3 from database:', tier3Value, '(type:', typeof intelligence.thresholds?.enableTier3, ')');
                     updateTier3Status(); // Update card visual state
                 }
                 
@@ -8205,6 +8207,9 @@ Continue?`;
                     neverWarmupCategories: parseCategories(document.getElementById('company-warmup-never-categories')?.value)
                 };
                 
+                const tier3Enabled = document.getElementById('company-enable-tier3')?.checked;
+                
+                console.log('📤 [COMPANY INTELLIGENCE] Tier 3 checkbox state:', tier3Enabled, '(type:', typeof tier3Enabled, ')');
                 console.log('📤 [COMPANY INTELLIGENCE] Warmup checkbox state:', warmupEnabled, '(type:', typeof warmupEnabled, ')');
                 console.log('📤 [COMPANY INTELLIGENCE] Sending settings (including warmup):', settings);
                 console.log('📤 [COMPANY INTELLIGENCE] Request URL:', `/api/company/${companyId}/intelligence`);
@@ -8235,6 +8240,7 @@ Continue?`;
                 // Show prominent success message
                 showToast('success', '✅ Production Intelligence settings saved!');
                 alert('✅ SUCCESS!\n\nProduction Intelligence settings have been saved to the database.\n\n' + 
+                      '3-Tier System: ' + (tier3Enabled ? 'ENABLED ✅' : 'DISABLED ❌') + '\n' +
                       'Warmup Status: ' + (warmupEnabled ? 'ENABLED ✅' : 'DISABLED ❌'));
                 
             } catch (error) {
