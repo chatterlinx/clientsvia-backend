@@ -906,6 +906,38 @@ const companySchema = new mongoose.Schema({
     },
     
     // ============================================================================
+    // 🚀 INTELLIGENCE MODE SELECTOR - Global vs Custom Settings
+    // ============================================================================
+    // PURPOSE: Enforce mutually exclusive intelligence configuration modes
+    // OPTIONS: 
+    //   - 'global': Uses platform-wide AdminSettings (99% of companies)
+    //   - 'custom': Uses company-specific aiAgentLogic (premium feature)
+    // PROTECTION: Enum validation + audit logging on mode switches
+    // BUSINESS LOGIC:
+    //   - When 'global': aiAgentLogic is ignored, AdminSettings used
+    //   - When 'custom': Company's own aiAgentLogic used independently
+    // AUDIT: All mode switches logged with admin email + timestamp
+    // ============================================================================
+    intelligenceMode: {
+        type: String,
+        enum: {
+            values: ['global', 'custom'],
+            message: 'Intelligence mode must be either "global" or "custom"'
+        },
+        default: 'global',
+        required: true,
+        index: true  // Fast queries for "show all global companies"
+    },
+    
+    // Metadata for intelligence mode switches
+    intelligenceModeHistory: [{
+        mode: { type: String, enum: ['global', 'custom'], required: true },
+        switchedBy: { type: String, trim: true, required: true }, // Admin email
+        switchedAt: { type: Date, default: Date.now },
+        reason: { type: String, trim: true, default: null }
+    }],
+    
+    // ============================================================================
     // 🚀 AI AGENT SETTINGS - REFERENCE-BASED TEMPLATE SYSTEM
     // ============================================================================
     // PURPOSE: Multi-template support with smart placeholder management

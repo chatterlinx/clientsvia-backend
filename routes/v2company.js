@@ -2240,4 +2240,217 @@ router.delete('/company/:companyId/response-templates/:templateId', authenticate
 
 logger.debug('[INIT] ✅ V3 AI Response System routes added (Instant Responses + Templates piggybacked!)');
 
+// ============================================================================
+// 🚀 INTELLIGENCE MODE SWITCHER - Global ↔ Custom
+// ============================================================================
+// ENDPOINT: PATCH /api/company/:companyId/intelligence-mode
+// AUTH: Required (JWT + Admin)
+// PURPOSE: Switch company between global (AdminSettings) and custom (aiAgentLogic) modes
+// PROTECTION: Typed confirmation required, full audit trail, cache invalidation
+// ============================================================================
+router.patch('/company/:companyId/intelligence-mode', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    const { newMode, confirmation, reason, adminEmail } = req.body;
+    
+    const startTime = Date.now();
+    
+    logger.security(`🔄 [INTELLIGENCE MODE SWITCH] Company: ${companyId}, Target Mode: ${newMode}`);
+    
+    // ====================================================================
+    // VALIDATION LAYER
+    // ====================================================================
+    
+    if (!ObjectId.isValid(companyId)) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'Invalid company ID format' 
+        });
+    }
+    
+    // Validate new mode
+    const validModes = ['global', 'custom'];
+    if (!newMode || !validModes.includes(newMode)) {
+        return res.status(400).json({ 
+            success: false, 
+            message: `Invalid intelligence mode. Must be one of: ${validModes.join(', ')}` 
+        });
+    }
+    
+    // Validate typed confirmation
+    const expectedConfirmations = {
+        global: 'SWITCH TO GLOBAL',
+        custom: 'SWITCH TO CUSTOM'
+    };
+    
+    const expectedConfirmation = expectedConfirmations[newMode];
+    
+    if (!confirmation || confirmation.trim().toUpperCase() !== expectedConfirmation) {
+        return res.status(400).json({ 
+            success: false, 
+            message: `Invalid confirmation. You must type exactly: "${expectedConfirmation}"`,
+            expected: expectedConfirmation
+        });
+    }
+    
+    // Validate admin email
+    if (!adminEmail || !adminEmail.includes('@')) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'Valid admin email is required for audit trail' 
+        });
+    }
+    
+    // ====================================================================
+    // EXECUTE MODE SWITCH
+    // ====================================================================
+    
+    try {
+        const company = await Company.findById(companyId);
+        
+        if (!company) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Company not found' 
+            });
+        }
+        
+        const currentMode = company.intelligenceMode || 'global';
+        
+        // Prevent redundant switch
+        if (currentMode === newMode) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `Company is already in ${newMode} mode`,
+                currentMode
+            });
+        }
+        
+        logger.info(`🔄 [MODE SWITCH] ${company.companyName}: ${currentMode} → ${newMode}`);
+        
+        // ====================================================================
+        // SPECIAL LOGIC FOR GLOBAL → CUSTOM
+        // ====================================================================
+        if (newMode === 'custom' && currentMode === 'global') {
+            logger.info(`📋 [MODE SWITCH] Creating custom aiAgentLogic from AdminSettings template...`);
+            
+            // Load AdminSettings to copy global config
+            const AdminSettings = require('../models/AdminSettings');
+            const adminSettings = await AdminSettings.findOne();
+            
+            if (adminSettings && adminSettings.productionIntelligence) {
+                // Copy global settings to company's aiAgentLogic
+                company.aiAgentLogic = company.aiAgentLogic || {};
+                company.aiAgentLogic.thresholds = adminSettings.productionIntelligence.thresholds;
+                company.aiAgentLogic.llmConfig = adminSettings.productionIntelligence.llmConfig;
+                company.aiAgentLogic.warmup = adminSettings.productionIntelligence.warmup;
+                company.aiAgentLogic.lastUpdated = new Date();
+                
+                logger.info(`✅ [MODE SWITCH] Custom aiAgentLogic initialized from global template`);
+            } else {
+                logger.warn(`⚠️ [MODE SWITCH] No AdminSettings found, using default aiAgentLogic`);
+            }
+        }
+        
+        // ====================================================================
+        // SPECIAL LOGIC FOR CUSTOM → GLOBAL
+        // ====================================================================
+        if (newMode === 'global' && currentMode === 'custom') {
+            logger.info(`🗄️ [MODE SWITCH] Archiving custom aiAgentLogic settings...`);
+            
+            // Archive current custom settings (don't delete, allow restoration)
+            company.archivedAiAgentLogic = company.archivedAiAgentLogic || [];
+            company.archivedAiAgentLogic.push({
+                settings: company.aiAgentLogic,
+                archivedAt: new Date(),
+                archivedBy: adminEmail,
+                reason: reason || 'Switched to global mode'
+            });
+            
+            // Keep the aiAgentLogic but mark as archived
+            logger.info(`✅ [MODE SWITCH] Custom settings archived (can be restored later)`);
+        }
+        
+        // ====================================================================
+        // UPDATE INTELLIGENCE MODE
+        // ====================================================================
+        company.intelligenceMode = newMode;
+        
+        // Add to history for audit trail
+        if (!company.intelligenceModeHistory) {
+            company.intelligenceModeHistory = [];
+        }
+        
+        company.intelligenceModeHistory.push({
+            mode: newMode,
+            switchedBy: adminEmail,
+            switchedAt: new Date(),
+            reason: reason || null
+        });
+        
+        // Save company
+        await company.save();
+        
+        // ====================================================================
+        // CACHE INVALIDATION
+        // ====================================================================
+        await CacheHelper.clearCompanyCache(companyId);
+        
+        // Clear AI Agent Logic cache
+        const aiLoader = require('../src/config/aiLoader');
+        await aiLoader.invalidate(companyId);
+        
+        logger.info(`🗑️ [MODE SWITCH] Cache cleared for company: ${companyId}`);
+        
+        // ====================================================================
+        // AUDIT NOTIFICATION (P1 - Mode switches are critical)
+        // ====================================================================
+        await AdminNotificationService.logNotification({
+            type: 'intelligence_mode_switch',
+            severity: 'p1',
+            companyId,
+            companyName: company.companyName,
+            message: `Intelligence mode switched: ${currentMode} → ${newMode}`,
+            metadata: {
+                previousMode: currentMode,
+                newMode,
+                switchedBy: adminEmail,
+                reason: reason || 'Not specified',
+                timestamp: new Date().toISOString()
+            }
+        });
+        
+        logger.security(`✅ [MODE SWITCH COMPLETE] ${company.companyName} now in ${newMode} mode`);
+        
+        // ====================================================================
+        // SUCCESS RESPONSE
+        // ====================================================================
+        res.json({ 
+            success: true, 
+            message: `Intelligence mode switched to ${newMode}`,
+            data: {
+                companyId,
+                companyName: company.companyName,
+                previousMode: currentMode,
+                currentMode: newMode,
+                switchedBy: adminEmail,
+                switchedAt: new Date(),
+                reason: reason || null
+            },
+            meta: { 
+                responseTime: Date.now() - startTime 
+            }
+        });
+        
+    } catch (error) {
+        logger.error(`[MODE SWITCH ERROR] Error switching intelligence mode:`, error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to switch intelligence mode',
+            error: error.message 
+        });
+    }
+});
+
+logger.debug('[INIT] ✅ Intelligence Mode Switcher endpoint added');
+
 module.exports = router;

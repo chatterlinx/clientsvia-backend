@@ -456,6 +456,30 @@
         .badge-priority {
             @apply bg-yellow-100 text-yellow-700 border border-yellow-300;
         }
+        
+        /* ============================================================================
+         * MODAL ANIMATIONS - Smooth entrance/exit
+         * ============================================================================ */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        
+        @keyframes slideUp {
+            from { 
+                opacity: 0;
+                transform: translateY(20px); 
+            }
+            to { 
+                opacity: 1;
+                transform: translateY(0); 
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
@@ -2225,6 +2249,59 @@
         </button>
     </div>
     <!-- END SECTION 1: HEADER -->
+    
+    
+    <!-- ============================================================
+         SECTION 1.5: INTELLIGENCE MODE INDICATOR
+         ============================================================
+         Purpose: Clearly show if company is using GLOBAL or CUSTOM settings
+         Visual: Prominent badge with mode-specific styling and icon
+         Action: Button to switch between modes (with confirmation)
+         ============================================================ -->
+    <div id="company-intelligence-mode-indicator" 
+         class="mb-6 p-4 rounded-lg border-2"
+         data-section="mode-indicator"
+         data-intelligence-mode="global">
+        
+        <!-- Mode Badge Content -->
+        <div class="flex items-center justify-between">
+            
+            <!-- Left: Mode Icon + Status -->
+            <div class="flex items-center gap-3">
+                <!-- Mode Icon -->
+                <div id="mode-icon-container" 
+                     class="w-12 h-12 rounded-full flex items-center justify-center">
+                    <i id="mode-icon" class="text-white text-xl"></i>
+                </div>
+                
+                <!-- Mode Text -->
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span id="mode-badge-text" class="font-bold text-lg"></span>
+                        <span id="mode-subtitle" class="text-sm"></span>
+                    </div>
+                    <p id="mode-description" class="text-xs mt-1"></p>
+                </div>
+            </div>
+            
+            <!-- Right: Switch Button -->
+            <button id="switch-mode-btn" 
+                    onclick="showModeSwitchModal()" 
+                    class="px-4 py-2 rounded-lg font-semibold transition-all text-sm"
+                    data-action="switch-mode">
+                <i class="fas fa-exchange-alt mr-1"></i>
+                <span id="switch-btn-text">Switch Mode</span>
+            </button>
+        </div>
+        
+        <!-- Companies Affected Counter (only shown when in global mode) -->
+        <div id="global-companies-count" 
+             class="hidden mt-3 pt-3 border-t text-xs font-semibold">
+            <i class="fas fa-building mr-1"></i>
+            This company is 1 of <span id="global-companies-total" class="font-mono">0</span> companies using global settings
+        </div>
+    </div>
+    <!-- END SECTION 1.5: MODE INDICATOR -->
     
     
     <!-- ============================================================
@@ -8309,6 +8386,17 @@ Continue?`;
                 
                 console.log('✅ [COMPANY INTELLIGENCE] Loaded settings:', intelligence);
                 
+                // ============================================================
+                // UPDATE INTELLIGENCE MODE INDICATOR
+                // ============================================================
+                const intelligenceMode = company.intelligenceMode || 'global';
+                
+                // TODO: Fetch global companies count from backend
+                // For now, using placeholder count
+                const globalCompaniesCount = 187; // TODO: Replace with actual count from API
+                
+                updateIntelligenceModeIndicator(intelligenceMode, company, globalCompaniesCount);
+                
                 // Populate UI with settings
                 const enableTier3Checkbox = document.getElementById('company-enable-tier3');
                 const tier1Slider = document.getElementById('company-tier1-slider');
@@ -8871,6 +8959,290 @@ Continue?`;
             return betaModels.includes(modelName) || 
                    modelName.includes('preview') || 
                    modelName.includes('beta');
+        }
+        
+        /**
+         * ================================================================
+         * INTELLIGENCE MODE MANAGEMENT
+         * ================================================================
+         * Control global vs custom intelligence mode switching
+         */
+        
+        /**
+         * Update the visual mode indicator badge
+         * @param {string} mode - 'global' or 'custom'
+         * @param {Object} company - Company data including name
+         * @param {number} globalCompaniesCount - Total companies using global mode
+         */
+        function updateIntelligenceModeIndicator(mode, company, globalCompaniesCount = 0) {
+            const indicator = document.getElementById('company-intelligence-mode-indicator');
+            const iconContainer = document.getElementById('mode-icon-container');
+            const icon = document.getElementById('mode-icon');
+            const badgeText = document.getElementById('mode-badge-text');
+            const subtitle = document.getElementById('mode-subtitle');
+            const description = document.getElementById('mode-description');
+            const switchBtn = document.getElementById('switch-mode-btn');
+            const switchBtnText = document.getElementById('switch-btn-text');
+            const globalCountDiv = document.getElementById('global-companies-count');
+            const globalCountTotal = document.getElementById('global-companies-total');
+            
+            if (!indicator) return;
+            
+            // Set mode data attribute
+            indicator.setAttribute('data-intelligence-mode', mode);
+            
+            if (mode === 'global') {
+                // GLOBAL MODE STYLING
+                indicator.className = 'mb-6 p-4 rounded-lg border-2 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-400';
+                iconContainer.className = 'w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg';
+                icon.className = 'fas fa-globe text-white text-xl';
+                badgeText.textContent = '🌍 GLOBAL MODE';
+                badgeText.className = 'font-bold text-lg text-blue-800';
+                subtitle.textContent = '(using platform defaults)';
+                subtitle.className = 'text-sm text-blue-600';
+                description.textContent = 'This company inherits intelligence settings from global platform configuration. All updates to global settings will automatically apply here.';
+                description.className = 'text-xs mt-1 text-blue-700';
+                switchBtn.className = 'px-4 py-2 rounded-lg font-semibold transition-all text-sm bg-white hover:bg-blue-50 text-blue-700 border-2 border-blue-400';
+                switchBtnText.textContent = 'Switch to Custom';
+                
+                // Show global companies count
+                if (globalCountDiv && globalCountTotal) {
+                    globalCountTotal.textContent = globalCompaniesCount;
+                    globalCountDiv.className = 'mt-3 pt-3 border-t border-blue-300 text-xs font-semibold text-blue-700';
+                }
+                
+            } else if (mode === 'custom') {
+                // CUSTOM MODE STYLING
+                indicator.className = 'mb-6 p-4 rounded-lg border-2 bg-gradient-to-r from-purple-50 to-pink-50 border-purple-400';
+                iconContainer.className = 'w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-br from-purple-500 to-pink-600 shadow-lg';
+                icon.className = 'fas fa-cog text-white text-xl';
+                badgeText.textContent = '⚙️ CUSTOM MODE';
+                badgeText.className = 'font-bold text-lg text-purple-800';
+                subtitle.textContent = '(independent settings)';
+                subtitle.className = 'text-sm text-purple-600';
+                description.textContent = 'This company uses custom intelligence settings. Changes to global settings will NOT affect this company. All settings are managed independently.';
+                description.className = 'text-xs mt-1 text-purple-700';
+                switchBtn.className = 'px-4 py-2 rounded-lg font-semibold transition-all text-sm bg-white hover:bg-purple-50 text-purple-700 border-2 border-purple-400';
+                switchBtnText.textContent = 'Switch to Global';
+                
+                // Hide global companies count
+                if (globalCountDiv) {
+                    globalCountDiv.className = 'hidden';
+                }
+            }
+            
+            console.log(`🎨 [MODE INDICATOR] Updated to: ${mode.toUpperCase()}`);
+        }
+        
+        /**
+         * Show the mode switch confirmation modal
+         */
+        function showModeSwitchModal() {
+            const companyDropdown = document.getElementById('top-company-selector-dropdown');
+            const companyId = companyDropdown?.value;
+            
+            if (!companyId) {
+                showToast('error', 'Please select a company first');
+                return;
+            }
+            
+            // Get current mode from indicator
+            const indicator = document.getElementById('company-intelligence-mode-indicator');
+            const currentMode = indicator?.getAttribute('data-intelligence-mode') || 'global';
+            const newMode = currentMode === 'global' ? 'custom' : 'global';
+            
+            // Get company name from dropdown
+            const selectedOption = companyDropdown.options[companyDropdown.selectedIndex];
+            const companyName = selectedOption?.text || 'Unknown Company';
+            
+            // Determine confirmation text and warning message
+            let confirmText, modalTitle, modalWarning, confirmationPhrase;
+            
+            if (newMode === 'custom') {
+                modalTitle = '⚠️ CRITICAL: Switch to Custom Intelligence Settings?';
+                modalWarning = `
+                    <strong>Company:</strong> ${companyName}<br>
+                    <strong>Current Mode:</strong> GLOBAL (using platform defaults)<br>
+                    <strong>New Mode:</strong> CUSTOM (independent settings)<br><br>
+                    
+                    ⚠️ <strong>This company will NO LONGER receive automatic updates when global intelligence settings are improved.</strong><br><br>
+                    
+                    A copy of current global settings will be created for this company to start with.
+                `;
+                confirmationPhrase = 'SWITCH TO CUSTOM';
+            } else {
+                modalTitle = '⚠️ CRITICAL: Switch to Global Intelligence Settings?';
+                modalWarning = `
+                    <strong>Company:</strong> ${companyName}<br>
+                    <strong>Current Mode:</strong> CUSTOM (independent settings)<br>
+                    <strong>New Mode:</strong> GLOBAL (platform defaults)<br><br>
+                    
+                    ⚠️ <strong>All custom intelligence settings for this company will be ARCHIVED (not deleted, can be restored).</strong><br><br>
+                    
+                    This company will automatically receive platform-wide intelligence updates going forward.
+                `;
+                confirmationPhrase = 'SWITCH TO GLOBAL';
+            }
+            
+            // Create modal HTML
+            const modalHTML = `
+                <div id="mode-switch-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="animation: fadeIn 0.2s;">
+                    <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 p-6" style="animation: slideUp 0.3s;">
+                        
+                        <!-- Modal Header -->
+                        <div class="flex items-start gap-3 mb-4">
+                            <div class="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                <i class="fas fa-exclamation-triangle text-white text-xl"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="text-xl font-bold text-gray-900">${modalTitle}</h3>
+                            </div>
+                        </div>
+                        
+                        <!-- Warning Content -->
+                        <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded mb-4">
+                            <p class="text-sm text-amber-900 leading-relaxed">
+                                ${modalWarning}
+                            </p>
+                        </div>
+                        
+                        <!-- Typed Confirmation -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-bold text-gray-800 mb-2">
+                                Type "<span class="text-red-600">${confirmationPhrase}</span>" to confirm:
+                            </label>
+                            <input type="text" 
+                                   id="mode-switch-confirmation-input" 
+                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm font-mono"
+                                   placeholder="${confirmationPhrase}"
+                                   autocomplete="off">
+                            <p id="mode-switch-error" class="hidden text-xs text-red-600 mt-1 font-semibold">
+                                ❌ Confirmation text does not match. Please type exactly: ${confirmationPhrase}
+                            </p>
+                        </div>
+                        
+                        <!-- Optional Reason -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-bold text-gray-800 mb-2">
+                                Reason for switch (optional):
+                            </label>
+                            <textarea id="mode-switch-reason" 
+                                      class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
+                                      rows="2"
+                                      placeholder="e.g., Premium client needs custom warmup settings"></textarea>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="flex items-center justify-end gap-3">
+                            <button onclick="closeModeSwitchModal()" 
+                                    class="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition-all">
+                                Cancel
+                            </button>
+                            <button onclick="confirmModeSwitch('${newMode}', '${companyName}', '${confirmationPhrase}')" 
+                                    class="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg font-semibold transition-all shadow-lg">
+                                <i class="fas fa-exchange-alt mr-1"></i>
+                                Confirm Switch
+                            </button>
+                        </div>
+                        
+                    </div>
+                </div>
+            `;
+            
+            // Add modal to page
+            const modalContainer = document.getElementById('modal-container') || document.body;
+            const modalDiv = document.createElement('div');
+            modalDiv.innerHTML = modalHTML;
+            modalContainer.appendChild(modalDiv.firstElementChild);
+            
+            // Focus on confirmation input
+            setTimeout(() => {
+                document.getElementById('mode-switch-confirmation-input')?.focus();
+            }, 100);
+        }
+        
+        /**
+         * Close the mode switch modal
+         */
+        function closeModeSwitchModal() {
+            const modal = document.getElementById('mode-switch-modal');
+            if (modal) {
+                modal.style.animation = 'fadeOut 0.2s';
+                setTimeout(() => modal.remove(), 200);
+            }
+        }
+        
+        /**
+         * Confirm and execute the mode switch
+         */
+        async function confirmModeSwitch(newMode, companyName, expectedPhrase) {
+            const confirmationInput = document.getElementById('mode-switch-confirmation-input');
+            const reasonInput = document.getElementById('mode-switch-reason');
+            const errorMsg = document.getElementById('mode-switch-error');
+            
+            const userInput = confirmationInput?.value.trim().toUpperCase();
+            
+            // Validate typed confirmation
+            if (userInput !== expectedPhrase) {
+                errorMsg?.classList.remove('hidden');
+                confirmationInput?.classList.add('border-red-500');
+                return;
+            }
+            
+            // Get company ID
+            const companyDropdown = document.getElementById('top-company-selector-dropdown');
+            const companyId = companyDropdown?.value;
+            
+            if (!companyId) {
+                showToast('error', 'Company ID not found');
+                return;
+            }
+            
+            // Get admin email (you might want to get this from localStorage or a user session)
+            const adminEmail = 'admin@clientsvia.com'; // TODO: Get from actual session
+            
+            const reason = reasonInput?.value.trim() || null;
+            
+            console.log(`🔄 [MODE SWITCH] Initiating switch to ${newMode} for company: ${companyName}`);
+            
+            try {
+                // Call backend API
+                const response = await fetch(`/api/company/${companyId}/intelligence-mode`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    },
+                    body: JSON.stringify({
+                        newMode,
+                        confirmation: expectedPhrase,
+                        reason,
+                        adminEmail
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || `HTTP ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                console.log('✅ [MODE SWITCH] Success:', result);
+                
+                // Close modal
+                closeModeSwitchModal();
+                
+                // Show success toast
+                showToast('success', `Intelligence mode switched to ${newMode.toUpperCase()}`, 5000);
+                
+                // Reload company production intelligence to reflect new mode
+                await loadCompanyProductionIntelligence();
+                
+            } catch (error) {
+                console.error('❌ [MODE SWITCH] Error:', error);
+                showToast('error', `Failed to switch mode: ${error.message}`);
+            }
         }
         
         // ================================================================
