@@ -29,14 +29,13 @@ const logger = require('../../utils/logger.js');
 const router = express.Router();
 const AdminSettings = require('../../models/AdminSettings');
 const Company = require('../../models/v2Company');
-const { authenticateJWT, requireAdminRole } = require('../../middleware/auth');
+const { authenticateJWT } = require('../../middleware/auth');
 const { redisClient } = require('../../db');
 
 // ============================================================================
 // MIDDLEWARE: Admin Authentication Required
 // ============================================================================
 router.use(authenticateJWT);
-router.use(requireAdminRole);
 
 /**
  * ============================================================================
