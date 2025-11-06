@@ -236,6 +236,42 @@ router.get('/test-pilot/companies', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/test-pilot/companies/:id/intelligence-mode-debug
+ * DIAGNOSTIC ENDPOINT: Check company's intelligence mode directly from database
+ * Returns raw database value to diagnose UI/backend mismatches
+ */
+router.get('/test-pilot/companies/:id/intelligence-mode-debug', async (req, res) => {
+    try {
+        const { id } = req.params;
+        logger.info(`🔍 [DIAGNOSTIC] Checking intelligence mode for: ${id}`);
+        
+        const company = await Company.findById(id).select('_id companyName intelligenceMode intelligenceModeHistory').lean();
+        
+        if (!company) {
+            return res.status(404).json({ success: false, error: 'Company not found' });
+        }
+        
+        res.json({
+            success: true,
+            diagnostics: {
+                companyId: company._id,
+                companyName: company.companyName,
+                intelligenceMode: company.intelligenceMode,
+                intelligenceModeType: typeof company.intelligenceMode,
+                intelligenceModeExists: company.hasOwnProperty('intelligenceMode'),
+                intelligenceModeUndefined: company.intelligenceMode === undefined,
+                intelligenceModeHistory: company.intelligenceModeHistory || [],
+                schemaDefault: 'global',
+                displayValue: company.intelligenceMode || 'global'
+            }
+        });
+    } catch (error) {
+        logger.error(`❌ [DIAGNOSTIC] Error:`, error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
  * GET /api/admin/test-pilot/companies/:id
  * Get detailed company info for testing
  */
