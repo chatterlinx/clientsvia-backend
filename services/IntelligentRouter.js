@@ -42,6 +42,7 @@ const Tier3LLMFallback = require('./Tier3LLMFallback');
 const PatternLearningService = require('./PatternLearningService');
 const IntelligenceMonitor = require('./IntelligenceMonitor');  // 🚨 Comprehensive monitoring
 const AdminNotificationService = require('./AdminNotificationService');  // 🔔 Notification Center
+const SmartWarmupService = require('./SmartWarmupService');  // 🔥 Smart LLM Pre-warming
 const LLMCallLog = require('../models/LLMCallLog');
 const logger = require('../utils/logger');
 
@@ -170,6 +171,42 @@ class IntelligentRouter {
             });
             
             // ============================================
+            // SMART WARMUP: Check if we should pre-warm LLM
+            // ============================================
+            let warmupHandle = null;
+            const companyId = company?._id || company?.companyId;
+            
+            if (companyId) {
+                // Check if warmup should be triggered (before Tier 2 starts)
+                const warmupDecision = await SmartWarmupService.shouldTriggerWarmup(
+                    companyId,
+                    result.tier1Result.confidence,
+                    template.category
+                );
+                
+                if (warmupDecision.trigger) {
+                    logger.info('🔥 [SMART WARMUP] Triggering parallel LLM pre-warm', {
+                        routingId,
+                        reason: warmupDecision.reason,
+                        tier1Confidence: warmupDecision.confidence,
+                        budgetRemaining: warmupDecision.budgetRemaining
+                    });
+                    
+                    // Start warmup in parallel with Tier 2
+                    warmupHandle = await SmartWarmupService.startWarmup(companyId, callerInput, {
+                        systemPrompt: this.buildSystemPrompt(template, company),
+                        template,
+                        availableScenarios: this.prepareScenarios(template)
+                    });
+                } else {
+                    logger.debug('[SMART WARMUP] Skipped', {
+                        routingId,
+                        reason: warmupDecision.reason
+                    });
+                }
+            }
+            
+            // ============================================
             // TIER 2: SEMANTIC (BM25 + Context)
             // ============================================
             result.tier2Result = await this.tryTier2({
@@ -190,6 +227,15 @@ class IntelligentRouter {
                 result.confidence = result.tier2Result.confidence;
                 result.response = result.tier2Result.response;
                 result.success = true;
+                
+                // Cancel warmup if it was triggered (Tier 2 succeeded, no need for LLM)
+                if (warmupHandle) {
+                    logger.info('⚡ [SMART WARMUP] Cancelling warmup (Tier 2 succeeded)', {
+                        routingId,
+                        warmupId: warmupHandle.warmupId
+                    });
+                    await warmupHandle.cancel();
+                }
                 
                 logger.info('✅ [TIER 2] Semantic match succeeded', {
                     routingId,
@@ -241,16 +287,67 @@ class IntelligentRouter {
             // Prepare scenarios for LLM
             const availableScenarios = this.prepareScenarios(template);
             
-            result.tier3Result = await Tier3LLMFallback.analyze({
-                callerInput,
-                template,
-                availableScenarios,
-                context
-            });
+            // ============================================
+            // SMART WARMUP: Use pre-warmed LLM if available
+            // ============================================
+            let warmupResult = null;
+            if (warmupHandle) {
+                logger.info('💰 [SMART WARMUP] Using pre-warmed LLM (instant Tier 3!)', {
+                    routingId,
+                    warmupId: warmupHandle.warmupId
+                });
+                
+                warmupResult = await SmartWarmupService.useWarmup(warmupHandle.warmupId);
+                
+                if (warmupResult && warmupResult.success) {
+                    // Warmup succeeded! Use it directly
+                    logger.info('✅ [SMART WARMUP] Warmup result ready, using for Tier 3', {
+                        routingId,
+                        duration: warmupResult.duration,
+                        cost: warmupResult.cost,
+                        savedTime: '~1000ms'
+                    });
+                    
+                    // Convert warmup result to Tier3 format
+                    result.tier3Result = {
+                        success: true,
+                        matched: true,
+                        scenario: null, // Will be extracted from response
+                        confidence: 0.90, // Warmup results are high confidence
+                        response: warmupResult.response,
+                        patterns: [],
+                        cost: {
+                            llmApiCost: warmupResult.cost
+                        },
+                        performance: {
+                            responseTime: warmupResult.duration
+                        },
+                        warmupUsed: true
+                    };
+                    
+                    result.performance.tier3Time = warmupResult.duration;
+                    result.cost.tier3 = warmupResult.cost;
+                    result.cost.total = warmupResult.cost;
+                } else {
+                    logger.warn('⚠️ [SMART WARMUP] Warmup failed or timed out, falling back to fresh LLM call', {
+                        routingId
+                    });
+                }
+            }
             
-            result.performance.tier3Time = result.tier3Result.performance.responseTime;
-            result.cost.tier3 = result.tier3Result.cost.llmApiCost;
-            result.cost.total = result.cost.tier3;
+            // If no warmup or warmup failed, make fresh LLM call
+            if (!warmupResult || !warmupResult.success) {
+                result.tier3Result = await Tier3LLMFallback.analyze({
+                    callerInput,
+                    template,
+                    availableScenarios,
+                    context
+                });
+                
+                result.performance.tier3Time = result.tier3Result.performance.responseTime;
+                result.cost.tier3 = result.tier3Result.cost.llmApiCost;
+                result.cost.total = result.cost.tier3;
+            }
             
             if (result.tier3Result.success && result.tier3Result.matched) {
                 // ✅ TIER 3 SUCCESS - Expensive but guaranteed to work
@@ -794,6 +891,19 @@ class IntelligentRouter {
         });
         
         return effectiveMap;
+    }
+    
+    /**
+     * Helper: Build system prompt for LLM
+     */
+    buildSystemPrompt(template, company) {
+        const companyName = company?.businessName || company?.companyName || 'the company';
+        const templateName = template?.name || 'general';
+        
+        return `You are a helpful AI assistant for ${companyName}. 
+You are helping with ${templateName} inquiries.
+Provide accurate, professional, and helpful responses based on the available knowledge.
+Be concise but thorough. If you're not sure about something, say so.`;
     }
     
     /**

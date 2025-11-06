@@ -2187,6 +2187,31 @@ router.patch('/:companyId/intelligence', async (req, res) => {
             company.aiAgentLogic.productionIntelligence.llmConfig.dailyBudget = parseFloat(productionIntelligence.llmConfig.dailyBudget);
         }
         
+        // ============================================================
+        // SMART WARMUP SETTINGS (Premium Feature)
+        // ============================================================
+        if (productionIntelligence.smartWarmup) {
+            company.aiAgentLogic.productionIntelligence.smartWarmup = {
+                enabled: productionIntelligence.smartWarmup.enabled || false,
+                confidenceThreshold: parseFloat(productionIntelligence.smartWarmup.confidenceThreshold) || 0.75,
+                dailyBudget: parseFloat(productionIntelligence.smartWarmup.dailyBudget) || 5.00,
+                enablePatternLearning: productionIntelligence.smartWarmup.enablePatternLearning !== false,
+                minimumHitRate: parseFloat(productionIntelligence.smartWarmup.minimumHitRate) || 0.30,
+                alwaysWarmupCategories: Array.isArray(productionIntelligence.smartWarmup.alwaysWarmupCategories) 
+                    ? productionIntelligence.smartWarmup.alwaysWarmupCategories 
+                    : [],
+                neverWarmupCategories: Array.isArray(productionIntelligence.smartWarmup.neverWarmupCategories) 
+                    ? productionIntelligence.smartWarmup.neverWarmupCategories 
+                    : []
+            };
+            
+            logger.info(`🔥 [SMART WARMUP] Settings saved for company: ${companyId}`, {
+                enabled: company.aiAgentLogic.productionIntelligence.smartWarmup.enabled,
+                confidenceThreshold: company.aiAgentLogic.productionIntelligence.smartWarmup.confidenceThreshold,
+                dailyBudget: company.aiAgentLogic.productionIntelligence.smartWarmup.dailyBudget
+            });
+        }
+        
         // Save to MongoDB
         await company.save();
         
@@ -2211,6 +2236,47 @@ router.patch('/:companyId/intelligence', async (req, res) => {
         res.status(500).json({ 
             success: false, 
             message: 'Failed to save production intelligence settings',
+            error: error.message 
+        });
+    }
+});
+
+/**
+ * ============================================================================
+ * GET /api/company/:companyId/warmup-analytics
+ * ============================================================================
+ * PURPOSE: Get smart warmup analytics (hit rate, cost, time saved)
+ * RETURNS: Warmup analytics for last 7 days
+ * ============================================================================
+ */
+router.get('/:companyId/warmup-analytics', async (req, res) => {
+    const { companyId } = req.params;
+    const { days = 7 } = req.query;
+    
+    logger.info(`[WARMUP ANALYTICS] GET request for company: ${companyId}`);
+    
+    // Validation
+    if (!mongoose.Types.ObjectId.isValid(companyId)) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'Invalid company ID' 
+        });
+    }
+    
+    try {
+        // Get analytics from CostLog model
+        const CostLog = require('../../models/aiGateway/CostLog');
+        const analytics = await CostLog.getWarmupAnalytics(companyId, parseInt(days));
+        
+        logger.info(`✅ [WARMUP ANALYTICS] Retrieved for company: ${companyId}`, analytics);
+        
+        res.json(analytics);
+        
+    } catch (error) {
+        logger.error('[WARMUP ANALYTICS] Error getting analytics:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to get warmup analytics',
             error: error.message 
         });
     }

@@ -2375,6 +2375,180 @@
                                 </p>
                             </div>
                             
+                            <!-- ============================================================ -->
+                            <!-- 🔥 SMART WARMUP (Premium Feature) -->
+                            <!-- ============================================================ -->
+                            <div class="mt-8 pt-6 border-t-2 border-amber-200">
+                                <div class="mb-4">
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <i class="fas fa-fire text-orange-600 text-lg"></i>
+                                        <h5 class="text-md font-bold text-gray-900">Smart LLM Pre-warming (Premium)</h5>
+                                        <span class="px-2 py-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold rounded-full">OPTIONAL</span>
+                                    </div>
+                                    <p class="text-xs text-gray-600 leading-relaxed">
+                                        Eliminate perceived delay by pre-warming LLM during Tier 2. Only charges if Tier 2 fails. 
+                                        <strong>Intelligent prediction</strong> reduces wasted calls by 70%+.
+                                    </p>
+                                </div>
+                                
+                                <!-- Enable Smart Warmup Toggle -->
+                                <div class="mb-4 p-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg border-2 border-orange-300">
+                                    <label class="flex items-center gap-3 cursor-pointer">
+                                        <div class="relative">
+                                            <input type="checkbox" id="company-enable-warmup" 
+                                                   onchange="toggleWarmupSettings()" 
+                                                   class="sr-only peer">
+                                            <div class="w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-orange-600 transition-colors"></div>
+                                            <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+                                        </div>
+                                        <div>
+                                            <span class="text-sm font-bold text-gray-900">
+                                                <i class="fas fa-rocket text-orange-600 mr-1"></i>
+                                                Enable Smart Warmup
+                                            </span>
+                                            <p class="text-xs text-gray-600 mt-1">
+                                                Start LLM in parallel with Tier 2. Cancel if Tier 2 succeeds (no charge). Use if Tier 2 fails (instant Tier 3).
+                                            </p>
+                                        </div>
+                                    </label>
+                                </div>
+                                
+                                <!-- Warmup Settings (Hidden when disabled) -->
+                                <div id="warmup-settings-container" class="hidden space-y-4">
+                                    
+                                    <!-- Confidence Threshold Slider -->
+                                    <div>
+                                        <div class="flex items-center justify-between mb-2">
+                                            <label class="text-sm font-bold text-gray-800">
+                                                <i class="fas fa-gauge-high text-purple-600 mr-1"></i>
+                                                Warmup Trigger Threshold
+                                            </label>
+                                            <span class="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-mono font-bold">
+                                                <span id="company-warmup-threshold-value">0.75</span>
+                                            </span>
+                                        </div>
+                                        <input type="range" id="company-warmup-threshold-slider" 
+                                               min="0.50" max="0.85" step="0.05" value="0.75"
+                                               oninput="updateCompanyWarmupThresholdValue(this.value)"
+                                               class="w-full h-2 bg-gradient-to-r from-green-300 via-yellow-300 to-red-300 rounded-lg appearance-none cursor-pointer">
+                                        <div class="flex justify-between text-xs text-gray-600 mt-1">
+                                            <span>0.50 (Aggressive)</span>
+                                            <span>0.85 (Conservative)</span>
+                                        </div>
+                                        <p class="text-xs text-gray-500 mt-2">
+                                            Only pre-warm if Tier 2 confidence is <strong>below</strong> this threshold. 
+                                            Higher = more selective = less cost, but less benefit.
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Daily Budget -->
+                                    <div>
+                                        <label class="block text-sm font-bold text-gray-800 mb-2">
+                                            <i class="fas fa-piggy-bank text-green-600 mr-1"></i>
+                                            Daily Warmup Budget
+                                        </label>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-gray-700 font-semibold">$</span>
+                                            <input type="number" id="company-warmup-daily-budget" 
+                                                   min="1.00" max="50.00" step="1.00" value="5.00"
+                                                   class="flex-1 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm font-mono">
+                                        </div>
+                                        <p class="text-xs text-gray-500 mt-1">
+                                            Maximum spend per day on warmup calls. Auto-pauses when reached.
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Category Overrides (Always/Never Warmup) -->
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <!-- Always Warmup -->
+                                        <div>
+                                            <label class="block text-sm font-bold text-gray-800 mb-2">
+                                                <i class="fas fa-circle-check text-green-600 mr-1"></i>
+                                                Always Warmup
+                                            </label>
+                                            <input type="text" id="company-warmup-always-categories" 
+                                                   placeholder="pricing, emergency, vip"
+                                                   class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-xs">
+                                            <p class="text-xs text-gray-500 mt-1">
+                                                Categories to always pre-warm (comma-separated)
+                                            </p>
+                                        </div>
+                                        
+                                        <!-- Never Warmup -->
+                                        <div>
+                                            <label class="block text-sm font-bold text-gray-800 mb-2">
+                                                <i class="fas fa-circle-xmark text-red-600 mr-1"></i>
+                                                Never Warmup
+                                            </label>
+                                            <input type="text" id="company-warmup-never-categories" 
+                                                   placeholder="greeting, goodbye"
+                                                   class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-xs">
+                                            <p class="text-xs text-gray-500 mt-1">
+                                                Categories to never pre-warm (comma-separated)
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Pattern Learning Toggle -->
+                                    <div>
+                                        <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-700 hover:text-gray-900">
+                                            <input type="checkbox" id="company-warmup-pattern-learning" checked
+                                                   class="w-4 h-4 text-purple-600 rounded">
+                                            <span>
+                                                <i class="fas fa-brain text-purple-600 mr-1"></i>
+                                                Enable Pattern Learning (track which queries benefit most)
+                                            </span>
+                                        </label>
+                                    </div>
+                                    
+                                    <!-- Minimum Hit Rate -->
+                                    <div>
+                                        <label class="block text-sm font-bold text-gray-800 mb-2">
+                                            <i class="fas fa-target text-red-600 mr-1"></i>
+                                            Minimum Hit Rate (Auto-Disable)
+                                        </label>
+                                        <div class="flex items-center gap-2">
+                                            <input type="number" id="company-warmup-min-hit-rate" 
+                                                   min="0.20" max="0.80" step="0.05" value="0.30"
+                                                   class="flex-1 px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm font-mono">
+                                            <span class="text-gray-700 font-semibold text-sm">%</span>
+                                        </div>
+                                        <p class="text-xs text-gray-500 mt-1">
+                                            Auto-disable warmup if hit rate drops below this. Hit rate = warmup used / warmup triggered.
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Warmup Analytics Preview -->
+                                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border-2 border-blue-300">
+                                        <div class="flex items-center gap-2 mb-3">
+                                            <i class="fas fa-chart-bar text-blue-600"></i>
+                                            <span class="text-sm font-bold text-gray-900">Warmup Analytics (Last 7 Days)</span>
+                                        </div>
+                                        <div class="grid grid-cols-3 gap-2 text-xs">
+                                            <div class="bg-white p-2 rounded border border-blue-200 text-center">
+                                                <div class="text-blue-600 font-mono font-bold" id="company-warmup-hit-rate">N/A</div>
+                                                <div class="text-gray-600">Hit Rate</div>
+                                            </div>
+                                            <div class="bg-white p-2 rounded border border-blue-200 text-center">
+                                                <div class="text-green-600 font-mono font-bold" id="company-warmup-cost">$0.00</div>
+                                                <div class="text-gray-600">Total Cost</div>
+                                            </div>
+                                            <div class="bg-white p-2 rounded border border-blue-200 text-center">
+                                                <div class="text-purple-600 font-mono font-bold" id="company-warmup-time-saved">0ms</div>
+                                                <div class="text-gray-600">Avg Time Saved</div>
+                                            </div>
+                                        </div>
+                                        <p class="text-xs text-gray-600 mt-2">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            Analytics load after saving settings. Refresh to see latest data.
+                                        </p>
+                                    </div>
+                                    
+                                </div>
+                                
+                            </div>
+                            <!-- END: Smart Warmup Section -->
+                            
                         </div>
                         <!-- END: Settings Container -->
                         
@@ -7854,10 +8028,64 @@ Continue?`;
                     dailyBudgetInput.value = intelligence.llmConfig?.dailyBudget || '';
                 }
                 
+                // ============================================================
+                // SMART WARMUP SETTINGS
+                // ============================================================
+                const warmup = intelligence.smartWarmup || {};
+                
+                const enableWarmupCheckbox = document.getElementById('company-enable-warmup');
+                const warmupThresholdSlider = document.getElementById('company-warmup-threshold-slider');
+                const warmupDailyBudgetInput = document.getElementById('company-warmup-daily-budget');
+                const warmupAlwaysCategoriesInput = document.getElementById('company-warmup-always-categories');
+                const warmupNeverCategoriesInput = document.getElementById('company-warmup-never-categories');
+                const warmupPatternLearningCheckbox = document.getElementById('company-warmup-pattern-learning');
+                const warmupMinHitRateInput = document.getElementById('company-warmup-min-hit-rate');
+                
+                // Set warmup enabled toggle
+                if (enableWarmupCheckbox) {
+                    enableWarmupCheckbox.checked = warmup.enabled || false;
+                    toggleWarmupSettings(); // Show/hide settings based on enabled state
+                }
+                
+                // Set warmup confidence threshold
+                if (warmupThresholdSlider) {
+                    warmupThresholdSlider.value = warmup.confidenceThreshold || 0.75;
+                    updateCompanyWarmupThresholdValue(warmupThresholdSlider.value);
+                }
+                
+                // Set warmup daily budget
+                if (warmupDailyBudgetInput) {
+                    warmupDailyBudgetInput.value = warmup.dailyBudget || 5.00;
+                }
+                
+                // Set always/never warmup categories
+                if (warmupAlwaysCategoriesInput) {
+                    warmupAlwaysCategoriesInput.value = (warmup.alwaysWarmupCategories || []).join(', ');
+                }
+                
+                if (warmupNeverCategoriesInput) {
+                    warmupNeverCategoriesInput.value = (warmup.neverWarmupCategories || []).join(', ');
+                }
+                
+                // Set pattern learning
+                if (warmupPatternLearningCheckbox) {
+                    warmupPatternLearningCheckbox.checked = warmup.enablePatternLearning !== false;
+                }
+                
+                // Set minimum hit rate
+                if (warmupMinHitRateInput) {
+                    warmupMinHitRateInput.value = warmup.minimumHitRate || 0.30;
+                }
+                
+                // Load warmup analytics (if warmup is enabled)
+                if (warmup.enabled) {
+                    await loadWarmupAnalytics(companyId);
+                }
+                
                 // Update cost estimates
                 updateCompanyCostEstimate();
                 
-                console.log('✅ [COMPANY INTELLIGENCE] UI populated successfully');
+                console.log('✅ [COMPANY INTELLIGENCE] UI populated successfully (including warmup settings)');
                 
             } catch (error) {
                 console.error('❌ [COMPANY INTELLIGENCE] Failed to load:', error);
@@ -7901,7 +8129,28 @@ Continue?`;
                     settings.llmConfig.dailyBudget = parseFloat(dailyBudget);
                 }
                 
-                console.log('📤 [COMPANY INTELLIGENCE] Sending settings:', settings);
+                // ============================================================
+                // SMART WARMUP SETTINGS
+                // ============================================================
+                const warmupEnabled = document.getElementById('company-enable-warmup')?.checked;
+                
+                // Helper: Parse comma-separated categories
+                const parseCategories = (input) => {
+                    if (!input) return [];
+                    return input.split(',').map(c => c.trim()).filter(c => c.length > 0);
+                };
+                
+                settings.smartWarmup = {
+                    enabled: warmupEnabled || false,
+                    confidenceThreshold: parseFloat(document.getElementById('company-warmup-threshold-slider')?.value || 0.75),
+                    dailyBudget: parseFloat(document.getElementById('company-warmup-daily-budget')?.value || 5.00),
+                    enablePatternLearning: document.getElementById('company-warmup-pattern-learning')?.checked !== false,
+                    minimumHitRate: parseFloat(document.getElementById('company-warmup-min-hit-rate')?.value || 0.30),
+                    alwaysWarmupCategories: parseCategories(document.getElementById('company-warmup-always-categories')?.value),
+                    neverWarmupCategories: parseCategories(document.getElementById('company-warmup-never-categories')?.value)
+                };
+                
+                console.log('📤 [COMPANY INTELLIGENCE] Sending settings (including warmup):', settings);
                 
                 // Send to backend
                 const response = await fetch(`/api/company/${companyId}/intelligence`, {
@@ -7949,6 +8198,82 @@ Continue?`;
                 valueDisplay.textContent = parseFloat(value).toFixed(2);
             }
             updateCompanyCostEstimate();
+        }
+        
+        /**
+         * Update Warmup Threshold slider value display
+         */
+        function updateCompanyWarmupThresholdValue(value) {
+            const valueDisplay = document.getElementById('company-warmup-threshold-value');
+            if (valueDisplay) {
+                valueDisplay.textContent = parseFloat(value).toFixed(2);
+            }
+        }
+        
+        /**
+         * Toggle warmup settings visibility
+         */
+        function toggleWarmupSettings() {
+            const enabled = document.getElementById('company-enable-warmup')?.checked;
+            const container = document.getElementById('warmup-settings-container');
+            
+            if (container) {
+                if (enabled) {
+                    container.classList.remove('hidden');
+                } else {
+                    container.classList.add('hidden');
+                }
+            }
+        }
+        
+        /**
+         * Load warmup analytics from backend
+         */
+        async function loadWarmupAnalytics(companyId) {
+            try {
+                console.log('📊 [WARMUP ANALYTICS] Loading for company:', companyId);
+                
+                const response = await fetch(`/api/company/${companyId}/warmup-analytics`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    console.warn('⚠️ [WARMUP ANALYTICS] Failed to load analytics');
+                    return;
+                }
+                
+                const analytics = await response.json();
+                
+                console.log('✅ [WARMUP ANALYTICS] Loaded:', analytics);
+                
+                // Update UI
+                const hitRateDisplay = document.getElementById('company-warmup-hit-rate');
+                const costDisplay = document.getElementById('company-warmup-cost');
+                const timeSavedDisplay = document.getElementById('company-warmup-time-saved');
+                
+                if (hitRateDisplay) {
+                    hitRateDisplay.textContent = analytics.hitRate !== undefined 
+                        ? `${(analytics.hitRate * 100).toFixed(1)}%` 
+                        : 'N/A';
+                }
+                
+                if (costDisplay) {
+                    costDisplay.textContent = analytics.totalCost !== undefined 
+                        ? `$${analytics.totalCost.toFixed(2)}` 
+                        : '$0.00';
+                }
+                
+                if (timeSavedDisplay) {
+                    timeSavedDisplay.textContent = analytics.avgTimeSaved !== undefined 
+                        ? `${analytics.avgTimeSaved}ms` 
+                        : '0ms';
+                }
+                
+            } catch (error) {
+                console.error('❌ [WARMUP ANALYTICS] Error loading analytics:', error);
+            }
         }
         
         /**

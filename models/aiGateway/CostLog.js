@@ -32,8 +32,14 @@ const AIGatewayCostLogSchema = new Schema({
     
     operationType: {
         type: String,
-        enum: ['health_check', 'production_call', 'tier3_fallback', 'test_call', 'manual_test'],
+        enum: ['health_check', 'production_call', 'tier3_fallback', 'test_call', 'manual_test', 'warmup'],
         required: true,
+        index: true
+    },
+    
+    tier: {
+        type: String,
+        enum: ['tier1', 'tier2', 'tier3', 'warmup'],
         index: true
     },
     
@@ -101,6 +107,38 @@ const AIGatewayCostLogSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'Company',
         index: true
+    },
+    
+    // ========================================================================
+    // 🔥 SMART WARMUP TRACKING
+    // ========================================================================
+    
+    metadata: {
+        warmupId: String,
+        action: {
+            type: String,
+            enum: ['triggered', 'used', 'cancelled', 'failed']
+        },
+        reason: String,
+        duration: Number,
+        warmupTriggered: {
+            type: Boolean,
+            default: false,
+            index: true
+        },
+        warmupUsed: {
+            type: Boolean,
+            default: false,
+            index: true
+        },
+        warmupCancelled: {
+            type: Boolean,
+            default: false
+        },
+        query: String,
+        responseLength: Number,
+        tier1Confidence: Number,
+        tier2Confidence: Number
     }
     
 }, {
@@ -216,6 +254,98 @@ AIGatewayCostLogSchema.statics.getDailyCosts = async function(days = 30) {
         calls: d.calls,
         tokens: d.tokens
     }));
+};
+
+/**
+ * Get warmup analytics for a company
+ */
+AIGatewayCostLogSchema.statics.getWarmupAnalytics = async function(companyId, days = 7) {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    
+    const stats = await this.aggregate([
+        {
+            $match: {
+                companyId: companyId,
+                timestamp: { $gte: startDate },
+                'metadata.warmupTriggered': true
+            }
+        },
+        {
+            $group: {
+                _id: null,
+                totalTriggered: { $sum: 1 },
+                totalUsed: {
+                    $sum: {
+                        $cond: [{ $eq: ['$metadata.warmupUsed', true] }, 1, 0]
+                    }
+                },
+                totalCancelled: {
+                    $sum: {
+                        $cond: [{ $eq: ['$metadata.warmupCancelled', true] }, 1, 0]
+                    }
+                },
+                totalCost: {
+                    $sum: {
+                        $cond: [{ $eq: ['$metadata.warmupUsed', true] }, '$cost', 0]
+                    }
+                },
+                avgDuration: { $avg: '$metadata.duration' },
+                avgTimeSaved: {
+                    $avg: {
+                        $cond: [
+                            { $eq: ['$metadata.warmupUsed', true] },
+                            { $subtract: [1000, '$metadata.duration'] }, // Assume 1000ms saved vs fresh call
+                            null
+                        ]
+                    }
+                }
+            }
+        }
+    ]);
+    
+    if (stats.length === 0) {
+        return {
+            totalTriggered: 0,
+            totalUsed: 0,
+            totalCancelled: 0,
+            hitRate: 0,
+            totalCost: 0,
+            avgDuration: 0,
+            avgTimeSaved: 0,
+            estimatedSavings: 0
+        };
+    }
+    
+    const result = stats[0];
+    const hitRate = result.totalTriggered > 0 ? result.totalUsed / result.totalTriggered : 0;
+    
+    // Estimated savings: time saved * value per second ($0.01/second perception cost)
+    const estimatedSavings = (result.avgTimeSaved || 0) * result.totalUsed * 0.01 / 1000;
+    
+    return {
+        totalTriggered: result.totalTriggered,
+        totalUsed: result.totalUsed,
+        totalCancelled: result.totalCancelled,
+        hitRate: parseFloat(hitRate.toFixed(3)),
+        totalCost: parseFloat(result.totalCost.toFixed(4)),
+        avgDuration: Math.round(result.avgDuration || 0),
+        avgTimeSaved: Math.round(result.avgTimeSaved || 0),
+        estimatedSavings: parseFloat(estimatedSavings.toFixed(4)),
+        roi: result.totalCost > 0 ? parseFloat((estimatedSavings / result.totalCost).toFixed(2)) : 0
+    };
+};
+
+/**
+ * Get warmup hit rate by category
+ */
+AIGatewayCostLogSchema.statics.getWarmupHitRateByCategory = async function(companyId, days = 7) {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    
+    // This would require joining with template data
+    // For now, return overall hit rate
+    return await this.getWarmupAnalytics(companyId, days);
 };
 
 // ────────────────────────────────────────────────────────────────────────────

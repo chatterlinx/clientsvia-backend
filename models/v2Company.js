@@ -650,6 +650,55 @@ const aiAgentLogicSchema = new mongoose.Schema({
         },
         
         // ────────────────────────────────────────────────────────────────────────
+        // SMART WARMUP (Premium Feature - Optional LLM Pre-warming)
+        // ────────────────────────────────────────────────────────────────────────
+        // Purpose: Pre-warm LLM during Tier 2 to eliminate perceived delay for Tier 3
+        // Strategy: Intelligent prediction-based warmup with AbortController
+        // Cost: Only charges if Tier 2 fails and LLM response is used
+        // ────────────────────────────────────────────────────────────────────────
+        smartWarmup: {
+            enabled: {
+                type: Boolean,
+                default: false,
+                description: 'Enable smart LLM pre-warming during Tier 2. Premium feature - charges extra for warmup calls.'
+            },
+            confidenceThreshold: {
+                type: Number,
+                min: 0.5,
+                max: 0.85,
+                default: 0.75,
+                description: 'Only pre-warm if Tier 2 confidence below this threshold (0.50-0.85). Higher = more selective warmup. Default: 0.75'
+            },
+            dailyBudget: {
+                type: Number,
+                default: 5.00,
+                description: 'Max USD per day for warmup calls. Prevents runaway costs. Default: $5.00/day'
+            },
+            enablePatternLearning: {
+                type: Boolean,
+                default: true,
+                description: 'Track which query patterns benefit most from warmup. Improves prediction accuracy over time.'
+            },
+            minimumHitRate: {
+                type: Number,
+                min: 0.20,
+                max: 0.80,
+                default: 0.30,
+                description: 'Auto-disable warmup if hit rate falls below this (0.20-0.80). Hit rate = warmup used / warmup triggered. Default: 0.30 (30%)'
+            },
+            alwaysWarmupCategories: {
+                type: [String],
+                default: [],
+                description: 'Template categories that ALWAYS trigger warmup, regardless of confidence. Example: ["pricing", "emergency", "vip"]'
+            },
+            neverWarmupCategories: {
+                type: [String],
+                default: [],
+                description: 'Template categories that NEVER trigger warmup. Example: ["greeting", "goodbye", "confirmation"]'
+            }
+        },
+        
+        // ────────────────────────────────────────────────────────────────────────
         // METADATA
         // ────────────────────────────────────────────────────────────────────────
         lastUpdated: {
