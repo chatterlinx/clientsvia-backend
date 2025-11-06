@@ -9297,8 +9297,9 @@ Continue?`;
             
             if (!indicator) return;
             
-            // Set mode data attribute
+            // Set mode data attribute (CRITICAL for mode switching logic)
             indicator.setAttribute('data-intelligence-mode', mode);
+            console.log(`🔍 [MODE INDICATOR] Set data-intelligence-mode attribute to: ${mode}`);
             
             if (mode === 'global') {
                 // GLOBAL MODE STYLING
@@ -9359,6 +9360,9 @@ Continue?`;
             const indicator = document.getElementById('company-intelligence-mode-indicator');
             const currentMode = indicator?.getAttribute('data-intelligence-mode') || 'global';
             const newMode = currentMode === 'global' ? 'custom' : 'global';
+            
+            console.log(`🔍 [MODE SWITCH MODAL] Current mode from indicator: ${currentMode}`);
+            console.log(`🔍 [MODE SWITCH MODAL] Target new mode: ${newMode}`);
             
             // Get company name from dropdown
             const selectedOption = companyDropdown.options[companyDropdown.selectedIndex];
@@ -9448,7 +9452,7 @@ Continue?`;
                                 Cancel
                             </button>
                             <button onclick="confirmModeSwitch('${newMode}', '${companyName}', '${confirmationPhrase}')" 
-                                    class="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg font-semibold transition-all shadow-lg">
+                                    class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all shadow-lg">
                                 <i class="fas fa-exchange-alt mr-1"></i>
                                 Confirm Switch
                             </button>
@@ -9632,7 +9636,7 @@ Continue?`;
                                 Cancel
                             </button>
                             <button onclick="confirmGlobalUnlock()" 
-                                    class="px-6 py-2 bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white rounded-lg font-semibold transition-all shadow-lg">
+                                    class="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-all shadow-lg">
                                 <i class="fas fa-unlock mr-1"></i>
                                 Unlock for Editing
                             </button>
@@ -9971,7 +9975,7 @@ Continue?`;
                                 Cancel
                             </button>
                             <button onclick="confirmGlobalSave()" 
-                                    class="px-6 py-2 bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white rounded-lg font-semibold transition-all shadow-lg">
+                                    class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all shadow-lg">
                                 <i class="fas fa-save mr-1"></i>
                                 Save Changes
                             </button>
