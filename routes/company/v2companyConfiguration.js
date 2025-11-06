@@ -2133,6 +2133,10 @@ router.patch('/:companyId/intelligence', async (req, res) => {
     const { companyId } = req.params;
     const { productionIntelligence } = req.body;
     
+    console.log('🔥🔥🔥 [COMPANY INTELLIGENCE] ========== PATCH REQUEST RECEIVED ==========');
+    console.log('🔥🔥🔥 [COMPANY INTELLIGENCE] Company ID:', companyId);
+    console.log('🔥🔥🔥 [COMPANY INTELLIGENCE] Body:', JSON.stringify(req.body, null, 2));
+    console.log('🔥🔥🔥 [COMPANY INTELLIGENCE] Warmup data:', JSON.stringify(productionIntelligence?.smartWarmup, null, 2));
     logger.info(`[COMPANY INTELLIGENCE] PATCH request for company: ${companyId}`);
     
     // Validation
@@ -2220,6 +2224,9 @@ router.patch('/:companyId/intelligence', async (req, res) => {
         // Save to MongoDB
         await company.save();
         
+        console.log('🔥🔥🔥 [COMPANY INTELLIGENCE] ========== SAVED TO MONGODB ==========');
+        console.log('🔥🔥🔥 [COMPANY INTELLIGENCE] Saved smartWarmup.enabled:', company.aiAgentLogic.productionIntelligence.smartWarmup?.enabled);
+        console.log('🔥🔥🔥 [COMPANY INTELLIGENCE] Full smartWarmup:', JSON.stringify(company.aiAgentLogic.productionIntelligence.smartWarmup, null, 2));
         logger.info(`✅ [COMPANY INTELLIGENCE] Settings saved for company: ${companyId}`);
         
         // Clear Redis cache for this company

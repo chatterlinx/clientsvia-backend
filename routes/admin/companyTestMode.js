@@ -249,6 +249,14 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
             .select('_id companyName businessName aiAgentLogic aiAgentSettings')
             .lean();
         
+        console.log('🔍🔍🔍 [TEST PILOT LOAD] ========== LOADING COMPANY ==========');
+        console.log('🔍🔍🔍 [TEST PILOT LOAD] Company ID:', id);
+        console.log('🔍🔍🔍 [TEST PILOT LOAD] Has aiAgentLogic:', !!company?.aiAgentLogic);
+        console.log('🔍🔍🔍 [TEST PILOT LOAD] Has productionIntelligence:', !!company?.aiAgentLogic?.productionIntelligence);
+        console.log('🔍🔍🔍 [TEST PILOT LOAD] Has smartWarmup:', !!company?.aiAgentLogic?.productionIntelligence?.smartWarmup);
+        console.log('🔍🔍🔍 [TEST PILOT LOAD] smartWarmup.enabled:', company?.aiAgentLogic?.productionIntelligence?.smartWarmup?.enabled);
+        console.log('🔍🔍🔍 [TEST PILOT LOAD] Full smartWarmup:', JSON.stringify(company?.aiAgentLogic?.productionIntelligence?.smartWarmup, null, 2));
+        
         if (!company) {
             return res.status(404).json({
                 success: false,
