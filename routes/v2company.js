@@ -2337,17 +2337,17 @@ router.patch('/company/:companyId/intelligence-mode', authenticateJWT, async (re
             const AdminSettings = require('../models/AdminSettings');
             const adminSettings = await AdminSettings.findOne();
             
-            if (adminSettings && adminSettings.productionIntelligence) {
+            if (adminSettings && adminSettings.globalProductionIntelligence) {
                 // Copy global settings to company's aiAgentLogic
                 company.aiAgentLogic = company.aiAgentLogic || {};
-                company.aiAgentLogic.thresholds = adminSettings.productionIntelligence.thresholds;
-                company.aiAgentLogic.llmConfig = adminSettings.productionIntelligence.llmConfig;
-                company.aiAgentLogic.warmup = adminSettings.productionIntelligence.warmup;
+                company.aiAgentLogic.thresholds = adminSettings.globalProductionIntelligence.thresholds;
+                company.aiAgentLogic.llmConfig = adminSettings.globalProductionIntelligence.llmConfig;
+                company.aiAgentLogic.warmup = adminSettings.globalProductionIntelligence.warmup;
                 company.aiAgentLogic.lastUpdated = new Date();
                 
                 logger.info(`✅ [MODE SWITCH] Custom aiAgentLogic initialized from global template`);
             } else {
-                logger.warn(`⚠️ [MODE SWITCH] No AdminSettings found, using default aiAgentLogic`);
+                logger.warn(`⚠️ [MODE SWITCH] No AdminSettings.globalProductionIntelligence found, using default aiAgentLogic`);
             }
         }
         
