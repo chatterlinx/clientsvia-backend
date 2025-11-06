@@ -2393,7 +2393,7 @@ router.patch('/company/:companyId/intelligence-mode', authenticateJWT, async (re
         // ====================================================================
         // CACHE INVALIDATION
         // ====================================================================
-        await CacheHelper.clearCompanyCache(companyId);
+        await CacheHelper.invalidateCompany(companyId);
         
         // Clear AI Agent Logic cache
         const aiLoader = require('../src/config/aiLoader');
