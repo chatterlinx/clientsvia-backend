@@ -2194,7 +2194,9 @@
                             <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
                                 <label class="flex items-center gap-3 cursor-pointer">
                                     <div class="relative">
-                                        <input type="checkbox" id="company-enable-tier3" checked class="sr-only peer">
+                                        <input type="checkbox" id="company-enable-tier3" checked 
+                                               onchange="updateCompanyCostEstimate()" 
+                                               class="sr-only peer">
                                         <div class="w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-600 transition-colors"></div>
                                         <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
                                     </div>
@@ -2210,48 +2212,51 @@
                                 </label>
                             </div>
                             
-                            <!-- Tier 1 Threshold Slider -->
-                            <div class="mb-6">
-                                <div class="flex items-center justify-between mb-2">
-                                    <label class="text-sm font-bold text-gray-800">
-                                        <i class="fas fa-layer-group text-blue-600 mr-1"></i>
-                                        Tier 1 Threshold (Rule-Based)
-                                    </label>
-                                    <span class="text-lg font-mono font-bold text-blue-700" id="company-tier1-value">0.80</span>
+                            <!-- Tier Confidence Thresholds (Side-by-Side) -->
+                            <div class="grid grid-cols-2 gap-6 mb-6">
+                                <!-- Tier 1 Threshold Slider -->
+                                <div>
+                                    <div class="flex items-center justify-between mb-2">
+                                        <label class="text-sm font-bold text-gray-800">
+                                            <i class="fas fa-layer-group text-blue-600 mr-1"></i>
+                                            Tier 1 Threshold (Rule-Based)
+                                        </label>
+                                        <span class="text-lg font-mono font-bold text-blue-700" id="company-tier1-value">0.80</span>
+                                    </div>
+                                    <input type="range" id="company-tier1-slider" 
+                                           min="0.70" max="0.95" step="0.01" value="0.80"
+                                           oninput="updateCompanyTier1Value(this.value)"
+                                           class="w-full h-2 bg-gradient-to-r from-blue-300 to-blue-600 rounded-lg appearance-none cursor-pointer">
+                                    <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                        <span>0.70 (More Tier 2/3)</span>
+                                        <span>0.95 (Stricter)</span>
+                                    </div>
+                                    <p class="text-xs text-gray-600 mt-2 bg-blue-50 p-2 rounded border border-blue-200">
+                                        <strong>Higher = More strict:</strong> Requires exact keyword matches. Lower = More triggers flow to Tier 2 semantic analysis.
+                                    </p>
                                 </div>
-                                <input type="range" id="company-tier1-slider" 
-                                       min="0.70" max="0.95" step="0.01" value="0.80"
-                                       oninput="updateCompanyTier1Value(this.value)"
-                                       class="w-full h-2 bg-gradient-to-r from-blue-300 to-blue-600 rounded-lg appearance-none cursor-pointer">
-                                <div class="flex justify-between text-xs text-gray-500 mt-1">
-                                    <span>0.70 (More Tier 2/3)</span>
-                                    <span>0.95 (Stricter)</span>
+                                
+                                <!-- Tier 2 Threshold Slider -->
+                                <div>
+                                    <div class="flex items-center justify-between mb-2">
+                                        <label class="text-sm font-bold text-gray-800">
+                                            <i class="fas fa-brain text-purple-600 mr-1"></i>
+                                            Tier 2 Threshold (Semantic)
+                                        </label>
+                                        <span class="text-lg font-mono font-bold text-purple-700" id="company-tier2-value">0.60</span>
+                                    </div>
+                                    <input type="range" id="company-tier2-slider" 
+                                           min="0.50" max="0.80" step="0.01" value="0.60"
+                                           oninput="updateCompanyTier2Value(this.value)"
+                                           class="w-full h-2 bg-gradient-to-r from-purple-300 to-purple-600 rounded-lg appearance-none cursor-pointer">
+                                    <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                        <span>0.50 (More Tier 3)</span>
+                                        <span>0.80 (Stricter)</span>
+                                    </div>
+                                    <p class="text-xs text-gray-600 mt-2 bg-purple-50 p-2 rounded border border-purple-200">
+                                        <strong>Higher = More strict:</strong> Requires higher semantic similarity. Lower = More queries flow to Tier 3 LLM.
+                                    </p>
                                 </div>
-                                <p class="text-xs text-gray-600 mt-2 bg-blue-50 p-2 rounded border border-blue-200">
-                                    <strong>Higher = More strict:</strong> Requires exact keyword matches. Lower = More triggers flow to Tier 2 semantic analysis.
-                                </p>
-                            </div>
-                            
-                            <!-- Tier 2 Threshold Slider -->
-                            <div class="mb-6">
-                                <div class="flex items-center justify-between mb-2">
-                                    <label class="text-sm font-bold text-gray-800">
-                                        <i class="fas fa-brain text-purple-600 mr-1"></i>
-                                        Tier 2 Threshold (Semantic)
-                                    </label>
-                                    <span class="text-lg font-mono font-bold text-purple-700" id="company-tier2-value">0.60</span>
-                                </div>
-                                <input type="range" id="company-tier2-slider" 
-                                       min="0.50" max="0.80" step="0.01" value="0.60"
-                                       oninput="updateCompanyTier2Value(this.value)"
-                                       class="w-full h-2 bg-gradient-to-r from-purple-300 to-purple-600 rounded-lg appearance-none cursor-pointer">
-                                <div class="flex justify-between text-xs text-gray-500 mt-1">
-                                    <span>0.50 (More Tier 3)</span>
-                                    <span>0.80 (Stricter)</span>
-                                </div>
-                                <p class="text-xs text-gray-600 mt-2 bg-purple-50 p-2 rounded border border-purple-200">
-                                    <strong>Higher = More strict:</strong> Requires higher semantic similarity. Lower = More queries flow to Tier 3 LLM.
-                                </p>
                             </div>
                             
                             <!-- LLM Model Selector -->
@@ -7849,7 +7854,7 @@ Continue?`;
                     thresholds: {
                         tier1: parseFloat(document.getElementById('company-tier1-slider')?.value || 0.80),
                         tier2: parseFloat(document.getElementById('company-tier2-slider')?.value || 0.60),
-                        enableTier3: document.getElementById('company-enable-tier3')?.checked || true
+                        enableTier3: document.getElementById('company-enable-tier3')?.checked !== false // Default true, but respect false
                     },
                     llmConfig: {
                         model: document.getElementById('company-llm-model')?.value || 'gpt-4o-mini',
