@@ -108,31 +108,88 @@ class RuntimeIntelligenceConfig {
             }
             
             if (callSource === 'test-pilot-company' || callSource === 'production') {
-                // Company Testing OR Production: Use Company Production Intelligence
-                const productionConfig = company?.aiAgentLogic?.productionIntelligence || {};
+                // ============================================================
+                // CHECK INHERITANCE FLAG: Global vs Custom Intelligence
+                // ============================================================
+                const useGlobal = company?.aiAgentLogic?.useGlobalIntelligence !== false; // Default: true
                 
-                logger.info(`[RUNTIME CONFIG] ✅ Loaded Company Production Intelligence:`, {
-                    tier1: productionConfig.thresholds?.tier1 || 0.80,
-                    tier2: productionConfig.thresholds?.tier2 || 0.60,
-                    model: productionConfig.llmConfig?.model || 'gpt-4o-mini'
-                });
-                
-                return {
-                    source: 'production-company',
-                    thresholds: {
+                if (useGlobal) {
+                    // GLOBAL: Load from AdminSettings.globalProductionIntelligence
+                    const adminSettings = await AdminSettings.findOne({});
+                    const globalConfig = adminSettings?.globalProductionIntelligence || {};
+                    
+                    logger.info(`[RUNTIME CONFIG] 🌐 Using GLOBAL Production Intelligence:`, {
+                        tier1: globalConfig.thresholds?.tier1 || 0.80,
+                        tier2: globalConfig.thresholds?.tier2 || 0.60,
+                        enableTier3: globalConfig.thresholds?.enableTier3 !== false,
+                        model: globalConfig.llmConfig?.model || 'gpt-4o-mini',
+                        warmupEnabled: globalConfig.smartWarmup?.enabled || false
+                    });
+                    
+                    return {
+                        source: 'global-intelligence',
+                        thresholds: {
+                            tier1: globalConfig.thresholds?.tier1 || 0.80,
+                            tier2: globalConfig.thresholds?.tier2 || 0.60,
+                            enableTier3: globalConfig.thresholds?.enableTier3 !== false
+                        },
+                        llmConfig: {
+                            model: globalConfig.llmConfig?.model || 'gpt-4o-mini',
+                            maxCostPerCall: globalConfig.llmConfig?.maxCostPerCall || 0.10,
+                            dailyBudget: globalConfig.llmConfig?.dailyBudget || null
+                        },
+                        smartWarmup: {
+                            enabled: globalConfig.smartWarmup?.enabled || false,
+                            confidenceThreshold: globalConfig.smartWarmup?.confidenceThreshold || 0.75,
+                            dailyBudget: globalConfig.smartWarmup?.dailyBudget || 5.00,
+                            enablePatternLearning: globalConfig.smartWarmup?.enablePatternLearning !== false,
+                            minimumHitRate: globalConfig.smartWarmup?.minimumHitRate || 0.30,
+                            alwaysWarmupCategories: globalConfig.smartWarmup?.alwaysWarmupCategories || [],
+                            neverWarmupCategories: globalConfig.smartWarmup?.neverWarmupCategories || []
+                        },
+                        costTracking: {
+                            enabled: callSource === 'production', // Only track costs for real calls
+                            trackingPath: 'AdminSettings.globalProductionIntelligence.todaysCost'
+                        }
+                    };
+                } else {
+                    // CUSTOM: Load from company.aiAgentLogic.productionIntelligence
+                    const productionConfig = company?.aiAgentLogic?.productionIntelligence || {};
+                    
+                    logger.info(`[RUNTIME CONFIG] 🎯 Using CUSTOM Company Intelligence:`, {
                         tier1: productionConfig.thresholds?.tier1 || 0.80,
                         tier2: productionConfig.thresholds?.tier2 || 0.60,
-                        enableTier3: productionConfig.thresholds?.enableTier3 !== false
-                    },
-                    llmConfig: {
                         model: productionConfig.llmConfig?.model || 'gpt-4o-mini',
-                        maxCostPerCall: productionConfig.llmConfig?.maxCostPerCall || 0.10
-                    },
-                    costTracking: {
-                        enabled: callSource === 'production', // Only track costs for real calls
-                        trackingPath: 'company.aiAgentLogic.productionIntelligence.todaysCost'
-                    }
-                };
+                        warmupEnabled: productionConfig.smartWarmup?.enabled || false
+                    });
+                    
+                    return {
+                        source: 'custom-company-intelligence',
+                        thresholds: {
+                            tier1: productionConfig.thresholds?.tier1 || 0.80,
+                            tier2: productionConfig.thresholds?.tier2 || 0.60,
+                            enableTier3: productionConfig.thresholds?.enableTier3 !== false
+                        },
+                        llmConfig: {
+                            model: productionConfig.llmConfig?.model || 'gpt-4o-mini',
+                            maxCostPerCall: productionConfig.llmConfig?.maxCostPerCall || 0.10,
+                            dailyBudget: productionConfig.llmConfig?.dailyBudget || null
+                        },
+                        smartWarmup: {
+                            enabled: productionConfig.smartWarmup?.enabled || false,
+                            confidenceThreshold: productionConfig.smartWarmup?.confidenceThreshold || 0.75,
+                            dailyBudget: productionConfig.smartWarmup?.dailyBudget || 5.00,
+                            enablePatternLearning: productionConfig.smartWarmup?.enablePatternLearning !== false,
+                            minimumHitRate: productionConfig.smartWarmup?.minimumHitRate || 0.30,
+                            alwaysWarmupCategories: productionConfig.smartWarmup?.alwaysWarmupCategories || [],
+                            neverWarmupCategories: productionConfig.smartWarmup?.neverWarmupCategories || []
+                        },
+                        costTracking: {
+                            enabled: callSource === 'production', // Only track costs for real calls
+                            trackingPath: 'company.aiAgentLogic.productionIntelligence.todaysCost'
+                        }
+                    };
+                }
             }
             
             // Fallback: Default settings

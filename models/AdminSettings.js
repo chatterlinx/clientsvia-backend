@@ -727,6 +727,130 @@ const adminSettingsSchema = new mongoose.Schema({
         }
     },
     
+    // ============================================================================
+    // GLOBAL PRODUCTION INTELLIGENCE - Platform-Wide Default (NEW)
+    // ============================================================================
+    // PURPOSE:
+    //   - Serves as DEFAULT 3-tier intelligence settings for ALL companies
+    //   - Companies inherit from this UNLESS they switch to custom settings
+    //   - Used in production for REAL customer calls (not testing)
+    // 
+    // ARCHITECTURE:
+    //   - Companies have flag: useGlobalIntelligence (true/false)
+    //   - If true → use this global config
+    //   - If false → use company.aiAgentLogic.productionIntelligence
+    // 
+    // INCLUDES:
+    //   - Same settings as per-company intelligence
+    //   - Tier thresholds, LLM config, warmup settings
+    //   - Changes here affect ALL companies using global
+    // ============================================================================
+    globalProductionIntelligence: {
+        enabled: {
+            type: Boolean,
+            default: true,
+            description: 'Enable 3-tier intelligence system platform-wide'
+        },
+        
+        // THRESHOLDS
+        thresholds: {
+            tier1: {
+                type: Number,
+                min: 0.5,
+                max: 0.95,
+                default: 0.80,
+                description: 'Tier 1 (Rule-Based) confidence threshold. Lower = more Tier 2/3 triggers.'
+            },
+            tier2: {
+                type: Number,
+                min: 0.3,
+                max: 0.80,
+                default: 0.60,
+                description: 'Tier 2 (Semantic) confidence threshold. Lower = more Tier 3 triggers.'
+            },
+            enableTier3: {
+                type: Boolean,
+                default: true,
+                description: 'Enable Tier 3 (LLM fallback). Turn OFF for 100% free (Tier 1 & 2 only) but may fail on edge cases.'
+            }
+        },
+        
+        // LLM CONFIGURATION
+        llmConfig: {
+            model: {
+                type: String,
+                enum: ['gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo', 'o1-preview', 'o1-mini'],
+                default: 'gpt-4o-mini',
+                description: 'LLM model for Tier 3: gpt-4o (best, ~$0.10/call), gpt-4o-mini (balanced, ~$0.04/call), gpt-3.5-turbo (fast, ~$0.01/call)'
+            },
+            maxCostPerCall: {
+                type: Number,
+                default: 0.10,
+                description: 'Max cost per single LLM call (USD). Prevents single call from costing too much.'
+            },
+            dailyBudget: {
+                type: Number,
+                default: null,
+                description: 'Daily LLM budget in USD (null = unlimited). System auto-pauses Tier 3 if exceeded.'
+            }
+        },
+        
+        // SMART WARMUP (Premium Feature)
+        smartWarmup: {
+            enabled: {
+                type: Boolean,
+                default: false,
+                description: 'Enable smart LLM pre-warming during Tier 2. Premium feature - charges extra for warmup calls.'
+            },
+            confidenceThreshold: {
+                type: Number,
+                min: 0.5,
+                max: 0.85,
+                default: 0.75,
+                description: 'Only pre-warm if Tier 2 confidence below this threshold (0.50-0.85). Higher = more selective warmup.'
+            },
+            dailyBudget: {
+                type: Number,
+                default: 5.00,
+                description: 'Max USD per day for warmup calls. Prevents runaway costs. Default: $5.00/day'
+            },
+            enablePatternLearning: {
+                type: Boolean,
+                default: true,
+                description: 'Track which query patterns benefit most from warmup. Improves prediction accuracy over time.'
+            },
+            minimumHitRate: {
+                type: Number,
+                min: 0.20,
+                max: 0.50,
+                default: 0.30,
+                description: 'Minimum warmup hit rate (0.20-0.50). If hit rate drops below, reduce warmup frequency.'
+            },
+            alwaysWarmupCategories: {
+                type: [String],
+                default: [],
+                description: 'Category names to ALWAYS warmup (e.g., "Pricing", "Hours"). Useful for critical queries.'
+            },
+            neverWarmupCategories: {
+                type: [String],
+                default: [],
+                description: 'Category names to NEVER warmup (e.g., "Small Talk"). Saves costs on low-value queries.'
+            }
+        },
+        
+        // TRACKING
+        lastUpdated: {
+            type: Date,
+            default: Date.now,
+            description: 'When global settings were last changed'
+        },
+        updatedBy: {
+            type: String,
+            default: 'Admin',
+            description: 'Who last updated global settings'
+        }
+    },
+    
     // Metadata
     lastUpdated: {
         type: Date,

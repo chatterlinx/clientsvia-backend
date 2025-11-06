@@ -199,6 +199,7 @@ async function loadAllRoutes() {
         routes.companyTestModeRoutes = await loadRouteWithTimeout('./routes/admin/companyTestMode', 'companyTestModeRoutes'); // ADMIN: Company Test Mode (test real production configurations)
         routes.v2IntelligenceConfigRoutes = await loadRouteWithTimeout('./routes/admin/v2intelligenceConfig', 'v2IntelligenceConfigRoutes'); // ADMIN: Intelligence Presets (Test Pilot vs Production 3-Tier configs)
         routes.adminIntelligenceRoutes = await loadRouteWithTimeout('./routes/admin/adminIntelligence', 'adminIntelligenceRoutes');
+        routes.globalIntelligenceRoutes = await loadRouteWithTimeout('./routes/admin/globalIntelligence', 'globalIntelligenceRoutes'); // ADMIN: Global Production Intelligence (platform-wide 3-tier defaults, inheritance system)
         routes.aiGatewayRoutes = await loadRouteWithTimeout('./routes/admin/aiGateway', 'aiGatewayRoutes');
         routes.enterpriseSuggestionsRoutes = await loadRouteWithTimeout('./routes/admin/enterpriseSuggestions', 'enterpriseSuggestionsRoutes'); // ADMIN: Enterprise Test Pilot (deep analysis, suggestions, trends, conflicts, cost)
         routes.healthRoutes = await loadRouteWithTimeout('./routes/health', 'healthRoutes');
@@ -407,6 +408,7 @@ function registerRoutes(routes) {
     app.use('/api/admin', routes.companyTestModeRoutes); // ADMIN: Company Test Mode API (test real company configurations)
     app.use('/api/admin/intelligence', routes.v2IntelligenceConfigRoutes); // ADMIN: Intelligence Presets API (Test Pilot vs Production 3-Tier configs, cost estimation, recommendations)
     app.use('/api/admin/intelligence', routes.adminIntelligenceRoutes); // ADMIN: 3-Tier Intelligence System (LLM, pattern learning, cost tracking, global patterns)
+    app.use('/api/admin', routes.globalIntelligenceRoutes); // ADMIN: Global Production Intelligence API (platform-wide 3-tier defaults, inheritance system)
     app.use('/api/admin/ai-gateway', routes.aiGatewayRoutes); // ADMIN: AI Gateway (LLM health monitoring, suggestion system, call log analysis)
     app.use('/api/admin/suggestions', routes.enterpriseSuggestionsRoutes); // ADMIN: Enterprise Test Pilot (deep analysis, suggestions, trends, conflicts, cost projections)
     app.use('/api', routes.healthRoutes); // SYSTEM: Health check endpoint for all 3 new systems (AI Performance, Call Archives, Spam Filter)

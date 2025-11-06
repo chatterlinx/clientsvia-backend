@@ -586,17 +586,35 @@ const aiAgentLogicSchema = new mongoose.Schema({
     },
     
     // ============================================================================
-    // 🏭 PRODUCTION INTELLIGENCE CONFIGURATION (NEW - Dual 3-Tier System)
+    // 🌐 GLOBAL INTELLIGENCE INHERITANCE FLAG (NEW)
     // ============================================================================
-    // PURPOSE: Configure 3-Tier Intelligence for PRODUCTION customer calls (NOT testing)
-    // ARCHITECTURE: Separate from Test Pilot settings for cost optimization
+    // PURPOSE:
+    //   - Determines if company uses GLOBAL or CUSTOM intelligence settings
+    //   - Global = Inherits from AdminSettings.globalProductionIntelligence
+    //   - Custom = Uses company-specific productionIntelligence below
+    // 
+    // DEFAULT: true (all companies inherit from global by default)
+    // SWITCH: Admin can switch company to custom settings in UI
+    // RUNTIME: RuntimeIntelligenceConfig.js checks this flag first
+    // ============================================================================
+    useGlobalIntelligence: {
+        type: Boolean,
+        default: true,
+        description: 'If true, use AdminSettings.globalProductionIntelligence. If false, use company-specific productionIntelligence below.'
+    },
+    
+    // ============================================================================
+    // 🏭 PRODUCTION INTELLIGENCE CONFIGURATION (Company-Specific)
+    // ============================================================================
+    // PURPOSE: Configure 3-Tier Intelligence for PRODUCTION customer calls
+    // NOTE: ONLY USED when useGlobalIntelligence = false
+    // ARCHITECTURE: Per-company customization overrides global defaults
     // KEY DIFFERENCE:
-    //   - Test Pilot Intelligence (AdminSettings) = Aggressive learning, higher LLM cost
-    //   - Production Intelligence (THIS) = Conservative, cost-optimized for real customers
+    //   - Global Intelligence (AdminSettings) = Platform-wide baseline for all companies
+    //   - Production Intelligence (THIS) = Company-specific overrides
     // BENEFITS:
-    //   - Optimize production for cost while testing remains aggressive
-    //   - Per-company customization (e.g., high-volume clients use tighter thresholds)
-    //   - Can inherit from Test Pilot settings or use custom config
+    //   - Most companies use global (easy management)
+    //   - Special companies can customize (e.g., high-volume clients)
     //   - Safety mechanisms: cost limits, circuit breakers, fallbacks
     // ============================================================================
     productionIntelligence: {
