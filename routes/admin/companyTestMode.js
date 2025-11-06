@@ -414,7 +414,9 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
                     data: variablesObj,
                     configured: variablesCount > 0
                 }
-            }
+            },
+            // ✅ FIX: Include aiAgentLogic so frontend can load productionIntelligence settings
+            aiAgentLogic: company.aiAgentLogic
         };
         
         logger.info(`✅ [TEST PILOT] Company details loaded: ${companyInfo.name}`);
