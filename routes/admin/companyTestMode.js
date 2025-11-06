@@ -246,11 +246,12 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
         logger.info(`📋 [TEST PILOT] Fetching company details: ${id}`);
         
         const company = await Company.findById(id)
-            .select('_id companyName businessName aiAgentLogic aiAgentSettings')
+            .select('_id companyName businessName intelligenceMode aiAgentLogic aiAgentSettings')
             .lean();
         
         console.log('🔍🔍🔍 [TEST PILOT LOAD] ========== LOADING COMPANY ==========');
         console.log('🔍🔍🔍 [TEST PILOT LOAD] Company ID:', id);
+        console.log('🔍🔍🔍 [TEST PILOT LOAD] Intelligence Mode:', company?.intelligenceMode || 'global (default)');
         console.log('🔍🔍🔍 [TEST PILOT LOAD] Has aiAgentLogic:', !!company?.aiAgentLogic);
         console.log('🔍🔍🔍 [TEST PILOT LOAD] Has productionIntelligence:', !!company?.aiAgentLogic?.productionIntelligence);
         console.log('🔍🔍🔍 [TEST PILOT LOAD] Has smartWarmup:', !!company?.aiAgentLogic?.productionIntelligence?.smartWarmup);
