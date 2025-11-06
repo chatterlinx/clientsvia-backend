@@ -8131,15 +8131,26 @@ Continue?`;
          * Save Company Production Intelligence settings to backend
          */
         async function saveCompanyProductionIntelligence() {
+            console.log('💾 [COMPANY INTELLIGENCE] ========== SAVE INITIATED ==========');
             console.log('💾 [COMPANY INTELLIGENCE] Saving production settings...');
             
             // Get currently selected company
             const companyDropdown = document.getElementById('top-company-selector-dropdown');
             const companyId = companyDropdown?.value;
             
+            console.log('💾 [COMPANY INTELLIGENCE] Selected company ID:', companyId);
+            
             if (!companyId) {
+                alert('❌ ERROR: Please select a company first!');
                 showToast('error', 'Please select a company first');
                 return;
+            }
+            
+            // Disable save button during save
+            const saveButton = event?.target;
+            if (saveButton) {
+                saveButton.disabled = true;
+                saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
             }
             
             try {
@@ -8186,6 +8197,7 @@ Continue?`;
                 
                 console.log('📤 [COMPANY INTELLIGENCE] Warmup checkbox state:', warmupEnabled, '(type:', typeof warmupEnabled, ')');
                 console.log('📤 [COMPANY INTELLIGENCE] Sending settings (including warmup):', settings);
+                console.log('📤 [COMPANY INTELLIGENCE] Request URL:', `/api/company/${companyId}/intelligence`);
                 
                 // Send to backend
                 const response = await fetch(`/api/company/${companyId}/intelligence`, {
@@ -8197,19 +8209,37 @@ Continue?`;
                     body: JSON.stringify({ productionIntelligence: settings })
                 });
                 
+                console.log('📤 [COMPANY INTELLIGENCE] Response status:', response.status);
+                
                 if (!response.ok) {
                     const errorData = await response.json();
+                    console.error('❌ [COMPANY INTELLIGENCE] Server error:', errorData);
                     throw new Error(errorData.message || `HTTP ${response.status}`);
                 }
                 
                 const result = await response.json();
                 
                 console.log('✅ [COMPANY INTELLIGENCE] Saved successfully:', result);
+                console.log('✅ [COMPANY INTELLIGENCE] ========== SAVE COMPLETE ==========');
+                
+                // Show prominent success message
                 showToast('success', '✅ Production Intelligence settings saved!');
+                alert('✅ SUCCESS!\n\nProduction Intelligence settings have been saved to the database.\n\n' + 
+                      'Warmup Status: ' + (warmupEnabled ? 'ENABLED ✅' : 'DISABLED ❌'));
                 
             } catch (error) {
                 console.error('❌ [COMPANY INTELLIGENCE] Save failed:', error);
+                console.error('❌ [COMPANY INTELLIGENCE] Error stack:', error.stack);
+                console.log('❌ [COMPANY INTELLIGENCE] ========== SAVE FAILED ==========');
                 showToast('error', `Failed to save: ${error.message}`);
+                alert('❌ SAVE FAILED!\n\n' + error.message + '\n\nCheck console for details.');
+            } finally {
+                // Re-enable save button
+                const saveButton = document.querySelector('button[onclick="saveCompanyProductionIntelligence()"]');
+                if (saveButton) {
+                    saveButton.disabled = false;
+                    saveButton.innerHTML = '<i class="fas fa-save mr-2"></i>Save Production Intelligence Settings';
+                }
             }
         }
         
