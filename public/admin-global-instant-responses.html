@@ -2391,29 +2391,52 @@
                                     </p>
                                 </div>
                                 
-                                <!-- Enable Smart Warmup Toggle -->
+                                <!-- Enable Smart Warmup Toggle + Expand/Collapse -->
                                 <div class="mb-4 p-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg border-2 border-orange-300">
-                                    <label class="flex items-center gap-3 cursor-pointer">
-                                        <div class="relative">
-                                            <input type="checkbox" id="company-enable-warmup" 
-                                                   onchange="toggleWarmupSettings()" 
-                                                   class="sr-only peer">
-                                            <div class="w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-orange-600 transition-colors"></div>
-                                            <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
-                                        </div>
-                                        <div>
-                                            <span class="text-sm font-bold text-gray-900">
-                                                <i class="fas fa-rocket text-orange-600 mr-1"></i>
-                                                Enable Smart Warmup
+                                    <div class="flex items-center justify-between mb-3">
+                                        <!-- Toggle (Enable/Disable Only) -->
+                                        <label class="flex items-center gap-3 cursor-pointer">
+                                            <div class="relative">
+                                                <input type="checkbox" id="company-enable-warmup" 
+                                                       onchange="updateWarmupStatus()" 
+                                                       class="sr-only peer">
+                                                <div class="w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-orange-600 transition-colors"></div>
+                                                <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+                                            </div>
+                                            <div>
+                                                <span class="text-sm font-bold text-gray-900">
+                                                    <i class="fas fa-rocket text-orange-600 mr-1"></i>
+                                                    Enable Smart Warmup
+                                                </span>
+                                                <p class="text-xs text-gray-600 mt-1">
+                                                    Pre-warm LLM during Tier 2. Only charges if used.
+                                                </p>
+                                            </div>
+                                        </label>
+                                        
+                                        <!-- Separate Expand/Collapse Button -->
+                                        <button onclick="toggleWarmupSettingsVisibility()" 
+                                                class="flex items-center gap-2 px-3 py-2 bg-white hover:bg-gray-100 border-2 border-gray-300 rounded-lg transition-colors">
+                                            <i id="warmup-expand-icon" class="fas fa-chevron-down text-gray-600"></i>
+                                            <span class="text-xs font-semibold text-gray-700">Settings</span>
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Green Status Banner (Shows when enabled) -->
+                                    <div id="warmup-status-banner" class="hidden mt-3 pt-3 border-t-2 border-green-300">
+                                        <div class="flex items-center gap-2 bg-green-100 px-4 py-2 rounded-lg border-2 border-green-500">
+                                            <i class="fas fa-check-circle text-green-600 text-lg"></i>
+                                            <span class="text-sm font-bold text-green-700">
+                                                🔥 LLM TIER 2 WARM UP ENABLED
                                             </span>
-                                            <p class="text-xs text-gray-600 mt-1">
-                                                Start LLM in parallel with Tier 2. Cancel if Tier 2 succeeds (no charge). Use if Tier 2 fails (instant Tier 3).
-                                            </p>
                                         </div>
-                                    </label>
+                                        <p class="text-xs text-green-700 mt-2 font-semibold">
+                                            ✅ Smart warmup is ACTIVE. LLM will pre-warm during Tier 2 to eliminate delay.
+                                        </p>
+                                    </div>
                                 </div>
                                 
-                                <!-- Warmup Settings (Hidden when disabled) -->
+                                <!-- Warmup Settings (Collapsible, Independent of Toggle) -->
                                 <div id="warmup-settings-container" class="hidden space-y-4">
                                     
                                     <!-- Confidence Threshold Slider -->
@@ -8044,7 +8067,7 @@ Continue?`;
                 // Set warmup enabled toggle
                 if (enableWarmupCheckbox) {
                     enableWarmupCheckbox.checked = warmup.enabled || false;
-                    toggleWarmupSettings(); // Show/hide settings based on enabled state
+                    updateWarmupStatus(); // Show/hide green banner based on enabled state
                 }
                 
                 // Set warmup confidence threshold
@@ -8211,17 +8234,51 @@ Continue?`;
         }
         
         /**
-         * Toggle warmup settings visibility
+         * Update warmup status (toggle ON/OFF)
+         * This ONLY controls the green banner, NOT the settings visibility
          */
-        function toggleWarmupSettings() {
-            const enabled = document.getElementById('company-enable-warmup')?.checked;
-            const container = document.getElementById('warmup-settings-container');
+        function updateWarmupStatus() {
+            const checkbox = document.getElementById('company-enable-warmup');
+            const enabled = checkbox?.checked || false;
+            const banner = document.getElementById('warmup-status-banner');
             
-            if (container) {
+            console.log('🔥 [WARMUP STATUS] Toggle:', enabled ? 'ON' : 'OFF');
+            
+            // Show/hide green banner based on toggle
+            if (banner) {
                 if (enabled) {
-                    container.classList.remove('hidden');
+                    banner.classList.remove('hidden');
+                    console.log('✅ [WARMUP STATUS] Banner visible');
                 } else {
+                    banner.classList.add('hidden');
+                    console.log('❌ [WARMUP STATUS] Banner hidden');
+                }
+            }
+        }
+        
+        /**
+         * Toggle warmup settings visibility (expand/collapse)
+         * This is INDEPENDENT of the enable/disable toggle
+         */
+        function toggleWarmupSettingsVisibility() {
+            const container = document.getElementById('warmup-settings-container');
+            const icon = document.getElementById('warmup-expand-icon');
+            
+            if (container && icon) {
+                const isHidden = container.classList.contains('hidden');
+                
+                if (isHidden) {
+                    // Expand
+                    container.classList.remove('hidden');
+                    icon.classList.remove('fa-chevron-down');
+                    icon.classList.add('fa-chevron-up');
+                    console.log('📂 [WARMUP SETTINGS] Expanded');
+                } else {
+                    // Collapse
                     container.classList.add('hidden');
+                    icon.classList.remove('fa-chevron-up');
+                    icon.classList.add('fa-chevron-down');
+                    console.log('📁 [WARMUP SETTINGS] Collapsed');
                 }
             }
         }
