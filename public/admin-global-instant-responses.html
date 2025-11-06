@@ -8088,8 +8088,10 @@ Continue?`;
                 
                 // Set warmup enabled toggle
                 if (enableWarmupCheckbox) {
-                    enableWarmupCheckbox.checked = warmup.enabled === true; // STRICT: only true if explicitly true
-                    console.log('📥 [COMPANY INTELLIGENCE] Set checkbox to:', enableWarmupCheckbox.checked);
+                    const warmupValue = warmup.enabled === true; // STRICT: only true if explicitly true
+                    enableWarmupCheckbox.checked = warmupValue;
+                    console.log('📥 [COMPANY INTELLIGENCE] Loaded Warmup from database:', warmupValue, '(type:', typeof warmup.enabled, ')');
+                    console.log('📥 [COMPANY INTELLIGENCE] Set warmup checkbox to:', enableWarmupCheckbox.checked);
                     updateWarmupStatus(); // Show/hide green banner based on enabled state
                 }
                 
@@ -8296,7 +8298,9 @@ Continue?`;
          */
         function toggleWarmupCard() {
             const checkbox = document.getElementById('company-enable-warmup');
+            const oldState = checkbox.checked;
             checkbox.checked = !checkbox.checked;
+            console.log('🔥 [WARMUP TOGGLE] User clicked card - Changed from', oldState, 'to', checkbox.checked);
             updateWarmupStatus();
         }
         
@@ -8381,7 +8385,9 @@ Continue?`;
          */
         function toggleTier3Card() {
             const checkbox = document.getElementById('company-enable-tier3');
+            const oldState = checkbox.checked;
             checkbox.checked = !checkbox.checked;
+            console.log('🧠 [TIER3 TOGGLE] User clicked card - Changed from', oldState, 'to', checkbox.checked);
             updateTier3Status();
             updateCompanyCostEstimate(); // Update cost when tier3 changes
         }
