@@ -1,4 +1,28 @@
-# 🔧 How to Add a New LLM Model
+# 🔧 How to Add a New LLM Model - SAFE ROLLOUT GUIDE
+
+## 🛡️ Production-Safe Deployment Strategy
+
+This guide uses a **3-phase rollout** to protect your 500+ companies from untested models.
+
+---
+
+## 🎯 3-Phase Rollout Process
+
+### **Phase 1: Admin Testing** (1-2 days)
+- Add model to beta section (hidden from regular users)
+- Test with 1-2 pilot companies
+- Monitor for errors
+
+### **Phase 2: Limited Rollout** (1 week)
+- Enable for select companies
+- Monitor performance & costs
+- Gather feedback
+
+### **Phase 3: Production** (After validation)
+- Move to stable models section
+- Available for all companies
+
+---
 
 ## Quick Reference Guide
 
@@ -6,19 +30,99 @@ When OpenAI releases a new model, follow these steps:
 
 ---
 
-## 📝 **EXAMPLE: Adding GPT-4.5**
+## 📝 **PHASE 1: Add Model for Testing (SAFE)**
 
-### **Step 1: Update UI Dropdown**
+### **Step 1: Add to Beta Models Section**
 
 **File:** `public/admin-global-instant-responses.html`  
-**Line:** ~2270
+**Line:** ~2279 (inside beta-models-group)
 
 ```html
-<select id="company-llm-model">
+<!-- 🧪 TESTING MODELS (Use with Caution) -->
+<optgroup label="🧪 Testing/Beta Models (Admin Testing Only)" id="beta-models-group" style="display: none;">
+    <!-- Add new models here for testing before production rollout -->
+    <option value="gpt-4.5-preview">🧪 GPT-4.5 Preview (BETA - Test Only)</option>
+</optgroup>
+```
+
+**✅ SAFE:** Model is hidden by default, only visible if admin checks "Show testing/beta models"
+
+---
+
+### **Step 2: Add to Beta Model Detection**
+
+**File:** `public/admin-global-instant-responses.html`  
+**Line:** ~8050 (in `isBetaModel()` function)
+
+```javascript
+function isBetaModel(modelName) {
+    const betaModels = [
+        'gpt-4.5-preview',  // ← Add here
+        'gpt-5-preview',
+        'o1-preview',
+        'o1-mini'
+    ];
+    
+    return betaModels.includes(modelName) || 
+           modelName.includes('preview') || 
+           modelName.includes('beta');
+}
+```
+
+**✅ SAFE:** This triggers warning banner when beta model is selected
+
+---
+
+### **Step 3: Test with Pilot Company**
+
+1. Go to Company Testing
+2. Select Royal Plumbing (or test company)
+3. Check "🧪 Show testing/beta models"
+4. Select "GPT-4.5 Preview"
+5. See warning: "⚠️ Beta Model Selected"
+6. Save and test thoroughly
+
+**✅ SAFE:** Only affects companies you explicitly configure
+
+---
+
+## 📝 **PHASE 2: Limited Rollout (After Testing)**
+
+After 1-2 days of successful testing:
+
+### **Step 4: Update Database Enums (Allow Backend to Accept Model)**
+
+**Files to Update:**
+- `models/v2Company.js` (Line ~641)
+- `models/AdminSettings.js` (Line ~649)
+- `models/GlobalInstantResponseTemplate.js` (Line ~788)
+- `models/ProductionLLMSuggestion.js` (Line ~207)
+
+```javascript
+enum: ['gpt-4.5-preview', 'gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo']
+```
+
+**✅ SAFE:** Backend now accepts the model, but UI still shows it as beta
+
+---
+
+## 📝 **PHASE 3: Production Release (After Validation)**
+
+After 1 week of successful limited rollout:
+
+### **Step 5: Move to Stable Models Section**
+
+**File:** `public/admin-global-instant-responses.html`  
+**Line:** ~2272
+
+```html
+<!-- ✅ STABLE MODELS (Production-Ready) -->
+<optgroup label="✅ Stable Models (Production-Ready)">
     <option value="gpt-4.5">🚀🚀 GPT-4.5 (Next-Gen - ~$0.15/call)</option>
     <option value="gpt-4o">🚀 GPT-4o (Best Quality - ~$0.10/call)</option>
     <option value="gpt-4o-mini" selected>⚖️ GPT-4o-mini (Balanced - ~$0.04/call)</option>
     <option value="gpt-3.5-turbo">⚡ GPT-3.5-turbo (Fast & Cheap - ~$0.01/call)</option>
+</optgroup>
 </select>
 ```
 
