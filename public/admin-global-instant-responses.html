@@ -8698,7 +8698,16 @@ Continue?`;
                 // ============================================================
                 // UPDATE INTELLIGENCE MODE INDICATOR
                 // ============================================================
+                console.log('🔍🔍🔍 [CHECKPOINT 1] Full API response data:', data);
+                console.log('🔍🔍🔍 [CHECKPOINT 2] Company object:', company);
+                console.log('🔍🔍🔍 [CHECKPOINT 3] company.intelligenceMode value:', company.intelligenceMode);
+                console.log('🔍🔍🔍 [CHECKPOINT 4] company.intelligenceMode type:', typeof company.intelligenceMode);
+                console.log('🔍🔍🔍 [CHECKPOINT 5] company.intelligenceMode === undefined:', company.intelligenceMode === undefined);
+                console.log('🔍🔍🔍 [CHECKPOINT 6] company hasOwnProperty intelligenceMode:', company.hasOwnProperty('intelligenceMode'));
+                
                 const intelligenceMode = company.intelligenceMode || 'global';
+                
+                console.log('🔍🔍🔍 [CHECKPOINT 7] Final intelligenceMode after OR operator:', intelligenceMode);
                 
                 // TODO: Fetch global companies count from backend
                 // For now, using placeholder count
@@ -9284,6 +9293,12 @@ Continue?`;
          * @param {number} globalCompaniesCount - Total companies using global mode
          */
         function updateIntelligenceModeIndicator(mode, company, globalCompaniesCount = 0) {
+            console.log('🔍🔍🔍 [CHECKPOINT 8] updateIntelligenceModeIndicator() CALLED');
+            console.log('🔍🔍🔍 [CHECKPOINT 9] mode parameter received:', mode);
+            console.log('🔍🔍🔍 [CHECKPOINT 10] mode parameter type:', typeof mode);
+            console.log('🔍🔍🔍 [CHECKPOINT 11] company parameter:', company);
+            console.log('🔍🔍🔍 [CHECKPOINT 12] company.intelligenceMode from parameter:', company?.intelligenceMode);
+            
             const indicator = document.getElementById('company-intelligence-mode-indicator');
             const iconContainer = document.getElementById('mode-icon-container');
             const icon = document.getElementById('mode-icon');
