@@ -111,35 +111,6 @@ class RuntimeIntelligenceConfig {
                 // Company Testing OR Production: Use Company Production Intelligence
                 const productionConfig = company?.aiAgentLogic?.productionIntelligence || {};
                 
-                // Check if inheriting from Test Pilot
-                if (productionConfig.inheritFromTestPilot !== false) {
-                    const adminSettings = await AdminSettings.findOne({});
-                    const testPilotConfig = adminSettings?.testPilotIntelligence || {};
-                    
-                    logger.info(`[RUNTIME CONFIG] ✅ Company inheriting from Test Pilot:`, {
-                        tier1: testPilotConfig.thresholds?.tier1 || 0.80,
-                        tier2: testPilotConfig.thresholds?.tier2 || 0.60
-                    });
-                    
-                    return {
-                        source: 'production-inherited',
-                        thresholds: {
-                            tier1: testPilotConfig.thresholds?.tier1 || 0.80,
-                            tier2: testPilotConfig.thresholds?.tier2 || 0.60,
-                            enableTier3: productionConfig.thresholds?.enableTier3 !== false
-                        },
-                        llmConfig: {
-                            model: productionConfig.llmConfig?.model || testPilotConfig.llmConfig?.model || 'gpt-4o-mini',
-                            maxCostPerCall: productionConfig.llmConfig?.maxCostPerCall || 0.10
-                        },
-                        costTracking: {
-                            enabled: callSource === 'production', // Only track costs for real calls
-                            trackingPath: 'company.aiAgentLogic.productionIntelligence.todaysCost'
-                        }
-                    };
-                }
-                
-                // Use company-specific settings
                 logger.info(`[RUNTIME CONFIG] ✅ Loaded Company Production Intelligence:`, {
                     tier1: productionConfig.thresholds?.tier1 || 0.80,
                     tier2: productionConfig.thresholds?.tier2 || 0.60,
@@ -147,7 +118,7 @@ class RuntimeIntelligenceConfig {
                 });
                 
                 return {
-                    source: 'production-custom',
+                    source: 'production-company',
                     thresholds: {
                         tier1: productionConfig.thresholds?.tier1 || 0.80,
                         tier2: productionConfig.thresholds?.tier2 || 0.60,

@@ -2113,7 +2113,6 @@ router.delete('/:companyId/configuration/templates/:templateId', async (req, res
  * {
  *   productionIntelligence: {
  *     enabled: true,
- *     inheritFromTestPilot: false,
  *     thresholds: {
  *       tier1: 0.80,
  *       tier2: 0.60,
@@ -2170,7 +2169,6 @@ router.patch('/:companyId/intelligence', async (req, res) => {
         // Update production intelligence settings
         company.aiAgentLogic.productionIntelligence = {
             enabled: productionIntelligence.enabled !== false, // default true
-            inheritFromTestPilot: productionIntelligence.inheritFromTestPilot !== false, // default true
             thresholds: {
                 tier1: parseFloat(productionIntelligence.thresholds?.tier1) || 0.80,
                 tier2: parseFloat(productionIntelligence.thresholds?.tier2) || 0.60,

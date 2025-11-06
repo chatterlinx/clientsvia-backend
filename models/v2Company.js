@@ -650,18 +650,6 @@ const aiAgentLogicSchema = new mongoose.Schema({
         },
         
         // ────────────────────────────────────────────────────────────────────────
-        // INHERITANCE FROM TEST PILOT
-        // ────────────────────────────────────────────────────────────────────────
-        // If true, company inherits thresholds from AdminSettings.testPilotIntelligence
-        // This ensures what you test is exactly what customers get!
-        // If false, company uses custom thresholds defined above
-        inheritFromTestPilot: {
-            type: Boolean,
-            default: true,
-            description: 'Inherit thresholds from Test Pilot settings (AdminSettings). Recommended for consistency.'
-        },
-        
-        // ────────────────────────────────────────────────────────────────────────
         // METADATA
         // ────────────────────────────────────────────────────────────────────────
         lastUpdated: {

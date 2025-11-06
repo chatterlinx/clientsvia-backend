@@ -343,32 +343,18 @@ class V2AIAgentRuntime {
         const aiLogic = company.aiAgentLogic;
         const personality = aiLogic.agentPersonality || {};
         
-        // 🎯 TASK 2.2: Build effectiveIntelligence from company or Test Pilot settings
+        // 🎯 Load company production intelligence settings
         let effectiveIntelligence = {};
         try {
             const prodInt = aiLogic.productionIntelligence || {};
             
-            // If inheritFromTestPilot is true, load global Test Pilot settings
-            if (prodInt.inheritFromTestPilot) {
-                logger.info(`📊 [INTELLIGENCE CONFIG] Company ${company._id} inherits from Test Pilot`);
-                const adminSettings = await AdminSettings.getSettings();
-                effectiveIntelligence = adminSettings.testPilotIntelligence || prodInt;
-                logger.info(`✅ [INTELLIGENCE CONFIG] Using Test Pilot settings:`, {
-                    preset: effectiveIntelligence.preset,
-                    tier1: effectiveIntelligence.thresholds?.tier1,
-                    tier2: effectiveIntelligence.thresholds?.tier2,
-                    enableTier3: effectiveIntelligence.thresholds?.enableTier3,
-                    model: effectiveIntelligence.llmConfig?.model
-                });
-            } else {
-                effectiveIntelligence = prodInt;
-                logger.info(`✅ [INTELLIGENCE CONFIG] Using company-specific settings:`, {
-                    tier1: effectiveIntelligence.thresholds?.tier1,
-                    tier2: effectiveIntelligence.thresholds?.tier2,
-                    enableTier3: effectiveIntelligence.thresholds?.enableTier3,
-                    model: effectiveIntelligence.llmConfig?.model
-                });
-            }
+            effectiveIntelligence = prodInt;
+            logger.info(`✅ [INTELLIGENCE CONFIG] Using company production settings:`, {
+                tier1: effectiveIntelligence.thresholds?.tier1 || 0.80,
+                tier2: effectiveIntelligence.thresholds?.tier2 || 0.60,
+                enableTier3: effectiveIntelligence.thresholds?.enableTier3 !== false,
+                model: effectiveIntelligence.llmConfig?.model || 'gpt-4o-mini'
+            });
         } catch (intError) {
             logger.warn(`⚠️ [INTELLIGENCE CONFIG] Failed to load intelligence settings:`, intError.message);
             // Use defaults if loading fails
