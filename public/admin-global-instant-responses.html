@@ -8063,6 +8063,9 @@ Continue?`;
                 // ============================================================
                 const warmup = intelligence.smartWarmup || {};
                 
+                console.log('📥 [COMPANY INTELLIGENCE] Loaded warmup from database:', warmup);
+                console.log('📥 [COMPANY INTELLIGENCE] warmup.enabled value:', warmup.enabled, '(type:', typeof warmup.enabled, ')');
+                
                 const enableWarmupCheckbox = document.getElementById('company-enable-warmup');
                 const warmupThresholdSlider = document.getElementById('company-warmup-threshold-slider');
                 const warmupDailyBudgetInput = document.getElementById('company-warmup-daily-budget');
@@ -8073,7 +8076,8 @@ Continue?`;
                 
                 // Set warmup enabled toggle
                 if (enableWarmupCheckbox) {
-                    enableWarmupCheckbox.checked = warmup.enabled || false;
+                    enableWarmupCheckbox.checked = warmup.enabled === true; // STRICT: only true if explicitly true
+                    console.log('📥 [COMPANY INTELLIGENCE] Set checkbox to:', enableWarmupCheckbox.checked);
                     updateWarmupStatus(); // Show/hide green banner based on enabled state
                 }
                 
@@ -8171,7 +8175,7 @@ Continue?`;
                 };
                 
                 settings.smartWarmup = {
-                    enabled: warmupEnabled || false,
+                    enabled: warmupEnabled === true, // STRICT: only true if explicitly checked
                     confidenceThreshold: parseFloat(document.getElementById('company-warmup-threshold-slider')?.value || 0.75),
                     dailyBudget: parseFloat(document.getElementById('company-warmup-daily-budget')?.value || 5.00),
                     enablePatternLearning: document.getElementById('company-warmup-pattern-learning')?.checked !== false,
@@ -8180,6 +8184,7 @@ Continue?`;
                     neverWarmupCategories: parseCategories(document.getElementById('company-warmup-never-categories')?.value)
                 };
                 
+                console.log('📤 [COMPANY INTELLIGENCE] Warmup checkbox state:', warmupEnabled, '(type:', typeof warmupEnabled, ')');
                 console.log('📤 [COMPANY INTELLIGENCE] Sending settings (including warmup):', settings);
                 
                 // Send to backend

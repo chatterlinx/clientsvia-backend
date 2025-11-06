@@ -2191,8 +2191,13 @@ router.patch('/:companyId/intelligence', async (req, res) => {
         // SMART WARMUP SETTINGS (Premium Feature)
         // ============================================================
         if (productionIntelligence.smartWarmup) {
+            logger.info(`🔥 [SMART WARMUP] Received from frontend:`, {
+                enabled: productionIntelligence.smartWarmup.enabled,
+                enabledType: typeof productionIntelligence.smartWarmup.enabled
+            });
+            
             company.aiAgentLogic.productionIntelligence.smartWarmup = {
-                enabled: productionIntelligence.smartWarmup.enabled || false,
+                enabled: productionIntelligence.smartWarmup.enabled === true, // STRICT boolean check
                 confidenceThreshold: parseFloat(productionIntelligence.smartWarmup.confidenceThreshold) || 0.75,
                 dailyBudget: parseFloat(productionIntelligence.smartWarmup.dailyBudget) || 5.00,
                 enablePatternLearning: productionIntelligence.smartWarmup.enablePatternLearning !== false,
@@ -2205,7 +2210,7 @@ router.patch('/:companyId/intelligence', async (req, res) => {
                     : []
             };
             
-            logger.info(`🔥 [SMART WARMUP] Settings saved for company: ${companyId}`, {
+            logger.info(`🔥 [SMART WARMUP] Saved to database:`, {
                 enabled: company.aiAgentLogic.productionIntelligence.smartWarmup.enabled,
                 confidenceThreshold: company.aiAgentLogic.productionIntelligence.smartWarmup.confidenceThreshold,
                 dailyBudget: company.aiAgentLogic.productionIntelligence.smartWarmup.dailyBudget
