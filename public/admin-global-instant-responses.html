@@ -2190,26 +2190,35 @@
                         <!-- Settings Container -->
                         <div id="company-intelligence-settings">
                             
-                            <!-- Enable 3-Tier Intelligence Toggle -->
+                            <!-- Enable 3-Tier Intelligence Card-Style Button -->
                             <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                                <label class="flex items-center gap-3 cursor-pointer">
-                                    <div class="relative">
-                                        <input type="checkbox" id="company-enable-tier3" checked 
-                                               onchange="updateCompanyCostEstimate()" 
-                                               class="sr-only peer">
-                                        <div class="w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-600 transition-colors"></div>
-                                        <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+                                <input type="checkbox" id="company-enable-tier3" checked class="hidden">
+                                <div id="tier3-toggle-card" 
+                                     onclick="toggleTier3Card()" 
+                                     class="relative cursor-pointer rounded-lg p-4 border-2 transition-all duration-200"
+                                     style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border-color: #10b981;">
+                                    <!-- Status Indicator Dot (top right) -->
+                                    <div id="tier3-status-dot" 
+                                         class="absolute top-3 right-3 w-3 h-3 rounded-full"
+                                         style="background: #10b981;"></div>
+                                    
+                                    <!-- Icon and Title -->
+                                    <div class="flex items-start gap-3">
+                                        <div id="tier3-icon-container" 
+                                             class="w-10 h-10 rounded-full flex items-center justify-center"
+                                             style="background: #10b981;">
+                                            <i id="tier3-icon" class="fas fa-check text-white"></i>
+                                        </div>
+                                        <div class="flex-1">
+                                            <h4 id="tier3-title" class="text-base font-bold text-green-800">
+                                                3-Tier Intelligence System Enabled
+                                            </h4>
+                                            <p id="tier3-description" class="text-sm text-green-700 mt-1">
+                                                Tier 1 (Rules) → Tier 2 (Semantic) → Tier 3 (LLM Fallback)
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <span class="text-sm font-bold text-gray-900">
-                                            <i class="fas fa-brain text-green-600 mr-1"></i>
-                                            Enable 3-Tier Intelligence System
-                                        </span>
-                                        <p class="text-xs text-gray-600 mt-1">
-                                            Turn OFF to disable LLM fallback completely (Tier 1 & 2 only - 100% free, but may fail on edge cases)
-                                        </p>
-                                    </div>
-                                </label>
+                                </div>
                             </div>
                             
                             <!-- Tier Confidence Thresholds (Side-by-Side) -->
@@ -8030,6 +8039,7 @@ Continue?`;
                 // Set enable Tier 3 toggle (default: true)
                 if (enableTier3Checkbox) {
                     enableTier3Checkbox.checked = intelligence.thresholds?.enableTier3 !== false; // Default true
+                    updateTier3Status(); // Update card visual state
                 }
                 
                 // Set thresholds
@@ -8357,6 +8367,57 @@ Continue?`;
                     icon.classList.add('fa-chevron-down');
                     console.log('📁 [WARMUP SETTINGS] Collapsed');
                 }
+            }
+        }
+        
+        /**
+         * Toggle 3-Tier System card (user clicks the card to enable/disable)
+         */
+        function toggleTier3Card() {
+            const checkbox = document.getElementById('company-enable-tier3');
+            checkbox.checked = !checkbox.checked;
+            updateTier3Status();
+            updateCompanyCostEstimate(); // Update cost when tier3 changes
+        }
+        
+        /**
+         * Update 3-Tier System card visual state (green enabled vs gray disabled)
+         */
+        function updateTier3Status() {
+            const checkbox = document.getElementById('company-enable-tier3');
+            const enabled = checkbox?.checked !== false; // Default to enabled
+            
+            const card = document.getElementById('tier3-toggle-card');
+            const dot = document.getElementById('tier3-status-dot');
+            const iconContainer = document.getElementById('tier3-icon-container');
+            const icon = document.getElementById('tier3-icon');
+            const title = document.getElementById('tier3-title');
+            const description = document.getElementById('tier3-description');
+            
+            console.log('🧠 [TIER3 CARD] Toggle:', enabled ? 'ENABLED' : 'DISABLED');
+            
+            if (enabled) {
+                // GREEN ENABLED STATE
+                card.style.background = 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)';
+                card.style.borderColor = '#10b981';
+                dot.style.background = '#10b981';
+                iconContainer.style.background = '#10b981';
+                icon.className = 'fas fa-check text-white';
+                title.textContent = '3-Tier Intelligence System Enabled';
+                title.className = 'text-base font-bold text-green-800';
+                description.textContent = 'Tier 1 (Rules) → Tier 2 (Semantic) → Tier 3 (LLM Fallback)';
+                description.className = 'text-sm text-green-700 mt-1';
+            } else {
+                // RED DISABLED STATE
+                card.style.background = 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)';
+                card.style.borderColor = '#ef4444';
+                dot.style.background = '#ef4444';
+                iconContainer.style.background = '#ef4444';
+                icon.className = 'fas fa-times text-white';
+                title.textContent = '3-Tier Intelligence System Disabled';
+                title.className = 'text-base font-bold text-red-800';
+                description.textContent = 'Tier 1 & 2 only - 100% free, but may fail on edge cases';
+                description.className = 'text-sm text-red-700 mt-1';
             }
         }
         
