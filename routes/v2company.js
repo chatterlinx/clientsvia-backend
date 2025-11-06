@@ -2404,9 +2404,9 @@ router.patch('/company/:companyId/intelligence-mode', authenticateJWT, async (re
         // ====================================================================
         // AUDIT NOTIFICATION (P1 - Mode switches are critical)
         // ====================================================================
-        await AdminNotificationService.logNotification({
-            type: 'intelligence_mode_switch',
-            severity: 'p1',
+        await AdminNotificationService.sendAlert({
+            code: 'INTELLIGENCE_MODE_SWITCH',
+            severity: 'WARNING',
             companyId,
             companyName: company.companyName,
             message: `Intelligence mode switched: ${currentMode} → ${newMode}`,
