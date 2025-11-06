@@ -10063,6 +10063,15 @@ Continue?`;
                         model: document.getElementById('global-llm-model')?.value || 'gpt-4o-mini',
                         maxCostPerCall: parseFloat(document.getElementById('global-max-cost-per-call')?.value || 0.10),
                         dailyBudget: parseFloat(document.getElementById('global-daily-budget')?.value) || null
+                    },
+                    smartWarmup: {
+                        enabled: document.getElementById('global-enable-warmup')?.checked === true,
+                        confidenceThreshold: parseFloat(document.getElementById('global-warmup-confidence')?.value || 0.75),
+                        dailyBudget: parseFloat(document.getElementById('global-warmup-daily-budget')?.value || 5.00),
+                        enablePatternLearning: document.getElementById('global-warmup-pattern-learning')?.checked !== false,
+                        minimumHitRate: parseFloat(document.getElementById('global-warmup-min-hit-rate')?.value || 0.30),
+                        alwaysWarmupCategories: [],  // TODO: Implement category selection UI
+                        neverWarmupCategories: []     // TODO: Implement category selection UI
                     }
                 };
                 
@@ -10076,8 +10085,7 @@ Continue?`;
                         'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                     },
                     body: JSON.stringify({
-                        productionIntelligence: settings,
-                        updatedBy: 'admin@clientsvia.com' // TODO: Get from session
+                        intelligence: settings  // Backend expects 'intelligence', not 'productionIntelligence'
                     })
                 });
                 
