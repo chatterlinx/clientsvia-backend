@@ -8242,7 +8242,25 @@ Continue?`;
             const enabled = checkbox?.checked || false;
             const banner = document.getElementById('warmup-status-banner');
             
+            // Get toggle visual elements
+            const toggleContainer = checkbox?.parentElement;
+            const toggleBg = toggleContainer?.querySelector('.w-11.h-6');
+            const toggleDot = toggleContainer?.querySelector('.absolute');
+            
             console.log('🔥 [WARMUP STATUS] Toggle:', enabled ? 'ON' : 'OFF');
+            
+            // FORCE visual toggle update (CSS peer not working)
+            if (toggleBg && toggleDot) {
+                if (enabled) {
+                    toggleBg.classList.remove('bg-gray-300');
+                    toggleBg.classList.add('bg-orange-600');
+                    toggleDot.classList.add('translate-x-5');
+                } else {
+                    toggleBg.classList.remove('bg-orange-600');
+                    toggleBg.classList.add('bg-gray-300');
+                    toggleDot.classList.remove('translate-x-5');
+                }
+            }
             
             // Show/hide green banner based on toggle
             if (banner) {
