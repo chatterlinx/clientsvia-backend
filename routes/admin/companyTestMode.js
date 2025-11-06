@@ -436,6 +436,7 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
         const companyInfo = {
             _id: company._id,
             name: company.companyName || company.businessName,
+            intelligenceMode: company.intelligenceMode || 'global', // ✅ FIX: Include intelligenceMode for frontend UI
             templates: loadedTemplates,
             customizations: {
                 customFillers: {
