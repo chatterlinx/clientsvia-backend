@@ -371,7 +371,8 @@
       method: 'GET',
       headers: {
         'Accept': 'application/json'
-      }
+      },
+      credentials: 'include' // Send cookies for JWT authentication
     });
 
     if (!res.ok) {
@@ -388,7 +389,8 @@
   async function fetchTasks() {
     const res = await fetch('/api/admin/llm-learning/v2/tasks', {
       method: 'GET',
-      headers: { 'Accept': 'application/json' }
+      headers: { 'Accept': 'application/json' },
+      credentials: 'include' // Send cookies for JWT authentication
     });
     if (!res.ok) {
       console.error('Failed to load tasks', await res.text());
@@ -406,6 +408,7 @@
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
+      credentials: 'include', // Send cookies for JWT authentication
       body: JSON.stringify(body || {})
     });
     if (!res.ok) {

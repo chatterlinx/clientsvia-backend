@@ -25,7 +25,10 @@ const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
 
 // Apply admin-only protection
-router.use(authenticateJWT, requireRole('admin'));
+// NOTE: authenticateJWT checks for token in cookies (httpOnly) OR Authorization header
+// Admin UI stores JWT in httpOnly cookie after login
+router.use(authenticateJWT);
+router.use(requireRole('admin'));
 
 /**
  * ============================================================================
