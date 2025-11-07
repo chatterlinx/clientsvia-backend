@@ -19,8 +19,12 @@ const logger = require('../../utils/logger');
 /**
  * Serve LLM Learning Console V2 UI
  * GET /admin/llm-learning-v2
+ * 
+ * NOTE: Serves as static file without JWT check.
+ * The API endpoints (/api/admin/llm-learning/v2/*) are protected with JWT.
+ * This matches how other admin pages work (admin-global-instant-responses.html, etc.)
  */
-router.get('/llm-learning-v2', authenticateJWT, requireRole('admin'), (req, res) => {
+router.get('/llm-learning-v2', (req, res) => {
   try {
     logger.info('[LLM LEARNING V2 UI] Serving console interface');
     
@@ -29,18 +33,12 @@ router.get('/llm-learning-v2', authenticateJWT, requireRole('admin'), (req, res)
     res.sendFile(filePath, (err) => {
       if (err) {
         logger.error('[LLM LEARNING V2 UI] Error serving file:', err);
-        res.status(500).json({ 
-          error: 'Failed to load LLM Learning Console V2',
-          details: err.message 
-        });
+        res.status(500).send('Failed to load LLM Learning Console V2');
       }
     });
   } catch (error) {
     logger.error('[LLM LEARNING V2 UI] Unexpected error:', error);
-    res.status(500).json({ 
-      error: 'Internal server error',
-      details: error.message 
-    });
+    res.status(500).send('Internal server error');
   }
 });
 

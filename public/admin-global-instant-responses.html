@@ -594,11 +594,12 @@
                         <i class="fas fa-flask mr-1.5 text-xs"></i>
                         Test Pilot
                     </button>
-                    <button id="overview-subtab-llm-learning" onclick="switchOverviewSubTab('llm-learning')" class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 border-b-2 border-transparent rounded-t">
+                    <!-- ✨ V2: Opens new standalone LLM Learning Console -->
+                    <a href="/admin/llm-learning-v2" id="overview-subtab-llm-learning" class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 border-b-2 border-transparent rounded-t inline-flex items-center">
                         <i class="fas fa-graduation-cap mr-1.5 text-xs"></i>
                         LLM Learning Console
                         <span id="llm-suggestions-badge" class="ml-1.5 px-1.5 py-0.5 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs rounded-full font-bold animate-pulse">0</span>
-                    </button>
+                    </a>
                     <button id="overview-subtab-ai-gateway" onclick="switchOverviewSubTab('ai-gateway')" class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 border-b-2 border-transparent rounded-t">
                         <i class="fas fa-network-wired mr-1.5 text-xs"></i>
                         AI Gateway
@@ -3507,6 +3508,11 @@
                  - Approve/reject queue with cost analysis
                  - Track learning ROI and Tier 3 reduction
                  ======================================================================== -->
+            <!-- 🗑️ DEPRECATED V1: Old embedded LLM Learning Console (replaced by standalone V2 page)
+                 This section is hidden and will be removed once V2 is fully validated.
+                 New console location: /admin/llm-learning-v2
+            -->
+            <!--
             <div id="overview-llm-learning-content" class="overview-subtab-content hidden">
                 
                 <!-- Header -->
@@ -3669,7 +3675,8 @@
                 </div>
                 
             </div>
-            <!-- END: LLM Learning Console -->
+            <!-- END: LLM Learning Console (V1 - DEPRECATED) -->
+            -->
 
             <!-- AI Gateway Sub-Tab Content -->
             <div id="overview-ai-gateway-content" class="overview-subtab-content hidden">
