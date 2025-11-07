@@ -9915,6 +9915,55 @@ Continue?`;
         }
         
         /**
+         * Update global warmup card visual state (green active vs gray disabled)
+         */
+        function updateGlobalWarmupStatus() {
+            const checkbox = document.getElementById('global-enable-warmup');
+            const enabled = checkbox?.checked || false;
+            
+            const card = document.getElementById('global-warmup-toggle-card');
+            const dot = document.getElementById('global-warmup-status-dot');
+            const iconContainer = document.getElementById('global-warmup-icon-container');
+            const icon = document.getElementById('global-warmup-icon');
+            const title = document.getElementById('global-warmup-title');
+            const description = document.getElementById('global-warmup-description');
+            const banner = document.getElementById('global-warmup-status-banner');
+            
+            console.log('🔥 [GLOBAL WARMUP CARD] Toggle:', enabled ? 'ENABLED' : 'DISABLED');
+            
+            if (enabled) {
+                // GREEN ACTIVE STATE
+                card.style.background = 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)';
+                card.style.borderColor = '#10b981';
+                dot.style.background = '#10b981';
+                iconContainer.style.background = '#10b981';
+                icon.className = 'fas fa-check text-white';
+                title.textContent = 'Smart Warmup Enabled';
+                title.className = 'text-base font-bold text-green-800';
+                description.textContent = 'LLM pre-warming active during Tier 2';
+                description.className = 'text-sm text-green-700 mt-1';
+                
+                // Show green banner
+                if (banner) banner.classList.remove('hidden');
+                
+            } else {
+                // GRAY DISABLED STATE
+                card.style.background = 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)';
+                card.style.borderColor = '#9ca3af';
+                dot.style.background = '#9ca3af';
+                iconContainer.style.background = '#9ca3af';
+                icon.className = 'fas fa-times text-white';
+                title.textContent = 'Smart Warmup Disabled';
+                title.className = 'text-base font-bold text-gray-600';
+                description.textContent = 'No LLM pre-warming';
+                description.className = 'text-sm text-gray-500 mt-1';
+                
+                // Hide banner
+                if (banner) banner.classList.add('hidden');
+            }
+        }
+        
+        /**
          * Update global Tier 3 visual status
          */
         function updateGlobalTier3Status() {
@@ -10182,6 +10231,45 @@ Continue?`;
                 console.error('❌ [GLOBAL] Failed to load settings:', error);
                 showToast('error', `Failed to load global settings: ${error.message}`);
             }
+        }
+        
+        /**
+         * Calculate and update global cost estimate
+         * Based on thresholds, predict Tier 1/2/3 distribution and monthly cost
+         */
+        function updateGlobalCostEstimate() {
+            console.log('💰 [GLOBAL COST ESTIMATE] Calculating...');
+            
+            const tier1Threshold = parseFloat(document.getElementById('global-tier1-slider')?.value || 0.80);
+            const tier2Threshold = parseFloat(document.getElementById('global-tier2-slider')?.value || 0.60);
+            const llmModel = document.getElementById('global-llm-model')?.value || 'gpt-4o-mini';
+            const enableTier3 = document.getElementById('global-enable-tier3')?.checked;
+            
+            // Estimate tier distribution based on thresholds
+            // Lower thresholds = more queries escalate to higher tiers
+            const tier1Percent = Math.round(tier1Threshold * 100); // e.g., 0.80 = 80%
+            const tier2Percent = enableTier3 ? Math.round((1 - tier1Threshold) * 100 * 0.7) : Math.round((1 - tier1Threshold) * 100); // 70% of remaining
+            const tier3Percent = enableTier3 ? Math.round((1 - tier1Threshold) * 100 * 0.3) : 0; // 30% of remaining
+            
+            // Cost per LLM call (Tier 3 only)
+            const costPerCall = {
+                'gpt-4o': 0.10,
+                'gpt-4o-mini': 0.04,
+                'gpt-3.5-turbo': 0.01
+            }[llmModel] || 0.04;
+            
+            // Estimate monthly cost (1,000 calls/month)
+            const monthlyCallVolume = 1000;
+            const tier3Calls = (tier3Percent / 100) * monthlyCallVolume;
+            const monthlyCost = tier3Calls * costPerCall;
+            
+            // Update UI
+            document.getElementById('global-tier1-percent').textContent = `${tier1Percent}%`;
+            document.getElementById('global-tier2-percent').textContent = `${tier2Percent}%`;
+            document.getElementById('global-tier3-percent').textContent = `${tier3Percent}%`;
+            document.getElementById('global-monthly-cost-estimate').textContent = `$${monthlyCost.toFixed(2)}`;
+            
+            console.log(`✅ [GLOBAL COST ESTIMATE] T1: ${tier1Percent}%, T2: ${tier2Percent}%, T3: ${tier3Percent}%, Monthly: $${monthlyCost.toFixed(2)}`);
         }
         
         /**
