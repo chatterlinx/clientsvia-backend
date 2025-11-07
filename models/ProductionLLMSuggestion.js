@@ -1,475 +1,263 @@
 /**
  * ============================================================================
- * PRODUCTION LLM SUGGESTION MODEL
+ * PRODUCTION LLM SUGGESTION MODEL - V2 ENHANCED
  * ============================================================================
  * 
- * PURPOSE: Store LLM-generated suggestions from REAL production customer calls
- * SCOPE: Multi-tenant (all companies contribute to one global learning pool)
+ * PURPOSE: Store LLM-generated suggestions from production calls
+ * VERSION: 2.0 - Comprehensive latency tracking + multi-source support
  * 
- * KEY DIFFERENCES FROM TestPilotAnalysis:
- * - TestPilotAnalysis: Temporary suggestions from developer testing
- * - ProductionLLMSuggestion: Permanent suggestions from customer calls
- * 
- * FLOW:
- * 1. Customer calls company → Tier 3 LLM triggered
- * 2. LLM generates suggestion (e.g., "add trigger: leaky pipe")
- * 3. Saved to this collection
- * 4. Admin reviews in LLM Learning Console
- * 5. Approve → Updates Global Template
- * 6. Reject → Marks as dismissed
- * 
- * COST TRACKING:
- * Each suggestion stores the LLM cost, allowing ROI analysis
+ * KEY FEATURES:
+ * - Template + company tracking
+ * - Call source differentiation (template-test, company-test, production)
+ * - Full tier routing analysis (scores, thresholds, latency)
+ * - Dead air / customer wait time tracking
+ * - Rich suggestion metadata (type, priority, changes)
+ * - Admin workflow (pending, applied, rejected, snoozed)
  * 
  * ============================================================================
  */
 
 const mongoose = require('mongoose');
 
-const ProductionLLMSuggestionSchema = new mongoose.Schema({
+const { Schema } = mongoose;
+
+const ProductionLLMSuggestionSchema = new Schema(
+  {
     // ========================================================================
-    // CORE IDENTIFIERS
+    // WHAT TEMPLATE / COMPANY
     // ========================================================================
-    
-    templateId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'GlobalInstantResponseTemplate',
-        required: true,
-        index: true,
-        description: 'Which global template this suggestion applies to'
+    templateId: { 
+      type: Schema.Types.ObjectId, 
+      ref: 'GlobalInstantResponseTemplate', 
+      required: true,
+      index: true
     },
-    
-    templateName: {
-        type: String,
-        required: true,
-        description: 'Template name (denormalized for fast querying)'
+    templateName: { 
+      type: String, 
+      required: true 
     },
-    
-    companyId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'v2Company',
-        required: true,
-        index: true,
-        description: 'Which company\'s call generated this suggestion'
+
+    companyId: { 
+      type: Schema.Types.ObjectId, 
+      ref: 'v2Company', 
+      default: null,
+      index: true
     },
-    
-    companyName: {
-        type: String,
-        required: true,
-        description: 'Company name (denormalized for fast display)'
+    companyName: { 
+      type: String, 
+      default: null 
     },
-    
-    // 🎯 TEST PILOT INTEGRATION (Phase 1 + Enhanced)
+
+    // ========================================================================
+    // WHERE DID THIS CALL COME FROM?
+    // ========================================================================
+    // - template-test  => Global AI Brain test pilot
+    // - company-test   => Test Pilot company mode
+    // - production     => real customer calls
     callSource: {
-        type: String,
-        enum: ['template-test', 'company-test', 'production'],
-        required: true,
-        index: true,
-        description: 'Call source: template-test (Global AI Brain), company-test (Test Pilot), or production (real customers)'
+      type: String,
+      enum: ['template-test', 'company-test', 'production'],
+      default: 'production',
+      required: true,
+      index: true,
     },
-    
-    callId: {
-        type: String,
-        index: true,
-        description: 'Internal call/session ID for this conversation'
-    },
-    
-    turnIndex: {
-        type: Number,
-        description: 'Which turn in the conversation triggered Tier 3 (1-indexed)'
-    },
-    
+
     // ========================================================================
-    // SUGGESTION DETAILS
+    // CALL IDENTITY & TIMING
     // ========================================================================
+    callId: { 
+      type: String, 
+      index: true 
+    }, // internal call id
     
+    callSid: { 
+      type: String, 
+      index: true 
+    }, // Twilio SID if available
+    
+    callDate: { 
+      type: Date, 
+      default: Date.now, 
+      required: true,
+      index: true 
+    },
+
+    // ========================================================================
+    // TIER ROUTING INFO
+    // ========================================================================
+    tierPath: {
+      type: String, // e.g. "tier1", "tier2", "tier3"
+      default: 'tier3',
+    },
+    
+    tier1Score: { type: Number },
+    tier2Score: { type: Number },
+    tier1Threshold: { type: Number },
+    tier2Threshold: { type: Number },
+
+    // ========================================================================
+    // LATENCY / CUSTOMER WAIT TIME
+    // ========================================================================
+    tier1LatencyMs: { type: Number },
+    tier2LatencyMs: { type: Number },
+    tier3LatencyMs: { type: Number },
+    totalResponseLatencyMs: { type: Number }, // full time between caller speech and reply
+    deadAirMs: { type: Number }, // estimated "silence" time
+
+    // ========================================================================
+    // WHAT THE CALLER SAID + TRANSCRIPT
+    // ========================================================================
+    customerPhrase: { 
+      type: String,
+      required: true
+    }, // the exact utterance that caused Tier 3
+    
+    fullCallTranscript: { type: String },
+
+    // ========================================================================
+    // WHERE IN THE TEMPLATE THIS SUGGESTION APPLIES
+    // ========================================================================
+    targetCategory: { type: String },
+    targetScenario: { type: String },
+    scenarioId: { type: String }, // your internal scenario key
+    targetField: {
+      type: String,
+      enum: ['keyword', 'synonym', 'filler', 'scenario', 'reply', 'meta', 'other'],
+      default: 'keyword',
+    },
+
+    // ========================================================================
+    // SUGGESTION SEMANTICS
+    // ========================================================================
     suggestionType: {
-        type: String,
-        enum: ['trigger', 'synonym', 'filler', 'scenario', 'category', 'keyword', 'pattern', 'other'],
-        required: true,
-        index: true,
-        description: 'What type of improvement is suggested'
+      type: String,
+      enum: [
+        'ADD_KEYWORDS',
+        'ADD_SYNONYMS',
+        'ADD_FILLERS',
+        'NEW_SCENARIO',
+        'UPDATE_SCENARIO',
+        'MERGE_SCENARIOS',
+        'DELETE_SCENARIO',
+        'TWEAK_REPLY_TONE',
+        'ADD_EDGE_CASE',
+        'LATENCY_WARNING',
+        'OVERLAP_WARNING',
+        'OTHER',
+      ],
+      default: 'OTHER',
+      required: true,
+      index: true,
+    },
+
+    suggestionSummary: { 
+      type: String,
+      required: true
+    }, // short human summary for list view
+    
+    suggestedChanges: [{ type: String }], // concrete things to add/update/delete
+
+    // ========================================================================
+    // DEEP EXPLANATION
+    // ========================================================================
+    rootCauseReason: { 
+      type: String 
+    }, // "why this fired", human readable
+
+    // ========================================================================
+    // LLM META
+    // ========================================================================
+    llmModel: { 
+      type: String,
+      required: true
     },
     
-    suggestion: {
-        type: String,
-        required: true,
-        description: 'Human-readable suggestion text (e.g., "Add trigger: leaky pipe")'
+    llmResponse: { type: String }, // raw text from Tier 3 if helpful
+    tokens: { type: Number },
+    costUsd: { 
+      type: Number, 
+      default: 0,
+      min: 0,
+      required: true
     },
-    
-    suggestedValue: {
-        type: String,
-        required: true,
-        description: 'The actual value to add (e.g., "leaky pipe")'
-    },
-    
-    targetCategory: {
-        type: String,
-        description: 'Which category this should be added to (if applicable)'
-    },
-    
-    targetScenario: {
-        type: String,
-        description: 'Which scenario this should be added to (if applicable)'
-    },
-    
-    scenarioId: {
-        type: String,
-        description: 'Scenario ObjectId (if scenario was matched)'
-    },
-    
-    confidence: {
-        type: Number,
-        min: 0,
-        max: 1,
-        required: true,
-        description: 'LLM confidence in this suggestion (0.0 - 1.0)'
-    },
-    
+
+    // ========================================================================
+    // PRIORITY & STATUS TRACKING
+    // ========================================================================
     priority: {
-        type: String,
-        enum: ['high', 'medium', 'low'],
-        required: true,
-        index: true,
-        description: 'Priority based on confidence + impact score'
+      type: String,
+      enum: ['low', 'medium', 'high', 'critical'],
+      default: 'medium',
+      required: true,
+      index: true,
     },
-    
-    impactScore: {
-        type: Number,
-        min: 0,
-        max: 100,
-        description: 'Estimated impact on template performance (0-100)'
-    },
-    
-    // ========================================================================
-    // CONTEXT FROM ORIGINAL CALL
-    // ========================================================================
-    
-    customerPhrase: {
-        type: String,
-        required: true,
-        description: 'What the customer actually said that triggered this suggestion'
-    },
-    
-    tier1Score: {
-        type: Number,
-        description: 'Tier 1 confidence score for this phrase (failed to match)'
-    },
-    
-    tier2Score: {
-        type: Number,
-        description: 'Tier 2 confidence score for this phrase (failed to match)'
-    },
-    
-    tier1Threshold: {
-        type: Number,
-        description: 'Tier 1 threshold configured at runtime (for context)'
-    },
-    
-    tier2Threshold: {
-        type: Number,
-        description: 'Tier 2 threshold configured at runtime (for context)'
-    },
-    
-    rootCauseReason: {
-        type: String,
-        description: 'LLM-generated explanation of why Tier 3 was needed and what to fix'
-    },
-    
-    fullCallTranscript: {
-        type: String,
-        description: 'Full or condensed call transcript for context'
-    },
-    
-    llmResponse: {
-        type: String,
-        description: 'What the LLM actually responded with'
-    },
-    
-    callDate: {
-        type: Date,
-        required: true,
-        index: true,
-        description: 'When the customer call happened'
-    },
-    
-    phoneNumber: {
-        type: String,
-        description: 'Customer phone number (for debugging)'
-    },
-    
-    // ========================================================================
-    // COST & ROI TRACKING
-    // ========================================================================
-    
-    llmModel: {
-        type: String,
-        enum: ['gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'],
-        required: true,
-        description: 'Which LLM model generated this suggestion'
-    },
-    
-    cost: {
-        type: Number,
-        required: true,
-        min: 0,
-        description: 'Cost of this LLM call in USD (e.g., 0.08 = 8 cents)'
-    },
-    
-    tokens: {
-        type: Number,
-        description: 'Total token count for this LLM call (prompt + completion)'
-    },
-    
-    estimatedMonthlySavings: {
-        type: Number,
-        min: 0,
-        description: 'Estimated $ savings per month if this suggestion is applied'
-    },
-    
-    // ========================================================================
-    // STATUS & APPROVAL
-    // ========================================================================
     
     status: {
-        type: String,
-        enum: ['pending', 'approved', 'rejected', 'applied'],
-        default: 'pending',
-        required: true,
-        index: true,
-        description: 'Current status of this suggestion'
+      type: String,
+      enum: ['pending', 'applied', 'rejected', 'snoozed'],
+      default: 'pending',
+      required: true,
+      index: true,
     },
     
-    reviewedBy: {
-        type: String,
-        description: 'Admin email who reviewed this suggestion'
-    },
-    
-    reviewedAt: {
-        type: Date,
-        description: 'When this suggestion was reviewed'
-    },
-    
-    rejectionReason: {
-        type: String,
-        description: 'Why this suggestion was rejected (optional)'
-    },
-    
-    appliedAt: {
-        type: Date,
-        description: 'When this suggestion was applied to the template'
-    },
-    
-    appliedBy: {
-        type: String,
-        description: 'Admin email who applied this suggestion'
-    },
-    
+    snoozeUntil: { type: Date },
+
     // ========================================================================
-    // METADATA
+    // ADMIN AUDIT INFO
     // ========================================================================
-    
-    notes: {
-        type: String,
-        description: 'Admin notes about this suggestion'
-    },
-    
-    isDuplicate: {
-        type: Boolean,
-        default: false,
-        description: 'Flag if this suggestion duplicates an existing one'
-    },
-    
-    duplicateOf: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'ProductionLLMSuggestion',
-        description: 'Reference to original suggestion if this is a duplicate'
-    },
-    
-    createdAt: {
-        type: Date,
-        default: Date.now,
-        index: true,
-        description: 'When this suggestion was created'
-    },
-    
-    updatedAt: {
-        type: Date,
-        default: Date.now,
-        description: 'When this suggestion was last updated'
-    }
-});
+    reviewedBy: { type: String },
+    appliedBy: { type: String },
+    appliedAt: { type: Date },
+    rejectedBy: { type: String },
+    rejectedReason: { type: String },
+  },
+  {
+    timestamps: true, // createdAt, updatedAt
+  }
+);
 
 // ============================================================================
 // INDEXES FOR PERFORMANCE
 // ============================================================================
 
-// Compound index for LLM Learning Console main query (with callSource filtering)
-ProductionLLMSuggestionSchema.index({ templateId: 1, callSource: 1, status: 1, priority: -1, createdAt: -1 });
+// Main console query (template + status + priority)
+ProductionLLMSuggestionSchema.index({ 
+  templateId: 1, 
+  status: 1, 
+  priority: -1, 
+  callDate: -1 
+});
 
-// Index for cost analytics queries
-ProductionLLMSuggestionSchema.index({ callDate: -1, cost: 1 });
+// Call source filtering
+ProductionLLMSuggestionSchema.index({ 
+  callSource: 1, 
+  callDate: -1 
+});
 
-// Index for company-specific queries (with callSource)
-ProductionLLMSuggestionSchema.index({ companyId: 1, callSource: 1, createdAt: -1 });
+// Company-specific queries
+ProductionLLMSuggestionSchema.index({ 
+  companyId: 1, 
+  status: 1, 
+  callDate: -1 
+});
 
-// Index for duplicate detection
-ProductionLLMSuggestionSchema.index({ templateId: 1, suggestionType: 1, suggestedValue: 1 });
+// Cost analytics queries
+ProductionLLMSuggestionSchema.index({ 
+  callDate: -1, 
+  costUsd: 1 
+});
 
-// ============================================================================
-// STATIC METHODS
-// ============================================================================
+// Duplicate detection
+ProductionLLMSuggestionSchema.index({ 
+  templateId: 1, 
+  suggestionType: 1, 
+  suggestionSummary: 1 
+});
 
-/**
- * Get pending suggestions grouped by template
- * Used for LLM Learning Console main view
- */
-ProductionLLMSuggestionSchema.statics.getTemplatesSummary = async function() {
-    try {
-        const GlobalTemplate = mongoose.model('GlobalInstantResponseTemplate');
-        
-        // Get all templates
-        const templates = await GlobalTemplate.find({ isPublished: true })
-            .select('name')
-            .lean();
-        
-        // 🎯 Phase 5: Handle empty templates gracefully
-        if (!templates || templates.length === 0) {
-            return []; // No templates - return empty array instead of failing
-        }
-        
-        // Get suggestion counts for each template
-        const summaries = await Promise.all(templates.map(async (template) => {
-            try {
-                const suggestions = await this.find({
-                    templateId: template._id,
-                    status: 'pending'
-                }).lean();
-                
-                const highCount = suggestions.filter(s => s.priority === 'high').length;
-                const mediumCount = suggestions.filter(s => s.priority === 'medium').length;
-                const lowCount = suggestions.filter(s => s.priority === 'low').length;
-                
-                const totalCost = suggestions.reduce((sum, s) => sum + (s.cost || 0), 0);
-                
-                // Count unique companies using this template
-                const Company = mongoose.model('v2Company');
-                const companiesUsing = await Company.countDocuments({
-                    'aiAgentSettings.templateReferences.templateId': template._id,
-                    'aiAgentSettings.templateReferences.isActive': true
-                });
-                
-                const lastSuggestion = suggestions.length > 0 
-                    ? suggestions.sort((a, b) => b.createdAt - a.createdAt)[0].createdAt
-                    : new Date(0);
-                
-                return {
-                    _id: template._id,
-                    name: template.name,
-                    pendingSuggestions: suggestions.length,
-                    learningCost: totalCost,
-                    companiesUsing,
-                    lastSuggestion,
-                    priority: {
-                        high: highCount,
-                        medium: mediumCount,
-                        low: lowCount
-                    }
-                };
-            } catch (templateError) {
-                // Log error but don't fail entire request
-                console.error(`Error processing template ${template._id}:`, templateError.message);
-                return null;
-            }
-        }));
-        
-        // Filter out null entries (failed templates) and templates with no suggestions
-        return summaries
-            .filter(s => s !== null && s.pendingSuggestions > 0)
-            .sort((a, b) => b.pendingSuggestions - a.pendingSuggestions);
-            
-    } catch (error) {
-        console.error('Error in getTemplatesSummary:', error);
-        return []; // Return empty array instead of throwing
-    }
-};
-
-/**
- * Get cost analytics for dashboard
- */
-ProductionLLMSuggestionSchema.statics.getCostAnalytics = async function() {
-    try {
-        const now = new Date();
-        const todayStart = new Date(now.setHours(0, 0, 0, 0));
-        const weekStart = new Date(now.setDate(now.getDate() - 7));
-        
-        // Today's stats
-        const todayStats = await this.aggregate([
-            { $match: { callDate: { $gte: todayStart } } },
-            { $group: {
-                _id: null,
-                cost: { $sum: '$cost' },
-                calls: { $sum: 1 }
-            }}
-        ]);
-        
-        // This week's stats
-        const weekStats = await this.aggregate([
-            { $match: { callDate: { $gte: weekStart } } },
-            { $group: {
-                _id: null,
-                cost: { $sum: '$cost' },
-                calls: { $sum: 1 }
-            }}
-        ]);
-        
-        // ROI stats (applied suggestions)
-        const roiStats = await this.aggregate([
-            { $match: { status: 'applied' } },
-            { $group: {
-                _id: null,
-                savings: { $sum: '$estimatedMonthlySavings' },
-                suggestionsApplied: { $sum: 1 }
-            }}
-        ]);
-        
-        // Tier 3 reduction (placeholder - would need historical data)
-        const tier3Reduction = 0; // TODO: Calculate from historical metrics
-        
-        return {
-            today: {
-                cost: todayStats[0]?.cost || 0,
-                calls: todayStats[0]?.calls || 0
-            },
-            week: {
-                cost: weekStats[0]?.cost || 0,
-                calls: weekStats[0]?.calls || 0
-            },
-            roi: {
-                savings: roiStats[0]?.savings || 0,
-                suggestionsApplied: roiStats[0]?.suggestionsApplied || 0
-            },
-            tier3Reduction
-        };
-    } catch (error) {
-        console.error('Error in getCostAnalytics:', error);
-        // Return zero stats instead of throwing
-        return {
-            today: { cost: 0, calls: 0 },
-            week: { cost: 0, calls: 0 },
-            roi: { savings: 0, suggestionsApplied: 0 },
-            tier3Reduction: 0
-        };
-    }
-};
-
-/**
- * Update timestamps on save
- */
-ProductionLLMSuggestionSchema.pre('save', function(next) {
-    this.updatedAt = new Date();
-    next();
+// Snoozed items query
+ProductionLLMSuggestionSchema.index({ 
+  status: 1, 
+  snoozeUntil: 1 
 });
 
 module.exports = mongoose.model('ProductionLLMSuggestion', ProductionLLMSuggestionSchema);
-
