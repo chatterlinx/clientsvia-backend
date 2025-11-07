@@ -38,7 +38,7 @@ const systemHealthSnapshotSchema = new mongoose.Schema({
     // ========================================================================
     overallStatus: {
         type: String,
-        enum: ['HEALTHY', 'DEGRADED', 'CRITICAL', 'DOWN'],
+        enum: ['HEALTHY', 'WARNING', 'DEGRADED', 'CRITICAL', 'DOWN'],
         required: true,
         index: true
     },
