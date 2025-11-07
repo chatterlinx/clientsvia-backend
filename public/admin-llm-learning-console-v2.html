@@ -98,11 +98,16 @@
 <body>
   <!-- Navigation -->
   <nav class="navbar navbar-dark">
-    <div class="container-fluid">
-      <span class="navbar-brand mb-0 h1">
-        <i class="fas fa-brain me-2"></i>
-        LLM Learning Console V2
-      </span>
+    <div class="container-fluid d-flex justify-content-between align-items-center">
+      <div class="d-flex align-items-center">
+        <a href="/admin-global-instant-responses.html" class="btn btn-outline-light btn-sm me-3">
+          <i class="fas fa-arrow-left me-1"></i> Back to Global AI Brain
+        </a>
+        <span class="navbar-brand mb-0 h1">
+          <i class="fas fa-brain me-2"></i>
+          LLM Learning Console V2
+        </span>
+      </div>
       <div class="text-white">
         <small>Admin Portal</small>
       </div>
@@ -267,6 +272,41 @@
   <!-- LLM Learning Console V2 JavaScript -->
   <script>
 (function () {
+  // ================================================================
+  // AUTH HELPER - USE SAME TOKEN AS OTHER ADMIN PAGES
+  // ================================================================
+  function getAuthToken() {
+    // Try common keys - adjust to match your existing admin pages
+    return (
+      localStorage.getItem('adminToken') ||
+      localStorage.getItem('token') ||
+      localStorage.getItem('jwt')
+    );
+  }
+
+  function apiFetch(url, options = {}) {
+    const token = getAuthToken();
+    const headers = options.headers ? {...options.headers} : {};
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    // Default JSON content-type if body is present and not explicitly set
+    if (options.body && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    return fetch(url, {
+      credentials: 'same-origin',
+      ...options,
+      headers
+    });
+  }
+
+  // ================================================================
+  // STATE MANAGEMENT
+  // ================================================================
   const state = {
     filters: {
       templateId: '',
@@ -367,12 +407,11 @@
     params.append('page', state.filters.page);
     params.append('pageSize', state.filters.pageSize);
 
-    const res = await fetch('/api/admin/llm-learning/v2/suggestions?' + params.toString(), {
+    const res = await apiFetch('/api/admin/llm-learning/v2/suggestions?' + params.toString(), {
       method: 'GET',
       headers: {
         'Accept': 'application/json'
-      },
-      credentials: 'include' // Send cookies for JWT authentication
+      }
     });
 
     if (!res.ok) {
@@ -387,10 +426,9 @@
   }
 
   async function fetchTasks() {
-    const res = await fetch('/api/admin/llm-learning/v2/tasks', {
+    const res = await apiFetch('/api/admin/llm-learning/v2/tasks', {
       method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      credentials: 'include' // Send cookies for JWT authentication
+      headers: { 'Accept': 'application/json' }
     });
     if (!res.ok) {
       console.error('Failed to load tasks', await res.text());
@@ -402,13 +440,8 @@
   }
 
   async function patchSuggestion(id, action, body) {
-    const res = await fetch(`/api/admin/llm-learning/v2/suggestions/${id}/${action}`, {
+    const res = await apiFetch(`/api/admin/llm-learning/v2/suggestions/${id}/${action}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      credentials: 'include', // Send cookies for JWT authentication
       body: JSON.stringify(body || {})
     });
     if (!res.ok) {
