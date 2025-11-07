@@ -9731,9 +9731,24 @@ Continue?`;
          */
         async function loadGlobalCompaniesCount() {
             try {
-                // TODO: Create API endpoint to get global companies count
-                // For now, using placeholder
-                const count = 187;
+                console.log('👥 [GLOBAL] Loading companies count from database...');
+                
+                // Call REAL API endpoint to get actual database count
+                const response = await fetch('/api/admin/global-intelligence/stats', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const count = data.stats.usingGlobal; // Real count from MongoDB
+                
+                console.log(`✅ [GLOBAL] Loaded REAL companies count: ${count} (${data.stats.percentGlobal}% of ${data.stats.total} total)`);
                 
                 const countElement = document.getElementById('unlock-companies-count');
                 if (countElement) {
@@ -9746,6 +9761,9 @@ Continue?`;
                 
             } catch (error) {
                 console.error('❌ [GLOBAL] Failed to load companies count:', error);
+                // Fallback: Show ? instead of fake data
+                document.getElementById('global-companies-affected-count').textContent = '?';
+                document.getElementById('global-warning-company-count').textContent = '?';
             }
         }
         

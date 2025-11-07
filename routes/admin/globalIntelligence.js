@@ -129,7 +129,14 @@ router.get('/global-intelligence', async (req, res) => {
 
         const intelligence = settings.globalProductionIntelligence;
 
-        logger.info('✅ [GLOBAL INTELLIGENCE] Loaded successfully');
+        // Count companies using global intelligence (REAL production data)
+        const companiesAffected = await Company.countDocuments({
+            'aiAgentLogic.useGlobalIntelligence': { $ne: false } // Default is true
+        });
+
+        logger.info('✅ [GLOBAL INTELLIGENCE] Loaded successfully', {
+            companiesAffected
+        });
         
         res.json({
             success: true,
@@ -140,7 +147,8 @@ router.get('/global-intelligence', async (req, res) => {
                 smartWarmup: intelligence.smartWarmup,
                 lastUpdated: intelligence.lastUpdated,
                 updatedBy: intelligence.updatedBy
-            }
+            },
+            companiesAffected // REAL count from database
         });
 
     } catch (error) {
