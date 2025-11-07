@@ -2013,8 +2013,7 @@ router.post('/test-respond/:templateId', async (req, res) => {
     // ============================================
     // 🧠 V2: Check if 3-Tier is enabled for template testing
     // ============================================
-    // Load global intelligence settings to see if admin enabled 3-tier for testing
-    const adminSettings = await AdminSettings.getSettings();
+    // Reuse adminSettings already loaded at line 1889
     const globalIntelligence = adminSettings?.globalProductionIntelligence || {};
     const USE_3_TIER_FOR_TESTING = globalIntelligence.enabled === true && globalIntelligence.testingEnabled === true;
     
