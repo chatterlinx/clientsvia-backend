@@ -43,6 +43,7 @@ const PatternLearningService = require('./PatternLearningService');
 const IntelligenceMonitor = require('./IntelligenceMonitor');  // 🚨 Comprehensive monitoring
 const AdminNotificationService = require('./AdminNotificationService');  // 🔔 Notification Center
 const SmartWarmupService = require('./SmartWarmupService');  // 🔥 Smart LLM Pre-warming
+const { logTier3SuggestionSmart } = require('./LlmLearningLogger');  // 🧠 V2 LLM Learning Console
 const LLMCallLog = require('../models/LLMCallLog');
 const logger = require('../utils/logger');
 
@@ -393,110 +394,65 @@ class IntelligentRouter {
                     patternsLearned: result.patternsLearned.length
                 });
                 
-                // 🎯 Phase 4: Log to LLM Learning System (Enhanced with AI Analysis)
+                // 🧠 V2: Log to LLM Learning Console (Smart Classification)
                 try {
-                    const ProductionLLMSuggestion = require('../models/ProductionLLMSuggestion');
-                    const { generateSuggestionAnalysis, generateBasicSuggestion } = require('./LearningAnalyzer');
-                    const Tier3LLMFallback = require('./Tier3LLMFallback');
-                    
                     const callSource = context.callSource || 'production'; // 'template-test' | 'company-test' | 'production'
                     
                     // Get thresholds from context or use defaults
                     const tier1Threshold = context.intelligenceConfig?.thresholds?.tier1 ?? this.config.defaultTier1Threshold;
                     const tier2Threshold = context.intelligenceConfig?.thresholds?.tier2 ?? this.config.defaultTier2Threshold;
                     
-                    // Generate AI analysis of why Tier 3 was needed
-                    let analysis;
-                    try {
-                        analysis = await generateSuggestionAnalysis({
-                            userText: callerInput,
-                            tier1Score: result.tier1Result?.confidence || 0,
-                            tier2Score: result.tier2Result?.confidence || 0,
-                            tier1Threshold,
-                            tier2Threshold,
-                            matchedScenario: result.scenario,
+                    // Calculate dead air metrics (if available)
+                    const maxDeadAirMs = context.voiceMetrics?.maxDeadAirMs || null;
+                    const avgDeadAirMs = context.voiceMetrics?.avgDeadAirMs || null;
+                    
+                    // Log with smart auto-classification
+                    await logTier3SuggestionSmart({
+                        callContext: {
+                            templateId: template._id,
                             templateName: template.name,
-                            callLLM: Tier3LLMFallback.callLLM.bind(Tier3LLMFallback) // Use existing LLM gateway
-                        });
-                    } catch (analysisError) {
-                        logger.warn('[LLM LEARNING] AI analysis failed, using basic suggestion:', analysisError.message);
-                        analysis = generateBasicSuggestion({
-                            userText: callerInput,
+                            companyId: company?._id || null,
+                            companyName: company?.companyName || company?.businessName || null,
+                            callSource,
+                            callId: context.callId || callId || null,
+                            callSid: context.callSid || null,
+                            callDate: new Date(),
+                            callTranscript: context.transcript || context.fullCallTranscript || ''
+                        },
+                        tierContext: {
                             tier1Score: result.tier1Result?.confidence || 0,
-                            tier2Score: result.tier2Result?.confidence || 0,
                             tier1Threshold,
+                            tier1LatencyMs: result.performance.tier1Time || null,
+                            tier2Score: result.tier2Result?.confidence || 0,
                             tier2Threshold,
-                            matchedScenario: result.scenario
-                        });
-                    }
-                    
-                    // Create enriched suggestion record
-                    await ProductionLLMSuggestion.create({
-                        // IDs & names
-                        templateId: template._id,
-                        templateName: template.name,
-                        companyId: company?._id || null,
-                        companyName: company?.companyName || company?.businessName || 'Unknown',
-                        
-                        // Call source tracking (3 modes)
-                        callSource,  // 'template-test' | 'company-test' | 'production'
-                        callId: context.callId || callId || null,
-                        turnIndex: context.turnIndex || null,
-                        
-                        // AI-generated suggestion
-                        suggestionType: analysis.type,
-                        suggestion: analysis.reason,
-                        suggestedValue: Array.isArray(analysis.changes) 
-                            ? analysis.changes.join(', ') 
-                            : String(analysis.changes || callerInput.substring(0, 100)),
-                        
-                        // Target location
-                        targetCategory: result.scenario?.categoryName || null,
-                        targetScenario: result.scenario?.name || null,
-                        scenarioId: result.scenario?._id?.toString() || null,
-                        
-                        // Confidence & priority from AI analysis
-                        confidence: analysis.confidence || result.confidence,
-                        priority: analysis.priority || (result.confidence > 0.8 ? 'high' : 'medium'),
-                        
-                        // Context from call
-                        customerPhrase: callerInput,
-                        tier1Score: result.tier1Result?.confidence || 0,
-                        tier2Score: result.tier2Result?.confidence || 0,
-                        tier1Threshold,
-                        tier2Threshold,
-                        
-                        // AI analysis result
-                        rootCauseReason: analysis.reason,
-                        
-                        // LLM response
-                        llmResponse: result.response,
-                        fullCallTranscript: context.transcript || context.fullCallTranscript || '',
-                        
-                        // Cost & token tracking
-                        llmModel: result.tier3Result.llmModel || 'gpt-4o',
-                        cost: result.cost.tier3 || 0,
-                        tokens: result.tier3Result.tokens || null,
-                        
-                        // Metadata
-                        callDate: new Date(),
-                        status: 'pending'
+                            tier2LatencyMs: result.performance.tier2Time || null,
+                            tier3LatencyMs: result.performance.tier3Time || null,
+                            overallLatencyMs: result.performance.totalTime || null,
+                            maxDeadAirMs,
+                            avgDeadAirMs,
+                            scenarioId: result.scenario?._id?.toString() || null,
+                            scenarioName: result.scenario?.name || null,
+                            categoryName: result.scenario?.categoryName || null
+                        },
+                        llmContext: {
+                            llmModel: result.tier3Result.llmModel || 'gpt-4o-mini',
+                            tokens: result.tier3Result.tokens || null,
+                            costUsd: result.cost.tier3 || 0,
+                            customerPhrase: callerInput,
+                            agentResponseSnippet: result.response?.substring(0, 400) || null,
+                            llmResponse: result.response
+                        },
+                        suggestion: {
+                            // Smart logger will auto-calculate these if not provided
+                            rootCauseReason: `Tier 3 was required because Tier 1 score (${(result.tier1Result?.confidence || 0).toFixed(2)}) was below threshold (${tier1Threshold}) and Tier 2 score (${(result.tier2Result?.confidence || 0).toFixed(2)}) was below threshold (${tier2Threshold}).`,
+                            similarCallCount: 1,
+                            status: 'pending'
+                        }
                     });
                     
-                    // 🔍 Clear log marker for manual verification
-                    console.log('[TIER3 LLM LOG]', {
-                        companyId: company?._id?.toString() || 'Unknown',
-                        callSource,
-                        templateId: template._id.toString(),
-                        suggestionType: analysis.type,
-                        costUsd: result.cost.tier3 || 0,
-                    });
-                    
-                    logger.info('📝 [LLM LEARNING] Tier 3 usage logged with AI analysis', {
+                    logger.info('📝 [LLM LEARNING V2] Tier 3 usage logged with smart classification', {
                         routingId,
                         callSource,
-                        suggestionType: analysis.type,
-                        priority: analysis.priority,
                         cost: `$${result.cost.tier3.toFixed(4)}`
                     });
                 } catch (loggingError) {
