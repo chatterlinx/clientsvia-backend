@@ -34,19 +34,15 @@ const { stripMarkdown, cleanTextForTTS } = require('../utils/textUtils');
 // ============================================================================
 // 🧠 3-TIER SELF-IMPROVEMENT SYSTEM CONFIGURATION
 // ============================================================================
-// Feature flag to enable/disable the 3-tier intelligence system (Tier 1 → 2 → 3)
-// When enabled: Calls route through IntelligentRouter for self-improvement cycle
-// When disabled: Falls back to traditional HybridScenarioSelector (Tier 1 only)
-// Default: FALSE for safe rollout, set ENABLE_3_TIER_INTELLIGENCE=true to activate
+// The 3-tier intelligence system (Tier 1 → 2 → 3) is now controlled by:
+// - GLOBAL MODE: AdminSettings.globalProductionIntelligence.enabled
+// - CUSTOM MODE: company.aiAgentLogic.productionIntelligence.enabled
+// 
+// This is checked DYNAMICALLY at request time, not via environment variable.
+// UI and backend now use the SAME source of truth (database).
 // ============================================================================
-const ENABLE_3_TIER_INTELLIGENCE = process.env.ENABLE_3_TIER_INTELLIGENCE === 'true';
 
-if (ENABLE_3_TIER_INTELLIGENCE) {
-  logger.info('🧠 [3-TIER SYSTEM] ENABLED - Self-improvement cycle active');
-  logger.info('🧠 [3-TIER SYSTEM] Calls will route: Tier 1 (rule) → Tier 2 (semantic) → Tier 3 (LLM)');
-} else {
-  logger.info('🧠 [3-TIER SYSTEM] DISABLED - Using traditional Tier 1 only');
-}
+logger.info('🧠 [3-TIER SYSTEM] Configuration loaded from database (per-request check)');
 
 const router = express.Router();
 logger.info('🚀 [V2TWILIO] ========== EXPRESS ROUTER CREATED ==========');
@@ -2014,12 +2010,17 @@ router.post('/test-respond/:templateId', async (req, res) => {
     // This is how the system worked before 3-tier was added.
     // ============================================
     
-    const USE_3_TIER_FOR_TESTING = false;  // 🎯 CRITICAL: Keep FALSE to test YOUR rules
+    // ============================================
+    // 🧠 V2: Check if 3-Tier is enabled for template testing
+    // ============================================
+    // Load global intelligence settings to see if admin enabled 3-tier for testing
+    const adminSettings = await AdminSettings.getSettings();
+    const globalIntelligence = adminSettings?.globalProductionIntelligence || {};
+    const USE_3_TIER_FOR_TESTING = globalIntelligence.enabled === true && globalIntelligence.testingEnabled === true;
     
-    if (ENABLE_3_TIER_INTELLIGENCE && USE_3_TIER_FOR_TESTING) {
-      // 🚨 WARNING: This path is for PRODUCTION calls only!
-      // For testing templates, we need to test YOUR rules directly.
-      logger.info('🧠 [3-TIER ROUTING] Starting intelligent cascade (Tier 1 → 2 → 3)');
+    if (USE_3_TIER_FOR_TESTING) {
+      // ✅ Admin enabled 3-tier for template testing
+      logger.info('🧠 [3-TIER ROUTING] Starting intelligent cascade (Tier 1 → 2 → 3) for template testing');
       
       // Route through 3-tier system
       const routingResult = await IntelligentRouter.route({
@@ -2129,7 +2130,7 @@ router.post('/test-respond/:templateId', async (req, res) => {
       // Build debug message with tier information if 3-tier is enabled
       let debugMessage = `You triggered the scenario: ${result.scenario.name}. Confidence: ${(result.confidence * 100).toFixed(0)} percent.`;
       
-      if (ENABLE_3_TIER_INTELLIGENCE && routingDetails.tierUsed) {
+      if (USE_3_TIER_FOR_TESTING && routingDetails.tierUsed) {
         const tierNames = { 1: 'Tier 1: Rule-based', 2: 'Tier 2: Semantic', 3: 'Tier 3: LLM' };
         debugMessage += ` Matched via ${tierNames[routingDetails.tierUsed]}.`;
         
@@ -2214,7 +2215,7 @@ router.post('/test-respond/:templateId', async (req, res) => {
       // ============================================
       // 🧠 3-TIER ROUTING METADATA (if enabled)
       // ============================================
-      ...(ENABLE_3_TIER_INTELLIGENCE && routingDetails.tierUsed && {
+      ...(USE_3_TIER_FOR_TESTING && routingDetails.tierUsed && {
         intelligenceRouting: {
           enabled: true,
           tierUsed: routingDetails.tierUsed,
@@ -2283,7 +2284,7 @@ router.post('/test-respond/:templateId', async (req, res) => {
         // Build tierResults object from available data (either 3-tier routing or test mode)
         let tierResults;
         
-        if (ENABLE_3_TIER_INTELLIGENCE && routingDetails.tierUsed) {
+        if (USE_3_TIER_FOR_TESTING && routingDetails.tierUsed) {
           // 3-tier mode: Use routing details
           tierResults = {
             finalTier: `tier${routingDetails.tierUsed}`,
@@ -2326,7 +2327,7 @@ router.post('/test-respond/:templateId', async (req, res) => {
         logger.info(`🧠 [ENTERPRISE TEST PILOT] Built tierResults:`, {
           finalTier: tierResults.finalTier,
           finalConfidence: tierResults.finalConfidence,
-          mode: ENABLE_3_TIER_INTELLIGENCE ? '3-tier' : 'test'
+          mode: USE_3_TIER_FOR_TESTING ? '3-tier' : 'test'
         });
         
         // Run comprehensive analysis with tierResults
