@@ -3012,14 +3012,23 @@
             </div>
         </div>
         
-        <!-- Header Right: Lock/Unlock Button -->
-        <button id="global-lock-unlock-btn" 
-                onclick="toggleGlobalEditMode()" 
-                class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition-all text-sm border-2 border-gray-300"
-                data-action="toggle-edit-mode">
-            <i id="global-lock-icon" class="fas fa-lock mr-1"></i>
-            <span id="global-lock-text">Unlock to Edit</span>
-        </button>
+        <!-- Header Right: Reload + Lock/Unlock Buttons -->
+        <div class="flex items-center gap-2">
+            <button onclick="loadGlobalProductionIntelligence()" 
+                    class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition-all text-sm"
+                    data-action="reload-global-settings">
+                <i class="fas fa-sync-alt mr-1"></i>
+                Reload
+            </button>
+            
+            <button id="global-lock-unlock-btn" 
+                    onclick="toggleGlobalEditMode()" 
+                    class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition-all text-sm border-2 border-gray-300"
+                    data-action="toggle-edit-mode">
+                <i id="global-lock-icon" class="fas fa-lock mr-1"></i>
+                <span id="global-lock-text">Unlock to Edit</span>
+            </button>
+        </div>
     </div>
     <!-- END SECTION 1: HEADER -->
     
@@ -9377,6 +9386,9 @@ Continue?`;
                 if (globalContainer) {
                     globalContainer.style.display = 'block';
                     console.log('👁️ [VISIBILITY] Showing global settings section');
+                    
+                    // Load global settings from database
+                    loadGlobalProductionIntelligence();
                 }
             } else if (mode === 'custom') {
                 // Company has custom settings - show custom settings, hide global
@@ -10074,6 +10086,102 @@ Continue?`;
             
             // Execute save
             await saveGlobalProductionIntelligence();
+        }
+        
+        /**
+         * Load global intelligence settings from backend
+         */
+        async function loadGlobalProductionIntelligence() {
+            console.log('📥 [GLOBAL] Loading production intelligence settings...');
+            
+            try {
+                const response = await fetch('/api/admin/global-intelligence', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('📥 [GLOBAL] Loaded settings:', data);
+                
+                // Populate UI with loaded settings
+                const settings = data.settings || data.intelligence || {};
+                
+                // 3-Tier Toggle
+                const tier3Enabled = settings.enabled !== false;
+                const tier3Checkbox = document.getElementById('global-enable-tier3');
+                if (tier3Checkbox) {
+                    tier3Checkbox.checked = tier3Enabled;
+                    updateGlobalTier3Status();
+                }
+                
+                // Thresholds
+                if (settings.thresholds) {
+                    const tier1Slider = document.getElementById('global-tier1-slider');
+                    const tier2Slider = document.getElementById('global-tier2-slider');
+                    
+                    if (tier1Slider) {
+                        tier1Slider.value = settings.thresholds.tier1 || 0.80;
+                        document.getElementById('global-tier1-value').textContent = (settings.thresholds.tier1 || 0.80).toFixed(2);
+                    }
+                    
+                    if (tier2Slider) {
+                        tier2Slider.value = settings.thresholds.tier2 || 0.60;
+                        document.getElementById('global-tier2-value').textContent = (settings.thresholds.tier2 || 0.60).toFixed(2);
+                    }
+                }
+                
+                // LLM Config
+                if (settings.llmConfig) {
+                    const modelSelect = document.getElementById('global-llm-model');
+                    const maxCostInput = document.getElementById('global-max-cost-per-call');
+                    const dailyBudgetInput = document.getElementById('global-daily-budget');
+                    
+                    if (modelSelect) modelSelect.value = settings.llmConfig.model || 'gpt-4o-mini';
+                    if (maxCostInput) maxCostInput.value = settings.llmConfig.maxCostPerCall || 0.10;
+                    if (dailyBudgetInput) dailyBudgetInput.value = settings.llmConfig.dailyBudget || '';
+                }
+                
+                // Smart Warmup
+                if (settings.smartWarmup) {
+                    const warmupCheckbox = document.getElementById('global-enable-warmup');
+                    const warmupConfidence = document.getElementById('global-warmup-confidence');
+                    const warmupDailyBudget = document.getElementById('global-warmup-daily-budget');
+                    const warmupPatternLearning = document.getElementById('global-warmup-pattern-learning');
+                    const warmupMinHitRate = document.getElementById('global-warmup-min-hit-rate');
+                    
+                    if (warmupCheckbox) {
+                        warmupCheckbox.checked = settings.smartWarmup.enabled === true;
+                        updateGlobalWarmupStatus();
+                    }
+                    if (warmupConfidence) warmupConfidence.value = settings.smartWarmup.confidenceThreshold || 0.75;
+                    if (warmupDailyBudget) warmupDailyBudget.value = settings.smartWarmup.dailyBudget || 5.00;
+                    if (warmupPatternLearning) warmupPatternLearning.checked = settings.smartWarmup.enablePatternLearning !== false;
+                    if (warmupMinHitRate) warmupMinHitRate.value = settings.smartWarmup.minimumHitRate || 0.30;
+                }
+                
+                // Update companies affected count
+                if (data.companiesAffected !== undefined) {
+                    const countElement = document.getElementById('global-companies-affected-count');
+                    if (countElement) {
+                        countElement.textContent = data.companiesAffected;
+                    }
+                }
+                
+                // Update cost estimate
+                updateGlobalCostEstimate();
+                
+                console.log('✅ [GLOBAL] Settings loaded and UI populated');
+                
+            } catch (error) {
+                console.error('❌ [GLOBAL] Failed to load settings:', error);
+                showToast('error', `Failed to load global settings: ${error.message}`);
+            }
         }
         
         /**
