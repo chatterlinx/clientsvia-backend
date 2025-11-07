@@ -2989,7 +2989,8 @@
      - Lock/Unlock Button: Controls edit mode with confirmation
      
      ================================================================ -->
-<div class="bg-white rounded-xl border-2 border-blue-400 p-6 shadow-lg mb-8" 
+<div id="global-intelligence-container"
+     class="bg-white rounded-xl border-2 border-blue-400 p-6 shadow-lg mb-8" 
      data-section="global-production-intelligence"
      data-debug-id="global-container">
     
@@ -9357,6 +9358,37 @@ Continue?`;
             }
             
             console.log(`🎨 [MODE INDICATOR] Updated to: ${mode.toUpperCase()}`);
+            
+            // ================================================================
+            // 👁️ SHOW/HIDE SECTIONS BASED ON MODE
+            // ================================================================
+            // GLOBAL MODE: Hide company custom settings, show global settings
+            // CUSTOM MODE: Show company custom settings, hide global settings
+            // ================================================================
+            const companySettingsContainer = document.getElementById('company-intelligence-settings');
+            const globalContainer = document.getElementById('global-intelligence-container');
+            
+            if (mode === 'global') {
+                // Company is using global defaults - hide custom settings, show global
+                if (companySettingsContainer) {
+                    companySettingsContainer.style.display = 'none';
+                    console.log('👁️ [VISIBILITY] Hidden company custom settings (company is in GLOBAL mode)');
+                }
+                if (globalContainer) {
+                    globalContainer.style.display = 'block';
+                    console.log('👁️ [VISIBILITY] Showing global settings section');
+                }
+            } else if (mode === 'custom') {
+                // Company has custom settings - show custom settings, hide global
+                if (companySettingsContainer) {
+                    companySettingsContainer.style.display = 'block';
+                    console.log('👁️ [VISIBILITY] Showing company custom settings (company is in CUSTOM mode)');
+                }
+                if (globalContainer) {
+                    globalContainer.style.display = 'none';
+                    console.log('👁️ [VISIBILITY] Hidden global settings section');
+                }
+            }
         }
         
         /**
