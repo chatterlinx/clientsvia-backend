@@ -146,17 +146,19 @@ router.get('/suggestions', async (req, res, next) => {
       callSource,
       status,
       priority,
+      severity,
       suggestionType,
+      slowOnly,
       from,
       to,
       page = 1,
-      limit = 25,
+      pageSize = 25,
     } = req.query;
 
     page = Number(page) || 1;
-    limit = Math.min(Number(limit) || 25, 100);
+    pageSize = Math.min(Number(pageSize) || 25, 100);
 
-    logger.info(`[LLM LEARNING V2] Fetching suggestions: page=${page}, limit=${limit}, filters=${JSON.stringify({ templateId, companyId, callSource, status, priority })}`);
+    logger.info(`[LLM LEARNING V2] Fetching suggestions: page=${page}, pageSize=${pageSize}, filters=${JSON.stringify({ templateId, companyId, callSource, status, priority, severity, slowOnly })}`);
 
     const filter = {};
 
@@ -165,7 +167,17 @@ router.get('/suggestions', async (req, res, next) => {
     if (callSource) filter.callSource = callSource;
     if (status) filter.status = status;
     if (priority) filter.priority = priority;
+    if (severity) filter.severity = severity;
     if (suggestionType) filter.suggestionType = suggestionType;
+
+    // slowOnly filter: show only calls with high latency or dead air
+    if (slowOnly === 'true') {
+      filter.$or = [
+        { tier3LatencyMs: { $gte: 500 } }, // Tier 3 took >500ms
+        { maxDeadAirMs: { $gte: 2000 } },  // Dead air >2 seconds
+        { overallLatencyMs: { $gte: 1000 } } // Overall >1 second
+      ];
+    }
 
     if (from || to) {
       filter.callDate = {};
@@ -173,13 +185,13 @@ router.get('/suggestions', async (req, res, next) => {
       if (to) filter.callDate.$lte = new Date(to);
     }
 
-    const skip = (page - 1) * limit;
+    const skip = (page - 1) * pageSize;
 
     const [items, total] = await Promise.all([
       ProductionLLMSuggestion.find(filter)
-        .sort({ callDate: -1, priority: -1 })
+        .sort({ callDate: -1, severity: -1, priority: -1 })
         .skip(skip)
-        .limit(limit)
+        .limit(pageSize)
         .lean()
         .exec(),
       ProductionLLMSuggestion.countDocuments(filter),
@@ -191,7 +203,7 @@ router.get('/suggestions', async (req, res, next) => {
       items,
       total,
       page,
-      pages: Math.ceil(total / limit) || 1,
+      pageSize,
     });
   } catch (err) {
     logger.error('[LLM LEARNING V2] Error fetching suggestions:', err);
@@ -214,10 +226,13 @@ router.get('/suggestions', async (req, res, next) => {
  *       templateName: 'Universal AI Brain',
  *       companyId: '...',
  *       companyName: 'Royal Plumbing',
- *       pendingCount: 23,
- *       snoozedCount: 5,
- *       highestPriority: 'high',
- *       latestCallDate: '2025-11-07T...'
+ *       taskType: 'COVERAGE_GAP',
+ *       summary: 'Add reschedule appointment scenario',
+ *       rootCauseReason: 'Multiple calls asking to move existing appointment...',
+ *       severity: 'high',
+ *       priority: 'high',
+ *       affectedCalls: 7,
+ *       suggestionIds: ['6730d2f3a21c...', '6730d3025d8b...']
  *     },
  *     ...
  *   ]
@@ -239,27 +254,23 @@ router.get('/tasks', async (req, res, next) => {
           _id: {
             templateId: '$templateId',
             companyId: '$companyId',
+            suggestionType: '$suggestionType',
           },
           templateId: { $first: '$templateId' },
           templateName: { $first: '$templateName' },
           companyId: { $first: '$companyId' },
           companyName: { $first: '$companyName' },
-          pendingCount: {
-            $sum: {
-              $cond: [{ $eq: ['$status', 'pending'] }, 1, 0],
-            },
-          },
-          snoozedCount: {
-            $sum: {
-              $cond: [{ $eq: ['$status', 'snoozed'] }, 1, 0],
-            },
-          },
-          highestPriority: { $max: '$priority' },
-          latestCallDate: { $max: '$callDate' },
+          taskType: { $first: '$suggestionType' }, // Use suggestionType as taskType
+          summary: { $first: '$suggestionSummary' }, // Use first suggestion's summary
+          rootCauseReason: { $first: '$rootCauseReason' }, // Use first suggestion's reason
+          severity: { $max: '$severity' }, // Highest severity in group
+          priority: { $max: '$priority' }, // Highest priority in group
+          affectedCalls: { $sum: '$similarCallCount' }, // Sum of all affected calls
+          suggestionIds: { $push: '$_id' }, // Collect all suggestion IDs
         },
       },
       {
-        $sort: { latestCallDate: -1 },
+        $sort: { severity: -1, priority: -1, affectedCalls: -1 },
       },
     ];
 

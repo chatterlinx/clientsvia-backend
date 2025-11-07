@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Learning Console V2 | ClientsVia Admin</title>
+  
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #f8f9fa;
+    }
+    
+    .navbar {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .main-container {
+      max-width: 1600px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+    
+    .card {
+      border: none;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .table-responsive {
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    
+    table.table {
+      margin-bottom: 0;
+    }
+    
+    table thead {
+      background: #f8f9fa;
+      font-weight: 600;
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    table tbody tr {
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    
+    table tbody tr:hover {
+      background: #f8f9fa;
+    }
+    
+    .badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.5rem;
+    }
+    
+    .btn-group-sm .btn {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+    }
+    
+    #llm-suggestion-drawer {
+      transition: transform 0.3s ease-in-out;
+    }
+    
+    .nav-tabs .nav-link {
+      color: #6c757d;
+      border: none;
+      border-bottom: 2px solid transparent;
+    }
+    
+    .nav-tabs .nav-link.active {
+      color: #667eea;
+      border-bottom: 2px solid #667eea;
+      background: transparent;
+    }
+    
+    .filter-section {
+      background: white;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-dark">
+    <div class="container-fluid">
+      <span class="navbar-brand mb-0 h1">
+        <i class="fas fa-brain me-2"></i>
+        LLM Learning Console V2
+      </span>
+      <div class="text-white">
+        <small>Admin Portal</small>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <div class="main-container">
+    
+    <!-- LLM Learning Console V2 -->
+    <div id="llm-learning-console-v2" class="card shadow-sm p-3 mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <h4 class="mb-0">LLM Learning Console (v2)</h4>
+          <small class="text-muted">
+            See where Tier 3 had to rescue the call, why, and how to fix it.
+          </small>
+        </div>
+      </div>
+
+      <!-- Filters Bar -->
+      <div class="filter-section" id="llm-filters-bar">
+        <div class="row g-2 mb-3">
+          <div class="col-md-3">
+            <label class="form-label">Template</label>
+            <select id="llm-filter-template" class="form-select">
+              <option value="">All Templates</option>
+              <!-- coder: populate from backend if you want -->
+            </select>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Company</label>
+            <select id="llm-filter-company" class="form-select">
+              <option value="">All Companies</option>
+            </select>
+          </div>
+
+          <div class="col-md-2">
+            <label class="form-label">Call Source</label>
+            <select id="llm-filter-callSource" class="form-select">
+              <option value="">All</option>
+              <option value="template-test">Template Test</option>
+              <option value="company-test">Company Test</option>
+              <option value="production">Production</option>
+            </select>
+          </div>
+
+          <div class="col-md-2">
+            <label class="form-label">Status</label>
+            <select id="llm-filter-status" class="form-select">
+              <option value="">All</option>
+              <option value="pending">Pending</option>
+              <option value="applied">Applied</option>
+              <option value="rejected">Rejected</option>
+              <option value="snoozed">Snoozed</option>
+            </select>
+          </div>
+
+          <div class="col-md-2">
+            <label class="form-label">Severity</label>
+            <select id="llm-filter-severity" class="form-select">
+              <option value="">All</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-12 d-flex align-items-center">
+            <div class="form-check me-3">
+              <input class="form-check-input" type="checkbox" id="llm-filter-slowOnly">
+              <label class="form-check-label" for="llm-filter-slowOnly">
+                Show only slow / dead-air calls
+              </label>
+            </div>
+            <button id="llm-filter-apply" class="btn btn-sm btn-primary me-2">
+              Apply Filters
+            </button>
+            <button id="llm-filter-reset" class="btn btn-sm btn-outline-secondary">
+              Reset
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <ul class="nav nav-tabs mb-3" id="llm-learning-tabs">
+        <li class="nav-item">
+          <button class="nav-link active" data-llm-tab="suggestions">Suggestions</button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-llm-tab="tasks">Task Queue</button>
+        </li>
+      </ul>
+
+      <!-- Suggestions Tab -->
+      <div id="llm-tab-suggestions">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle" id="llm-suggestions-table">
+            <thead>
+              <tr>
+                <th>Template / Company</th>
+                <th>Call Source & Tier Path</th>
+                <th>Issue</th>
+                <th>Why</th>
+                <th>Impact</th>
+                <th>Latency / Dead Air</th>
+                <th>Status</th>
+                <th style="width: 120px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- rows rendered by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Simple pagination -->
+        <div class="d-flex justify-content-between align-items-center mt-3" id="llm-suggestions-pagination">
+          <div>
+            <small id="llm-suggestions-summary"></small>
+          </div>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" id="llm-page-prev">&laquo; Prev</button>
+            <button class="btn btn-outline-secondary" id="llm-page-next">Next &raquo;</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Task Queue Tab -->
+      <div id="llm-tab-tasks" style="display:none;">
+        <div id="llm-tasks-container">
+          <!-- task groups rendered by JS -->
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Details Drawer (right side) -->
+  <div id="llm-suggestion-drawer" style="display:none; position:fixed; top:0; right:0; width:420px; height:100%; background:#fff; border-left:1px solid #ddd; box-shadow:-4px 0 12px rgba(0,0,0,0.08); z-index:1050; overflow-y:auto;">
+    <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+      <div>
+        <h5 class="mb-0" id="llm-drawer-title">Suggestion Details</h5>
+        <small class="text-muted" id="llm-drawer-subtitle"></small>
+      </div>
+      <button class="btn-close" id="llm-drawer-close"></button>
+    </div>
+
+    <div class="p-3" id="llm-drawer-content">
+      <!-- details rendered by JS -->
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- LLM Learning Console V2 JavaScript -->
+  <script>
+(function () {
+  const state = {
+    filters: {
+      templateId: '',
+      companyId: '',
+      callSource: '',
+      status: '',
+      severity: '',
+      slowOnly: false,
+      page: 1,
+      pageSize: 25
+    },
+    suggestions: [],
+    totalSuggestions: 0,
+    selectedSuggestion: null,
+    tasks: []
+  };
+
+  // --- Utility helpers ----------------------------------------------------
+
+  function qs(id) {
+    return document.getElementById(id);
+  }
+
+  function formatMsToSeconds(ms) {
+    if (ms == null) return '—';
+    return (ms / 1000).toFixed(1) + 's';
+  }
+
+  function badge(text, extraClass) {
+    return `<span class="badge bg-${extraClass}">${text}</span>`;
+  }
+
+  function mapCallSource(cs) {
+    if (cs === 'template-test') return 'Template Test';
+    if (cs === 'company-test') return 'Company Test';
+    if (cs === 'production') return 'Production';
+    return cs || 'Unknown';
+  }
+
+  function mapSuggestionType(t) {
+    const map = {
+      ADD_KEYWORDS: 'Add keywords',
+      ADD_SYNONYMS: 'Add synonyms',
+      ADD_FILLERS: 'Add fillers',
+      REMOVE_KEYWORD: 'Remove keyword',
+      MERGE_SCENARIOS: 'Merge scenarios',
+      NEW_SCENARIO: 'New scenario',
+      UPDATE_SCENARIO: 'Update scenario',
+      DELETE_SCENARIO: 'Delete scenario',
+      TWEAK_REPLY_TONE: 'Tweak reply tone',
+      ADD_EDGE_CASE: 'Add edge case',
+      LATENCY_WARNING: 'Latency warning',
+      LATENCY_CONFIG: 'Latency config',
+      FILLER_CONFIG: 'Filler config',
+      PLACEHOLDER_ISSUE: 'Placeholder issue',
+      OVERLAP_WARNING: 'Overlap warning',
+      OTHER: 'Other'
+    };
+    return map[t] || t;
+  }
+
+  function mapPriority(p) {
+    const cls =
+      p === 'critical' ? 'danger' :
+      p === 'high' ? 'danger' :
+      p === 'medium' ? 'warning' :
+      p === 'low' ? 'secondary' : 'secondary';
+    return badge(p || 'n/a', cls);
+  }
+
+  function mapSeverity(s) {
+    const cls =
+      s === 'critical' ? 'danger' :
+      s === 'high' ? 'warning' :
+      s === 'medium' ? 'info' : 'secondary';
+    return badge(s || 'n/a', cls);
+  }
+
+  function mapStatus(s) {
+    const cls =
+      s === 'pending' ? 'primary' :
+      s === 'applied' ? 'success' :
+      s === 'rejected' ? 'secondary' :
+      s === 'snoozed' ? 'warning' : 'secondary';
+    return badge(s || 'pending', cls);
+  }
+
+  // --- API calls ----------------------------------------------------------
+
+  async function fetchSuggestions() {
+    const params = new URLSearchParams();
+    if (state.filters.templateId) params.append('templateId', state.filters.templateId);
+    if (state.filters.companyId) params.append('companyId', state.filters.companyId);
+    if (state.filters.callSource) params.append('callSource', state.filters.callSource);
+    if (state.filters.status) params.append('status', state.filters.status);
+    if (state.filters.severity) params.append('severity', state.filters.severity);
+    if (state.filters.slowOnly) params.append('slowOnly', 'true');
+    params.append('page', state.filters.page);
+    params.append('pageSize', state.filters.pageSize);
+
+    const res = await fetch('/api/admin/llm-learning/v2/suggestions?' + params.toString(), {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!res.ok) {
+      console.error('Failed to load suggestions', await res.text());
+      return;
+    }
+
+    const data = await res.json();
+    state.suggestions = data.items || [];
+    state.totalSuggestions = data.total || 0;
+    renderSuggestionsTable();
+  }
+
+  async function fetchTasks() {
+    const res = await fetch('/api/admin/llm-learning/v2/tasks', {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!res.ok) {
+      console.error('Failed to load tasks', await res.text());
+      return;
+    }
+    const data = await res.json();
+    state.tasks = data.items || [];
+    renderTasksView();
+  }
+
+  async function patchSuggestion(id, action, body) {
+    const res = await fetch(`/api/admin/llm-learning/v2/suggestions/${id}/${action}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(body || {})
+    });
+    if (!res.ok) {
+      console.error('Failed to update suggestion', action, await res.text());
+      alert('Failed to update suggestion.');
+      return false;
+    }
+    return true;
+  }
+
+  // --- Rendering ----------------------------------------------------------
+
+  function renderSuggestionsTable() {
+    const tbody = qs('llm-suggestions-table').querySelector('tbody');
+    tbody.innerHTML = '';
+
+    if (!state.suggestions.length) {
+      tbody.innerHTML = `
+        <tr><td colspan="8" class="text-center text-muted py-3">
+          No suggestions found for the current filters.
+        </td></tr>`;
+      qs('llm-suggestions-summary').textContent = '';
+      return;
+    }
+
+    state.suggestions.forEach(item => {
+      const tr = document.createElement('tr');
+      tr.dataset.id = item._id;
+
+      const templateCompany = `
+        <div><strong>${item.templateName || 'Unknown template'}</strong></div>
+        <div class="text-muted small">${item.companyName || '(Global / Template Test)'}</div>
+      `;
+
+      const tierPath = buildTierPathLabel(item);
+      const callSourceLabel = mapCallSource(item.callSource);
+      const issue = mapSuggestionType(item.suggestionType);
+      const why = (item.rootCauseReason || '').slice(0, 90) + (item.rootCauseReason && item.rootCauseReason.length > 90 ? '…' : '');
+
+      const impactVal = item.changeImpactScore != null ? (item.changeImpactScore.toFixed ? item.changeImpactScore.toFixed(1) : item.changeImpactScore) : 0;
+      const impact = `
+        <div>${mapPriority(item.priority)} ${mapSeverity(item.severity)}</div>
+        <div class="small text-muted">Impact: ${impactVal}</div>
+        <div class="small text-muted">Calls: ${item.similarCallCount || 1}</div>
+      `;
+
+      const latency = `
+        <div class="small">LLM: ${formatMsToSeconds(item.tier3LatencyMs)}</div>
+        <div class="small">Dead Air: ${formatMsToSeconds(item.maxDeadAirMs)}</div>
+      `;
+
+      const status = mapStatus(item.status);
+
+      tr.innerHTML = `
+        <td>${templateCompany}</td>
+        <td>
+          <div class="small">${badge(callSourceLabel, 'secondary')}</div>
+          <div class="small text-muted">${tierPath}</div>
+        </td>
+        <td>${issue}</td>
+        <td class="small">${why}</td>
+        <td>${impact}</td>
+        <td>${latency}</td>
+        <td>${status}</td>
+        <td>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-primary llm-action-view">View</button>
+            <button class="btn btn-outline-success llm-action-approve">Apply</button>
+            <button class="btn btn-outline-secondary llm-action-reject">Reject</button>
+          </div>
+        </td>
+      `;
+
+      tbody.appendChild(tr);
+    });
+
+    const start = (state.filters.page - 1) * state.filters.pageSize + 1;
+    const end = Math.min(start + state.filters.pageSize - 1, state.totalSuggestions);
+    qs('llm-suggestions-summary').textContent =
+      `Showing ${start}-${end} of ${state.totalSuggestions} suggestions`;
+  }
+
+  function buildTierPathLabel(item) {
+    const path = [];
+    if (item.tier1Score != null) path.push('T1');
+    if (item.tier2Score != null) path.push('T2');
+    if (item.tier3LatencyMs != null || item.llmModel) path.push('T3');
+    if (!path.length) return '—';
+    return 'Tier Path: ' + path.join(' → ');
+  }
+
+  function renderTasksView() {
+    const container = qs('llm-tasks-container');
+    container.innerHTML = '';
+
+    if (!state.tasks.length) {
+      container.innerHTML = `
+        <div class="text-muted text-center py-3">
+          No grouped tasks yet. Once multiple similar issues accumulate,
+          they will appear here as high-value to-do items.
+        </div>`;
+      return;
+    }
+
+    // Group by template + company for display
+    const groups = {};
+    state.tasks.forEach(t => {
+      const key = (t.templateName || 'Unknown') + '|' + (t.companyName || '(Global)');
+      if (!groups[key]) groups[key] = { header: t.templateName, company: t.companyName, items: [] };
+      groups[key].items.push(t);
+    });
+
+    Object.values(groups).forEach(group => {
+      const card = document.createElement('div');
+      card.className = 'card mb-2';
+      card.innerHTML = `
+        <div class="card-header">
+          <strong>${group.header}</strong>
+          <span class="text-muted"> — ${group.company || '(Global)'}</span>
+        </div>
+        <div class="list-group list-group-flush"></div>
+      `;
+      const list = card.querySelector('.list-group');
+
+      group.items.forEach(t => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item';
+        item.innerHTML = `
+          <div class="d-flex justify-content-between">
+            <div>
+              <div><strong>${t.summary}</strong></div>
+              <div class="small text-muted">${t.rootCauseReason || ''}</div>
+              <div class="small text-muted">Calls affected: ${t.affectedCalls || 1}</div>
+            </div>
+            <div class="text-end">
+              ${mapSeverity(t.severity)} ${mapPriority(t.priority)}
+              <div class="mt-1">
+                <button class="btn btn-sm btn-outline-primary llm-task-view-suggestions" data-ids="${(t.suggestionIds || []).join(',')}">
+                  View suggestions
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+        list.appendChild(item);
+      });
+
+      container.appendChild(card);
+    });
+  }
+
+  function openDrawer(suggestion) {
+    state.selectedSuggestion = suggestion;
+    const drawer = qs('llm-suggestion-drawer');
+    const title = qs('llm-drawer-title');
+    const subtitle = qs('llm-drawer-subtitle');
+    const content = qs('llm-drawer-content');
+
+    title.textContent = mapSuggestionType(suggestion.suggestionType);
+    subtitle.textContent = `${suggestion.templateName || 'Unknown template'} — ${suggestion.companyName || '(Global)'}`;
+
+    // Build details HTML
+    const latencyHtml = `
+      <div class="mb-2">
+        <strong>Responsiveness</strong>
+        <div class="small text-muted">Tier 1: score ${suggestion.tier1Score ?? 'n/a'} / threshold ${suggestion.tier1Threshold ?? 'n/a'} (${formatMsToSeconds(suggestion.tier1LatencyMs)})</div>
+        <div class="small text-muted">Tier 2: score ${suggestion.tier2Score ?? 'n/a'} / threshold ${suggestion.tier2Threshold ?? 'n/a'} (${formatMsToSeconds(suggestion.tier2LatencyMs)})</div>
+        <div class="small text-muted">Tier 3: ${suggestion.llmModel || 'LLM'} (${formatMsToSeconds(suggestion.tier3LatencyMs)}), tokens ${suggestion.tokens || 'n/a'}</div>
+        <div class="small text-muted">Max dead air: ${formatMsToSeconds(suggestion.maxDeadAirMs)}, Avg dead air: ${formatMsToSeconds(suggestion.avgDeadAirMs)}</div>
+      </div>
+    `;
+
+    const transcriptHtml = `
+      <div class="mb-2">
+        <strong>Call snippet</strong>
+        <div class="mt-1">
+          <div class="small"><strong>Caller:</strong> ${suggestion.customerPhrase || '(not captured)'}</div>
+          <div class="small"><strong>Agent:</strong> ${suggestion.agentResponseSnippet || '(not captured)'}</div>
+        </div>
+      </div>
+    `;
+
+    const whyHtml = `
+      <div class="mb-2">
+        <strong>Why did this fire?</strong>
+        <div class="small text-muted">${suggestion.rootCauseReason || 'No explanation provided.'}</div>
+      </div>
+    `;
+
+    const metaHtml = `
+      <div class="mb-2">
+        <strong>Meta</strong>
+        <div class="small text-muted">Call Source: ${mapCallSource(suggestion.callSource)}</div>
+        <div class="small text-muted">Scenario: ${suggestion.scenarioName || '(none)'} (${suggestion.categoryName || 'n/a'})</div>
+        <div class="small text-muted">Created: ${suggestion.createdAt || ''}</div>
+        <div class="small text-muted">Call Date: ${suggestion.callDate || ''}</div>
+      </div>
+    `;
+
+    const actionsHtml = `
+      <div class="mt-3 d-flex justify-content-between">
+        <button class="btn btn-sm btn-success" id="llm-drawer-apply">Apply Fix</button>
+        <button class="btn btn-sm btn-outline-secondary" id="llm-drawer-reject">Reject</button>
+        <button class="btn btn-sm btn-outline-warning" id="llm-drawer-snooze">Snooze</button>
+      </div>
+    `;
+
+    content.innerHTML = latencyHtml + transcriptHtml + whyHtml + metaHtml + actionsHtml;
+
+    // Hook up drawer action buttons
+    qs('llm-drawer-apply').onclick = async function () {
+      if (await patchSuggestion(suggestion._id, 'approve', {})) {
+        drawer.style.display = 'none';
+        fetchSuggestions();
+      }
+    };
+
+    qs('llm-drawer-reject').onclick = async function () {
+      const reason = prompt('Why are you rejecting this suggestion? (optional)');
+      if (await patchSuggestion(suggestion._id, 'reject', { rejectedReason: reason || '' })) {
+        drawer.style.display = 'none';
+        fetchSuggestions();
+      }
+    };
+
+    qs('llm-drawer-snooze').onclick = async function () {
+      const days = prompt('Snooze for how many days?', '7');
+      const d = parseInt(days, 10);
+      if (!isNaN(d) && d > 0) {
+        const until = new Date();
+        until.setDate(until.getDate() + d);
+        if (await patchSuggestion(suggestion._id, 'snooze', { snoozeUntil: until.toISOString() })) {
+          drawer.style.display = 'none';
+          fetchSuggestions();
+        }
+      }
+    };
+
+    drawer.style.display = 'block';
+  }
+
+  function closeDrawer() {
+    qs('llm-suggestion-drawer').style.display = 'none';
+    state.selectedSuggestion = null;
+  }
+
+  // --- Event binding ------------------------------------------------------
+
+  function bindEvents() {
+    // Filters
+    qs('llm-filter-apply').addEventListener('click', () => {
+      state.filters.templateId = qs('llm-filter-template').value;
+      state.filters.companyId = qs('llm-filter-company').value;
+      state.filters.callSource = qs('llm-filter-callSource').value;
+      state.filters.status = qs('llm-filter-status').value;
+      state.filters.severity = qs('llm-filter-severity').value;
+      state.filters.slowOnly = qs('llm-filter-slowOnly').checked;
+      state.filters.page = 1;
+      fetchSuggestions();
+    });
+
+    qs('llm-filter-reset').addEventListener('click', () => {
+      ['template', 'company', 'callSource', 'status', 'severity'].forEach(key => {
+        qs('llm-filter-' + key).value = '';
+      });
+      qs('llm-filter-slowOnly').checked = false;
+      state.filters = { ...state.filters, templateId: '', companyId: '', callSource: '', status: '', severity: '', slowOnly: false, page: 1 };
+      fetchSuggestions();
+    });
+
+    // Pagination
+    qs('llm-page-prev').addEventListener('click', () => {
+      if (state.filters.page > 1) {
+        state.filters.page--;
+        fetchSuggestions();
+      }
+    });
+    qs('llm-page-next').addEventListener('click', () => {
+      const maxPage = Math.ceil(state.totalSuggestions / state.filters.pageSize);
+      if (state.filters.page < maxPage) {
+        state.filters.page++;
+        fetchSuggestions();
+      }
+    });
+
+    // Row actions using event delegation
+    qs('llm-suggestions-table').addEventListener('click', async (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const tr = e.target.closest('tr');
+      if (!tr || !tr.dataset.id) return;
+      const id = tr.dataset.id;
+      const suggestion = state.suggestions.find(s => s._id === id);
+      if (!suggestion) return;
+
+      if (btn.classList.contains('llm-action-view')) {
+        openDrawer(suggestion);
+      } else if (btn.classList.contains('llm-action-approve')) {
+        if (await patchSuggestion(id, 'approve', {})) fetchSuggestions();
+      } else if (btn.classList.contains('llm-action-reject')) {
+        const reason = prompt('Why are you rejecting this suggestion? (optional)');
+        if (await patchSuggestion(id, 'reject', { rejectedReason: reason || '' })) fetchSuggestions();
+      }
+    });
+
+    // Tabs
+    document.querySelectorAll('#llm-learning-tabs button[data-llm-tab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = btn.getAttribute('data-llm-tab');
+        document.querySelectorAll('#llm-learning-tabs button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        qs('llm-tab-suggestions').style.display = (tab === 'suggestions') ? 'block' : 'none';
+        qs('llm-tab-tasks').style.display = (tab === 'tasks') ? 'block' : 'none';
+        if (tab === 'tasks') {
+          fetchTasks();
+        }
+      });
+    });
+
+    // Drawer close
+    qs('llm-drawer-close').addEventListener('click', closeDrawer);
+  }
+
+  // --- Init ---------------------------------------------------------------
+
+  function initLLMLearningConsoleV2() {
+    if (!qs('llm-learning-console-v2')) return;
+    bindEvents();
+    fetchSuggestions();
+  }
+
+  document.addEventListener('DOMContentLoaded', initLLMLearningConsoleV2);
+})();
+  </script>
+</body>
+</html>
+

@@ -102,7 +102,10 @@ const ProductionLLMSuggestionSchema = new Schema(
     tier2LatencyMs: { type: Number },
     tier3LatencyMs: { type: Number },
     totalResponseLatencyMs: { type: Number }, // full time between caller speech and reply
-    deadAirMs: { type: Number }, // estimated "silence" time
+    overallLatencyMs: { type: Number }, // alias for totalResponseLatencyMs (UI compatibility)
+    deadAirMs: { type: Number }, // estimated "silence" time (deprecated - use maxDeadAirMs)
+    maxDeadAirMs: { type: Number }, // maximum silence/dead air time during call
+    avgDeadAirMs: { type: Number }, // average dead air time across call
 
     // ========================================================================
     // WHAT THE CALLER SAID + TRANSCRIPT
@@ -112,14 +115,18 @@ const ProductionLLMSuggestionSchema = new Schema(
       required: true
     }, // the exact utterance that caused Tier 3
     
+    agentResponseSnippet: { type: String }, // what the AI agent responded (preview)
+    
     fullCallTranscript: { type: String },
 
     // ========================================================================
     // WHERE IN THE TEMPLATE THIS SUGGESTION APPLIES
     // ========================================================================
     targetCategory: { type: String },
+    categoryName: { type: String }, // human-readable category name
     targetScenario: { type: String },
     scenarioId: { type: String }, // your internal scenario key
+    scenarioName: { type: String }, // human-readable scenario name
     targetField: {
       type: String,
       enum: ['keyword', 'synonym', 'filler', 'scenario', 'reply', 'meta', 'other'],
@@ -192,6 +199,28 @@ const ProductionLLMSuggestionSchema = new Schema(
       index: true,
     },
     
+    severity: {
+      type: String,
+      enum: ['low', 'medium', 'high', 'critical'],
+      default: 'medium',
+      index: true,
+      description: 'How severe is the impact (separate from priority)'
+    },
+    
+    changeImpactScore: {
+      type: Number,
+      min: 0,
+      max: 5,
+      default: 0,
+      description: 'Estimated impact of applying this fix (0-5 scale)'
+    },
+    
+    similarCallCount: {
+      type: Number,
+      default: 1,
+      description: 'Number of similar calls affected by the same issue'
+    },
+    
     status: {
       type: String,
       enum: ['pending', 'applied', 'rejected', 'snoozed'],
@@ -258,6 +287,12 @@ ProductionLLMSuggestionSchema.index({
 ProductionLLMSuggestionSchema.index({ 
   status: 1, 
   snoozeUntil: 1 
+});
+
+// Severity filtering
+ProductionLLMSuggestionSchema.index({ 
+  severity: 1, 
+  callDate: -1 
 });
 
 module.exports = mongoose.model('ProductionLLMSuggestion', ProductionLLMSuggestionSchema);
