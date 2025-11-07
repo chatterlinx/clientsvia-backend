@@ -276,20 +276,77 @@ class PriorityDrivenKnowledgeRouter {
 
     /**
      * ⚡ INSTANT RESPONSES QUERY ENGINE (PRIORITY 0) - V3 HYBRID BRAIN
-     * 📋 Ultra-fast matching using HybridScenarioSelector (sub-10ms target)
+     * 📋 Ultra-fast matching using HybridScenarioSelector (Tier 1 only) OR IntelligentRouter (3-tier cascade)
      * 🎯 Purpose: Provide immediate answers using Global AI Brain with hybrid matching
      * 🧠 NEW: Uses BM25 + Regex + Context + Negative Triggers for world-class intelligence
      * ⚠️  CRITICAL: Must be fastest source - uses in-memory matching with cached templates
+     * 🚀 V2: Now respects Global/Custom 3-tier intelligence settings for self-improvement cycle
      */
     async queryInstantResponses(companyId, query, context) {
         try {
             const HybridScenarioSelector = require('./HybridScenarioSelector');
             const ScenarioPoolService = require('./ScenarioPoolService');
             const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
+            const IntelligentRouter = require('./IntelligentRouter');
+            const AdminSettings = require('../models/AdminSettings');
             
             logger.info(`⚡ [V3 HYBRID BRAIN] Querying instant responses for "${query.substring(0, 50)}..."`, {
                 routingId: context.routingId
             });
+
+            // ============================================
+            // 🧠 STEP 1: CHECK IF 3-TIER INTELLIGENCE IS ENABLED
+            // ============================================
+            // Determine if company uses Global or Custom intelligence
+            // and whether 3-tier cascade is enabled for self-improvement
+            const company = await Company.findById(companyId)
+                .select('configuration aiAgentSettings aiAgentLogic')
+                .lean();
+
+            if (!company) {
+                logger.error(`❌ [V3 HYBRID BRAIN] Company not found: ${companyId}`);
+                return {
+                    confidence: 0,
+                    response: null,
+                    metadata: {
+                        source: 'instantResponses',
+                        error: 'Company not found'
+                    }
+                };
+            }
+
+            // Check if company uses Global or Custom intelligence
+            const useGlobalIntelligence = company?.aiAgentLogic?.useGlobalIntelligence !== false; // Default: true
+            
+            let intelligenceEnabled = false;
+            let intelligenceConfig = null;
+            
+            if (useGlobalIntelligence) {
+                // GLOBAL MODE: Load from AdminSettings.globalProductionIntelligence
+                const adminSettings = await AdminSettings.findOne({});
+                const globalIntelligence = adminSettings?.globalProductionIntelligence || {};
+                intelligenceEnabled = globalIntelligence.enabled === true;
+                intelligenceConfig = globalIntelligence;
+                
+                logger.info(`🌐 [V3 HYBRID BRAIN] Company uses GLOBAL intelligence: ${intelligenceEnabled ? 'ENABLED' : 'DISABLED'}`, {
+                    routingId: context.routingId,
+                    tier1: globalIntelligence.thresholds?.tier1 || 0.80,
+                    tier2: globalIntelligence.thresholds?.tier2 || 0.60,
+                    enableTier3: globalIntelligence.thresholds?.enableTier3
+                });
+            } else {
+                // CUSTOM MODE: Load from company.aiAgentLogic.productionIntelligence
+                const productionIntelligence = company?.aiAgentLogic?.productionIntelligence || {};
+                intelligenceEnabled = productionIntelligence.enabled === true;
+                intelligenceConfig = productionIntelligence;
+                
+                logger.info(`🎯 [V3 HYBRID BRAIN] Company uses CUSTOM intelligence: ${intelligenceEnabled ? 'ENABLED' : 'DISABLED'}`, {
+                    routingId: context.routingId,
+                    tier1: productionIntelligence.thresholds?.tier1 || 0.80,
+                    tier2: productionIntelligence.thresholds?.tier2 || 0.60,
+                    enableTier3: productionIntelligence.thresholds?.enableTier3
+                });
+            }
 
             // ============================================
             // 🚀 NEW: USE SCENARIOPOOLSERVICE (CANONICAL SOURCE)
@@ -340,56 +397,148 @@ class PriorityDrivenKnowledgeRouter {
             logger.info(`🧠 [V3 HYBRID BRAIN] Loaded ${enabledScenarios.length} enabled scenarios (${scenarios.length - enabledScenarios.length} disabled) from ${templatesUsed.length} template(s)`);
 
             // ============================================
-            // 🔇 BUILD EFFECTIVE FILLERS & SYNONYMS
+            // 🔀 STEP 2: ROUTE BASED ON INTELLIGENCE SETTING
             // ============================================
-            // Load company configuration for filler words and synonyms
-            const company = await Company.findById(companyId)
-                .select('configuration.fillerWords configuration.urgencyKeywords aiAgentSettings.fillerWords')
-                .lean();
+            let result;
+            
+            if (intelligenceEnabled) {
+                // ============================================
+                // 🚀 PATH A: 3-TIER INTELLIGENT ROUTER (SELF-IMPROVEMENT CYCLE)
+                // ============================================
+                logger.info(`🚀 [3-TIER ROUTING] Intelligence enabled - using IntelligentRouter (Tier 1 → 2 → 3)`, {
+                    routingId: context.routingId,
+                    mode: useGlobalIntelligence ? 'GLOBAL' : 'CUSTOM'
+                });
+                
+                // Get the first template (primary template for this company)
+                // NOTE: IntelligentRouter expects a single template object
+                const primaryTemplate = await GlobalInstantResponseTemplate.findById(templatesUsed[0]._id);
+                
+                if (!primaryTemplate) {
+                    logger.error(`❌ [3-TIER ROUTING] Primary template not found: ${templatesUsed[0]._id}`);
+                    return {
+                        confidence: 0,
+                        response: null,
+                        metadata: {
+                            source: 'instantResponses',
+                            error: 'Primary template not found'
+                        }
+                    };
+                }
+                
+                // Create IntelligentRouter instance
+                const router = new IntelligentRouter();
+                
+                // Route through 3-tier cascade
+                const routingResult = await router.route({
+                    callerInput: query,
+                    template: primaryTemplate,
+                    company: company,
+                    callId: context.callState?.callId || context.routingId,
+                    context: {
+                        callSource: context.callSource || 'production',
+                        isTest: context.isTest || false,
+                        callState: context.callState,
+                        intelligenceConfig,
+                        routingId: context.routingId,
+                        transcript: context.transcript || '',
+                        callSid: context.callState?.callSid
+                    }
+                });
+                
+                logger.info(`✅ [3-TIER ROUTING] Routing complete`, {
+                    routingId: context.routingId,
+                    matched: routingResult.matched,
+                    tierUsed: routingResult.tierUsed,
+                    confidence: routingResult.confidence,
+                    cost: routingResult.cost?.total || 0
+                });
+                
+                if (routingResult.matched && routingResult.scenario) {
+                    // Map IntelligentRouter result to expected format
+                    result = {
+                        scenario: routingResult.scenario,
+                        confidence: routingResult.confidence,
+                        score: routingResult.confidence,
+                        breakdown: {
+                            bm25: routingResult.tier1Result?.breakdown?.bm25 || 0,
+                            regexBonus: routingResult.tier1Result?.breakdown?.regexBonus || 0,
+                            contextBonus: routingResult.tier1Result?.breakdown?.contextBonus || 0
+                        },
+                        trace: {
+                            tierUsed: routingResult.tierUsed,
+                            tier1Score: routingResult.tier1Result?.confidence || 0,
+                            tier2Score: routingResult.tier2Result?.confidence || 0,
+                            tier3Score: routingResult.tier3Result?.confidence || 0,
+                            timingMs: routingResult.performance || {},
+                            cost: routingResult.cost || {}
+                        }
+                    };
+                } else {
+                    // No match - return zero confidence
+                    result = {
+                        scenario: null,
+                        confidence: 0,
+                        score: 0,
+                        trace: {
+                            tierUsed: routingResult.tierUsed,
+                            reason: 'No scenario matched above thresholds'
+                        }
+                    };
+                }
+                
+            } else {
+                // ============================================
+                // 🎯 PATH B: HYBRID SCENARIO SELECTOR (TIER 1 ONLY - LEGACY)
+                // ============================================
+                logger.info(`🎯 [TIER 1 ONLY] Intelligence disabled - using HybridScenarioSelector (no self-improvement)`, {
+                    routingId: context.routingId
+                });
+                
+                // Build filler words (template inherited + company custom)
+                const allFillers = [
+                    ...(company.configuration?.fillerWords?.inherited || []),
+                    ...(company.configuration?.fillerWords?.custom || []),
+                    ...(company.aiAgentSettings?.fillerWords?.custom || [])
+                ];
+                const effectiveFillers = [...new Set(allFillers)];
+                
+                // Load urgency keywords
+                const urgencyKeywords = [
+                    ...(company.configuration?.urgencyKeywords?.inherited || []),
+                    ...(company.configuration?.urgencyKeywords?.custom || [])
+                ];
+                
+                // TODO: Build effective synonym map from templates
+                // For now, we pass null and let HybridScenarioSelector use defaults
+                const effectiveSynonymMap = null;
+                
+                logger.info(`🔇 [TIER 1 ONLY] Loaded ${effectiveFillers.length} filler words, ${urgencyKeywords.length} urgency keywords`);
+                
+                // Instantiate HybridScenarioSelector
+                const selector = new HybridScenarioSelector(effectiveFillers, urgencyKeywords, effectiveSynonymMap);
 
-            // Build filler words (template inherited + company custom)
-            const allFillers = [
-                ...(company.configuration?.fillerWords?.inherited || []),
-                ...(company.configuration?.fillerWords?.custom || []),
-                ...(company.aiAgentSettings?.fillerWords?.custom || [])
-            ];
-            const effectiveFillers = [...new Set(allFillers)];
-            
-            // Load urgency keywords
-            const urgencyKeywords = [
-                ...(company.configuration?.urgencyKeywords?.inherited || []),
-                ...(company.configuration?.urgencyKeywords?.custom || [])
-            ];
-            
-            // TODO: Build effective synonym map from templates
-            // For now, we pass null and let HybridScenarioSelector use defaults
-            const effectiveSynonymMap = null;
-            
-            logger.info(`🔇 [V3 HYBRID BRAIN] Loaded ${effectiveFillers.length} filler words, ${urgencyKeywords.length} urgency keywords`);
-            
-            // ============================================
-            // 🧠 INSTANTIATE HYBRID SCENARIO SELECTOR
-            // ============================================
-            const selector = new HybridScenarioSelector(effectiveFillers, urgencyKeywords, effectiveSynonymMap);
+                // Build match context
+                const matchContext = {
+                    channel: context.channel || 'voice',
+                    language: context.language || 'auto',
+                    conversationState: context.callState || {},
+                    recentScenarios: {}, // TODO: Track recently used scenarios in Redis
+                    lastIntent: context.callState?.lastIntent || null,
+                    callerProfile: null // TODO: Load caller preferences from DB
+                };
 
-            // Build match context
-            const matchContext = {
-                channel: context.channel || 'voice',
-                language: context.language || 'auto',
-                conversationState: context.callState || {},
-                recentScenarios: {}, // TODO: Track recently used scenarios in Redis
-                lastIntent: context.callState?.lastIntent || null,
-                callerProfile: null // TODO: Load caller preferences from DB
-            };
-
+                // Match scenario
+                result = await selector.selectScenario(
+                    query,
+                    enabledScenarios, // CRITICAL: Only pass enabled scenarios
+                    matchContext
+                );
+            }
+            
             // ============================================
-            // 🎯 MATCH SCENARIO
+            // 🎯 STEP 3: PROCESS RESULT (BOTH PATHS CONVERGE HERE)
             // ============================================
-            const result = await selector.selectScenario(
-                query,
-                enabledScenarios, // CRITICAL: Only pass enabled scenarios
-                matchContext
-            );
 
             if (result.scenario && result.confidence > 0) {
                 logger.info(`✅ [V3 HYBRID BRAIN] Scenario matched!`, {
