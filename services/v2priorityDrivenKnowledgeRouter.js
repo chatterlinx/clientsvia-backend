@@ -646,23 +646,25 @@ class PriorityDrivenKnowledgeRouter {
     async queryCompanyQnA(companyId, query, context) {
         try {
             // 🚀 OPTIMIZATION: Pre-filter check before expensive query
-            const canMatch = await this.canSourceMatch(companyId, query, 'companyQnA');
-            if (!canMatch) {
-                logger.info(`⚡ Pre-filter SKIP: No keyword matches in companyQnA for "${query}"`, { 
-                    routingId: context.routingId 
-                });
-                return { 
-                    confidence: 0, 
-                    response: null, 
-                    metadata: { 
-                        source: 'companyQnA', 
-                        skipped: 'pre-filter',
-                        reason: 'No keyword overlap detected'
-                    } 
-                };
-            }
+            // 🔧 TEMPORARY FIX: canSourceMatch() not implemented yet, skip pre-filter
+            // const canMatch = await this.canSourceMatch(companyId, query, 'companyQnA');
+            // if (!canMatch) {
+            //     logger.info(`⚡ Pre-filter SKIP: No keyword matches in companyQnA for "${query}"`, { 
+            //         routingId: context.routingId 
+            //     });
+            //     return { 
+            //         confidence: 0, 
+            //         response: null, 
+            //         metadata: { 
+            //             source: 'companyQnA', 
+            //             skipped: 'pre-filter',
+            //             reason: 'No keyword overlap detected'
+            //         } 
+            //     };
+            // }
             
-            logger.info(`⚡ Pre-filter PASS: Keyword matches found in companyQnA`, { 
+            // 🔧 Skipping pre-filter, proceeding directly to query
+            logger.info(`⚡ Querying companyQnA (pre-filter disabled)`, { 
                 routingId: context.routingId 
             });
 

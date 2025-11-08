@@ -388,12 +388,12 @@ class V2AIAgentRuntime {
                 // 🎯 NEW: Pass effective intelligence configuration
                 intelligenceConfig: effectiveIntelligence,
                 // 🔧 FIX: Changed "priorities" to "priorityConfig" (router expects this name)
+                // 🔥 CRITICAL FIX: Removed legacy companyQnA and tradeQnA (don't exist in new AI Brain system!)
+                // New system ONLY has: Templates → Categories → Scenarios (AI Brain tab)
                 priorityConfig: aiLogic.knowledgeSourcePriorities || {
                     priorityFlow: [
-                        { source: 'companyQnA', priority: 1, threshold: 0.8, enabled: true },
-                        { source: 'tradeQnA', priority: 2, threshold: 0.75, enabled: true },
-                        { source: 'templates', priority: 3, threshold: 0.7, enabled: true },
-                        { source: 'inHouseFallback', priority: 4, threshold: 0.5, enabled: true }
+                        { source: 'templates', priority: 1, threshold: 0.7, enabled: true },  // ← THE REAL SOURCE!
+                        { source: 'inHouseFallback', priority: 2, threshold: 0.5, enabled: true }  // ← Generic fallback
                     ]
                 }
             };
