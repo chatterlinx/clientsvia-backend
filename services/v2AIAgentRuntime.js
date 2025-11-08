@@ -389,10 +389,12 @@ class V2AIAgentRuntime {
                 intelligenceConfig: effectiveIntelligence,
                 // 🔧 FIX: Changed "priorities" to "priorityConfig" (router expects this name)
                 // 🔥 CRITICAL FIX: Removed legacy companyQnA and tradeQnA (don't exist in new AI Brain system!)
-                // New system ONLY has: Templates → Categories → Scenarios (AI Brain tab)
+                // 🔥 CRITICAL FIX #2: Changed 'templates' to 'instantResponses' (the NEW queryInstantResponses function!)
+                // Router mapping: 'templates' → OLD queryTemplates() (LEGACY), 'instantResponses' → NEW queryInstantResponses() (REAL!)
+                // New system: instantResponses → ScenarioPoolService → 3-tier intelligence → REAL AI BRAIN!
                 priorityConfig: aiLogic.knowledgeSourcePriorities || {
                     priorityFlow: [
-                        { source: 'templates', priority: 1, threshold: 0.7, enabled: true },  // ← THE REAL SOURCE!
+                        { source: 'instantResponses', priority: 1, threshold: 0.7, enabled: true },  // ← THE REAL SOURCE!
                         { source: 'inHouseFallback', priority: 2, threshold: 0.5, enabled: true }  // ← Generic fallback
                     ]
                 }
