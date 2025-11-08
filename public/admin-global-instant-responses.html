@@ -7330,10 +7330,10 @@ Continue?`;
          *         instead of UI's activeTemplate to ensure WYSIWYG
          */
         async function loadTestPhrases() {
-            console.log('📋 [TEST PHRASES] Loading phrases from GLOBAL active template...');
+            console.log('📋 [TEST PHRASES] Loading phrases (mode-aware)...');
             
             try {
-                // STEP 1: Fetch global test config to get the REAL active template
+                // STEP 1: Fetch global test config to get the mode and active template/company
                 console.log('📋 [TEST PHRASES] Step 1: Fetching global test config...');
                 const token = getAuthToken();
                 const globalConfigResponse = await fetch('/api/admin/settings/global-ai-brain-test', {
@@ -7349,100 +7349,207 @@ Continue?`;
                 
                 const globalConfigResult = await globalConfigResponse.json();
                 const globalConfig = globalConfigResult.data;
+                const mode = globalConfig.mode || 'template'; // Default to template mode
                 const realActiveTemplateId = globalConfig.activeTemplateId;
+                const testCompanyId = globalConfig.testCompanyId;
                 const realActiveTemplateName = globalConfig.activeTemplateName || 'Unknown';
                 
                 console.log('📋 [TEST PHRASES] Global config loaded:', {
+                    mode: mode,
                     activeTemplateId: realActiveTemplateId,
+                    testCompanyId: testCompanyId,
                     activeTemplateName: realActiveTemplateName,
                     enabled: globalConfig.enabled
                 });
                 
-                if (!realActiveTemplateId) {
-                    console.warn('⚠️ [TEST PHRASES] No active template set in global config');
-                    document.getElementById('test-phrase-categories').innerHTML = `
-                        <div class="text-center py-8 text-yellow-600">
-                            <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
-                            <p>No active template configured for testing.</p>
-                            <p class="text-sm mt-2">Please save the Twilio test configuration first.</p>
-                        </div>
-                    `;
-                    return;
-                }
+                // STEP 2: MODE-AWARE LOADING
+                let templatesToLoad = [];
+                let displayModeName = '';
                 
-                // STEP 2: Load the ACTUAL active template from backend
-                console.log('📋 [TEST PHRASES] Step 2: Loading template from backend...', realActiveTemplateId);
-                const templateResponse = await fetch(`/api/admin/global-instant-responses/${realActiveTemplateId}`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
+                if (mode === 'template') {
+                    // ===== TEMPLATE MODE: Load single active template =====
+                    console.log('📋 [TEST PHRASES] MODE: Template Testing');
+                    
+                    if (!realActiveTemplateId) {
+                        console.warn('⚠️ [TEST PHRASES] No active template set in global config');
+                        document.getElementById('test-phrase-categories').innerHTML = `
+                            <div class="text-center py-8 text-yellow-600">
+                                <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
+                                <p>No active template configured for testing.</p>
+                                <p class="text-sm mt-2">Please save the Twilio test configuration first.</p>
+                            </div>
+                        `;
+                        return;
                     }
-                });
-                
-                if (!templateResponse.ok) {
-                    throw new Error(`Failed to load template ${realActiveTemplateId}: ${templateResponse.status}`);
+                    
+                    console.log('📋 [TEST PHRASES] Step 2: Loading template from backend...', realActiveTemplateId);
+                    const templateResponse = await fetch(`/api/admin/global-instant-responses/${realActiveTemplateId}`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (!templateResponse.ok) {
+                        throw new Error(`Failed to load template ${realActiveTemplateId}: ${templateResponse.status}`);
+                    }
+                    
+                    const templateResult = await templateResponse.json();
+                    const realActiveTemplate = templateResult.data || templateResult.template;
+                    
+                    templatesToLoad = [realActiveTemplate];
+                    displayModeName = `Template: ${realActiveTemplate.name}`;
+                    
+                    console.log('📋 [TEST PHRASES] Template loaded:', {
+                        id: realActiveTemplate._id,
+                        name: realActiveTemplate.name,
+                        categories: realActiveTemplate.categories?.length || 0
+                    });
+                    
+                } else if (mode === 'company') {
+                    // ===== COMPANY MODE: Load ALL company templates =====
+                    console.log('📋 [TEST PHRASES] MODE: Company Testing');
+                    
+                    if (!testCompanyId) {
+                        console.warn('⚠️ [TEST PHRASES] No company selected for testing');
+                        document.getElementById('test-phrase-categories').innerHTML = `
+                            <div class="text-center py-8 text-yellow-600">
+                                <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
+                                <p>No company selected for testing.</p>
+                                <p class="text-sm mt-2">Please select a company from the dropdown first.</p>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    console.log('📋 [TEST PHRASES] Step 2: Loading company data...', testCompanyId);
+                    const companyResponse = await fetch(`/api/admin/test-pilot/companies/${testCompanyId}`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (!companyResponse.ok) {
+                        throw new Error(`Failed to load company ${testCompanyId}: ${companyResponse.status}`);
+                    }
+                    
+                    const companyResult = await companyResponse.json();
+                    const company = companyResult.data;
+                    const assignedTemplateIds = company.aiAgentLogic?.assignedTemplates || [];
+                    
+                    console.log('📋 [TEST PHRASES] Company loaded:', {
+                        id: company._id,
+                        name: company.name,
+                        assignedTemplates: assignedTemplateIds.length
+                    });
+                    
+                    if (assignedTemplateIds.length === 0) {
+                        console.warn('⚠️ [TEST PHRASES] Company has no assigned templates');
+                        document.getElementById('test-phrase-categories').innerHTML = `
+                            <div class="text-center py-8 text-yellow-600">
+                                <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
+                                <p>Company "${company.name}" has no assigned templates.</p>
+                                <p class="text-sm mt-2">Please assign templates to this company first.</p>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    // Load ALL assigned templates
+                    console.log('📋 [TEST PHRASES] Step 3: Loading all assigned templates...', assignedTemplateIds);
+                    const templatePromises = assignedTemplateIds.map(templateId => 
+                        fetch(`/api/admin/global-instant-responses/${templateId}`, {
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            }
+                        }).then(res => res.ok ? res.json() : null)
+                    );
+                    
+                    const templateResults = await Promise.all(templatePromises);
+                    templatesToLoad = templateResults
+                        .filter(result => result !== null)
+                        .map(result => result.data || result.template);
+                    
+                    displayModeName = `Company: ${company.name} (${templatesToLoad.length} templates)`;
+                    
+                    console.log('📋 [TEST PHRASES] Templates loaded:', {
+                        count: templatesToLoad.length,
+                        names: templatesToLoad.map(t => t.name)
+                    });
                 }
                 
-                const templateResult = await templateResponse.json();
-                const realActiveTemplate = templateResult.data || templateResult.template;
-                
-                console.log('📋 [TEST PHRASES] Template loaded:', {
-                    id: realActiveTemplate._id,
-                    name: realActiveTemplate.name,
-                    categories: realActiveTemplate.categories?.length || 0
-                });
-                
-                // STEP 3: Extract test phrases from the REAL active template
-                console.log('📋 [TEST PHRASES] Step 3: Extracting phrases...');
+                // STEP 3: Extract test phrases from ALL loaded templates
+                console.log('📋 [TEST PHRASES] Step 3: Extracting phrases from', templatesToLoad.length, 'template(s)...');
                 testPhraseData = [];
                 let totalPhrases = 0;
+                const categoryMap = new Map(); // For merging categories across templates
                 
-                if (!realActiveTemplate.categories || realActiveTemplate.categories.length === 0) {
-                    console.warn('⚠️ [TEST PHRASES] Template has no categories');
+                if (templatesToLoad.length === 0) {
+                    console.warn('⚠️ [TEST PHRASES] No templates to load');
                     document.getElementById('test-phrase-categories').innerHTML = `
                         <div class="text-center py-8 text-yellow-600">
                             <i class="fas fa-folder-open text-2xl mb-2"></i>
-                            <p>Template "${realActiveTemplate.name}" has no categories yet.</p>
+                            <p>No templates available for testing.</p>
                         </div>
                     `;
                     return;
                 }
                 
-                // Extract all triggers from all scenarios in all categories
-                realActiveTemplate.categories.forEach(category => {
-                    const categoryData = {
-                        id: category.id,
-                        name: category.name,
-                        icon: category.icon || '📁',
-                        description: category.description || '',
-                        phrases: [],
-                        expanded: false
-                    };
+                // Extract all triggers from all scenarios in all categories across ALL templates
+                templatesToLoad.forEach((template, templateIndex) => {
+                    console.log(`📋 [TEST PHRASES] Processing template ${templateIndex + 1}/${templatesToLoad.length}: ${template.name}`);
                     
-                    if (category.scenarios && Array.isArray(category.scenarios)) {
-                        category.scenarios.forEach(scenario => {
-                            if (scenario.triggers && Array.isArray(scenario.triggers)) {
-                                scenario.triggers.forEach(trigger => {
-                                    categoryData.phrases.push({
-                                        text: trigger,
-                                        scenarioName: scenario.name,
-                                        scenarioId: scenario.scenarioId
+                    if (!template.categories || template.categories.length === 0) {
+                        console.warn(`⚠️ [TEST PHRASES] Template "${template.name}" has no categories`);
+                        return;
+                    }
+                    
+                    template.categories.forEach(category => {
+                        // Use category name as key for merging (or use ID if available)
+                        const categoryKey = category.name;
+                        
+                        if (!categoryMap.has(categoryKey)) {
+                            categoryMap.set(categoryKey, {
+                                id: category.id,
+                                name: category.name,
+                                icon: category.icon || '📁',
+                                description: category.description || '',
+                                phrases: [],
+                                expanded: false,
+                                sourceTemplates: [] // Track which templates this category came from
+                            });
+                        }
+                        
+                        const categoryData = categoryMap.get(categoryKey);
+                        categoryData.sourceTemplates.push(template.name);
+                        
+                        if (category.scenarios && Array.isArray(category.scenarios)) {
+                            category.scenarios.forEach(scenario => {
+                                if (scenario.triggers && Array.isArray(scenario.triggers)) {
+                                    scenario.triggers.forEach(trigger => {
+                                        categoryData.phrases.push({
+                                            text: trigger,
+                                            scenarioName: scenario.name,
+                                            scenarioId: scenario.scenarioId,
+                                            templateName: template.name // Add template name for context
+                                        });
+                                        totalPhrases++;
                                     });
-                                    totalPhrases++;
-                                });
-                            }
-                        });
-                    }
-                    
-                    if (categoryData.phrases.length > 0) {
-                        testPhraseData.push(categoryData);
-                    }
+                                }
+                            });
+                        }
+                    });
                 });
                 
-                console.log(`✅ [TEST PHRASES] Loaded ${totalPhrases} phrases from ${testPhraseData.length} categories`);
-                console.log(`✅ [TEST PHRASES] Template: "${realActiveTemplate.name}" (${realActiveTemplateId})`);
+                // Convert map to array and filter empty categories
+                testPhraseData = Array.from(categoryMap.values()).filter(cat => cat.phrases.length > 0);
                 
-                // STEP 4: Update UI with real active template info
+                console.log(`✅ [TEST PHRASES] Loaded ${totalPhrases} phrases from ${testPhraseData.length} categories`);
+                console.log(`✅ [TEST PHRASES] Mode: ${displayModeName}`);
+                
+                // STEP 4: Update UI with mode-aware template info
                 document.getElementById('total-phrase-count').textContent = `${totalPhrases} phrases`;
                 document.getElementById('footer-category-count').textContent = testPhraseData.length;
                 document.getElementById('footer-phrase-count').textContent = totalPhrases;
@@ -7451,12 +7558,21 @@ Continue?`;
                 // STEP 4.5: Update the active test template banner (CRITICAL for sync visibility)
                 const bannerElement = document.getElementById('active-test-template-display');
                 if (bannerElement) {
-                    bannerElement.innerHTML = `
-                        <div class="flex items-center gap-2">
-                            <i class="fas fa-check-circle text-emerald-100"></i>
-                            <span>${realActiveTemplate.name}</span>
-                        </div>
-                    `;
+                    if (mode === 'template') {
+                        bannerElement.innerHTML = `
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-check-circle text-emerald-100"></i>
+                                <span>${templatesToLoad[0].name}</span>
+                            </div>
+                        `;
+                    } else if (mode === 'company') {
+                        bannerElement.innerHTML = `
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-building text-blue-100"></i>
+                                <span>${displayModeName}</span>
+                            </div>
+                        `;
+                    }
                 }
                 
                 // STEP 5: Render the phrases
@@ -7502,7 +7618,15 @@ Continue?`;
                         <div class="flex items-center gap-3">
                             <span class="text-2xl">${category.icon}</span>
                             <div>
-                                <h4 class="font-bold text-gray-900">${category.name}</h4>
+                                <div class="flex items-center gap-2">
+                                    <h4 class="font-bold text-gray-900">${category.name}</h4>
+                                    ${category.sourceTemplates && category.sourceTemplates.length > 1 ? `
+                                        <span class="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-semibold" title="This category appears in ${category.sourceTemplates.length} templates">
+                                            <i class="fas fa-layer-group mr-1"></i>
+                                            ${category.sourceTemplates.length} sources
+                                        </span>
+                                    ` : ''}
+                                </div>
                                 <p class="text-xs text-gray-600">${category.phrases.length} test phrase${category.phrases.length !== 1 ? 's' : ''}</p>
                             </div>
                         </div>
@@ -7523,9 +7647,17 @@ Continue?`;
                                 <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-green-50 transition-colors border border-gray-200 hover:border-green-300 test-phrase-item">
                                     <div class="flex-1">
                                         <div class="font-medium text-gray-900 test-phrase-text">"${phrase.text}"</div>
-                                        <div class="text-xs text-gray-500 mt-1">
-                                            <i class="fas fa-tag mr-1"></i>
-                                            Scenario: ${phrase.scenarioName}
+                                        <div class="text-xs text-gray-500 mt-1 flex items-center gap-3 flex-wrap">
+                                            <span>
+                                                <i class="fas fa-tag mr-1"></i>
+                                                Scenario: ${phrase.scenarioName}
+                                            </span>
+                                            ${phrase.templateName ? `
+                                                <span class="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-700 rounded font-semibold">
+                                                    <i class="fas fa-brain mr-1"></i>
+                                                    ${phrase.templateName}
+                                                </span>
+                                            ` : ''}
                                         </div>
                                     </div>
                                     <div class="flex gap-1">
@@ -8048,6 +8180,13 @@ Continue?`;
                     console.warn('⚠️ [TEMPLATE TEST] No phone number found in config');
                 }
                 
+                // 🔄 RELOAD: Test Phrase Library to load template-specific phrases
+                console.log('📋 [TEMPLATE TEST] Reloading Test Phrase Library...');
+                if (testPhraseLibraryExpanded || testPhraseData.length > 0) {
+                    await loadTestPhrases();
+                    console.log('✅ [TEMPLATE TEST] Test Phrase Library reloaded');
+                }
+                
                 console.log('✅ [TEST MODE] Switched to Template Mode');
                 
             } else if (mode === 'company') {
@@ -8111,6 +8250,13 @@ Continue?`;
                 } else {
                     companyPhoneDisplay.textContent = 'Not configured';
                     console.warn('⚠️ [COMPANY TEST] No phone number found in config');
+                }
+                
+                // 🔄 RELOAD: Test Phrase Library to load ALL company templates
+                console.log('📋 [COMPANY TEST] Reloading Test Phrase Library for all company templates...');
+                if (testPhraseLibraryExpanded || testPhraseData.length > 0) {
+                    await loadTestPhrases();
+                    console.log('✅ [COMPANY TEST] Test Phrase Library reloaded with all company templates');
                 }
                 
                 console.log('✅ [TEST MODE] Switched to Company Mode');
