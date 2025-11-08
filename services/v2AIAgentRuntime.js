@@ -392,7 +392,22 @@ class V2AIAgentRuntime {
             
             logger.info(`🎯 [ROUTER CONTEXT] Routing with callSource: ${context.callSource} | Test: ${context.isTest}`);
             
+            // 🔍 DIAGNOSTIC: About to call knowledge router
+            console.log('═'.repeat(80));
+            console.log('[🔍 AI BRAIN] About to call executePriorityRouting');
+            console.log('CompanyID:', company._id.toString());
+            console.log('User input:', userInput);
+            console.log('═'.repeat(80));
+            
             const routingResult = await router.executePriorityRouting(context);
+            
+            // 🔍 DIAGNOSTIC: Knowledge router returned
+            console.log('═'.repeat(80));
+            console.log('[🔍 AI BRAIN] Knowledge router returned');
+            console.log('Success:', Boolean(routingResult));
+            console.log('Response:', routingResult?.response?.substring(0, 50));
+            console.log('Confidence:', routingResult?.confidence);
+            console.log('═'.repeat(80));
             
             if (routingResult && routingResult.response && routingResult.confidence >= 0.5) {
                 logger.info(`[V2 KNOWLEDGE] ✅ Found answer from ${routingResult.source} (confidence: ${routingResult.confidence})`);
@@ -427,7 +442,15 @@ class V2AIAgentRuntime {
                 };
             }
         } catch (knowledgeError) {
+            // 🔍 DIAGNOSTIC: Full error details
+            console.log('═'.repeat(80));
+            console.log('[❌ AI BRAIN ERROR] Knowledge routing threw error:');
+            console.log('Error message:', knowledgeError.message);
+            console.log('Error stack:', knowledgeError.stack);
+            console.log('═'.repeat(80));
+            
             logger.warn(`[V2 KNOWLEDGE] ⚠️ Knowledge routing failed, using fallback:`, knowledgeError.message);
+            logger.error(`[V2 KNOWLEDGE] Full error:`, knowledgeError);
         }
         
         // 🔄 FALLBACK: Basic V2 response logic if knowledge routing fails

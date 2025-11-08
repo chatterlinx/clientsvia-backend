@@ -116,6 +116,15 @@ class PriorityDrivenKnowledgeRouter {
      * ⚠️  CRITICAL: Follows exact priority order with confidence thresholds
      */
     async executePriorityRouting(context) {
+        // 🔍 DIAGNOSTIC: Entry point
+        console.log('═'.repeat(80));
+        console.log('[🔍 KNOWLEDGE ROUTER] executePriorityRouting CALLED');
+        console.log('CompanyID:', context.companyId);
+        console.log('Query:', context.query);
+        console.log('Has priorityConfig:', Boolean(context.priorityConfig));
+        console.log('Has priorities:', Boolean(context.priorities));
+        console.log('═'.repeat(80));
+        
         const { priorityConfig, query, companyId, routingId } = context;
 
         // Sort sources by priority (1 = highest priority)
@@ -351,10 +360,23 @@ class PriorityDrivenKnowledgeRouter {
             // ============================================
             // 🚀 NEW: USE SCENARIOPOOLSERVICE (CANONICAL SOURCE)
             // ============================================
+            // 🔍 DIAGNOSTIC: About to call ScenarioPoolService
+            console.log('═'.repeat(80));
+            console.log('[🔍 SCENARIO LOAD] About to call ScenarioPoolService.getScenarioPoolForCompany');
+            console.log('CompanyID:', companyId);
+            console.log('═'.repeat(80));
+            
             // Loads scenarios from all active templates (multi-template support)
             // Applies per-company scenarioControls (enable/disable)
             // Replaces manual template loading and scenario flattening
             const { scenarios, templatesUsed } = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
+            
+            // 🔍 DIAGNOSTIC: ScenarioPoolService returned
+            console.log('═'.repeat(80));
+            console.log('[🔍 SCENARIO LOAD] ScenarioPoolService returned');
+            console.log('Scenarios count:', scenarios?.length || 0);
+            console.log('Templates count:', templatesUsed?.length || 0);
+            console.log('═'.repeat(80));
             
             if (!templatesUsed || templatesUsed.length === 0) {
                 logger.info(`ℹ️ [V3 HYBRID BRAIN] No templates configured for company`, {
