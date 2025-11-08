@@ -165,7 +165,7 @@ async function loadAllRoutes() {
         routes.adminRoutes = await loadRouteWithTimeout('./routes/v2admin', 'adminRoutes');
         routes.globalInstantResponsesRoutes = await loadRouteWithTimeout('./routes/admin/globalInstantResponses', 'globalInstantResponsesRoutes');
         routes.globalAIBehaviorsRoutes = await loadRouteWithTimeout('./routes/admin/globalAIBehaviors', 'globalAIBehaviorsRoutes');
-        routes.llmLearningConsoleRoutes = await loadRouteWithTimeout('./routes/admin/llmLearningConsole', 'llmLearningConsoleRoutes');
+        // V1 LLM Console removed - 2025-11-08
         routes.llmLearningV2Routes = await loadRouteWithTimeout('./routes/admin/llmLearningV2', 'llmLearningV2Routes');
         routes.llmLearningV2UIRoutes = await loadRouteWithTimeout('./routes/admin/llmLearningConsoleV2UI', 'llmLearningV2UIRoutes');
         routes.globalActionHooksRoutes = await loadRouteWithTimeout('./routes/admin/globalActionHooks', 'globalActionHooksRoutes');
@@ -378,7 +378,7 @@ function registerRoutes(routes) {
     app.use('/api/admin', routes.adminRoutes);
     app.use('/api/admin/global-instant-responses', routes.globalInstantResponsesRoutes); // Global AI Brain Management
     app.use('/api/admin/global-behaviors', routes.globalAIBehaviorsRoutes); // Global AI Behavior Templates
-    app.use('/api/admin/llm-learning', routes.llmLearningConsoleRoutes); // LLM Learning Console (V1)
+    // V1 LLM Console API removed - 2025-11-08 (use V2 instead)
     app.use('/api/admin/llm-learning/v2', routes.llmLearningV2Routes); // LLM Learning Console V2 API (Enhanced with latency tracking)
     app.use('/admin', routes.llmLearningV2UIRoutes); // LLM Learning Console V2 UI (Standalone page at /admin/llm-learning-v2)
     app.use('/api/admin/global-action-hooks', routes.globalActionHooksRoutes); // Global Action Hooks
