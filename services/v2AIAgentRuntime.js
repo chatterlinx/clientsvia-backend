@@ -380,7 +380,8 @@ class V2AIAgentRuntime {
                 isTest: callState.isTest || false,
                 // 🎯 NEW: Pass effective intelligence configuration
                 intelligenceConfig: effectiveIntelligence,
-                priorities: aiLogic.knowledgeSourcePriorities || {
+                // 🔧 FIX: Changed "priorities" to "priorityConfig" (router expects this name)
+                priorityConfig: aiLogic.knowledgeSourcePriorities || {
                     priorityFlow: [
                         { source: 'companyQnA', priority: 1, threshold: 0.8, enabled: true },
                         { source: 'tradeQnA', priority: 2, threshold: 0.75, enabled: true },
