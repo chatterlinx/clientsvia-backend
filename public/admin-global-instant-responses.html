@@ -8035,6 +8035,19 @@ Continue?`;
                     showToast('error', 'Failed to enable Template Testing');
                 }
                 
+                // 🔄 RELOAD: Fetch updated config to refresh phone number and test monitor
+                await loadTwilioTestConfig();
+                
+                // 📞 UPDATE: Live Test Monitor phone display
+                const templatePhoneDisplay = document.getElementById('live-test-phone-display');
+                if (templatePhoneDisplay && window.globalTwilioTestConfig?.phoneNumber) {
+                    templatePhoneDisplay.textContent = window.globalTwilioTestConfig.phoneNumber;
+                    console.log('📞 [TEMPLATE TEST] Phone number updated:', window.globalTwilioTestConfig.phoneNumber);
+                } else {
+                    templatePhoneDisplay.textContent = 'Not configured';
+                    console.warn('⚠️ [TEMPLATE TEST] No phone number found in config');
+                }
+                
                 console.log('✅ [TEST MODE] Switched to Template Mode');
                 
             } else if (mode === 'company') {
@@ -8085,7 +8098,20 @@ Continue?`;
                 }
                 
                 // Load company data if not loaded
-                loadCompanyTestModeConfig();
+                await loadCompanyTestModeConfig();
+                
+                // 🔄 RELOAD: Fetch updated config to refresh phone number and test monitor
+                await loadTwilioTestConfig();
+                
+                // 📞 UPDATE: Live Test Monitor phone display
+                const companyPhoneDisplay = document.getElementById('live-test-phone-display');
+                if (companyPhoneDisplay && window.globalTwilioTestConfig?.phoneNumber) {
+                    companyPhoneDisplay.textContent = window.globalTwilioTestConfig.phoneNumber;
+                    console.log('📞 [COMPANY TEST] Phone number updated:', window.globalTwilioTestConfig.phoneNumber);
+                } else {
+                    companyPhoneDisplay.textContent = 'Not configured';
+                    console.warn('⚠️ [COMPANY TEST] No phone number found in config');
+                }
                 
                 console.log('✅ [TEST MODE] Switched to Company Mode');
             }
