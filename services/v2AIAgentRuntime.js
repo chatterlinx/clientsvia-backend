@@ -371,6 +371,13 @@ class V2AIAgentRuntime {
             
             // 🎯 TASK 3.1: Pass callSource and intelligenceConfig into router context
             const context = {
+                // 🔧 FIX: Add required routing context properties
+                routingId: `${callState.callId}-${Date.now()}`,
+                startTime: Date.now(),
+                routingFlow: [],
+                finalMatch: null,
+                performance: {},
+                // Existing properties
                 companyId: company._id.toString(),
                 company,
                 query: userInput,
