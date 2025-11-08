@@ -534,6 +534,14 @@ async function getCompanyByPhoneNumber(phoneNumber) {
 router.post('/voice', async (req, res) => {
   const callStartTime = Date.now();
   
+  // 🎯 PHASE 1 DIAGNOSTIC: Entry point marker
+  console.log('═'.repeat(80));
+  console.log('[🎯 ENTRY] Twilio /voice hit');
+  console.log('CallSid:', req.body.CallSid);
+  console.log('From:', req.body.From);
+  console.log('To:', req.body.To);
+  console.log('═'.repeat(80));
+  
   // 🚨 CRITICAL CHECKPOINT: Log EVERYTHING at webhook entry
   logger.info('='.repeat(80));
   logger.info(`🚨 WEBHOOK HIT: /api/twilio/voice at ${new Date().toISOString()}`);
@@ -1621,6 +1629,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
   const fromNumber = req.body.From || 'UNKNOWN';
   const speechResult = req.body.SpeechResult || '';
   
+  // 🎯 PHASE 1 DIAGNOSTIC: Second leg marker
+  console.log('═'.repeat(80));
+  console.log('[🎯 AGENT-RESPOND] User input received');
+  console.log('CompanyID:', req.params.companyID);
+  console.log('User text:', speechResult);
+  console.log('═'.repeat(80));
+  
   logger.info('🎯 CHECKPOINT 11: AI Agent Response Handler Called');
   logger.info(`📞 Call Details: SID=${callSid}, From=${fromNumber}`);
   logger.info(`🗣️ User Speech: "${speechResult}"`);
@@ -1677,7 +1692,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       twiml.say(escapeTwiML(result.text));
       
       // Get company transfer number and check if transfer is enabled
-      const company = await Company.findById(companyID);
+      // 🔧 PHASE 2 FIX: Use consistent company loading
+      const company = await Company.findById(companyID)
+        .select('+aiAgentLogic.voiceSettings +aiAgentSettings')
+        .lean();
       logger.info('🎯 CHECKPOINT 19: Calling handleTransfer function');
       handleTransfer(twiml, company, "I apologize, but I cannot transfer you at this time. Please try calling back later or visiting our website for assistance.", companyID);
     } else {
@@ -1685,7 +1703,21 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       logger.info(`🗣️ AI Response: "${result.response}"`);
       
       // 🎤 V2 ELEVENLABS INTEGRATION: Use ElevenLabs if configured
-      const company = await Company.findById(companyID);
+      // 🔧 PHASE 2 FIX: Explicitly load voice settings (was incomplete before)
+      const company = await Company.findById(companyID)
+        .select('+aiAgentLogic.voiceSettings +aiAgentSettings')
+        .lean();
+      
+      // 🎯 PHASE 2 DIAGNOSTIC: Enhanced voice settings debug
+      console.log('═'.repeat(80));
+      console.log('[🔍 VOICE DEBUG] Second leg company load:');
+      console.log('Company exists:', Boolean(company));
+      console.log('Company ID:', company?._id?.toString());
+      console.log('aiAgentLogic exists:', Boolean(company?.aiAgentLogic));
+      console.log('voiceSettings exists:', Boolean(company?.aiAgentLogic?.voiceSettings));
+      console.log('voiceId:', company?.aiAgentLogic?.voiceSettings?.voiceId || 'UNDEFINED');
+      console.log('Full voiceSettings:', JSON.stringify(company?.aiAgentLogic?.voiceSettings, null, 2));
+      console.log('═'.repeat(80));
       
       // 🔍 DIAGNOSTIC: Log voice settings check
       logger.info('🔍 V2 VOICE CHECK: Company loaded:', Boolean(company));

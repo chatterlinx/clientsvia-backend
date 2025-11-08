@@ -133,11 +133,13 @@ class IntelligentRouter {
             // ============================================
             // TIER 1: RULE-BASED (HybridScenarioSelector)
             // ============================================
+            // 🔧 PHASE 3 FIX: Pass company for custom fillers
             result.tier1Result = await this.tryTier1({
                 callerInput,
                 template,
                 threshold: tier1Threshold,
-                context
+                context,
+                company
             });
             
             result.performance.tier1Time = result.tier1Result.responseTime;
@@ -522,12 +524,13 @@ class IntelligentRouter {
      * TIER 1: RULE-BASED MATCHING
      * ============================================================================
      */
-    async tryTier1({ callerInput, template, threshold, context }) {
+    async tryTier1({ callerInput, template, threshold, context, company = null }) {
         const startTime = Date.now();
         
         try {
-            // Build effective fillers (template + all categories)
-            const effectiveFillers = this.buildEffectiveFillers(template);
+            // Build effective fillers (template + all categories + company custom)
+            // 🔧 PHASE 3 FIX: Now passing company to include custom fillers
+            const effectiveFillers = this.buildEffectiveFillers(template, company);
             
             // Build effective synonym map (template + all categories)
             const effectiveSynonymMap = this.buildEffectiveSynonymMap(template);
@@ -801,11 +804,22 @@ class IntelligentRouter {
     }
     
     /**
-     * Helper: Build effective fillers from template + categories
+     * Helper: Build effective fillers from template + categories + company custom
+     * 🔧 PHASE 3 FIX: Now includes custom fillers from company settings
      */
-    buildEffectiveFillers(template) {
+    buildEffectiveFillers(template, company = null) {
         const templateFillers = template.fillerWords || [];
-        const allFillers = [...templateFillers];
+        const customFillers = company?.aiAgentSettings?.fillerWords?.custom || [];
+        
+        // 🎯 PHASE 3 DIAGNOSTIC: Log filler sources
+        console.log('[🔍 FILLER DEBUG] Building effective fillers:');
+        console.log('  Template fillers:', templateFillers.length);
+        console.log('  Custom fillers:', customFillers.length);
+        if (customFillers.length > 0) {
+            console.log('  Custom words:', customFillers);
+        }
+        
+        const allFillers = [...templateFillers, ...customFillers];
         
         template.categories.forEach(category => {
             if (category.additionalFillerWords && Array.isArray(category.additionalFillerWords)) {
@@ -813,7 +827,10 @@ class IntelligentRouter {
             }
         });
         
-        return [...new Set(allFillers)];
+        const deduplicated = [...new Set(allFillers)];
+        console.log('  Total effective fillers:', deduplicated.length);
+        
+        return deduplicated;
     }
     
     /**

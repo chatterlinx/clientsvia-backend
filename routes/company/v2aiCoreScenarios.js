@@ -146,9 +146,9 @@ router.patch('/aicore/:companyId/scenarios/:templateId/:scenarioId', async (req,
         // ============================================
         // Clear live-scenarios cache so UI sees fresh data immediately
         try {
-            const cacheKey = `live-scenarios:${companyId}`;
-            await redisClient.del(cacheKey);
-            logger.debug(`🗑️ [AICORE SCENARIOS] Cleared cache: ${cacheKey}`);
+            await redisClient.del(`live-scenarios:${companyId}`);
+            await redisClient.del(`scenario-pool:${companyId}`); // 🔧 PHASE 4: Clear scenario pool cache
+            logger.debug(`🗑️ [AICORE SCENARIOS] Cleared cache: live-scenarios + scenario-pool for ${companyId}`);
         } catch (cacheError) {
             logger.warn(`⚠️ [AICORE SCENARIOS] Cache invalidation failed (non-critical):`, cacheError.message);
         }
