@@ -7435,16 +7435,17 @@ Continue?`;
                     }
                     
                     const companyResult = await companyResponse.json();
-                    const company = companyResult.data;
-                    const assignedTemplateIds = company.aiAgentLogic?.assignedTemplates || [];
+                    const company = companyResult.company; // ✅ FIX: API returns { company: ... } not { data: ... }
+                    const companyTemplates = company.templates || []; // Templates are already loaded by the API
                     
                     console.log('📋 [TEST PHRASES] Company loaded:', {
                         id: company._id,
                         name: company.name,
-                        assignedTemplates: assignedTemplateIds.length
+                        templates: companyTemplates.length,
+                        templateNames: companyTemplates.map(t => t.name)
                     });
                     
-                    if (assignedTemplateIds.length === 0) {
+                    if (companyTemplates.length === 0) {
                         console.warn('⚠️ [TEST PHRASES] Company has no assigned templates');
                         document.getElementById('test-phrase-categories').innerHTML = `
                             <div class="text-center py-8 text-yellow-600">
@@ -7456,10 +7457,11 @@ Continue?`;
                         return;
                     }
                     
-                    // Load ALL assigned templates
-                    console.log('📋 [TEST PHRASES] Step 3: Loading all assigned templates...', assignedTemplateIds);
-                    const templatePromises = assignedTemplateIds.map(templateId => 
-                        fetch(`/api/admin/global-instant-responses/${templateId}`, {
+                    // Load FULL template data for ALL assigned templates
+                    // Note: The API returns templates with basic info, but we need full category/scenario data
+                    console.log('📋 [TEST PHRASES] Step 3: Loading full template data for all assigned templates...');
+                    const templatePromises = companyTemplates.map(t => 
+                        fetch(`/api/admin/global-instant-responses/${t._id}`, {
                             headers: {
                                 'Authorization': `Bearer ${token}`,
                                 'Content-Type': 'application/json'
