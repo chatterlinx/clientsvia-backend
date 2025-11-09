@@ -315,6 +315,7 @@ class AIBrain3tierllm {
                         scenario: routingResult.scenario,
                         confidence: routingResult.confidence,
                         score: routingResult.confidence,
+                        response: routingResult.response,  // ✅ CRITICAL FIX: Include response from router
                         trace: {
                             tierUsed: routingResult.tierUsed,
                             tier1Score: routingResult.tier1Result?.confidence || 0,
@@ -373,14 +374,23 @@ class AIBrain3tierllm {
                     confidence: result.confidence.toFixed(3)
                 });
 
-                const useQuickReply = Math.random() < 0.3;
-                let replyVariants = useQuickReply ? result.scenario.quickReplies : result.scenario.fullReplies;
-                
-                if (!replyVariants || replyVariants.length === 0) {
-                    replyVariants = result.scenario.fullReplies || result.scenario.quickReplies || [];
-                }
+                // ✅ CRITICAL FIX: Use response from router if available, otherwise extract from scenario
+                let selectedReply;
+                if (result.response) {
+                    // Router already selected the response (Tier 1/2/3)
+                    selectedReply = result.response;
+                } else {
+                    // Fallback: Extract from scenario (legacy path, should rarely happen)
+                    const useQuickReply = Math.random() < 0.3;
+                    let replyVariants = useQuickReply ? result.scenario.quickReplies : result.scenario.fullReplies;
+                    
+                    if (!replyVariants || replyVariants.length === 0) {
+                        replyVariants = result.scenario.fullReplies || result.scenario.quickReplies || [];
+                    }
 
-                const selectedReply = replyVariants[Math.floor(Math.random() * replyVariants.length)] || "I'm here to help!";
+                    selectedReply = replyVariants[Math.floor(Math.random() * replyVariants.length)] || "I'm here to help!";
+                }
+                
                 const processedResponse = replacePlaceholders(selectedReply, company);
 
                 return {
