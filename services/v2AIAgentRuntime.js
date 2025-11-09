@@ -394,8 +394,7 @@ class V2AIAgentRuntime {
                 // New system: instantResponses → ScenarioPoolService → 3-tier intelligence → REAL AI BRAIN!
                 priorityConfig: aiLogic.knowledgeSourcePriorities || {
                     priorityFlow: [
-                        { source: 'instantResponses', priority: 1, threshold: 0.7, enabled: true },  // ← THE REAL SOURCE!
-                        { source: 'inHouseFallback', priority: 2, threshold: 0.5, enabled: true }  // ← Generic fallback
+                        { source: 'instantResponses', priority: 1, threshold: 0.7, enabled: true }  // ← ONLY SOURCE! Tier 3 LLM is the fallback
                     ]
                 }
             };

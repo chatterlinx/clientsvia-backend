@@ -22,7 +22,7 @@ const { initializeCall, processUserInput } = require('../services/v2AIAgentRunti
 // V2 DELETED: Legacy aiAgentRuntime - replaced with v2AIAgentRuntime
 // const aiAgentRuntime = require('../services/aiAgentRuntime');
 // V2 DELETED: Legacy findCachedAnswer - using V2 PriorityDrivenKnowledgeRouter
-const CompanyKnowledgeQnA = require('../models/knowledge/CompanyQnA');
+// V2 DELETED: CompanyKnowledgeQnA model removed (AI Brain only)
 const fs = require('fs');
 const path = require('path');
 const { synthesizeSpeech } = require('../services/v2elevenLabsService');
