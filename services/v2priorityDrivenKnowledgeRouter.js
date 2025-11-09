@@ -434,10 +434,11 @@ class PriorityDrivenKnowledgeRouter {
                 
                 // Get the first template (primary template for this company)
                 // NOTE: IntelligentRouter expects a single template object
-                const primaryTemplate = await GlobalInstantResponseTemplate.findById(templatesUsed[0]._id);
+                // 🔧 FIX: templatesUsed[0] has "templateId" field, not "_id"!
+                const primaryTemplate = await GlobalInstantResponseTemplate.findById(templatesUsed[0].templateId);
                 
                 if (!primaryTemplate) {
-                    logger.error(`❌ [3-TIER ROUTING] Primary template not found: ${templatesUsed[0]._id}`);
+                    logger.error(`❌ [3-TIER ROUTING] Primary template not found: ${templatesUsed[0].templateId}`);
                     return {
                         confidence: 0,
                         response: null,
