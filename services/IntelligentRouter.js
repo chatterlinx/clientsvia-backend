@@ -558,11 +558,11 @@ class IntelligentRouter {
             const responseTime = Date.now() - startTime;
             
             return {
-                success: match.matched,
-                scenario: match.matched ? match.scenario : null,
+                success: match.scenario !== null,
+                scenario: match.scenario,
                 confidence: match.confidence,
                 responseTime,
-                response: match.matched ? match.scenario.quickReplies[0] : null,
+                response: match.scenario?.quickReplies?.[0] || null,
                 reasoning: match.reasoning || 'Rule-based matching'
             };
             
