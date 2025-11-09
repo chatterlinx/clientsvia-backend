@@ -1817,9 +1817,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       
       // Fallback - use configurable response [[memory:8276820]]
       // Note: company already loaded above for ElevenLabs integration
-      // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
-      const fallbackResponse = `I understand you have a question. Let me connect you with someone who can help you better.`;
-      twiml.say(fallbackResponse);
+      // V2: Use company-specific timeout message or intelligent default
+      const timeoutMessage = company.connectionMessages?.voice?.timeoutMessage || 
+                            company.connectionMessages?.voice?.text ||
+                            "Thank you for calling. Please call back if you need further assistance.";
+      twiml.say(timeoutMessage);
       twiml.hangup();
     }
     
