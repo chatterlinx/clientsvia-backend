@@ -38,8 +38,7 @@ const logger = require('../utils/logger');
 
 // Import all models that reference companyId
 const Company = require('../models/v2Company');
-// V2 DELETED: Legacy CompanyQnA model - using CompanyKnowledgeQnA only
-const CompanyKnowledgeQnA = require('../models/knowledge/CompanyQnA');
+// V2 DELETED: CompanyKnowledgeQnA model removed (AI Brain only)
 // V2 DELETED: Workflow models not in V2 system
 // const Workflow = require('../models/Workflow');
 // const WorkflowExecution = require('../models/WorkflowExecution');

@@ -539,10 +539,7 @@ router.delete('/company/:id', async (req, res) => {
         
         // 🗑️ Delete related documents from other collections
         try {
-            // Delete Company Q&A categories and entries
-            const CompanyQnACategory = require('../models/CompanyQnACategory');
-            const deletedQnA = await CompanyQnACategory.deleteMany({ companyId });
-            logger.info(`[API DELETE /api/company/:id] 🗑️ Deleted ${deletedQnA.deletedCount} Q&A categories`);
+            // V2 DELETED: CompanyQnACategory cleanup (model no longer exists)
             
             // Delete Instant Response categories
             const InstantResponseCategory = require('../models/InstantResponseCategory');

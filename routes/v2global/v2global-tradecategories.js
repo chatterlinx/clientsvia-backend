@@ -28,7 +28,7 @@
 const express = require('express');
 const router = express.Router();
 const TradeCategory = require('../../models/v2TradeCategory');
-const CompanyKnowledgeQnA = require('../../models/knowledge/CompanyQnA');
+// V2 DELETED: CompanyKnowledgeQnA model removed (AI Brain only)
 const Company = require('../../models/v2Company');
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const { redisClient } = require('../../clients');

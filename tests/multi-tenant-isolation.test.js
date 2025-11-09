@@ -21,7 +21,7 @@ const mongoose = require('mongoose');
 const app = require('../app');
 const Company = require('../models/v2Company');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
-const CompanyKnowledgeQnA = require('../models/knowledge/CompanyQnA');
+// V2 DELETED: CompanyKnowledgeQnA model removed (AI Brain only)
 const { redisClient } = require('../db');
 
 describe('🔒 MULTI-TENANT ISOLATION TESTS', () => {
