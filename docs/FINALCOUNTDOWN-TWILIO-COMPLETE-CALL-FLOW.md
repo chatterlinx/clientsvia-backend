@@ -1,9 +1,10 @@
 # 🎯 FINAL COUNTDOWN: Complete Twilio Call Flow
 **The Definitive Step-by-Step Architecture Map**
 
-**Last Updated:** November 9, 2025  
+**Last Updated:** November 9, 2025 (Post-Legacy-Nuke)  
 **Status:** Living Document - Updated as we discover truth  
-**Purpose:** Zero-ambiguity map of EXACTLY how a call flows from dial to response
+**Purpose:** Zero-ambiguity map of EXACTLY how a call flows from dial to response  
+**Architecture:** AIBrain3tierllm (3-Tier Intelligence System) - THE ONLY KNOWLEDGE SOURCE
 
 ---
 
@@ -754,32 +755,35 @@ const productionIntelligence = company.aiAgentLogic.productionIntelligence;
 
 ---
 
-### **STEP 19: Execute Priority Routing**
-**File:** `/services/v2priorityDrivenKnowledgeRouter.js`  
-**Function:** `executePriorityRouting()`  
-**Lines:** 100-500
+### **STEP 19: AI Brain 3-Tier Intelligence Routing**
+**File:** `/services/AIBrain3tierllm.js`  
+**Function:** `query()`  
+**Lines:** 115-300
 
-**Knowledge Source Priority:**
+**🧠 THE ONLY KNOWLEDGE SOURCE:**
 ```javascript
-Priority 1: instantResponses (Templates/Scenarios)
-Priority 2: inHouseFallback (Built-in responses)
+AI Brain 3-Tier Intelligence System:
+  ↓
+Tier 1: Rule-Based Matching (80% calls - FREE)
+Tier 2: Semantic Matching (14% calls - FREE)  
+Tier 3: LLM Fallback (6% calls - $0.04 each)
 ```
 
 **Log Evidence:**
 ```
-14:38:53 info: 🔄 Executing priority routing with 2 enabled sources
-  {"sources":"instantResponses(1) → inHouseFallback(2)"}
-14:38:53 info: 🔍 Testing source: instantResponses (priority 1, threshold 0.7)
+14:38:53 info: 🧠 [AI BRAIN] Processing query for company 68e3f77a9d623b8058c700c4
+14:38:53 info: 🚀 [AI BRAIN] Using 3-Tier Intelligence (Tier 1 → 2 → 3)
+14:38:53 info: ⚡ [AI BRAIN] Loading scenarios and intelligence config
 ```
 
 **Performance:** ~5-10ms (routing setup)
 
 ---
 
-### **STEP 20: Query Instant Responses (V3 Hybrid Brain)**
-**File:** `/services/v3hybridScenarioMatcher.js`  
-**Function:** `queryHybridKnowledgeSource()`  
-**Lines:** 50-800
+### **STEP 20: AI Brain Processes Query (3-Tier Intelligence)**
+**File:** `/services/AIBrain3tierllm.js`  
+**Function:** `queryAIBrain()`  
+**Lines:** 138-430
 
 **What Happens:**
 
@@ -1316,10 +1320,12 @@ const timeoutMessage = company.connectionMessages?.voice?.timeoutMessage ||
 - `/routes/v2twilio.js` - Main call handling (lines 534-1863)
 
 ### **Services:**
-- `/services/v2AIAgentRuntime.js` - AI agent logic
+- `/services/v2AIAgentRuntime.js` - AI agent orchestration
 - `/services/v2elevenLabsService.js` - ElevenLabs TTS
-- `/services/v2priorityDrivenKnowledgeRouter.js` - Knowledge routing
-- `/services/v3hybridScenarioMatcher.js` - Scenario matching
+- `/services/AIBrain3tierllm.js` - 🧠 **AI BRAIN 3-TIER INTELLIGENCE** (THE ONLY KNOWLEDGE SOURCE)
+- `/services/HybridScenarioSelector.js` - Tier 1 rule-based matching
+- `/services/IntelligentRouter.js` - 3-Tier cascade orchestrator
+- `/services/ScenarioPoolService.js` - Scenario loading & caching
 
 ### **Models:**
 - `/models/v2Company.js` - Company schema
@@ -1428,6 +1434,9 @@ grep "V2 ELEVENLABS: Using voice" logs
 | 2025-11-09 | **CRITICAL:** Discovered Render is running OLD code - deployment needed! | AI Assistant |
 | 2025-11-09 | Fixed Issue #2: Legacy timeout message (line 1821) | AI Assistant |
 | 2025-11-09 | Documented both ElevenLabs bug AND legacy text bug | AI Assistant |
+| 2025-11-09 | **🔥 MAJOR REFACTOR:** Replaced PriorityDrivenKnowledgeRouter → AIBrain3tierllm | AI Assistant |
+| 2025-11-09 | **🔥 NUKE COMPLETE:** Eliminated ALL legacy QnA systems (companyQnA, tradeQnA, inHouseFallback) | AI Assistant |
+| 2025-11-09 | **✅ ARCHITECTURE TRUTH:** AI Brain 3-Tier Intelligence is now THE ONLY knowledge source | AI Assistant |
 
 ---
 
