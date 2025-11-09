@@ -1789,7 +1789,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           logger.info(`✅ V2 ELEVENLABS: Audio generated and stored at ${audioUrl}`);
           
         } catch (elevenLabsError) {
-          logger.error('❌ V2 ELEVENLABS: Failed, falling back to Twilio voice:', elevenLabsError.message);
+          logger.error('❌ V2 ELEVENLABS: Failed, falling back to Twilio voice:', {
+            error: elevenLabsError.message,
+            stack: elevenLabsError.stack,
+            voiceId: elevenLabsVoice,
+            responseTextLength: responseText?.length,
+            hasCompany: !!company
+          });
           // Fallback to Twilio voice
           twiml.say({
             voice: result.controlFlags?.tone === 'robotic' ? 'Polly.Joanna' : 'alice'
