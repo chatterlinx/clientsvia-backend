@@ -376,12 +376,17 @@ class AIBrain3tierllm {
 
                 // ✅ CRITICAL FIX: Use response from router if available, otherwise extract from scenario
                 let selectedReply;
+                let replyType = 'full'; // Default reply type
+                
                 if (result.response) {
                     // Router already selected the response (Tier 1/2/3)
                     selectedReply = result.response;
+                    // Infer reply type from response length (just for metadata)
+                    replyType = result.response.length < 100 ? 'quick' : 'full';
                 } else {
                     // Fallback: Extract from scenario (legacy path, should rarely happen)
                     const useQuickReply = Math.random() < 0.3;
+                    replyType = useQuickReply ? 'quick' : 'full';
                     let replyVariants = useQuickReply ? result.scenario.quickReplies : result.scenario.fullReplies;
                     
                     if (!replyVariants || replyVariants.length === 0) {
@@ -400,7 +405,7 @@ class AIBrain3tierllm {
                         source: 'ai-brain',
                         scenarioId: result.scenario.scenarioId,
                         scenarioName: result.scenario.name,
-                        replyType: useQuickReply ? 'quick' : 'full',
+                        replyType: replyType,
                         matchScore: result.score,
                         trace: result.trace
                     }
