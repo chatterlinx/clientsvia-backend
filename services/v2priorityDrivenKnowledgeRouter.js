@@ -963,8 +963,8 @@ class PriorityDrivenKnowledgeRouter {
                 }
             }
 
-            // Ultimate fallback - always responds
-            let ultimateResponse = "Thank you for contacting us. Let me connect you with someone who can help you right away.";
+            // Ultimate fallback - always responds professionally
+            let ultimateResponse = "Thank you for contacting us. I'm transferring you to our team who can assist you right away.";
             if (company) {
                 ultimateResponse = replacePlaceholders(ultimateResponse, company);
             }
@@ -1290,7 +1290,7 @@ class PriorityDrivenKnowledgeRouter {
         
         return {
             success: false,
-            response: "I want to make sure I give you the best help possible. Let me connect you with someone who can assist you right away.",
+            response: "I want to make sure you get the best help possible. I'm transferring you to our team right now.",
             confidence: 0.3,
             source: 'noMatch',
             metadata: {

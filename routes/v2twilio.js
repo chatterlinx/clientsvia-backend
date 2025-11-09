@@ -280,7 +280,9 @@ function getTransferMessage(company) {
   if (company?.aiAgentLogic?.callTransferConfig?.transferMessage) {
     return company.aiAgentLogic.callTransferConfig.transferMessage;
   }
-  return "Let me connect you with someone who can better assist you.";
+  // Professional transfer - never sounds like AI is giving up
+  return company.connectionMessages?.voice?.transferMessage || 
+         "One moment while I transfer you to our team.";
 }
 
 // Helper function to handle transfer logic with enabled check
@@ -1091,8 +1093,9 @@ router.post('/handle-speech', async (req, res) => {
       }
       if (repeats > (company.aiSettings?.maxRepeats ?? 3)) {
         const personality = company.aiSettings?.personality || 'friendly';
-        // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
-        const msg = `I understand you need help. Let me connect you with someone who can assist you better.`;
+        // V2: Professional max repeats message - configurable per company
+        const msg = company.connectionMessages?.voice?.maxRepeatsMessage ||
+                   "I want to make sure you get the help you need. Please hold while I transfer you to our team.";
         const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
         twiml.hangup();
         await redisClient.del(repeatKey);
@@ -1327,7 +1330,8 @@ router.post('/handle-speech', async (req, res) => {
       logger.debug(`[LEGACY WARNING] Using legacy handle-speech endpoint - should migrate to V2`);
       
       answerObj = {
-        text: "I understand your question. Let me connect you with someone who can help you better.",
+        text: company.connectionMessages?.voice?.fallbackMessage || 
+              "I'm here to help you. Let me transfer you to our team for the best assistance.",
         escalate: true
       };
       

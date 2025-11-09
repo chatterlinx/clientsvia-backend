@@ -1382,7 +1382,7 @@ const companySchema = new mongoose.Schema({
             transferMessage: {
                 type: String,
                 trim: true,
-                default: 'Let me connect you with someone who can better assist you.'
+                default: 'One moment while I transfer you to our team.'
             }
         },
 
@@ -1615,11 +1615,11 @@ const companySchema = new mongoose.Schema({
                     },
                     hours: {
                         type: String,
-                        default: 'We\'re available during business hours. Let me connect you with someone who can provide our current schedule.'
+                        default: 'We\'re available during business hours. I can help you with our schedule right now.'
                     },
                     general: {
                         type: String,
-                        default: 'I want to make sure you get the best help possible. Let me connect you with a specialist.'
+                        default: 'I want to make sure you get the best help possible. Let me get you to the right person.'
                     }
                 },
                 
@@ -1833,7 +1833,7 @@ const companySchema = new mongoose.Schema({
                     type: [String],
                     default: [
                         'I want to make sure I give you accurate information...',
-                        'Let me connect you with someone who specializes in this...',
+                        'Let me get you to a specialist who can help with this specifically...',
                         'I\'d rather have an expert confirm this for you...'
                     ]
                 },

@@ -464,7 +464,7 @@ class V2AIAgentRuntime {
         }
         
         // 🔄 FALLBACK: Basic V2 response logic if knowledge routing fails
-        let responseText = "I understand your question. Let me help you with that.";
+        let responseText = "I'm here to help you. Let me check on that for you.";
         let action = 'continue';
         let confidence = 0.7;
 
@@ -480,12 +480,12 @@ class V2AIAgentRuntime {
             confidence = 0.8;
         }
         else if (input.includes('price') || input.includes('cost') || input.includes('quote')) {
-            responseText = "I can help you with pricing information. Let me connect you with someone who can provide you with a detailed quote.";
+            responseText = "I can help you with pricing information. Let me transfer you to our team who can provide a detailed quote.";
             action = 'transfer';
             confidence = 0.8;
         }
         else if (input.includes('emergency') || input.includes('urgent')) {
-            responseText = "This sounds urgent. Let me connect you with our emergency team right away.";
+            responseText = "This sounds urgent. I'm transferring you to our emergency team right away.";
             action = 'transfer';
             confidence = 0.95;
         }

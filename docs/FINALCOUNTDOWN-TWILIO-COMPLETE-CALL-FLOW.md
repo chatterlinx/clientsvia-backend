@@ -1208,7 +1208,7 @@ If no more input after timeout, or if AI decides to end call:
 ## 🐛 KNOWN ISSUES & FIXES
 
 ### **Issue 1: ElevenLabs Fails on Response (Second Leg)** 
-**Status:** ✅ FIXED (awaiting Render deployment)
+**Status:** ✅ FIXED IN CODE (⏳ AWAITING RENDER DEPLOYMENT)
 
 **Problem:**
 - Greeting uses ElevenLabs ✅
@@ -1226,12 +1226,49 @@ await synthesizeSpeech({ text, voiceId /* missing: company */ });
 await synthesizeSpeech({ text, voiceId, company });
 ```
 
+**File:** `routes/v2twilio.js` lines 1766-1775  
 **Commit:** `47b97d88`  
-**Deployed:** ⏳ Pending Render deployment
+**Status:** ✅ Committed to GitHub  
+**Deployed:** ❌ NOT YET DEPLOYED TO RENDER  
+
+**⚠️ CRITICAL:** Render is running OLD code! Deploy manually ASAP!
 
 ---
 
-### **Issue 2: Redis Latency on Render**
+### **Issue 2: Legacy Timeout Message Playing After Response**
+**Status:** ✅ FIXED IN CODE (⏳ AWAITING RENDER DEPLOYMENT)
+
+**Problem:**
+- After AI response, hardcoded legacy text played:
+  > "I understand you have a question. Let me connect you with someone who can help you better."
+- This is confusing and doesn't match company branding
+
+**Root Cause:**
+```javascript
+// Line 1821 - Hardcoded legacy fallback
+const fallbackResponse = `I understand you have a question. Let me connect you with someone who can help you better.`;
+```
+
+**Fix Applied:**
+```javascript
+// Now uses company-configurable timeout message
+const timeoutMessage = company.connectionMessages?.voice?.timeoutMessage || 
+                      company.connectionMessages?.voice?.text ||
+                      "Thank you for calling. Please call back if you need further assistance.";
+```
+
+**File:** `routes/v2twilio.js` lines 1821-1823  
+**Commit:** `653736e2`  
+**Status:** ✅ Committed to GitHub  
+**Deployed:** ❌ NOT YET DEPLOYED TO RENDER
+
+**When It Plays:** If caller doesn't respond after hearing AI answer (timeout after 5 seconds)
+
+**Configuration Path:** `company.connectionMessages.voice.timeoutMessage`
+
+---
+
+### **Issue 3: Redis Latency on Render**
 **Status:** 🔴 ACTIVE PROBLEM
 
 **Problem:**
@@ -1388,7 +1425,9 @@ grep "V2 ELEVENLABS: Using voice" logs
 | 2025-11-09 | Initial document created | AI Assistant |
 | 2025-11-09 | Added ElevenLabs fix documentation | AI Assistant |
 | 2025-11-09 | Documented complete call flow phases 1-9 | AI Assistant |
-| YYYY-MM-DD | [Add updates as we discover more] | |
+| 2025-11-09 | **CRITICAL:** Discovered Render is running OLD code - deployment needed! | AI Assistant |
+| 2025-11-09 | Fixed Issue #2: Legacy timeout message (line 1821) | AI Assistant |
+| 2025-11-09 | Documented both ElevenLabs bug AND legacy text bug | AI Assistant |
 
 ---
 
