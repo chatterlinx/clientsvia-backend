@@ -1778,15 +1778,30 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             company  // ✅ CRITICAL FIX: Pass company object for API key lookup
           });
           
-          // Store audio in Redis for serving
           const timestamp = Date.now();
-          const audioKey = `audio:v2:${callSid}_${timestamp}`;
-          await redisClient.setEx(audioKey, 300, audioBuffer.toString('base64'));
+          let audioUrl;
           
-          const audioUrl = `https://${req.get('host')}/api/twilio/audio/v2/${callSid}_${timestamp}`;
+          // 🔥 CRITICAL FIX: Fallback to disk if Redis unavailable
+          if (redisClient && redisClient.isReady) {
+            // Store audio in Redis for serving (preferred method)
+            const audioKey = `audio:v2:${callSid}_${timestamp}`;
+            await redisClient.setEx(audioKey, 300, audioBuffer.toString('base64'));
+            audioUrl = `https://${req.get('host')}/api/twilio/audio/v2/${callSid}_${timestamp}`;
+            logger.info(`✅ V2 ELEVENLABS: Audio stored in Redis at ${audioUrl}`);
+          } else {
+            // Fallback: Save to disk if Redis is unavailable
+            const fileName = `ai_response_${timestamp}.mp3`;
+            const audioDir = path.join(__dirname, '../public/audio');
+            if (!fs.existsSync(audioDir)) {
+              fs.mkdirSync(audioDir, { recursive: true });
+            }
+            const filePath = path.join(audioDir, fileName);
+            fs.writeFileSync(filePath, audioBuffer);
+            audioUrl = `http://${req.get('host')}/audio/${fileName}`;
+            logger.warn(`⚠️ V2 ELEVENLABS: Redis unavailable, saved to disk at ${audioUrl}`);
+          }
+          
           twiml.play(audioUrl);
-          
-          logger.info(`✅ V2 ELEVENLABS: Audio generated and stored at ${audioUrl}`);
           
         } catch (elevenLabsError) {
           logger.error('❌ V2 ELEVENLABS: Failed, falling back to Twilio voice:', {
