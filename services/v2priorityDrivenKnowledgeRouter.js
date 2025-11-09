@@ -23,8 +23,7 @@
 // ============================================================================
 
 const Company = require('../models/v2Company');
-// V3 SYSTEM: CompanyQnACategory is the NEW category-based Q&A system (replaces old flat CompanyKnowledgeQnA)
-const CompanyQnACategory = require('../models/CompanyQnACategory');
+// V2 DELETED: Legacy CompanyQnACategory - removed (AI Brain only)
 // V2 DELETED: Legacy v2 aiAgentCacheService - using simple Redis directly
 const { redisClient } = require('../clients');
 const logger = require('../utils/logger');
@@ -254,18 +253,7 @@ class PriorityDrivenKnowledgeRouter {
             case 'instantResponses':
                 result = await this.queryInstantResponses(companyId, query, context);
                 break;
-            case 'companyQnA':
-                result = await this.queryCompanyQnA(companyId, query, context);
-                break;
-            case 'tradeQnA':
-                result = await this.queryTradeQnA(companyId, query, context);
-                break;
-            case 'templates':
-                result = await this.queryTemplates(companyId, query, context);
-                break;
-            case 'inHouseFallback':
-                result = await this.queryInHouseFallback(companyId, query, context);
-                break;
+            // V2 DELETED: companyQnA, tradeQnA, templates, inHouseFallback - AI Brain only
             default:
                 throw new Error(`Unknown source type: ${sourceType}`);
         }
