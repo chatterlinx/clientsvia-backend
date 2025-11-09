@@ -1766,10 +1766,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           const audioBuffer = await synthesizeSpeech({
             text: responseText,
             voiceId: elevenLabsVoice,
-            stability: company.aiAgentLogic?.voiceSettings?.stability || 0.5,
-            similarity_boost: company.aiAgentLogic?.voiceSettings?.similarityBoost || 0.75,
-            style: company.aiAgentLogic?.voiceSettings?.style || 0.0,
-            model_id: company.aiAgentLogic?.voiceSettings?.modelId || 'eleven_monolingual_v1'
+            stability: company.aiAgentLogic?.voiceSettings?.stability,
+            similarity_boost: company.aiAgentLogic?.voiceSettings?.similarityBoost,
+            style: company.aiAgentLogic?.voiceSettings?.styleExaggeration,
+            use_speaker_boost: company.aiAgentLogic?.voiceSettings?.speakerBoost,
+            model_id: company.aiAgentLogic?.voiceSettings?.aiModel,
+            company  // ✅ CRITICAL FIX: Pass company object for API key lookup
           });
           
           // Store audio in Redis for serving
