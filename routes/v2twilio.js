@@ -886,9 +886,20 @@ router.post('/voice', async (req, res) => {
       // Set up speech gathering with V2 Agent response handler
       // 📞 SPEECH DETECTION: Now configurable per company in Voice Settings
       const speechDetection = company.aiAgentLogic?.voiceSettings?.speechDetection || {};
+      
+      // 🐰 RABBIT HOLE CHECKPOINT #1: WHERE WILL GATHER SEND USER INPUT?
+      const actionUrl = `https://${req.get('host')}/api/twilio/v2-agent-respond/${company._id}`;
+      console.log('═'.repeat(80));
+      console.log('[🐰 GATHER CHECKPOINT #1] Setting up <Gather> - WHERE will user speech go?');
+      console.log('Action URL:', actionUrl);
+      console.log('CompanyID:', company._id.toString());
+      console.log('Host:', req.get('host'));
+      console.log('Full Path:', `/api/twilio/v2-agent-respond/${company._id}`);
+      console.log('═'.repeat(80));
+      
       const gather = twiml.gather({
         input: 'speech',
-        action: `https://${req.get('host')}/api/twilio/v2-agent-respond/${company._id}`,
+        action: actionUrl,
         method: 'POST',
         bargeIn: speechDetection.bargeIn ?? false,
         timeout: speechDetection.initialTimeout ?? 5,
@@ -974,6 +985,14 @@ router.post('/voice', async (req, res) => {
 
     res.type('text/xml');
     const twimlString = twiml.toString();
+    
+    // 🐰 RABBIT HOLE CHECKPOINT #2: WHAT TWIML ARE WE SENDING TO TWILIO?
+    console.log('═'.repeat(80));
+    console.log('[🐰 GATHER CHECKPOINT #2] Sending TwiML to Twilio - CHECK THE ACTION URL!');
+    console.log('TwiML Length:', twimlString.length);
+    console.log('TwiML Content:', twimlString);
+    console.log('═'.repeat(80));
+    
     logger.info(`[Twilio Voice] Sending AI Agent Logic TwiML: ${twimlString}`);
     res.send(twimlString);
     
@@ -1629,11 +1648,17 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
   const fromNumber = req.body.From || 'UNKNOWN';
   const speechResult = req.body.SpeechResult || '';
   
-  // 🎯 PHASE 1 DIAGNOSTIC: Second leg marker
+  // 🐰 RABBIT HOLE CHECKPOINT #3: WE MADE IT! TWILIO CALLED THE CORRECT ENDPOINT!
   console.log('═'.repeat(80));
-  console.log('[🎯 AGENT-RESPOND] User input received');
+  console.log('[🐰 CHECKPOINT #3] ✅ TWILIO HIT THE CORRECT ENDPOINT!');
+  console.log('Endpoint:', '/api/twilio/v2-agent-respond/:companyID');
+  console.log('Method:', req.method);
+  console.log('URL:', req.originalUrl);
   console.log('CompanyID:', req.params.companyID);
-  console.log('User text:', speechResult);
+  console.log('User Speech:', speechResult);
+  console.log('CallSid:', callSid);
+  console.log('From:', fromNumber);
+  console.log('This is the SECOND LEG - time to process AI response!');
   console.log('═'.repeat(80));
   
   logger.info('🎯 CHECKPOINT 11: AI Agent Response Handler Called');
