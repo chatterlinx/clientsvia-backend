@@ -8,7 +8,7 @@
 const mongoose = require('mongoose');
 const Company = require('../models/v2Company');
 const { redisClient } = require('../clients');
-const PriorityDrivenKnowledgeRouter = require('../services/v2priorityDrivenKnowledgeRouter');
+const AIBrain3tierllm = require('../services/AIBrain3tierllm');
 
 describe('Performance Tests - Sub-25ms Target', () => {
   let testCompanyId;
@@ -67,8 +67,8 @@ describe('Performance Tests - Sub-25ms Target', () => {
     await testCompany.save();
     testCompanyId = testCompany._id.toString();
 
-    // Initialize router
-    router = new PriorityDrivenKnowledgeRouter();
+    // Initialize AI Brain (singleton instance)
+    router = AIBrain3tierllm;
   });
 
   afterAll(async () => {
@@ -193,11 +193,11 @@ describe('Performance Tests - Sub-25ms Target', () => {
       const query = 'What are your business hours?';
 
       // First query to populate cache
-      await router.routeQuery(testCompanyId, query);
+      await router.query(testCompanyId, query);
 
       // Second query (should hit cache)
       const start = Date.now();
-      const result = await router.routeQuery(testCompanyId, query);
+      const result = await router.query(testCompanyId, query);
       const duration = Date.now() - start;
 
       expect(result).toHaveProperty('success');
@@ -215,7 +215,7 @@ describe('Performance Tests - Sub-25ms Target', () => {
       await redisClient.del(`query:${testCompanyId}:companyQnA:*`);
 
       const start = Date.now();
-      const result = await router.routeQuery(testCompanyId, query);
+      const result = await router.query(testCompanyId, query);
       const duration = Date.now() - start;
 
       expect(result).toHaveProperty('response');
@@ -236,7 +236,7 @@ describe('Performance Tests - Sub-25ms Target', () => {
 
       for (const query of queries) {
         const start = Date.now();
-        await router.routeQuery(testCompanyId, query);
+        await router.query(testCompanyId, query);
         const duration = Date.now() - start;
         durations.push(duration);
       }
@@ -261,7 +261,7 @@ describe('Performance Tests - Sub-25ms Target', () => {
 
       const start = Date.now();
       const results = await Promise.all(
-        queries.map(query => router.routeQuery(testCompanyId, query))
+        queries.map(query => router.query(testCompanyId, query))
       );
       const duration = Date.now() - start;
 
@@ -307,7 +307,7 @@ describe('Performance Tests - Sub-25ms Target', () => {
 
       // Execute 1000 queries
       for (let i = 0; i < 1000; i++) {
-        await router.routeQuery(testCompanyId, `Query ${i}`);
+        await router.query(testCompanyId, `Query ${i}`);
       }
 
       // Force garbage collection if available

@@ -608,10 +608,9 @@ router.post('/categories/:categoryId/qna', async (req, res) => {
 
         await category.save();
 
-        // 🚀 OPTIMIZATION: Invalidate trade Q&A keyword cache for all companies using this category
+        // 🚀 OPTIMIZATION: Invalidate AI Brain cache for all companies (legacy code - safe to remove)
         try {
-            const PriorityDrivenKnowledgeRouter = require('../../services/v2priorityDrivenKnowledgeRouter');
-            const router = new PriorityDrivenKnowledgeRouter();
+            const AIBrain3tierllm = require('../../services/AIBrain3tierllm');
             
             // Find all companies using this trade category and invalidate their cache
             const Company = require('../../models/v2Company');

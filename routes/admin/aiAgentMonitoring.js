@@ -28,7 +28,7 @@ const Company = require('../../models/v2Company');
 const { authenticateJWT } = require('../../middleware/auth');
 // V2 DELETED: Legacy v2 aiAgentCacheService - using simple Redis directly
 const { redisClient } = require('../../clients');
-const PriorityDrivenKnowledgeRouter = require('../../services/v2priorityDrivenKnowledgeRouter');
+const AIBrain3tierllm = require('../../services/AIBrain3tierllm');
 const logger = require('../../utils/logger');
 
 /**
@@ -194,10 +194,9 @@ router.get('/health/:companyId', authenticateJWT, async (req, res) => {
             healthStatus.overall = 'unhealthy';
         }
 
-        // 5. Priority Router Health
+        // 5. AI Brain Health (3-Tier Intelligence)
         try {
-            const router = new PriorityDrivenKnowledgeRouter();
-            const testResult = await router.routeQuery(companyId, 'health check test', { timeout: 5000 });
+            const testResult = await AIBrain3tierllm.query(companyId, 'health check test', { timeout: 5000 });
             
             healthStatus.components.priorityRouter = {
                 status: testResult ? 'healthy' : 'warning',
@@ -397,10 +396,9 @@ router.get('/diagnostics/:companyId', authenticateJWT, async (req, res) => {
             diagnostics.summary.failed++;
         }
 
-        // Test 3: Priority Router Instantiation
+        // Test 3: AI Brain Metrics
         try {
-            const router = new PriorityDrivenKnowledgeRouter();
-            const config = await router.getPriorityConfiguration(companyId);
+            const metrics = AIBrain3tierllm.getPerformanceMetrics();
             
             diagnostics.tests.priorityRouter = {
                 name: 'Priority Router System',
@@ -503,8 +501,7 @@ router.get('/test-flow/:companyId', authenticateJWT, async (req, res) => {
     const startTime = Date.now();
     
     try {
-        const router = new PriorityDrivenKnowledgeRouter();
-        const result = await router.routeQuery(companyId, query, { 
+        const result = await AIBrain3tierllm.query(companyId, query, { 
             includeMetadata: true,
             timeout: 10000 
         });

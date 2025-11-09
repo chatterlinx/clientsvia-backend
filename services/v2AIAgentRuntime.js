@@ -364,10 +364,9 @@ class V2AIAgentRuntime {
             };
         }
         
-        // 🚀 V2 ENHANCED: Use Priority-Driven Knowledge Router for intelligent responses
+        // 🚀 V2 ENHANCED: Use AI Brain 3-Tier Intelligence for all responses
         try {
-            const PriorityRouter = require('./v2priorityDrivenKnowledgeRouter');
-            const router = new PriorityRouter();
+            const AIBrain3tierllm = require('./AIBrain3tierllm');
             
             // 🎯 TASK 3.1: Pass callSource and intelligenceConfig into router context
             const context = {
@@ -399,20 +398,20 @@ class V2AIAgentRuntime {
                 }
             };
             
-            logger.info(`🎯 [ROUTER CONTEXT] Routing with callSource: ${context.callSource} | Test: ${context.isTest}`);
+            logger.info(`🎯 [AI BRAIN] Routing with callSource: ${context.callSource} | Test: ${context.isTest}`);
             
-            // 🔍 DIAGNOSTIC: About to call knowledge router
+            // 🔍 DIAGNOSTIC: About to call AI Brain
             console.log('═'.repeat(80));
-            console.log('[🔍 AI BRAIN] About to call executePriorityRouting');
+            console.log('[🔍 AI BRAIN] About to query 3-Tier Intelligence System');
             console.log('CompanyID:', company._id.toString());
             console.log('User input:', userInput);
             console.log('═'.repeat(80));
             
-            const routingResult = await router.executePriorityRouting(context);
+            const routingResult = await AIBrain3tierllm.query(company._id.toString(), userInput, context);
             
-            // 🔍 DIAGNOSTIC: Knowledge router returned
+            // 🔍 DIAGNOSTIC: AI Brain returned
             console.log('═'.repeat(80));
-            console.log('[🔍 AI BRAIN] Knowledge router returned');
+            console.log('[🔍 AI BRAIN] 3-Tier Intelligence returned');
             console.log('Success:', Boolean(routingResult));
             console.log('Response:', routingResult?.response?.substring(0, 50));
             console.log('Confidence:', routingResult?.confidence);

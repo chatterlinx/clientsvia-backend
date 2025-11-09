@@ -21,7 +21,7 @@ const AdminNotificationService = require('../services/AdminNotificationService')
 const { initializeCall, processUserInput } = require('../services/v2AIAgentRuntime');
 // V2 DELETED: Legacy aiAgentRuntime - replaced with v2AIAgentRuntime
 // const aiAgentRuntime = require('../services/aiAgentRuntime');
-// V2 DELETED: Legacy findCachedAnswer - using V2 PriorityDrivenKnowledgeRouter
+// V2: AI responses come from AIBrain3tierllm (3-Tier Intelligence System)
 // V2 DELETED: CompanyKnowledgeQnA model removed (AI Brain only)
 const fs = require('fs');
 const path = require('path');

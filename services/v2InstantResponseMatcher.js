@@ -16,8 +16,8 @@
  * 4. Return best match if confidence > threshold
  * 
  * Usage:
- * - Called by v2priorityDrivenKnowledgeRouter.js as Priority 0
- * - Invoked before any other knowledge sources
+ * - Called by AIBrain3tierllm.js within 3-Tier Intelligence System
+ * - Part of Tier 1 (Rule-Based) matching
  * - Returns null if no confident match found
  * 
  * Last Updated: 2025-10-02

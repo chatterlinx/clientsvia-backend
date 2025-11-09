@@ -13,7 +13,7 @@
  * 
  * Integration Points:
  * - v2AIAgentRuntime.js (greeting and responses)
- * - v2priorityDrivenKnowledgeRouter.js (all knowledge sources)
+ * - AIBrain3tierllm.js (3-Tier Intelligence System)
  * - v2InstantResponseMatcher.js (instant responses)
  * 
  * Created: 2025-10-05
