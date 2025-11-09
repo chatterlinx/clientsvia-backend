@@ -185,6 +185,25 @@ const namedPhoneRecipientSchema = new mongoose.Schema({ name: { type: String, tr
 
 // 🔧 CRITICAL FIX: Define aiAgentLogic as a proper Mongoose Schema
 // This ensures Mongoose properly tracks and persists nested changes (especially voice Settings)
+// ============================================================================
+// ⚠️ NAMING CLARIFICATION: Why "aiAgentLogic"?
+// ============================================================================
+// HISTORY: This field was created when we had an "AI Agent Logic" UI tab
+// EVOLUTION: That tab was deleted and split into multiple tabs:
+//   - "AI Voice Settings" tab (manages voiceSettings below)
+//   - "AI Agent Settings" tab (manages aiAgentSettings field)
+//   - "Configuration" tabs (various)
+// 
+// CURRENT STATE: Field name is LEGACY but data structure is ACTIVE
+// WHY NOT RENAMED: 589 references across 79 files = high production risk
+// 
+// CONFUSION PREVENTION:
+//   - aiAgentLogic ≠ aiAgentSettings (two separate systems)
+//   - aiAgentLogic = Voice + Intelligence configuration
+//   - aiAgentSettings = Template + Variable management
+// 
+// FUTURE: Consider alias system or gradual rename post-launch
+// ============================================================================
 const aiAgentLogicSchema = new mongoose.Schema({
     // Enable/disable AI Agent Logic system
     enabled: { type: Boolean, default: true },
