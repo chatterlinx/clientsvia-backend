@@ -10,6 +10,7 @@
  * GET /api/admin/ai-agent-monitoring/diagnostics/:companyId - Deep diagnostics
  * GET /api/admin/ai-agent-monitoring/test-flow/:companyId - Test complete flow
  * GET /api/admin/ai-agent-monitoring/dashboard - Real-time dashboard data
+ * GET /api/admin/ai-agent-monitoring/performance - AI Brain 3-Tier performance metrics
  * 
  * FEATURES:
  * - Real-time health status monitoring
@@ -545,6 +546,115 @@ router.get('/test-flow/:companyId', authenticateJWT, async (req, res) => {
                 responseTime: Date.now() - startTime,
                 testQuery: query
             }
+        });
+    }
+});
+
+/**
+ * 📊 GET /api/admin/ai-agent-monitoring/performance
+ * AI Brain 3-Tier Intelligence Performance Metrics
+ * Shows tier usage breakdown, response times, and cost tracking
+ */
+router.get('/performance', authenticateJWT, async (req, res) => {
+    try {
+        const metrics = AIBrain3tierllm.getPerformanceMetrics();
+        
+        // Calculate tier distribution
+        const totalQueries = metrics.totalQueries || 1; // Avoid division by zero
+        const tier1Percentage = ((metrics.tier1Hits / totalQueries) * 100).toFixed(1);
+        const tier2Percentage = ((metrics.tier2Hits / totalQueries) * 100).toFixed(1);
+        const tier3Percentage = ((metrics.tier3Hits / totalQueries) * 100).toFixed(1);
+        
+        // Estimate costs (Tier 3 only has costs)
+        const estimatedCostPerTier3Call = 0.04; // $0.04 per LLM call
+        const totalEstimatedCost = (metrics.tier3Hits * estimatedCostPerTier3Call).toFixed(4);
+        
+        const performanceData = {
+            timestamp: new Date().toISOString(),
+            summary: {
+                totalQueries: metrics.totalQueries,
+                avgResponseTime: Math.round(metrics.avgResponseTime),
+                cacheHitRate: metrics.cacheHitRate + '%'
+            },
+            tierBreakdown: {
+                tier1: {
+                    name: 'Rule-Based (FREE)',
+                    hits: metrics.tier1Hits,
+                    percentage: tier1Percentage + '%',
+                    avgCost: '$0.00',
+                    emoji: '⚡',
+                    description: 'Instant exact matches'
+                },
+                tier2: {
+                    name: 'Semantic (FREE)',
+                    hits: metrics.tier2Hits,
+                    percentage: tier2Percentage + '%',
+                    avgCost: '$0.00',
+                    emoji: '🧠',
+                    description: 'Fast semantic matching'
+                },
+                tier3: {
+                    name: 'LLM Fallback (PAID)',
+                    hits: metrics.tier3Hits,
+                    percentage: tier3Percentage + '%',
+                    avgCost: `$${estimatedCostPerTier3Call}`,
+                    emoji: '🤖',
+                    description: 'GPT-4o-mini fallback'
+                }
+            },
+            costAnalysis: {
+                totalEstimatedCost: `$${totalEstimatedCost}`,
+                freeCalls: metrics.tier1Hits + metrics.tier2Hits,
+                paidCalls: metrics.tier3Hits,
+                averageCostPerCall: `$${(metrics.tier3Hits * estimatedCostPerTier3Call / totalQueries).toFixed(6)}`
+            },
+            recommendations: []
+        };
+        
+        // Add intelligent recommendations
+        if (parseFloat(tier3Percentage) > 10) {
+            performanceData.recommendations.push({
+                type: 'optimization',
+                severity: 'medium',
+                message: `${tier3Percentage}% of calls using Tier 3 (LLM). Consider adding more scenarios or adjusting thresholds to reduce costs.`
+            });
+        }
+        
+        if (parseFloat(tier1Percentage) > 80) {
+            performanceData.recommendations.push({
+                type: 'success',
+                severity: 'low',
+                message: `Excellent! ${tier1Percentage}% of calls handled by free Tier 1 (Rule-Based matching).`
+            });
+        }
+        
+        if (metrics.avgResponseTime > 1000) {
+            performanceData.recommendations.push({
+                type: 'performance',
+                severity: 'high',
+                message: `Average response time (${Math.round(metrics.avgResponseTime)}ms) is high. Check scenario pool size and Redis connection.`
+            });
+        }
+        
+        if (parseFloat(metrics.cacheHitRate) < 20 && metrics.totalQueries > 10) {
+            performanceData.recommendations.push({
+                type: 'caching',
+                severity: 'medium',
+                message: `Low cache hit rate (${metrics.cacheHitRate}%). Ensure Redis is connected for better performance.`
+            });
+        }
+        
+        res.json({
+            success: true,
+            data: performanceData
+        });
+        
+    } catch (error) {
+        logger.error('Performance metrics fetch failed:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch performance metrics',
+            details: error.message
         });
     }
 });

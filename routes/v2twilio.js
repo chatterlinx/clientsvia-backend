@@ -1679,6 +1679,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // V2 DELETED: Legacy aiAgentRuntime - replaced with v2AIAgentRuntime
     // const { processCallTurn } = require('../services/aiAgentRuntime');
     
+    // 🎯 PERFORMANCE TRACKING: Start timing
+    const perfStart = Date.now();
+    const perfCheckpoints = { requestReceived: 0 };
+    
     logger.security('🎯 CHECKPOINT 13: Initializing call state');
     // Get or initialize call state
     const callState = req.session?.callState || {
@@ -1688,9 +1692,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       failedAttempts: 0,
       startTime: new Date()
     };
+    perfCheckpoints.callStateInit = Date.now() - perfStart;
     
     logger.debug('🎯 CHECKPOINT 14: Calling V2 AI Agent Runtime processUserInput');
     // Process the call turn through V2 AI Agent Runtime
+    const aiProcessStart = Date.now();
     const { processUserInput } = require('../services/v2AIAgentRuntime');
     const result = await processUserInput(
       companyID,
@@ -1698,6 +1704,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       speechResult,
       callState
     );
+    perfCheckpoints.aiProcessing = Date.now() - aiProcessStart;
     
     logger.security('🎯 CHECKPOINT 15: AI Agent Runtime response received');
     logger.security('🤖 AI Response:', JSON.stringify(result, null, 2));
@@ -1766,6 +1773,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           logger.info(`🎤 V2 ELEVENLABS: Using voice ${elevenLabsVoice} for response`);
           
           // Generate ElevenLabs audio
+          const ttsStart = Date.now();
           const { synthesizeSpeech } = require('../services/v2elevenLabsService');
           const audioBuffer = await synthesizeSpeech({
             text: responseText,
@@ -1777,16 +1785,20 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             model_id: company.aiAgentLogic?.voiceSettings?.aiModel,
             company  // ✅ CRITICAL FIX: Pass company object for API key lookup
           });
+          perfCheckpoints.ttsGeneration = Date.now() - ttsStart;
           
           const timestamp = Date.now();
           let audioUrl;
+          let storageMethod = 'unknown';
           
           // 🔥 CRITICAL FIX: Fallback to disk if Redis unavailable
+          const storageStart = Date.now();
           if (redisClient && redisClient.isReady) {
             // Store audio in Redis for serving (preferred method)
             const audioKey = `audio:v2:${callSid}_${timestamp}`;
             await redisClient.setEx(audioKey, 300, audioBuffer.toString('base64'));
             audioUrl = `https://${req.get('host')}/api/twilio/audio/v2/${callSid}_${timestamp}`;
+            storageMethod = 'Redis';
             logger.info(`✅ V2 ELEVENLABS: Audio stored in Redis at ${audioUrl}`);
           } else {
             // Fallback: Save to disk if Redis is unavailable
@@ -1798,8 +1810,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             const filePath = path.join(audioDir, fileName);
             fs.writeFileSync(filePath, audioBuffer);
             audioUrl = `http://${req.get('host')}/audio/${fileName}`;
+            storageMethod = 'Disk (Redis unavailable)';
             logger.warn(`⚠️ V2 ELEVENLABS: Redis unavailable, saved to disk at ${audioUrl}`);
           }
+          perfCheckpoints.audioStorage = Date.now() - storageStart;
+          perfCheckpoints.storageMethod = storageMethod;
           
           twiml.play(audioUrl);
           
@@ -1854,10 +1869,54 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     logger.info('📤 CHECKPOINT 22: Sending TwiML response to Twilio');
     logger.info('📋 TwiML Content:', twimlString);
     
+    // 🎯 COMPREHENSIVE PERFORMANCE SUMMARY
+    const totalTime = Date.now() - perfStart;
+    perfCheckpoints.total = totalTime;
+    
+    // Calculate percentages
+    const aiPercent = ((perfCheckpoints.aiProcessing / totalTime) * 100).toFixed(1);
+    const ttsPercent = perfCheckpoints.ttsGeneration ? ((perfCheckpoints.ttsGeneration / totalTime) * 100).toFixed(1) : 0;
+    const storagePercent = perfCheckpoints.audioStorage ? ((perfCheckpoints.audioStorage / totalTime) * 100).toFixed(1) : 0;
+    
+    console.log('\n' + '═'.repeat(80));
+    console.log('🎯 TWILIO CALL PERFORMANCE BREAKDOWN');
+    console.log('═'.repeat(80));
+    console.log(`📞 User Said: "${speechResult.substring(0, 60)}${speechResult.length > 60 ? '...' : ''}"`);
+    console.log(`🤖 AI Response: "${(result.response || result.text || '').substring(0, 60)}..."`);
+    console.log(`⏱️  TOTAL TIME: ${totalTime}ms`);
+    console.log('');
+    console.log('📊 TIME BREAKDOWN:');
+    console.log(`   ├─ Call State Init: ${perfCheckpoints.callStateInit}ms`);
+    console.log(`   ├─ AI Processing: ${perfCheckpoints.aiProcessing}ms (${aiPercent}%)`);
+    if (perfCheckpoints.ttsGeneration) {
+      console.log(`   ├─ ElevenLabs TTS: ${perfCheckpoints.ttsGeneration}ms (${ttsPercent}%) ⚠️ BOTTLENECK`);
+      console.log(`   ├─ Audio Storage: ${perfCheckpoints.audioStorage}ms (${storagePercent}%) [${perfCheckpoints.storageMethod}]`);
+      if (perfCheckpoints.storageMethod.includes('Disk')) {
+        console.log(`   │  └─ ⚠️ WARNING: Redis unavailable, using disk fallback`);
+      }
+    } else {
+      console.log(`   ├─ Voice: Twilio (no ElevenLabs)`);
+    }
+    console.log(`   └─ TwiML Generation: <1ms`);
+    console.log('');
+    console.log('💡 PERFORMANCE INSIGHTS:');
+    if (perfCheckpoints.ttsGeneration && perfCheckpoints.ttsGeneration > 1500) {
+      console.log('   • ElevenLabs TTS (~1.8s) is the main bottleneck - THIS IS NORMAL');
+      console.log('   • High-quality voice synthesis requires this time');
+    }
+    if (perfCheckpoints.aiProcessing < 700) {
+      console.log('   • ✅ AI Brain is performing excellently (<700ms)');
+    }
+    if (perfCheckpoints.storageMethod && perfCheckpoints.storageMethod.includes('Disk')) {
+      console.log('   • ⚠️ Redis is down - investigate connection issue');
+      console.log('   • Disk fallback working, but Redis would be faster');
+    }
+    console.log('═'.repeat(80) + '\n');
+    
     res.type('text/xml');
     res.send(twimlString);
     
-    logger.info('✅ CHECKPOINT 23: Response sent successfully');
+    logger.info('✅ CHECKPOINT 23: Response sent successfully', { perfCheckpoints });
     
   } catch (error) {
     logger.error('❌ CHECKPOINT ERROR: AI Agent Respond error:', error);

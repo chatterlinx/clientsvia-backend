@@ -1397,6 +1397,181 @@ grep "V2 ELEVENLABS: Using voice" logs
 
 ---
 
+## 📊 PERFORMANCE TRACKING & MONITORING
+
+### **Real-Time Performance Visibility**
+
+**NEW:** Comprehensive performance tracking has been implemented across the entire call flow!
+
+#### **1. AI Brain Performance Summary**
+**File:** `/services/AIBrain3tierllm.js`  
+**When:** After every AI query  
+**Shows:**
+```
+═══════════════════════════════════════════════════════════════════════════════
+⚡ AI BRAIN PERFORMANCE SUMMARY
+═══════════════════════════════════════════════════════════════════════════════
+📞 Query: "What are your hours?"
+🎯 Tier Used: TIER 1 (Rule-Based)
+💰 Cost: $0.00 (FREE)
+⏱️  Total Time: 658ms
+   ├─ Cache Check: 2ms
+   ├─ AI Brain Query: 655ms
+   └─ Cache Write: 1ms
+📊 Confidence: 100.0%
+🎬 Scenario: Hours of Operation
+═══════════════════════════════════════════════════════════════════════════════
+```
+
+**What You Can Track:**
+- Which tier handled the query (1, 2, or 3)
+- Exact response time breakdown
+- Cost per query ($0.00 for Tier 1/2, $0.04 for Tier 3)
+- Confidence scores
+- Cache performance
+
+#### **2. Twilio Call Performance Breakdown**
+**File:** `/routes/v2twilio.js`  
+**When:** After every AI response  
+**Shows:**
+```
+═══════════════════════════════════════════════════════════════════════════════
+🎯 TWILIO CALL PERFORMANCE BREAKDOWN
+═══════════════════════════════════════════════════════════════════════════════
+📞 User Said: "What are your hours?"
+🤖 AI Response: "Our business hours are Monday to Friday, 8 in the morning..."
+⏱️  TOTAL TIME: 2527ms
+
+📊 TIME BREAKDOWN:
+   ├─ Call State Init: 1ms
+   ├─ AI Processing: 658ms (26.0%)
+   ├─ ElevenLabs TTS: 1796ms (71.1%) ⚠️ BOTTLENECK
+   ├─ Audio Storage: 2ms (0.1%) [Disk (Redis unavailable)]
+   │  └─ ⚠️ WARNING: Redis unavailable, using disk fallback
+   └─ TwiML Generation: <1ms
+
+💡 PERFORMANCE INSIGHTS:
+   • ElevenLabs TTS (~1.8s) is the main bottleneck - THIS IS NORMAL
+   • High-quality voice synthesis requires this time
+   • ✅ AI Brain is performing excellently (<700ms)
+   • ⚠️ Redis is down - investigate connection issue
+   • Disk fallback working, but Redis would be faster
+═══════════════════════════════════════════════════════════════════════════════
+```
+
+**What You Learn:**
+- **Total call processing time**
+- **AI Brain speed** (should be <700ms)
+- **ElevenLabs TTS time** (~1.8s is normal)
+- **Redis status** (connected or using disk fallback)
+- **Percentage breakdown** showing where time is spent
+
+#### **3. Performance Dashboard API**
+**Endpoint:** `GET /api/admin/ai-agent-monitoring/performance`  
+**Authentication:** JWT required  
+
+**Sample Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "timestamp": "2025-11-09T15:51:00.000Z",
+    "summary": {
+      "totalQueries": 47,
+      "avgResponseTime": 543,
+      "cacheHitRate": "23.4%"
+    },
+    "tierBreakdown": {
+      "tier1": {
+        "name": "Rule-Based (FREE)",
+        "hits": 38,
+        "percentage": "80.9%",
+        "avgCost": "$0.00",
+        "emoji": "⚡",
+        "description": "Instant exact matches"
+      },
+      "tier2": {
+        "name": "Semantic (FREE)",
+        "hits": 7,
+        "percentage": "14.9%",
+        "avgCost": "$0.00",
+        "emoji": "🧠",
+        "description": "Fast semantic matching"
+      },
+      "tier3": {
+        "name": "LLM Fallback (PAID)",
+        "hits": 2,
+        "percentage": "4.3%",
+        "avgCost": "$0.04",
+        "emoji": "🤖",
+        "description": "GPT-4o-mini fallback"
+      }
+    },
+    "costAnalysis": {
+      "totalEstimatedCost": "$0.0800",
+      "freeCalls": 45,
+      "paidCalls": 2,
+      "averageCostPerCall": "$0.001702"
+    },
+    "recommendations": [
+      {
+        "type": "success",
+        "severity": "low",
+        "message": "Excellent! 80.9% of calls handled by free Tier 1 (Rule-Based matching)."
+      }
+    ]
+  }
+}
+```
+
+**What It Provides:**
+- **Tier usage statistics** (% breakdown)
+- **Cost analysis** (total, per-call average)
+- **Performance metrics** (avg response time, cache hit rate)
+- **Intelligent recommendations** based on usage patterns
+
+### **Performance Bottlenecks Explained**
+
+#### **Normal Bottlenecks (Expected):**
+1. **ElevenLabs TTS (~1.8s)**
+   - This is NORMAL for high-quality voice synthesis
+   - Cannot be significantly reduced
+   - Industry-standard latency for premium TTS
+
+2. **First Scenario Load (200-300ms)**
+   - Only happens once per server restart
+   - Subsequent calls use cache (50-150ms)
+
+#### **Problematic Bottlenecks (Need Fixing):**
+1. **Redis Connection Issues**
+   - Symptom: `Redis unavailable, saved to disk`
+   - Impact: Slower caching, no audio pre-storage
+   - Fix: Investigate Redis connection in Render dashboard
+
+2. **AI Brain >1000ms**
+   - Symptom: Performance summary shows >1000ms for AI processing
+   - Cause: Large scenario pool or slow DB queries
+   - Fix: Optimize scenario pool, check MongoDB latency
+
+### **Using Performance Data**
+
+**To Reduce Costs:**
+- Monitor Tier 3 usage percentage
+- If >10%, add more scenarios to cover common questions
+- Adjust thresholds (lower Tier 1/2 thresholds carefully)
+
+**To Improve Speed:**
+- Fix Redis connection (biggest non-TTS impact)
+- Optimize scenario pool size
+- Ensure MongoDB queries are indexed
+
+**To Track System Health:**
+- Check daily performance endpoint
+- Watch for sudden tier distribution changes
+- Monitor cache hit rate (should be >20% after warm-up)
+
+---
+
 ## 🎯 NEXT STEPS TO DISCOVER
 
 ### **Questions to Answer:**
@@ -1437,6 +1612,7 @@ grep "V2 ELEVENLABS: Using voice" logs
 | 2025-11-09 | **🔥 MAJOR REFACTOR:** Replaced PriorityDrivenKnowledgeRouter → AIBrain3tierllm | AI Assistant |
 | 2025-11-09 | **🔥 NUKE COMPLETE:** Eliminated ALL legacy QnA systems (companyQnA, tradeQnA, inHouseFallback) | AI Assistant |
 | 2025-11-09 | **✅ ARCHITECTURE TRUTH:** AI Brain 3-Tier Intelligence is now THE ONLY knowledge source | AI Assistant |
+| 2025-11-09 | **📊 PERFORMANCE TRACKING:** Added comprehensive performance monitoring with tier visibility, time breakdowns, and cost tracking | AI Assistant |
 
 ---
 

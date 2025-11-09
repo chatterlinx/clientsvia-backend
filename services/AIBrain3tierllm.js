@@ -46,6 +46,7 @@ class AIBrain3tierllm {
     async query(companyId, query, context = {}) {
         const startTime = Date.now();
         const routingId = context.routingId || `ai-brain-${Date.now()}`;
+        const perfCheckpoints = {};
         
         try {
             logger.info(`🧠 [AI BRAIN] Processing query for company ${companyId}`, {
@@ -56,8 +57,10 @@ class AIBrain3tierllm {
             });
 
             // Try cache first
+            const cacheStartTime = Date.now();
             const cacheKey = this.generateCacheKey(companyId, query);
             const cachedResult = await this.getCachedResult(cacheKey);
+            perfCheckpoints.cacheCheck = Date.now() - cacheStartTime;
             
             if (cachedResult) {
                 this.performanceMetrics.cacheHits++;
@@ -75,11 +78,15 @@ class AIBrain3tierllm {
             }
 
             // Query the AI Brain (3-Tier Intelligence)
+            const aiStartTime = Date.now();
             const result = await this.queryAIBrain(companyId, query, context);
+            perfCheckpoints.aiBrainQuery = Date.now() - aiStartTime;
 
             // Cache successful results
             if (result.confidence > 0.5 && result.response) {
+                const cacheWriteStart = Date.now();
                 await this.cacheResult(cacheKey, result);
+                perfCheckpoints.cacheWrite = Date.now() - cacheWriteStart;
             }
 
             // Update metrics
@@ -90,15 +97,42 @@ class AIBrain3tierllm {
                 this.performanceMetrics.totalQueries;
 
             // Track tier usage
-            if (result.metadata?.trace?.tierUsed === 1) this.performanceMetrics.tier1Hits++;
-            if (result.metadata?.trace?.tierUsed === 2) this.performanceMetrics.tier2Hits++;
-            if (result.metadata?.trace?.tierUsed === 3) this.performanceMetrics.tier3Hits++;
+            const tierUsed = result.metadata?.trace?.tierUsed;
+            if (tierUsed === 1) this.performanceMetrics.tier1Hits++;
+            if (tierUsed === 2) this.performanceMetrics.tier2Hits++;
+            if (tierUsed === 3) this.performanceMetrics.tier3Hits++;
+
+            // 🎯 PERFORMANCE SUMMARY - Crystal clear visibility
+            const tierEmoji = tierUsed === 1 ? '⚡' : tierUsed === 2 ? '🧠' : tierUsed === 3 ? '🤖' : '❓';
+            const tierName = tierUsed === 1 ? 'TIER 1 (Rule-Based)' : tierUsed === 2 ? 'TIER 2 (Semantic)' : tierUsed === 3 ? 'TIER 3 (LLM)' : 'UNKNOWN';
+            const cost = result.metadata?.trace?.cost?.total || 0;
+            const costDisplay = cost > 0 ? `$${cost.toFixed(4)}` : '$0.00 (FREE)';
+
+            console.log('\n' + '═'.repeat(80));
+            console.log(`${tierEmoji} AI BRAIN PERFORMANCE SUMMARY`);
+            console.log('═'.repeat(80));
+            console.log(`📞 Query: "${query.substring(0, 60)}${query.length > 60 ? '...' : ''}"`);
+            console.log(`🎯 Tier Used: ${tierName}`);
+            console.log(`💰 Cost: ${costDisplay}`);
+            console.log(`⏱️  Total Time: ${responseTime}ms`);
+            console.log(`   ├─ Cache Check: ${perfCheckpoints.cacheCheck}ms`);
+            console.log(`   ├─ AI Brain Query: ${perfCheckpoints.aiBrainQuery}ms`);
+            if (perfCheckpoints.cacheWrite) {
+                console.log(`   └─ Cache Write: ${perfCheckpoints.cacheWrite}ms`);
+            }
+            console.log(`📊 Confidence: ${(result.confidence * 100).toFixed(1)}%`);
+            if (result.metadata?.scenarioName) {
+                console.log(`🎬 Scenario: ${result.metadata.scenarioName}`);
+            }
+            console.log('═'.repeat(80) + '\n');
 
             logger.info(`✅ [AI BRAIN] Query complete (${responseTime}ms)`, {
                 routingId,
                 confidence: result.confidence,
-                tierUsed: result.metadata?.trace?.tierUsed,
-                cost: result.metadata?.trace?.cost?.total || 0
+                tierUsed,
+                tierName,
+                cost,
+                perfCheckpoints
             });
 
             return {
