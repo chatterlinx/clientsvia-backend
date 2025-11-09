@@ -449,8 +449,9 @@ class PriorityDrivenKnowledgeRouter {
                     };
                 }
                 
-                // Create IntelligentRouter instance
-                const router = new IntelligentRouter();
+                // Use IntelligentRouter singleton instance (already instantiated in IntelligentRouter.js)
+                // IntelligentRouter exports an instance, NOT a class constructor
+                const router = IntelligentRouter;
                 
                 // Route through 3-tier cascade
                 const routingResult = await router.route({
