@@ -1613,6 +1613,7 @@ grep "V2 ELEVENLABS: Using voice" logs
 | 2025-11-09 | **🔥 NUKE COMPLETE:** Eliminated ALL legacy QnA systems (companyQnA, tradeQnA, inHouseFallback) | AI Assistant |
 | 2025-11-09 | **✅ ARCHITECTURE TRUTH:** AI Brain 3-Tier Intelligence is now THE ONLY knowledge source | AI Assistant |
 | 2025-11-09 | **📊 PERFORMANCE TRACKING:** Added comprehensive performance monitoring with tier visibility, time breakdowns, and cost tracking | AI Assistant |
+| 2025-11-09 | **🔥 CRITICAL FIX:** Fixed useQuickReply scope bug causing AI Brain to return undefined responses (scenarios matched but response lost) | AI Assistant |
 
 ---
 
