@@ -5267,6 +5267,42 @@ Of course! I'm happy to wait while you look into it."></textarea>
                             <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">How to pick from multiple replies</p>
                         </div>
 
+                        <!-- 🎯 PHASE 2: Scenario Type & Reply Strategy -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            
+                            <!-- Scenario Type (NEW) -->
+                            <div>
+                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                    <i class="fas fa-tag text-blue-600 mr-2"></i>Scenario Type
+                                </label>
+                                <select id="scenario-type" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
+                                    <option value="">-- Infer from Content --</option>
+                                    <option value="INFO_FAQ">📋 INFO_FAQ (hours, pricing, info)</option>
+                                    <option value="ACTION_FLOW">🚀 ACTION_FLOW (booking, transfer)</option>
+                                    <option value="SYSTEM_ACK">✓ SYSTEM_ACK (confirmation)</option>
+                                    <option value="SMALL_TALK">💬 SMALL_TALK (rapport)</option>
+                                </select>
+                                <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">What this scenario does (blank = infer)</p>
+                            </div>
+
+                            <!-- Reply Strategy (NEW) -->
+                            <div>
+                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                    <i class="fas fa-reply text-green-600 mr-2"></i>Reply Strategy
+                                </label>
+                                <select id="scenario-reply-strategy" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
+                                    <option value="AUTO" selected>🎯 AUTO (Smart Default)</option>
+                                    <option value="FULL_ONLY">📖 FULL_ONLY (Detailed)</option>
+                                    <option value="QUICK_ONLY">⚡ QUICK_ONLY (Brief)</option>
+                                    <option value="QUICK_THEN_FULL">↳ QUICK_THEN_FULL (Intro + Full)</option>
+                                    <option value="LLM_WRAP">🤖 LLM_WRAP (Polish tone - beta)</option>
+                                    <option value="LLM_CONTEXT">🧠 LLM_CONTEXT (Generate - beta)</option>
+                                </select>
+                                <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">How to select replies for voice/SMS</p>
+                            </div>
+
+                        </div>
+
                     </div>
                 </div>
 
@@ -11650,6 +11686,10 @@ Continue?`;
             document.getElementById('scenario-followup-funnel').value = data.followUpFunnel || '';
             document.getElementById('scenario-reply-selection').value = data.replySelection || 'random';
             
+            // 🎯 PHASE 2: Scenario Semantics
+            document.getElementById('scenario-type').value = data.scenarioType || '';
+            document.getElementById('scenario-reply-strategy').value = data.replyStrategy || 'AUTO';
+            
             // Entities & Variables Tab
             document.getElementById('scenario-entity-capture').value = (data.entityCapture || []).join('\n');
             
@@ -11836,6 +11876,10 @@ Continue?`;
                 fullReplies: fullReplies.split('\n').filter(r => r.trim()),
                 followUpFunnel: document.getElementById('scenario-followup-funnel').value.trim(),
                 replySelection: document.getElementById('scenario-reply-selection').value || 'random',
+                
+                // 🎯 PHASE 2: Scenario Semantics
+                scenarioType: document.getElementById('scenario-type').value || null,
+                replyStrategy: document.getElementById('scenario-reply-strategy').value || 'AUTO',
                 
                 entityCapture: document.getElementById('scenario-entity-capture').value.split('\n').filter(e => e.trim()),
                 dynamicVariables: parseDynamicVariables(document.getElementById('scenario-dynamic-variables').value),
