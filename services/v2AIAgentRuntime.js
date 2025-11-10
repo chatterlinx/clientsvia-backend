@@ -333,7 +333,6 @@ class V2AIAgentRuntime {
         logger.info(`[V2 RESPONSE] 🧠 Generating V2 response for: "${userInput}"`);
         
         const aiLogic = company.aiAgentLogic;
-        const personality = aiLogic.agentPersonality || {};
         
         // 🎯 Load company production intelligence settings
         let effectiveIntelligence = {};
@@ -424,9 +423,6 @@ class V2AIAgentRuntime {
                     responseText = this.applyAIAgentRole(responseText, routingResult.metadata.aiAgentRole, company);
                 }
                 
-                // Apply personality tone to response
-                responseText = this.applyV2PersonalityTone(responseText, personality);
-                
                 // V2 PURE SYSTEM: No placeholder contamination - response is pre-built
                 responseText = this.buildPureResponse(responseText, company);
 
@@ -466,38 +462,6 @@ class V2AIAgentRuntime {
             confidence: 0,
             source: 'ai-brain-critical-failure'
         };
-    }
-
-    /**
-     * 🎭 Apply V2 personality tone to response
-     * @param {string} response - Base response
-     * @param {Object} personality - V2 personality configuration
-     * @returns {string} Tone-adjusted response
-     */
-    static applyV2PersonalityTone(response, personality) {
-        if (!personality.corePersonality) {return response;}
-
-        const tone = personality.corePersonality.voiceTone;
-        const formality = personality.corePersonality.formalityLevel;
-
-        // Adjust based on V2 personality settings
-        if (tone === 'professional' && formality === 'formal') {
-            // Keep response formal and professional
-            return response;
-        }
-        else if (tone === 'friendly' && formality === 'casual') {
-            // Make response more casual and friendly
-            if (!response.includes('!')) {
-                response = response.replace('.', '!');
-            }
-        }
-        else if (tone === 'empathetic') {
-            // 🔥 NUKE: NO "I understand" prefix! Responses come from templates only!
-            // Empathetic responses should be configured in Agent Personality settings
-            // Do NOT modify template responses with generic text
-        }
-
-        return response;
     }
 
     /**
