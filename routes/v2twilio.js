@@ -75,6 +75,56 @@ function getTestResults(templateId, limit = 20) {
 }
 
 // ============================================
+// 🎯 PHASE A – STEP 3B: FOLLOW-UP PLUMBING
+// ============================================
+/**
+ * Build voice response text with follow-up question appended (if configured)
+ * 
+ * Applies only to voice channel.
+ * Modes:
+ *   - NONE: no modification
+ *   - ASK_FOLLOWUP_QUESTION: append followUpQuestionText
+ *   - ASK_IF_BOOK: append followUpQuestionText
+ *   - TRANSFER: return unchanged (handled separately)
+ * 
+ * @param {String} mainText - The primary AI response text
+ * @param {Object} followUpMetadata - { mode, questionText, transferTarget }
+ * @returns {String} - Final text to speak (may include follow-up question)
+ */
+function buildFollowUpAwareText(mainText, followUpMetadata) {
+  if (!followUpMetadata) {
+    return mainText;
+  }
+
+  const mode = followUpMetadata.mode || 'NONE';
+  const questionText = (followUpMetadata.questionText || '').trim();
+
+  // If no mode or NONE → no change
+  if (!mode || mode === 'NONE') {
+    return mainText;
+  }
+
+  // For ASK_FOLLOWUP_QUESTION or ASK_IF_BOOK:
+  // - Append the question text if present
+  // - If missing questionText, use a safe generic fallback
+  if (mode === 'ASK_FOLLOWUP_QUESTION' || mode === 'ASK_IF_BOOK') {
+    const effectiveQuestion =
+      questionText.length > 0
+        ? questionText
+        : 'Is there anything else I can help you with?';
+
+    // Combine with a space. Keep it simple and natural.
+    if (!mainText || !mainText.trim()) {
+      return effectiveQuestion;
+    }
+    return `${mainText.trim()} ${effectiveQuestion}`;
+  }
+
+  // For TRANSFER we do NOT modify text here – transfer is handled separately
+  return mainText;
+}
+
+// ============================================
 // 🤖 AI ANALYSIS ENGINE
 // ============================================
 
@@ -287,23 +337,21 @@ function getTransferMessage(company) {
 
 // Helper function to handle transfer logic with enabled check
 // 🔥 NO generic fallback messages - neutral transfer only
-function handleTransfer(twiml, company, fallbackMessage = "I'm connecting you to our team.", companyID = null) {
-  if (isTransferEnabled(company)) {
-    const transferNumber = getTransferNumber(company);
-    
-    // Only transfer if we have a valid number configured
-    if (transferNumber) {
-      const transferMessage = getTransferMessage(company);
-      logger.info('[AI AGENT] Transfer enabled, transferring to:', transferNumber);
-      twiml.say(transferMessage);
-      twiml.dial(transferNumber);
-    } else {
-      logger.info('[AI AGENT] Transfer enabled but no number configured, connecting to team');
-      // 🔥 Neutral transfer message - no generic empathy
-      const configResponse = `I'm connecting you to our team.`;
-      twiml.say(configResponse);
-      twiml.hangup();
-    }
+function handleTransfer(twiml, company, fallbackMessage = "I'm connecting you to our team.", companyID = null, overrideTransferTarget = null) {
+  // 🎯 PHASE A – STEP 3B: Allow scenario-specific transfer target to override company config
+  const transferNumber = overrideTransferTarget || (isTransferEnabled(company) ? getTransferNumber(company) : null);
+  
+  if (transferNumber) {
+    const transferMessage = getTransferMessage(company);
+    logger.info('[AI AGENT] Transfer enabled, transferring to:', transferNumber);
+    twiml.say(transferMessage);
+    twiml.dial(transferNumber);
+  } else if (isTransferEnabled(company)) {
+    logger.info('[AI AGENT] Transfer enabled but no number configured, connecting to team');
+    // 🔥 Neutral transfer message - no generic empathy
+    const configResponse = `I'm connecting you to our team.`;
+    twiml.say(configResponse);
+    twiml.hangup();
   } else {
     logger.info('[AI AGENT] Transfer disabled, providing fallback message and continuing conversation');
     twiml.say(fallbackMessage);
@@ -1765,7 +1813,56 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const elevenLabsVoice = company?.aiAgentLogic?.voiceSettings?.voiceId;
       logger.info('🔍 V2 VOICE CHECK: Extracted voiceId:', elevenLabsVoice || 'NOT FOUND');
       
-      const responseText = result.response || result.text || "I'm connecting you to our team.";
+      // 🎯 PHASE A – STEP 3B: Check for follow-up mode (TRANSFER handling)
+      const followUp = result.metadata?.followUp || { mode: 'NONE' };
+      const followUpMode = followUp.mode || 'NONE';
+      
+      // 🎯 PHASE A – STEP 3B: Handle TRANSFER mode separately
+      if (followUpMode === 'TRANSFER') {
+        const transferTarget = (followUp.transferTarget || '').trim();
+        
+        if (!transferTarget) {
+          logger.warn('[TWILIO] followUp mode TRANSFER configured but transferTarget is missing', {
+            companyId: companyID,
+            callSid: callSid,
+            scenarioId: result.metadata?.scenarioId,
+            scenarioName: result.metadata?.scenarioName
+          });
+          // Fallback: continue as normal, just speak mainText
+          logger.info('🎯 CHECKPOINT 20A: TRANSFER mode but no target, continuing as NONE');
+        } else {
+          // Handle transfer using existing logic
+          logger.info('🎯 CHECKPOINT 20A: TRANSFER mode with target, initiating transfer', {
+            transferTarget,
+            mainText: (result.response || result.text || '').substring(0, 50)
+          });
+          
+          const mainText = result.response || result.text;
+          if (mainText && mainText.trim()) {
+            twiml.say(escapeTwiML(mainText));
+          }
+          
+          // Use existing transfer/handoff logic
+          handleTransfer(twiml, company, null, companyID, transferTarget);
+          
+          logger.info('📤 CHECKPOINT 22A: Sending TRANSFER TwiML response to Twilio');
+          const twimlString = twiml.toString();
+          logger.info('📋 TwiML Content (TRANSFER):', twimlString);
+          return res.type('text/xml').send(twimlString);
+        }
+      }
+      
+      // 🎯 PHASE A – STEP 3B: Build response text with follow-up question (if ASK_FOLLOWUP_QUESTION or ASK_IF_BOOK)
+      let responseText = result.response || result.text || "I'm connecting you to our team.";
+      responseText = buildFollowUpAwareText(responseText, followUp);
+      
+      if (followUpMode === 'ASK_FOLLOWUP_QUESTION' || followUpMode === 'ASK_IF_BOOK') {
+        logger.info(`[TWILIO] Follow-up mode applied: ${followUpMode}`, {
+          mainText: result.response?.substring(0, 50),
+          finalText: responseText.substring(0, 100)
+        });
+      }
+      
       logger.info('🔍 V2 VOICE CHECK: Response text:', responseText);
       logger.info('🔍 V2 VOICE CHECK: Will use ElevenLabs:', Boolean(elevenLabsVoice && responseText));
       

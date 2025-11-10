@@ -225,42 +225,55 @@ File: `public/admin-global-instant-responses.html`
 
 #### A.4 – FollowUpMode & Transfers (Behavior Implementation)
 
-**Goal (Future):** `followUpMode`, `followUpQuestionText`, `transferTarget` become **real behavior**, not dead fields.
+**Status: ✅ COMPLETE (Voice Only)**
 
-**Modes:**
+- Implemented: `followUpMode`, `followUpQuestionText`, and `transferTarget` now have real runtime behavior for VOICE calls.
+- ASK_FOLLOWUP_QUESTION & ASK_IF_BOOK: Follow-up question appended to main AI response in same turn (natural, conversational flow).
+- TRANSFER: Main response spoken, then call transferred to `transferTarget` using existing Twilio handoff logic.
+- SMS/Chat: Follow-ups ignored for now (channel-agnostic implementation deferred).
+- Defensive: Missing `transferTarget` on TRANSFER mode logs warning and falls back to normal behavior.
 
-* `NONE`: Just respond once, no extra logic.
+**Modes Implemented:**
+
+* `NONE`: Just respond once, no extra logic (default).
 * `ASK_FOLLOWUP_QUESTION`:
 
-  * After main reply, agent asks `followUpQuestionText`.
-  * Example: "Is there anything else I can help with?"
+  * Appends `followUpQuestionText` to main reply in same turn.
+  * If `followUpQuestionText` is empty, uses fallback: "Is there anything else I can help you with?"
+  * Example call flow:
+    1. Caller: "What are your hours?"
+    2. AI: "We're open 9-5 Monday through Friday. Is there anything else I can help you with?" (single turn)
+    3. Caller responds to follow-up question.
 * `ASK_IF_BOOK`:
 
-  * After answering info (like hours/pricing), agent asks:
-
-    * "Would you like to book an appointment now?"
-  * If caller says yes → start booking flow (Phase C).
+  * Same behavior as `ASK_FOLLOWUP_QUESTION` (intent is semantic, mechanics identical for now).
+  * Future: Can be upgraded to trigger booking flow (Phase C).
+  * Example: "We're open 9-5. Would you like to book an appointment now?"
 * `TRANSFER`:
 
-  * After main reply, agent immediately triggers transfer to `transferTarget`.
+  * Speaks main reply (if present).
+  * Then transfers call to `transferTarget` using existing Twilio transfer/handoff logic.
+  * If `transferTarget` is missing, logs warning and falls back to normal behavior (no transfer).
+  * Example: "One moment, transferring you to our team." → [call transferred to queue/extension].
 
-**Files:**
+---
 
-* `services/ResponseEngine.js`
-* `services/v2Twilio...` (Twilio call runtime / gather logic)
-* Possibly a `TransferHandler.js` (Phase B/C) for consistent transfers.
+### 3.5. Implementation Notes (Phase A – Step 3B)
 
-**Acceptance Test:**
+**Files Involved:**
+- `services/v2AIAgentRuntime.js` – Passes followUp from AIBrain to Twilio handler
+- `routes/v2twilio.js` – Routes handler that implements ASK_FOLLOWUP_QUESTION, ASK_IF_BOOK, TRANSFER behavior
+- `services/ResponseEngine.js`, `services/AIBrain3tierllm.js` – Already pipe followUp metadata (Step 3A)
 
-* Scenario: "Hours of Operation"
+**Channel Policy:**
+- Voice calls: Full follow-up behavior implemented (ASK_FOLLOWUP_QUESTION, ASK_IF_BOOK, TRANSFER)
+- SMS/Chat: Follow-ups currently ignored (safe defaults, no breaking changes)
+- Future: SMS/Chat follow-up support can be added in later phases per channel-specific UX
 
-  * `followUpMode = ASK_IF_BOOK`
-  * `followUpQuestionText = "Would you like to schedule a service now?"`
-  * Call flow:
-
-    1. Caller: "What are your hours?"
-    2. AI: "We're open Mon–Fri 9–5. Would you like to schedule a service now?"
-    3. Caller: "Yes" → AI enters booking flow (Phase C).
+**Defensive Behavior:**
+- If `followUpMode` is missing or invalid → defaults to NONE (no-op)
+- If TRANSFER mode but `transferTarget` is empty → logs warning, continues as NONE
+- All error paths fall back to current behavior gracefully
 
 ---
 

@@ -426,6 +426,7 @@ class V2AIAgentRuntime {
                 // V2 PURE SYSTEM: No placeholder contamination - response is pre-built
                 responseText = this.buildPureResponse(responseText, company);
 
+                // 🎯 PHASE A – STEP 3B: Include follow-up metadata for runtime use
                 return {
                     text: responseText,
                     action: 'continue',
@@ -433,7 +434,13 @@ class V2AIAgentRuntime {
                     source: routingResult.source,
                     metadata: {
                         ...routingResult.metadata,
-                        aiAgentRoleApplied: Boolean(routingResult.metadata?.aiAgentRole)
+                        aiAgentRoleApplied: Boolean(routingResult.metadata?.aiAgentRole),
+                        // 🎯 PHASE A – STEP 3B: Pass through follow-up for Twilio voice handling
+                        followUp: routingResult.metadata?.followUp || {
+                            mode: 'NONE',
+                            questionText: null,
+                            transferTarget: null
+                        }
                     }
                 };
             }
