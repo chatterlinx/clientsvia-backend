@@ -364,8 +364,26 @@ class IntelligentRouter {
                     result.scenario = fullScenario;  // Full scenario with replies!
                     result.confidence = result.tier3Result.confidence;
                     
-                    // Extract actual reply text from FULL scenario
-                    const useQuickReply = Math.random() < 0.3;
+                    // 🧠 INTELLIGENT REPLY SELECTION
+                    // Information-heavy scenarios MUST use full replies
+                    const informationScenarios = ['hours', 'operation', 'pricing', 'price', 'cost', 'service', 'location', 'address', 'phone', 'contact', 'policy', 'faq', 'question'];
+                    const scenarioNameLower = fullScenario.name.toLowerCase();
+                    const requiresFullReply = informationScenarios.some(keyword => scenarioNameLower.includes(keyword));
+                    
+                    // For information scenarios: ALWAYS use full replies
+                    // For action scenarios (appointment, booking): 30% quick, 70% full
+                    let useQuickReply;
+                    if (requiresFullReply) {
+                        useQuickReply = false;  // 🔥 ALWAYS full reply for info scenarios
+                        logger.info(`📋 [REPLY SELECTION] Information scenario detected - using FULL replies`, {
+                            scenarioId: fullScenario.scenarioId,
+                            scenarioName: fullScenario.name,
+                            reason: 'Information-heavy scenarios must have detailed responses'
+                        });
+                    } else {
+                        useQuickReply = Math.random() < 0.3;  // 30% quick for action scenarios
+                    }
+                    
                     let replyVariants = useQuickReply ? fullScenario.quickReplies : fullScenario.fullReplies;
                     
                     if (!replyVariants || replyVariants.length === 0) {

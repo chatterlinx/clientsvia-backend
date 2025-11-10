@@ -386,7 +386,27 @@ class AIBrain3tierllm {
                     replyType = result.response.length < 100 ? 'quick' : 'full';
                 } else {
                     // Fallback: Extract from scenario (legacy path, should rarely happen)
-                    const useQuickReply = Math.random() < 0.3;
+                    // 🧠 INTELLIGENT REPLY SELECTION
+                    // Information-heavy scenarios MUST use full replies
+                    const informationScenarios = ['hours', 'operation', 'pricing', 'price', 'cost', 'service', 'location', 'address', 'phone', 'contact', 'policy', 'faq', 'question'];
+                    const scenarioNameLower = result.scenario.name.toLowerCase();
+                    const requiresFullReply = informationScenarios.some(keyword => scenarioNameLower.includes(keyword));
+                    
+                    // For information scenarios: ALWAYS use full replies
+                    // For action scenarios (appointment, booking): 30% quick, 70% full
+                    let useQuickReply;
+                    if (requiresFullReply) {
+                        useQuickReply = false;  // 🔥 ALWAYS full reply for info scenarios
+                        logger.info(`📋 [REPLY SELECTION] Information scenario detected - using FULL replies`, {
+                            routingId: context.routingId,
+                            scenarioId: result.scenario.scenarioId,
+                            scenarioName: result.scenario.name,
+                            reason: 'Information-heavy scenarios must have detailed responses'
+                        });
+                    } else {
+                        useQuickReply = Math.random() < 0.3;  // 30% quick for action scenarios
+                    }
+                    
                     replyType = useQuickReply ? 'quick' : 'full';
                     let replyVariants = useQuickReply ? result.scenario.quickReplies : result.scenario.fullReplies;
                     
