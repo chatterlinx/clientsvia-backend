@@ -28,6 +28,79 @@ const Company = require('../models/v2Company');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 
 class ScenarioPoolService {
+    // ============================================================
+    // PHASE A.1: NORMALIZATION HELPERS
+    // ============================================================
+    // These helpers handle backwards compatibility for weighted replies
+    // and other Phase A.1 data transformations
+    
+    /**
+     * Normalize reply arrays to consistent {text, weight} format
+     * Supports legacy [String] format and new [{text, weight}] format
+     * 
+     * @param {Array} rawReplies - Mixed array: strings or {text, weight} objects
+     * @returns {Array<Object>} - [{text, weight}, ...]
+     * @private
+     */
+    static _normalizeReplies(rawReplies) {
+        if (!rawReplies || !Array.isArray(rawReplies)) {
+            return [];
+        }
+        
+        if (rawReplies.length === 0) {
+            return [];
+        }
+        
+        // Check if already normalized (first item is object with text property)
+        if (typeof rawReplies[0] === 'object' && rawReplies[0] !== null && rawReplies[0].text) {
+            return rawReplies.map(r => ({
+                text: String(r.text).trim(),
+                weight: typeof r.weight === 'number' ? Math.max(0, r.weight) : 3
+            }));
+        }
+        
+        // Legacy format: array of strings
+        return rawReplies
+            .filter(item => item && String(item).trim().length > 0)
+            .map(text => ({
+                text: String(text).trim(),
+                weight: 3 // Default weight
+            }));
+    }
+    
+    /**
+     * Ensure Phase A.1 fields exist in scenario object with defaults
+     * 
+     * @param {Object} scenario - Scenario object from template
+     * @returns {Object} - Scenario with all Phase A.1 fields
+     * @private
+     */
+    static _ensurePhaseA1Fields(scenario) {
+        return {
+            ...scenario,
+            
+            // Phase A.1: User phrases
+            exampleUserPhrases: scenario.exampleUserPhrases || [],
+            negativeUserPhrases: scenario.negativeUserPhrases || [],
+            
+            // Phase A.1: Weighted replies (normalized)
+            quickReplies: this._normalizeReplies(scenario.quickReplies),
+            fullReplies: this._normalizeReplies(scenario.fullReplies),
+            followUpPrompts: this._normalizeReplies(scenario.followUpPrompts),
+            
+            // Phase A.1: Follow-up behavior
+            followUpMode: scenario.followUpMode || 'NONE',
+            followUpQuestionText: scenario.followUpQuestionText || null,
+            transferTarget: scenario.transferTarget || null,
+            
+            // Phase A.1: Confidence override
+            minConfidence: scenario.minConfidence || null,
+            
+            // Phase A.1: Admin notes
+            notes: scenario.notes || ''
+        };
+    }
+    
     /**
      * ============================================================================
      * GET SCENARIO POOL FOR COMPANY - MAIN ENTRY POINT
@@ -304,6 +377,9 @@ class ScenarioPoolService {
                             return;
                         }
                         
+                        // 🎯 PHASE A.1: Ensure all Phase A.1 fields are normalized and present
+                        const normalizedScenario = this._ensurePhaseA1Fields(scenario);
+                        
                         // Build standardized scenario object
                         scenarioPool.push({
                             // Company context
@@ -319,37 +395,57 @@ class ScenarioPoolService {
                             categoryName: category.name || null,
                             
                             // Scenario identity
-                            scenarioId: scenario.scenarioId || scenario._id?.toString(),
-                            name: scenario.name,
-                            status: scenario.status,
-                            isActive: scenario.isActive,
+                            scenarioId: normalizedScenario.scenarioId || normalizedScenario._id?.toString(),
+                            name: normalizedScenario.name,
+                            status: normalizedScenario.status,
+                            isActive: normalizedScenario.isActive,
                             
                             // Matching fields (used by HybridScenarioSelector)
-                            triggers: scenario.triggers || [],
-                            regexTriggers: scenario.regexTriggers || [],
-                            negativeTriggers: scenario.negativeTriggers || [],
+                            triggers: normalizedScenario.triggers || [],
+                            regexTriggers: normalizedScenario.regexTriggers || [],
+                            negativeTriggers: normalizedScenario.negativeTriggers || [],
                             
-                            // Reply variations
-                            quickReplies: scenario.quickReplies || [],
-                            fullReplies: scenario.fullReplies || [],
-                            followUpFunnel: scenario.followUpFunnel || null,
+                            // 🎯 PHASE A.1: Enhanced user phrase triggers
+                            exampleUserPhrases: normalizedScenario.exampleUserPhrases || [],
+                            negativeUserPhrases: normalizedScenario.negativeUserPhrases || [],
+                            
+                            // 🎯 PHASE A.1: Weighted replies (normalized at read-time)
+                            quickReplies: normalizedScenario.quickReplies,
+                            fullReplies: normalizedScenario.fullReplies,
+                            followUpPrompts: normalizedScenario.followUpPrompts,
+                            followUpFunnel: normalizedScenario.followUpFunnel || null,
                             
                             // Scoring and behavior
-                            priority: scenario.priority || 0,
-                            contextWeight: scenario.contextWeight || 1,
-                            behavior: scenario.behavior || null,
-                            cooldownSeconds: scenario.cooldownSeconds || 0,
+                            priority: normalizedScenario.priority || 0,
+                            contextWeight: normalizedScenario.contextWeight || 1,
+                            behavior: normalizedScenario.behavior || null,
+                            cooldownSeconds: normalizedScenario.cooldownSeconds || 0,
                             
                             // Entity capture (future)
-                            entityCapture: scenario.entityCapture || [],
-                            dynamicVariables: scenario.dynamicVariables || {},
+                            entityCapture: normalizedScenario.entityCapture || [],
+                            dynamicVariables: normalizedScenario.dynamicVariables || {},
                             
                             // Action hooks (future)
-                            actionHooks: scenario.actionHooks || [],
+                            actionHooks: normalizedScenario.actionHooks || [],
                             
                             // Voice/TTS
-                            toneLevel: scenario.toneLevel || 2,
-                            ttsOverride: scenario.ttsOverride || {},
+                            toneLevel: normalizedScenario.toneLevel || 2,
+                            ttsOverride: normalizedScenario.ttsOverride || {},
+                            
+                            // 🎯 PHASE A.1: Scenario semantics
+                            scenarioType: normalizedScenario.scenarioType || null,
+                            replyStrategy: normalizedScenario.replyStrategy || 'AUTO',
+                            
+                            // 🎯 PHASE A.1: Follow-up behavior (not used yet, wired in Phase A.2)
+                            followUpMode: normalizedScenario.followUpMode || 'NONE',
+                            followUpQuestionText: normalizedScenario.followUpQuestionText || null,
+                            transferTarget: normalizedScenario.transferTarget || null,
+                            
+                            // 🎯 PHASE A.1: Confidence override
+                            minConfidence: normalizedScenario.minConfidence || null,
+                            
+                            // 🎯 PHASE A.1: Admin notes
+                            notes: normalizedScenario.notes || '',
                             
                             // Will be set in next step:
                             isEnabledForCompany: true // default, overridden by scenarioControls

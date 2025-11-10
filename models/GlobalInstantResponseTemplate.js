@@ -200,23 +200,49 @@ const scenarioSchema = new Schema({
     },
     
     // ============================================
-    // REPLIES - MULTIPLE VARIATIONS FOR NATURAL SOUND
+    // PHASE A.1: ENHANCED USER PHRASE TRIGGERS
     // ============================================
+    // Expanded trigger system for better matching
     
-    quickReplies: [{
+    exampleUserPhrases: [{
         type: String,
         trim: true,
-        required: true
-        // Short acknowledgment replies (2-3 variations)
-        // AI randomly selects to avoid robotic repetition
+        lowercase: true
+        // 12-18 example phrases users say (for documentation + future ML)
+        // Different from 'triggers' which are optimized for matching
+    }],
+    
+    negativeUserPhrases: [{
+        type: String,
+        trim: true,
+        lowercase: true
+        // Phrases that PREVENT this scenario from matching
+        // Example: if scenario is "Book Appointment", phrase "don't book" prevents it
+    }],
+    
+    // ============================================
+    // PHASE A.1: WEIGHTED REPLIES
+    // ============================================
+    // Flexible schema: supports both legacy [String] and new [{text, weight}] formats
+    // Normalization happens at read-time in ScenarioPoolService
+    
+    quickReplies: [{
+        type: Schema.Types.Mixed
+        // Flexible: accepts String (legacy) or {text: String, weight: Number}
+        // Normalized at runtime via normalizeReplies()
     }],
     
     fullReplies: [{
-        type: String,
-        trim: true,
-        required: true
-        // Expanded responses (2-3 variations)
-        // Used for longer interactions or follow-ups
+        type: Schema.Types.Mixed
+        // Flexible: accepts String (legacy) or {text: String, weight: Number}
+        // Normalized at runtime via normalizeReplies()
+    }],
+    
+    followUpPrompts: [{
+        type: Schema.Types.Mixed
+        // NEW: Follow-up questions after initial response
+        // Flexible: String (legacy) or {text: String, weight: Number}
+        // Used in Phase A.2 when implementing follow-up behavior
     }],
     
     followUpFunnel: {
@@ -262,6 +288,63 @@ const scenarioSchema = new Schema({
         // QUICK_THEN_FULL: use quick then full
         // LLM_WRAP: fullReply through LLM for tone polish (future)
         // LLM_CONTEXT: LLM composes using scenario + KB (future)
+    },
+    
+    // ============================================
+    // PHASE A.1: FOLLOW-UP BEHAVIOR
+    // ============================================
+    // Controls what happens after the initial response is given
+    
+    followUpMode: {
+        type: String,
+        enum: ['NONE', 'ASK_FOLLOWUP_QUESTION', 'ASK_IF_BOOK', 'TRANSFER'],
+        default: 'NONE'
+        // NONE: no follow-up, call ends
+        // ASK_FOLLOWUP_QUESTION: ask followUpQuestionText
+        // ASK_IF_BOOK: "Would you like to book?", transfer if yes
+        // TRANSFER: immediately transfer after response
+    },
+    
+    followUpQuestionText: {
+        type: String,
+        default: null
+        // Text to ask if followUpMode = 'ASK_FOLLOWUP_QUESTION'
+        // Example: "Is there anything else I can help you with?"
+    },
+    
+    transferTarget: {
+        type: String,
+        default: null
+        // Queue/extension/target for transfer if followUpMode = 'TRANSFER'
+        // Example: "sales_queue" or "+14155551234"
+    },
+    
+    // ============================================
+    // PHASE A.1: CONFIDENCE & PRIORITY OVERRIDES
+    // ============================================
+    // Per-scenario threshold adjustments for matching
+    
+    minConfidence: {
+        type: Number,
+        default: null
+        // null = use template/company defaults
+        // 0-1: scenario-level confidence threshold override
+        // If match score < minConfidence, scenario is not selected
+    },
+    
+    // Priority already exists above (lines 104-111)
+    // Updated here for clarity:
+    // priority: Number (-10 to +10, default 0) - tie-breaker for equal confidence matches
+    
+    // ============================================
+    // PHASE A.1: ADMIN NOTES
+    // ============================================
+    
+    notes: {
+        type: String,
+        default: ''
+        // Internal notes for admins (not used by AI)
+        // Example: "Testing new booking flow", "Migrated from legacy template"
     },
     
     // ============================================
@@ -1185,7 +1268,64 @@ const globalInstantResponseTemplateSchema = new Schema({
             trim: true
         }]
         // Example phrases containing this keyword
-    }]
+    }],
+    
+    // ============================================
+    // PHASE A.1: TEMPLATE-LEVEL NLP CONFIG
+    // ============================================
+    // Central repository for synonyms, fillers, and NLP settings
+    // Inherited by all scenarios and categories in this template
+    // Can be extended/overridden at category or scenario level (future phase)
+    
+    nlpConfig: {
+        // ========== SYNONYMS ==========
+        // Maps normalized terms to colloquial variants for flexible matching
+        // Format: { "technical_term": ["variant1", "variant2", "variant3"] }
+        // Example: { "air_conditioner": ["ac", "a/c", "air", "cooling system"] }
+        synonyms: {
+            type: Map,
+            of: [String],
+            default: {}
+            // At runtime, all synonyms are flattened for matching in HybridScenarioSelector
+        },
+        
+        // ========== FILLER WORDS ==========
+        // Words to strip from user input before keyword matching
+        // Improves matching accuracy by removing noise
+        // Example: ["um", "uh", "like", "you know", "actually", "basically"]
+        fillerWords: {
+            type: [String],
+            default: [],
+            trim: true
+        },
+        
+        // ========== FILLER PHRASES ==========
+        // Optional phrases to inject into voice responses for natural sound
+        // Used in Phase A.2 by ResponseEngine for voice enhancement
+        // Example: ["Alright,", "Gotcha,", "No problem,", "Sure thing,"]
+        fillerPhrases: {
+            type: [String],
+            default: [],
+            trim: true
+        },
+        
+        // ========== NLP CONFIG METADATA ==========
+        updatedAt: {
+            type: Date,
+            default: Date.now
+        },
+        updatedBy: {
+            type: String,
+            trim: true,
+            default: 'Platform Admin'
+        },
+        notes: {
+            type: String,
+            trim: true,
+            default: ''
+            // Admin notes about NLP changes (e.g., "Added HVAC synonyms 2025-11-10")
+        }
+    }
     
 }, { 
     timestamps: true,

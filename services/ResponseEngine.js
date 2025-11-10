@@ -521,12 +521,36 @@ class ResponseEngine {
   
   /**
    * Helper: Select random element from array
+   * 
+   * 🎯 PHASE A.1: Updated to handle normalized replies
+   * - If replies are objects with {text, weight}, extracts text
+   * - If replies are strings (legacy), returns them directly
+   * 
+   * Future (Phase A.2): Will use weights for weighted random selection
+   * instead of uniform random.
+   * 
+   * @param {Array} arr - Array of strings or {text, weight} objects
+   * @returns {String} - The selected reply text
    */
   _selectRandom(arr) {
     if (!arr || arr.length === 0) {
       return null;
     }
-    return arr[Math.floor(Math.random() * arr.length)];
+    
+    // Select random index
+    const selected = arr[Math.floor(Math.random() * arr.length)];
+    
+    // Handle both legacy (string) and normalized ({text, weight}) formats
+    if (typeof selected === 'string') {
+      return selected;
+    }
+    
+    if (typeof selected === 'object' && selected !== null && selected.text) {
+      return selected.text;
+    }
+    
+    // Fallback (should not happen with proper normalization)
+    return null;
   }
 }
 
