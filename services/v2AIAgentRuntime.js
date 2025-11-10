@@ -461,44 +461,18 @@ class V2AIAgentRuntime {
             logger.error(`[V2 KNOWLEDGE] Full error:`, knowledgeError);
         }
         
-        // 🔄 FALLBACK: Basic V2 response logic if knowledge routing fails
-        let responseText = "I'm here to help you. Let me check on that for you.";
-        let action = 'continue';
-        let confidence = 0.7;
-
-        // Enhanced keyword matching for common queries
-        const input = userInput.toLowerCase();
-        
-        if (input.includes('hello') || input.includes('hi') || input.includes('hey')) {
-            responseText = "Hello! How can I assist you today?";
-            confidence = 0.9;
-        }
-        else if (input.includes('service') || input.includes('repair') || input.includes('fix')) {
-            responseText = "I'd be happy to help you with service. Can you tell me more about what you need?";
-            confidence = 0.8;
-        }
-        else if (input.includes('price') || input.includes('cost') || input.includes('quote')) {
-            responseText = "I can help you with pricing information. Let me transfer you to our team who can provide a detailed quote.";
-            action = 'transfer';
-            confidence = 0.8;
-        }
-        else if (input.includes('emergency') || input.includes('urgent')) {
-            responseText = "This sounds urgent. I'm transferring you to our emergency team right away.";
-            action = 'transfer';
-            confidence = 0.95;
-        }
-
-        // Apply personality tone to response
-        responseText = this.applyV2PersonalityTone(responseText, personality);
-        
-        // V2 PURE SYSTEM: No placeholder contamination - response is pre-built
-        responseText = this.buildPureResponse(responseText, company);
+        // 🔥 NO FALLBACK TEXT! If AI Brain fails, transfer to human immediately
+        // The ONLY fallback is LLM (Tier 3), which already ran and failed
+        logger.error('🚨 [V2 AGENT] AI Brain completely failed, must transfer to human', {
+            companyId: company._id,
+            userInput: userInput.substring(0, 100)
+        });
 
         return {
-            text: responseText,
-            action,
-            confidence,
-            source: 'v2_agent_personality'
+            text: null,  // ❌ NO GENERIC TEXT!
+            action: 'transfer',  // Must transfer to human
+            confidence: 0,
+            source: 'ai-brain-critical-failure'
         };
     }
 
@@ -526,11 +500,9 @@ class V2AIAgentRuntime {
             }
         }
         else if (tone === 'empathetic') {
-            // V2 PURE SYSTEM: No dynamic string insertion - responses should be pre-built
+            // 🔥 NUKE: NO "I understand" prefix! Responses come from templates only!
             // Empathetic responses should be configured in Agent Personality settings
-            if (!response.startsWith('I understand') && !response.startsWith('I hear')) {
-                response = `I understand. ${  response}`; // Simple concatenation, no template literals
-            }
+            // Do NOT modify template responses with generic text
         }
 
         return response;

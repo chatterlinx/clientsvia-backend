@@ -356,13 +356,45 @@ class IntelligentRouter {
                 // ✅ TIER 3 SUCCESS - Expensive but guaranteed to work
                 result.tierUsed = 3;
                 result.matched = true;
-                result.scenario = result.tier3Result.scenario;
-                result.confidence = result.tier3Result.confidence;
-                // Extract actual reply text from scenario (same as Tier 1)
-                result.response = result.tier3Result.scenario?.quickReplies?.[0] || 
-                                 result.tier3Result.scenario?.fullReplies?.[0] || 
-                                 'I understand.';
-                result.success = true;
+                
+                // 🔥 CRITICAL FIX: LLM only returns scenarioId, need to find FULL scenario with replies
+                const fullScenario = availableScenarios.find(s => s.scenarioId === result.tier3Result.scenario.scenarioId);
+                
+                if (fullScenario) {
+                    result.scenario = fullScenario;  // Full scenario with replies!
+                    result.confidence = result.tier3Result.confidence;
+                    
+                    // Extract actual reply text from FULL scenario
+                    const useQuickReply = Math.random() < 0.3;
+                    let replyVariants = useQuickReply ? fullScenario.quickReplies : fullScenario.fullReplies;
+                    
+                    if (!replyVariants || replyVariants.length === 0) {
+                        replyVariants = fullScenario.fullReplies || fullScenario.quickReplies || [];
+                    }
+                    
+                    // 🔥 CRITICAL: NO FALLBACK TEXT! Scenario MUST have replies!
+                    if (!replyVariants || replyVariants.length === 0) {
+                        logger.error('🚨 [TIER 3] Scenario has NO replies! Template is broken!', {
+                            scenarioId: fullScenario.scenarioId,
+                            scenarioName: fullScenario.name,
+                            templateId: template._id
+                        });
+                        result.success = false;
+                        result.response = null;
+                    } else {
+                        result.response = replyVariants[Math.floor(Math.random() * replyVariants.length)];
+                        result.success = true;
+                    }
+                } else {
+                    // Scenario not found in available scenarios (shouldn't happen!)
+                    logger.error('🚨 [TIER 3] Scenario matched by LLM not found in availableScenarios!', {
+                        scenarioId: result.tier3Result.scenario.scenarioId,
+                        scenarioName: result.tier3Result.scenario.name,
+                        templateId: template._id
+                    });
+                    result.response = null;
+                    result.success = false;
+                }
                 
                 // 🧠 LEARNING: Extract patterns and teach Tier 1
                 if (this.config.enableLearning && result.tier3Result.patterns.length > 0) {

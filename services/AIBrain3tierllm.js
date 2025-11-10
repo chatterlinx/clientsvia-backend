@@ -151,14 +151,15 @@ class AIBrain3tierllm {
                 stack: error.stack
             });
 
-            // Emergency fallback - never fail
+            // 🔥 NO FALLBACK TEXT! If AI Brain fails, return null to trigger transfer
             return {
-                confidence: 0.5,
-                response: "I'm here to help you. Let me transfer you to our team right away.",
+                confidence: 0,
+                response: null,  // ❌ NO GENERIC TEXT! Force transfer to human
                 metadata: {
-                    source: 'ai-brain-emergency-fallback',
+                    source: 'ai-brain-critical-failure',
                     error: error.message,
-                    responseTime: Date.now() - startTime
+                    responseTime: Date.now() - startTime,
+                    action: 'transfer'  // System should transfer to human
                 }
             };
         }
@@ -393,14 +394,25 @@ class AIBrain3tierllm {
                         replyVariants = result.scenario.fullReplies || result.scenario.quickReplies || [];
                     }
 
-                    selectedReply = replyVariants[Math.floor(Math.random() * replyVariants.length)] || "I'm here to help!";
+                    // 🔥 NO FALLBACK TEXT! If scenario has no replies, template is broken!
+                    if (!replyVariants || replyVariants.length === 0) {
+                        logger.error('🚨 [AI BRAIN] Scenario has NO replies! Template broken!', {
+                            routingId: context.routingId,
+                            scenarioId: result.scenario.scenarioId,
+                            scenarioName: result.scenario.name
+                        });
+                        selectedReply = null;  // ❌ NO GENERIC TEXT!
+                    } else {
+                        selectedReply = replyVariants[Math.floor(Math.random() * replyVariants.length)];
+                    }
                 }
                 
-                const processedResponse = replacePlaceholders(selectedReply, company);
+                // 🔥 If no reply found, return null (no processing)
+                const processedResponse = selectedReply ? replacePlaceholders(selectedReply, company) : null;
 
                 return {
                     confidence: result.confidence,
-                    response: processedResponse,
+                    response: processedResponse,  // null if scenario has no replies
                     metadata: {
                         source: 'ai-brain',
                         scenarioId: result.scenario.scenarioId,
