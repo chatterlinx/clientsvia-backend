@@ -286,7 +286,8 @@ function getTransferMessage(company) {
 }
 
 // Helper function to handle transfer logic with enabled check
-function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I cannot assist further at this time. Please try calling back later.", companyID = null) {
+// 🔥 NO generic fallback messages - neutral transfer only
+function handleTransfer(twiml, company, fallbackMessage = "I'm connecting you to our team.", companyID = null) {
   if (isTransferEnabled(company)) {
     const transferNumber = getTransferNumber(company);
     
@@ -1732,7 +1733,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         .select('+aiAgentLogic.voiceSettings +aiAgentSettings')
         .lean();
       logger.info('🎯 CHECKPOINT 19: Calling handleTransfer function');
-      handleTransfer(twiml, company, "I apologize, but I cannot transfer you at this time. Please try calling back later or visiting our website for assistance.", companyID);
+      // 🔥 Neutral transfer message - no generic apology
+      handleTransfer(twiml, company, "I'm connecting you to our team.", companyID);
     } else {
       logger.info('🎯 CHECKPOINT 20: AI continuing conversation');
       logger.info(`🗣️ AI Response: "${result.response}"`);
