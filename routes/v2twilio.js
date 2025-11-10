@@ -814,9 +814,9 @@ router.post('/voice', async (req, res) => {
           logger.info(`[ACCOUNT SUSPENDED] Final message: "${suspendedMessage}"`);
           twiml.say(escapeTwiML(suspendedMessage));
         } else {
-          // No custom message - use default professional message
-          logger.info(`[ACCOUNT SUSPENDED] No custom message set - using default`);
-          const defaultMessage = "We're sorry, but service for this number is temporarily unavailable. Please contact support for assistance.";
+          // No custom message - use neutral transfer message
+          logger.info(`[ACCOUNT SUSPENDED] No custom message set - using neutral transfer`);
+          const defaultMessage = "This service is unavailable. Please contact support.";
           twiml.say(escapeTwiML(defaultMessage));
         }
         
@@ -1331,7 +1331,7 @@ router.post('/handle-speech', async (req, res) => {
       
       answerObj = {
         text: company.connectionMessages?.voice?.fallbackMessage || 
-              "I'm here to help you. Let me transfer you to our team for the best assistance.",
+              "I'm connecting you to our team.",  // 🔥 Neutral transfer message, no generic empathy
         escalate: true
       };
       
@@ -1347,10 +1347,9 @@ router.post('/handle-speech', async (req, res) => {
     } catch (err) {
       logger.error(`[AI ERROR] [ERROR] AI processing failed: ${err.message}`);
       logger.error(`[AI Processing Error for CallSid: ${callSid}]`, err.message, err.stack);
-      const personality = company.aiSettings?.personality || 'friendly';
-      // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
-      const fallback = `I'm experiencing a technical issue. Let me connect you to our support team who can help you right away.`;
-      answerObj = { text: fallback, escalate: false };
+      // 🔥 NO FALLBACK TEXT - Transfer to human on AI error
+      const fallback = company.connectionMessages?.voice?.fallbackMessage || "I'm connecting you to our team.";
+      answerObj = { text: fallback, escalate: true };
     }
 
     // Generate TTS and respond immediately - using configurable speech detection settings

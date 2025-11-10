@@ -587,14 +587,14 @@ function getDefaultConfig() {
                 text: 'Thank you for calling. Please wait a moment while we connect you...',
                 voiceId: null
             },
-            // Intelligent Fallback System
+            // Infrastructure Failure Fallback (Hybrid Approach)
+            // 🔥 NO generic voice fallback - goes straight to transfer + SMS + alert
             fallback: {
                 enabled: true,
-                voiceMessage: "We're experiencing technical difficulties. Please hold while we connect you to our team.",
                 smsEnabled: true,
-                smsMessage: "Sorry, our voice system missed your call. How can we help you?",
+                smsMessage: "We're experiencing technical issues and are connecting you to our team. Thank you for your patience.",
                 notifyAdmin: true,
-                adminNotificationMethod: 'sms', // sms | email | both
+                adminNotificationMethod: 'both', // sms | email | both - ALWAYS notify ops
                 adminPhone: null, // Custom admin phone for notifications
                 adminEmail: null, // Custom admin email for notifications
                 adminSmsMessage: "⚠️ FALLBACK ALERT: Greeting fallback occurred in {companyname} ({companyid}). Please check the Messages & Greetings settings immediately."

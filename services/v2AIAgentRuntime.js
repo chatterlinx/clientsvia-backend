@@ -270,8 +270,8 @@ class V2AIAgentRuntime {
             const company = await Company.findById(companyID);
             if (!company || !company.aiAgentLogic?.enabled) {
                 return {
-                    response: "I'm sorry, there's a configuration issue. Let me connect you to someone who can help.",
-                    action: 'transfer',
+                    response: null,  // 🔥 NO FALLBACK TEXT
+                    action: 'transfer',  // Direct transfer to human
                     callState: { ...callState, stage: 'transfer' }
                 };
             }
