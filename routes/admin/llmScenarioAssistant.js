@@ -20,7 +20,7 @@
 const express = require('express');
 const logger = require('../../utils/logger');
 const openaiClient = require('../../config/openai');
-const { requireAdminAuth } = require('../../middleware/auth');
+const { authenticateSingleSession, requireRole } = require('../../middleware/auth');
 
 const router = express.Router();
 
@@ -36,7 +36,7 @@ const router = express.Router();
  *  - notesFromAdmin: string (REQUIRED - what the scenario should do)
  *  - existingScenario: object (optional, if editing existing)
  */
-router.post('/draft', requireAdminAuth, async (req, res) => {
+router.post('/draft', authenticateSingleSession, requireRole('admin'), async (req, res) => {
   try {
     const {
       companyId,
