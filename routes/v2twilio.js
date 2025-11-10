@@ -297,9 +297,9 @@ function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I ca
       twiml.say(transferMessage);
       twiml.dial(transferNumber);
     } else {
-      logger.info('[AI AGENT] Transfer enabled but no number configured, providing fallback message');
-      // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
-      const configResponse = `I understand you need assistance. Let me connect you with our support team who can help you right away.`;
+      logger.info('[AI AGENT] Transfer enabled but no number configured, connecting to team');
+      // 🔥 Neutral transfer message - no generic empathy
+      const configResponse = `I'm connecting you to our team.`;
       twiml.say(configResponse);
       twiml.hangup();
     }
@@ -1004,8 +1004,8 @@ router.post('/voice', async (req, res) => {
     
     const twiml = new twilio.twiml.VoiceResponse();
     
-    // Professional fallback message (no legacy "technician" wording)
-    twiml.say('We apologize, but we are experiencing a technical issue. Please try your call again in a few moments, or contact us through our website. Thank you.');
+    // 🔥 Minimal error message - no generic fallback text
+    twiml.say('Service is temporarily unavailable. Please try again later.');
     twiml.hangup();
     
     res.type('text/xml');
@@ -1763,7 +1763,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const elevenLabsVoice = company?.aiAgentLogic?.voiceSettings?.voiceId;
       logger.info('🔍 V2 VOICE CHECK: Extracted voiceId:', elevenLabsVoice || 'NOT FOUND');
       
-      const responseText = result.response || result.text || "I understand. How can I help you?";
+      const responseText = result.response || result.text || "I'm connecting you to our team.";
       logger.info('🔍 V2 VOICE CHECK: Response text:', responseText);
       logger.info('🔍 V2 VOICE CHECK: Will use ElevenLabs:', Boolean(elevenLabsVoice && responseText));
       
@@ -1930,8 +1930,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       
       logger.info('🎯 CHECKPOINT ERROR RECOVERY: Attempting graceful error handling');
       
-      // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
-      const errorResponse = `I'm experiencing a technical issue. Let me connect you to our support team right away.`;
+      // 🔥 Minimal error message - no generic empathy or explanation
+      const errorResponse = `I'm connecting you to our team.`;
       
       twiml.say(errorResponse);
       handleTransfer(twiml, company, "Our team will be happy to assist you.", companyID);
@@ -2262,7 +2262,7 @@ router.post('/test-respond/:templateId', async (req, res) => {
         : result.scenario.quickReplies || [];
       
       logger.info(`🧠 [CHECKPOINT 8] Available replies: ${replies.length}`);
-      const reply = replies[Math.floor(Math.random() * replies.length)] || 'I understand.';
+      const reply = replies[Math.floor(Math.random() * replies.length)] || null;  // 🔥 NO FALLBACK
       logger.debug(`🧠 [CHECKPOINT 8] ✅ Selected reply: "${reply.substring(0, 50)}..."`);
       
       logger.debug(`🧠 [CHECKPOINT 9] Adding reply to TwiML...`);
