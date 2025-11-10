@@ -1,29 +1,31 @@
 /**
  * ============================================================================
- * INTELLIGENT FALLBACK HANDLER
+ * INTELLIGENT FALLBACK HANDLER - INFRASTRUCTURE FAILURE NOTIFICATION
  * ============================================================================
  * 
- * PURPOSE: Emergency fallback system when primary greeting fails
+ * PURPOSE: When greeting generation INFRASTRUCTURE fails (not AI logic)
  * 
- * FEATURES:
- * 1. Voice fallback (ElevenLabs TTS with custom message)
- * 2. SMS customer notification (optional)
- * 3. Admin alerts (SMS/Email/Both)
- * 4. Detailed logging for diagnostics
+ * HYBRID APPROACH:
+ * ✅ NO generic voice fallback text
+ * ✅ SMS notification to customer (infrastructure issue detected)
+ * ✅ Critical admin alert (ops team investigates)
+ * ✅ Transfer to human immediately (no masking problems)
+ * ✅ Detailed logging for root cause analysis
  * 
  * TRIGGER CONDITIONS:
  * - Pre-recorded audio file missing/corrupted
  * - ElevenLabs API failure
  * - Network timeout
- * - Any other greeting generation error
+ * - Greeting generation system error
+ * 
+ * NEW BEHAVIOR:
+ * Greeting fails → SMS customer + Alert admin + Transfer to human (NO TEXT)
  * 
  * ============================================================================
  */
 
 const logger = require('../utils/logger');
 const smsClient = require('../clients/smsClient');
-const emailClient = require('../clients/emailClient');
-const v2elevenLabsService = require('./v2elevenLabsService');
 const AdminNotificationService = require('./AdminNotificationService');
 
 class IntelligentFallbackHandler {
@@ -33,7 +35,14 @@ class IntelligentFallbackHandler {
     }
 
     /**
-     * Execute fallback system
+     * Execute fallback system - Infrastructure failure response
+     * 
+     * 🔥 HYBRID APPROACH:
+     * - NO generic voice fallback (purity)
+     * - SMS notification to customer (reliability)
+     * - Admin alert CRITICAL (visibility)
+     * - Transfer to human (no masking)
+     * 
      * @param {Object} options - Fallback options
      * @param {Object} options.company - Company document
      * @param {String} options.companyId - Company ID
@@ -41,7 +50,7 @@ class IntelligentFallbackHandler {
      * @param {String} options.callerPhone - Caller's phone number
      * @param {String} options.failureReason - Why primary greeting failed
      * @param {Object} options.fallbackConfig - Fallback configuration
-     * @returns {Object} - Fallback result
+     * @returns {Object} - Fallback result with transfer action
      */
     async executeFallback(options) {
         const {
@@ -53,45 +62,43 @@ class IntelligentFallbackHandler {
             fallbackConfig
         } = options;
 
-        logger.info(`🆘 [FALLBACK] Executing intelligent fallback for company: ${companyName} (${companyId})`);
-        logger.info(`🆘 [FALLBACK] Failure reason: ${failureReason}`);
+        logger.error(`🚨 [INFRASTRUCTURE FAILURE] Triggering fallback for company: ${companyName} (${companyId})`);
+        logger.error(`🚨 [INFRASTRUCTURE FAILURE] Reason: ${failureReason}`);
 
         const result = {
             success: false,
-            voiceAudioGenerated: false,
             smsSent: false,
             adminNotified: false,
+            transferTriggered: true,  // Always transfer to human
             errors: []
         };
 
         try {
-            // Step 1: Generate fallback voice audio
-            result.voiceAudio = await this.generateFallbackVoice(company, fallbackConfig);
-            result.voiceAudioGenerated = Boolean(result.voiceAudio);
-
-            // Step 2: Send SMS to customer (if enabled)
-            if (fallbackConfig.smsEnabled && callerPhone) {
+            // Step 1: Send SMS to customer (if caller phone available)
+            if (callerPhone && fallbackConfig?.smsEnabled !== false) {
+                const defaultSmsMessage = `We're experiencing technical difficulties and are connecting you to our team. Thank you for your patience.`;
+                const smsMessage = fallbackConfig?.smsMessage || defaultSmsMessage;
                 result.smsSent = await this.notifyCustomerViaSMS(
                     callerPhone,
                     companyName,
-                    fallbackConfig.smsMessage,
+                    smsMessage,
                     company
                 );
             }
 
-            // Step 3: Notify admin (if enabled)
-            if (fallbackConfig.notifyAdmin) {
+            // Step 2: CRITICAL admin alert (always notify on infrastructure failure)
+            if (fallbackConfig?.notifyAdmin !== false) {
                 result.adminNotified = await this.notifyAdmin(
                     companyId,
                     companyName,
                     failureReason,
-                    fallbackConfig.adminNotificationMethod,
+                    fallbackConfig?.adminNotificationMethod || 'both',
                     fallbackConfig,
                     company
                 );
             }
 
-            // Step 4: Log fallback event
+            // Step 3: Log fallback event for debugging
             await this.logFallbackEvent({
                 companyId,
                 companyName,
@@ -101,7 +108,7 @@ class IntelligentFallbackHandler {
             });
 
             result.success = true;
-            logger.info(`✅ [FALLBACK] Fallback executed successfully for ${companyName}`);
+            logger.error(`✅ [FALLBACK] Infrastructure failure response complete - transferring to human`);
 
         } catch (error) {
             logger.error(`❌ [FALLBACK] Error executing fallback for ${companyName}:`, error);
@@ -111,43 +118,6 @@ class IntelligentFallbackHandler {
         return result;
     }
 
-    /**
-     * Generate fallback voice using ElevenLabs TTS
-     * @param {Object} company - Company document
-     * @param {Object} fallbackConfig - Fallback configuration
-     * @returns {String|null} - Audio URL or null
-     */
-    async generateFallbackVoice(company, fallbackConfig) {
-        try {
-            logger.info(`🎤 [FALLBACK] Generating fallback voice audio...`);
-
-            const voiceSettings = company.voiceSettings || {};
-            const selectedVoiceId = voiceSettings.selectedVoiceId || 'Rachel'; // Default voice
-
-            const audioData = await v2elevenLabsService.generateSpeech(
-                fallbackConfig.voiceMessage,
-                selectedVoiceId,
-                {
-                    stability: 0.5,
-                    similarity_boost: 0.75,
-                    style: 0,
-                    use_speaker_boost: true
-                }
-            );
-
-            if (audioData && audioData.audioUrl) {
-                logger.info(`✅ [FALLBACK] Voice audio generated: ${audioData.audioUrl}`);
-                return audioData.audioUrl;
-            }
-
-            logger.warn(`⚠️ [FALLBACK] ElevenLabs returned no audio`);
-            return null;
-
-        } catch (error) {
-            logger.error(`❌ [FALLBACK] Error generating fallback voice:`, error);
-            return null;
-        }
-    }
 
     /**
      * Notify customer via SMS with variable replacement
@@ -210,81 +180,51 @@ class IntelligentFallbackHandler {
     }
 
     /**
-     * Notify admin of fallback event via AdminNotificationService (Notification Contract compliant)
+     * Notify admin of infrastructure failure
+     * 
+     * 🔥 ALWAYS CRITICAL SEVERITY
+     * Infrastructure failures = system is down = ops team must investigate immediately
      * 
      * ============================================================================
-     * REFACTOR NOTE (Phase 4 - Notification Contract Compliance)
-     * ============================================================================
-     * 
-     * BEFORE: This method directly called smsClient.send() and emailClient.send()
-     * PROBLEMS:
-     * - ❌ Alerts not visible in Notification Center dashboard
-     * - ❌ No deduplication (100 fallbacks = 100 SMS)
-     * - ❌ No escalation tracking or acknowledgment workflow
-     * - ❌ Bypassed severity policies and quiet hours
-     * - ❌ No analytics or registry tracking
-     * 
-     * AFTER: Now uses AdminNotificationService.sendAlert() per REFACTOR_PROTOCOL
-     * BENEFITS:
-     * - ✅ Alerts visible in Notification Center dashboard
-     * - ✅ Smart deduplication (100 fallbacks → 1 alert with occurrenceCount: 100)
-     * - ✅ Escalation tracking and acknowledgment workflow
-     * - ✅ Respects quiet hours and severity policies
-     * - ✅ Full audit trail and analytics
-     * 
+     * Uses AdminNotificationService per REFACTOR_PROTOCOL (Notification Contract)
      * ============================================================================
      * 
      * @param {String} companyId - Company ID
      * @param {String} companyName - Company name
-     * @param {String} failureReason - Why fallback was triggered
-     * @param {String} method - Notification method (sms | email | both) - DEPRECATED, now controlled by AdminNotificationService policies
+     * @param {String} failureReason - Why greeting infrastructure failed
+     * @param {String} method - Notification method (sms | email | both)
      * @param {Object} fallbackConfig - Fallback configuration
      * @param {Object} company - Company document (for variable replacement)
      * @returns {Boolean} - Success status
      */
     async notifyAdmin(companyId, companyName, failureReason, method, fallbackConfig, company) {
         try {
-            logger.info(`🚨 [FALLBACK] Sending alert via AdminNotificationService (method: ${method})`);
+            logger.error(`🚨 [ADMIN ALERT] Infrastructure failure - sending CRITICAL notification`);
 
-            // Use custom admin SMS message with variable replacement
-            const smsMessage = fallbackConfig.adminSmsMessage || 
-                `⚠️ FALLBACK ALERT: Greeting fallback occurred in {companyname} ({companyid}). Please check the Messages & Greetings settings immediately.`;
-            
-            const processedSmsMessage = this.replaceVariables(smsMessage, company);
-
-            // Determine severity based on fallback config
-            // CRITICAL if no fallback message configured (company is down)
-            // WARNING if fallback exists but primary greeting failed
-            const severity = (!fallbackConfig.customerMessage || fallbackConfig.customerMessage.trim() === '') 
-                ? 'CRITICAL'  // No fallback message = customers hear nothing = system down
-                : 'WARNING';  // Fallback exists = degraded but functional
-
-            // Send alert via AdminNotificationService (Notification Contract)
+            // Send alert via AdminNotificationService with CRITICAL severity
+            // Infrastructure failures ALWAYS warrant immediate ops team attention
             await AdminNotificationService.sendAlert({
-                code: 'AI_AGENT_FALLBACK_TRIGGERED',
-                severity: severity,
-                message: `Greeting fallback triggered for ${companyName}: ${failureReason}`,
+                code: 'GREETING_INFRASTRUCTURE_FAILURE',
+                severity: 'CRITICAL',  // Always critical for infrastructure failures
+                message: `GREETING INFRASTRUCTURE FAILURE in ${companyName}: ${failureReason}`,
                 companyId: companyId,
                 companyName: companyName,
-                details: `Failure Reason: ${failureReason}\nCustomer Message: ${fallbackConfig.customerMessage || 'NONE CONFIGURED'}\nAdmin Notification Method: ${method}\nProcessed SMS Message: ${processedSmsMessage}`,
+                details: `Greeting infrastructure has failed and customer is being transferred to human agent.\n\nFailure Reason: ${failureReason}\n\nImmediate investigation required.`,
                 feature: 'ai-agent',
                 tab: 'AI_AGENT',
-                module: 'FALLBACK_HANDLER',
+                module: 'GREETING_INFRASTRUCTURE',
                 meta: {
                     failureReason: failureReason,
-                    customerMessage: (fallbackConfig.customerMessage || '').substring(0, 100),
-                    notificationMethod: method,
-                    hasCustomerFallback: !!(fallbackConfig.customerMessage && fallbackConfig.customerMessage.trim()),
-                    adminPhone: fallbackConfig.adminPhone || this.adminPhone || 'none',
-                    adminEmail: fallbackConfig.adminEmail || this.adminEmail || 'none'
+                    action: 'CUSTOMER_TRANSFERRED_TO_HUMAN',
+                    requiresImmediateInvestigation: true
                 }
             });
 
-            logger.info(`✅ [FALLBACK] Alert sent successfully via AdminNotificationService`);
+            logger.error(`✅ [ADMIN ALERT] CRITICAL alert sent - ops team notified of infrastructure failure`);
             return true;
 
         } catch (error) {
-            logger.error(`❌ [FALLBACK] Error sending alert via AdminNotificationService:`, error);
+            logger.error(`❌ [ADMIN ALERT] Error sending critical alert:`, error);
             return false;
         }
     }

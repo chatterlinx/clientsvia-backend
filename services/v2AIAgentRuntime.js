@@ -183,41 +183,33 @@ class V2AIAgentRuntime {
     }
 
     /**
-     * 🆘 Trigger intelligent fallback system
-     * @param {Object} company - Company document
-     * @param {String} reason - Reason for fallback
-     * @returns {Object} Fallback greeting configuration
+     * 🆘 Trigger intelligent fallback system - HYBRID APPROACH
+     * 
+     * 🔥 NO GENERIC FALLBACK TEXT
+     * When greeting infrastructure fails:
+     * 1. Send SMS to customer (infrastructure issue detected)
+     * 2. Alert admin CRITICAL (ops team investigates)
+     * 3. Transfer to human (no masking)
      */
     static triggerFallback(company, reason) {
-        logger.info(`🆘 V2 FALLBACK: Triggered for ${company.companyName} - Reason: ${reason}`);
+        logger.error(`🚨 [INFRASTRUCTURE FAILURE] V2 FALLBACK: Triggered for ${company.companyName} - Reason: ${reason}`);
         
-        // ✅ FIX: Use ROOT LEVEL connectionMessages (AI Agent Settings tab)
+        // ✅ Use ROOT LEVEL connectionMessages (AI Agent Settings tab)
         const fallbackConfig = company.connectionMessages?.voice?.fallback;
-        
-        if (!fallbackConfig || !fallbackConfig.enabled) {
-            logger.error(`❌ FALLBACK: Fallback system is disabled or not configured`);
-            logger.error(`❌ HINT: Configure fallback in AI Agent Settings > Messages & Greetings > Fallback tab`);
-            return {
-                mode: 'error',
-                text: "We're experiencing technical difficulties. Please try again later."
-            };
-        }
 
-        const fallbackText = fallbackConfig.voiceMessage || "We're experiencing technical difficulties. Please hold while we connect you to our team.";
-        const processedText = this.buildPureResponse(fallbackText, company);
+        logger.error(`🚨 [INFRASTRUCTURE FAILURE] Executing fallback protocol: SMS + Alert + Transfer`);
 
-        logger.debug(`✅ V2 FALLBACK: Using fallback message: "${processedText}"`);
-
-        // Queue async fallback actions (SMS + Admin notifications)
+        // Queue async fallback actions (SMS + Critical admin alert)
         this.executeFallbackActions(company, reason, fallbackConfig).catch(error => {
-            logger.error(`❌ FALLBACK: Error executing fallback actions:`, error);
+            logger.error(`❌ FALLBACK ACTIONS: Error:`, error);
         });
 
+        // 🔥 NO GENERIC TEXT - Return transfer action immediately
         return {
-            mode: 'fallback',
-            text: processedText,
-            reason,
-            voiceId: company.voiceSettings?.selectedVoiceId
+            mode: 'transfer',  // Go directly to human agent
+            reason: reason,
+            voiceId: company.voiceSettings?.selectedVoiceId,
+            action: 'transfer'  // Explicit transfer signal
         };
     }
 
