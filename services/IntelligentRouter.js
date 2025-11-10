@@ -439,8 +439,22 @@ class IntelligentRouter {
                 });
                 
                 result.performance.tier3Time = result.tier3Result.performance.responseTime;
-                result.cost.tier3 = result.tier3Result.cost.llmApiCost;
+                result.cost.tier3 = result.tier3Result.performance?.cost || 0;
                 result.cost.total = result.cost.tier3;
+                
+                // 🤖 PHASE A.5: Log Tier 3 LLM decision
+                if (result.tier3Result.source === 'tier3-llm') {
+                    logger.info('[ROUTER] Tier 3 LLM Decision', {
+                        routingId,
+                        matched: result.tier3Result.matched,
+                        scenarioId: result.tier3Result.scenario?.scenarioId,
+                        scenarioName: result.tier3Result.scenario?.name,
+                        confidence: result.tier3Result.confidence,
+                        rationale: result.tier3Result.rationale,
+                        responseTime: `${result.tier3Result.performance?.responseTime}ms`,
+                        cost: `$${result.cost.tier3?.toFixed(4) || '0.0000'}`
+                    });
+                }
             }
             
             if (result.tier3Result.success && result.tier3Result.matched) {

@@ -68,112 +68,219 @@ class Tier3LLMFallback {
     
     /**
      * ============================================================================
-     * MAIN METHOD: Analyze caller input with LLM
+     * MAIN METHOD: Analyze caller input with LLM – PHASE A.5 UPGRADE
      * ============================================================================
+     * Uses scenario fields (triggers, examples, scenarioType, followUpMode, etc.)
+     * Returns clean JSON decision with confidence and rationale.
+     * 
      * @param {Object} params
      * @param {String} params.callerInput - What the caller said
      * @param {Object} params.template - GlobalInstantResponseTemplate object
-     * @param {Array} params.availableScenarios - Scenarios to choose from
-     * @param {Object} params.context - Additional context (call history, etc.)
-     * @returns {Object} - { matched: true/false, scenario, confidence, patterns, cost, responseTime }
+     * @param {Array} params.availableScenarios - Scenarios with full metadata
+     * @param {Object} params.context - { companyName, categoryName, channel, language }
+     * @returns {Object} - { success, scenario, confidence, tier, source, rationale, matched }
      */
     async analyze({ callerInput, template, availableScenarios, context = {} }) {
         const startTime = Date.now();
         
+        if (!callerInput || !Array.isArray(availableScenarios) || availableScenarios.length === 0) {
+            logger.warn('🤖 [TIER 3 LLM] Invalid input', {
+                hasInput: !!callerInput,
+                scenarioCount: availableScenarios.length
+            });
+            return {
+                success: false,
+                matched: false,
+                scenario: null,
+                confidence: 0,
+                tier: 3,
+                source: 'tier3-llm',
+                rationale: 'No scenarios or empty input'
+            };
+        }
+
         try {
-            logger.info('🤖 [TIER 3 LLM] Starting analysis', {
+            logger.info('🤖 [TIER 3 LLM] Starting analysis (Phase A.5)', {
                 templateId: template._id,
                 templateName: template.name,
-                callerInput: callerInput.substring(0, 100),
+                callerInputLength: callerInput.length,
                 scenarioCount: availableScenarios.length,
                 model: this.config.model
             });
             
-            // Build prompt
-            const prompt = this.buildAnalysisPrompt(callerInput, template, availableScenarios);
+            // Compact scenario summary for LLM
+            const scenarioSummaries = availableScenarios.map(s => ({
+                id: s.scenarioId,
+                name: s.name,
+                type: s.scenarioType || null,
+                replyStrategy: s.replyStrategy || 'AUTO',
+                triggers: (s.triggers || []).slice(0, 5),
+                examples: (s.exampleUserPhrases || []).slice(0, 5),
+                negatives: (s.negativeUserPhrases || []).slice(0, 3),
+                followUpMode: s.followUpMode || 'NONE'
+            }));
             
-            // Call OpenAI with retry logic
-            const llmResponse = await this.callOpenAIWithRetry(prompt);
-            
-            // Extract analysis from response
-            const analysis = this.parseAnalysisResponse(llmResponse.content);
-            
-            // Calculate cost
-            const cost = this.calculateCost(llmResponse.usage, llmResponse.model);
-            
-            const responseTime = Date.now() - startTime;
-            
-            logger.info('✅ [TIER 3 LLM] Analysis complete', {
-                matched: analysis.matched,
-                confidence: analysis.confidence,
-                scenarioMatched: analysis.scenario?.name,
-                patternsExtracted: analysis.patterns.length,
-                cost: `$${cost.toFixed(4)}`,
-                responseTime: `${responseTime}ms`,
-                tokensUsed: llmResponse.usage.total_tokens
+            // Build system + user prompts
+            const systemPrompt = `You are an expert call-center router for ClientVia.ai.
+
+Your job: Choose which scenario best matches what the caller said.
+
+Respond ONLY with JSON. No explanation.
+
+{
+  "scenarioId": "id or null",
+  "confidence": 0.0-1.0,
+  "reason": "short explanation"
+}
+
+Rules:
+- Use ALL scenario metadata: triggers, examples, negatives, type
+- Prefer scenarios whose NEGATIVE phrases do NOT match the caller
+- If multiple fit, pick the MOST SPECIFIC
+- If confidence < 0.4, return null
+- ONLY use ids from the provided list`;
+
+            const userPrompt = `Company: ${context.companyName || 'Unknown'}
+Template: ${template.name}
+Channel: ${context.channel || 'voice'}
+
+Caller said:
+"""
+${callerInput}
+"""
+
+Scenarios:
+${JSON.stringify(scenarioSummaries, null, 2)}`;
+
+            // Call OpenAI
+            const completion = await this.openai.chat.completions.create({
+                model: this.config.model,
+                response_format: { type: 'json_object' },
+                temperature: 0.2,
+                max_tokens: 500,
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userPrompt }
+                ]
             });
-            
+
+            let parsed;
+            try {
+                parsed = JSON.parse(completion.choices[0].message.content);
+            } catch (parseErr) {
+                logger.error('🤖 [TIER 3 LLM] Failed to parse JSON', {
+                    error: parseErr.message,
+                    content: completion.choices[0].message.content
+                });
+                return {
+                    success: false,
+                    matched: false,
+                    scenario: null,
+                    confidence: 0,
+                    tier: 3,
+                    source: 'tier3-llm',
+                    rationale: 'Failed to parse LLM JSON'
+                };
+            }
+
+            const confidence = typeof parsed.confidence === 'number' 
+                ? Math.max(0, Math.min(1, parsed.confidence)) 
+                : 0;
+            const chosenId = parsed.scenarioId || null;
+            const rationale = parsed.reason || 'LLM routing decision';
+
+            // Calculate cost
+            const cost = this.calculateCost(completion.usage, this.config.model);
+            const responseTime = Date.now() - startTime;
+
+            if (!chosenId) {
+                logger.info('🤖 [TIER 3 LLM] No match (LLM confidence too low or explicit null)', {
+                    confidence,
+                    rationale,
+                    responseTime: `${responseTime}ms`,
+                    cost: `$${cost.toFixed(4)}`
+                });
+                return {
+                    success: true,
+                    matched: false,
+                    scenario: null,
+                    confidence,
+                    tier: 3,
+                    source: 'tier3-llm',
+                    rationale,
+                    performance: { responseTime, cost }
+                };
+            }
+
+            // Find scenario by id
+            const scenario = availableScenarios.find(s => s.scenarioId === chosenId);
+            if (!scenario) {
+                logger.warn('🤖 [TIER 3 LLM] LLM returned unknown scenarioId', {
+                    chosenId,
+                    validIds: availableScenarios.map(s => s.scenarioId).slice(0, 5)
+                });
+                return {
+                    success: true,
+                    matched: false,
+                    scenario: null,
+                    confidence,
+                    tier: 3,
+                    source: 'tier3-llm',
+                    rationale: 'LLM chose unknown scenario'
+                };
+            }
+
+            logger.info('✅ [TIER 3 LLM] Scenario matched', {
+                scenarioId: scenario.scenarioId,
+                scenarioName: scenario.name,
+                scenarioType: scenario.scenarioType,
+                confidence,
+                rationale,
+                responseTime: `${responseTime}ms`,
+                cost: `$${cost.toFixed(4)}`
+            });
+
             return {
                 success: true,
-                matched: analysis.matched,
-                scenario: analysis.scenario,
-                confidence: analysis.confidence,
-                reasoning: analysis.reasoning,
-                patterns: analysis.patterns,  // For PatternLearningService
-                cost: {
-                    llmApiCost: cost,
-                    totalCost: cost
-                },
-                performance: {
-                    responseTime,
-                    tokensUsed: llmResponse.usage,
-                    model: llmResponse.model,
-                    provider: 'openai'
-                }
+                matched: true,
+                scenario,
+                confidence,
+                tier: 3,
+                source: 'tier3-llm',
+                rationale,
+                performance: { responseTime, cost, tokens: completion.usage.total_tokens }
             };
-            
+
         } catch (error) {
             const responseTime = Date.now() - startTime;
             
-            logger.error('❌ [TIER 3 LLM] Analysis failed', {
+            logger.error('❌ [TIER 3 LLM] Error', {
                 error: error.message,
                 stack: error.stack,
-                templateId: template._id,
-                callerInput: callerInput.substring(0, 100),
                 responseTime: `${responseTime}ms`
             });
             
-            // 🚨 CRITICAL: Tier 3 LLM failure = ultimate fallback is down
-            await AdminNotificationService.sendAlert({
-                code: 'AI_TIER3_LLM_FAILURE',
-                severity: 'CRITICAL',
-                companyId: null,
-                companyName: 'Platform',
-                title: '🚨 AI Tier 3 (LLM) CRITICAL FAILURE',
-                message: `OpenAI API call failed for template "${template.name}". Ultimate AI fallback is DOWN. Callers may receive generic error messages.`,
-                details: {
-                    error: error.message,
-                    stackTrace: error.stack,
-                    templateId: template._id,
-                    templateName: template.name,
-                    callId,
-                    callerInput: callerInput.substring(0, 200),
-                    responseTime: `${responseTime}ms`,
-                    impact: 'ALL calls that Tier 1/2 cannot handle will FAIL. Customer experience severely degraded. No pattern learning possible.',
-                    action: 'Check OpenAI API key, account credits, rate limits, and API status at https://status.openai.com'
-                }
-            });
+            // Alert on critical failures
+            if (error.response?.status === 429 || error.response?.status === 500) {
+                await AdminNotificationService.sendAlert({
+                    code: 'AI_TIER3_LLM_FAILURE',
+                    severity: 'CRITICAL',
+                    companyId: null,
+                    companyName: 'Platform',
+                    title: '🚨 AI Tier 3 (LLM) Service Degraded',
+                    message: `OpenAI API error (${error.response?.status}). Calls may fall through to escalation.`,
+                    details: { error: error.message, status: error.response?.status }
+                });
+            }
             
             return {
                 success: false,
                 matched: false,
                 scenario: null,
                 confidence: 0,
-                reasoning: `LLM analysis failed: ${error.message}`,
-                patterns: [],
-                cost: { llmApiCost: 0, totalCost: 0 },
-                performance: { responseTime, error: error.message },
-                error: error.message
+                tier: 3,
+                source: 'tier3-llm',
+                rationale: `LLM error: ${error.message}`
             };
         }
     }
