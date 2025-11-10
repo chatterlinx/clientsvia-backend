@@ -364,53 +364,21 @@ class IntelligentRouter {
                     result.scenario = fullScenario;  // Full scenario with replies!
                     result.confidence = result.tier3Result.confidence;
                     
-                    // 🎯 PHASE 1: VOICE-CHANNEL OPTIMIZATION
-                    // For VOICE: if fullReplies exist, ALWAYS use them (never just quick-only)
-                    // For SMS/chat: use existing logic (keyword-based)
-                    const isVoiceChannel = context && context.channel === 'voice';
+                    // 🎯 PHASE 2: Response Engine will handle reply selection
+                    // Tier 3 just provides the scenario match, not the actual response text
+                    // The caller (AIBrain3tierllm.js) will use Response Engine to build final response
                     
-                    let useQuickReply;
-                    
-                    if (isVoiceChannel && fullScenario.fullReplies && fullScenario.fullReplies.length > 0) {
-                        // 🎯 PHASE 1: VOICE OPTIMIZATION
-                        // For voice, if we have fullReplies, ALWAYS use them
-                        // This ensures users hear actual hours/pricing/services, not just "We're here to help!"
-                        useQuickReply = false;
-                        logger.info(`🎯 [PHASE 1] VOICE channel + fullReplies available - using FULL replies`, {
-                            scenarioId: fullScenario.scenarioId,
-                            scenarioName: fullScenario.name,
-                            reason: 'Phase 1: Voice must always include full information when available'
-                        });
+                    // For now, return the first reply as a placeholder (real selection happens in AIBrain)
+                    if (fullScenario.fullReplies && fullScenario.fullReplies.length > 0) {
+                        // Return first full reply as placeholder (Response Engine will re-select)
+                        result.response = fullScenario.fullReplies[0];
+                        result.success = true;
+                    } else if (fullScenario.quickReplies && fullScenario.quickReplies.length > 0) {
+                        // Fallback: return first quick reply
+                        result.response = fullScenario.quickReplies[0];
+                        result.success = true;
                     } else {
-                        // 🧠 LEGACY INTELLIGENT REPLY SELECTION (non-voice, or no fullReplies)
-                        // Information-heavy scenarios MUST use full replies
-                        const informationScenarios = ['hours', 'operation', 'pricing', 'price', 'cost', 'service', 'location', 'address', 'phone', 'contact', 'policy', 'faq', 'question'];
-                        const scenarioNameLower = fullScenario.name.toLowerCase();
-                        const requiresFullReply = informationScenarios.some(keyword => scenarioNameLower.includes(keyword));
-                        
-                        // For information scenarios: ALWAYS use full replies
-                        // For action scenarios (appointment, booking): 30% quick, 70% full
-                        if (requiresFullReply) {
-                            useQuickReply = false;  // 🔥 ALWAYS full reply for info scenarios
-                            logger.info(`📋 [REPLY SELECTION] Information scenario detected - using FULL replies`, {
-                                scenarioId: fullScenario.scenarioId,
-                                scenarioName: fullScenario.name,
-                                reason: 'Information-heavy scenarios must have detailed responses',
-                                channel: context?.channel || 'unknown'
-                            });
-                        } else {
-                            useQuickReply = Math.random() < 0.3;  // 30% quick for action scenarios
-                        }
-                    }
-                    
-                    let replyVariants = useQuickReply ? fullScenario.quickReplies : fullScenario.fullReplies;
-                    
-                    if (!replyVariants || replyVariants.length === 0) {
-                        replyVariants = fullScenario.fullReplies || fullScenario.quickReplies || [];
-                    }
-                    
-                    // 🔥 CRITICAL: NO FALLBACK TEXT! Scenario MUST have replies!
-                    if (!replyVariants || replyVariants.length === 0) {
+                        // Scenario has no replies at all
                         logger.error('🚨 [TIER 3] Scenario has NO replies! Template is broken!', {
                             scenarioId: fullScenario.scenarioId,
                             scenarioName: fullScenario.name,
@@ -418,9 +386,6 @@ class IntelligentRouter {
                         });
                         result.success = false;
                         result.response = null;
-                    } else {
-                        result.response = replyVariants[Math.floor(Math.random() * replyVariants.length)];
-                        result.success = true;
                     }
                 } else {
                     // Scenario not found in available scenarios (shouldn't happen!)
