@@ -236,6 +236,35 @@ const scenarioSchema = new Schema({
     },
     
     // ============================================
+    // PHASE 2: SCENARIO SEMANTICS & REPLY STRATEGY
+    // ============================================
+    // Used by Response Engine to intelligently select replies
+    // based on scenario type, reply strategy, and channel
+    
+    scenarioType: {
+        type: String,
+        enum: ['INFO_FAQ', 'ACTION_FLOW', 'SYSTEM_ACK', 'SMALL_TALK'],
+        default: null
+        // null = inferred at runtime from content
+        // INFO_FAQ: static info (hours, pricing, address, services, policies)
+        // ACTION_FLOW: starts/drives a flow (booking, estimates, transfers)
+        // SYSTEM_ACK: internal confirmations ("Got it, one moment")
+        // SMALL_TALK: chit-chat, rapport, jokes
+    },
+    
+    replyStrategy: {
+        type: String,
+        enum: ['AUTO', 'FULL_ONLY', 'QUICK_ONLY', 'QUICK_THEN_FULL', 'LLM_WRAP', 'LLM_CONTEXT'],
+        default: 'AUTO'
+        // AUTO: use global rules based on scenarioType + channel
+        // FULL_ONLY: never use quickReplies
+        // QUICK_ONLY: never use fullReplies
+        // QUICK_THEN_FULL: use quick then full
+        // LLM_WRAP: fullReply through LLM for tone polish (future)
+        // LLM_CONTEXT: LLM composes using scenario + KB (future)
+    },
+    
+    // ============================================
     // ENTITY CAPTURE & DYNAMIC VARIABLES
     // ============================================
     
