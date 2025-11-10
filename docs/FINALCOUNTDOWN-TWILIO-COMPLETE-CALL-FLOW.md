@@ -1599,6 +1599,52 @@ grep "V2 ELEVENLABS: Using voice" logs
 
 ---
 
+## 🚨 INFRASTRUCTURE FAILURES (New!)
+
+### **When Greeting Infrastructure Fails**
+
+**Scenario:** What if greeting generation breaks?
+- Pre-recorded file corrupted
+- ElevenLabs API is down
+- Render server crash
+- Network timeout
+
+**OLD APPROACH (❌ BAD):**
+- Play generic TTS: "We're experiencing technical difficulties"
+- Customer is confused
+- Admin doesn't know there's a problem
+
+**NEW APPROACH (✅ HYBRID):**
+```
+Greeting infrastructure fails
+    ↓
+Send SMS to customer: "Technical issue detected, connecting to team"
+    ↓
+Send CRITICAL alert to ops team
+    ↓
+Transfer customer to human agent immediately
+    ↓
+NO generic fallback text masks the problem!
+```
+
+**Key Points:**
+- ✅ Customer knows what's happening (SMS notification)
+- ✅ Ops team knows to investigate (CRITICAL alert)
+- ✅ System purity (no generic text masking real problems)
+- ✅ Problem visibility (can't hide infrastructure failures)
+
+**Implementation:**
+- `services/intelligentFallbackHandler.js` - Handles SMS + alerts
+- `services/v2AIAgentRuntime.js` - Returns `mode: 'transfer'` (not fallback text)
+- `routes/v2twilio.js` - Routes to human agent
+
+**Benefits Over Pure Approach:**
+- ✅ Transparency (customer and admin know what happened)
+- ✅ Reliability (system keeps working, just transfers instead)
+- ✅ Visibility (ops can investigate without guessing)
+
+---
+
 ## 📝 UPDATE LOG
 
 | Date | Update | By |
@@ -1614,6 +1660,7 @@ grep "V2 ELEVENLABS: Using voice" logs
 | 2025-11-09 | **✅ ARCHITECTURE TRUTH:** AI Brain 3-Tier Intelligence is now THE ONLY knowledge source | AI Assistant |
 | 2025-11-09 | **📊 PERFORMANCE TRACKING:** Added comprehensive performance monitoring with tier visibility, time breakdowns, and cost tracking | AI Assistant |
 | 2025-11-09 | **🔥 CRITICAL FIX:** Fixed useQuickReply scope bug causing AI Brain to return undefined responses (scenarios matched but response lost) | AI Assistant |
+| 2025-11-10 | **🔥 HYBRID INFRASTRUCTURE FALLBACK:** No generic text, SMS + alerts + human transfer when infrastructure fails | AI Assistant |
 
 ---
 
