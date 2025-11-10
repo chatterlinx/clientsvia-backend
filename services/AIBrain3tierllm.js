@@ -409,6 +409,9 @@ class AIBrain3tierllm {
                         result.replyStrategyResolved = responseEngineResult.replyStrategyResolved;
                         result.responseStrategyUsed = responseEngineResult.strategyUsed;
                         
+                        // 🎯 PHASE A – STEP 3A: Store follow-up metadata for runtime use
+                        result.followUp = responseEngineResult.followUp;
+                        
                     } catch (error) {
                         logger.error('🚨 [AI BRAIN] Response Engine failed, no fallback', {
                             routingId: context.routingId,
@@ -436,7 +439,13 @@ class AIBrain3tierllm {
                         // 🎯 PHASE 2: Response Engine metadata
                         scenarioTypeResolved: result.scenarioTypeResolved,
                         replyStrategyResolved: result.replyStrategyResolved,
-                        responseStrategyUsed: result.responseStrategyUsed
+                        responseStrategyUsed: result.responseStrategyUsed,
+                        // 🎯 PHASE A – STEP 3A: Follow-up metadata (for Twilio runtime in Phase 3B)
+                        followUp: result.followUp || {
+                            mode: 'NONE',
+                            questionText: null,
+                            transferTarget: null
+                        }
                     }
                 };
             }

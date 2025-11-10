@@ -210,9 +210,22 @@ File: `public/admin-global-instant-responses.html`
 - Clear info-level logging shows when scenarios are rejected due to minConfidence.
 - Backwards compatible: scenarios without minConfidence set are unaffected (treated as null).
 
-#### A.3 – FollowUpMode & Transfers
+#### A.3 – Follow-Up Plumbing (Data Only)
 
-**Goal:** `followUpMode`, `followUpQuestionText`, `transferTarget` become **real behavior**, not dead fields.
+**Status: ✅ COMPLETE**
+
+- Implemented: followUpMode, followUpQuestionText, and transferTarget are now:
+  - Loaded into the scenario pool by ScenarioPoolService
+  - Surfaced by ResponseEngine.buildResponse() in a `followUp` object
+  - Exposed in AIBrain metadata as `metadata.followUp`
+  - Ready for runtime use in Phase A – Step 3B (Twilio behavior implementation)
+- No runtime behavior change yet; all follow-ups default to NONE and are logged for debugging.
+
+---
+
+#### A.4 – FollowUpMode & Transfers (Behavior Implementation)
+
+**Goal (Future):** `followUpMode`, `followUpQuestionText`, `transferTarget` become **real behavior**, not dead fields.
 
 **Modes:**
 

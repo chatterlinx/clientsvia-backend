@@ -102,6 +102,19 @@ class ResponseEngine {
       
       const responseTime = Date.now() - startTime;
       
+      // 🎯 PHASE A – STEP 3A: Prepare follow-up metadata (data only, no behavior change)
+      const followUpMode = scenario.followUpMode || 'NONE';
+      
+      if (followUpMode !== 'NONE') {
+        logger.info('[RESPONSE ENGINE] Scenario has follow-up configured', {
+          scenarioId: scenario.scenarioId,
+          scenarioName: scenario.name,
+          followUpMode,
+          followUpQuestionText: scenario.followUpQuestionText,
+          transferTarget: scenario.transferTarget
+        });
+      }
+      
       logger.info(`🎯 [RESPONSE ENGINE] Reply selected`, {
         scenarioName: scenario.name,
         scenarioType: scenarioTypeResolved,
@@ -116,7 +129,13 @@ class ResponseEngine {
         text,
         strategyUsed,
         scenarioTypeResolved,
-        replyStrategyResolved
+        replyStrategyResolved,
+        // 🎯 PHASE A – STEP 3A: Follow-up metadata (used in AIBrain metadata)
+        followUp: {
+          mode: followUpMode,
+          questionText: scenario.followUpQuestionText || null,
+          transferTarget: scenario.transferTarget || null
+        }
       };
       
     } catch (error) {
@@ -130,7 +149,13 @@ class ResponseEngine {
         text: null,
         strategyUsed: 'ERROR',
         scenarioTypeResolved: scenario?.scenarioType || null,
-        replyStrategyResolved: scenario?.replyStrategy || 'AUTO'
+        replyStrategyResolved: scenario?.replyStrategy || 'AUTO',
+        // 🎯 PHASE A – STEP 3A: Follow-up metadata (with safe defaults on error)
+        followUp: {
+          mode: scenario?.followUpMode || 'NONE',
+          questionText: scenario?.followUpQuestionText || null,
+          transferTarget: scenario?.transferTarget || null
+        }
       };
     }
   }
