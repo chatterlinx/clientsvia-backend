@@ -66,6 +66,61 @@ class IntelligentRouter {
     
     /**
      * ============================================================================
+     * PHASE A – STEP 2: minConfidence VALIDATION HELPER
+     * ============================================================================
+     * Checks if a scenario meets its per-scenario minimum confidence threshold.
+     * 
+     * @param {Object} scenario - The scenario object (must have minConfidence field)
+     * @param {Number} confidence - The match confidence score (0-1)
+     * @param {String} routingId - For logging
+     * @param {Number} tier - Which tier (1, 2, or 3) for logging context
+     * @returns {Object} - { allowed: true/false, reason: string }
+     */
+    _validateScenarioMinConfidence(scenario, confidence, routingId, tier) {
+        // If no scenario, no validation needed
+        if (!scenario) {
+            return { allowed: true, reason: 'no_scenario' };
+        }
+        
+        const minConf = scenario.minConfidence;
+        
+        // If minConfidence not set, allow (backward compatible)
+        if (minConf === null || minConf === undefined) {
+            return { allowed: true, reason: 'no_minconfidence_set' };
+        }
+        
+        // Validate minConfidence is a valid number between 0 and 1
+        if (typeof minConf !== 'number' || minConf <= 0 || minConf > 1) {
+            logger.warn('[ROUTER] Invalid minConfidence on scenario, ignoring', {
+                routingId,
+                scenarioId: scenario.scenarioId,
+                scenarioName: scenario.name,
+                minConfidence: minConf,
+                tier
+            });
+            return { allowed: true, reason: 'invalid_minconfidence_ignored' };
+        }
+        
+        // Check: confidence >= minConfidence
+        if (confidence < minConf) {
+            logger.info('[ROUTER] Scenario rejected: confidence below minConfidence', {
+                routingId,
+                tier,
+                scenarioId: scenario.scenarioId,
+                scenarioName: scenario.name,
+                confidence: confidence.toFixed(3),
+                minConfidence: minConf,
+                gap: (minConf - confidence).toFixed(3)
+            });
+            return { allowed: false, reason: 'below_minconfidence' };
+        }
+        
+        // Confidence meets or exceeds minConfidence – allowed
+        return { allowed: true, reason: 'meets_minconfidence' };
+    }
+    
+    /**
+     * ============================================================================
      * MAIN METHOD: Route a call through the 3-tier cascade
      * ============================================================================
      * @param {Object} params
@@ -145,26 +200,44 @@ class IntelligentRouter {
             result.performance.tier1Time = result.tier1Result.responseTime;
             
             if (result.tier1Result.success && result.tier1Result.confidence >= tier1Threshold) {
-                // ✅ TIER 1 SUCCESS - Free, fast match!
-                result.tierUsed = 1;
-                result.matched = true;
-                result.scenario = result.tier1Result.scenario;
-                result.confidence = result.tier1Result.confidence;
-                result.response = result.tier1Result.response;
-                result.success = true;
-                
-                logger.info('✅ [TIER 1] Rule-based match succeeded', {
+                // 🎯 PHASE A – STEP 2: Check minConfidence BEFORE accepting Tier 1 match
+                const minConfCheck = this._validateScenarioMinConfidence(
+                    result.tier1Result.scenario,
+                    result.tier1Result.confidence,
                     routingId,
-                    confidence: result.confidence,
-                    scenario: result.scenario?.name,
-                    responseTime: `${result.tier1Result.responseTime}ms`,
-                    cost: '$0.00'
-                });
+                    1
+                );
                 
-                // Log success and return
-                await this.logCall(result, template, company);
-                result.performance.totalTime = Date.now() - startTime;
-                return result;
+                if (!minConfCheck.allowed) {
+                    // Scenario failed minConfidence check – treat as Tier 1 miss, escalate to Tier 2
+                    logger.info('⚠️ [TIER 1] Scenario below minConfidence, escalating to Tier 2', {
+                        routingId,
+                        confidence: result.tier1Result.confidence,
+                        minConfidence: result.tier1Result.scenario?.minConfidence
+                    });
+                    // Continue to Tier 2 (fall through below)
+                } else {
+                    // ✅ TIER 1 SUCCESS - Free, fast match!
+                    result.tierUsed = 1;
+                    result.matched = true;
+                    result.scenario = result.tier1Result.scenario;
+                    result.confidence = result.tier1Result.confidence;
+                    result.response = result.tier1Result.response;
+                    result.success = true;
+                    
+                    logger.info('✅ [TIER 1] Rule-based match succeeded', {
+                        routingId,
+                        confidence: result.confidence,
+                        scenario: result.scenario?.name,
+                        responseTime: `${result.tier1Result.responseTime}ms`,
+                        cost: '$0.00'
+                    });
+                    
+                    // Log success and return
+                    await this.logCall(result, template, company);
+                    result.performance.totalTime = Date.now() - startTime;
+                    return result;
+                }
             }
             
             logger.info('⚠️ [TIER 1] Below threshold, escalating to Tier 2', {
@@ -223,34 +296,52 @@ class IntelligentRouter {
             result.performance.tier2Time = result.tier2Result.responseTime;
             
             if (result.tier2Result.success && result.tier2Result.confidence >= tier2Threshold) {
-                // ✅ TIER 2 SUCCESS - Still free, slightly slower
-                result.tierUsed = 2;
-                result.matched = true;
-                result.scenario = result.tier2Result.scenario;
-                result.confidence = result.tier2Result.confidence;
-                result.response = result.tier2Result.response;
-                result.success = true;
-                
-                // Cancel warmup if it was triggered (Tier 2 succeeded, no need for LLM)
-                if (warmupHandle) {
-                    logger.info('⚡ [SMART WARMUP] Cancelling warmup (Tier 2 succeeded)', {
-                        routingId,
-                        warmupId: warmupHandle.warmupId
-                    });
-                    await warmupHandle.cancel();
-                }
-                
-                logger.info('✅ [TIER 2] Semantic match succeeded', {
+                // 🎯 PHASE A – STEP 2: Check minConfidence BEFORE accepting Tier 2 match
+                const minConfCheck = this._validateScenarioMinConfidence(
+                    result.tier2Result.scenario,
+                    result.tier2Result.confidence,
                     routingId,
-                    confidence: result.confidence,
-                    scenario: result.scenario?.name,
-                    responseTime: `${result.tier2Result.responseTime}ms`,
-                    cost: '$0.00'
-                });
+                    2
+                );
                 
-                await this.logCall(result, template, company);
-                result.performance.totalTime = Date.now() - startTime;
-                return result;
+                if (!minConfCheck.allowed) {
+                    // Scenario failed minConfidence check – treat as Tier 2 miss, escalate to Tier 3
+                    logger.info('⚠️ [TIER 2] Scenario below minConfidence, escalating to Tier 3', {
+                        routingId,
+                        confidence: result.tier2Result.confidence,
+                        minConfidence: result.tier2Result.scenario?.minConfidence
+                    });
+                    // Continue to Tier 3 (fall through below)
+                } else {
+                    // ✅ TIER 2 SUCCESS - Still free, slightly slower
+                    result.tierUsed = 2;
+                    result.matched = true;
+                    result.scenario = result.tier2Result.scenario;
+                    result.confidence = result.tier2Result.confidence;
+                    result.response = result.tier2Result.response;
+                    result.success = true;
+                    
+                    // Cancel warmup if it was triggered (Tier 2 succeeded, no need for LLM)
+                    if (warmupHandle) {
+                        logger.info('⚡ [SMART WARMUP] Cancelling warmup (Tier 2 succeeded)', {
+                            routingId,
+                            warmupId: warmupHandle.warmupId
+                        });
+                        await warmupHandle.cancel();
+                    }
+                    
+                    logger.info('✅ [TIER 2] Semantic match succeeded', {
+                        routingId,
+                        confidence: result.confidence,
+                        scenario: result.scenario?.name,
+                        responseTime: `${result.tier2Result.responseTime}ms`,
+                        cost: '$0.00'
+                    });
+                    
+                    await this.logCall(result, template, company);
+                    result.performance.totalTime = Date.now() - startTime;
+                    return result;
+                }
             }
             
             logger.warn('⚠️ [TIER 2] Below threshold, escalating to Tier 3 (LLM - EXPENSIVE!)', {
@@ -353,14 +444,46 @@ class IntelligentRouter {
             }
             
             if (result.tier3Result.success && result.tier3Result.matched) {
-                // ✅ TIER 3 SUCCESS - Expensive but guaranteed to work
-                result.tierUsed = 3;
-                result.matched = true;
-                
                 // 🔥 CRITICAL FIX: LLM only returns scenarioId, need to find FULL scenario with replies
                 const fullScenario = availableScenarios.find(s => s.scenarioId === result.tier3Result.scenario.scenarioId);
                 
                 if (fullScenario) {
+                    // 🎯 PHASE A – STEP 2: Check minConfidence BEFORE accepting Tier 3 match
+                    const minConfCheck = this._validateScenarioMinConfidence(
+                        fullScenario,
+                        result.tier3Result.confidence,
+                        routingId,
+                        3
+                    );
+                    
+                    if (!minConfCheck.allowed) {
+                        // Scenario failed minConfidence check – Tier 3 LLM matched but scenario below threshold
+                        logger.warn('[TIER 3] LLM matched scenario below minConfidence threshold', {
+                            routingId,
+                            scenarioId: fullScenario.scenarioId,
+                            scenarioName: fullScenario.name,
+                            confidence: result.tier3Result.confidence,
+                            minConfidence: fullScenario.minConfidence,
+                            note: 'Treating as total router failure (no acceptable scenario found)'
+                        });
+                        
+                        // Treat as total router failure – no scenario met minConfidence at any tier
+                        result.tierUsed = 3;
+                        result.matched = false;
+                        result.scenario = null;
+                        result.confidence = 0;
+                        result.response = null;
+                        result.success = false;
+                        result.error = 'No scenario met minConfidence threshold';
+                        
+                        await this.logCall(result, template, company);
+                        result.performance.totalTime = Date.now() - startTime;
+                        return result;
+                    }
+                    
+                    // ✅ TIER 3 SUCCESS - Expensive but guaranteed to work (and meets minConfidence)
+                    result.tierUsed = 3;
+                    result.matched = true;
                     result.scenario = fullScenario;  // Full scenario with replies!
                     result.confidence = result.tier3Result.confidence;
                     
