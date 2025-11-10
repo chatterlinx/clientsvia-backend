@@ -11976,15 +11976,25 @@ Continue?`;
             }
 
             const draft = aiAssistantDraft;
-            console.log('🤖 [AI ASSISTANT] Applying draft to form:', draft);
+            console.log('🤖 [AI ASSISTANT] Applying draft to form (Phase A.4):', draft);
 
-            // Basic fields
-            if (draft.name) document.getElementById('scenario-name').value = draft.name;
+            // PHASE A.4: Handle both scenarioName (new) and name (legacy)
+            const scenarioName = draft.scenarioName || draft.name;
+            if (scenarioName) document.getElementById('scenario-name').value = scenarioName;
+            
             if (draft.scenarioType) document.getElementById('scenario-type').value = draft.scenarioType;
             if (draft.replyStrategy) document.getElementById('scenario-reply-strategy').value = draft.replyStrategy;
 
             // Helpers
-            const joinLines = arr => Array.isArray(arr) ? arr.join('\n') : '';
+            const joinLines = arr => {
+              if (!Array.isArray(arr)) return '';
+              return arr.map(item => {
+                // Handle both strings and weighted objects { text, weight }
+                if (typeof item === 'string') return item;
+                if (item && typeof item === 'object' && item.text) return item.text;
+                return '';
+              }).filter(s => s.length > 0).join('\n');
+            };
 
             // Triggers & phrases
             if (draft.triggers) document.getElementById('scenario-triggers').value = joinLines(draft.triggers);
@@ -11998,17 +12008,31 @@ Continue?`;
                 if (negEl) negEl.value = joinLines(draft.negativeUserPhrases);
             }
 
-            // Replies
+            // Replies – PHASE A.4: Extract text from weighted objects
             if (draft.quickReplies) document.getElementById('scenario-quick-replies').value = joinLines(draft.quickReplies);
             if (draft.fullReplies) document.getElementById('scenario-full-replies').value = joinLines(draft.fullReplies);
 
-            // Follow-up
+            // Follow-up prompts (if field exists, map it)
+            if (draft.followUpPrompts && draft.followUpPrompts.length > 0) {
+                const followupPromptsEl = document.getElementById('scenario-followup-prompts');
+                if (followupPromptsEl) followupPromptsEl.value = joinLines(draft.followUpPrompts);
+            }
+
+            // Follow-up behavior
             if (draft.followUpMode) document.getElementById('scenario-followup-mode').value = draft.followUpMode;
-            if (typeof draft.followUpQuestionText === 'string') {
+            if (typeof draft.followUpQuestionText === 'string' && draft.followUpQuestionText) {
                 document.getElementById('scenario-followup-question').value = draft.followUpQuestionText;
             }
-            if (typeof draft.transferTarget === 'string') {
+            if (typeof draft.transferTarget === 'string' && draft.transferTarget) {
                 document.getElementById('scenario-followup-transfer-target').value = draft.transferTarget;
+            }
+
+            // PHASE A.4: minConfidence & priority (if fields exist)
+            if (typeof draft.minConfidence === 'number' && document.getElementById('scenario-min-confidence')) {
+                document.getElementById('scenario-min-confidence').value = draft.minConfidence.toFixed(2);
+            }
+            if (typeof draft.priority === 'number' && document.getElementById('scenario-priority')) {
+                document.getElementById('scenario-priority').value = draft.priority;
             }
 
             // Admin notes
