@@ -520,37 +520,81 @@ class ResponseEngine {
   }
   
   /**
-   * Helper: Select random element from array
+   * Helper: Select random element from array with weighted probability
    * 
-   * 🎯 PHASE A.1: Updated to handle normalized replies
-   * - If replies are objects with {text, weight}, extracts text
-   * - If replies are strings (legacy), returns them directly
+   * 🎯 PHASE A – STEP 1: Weighted Reply Selection (implemented)
+   * - If replies are objects with {text, weight}, uses weight for probability
+   * - If replies are strings (legacy), treats all with equal weight
+   * - Uses cumulative weight distribution for O(n) selection
    * 
-   * Future (Phase A.2): Will use weights for weighted random selection
-   * instead of uniform random.
+   * Behavior:
+   * - `[{text: "Hi", weight: 5}, {text: "Hello", weight: 1}]`
+   *   → "Hi" is 5x more likely to be selected
+   * - `["Hi", "Hello"]` → both equally likely (weight 1 each)
+   * - Mixed format treated safely (strings converted to weight 1)
    * 
    * @param {Array} arr - Array of strings or {text, weight} objects
-   * @returns {String} - The selected reply text
+   * @returns {String} - The selected reply text (null if empty/invalid)
    */
   _selectRandom(arr) {
     if (!arr || arr.length === 0) {
       return null;
     }
-    
-    // Select random index
-    const selected = arr[Math.floor(Math.random() * arr.length)];
-    
-    // Handle both legacy (string) and normalized ({text, weight}) formats
-    if (typeof selected === 'string') {
-      return selected;
+
+    // ========================================================================
+    // BUILD WEIGHTED DISTRIBUTION
+    // ========================================================================
+    const items = [];
+    let totalWeight = 0;
+
+    for (let i = 0; i < arr.length; i++) {
+      const item = arr[i];
+      let text = null;
+      let weight = 1;
+
+      // Handle different input formats
+      if (typeof item === 'string') {
+        // Legacy format: plain string
+        text = item;
+        weight = 1;
+      } else if (typeof item === 'object' && item !== null && item.text) {
+        // New format: {text, weight}
+        text = item.text;
+        weight = typeof item.weight === 'number' && item.weight > 0 ? item.weight : 3;
+      } else {
+        // Invalid item - skip with warning
+        logger.warn('[RESPONSE ENGINE] Invalid reply item in _selectRandom', {
+          index: i,
+          itemType: typeof item,
+          hasText: item?.text !== undefined
+        });
+        continue;
+      }
+
+      items.push({ text, weight });
+      totalWeight += weight;
     }
-    
-    if (typeof selected === 'object' && selected !== null && selected.text) {
-      return selected.text;
+
+    // Handle edge case: no valid items
+    if (items.length === 0 || totalWeight <= 0) {
+      return null;
     }
-    
-    // Fallback (should not happen with proper normalization)
-    return null;
+
+    // ========================================================================
+    // WEIGHTED RANDOM SELECTION
+    // ========================================================================
+    let randomValue = Math.random() * totalWeight;
+    let cumulativeWeight = 0;
+
+    for (const item of items) {
+      cumulativeWeight += item.weight;
+      if (randomValue < cumulativeWeight) {
+        return item.text;
+      }
+    }
+
+    // Fallback (should not happen, but just in case of floating point edge case)
+    return items[items.length - 1].text;
   }
 }
 
