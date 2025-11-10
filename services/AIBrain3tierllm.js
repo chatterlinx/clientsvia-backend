@@ -19,6 +19,7 @@ const Company = require('../models/v2Company');
 const { redisClient } = require('../clients');
 const logger = require('../utils/logger');
 const { replacePlaceholders } = require('../utils/placeholderReplacer');
+const ResponseEngine = require('./ResponseEngine');
 
 class AIBrain3tierllm {
     constructor() {
@@ -385,67 +386,37 @@ class AIBrain3tierllm {
                     // Infer reply type from response length (just for metadata)
                     replyType = result.response.length < 100 ? 'quick' : 'full';
                 } else {
-                    // Fallback: Extract from scenario (legacy path, should rarely happen)
-                    // 🎯 PHASE 1: VOICE-CHANNEL OPTIMIZATION
-                    // For VOICE: if fullReplies exist, ALWAYS use them (never just quick-only)
-                    // For SMS/chat: use existing logic (keyword-based)
-                    const isVoiceChannel = context && context.channel === 'voice';
+                    // 🎯 PHASE 2: RESPONSE ENGINE - CENTRALIZED REPLY SELECTION
+                    // Delegate ALL reply selection to Response Engine based on:
+                    // - scenarioType (INFO_FAQ, ACTION_FLOW, SYSTEM_ACK, SMALL_TALK)
+                    // - replyStrategy (AUTO, FULL_ONLY, QUICK_ONLY, QUICK_THEN_FULL, LLM_WRAP, LLM_CONTEXT)
+                    // - channel (voice, sms, chat)
                     
-                    let useQuickReply;
+                    const channel = context && context.channel ? context.channel : 'voice';
                     
-                    if (isVoiceChannel && result.scenario.fullReplies && result.scenario.fullReplies.length > 0) {
-                        // 🎯 PHASE 1: VOICE OPTIMIZATION
-                        // For voice, if we have fullReplies, ALWAYS use them
-                        // This ensures users hear actual hours/pricing/services, not just "We're here to help!"
-                        useQuickReply = false;
-                        replyType = 'full';
-                        logger.info(`🎯 [PHASE 1] VOICE channel + fullReplies available - using FULL replies`, {
-                            routingId: context.routingId,
-                            scenarioId: result.scenario.scenarioId,
-                            scenarioName: result.scenario.name,
-                            reason: 'Phase 1: Voice must always include full information when available'
+                    try {
+                        const responseEngineResult = await ResponseEngine.buildResponse({
+                            scenario: result.scenario,
+                            channel,
+                            context
                         });
-                    } else {
-                        // 🧠 LEGACY INTELLIGENT REPLY SELECTION (non-voice, or no fullReplies)
-                        // Information-heavy scenarios MUST use full replies
-                        const informationScenarios = ['hours', 'operation', 'pricing', 'price', 'cost', 'service', 'location', 'address', 'phone', 'contact', 'policy', 'faq', 'question'];
-                        const scenarioNameLower = result.scenario.name.toLowerCase();
-                        const requiresFullReply = informationScenarios.some(keyword => scenarioNameLower.includes(keyword));
                         
-                        // For information scenarios: ALWAYS use full replies
-                        // For action scenarios (appointment, booking): 30% quick, 70% full
-                        if (requiresFullReply) {
-                            useQuickReply = false;  // 🔥 ALWAYS full reply for info scenarios
-                            logger.info(`📋 [REPLY SELECTION] Information scenario detected - using FULL replies`, {
-                                routingId: context.routingId,
-                                scenarioId: result.scenario.scenarioId,
-                                scenarioName: result.scenario.name,
-                                reason: 'Information-heavy scenarios must have detailed responses',
-                                channel: context?.channel || 'unknown'
-                            });
-                        } else {
-                            useQuickReply = Math.random() < 0.3;  // 30% quick for action scenarios
-                        }
+                        selectedReply = responseEngineResult.text;
+                        replyType = responseEngineResult.strategyUsed.includes('QUICK') ? 'quick' : 'full';
                         
-                        replyType = useQuickReply ? 'quick' : 'full';
-                    }
-                    
-                    let replyVariants = useQuickReply ? result.scenario.quickReplies : result.scenario.fullReplies;
-                    
-                    if (!replyVariants || replyVariants.length === 0) {
-                        replyVariants = result.scenario.fullReplies || result.scenario.quickReplies || [];
-                    }
-
-                    // 🔥 NO FALLBACK TEXT! If scenario has no replies, template is broken!
-                    if (!replyVariants || replyVariants.length === 0) {
-                        logger.error('🚨 [AI BRAIN] Scenario has NO replies! Template broken!', {
+                        // Add Response Engine metadata for tracing
+                        result.scenarioTypeResolved = responseEngineResult.scenarioTypeResolved;
+                        result.replyStrategyResolved = responseEngineResult.replyStrategyResolved;
+                        result.responseStrategyUsed = responseEngineResult.strategyUsed;
+                        
+                    } catch (error) {
+                        logger.error('🚨 [AI BRAIN] Response Engine failed, no fallback', {
                             routingId: context.routingId,
-                            scenarioId: result.scenario.scenarioId,
-                            scenarioName: result.scenario.name
+                            error: error.message,
+                            scenarioId: result.scenario?.scenarioId,
+                            scenarioName: result.scenario?.name
                         });
-                        selectedReply = null;  // ❌ NO GENERIC TEXT!
-                    } else {
-                        selectedReply = replyVariants[Math.floor(Math.random() * replyVariants.length)];
+                        selectedReply = null;  // ❌ NO FALLBACK TEXT!
                     }
                 }
                 
@@ -461,7 +432,11 @@ class AIBrain3tierllm {
                         scenarioName: result.scenario.name,
                         replyType: replyType,
                         matchScore: result.score,
-                        trace: result.trace
+                        trace: result.trace,
+                        // 🎯 PHASE 2: Response Engine metadata
+                        scenarioTypeResolved: result.scenarioTypeResolved,
+                        replyStrategyResolved: result.replyStrategyResolved,
+                        responseStrategyUsed: result.responseStrategyUsed
                     }
                 };
             }
