@@ -1,0 +1,136 @@
+================================================================================
+🧪 QUICK TEST CHECKLIST - 5 MINUTE PRODUCTION VERIFICATION
+================================================================================
+
+BEFORE YOU TEST:
+✅ Deploy to Render (wait for "Live" status)
+✅ Latest code is deployed (check git log)
+✅ Test company has scenarios configured
+
+================================================================================
+🚀 TEST 1: CALL AND LISTEN (60 seconds)
+================================================================================
+
+1. Dial your test Twilio number
+2. Listen to greeting
+   ✅ Should be smooth ElevenLabs voice
+   ❌ Should NOT sound robotic (Twilio voice)
+
+3. Say: "What are your hours?"
+4. Listen to response
+   ✅ Should be EXACT scenario text
+   ❌ Should NOT start with "I understand..." or "I'm here to help"
+
+Result: ✅ PASS / ❌ FAIL
+
+================================================================================
+🚀 TEST 2: CHECK LOGS FOR GENERIC TEXT (2 minutes)
+================================================================================
+
+Search production logs for any of these FAIL PHRASES:
+
+FAIL PHRASES (if you see these, PROBLEM!):
+❌ "I'm here to help"
+❌ "I understand you have"
+❌ "I'm sorry, there's"
+❌ "I apologize"
+❌ "let me connect you"
+❌ applyV2PersonalityTone
+❌ aiResponseSuggestion
+
+SUCCESS PHRASES (you should see these):
+✅ "AI Brain" or "3-Tier"
+✅ "Tier 1/2/3 match"
+✅ "ELEVENLABS: Using voice"
+✅ "Response text:" (exact scenario text)
+
+Result: ✅ PASS / ❌ FAIL
+
+================================================================================
+🚀 TEST 3: INFRASTRUCTURE FAILURE TEST (2 minutes)
+================================================================================
+
+SETUP:
+1. Temporarily set invalid ElevenLabs API key in .env
+2. Restart service
+
+TEST:
+1. Call test number
+2. Greeting fails → Infrastructure fallback triggers
+
+VERIFY:
+✅ SMS sent to you: "We're experiencing technical issues..."
+✅ Admin alert appears in system (CRITICAL)
+✅ Call transfers to human agent
+❌ NO generic voice message plays
+
+REVERT:
+1. Restore correct API key
+2. Restart service
+
+Result: ✅ PASS / ❌ FAIL
+
+================================================================================
+📊 FINAL RESULT
+================================================================================
+
+✅ ALL 3 TESTS PASS?
+   → YOU'RE PRODUCTION READY! 🚀
+
+❌ ANY TEST FAILS?
+   → NEED TO INVESTIGATE
+   → Check TESTING-PLAN-PRODUCTION-READY.md for troubleshooting
+
+================================================================================
+🎯 KEY INDICATORS YOUR SYSTEM IS CLEAN
+================================================================================
+
+LOGS SHOULD SHOW:
+✅ [V2 AGENT] Initializing call
+✅ [V2 GREETING] Generating greeting
+✅ [TTS COMPLETE] AI Agent Logic greeting TTS completed
+✅ [INTELLIGENT ROUTER] Starting 3-tier cascade
+✅ [TIER 1/2/3] Match found
+✅ V2 ELEVENLABS: Using voice [ID]
+✅ AI Response: "[EXACT SCENARIO TEXT]"
+
+LOGS SHOULD NEVER SHOW:
+❌ applyV2PersonalityTone
+❌ aiResponseSuggestion
+❌ personality
+❌ "I understand" in responses
+❌ "I'm here to help" in responses
+
+================================================================================
+⏱️ TIMESTAMP YOUR TESTS
+================================================================================
+
+Test 1 (Call & Listen):       Time: ______  Result: ✅/❌
+Test 2 (Check Logs):         Time: ______  Result: ✅/❌
+Test 3 (Infrastructure):     Time: ______  Result: ✅/❌
+
+OVERALL: ✅ PASS / ❌ FAIL
+
+================================================================================
+❓ QUICK TROUBLESHOOTING
+================================================================================
+
+Q: "I hear generic text like 'I understand...'"
+A: Render didn't fully redeploy. Restart the service manually.
+
+Q: "ElevenLabs doesn't work, uses Twilio voice"
+A: Check logs for "Redis unavailable" - uses disk fallback.
+   This is OK! System is still working, just slower.
+
+Q: "I don't see AI Brain logs"
+A: Make sure scenarios are loaded in admin.
+   Check that company has templates assigned.
+
+Q: "SMS doesn't send on infrastructure failure"
+A: Verify SMS service is configured in .env
+   Check admin notifications are enabled.
+
+================================================================================
+✅ READY TO TEST? Start with Test 1!
+================================================================================
+
