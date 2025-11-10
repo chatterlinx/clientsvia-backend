@@ -386,28 +386,50 @@ class AIBrain3tierllm {
                     replyType = result.response.length < 100 ? 'quick' : 'full';
                 } else {
                     // Fallback: Extract from scenario (legacy path, should rarely happen)
-                    // 🧠 INTELLIGENT REPLY SELECTION
-                    // Information-heavy scenarios MUST use full replies
-                    const informationScenarios = ['hours', 'operation', 'pricing', 'price', 'cost', 'service', 'location', 'address', 'phone', 'contact', 'policy', 'faq', 'question'];
-                    const scenarioNameLower = result.scenario.name.toLowerCase();
-                    const requiresFullReply = informationScenarios.some(keyword => scenarioNameLower.includes(keyword));
+                    // 🎯 PHASE 1: VOICE-CHANNEL OPTIMIZATION
+                    // For VOICE: if fullReplies exist, ALWAYS use them (never just quick-only)
+                    // For SMS/chat: use existing logic (keyword-based)
+                    const isVoiceChannel = context && context.channel === 'voice';
                     
-                    // For information scenarios: ALWAYS use full replies
-                    // For action scenarios (appointment, booking): 30% quick, 70% full
                     let useQuickReply;
-                    if (requiresFullReply) {
-                        useQuickReply = false;  // 🔥 ALWAYS full reply for info scenarios
-                        logger.info(`📋 [REPLY SELECTION] Information scenario detected - using FULL replies`, {
+                    
+                    if (isVoiceChannel && result.scenario.fullReplies && result.scenario.fullReplies.length > 0) {
+                        // 🎯 PHASE 1: VOICE OPTIMIZATION
+                        // For voice, if we have fullReplies, ALWAYS use them
+                        // This ensures users hear actual hours/pricing/services, not just "We're here to help!"
+                        useQuickReply = false;
+                        replyType = 'full';
+                        logger.info(`🎯 [PHASE 1] VOICE channel + fullReplies available - using FULL replies`, {
                             routingId: context.routingId,
                             scenarioId: result.scenario.scenarioId,
                             scenarioName: result.scenario.name,
-                            reason: 'Information-heavy scenarios must have detailed responses'
+                            reason: 'Phase 1: Voice must always include full information when available'
                         });
                     } else {
-                        useQuickReply = Math.random() < 0.3;  // 30% quick for action scenarios
+                        // 🧠 LEGACY INTELLIGENT REPLY SELECTION (non-voice, or no fullReplies)
+                        // Information-heavy scenarios MUST use full replies
+                        const informationScenarios = ['hours', 'operation', 'pricing', 'price', 'cost', 'service', 'location', 'address', 'phone', 'contact', 'policy', 'faq', 'question'];
+                        const scenarioNameLower = result.scenario.name.toLowerCase();
+                        const requiresFullReply = informationScenarios.some(keyword => scenarioNameLower.includes(keyword));
+                        
+                        // For information scenarios: ALWAYS use full replies
+                        // For action scenarios (appointment, booking): 30% quick, 70% full
+                        if (requiresFullReply) {
+                            useQuickReply = false;  // 🔥 ALWAYS full reply for info scenarios
+                            logger.info(`📋 [REPLY SELECTION] Information scenario detected - using FULL replies`, {
+                                routingId: context.routingId,
+                                scenarioId: result.scenario.scenarioId,
+                                scenarioName: result.scenario.name,
+                                reason: 'Information-heavy scenarios must have detailed responses',
+                                channel: context?.channel || 'unknown'
+                            });
+                        } else {
+                            useQuickReply = Math.random() < 0.3;  // 30% quick for action scenarios
+                        }
+                        
+                        replyType = useQuickReply ? 'quick' : 'full';
                     }
                     
-                    replyType = useQuickReply ? 'quick' : 'full';
                     let replyVariants = useQuickReply ? result.scenario.quickReplies : result.scenario.fullReplies;
                     
                     if (!replyVariants || replyVariants.length === 0) {

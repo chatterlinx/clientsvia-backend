@@ -364,24 +364,43 @@ class IntelligentRouter {
                     result.scenario = fullScenario;  // Full scenario with replies!
                     result.confidence = result.tier3Result.confidence;
                     
-                    // 🧠 INTELLIGENT REPLY SELECTION
-                    // Information-heavy scenarios MUST use full replies
-                    const informationScenarios = ['hours', 'operation', 'pricing', 'price', 'cost', 'service', 'location', 'address', 'phone', 'contact', 'policy', 'faq', 'question'];
-                    const scenarioNameLower = fullScenario.name.toLowerCase();
-                    const requiresFullReply = informationScenarios.some(keyword => scenarioNameLower.includes(keyword));
+                    // 🎯 PHASE 1: VOICE-CHANNEL OPTIMIZATION
+                    // For VOICE: if fullReplies exist, ALWAYS use them (never just quick-only)
+                    // For SMS/chat: use existing logic (keyword-based)
+                    const isVoiceChannel = context && context.channel === 'voice';
                     
-                    // For information scenarios: ALWAYS use full replies
-                    // For action scenarios (appointment, booking): 30% quick, 70% full
                     let useQuickReply;
-                    if (requiresFullReply) {
-                        useQuickReply = false;  // 🔥 ALWAYS full reply for info scenarios
-                        logger.info(`📋 [REPLY SELECTION] Information scenario detected - using FULL replies`, {
+                    
+                    if (isVoiceChannel && fullScenario.fullReplies && fullScenario.fullReplies.length > 0) {
+                        // 🎯 PHASE 1: VOICE OPTIMIZATION
+                        // For voice, if we have fullReplies, ALWAYS use them
+                        // This ensures users hear actual hours/pricing/services, not just "We're here to help!"
+                        useQuickReply = false;
+                        logger.info(`🎯 [PHASE 1] VOICE channel + fullReplies available - using FULL replies`, {
                             scenarioId: fullScenario.scenarioId,
                             scenarioName: fullScenario.name,
-                            reason: 'Information-heavy scenarios must have detailed responses'
+                            reason: 'Phase 1: Voice must always include full information when available'
                         });
                     } else {
-                        useQuickReply = Math.random() < 0.3;  // 30% quick for action scenarios
+                        // 🧠 LEGACY INTELLIGENT REPLY SELECTION (non-voice, or no fullReplies)
+                        // Information-heavy scenarios MUST use full replies
+                        const informationScenarios = ['hours', 'operation', 'pricing', 'price', 'cost', 'service', 'location', 'address', 'phone', 'contact', 'policy', 'faq', 'question'];
+                        const scenarioNameLower = fullScenario.name.toLowerCase();
+                        const requiresFullReply = informationScenarios.some(keyword => scenarioNameLower.includes(keyword));
+                        
+                        // For information scenarios: ALWAYS use full replies
+                        // For action scenarios (appointment, booking): 30% quick, 70% full
+                        if (requiresFullReply) {
+                            useQuickReply = false;  // 🔥 ALWAYS full reply for info scenarios
+                            logger.info(`📋 [REPLY SELECTION] Information scenario detected - using FULL replies`, {
+                                scenarioId: fullScenario.scenarioId,
+                                scenarioName: fullScenario.name,
+                                reason: 'Information-heavy scenarios must have detailed responses',
+                                channel: context?.channel || 'unknown'
+                            });
+                        } else {
+                            useQuickReply = Math.random() < 0.3;  // 30% quick for action scenarios
+                        }
                     }
                     
                     let replyVariants = useQuickReply ? fullScenario.quickReplies : fullScenario.fullReplies;
