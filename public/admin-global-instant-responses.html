@@ -14939,6 +14939,7 @@ Continue?`;
         // Handle edit action hook category form submission
         async function handleEditHookDirectorySubmit(e) {
             e.preventDefault();
+            console.log('📋 [DIRECTORY EDIT] handleEditHookDirectorySubmit() called');
             
             try {
                 showNotification('⏳ Updating directory...', 'info');
@@ -14953,28 +14954,39 @@ Continue?`;
                     isActive: document.getElementById('edit-ahc-category-active').checked
                 };
 
+                console.log('📋 [DIRECTORY EDIT] Directory ID:', directoryId);
+                console.log('📋 [DIRECTORY EDIT] Data:', directoryData);
+                
                 const token = getAuthToken();
+                console.log('📋 [DIRECTORY EDIT] Token present:', !!token);
+                
                 const response = await fetch(`/api/admin/global-action-hook-directories/${directoryId}`, {
                     method: 'PUT',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
+                    credentials: 'include',
                     body: JSON.stringify(directoryData)
                 });
 
+                console.log('📋 [DIRECTORY EDIT] Response status:', response.status);
                 const result = await response.json();
+                console.log('📋 [DIRECTORY EDIT] Response body:', result);
 
                 if (response.ok && result.success) {
                     showNotification(`✅ Directory "${directoryData.name}" updated successfully!`, 'success');
                     closeEditHookDirectoryModal();
+                    console.log('📋 [DIRECTORY EDIT] Modal closed, rendering directories...');
                     await renderDirectories();
                     await loadDirectoriesIntoDropdowns();
+                    console.log('📋 [DIRECTORY EDIT] ✅ Directory updated and UI refreshed!');
                 } else {
-                    showNotification('Failed to update directory: ' + result.message, 'error');
+                    console.error('❌ Update failed:', result);
+                    showNotification('Failed to update directory: ' + (result.message || 'Unknown error'), 'error');
                 }
             } catch (error) {
-                console.error('Error updating directory:', error);
+                console.error('❌ Error updating directory:', error);
                 showNotification('Error updating directory: ' + error.message, 'error');
             }
         }
@@ -19301,7 +19313,7 @@ ${JSON.stringify(healthData, null, 2)}
                 </button>
             </div>
 
-            <form id="edit-action-hook-category-form" class="space-y-4" onsubmit="handleEditActionHookCategorySubmit(event); return false;">
+            <form id="edit-action-hook-category-form" class="space-y-4" onsubmit="handleEditHookDirectorySubmit(event); return false;">
                 <input type="hidden" id="edit-ahc-category-id-original">
 
                 <div class="grid grid-cols-2 gap-4">
