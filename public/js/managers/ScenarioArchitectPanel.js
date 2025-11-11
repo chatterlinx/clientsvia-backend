@@ -61,16 +61,34 @@ class ScenarioArchitectPanel {
      * Attach all event listeners
      */
     _attachEvents() {
+        this._log('Attaching event listeners...', {
+            sendBtn: !!this.sendBtn,
+            applyBtn: !!this.applyBtn,
+            toggleBtn: !!this.toggleBtn,
+            inputEl: !!this.inputEl
+        });
+        
         if (this.sendBtn) {
-            this.sendBtn.addEventListener('click', () => this.handleSend());
+            this.sendBtn.addEventListener('click', () => {
+                this._log('🎯 Send button clicked!');
+                this.handleSend();
+            });
+            this._log('✅ Send button listener attached');
+        } else {
+            this._log('❌ Send button not found - cannot attach listener');
         }
         
         if (this.applyBtn) {
-            this.applyBtn.addEventListener('click', () => this.handleApplyDraft());
+            this.applyBtn.addEventListener('click', () => {
+                this._log('🎯 Apply button clicked!');
+                this.handleApplyDraft();
+            });
+            this._log('✅ Apply button listener attached');
         }
         
         if (this.toggleBtn) {
             this.toggleBtn.addEventListener('click', () => this.togglePanel());
+            this._log('✅ Toggle button listener attached');
         }
         
         // Allow Enter key to send (Shift+Enter for newlines)
@@ -81,6 +99,7 @@ class ScenarioArchitectPanel {
                     this.handleSend();
                 }
             });
+            this._log('✅ Input keydown listener attached');
         }
     }
     
@@ -100,11 +119,15 @@ class ScenarioArchitectPanel {
      * Handle send button click (Generate Draft / Continue)
      */
     async handleSend() {
+        this._log('🚀 handleSend() called');
+        
         const text = (this.inputEl?.value || '').trim();
+        this._log('Input text:', { text, hasDescription: !!this.state.description });
         
         // First message must exist
         if (!text && !this.state.description) {
             this._setStatus('Please describe what this scenario should handle.', 'error');
+            this._log('⚠️ No text provided');
             return;
         }
         

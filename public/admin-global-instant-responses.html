@@ -5670,32 +5670,34 @@ Just checking in..."></textarea>
                 <!-- Status Area -->
                 <div id="scenario-architect-status" class="architect-status" style="display: none; margin: 0 16px 12px;"></div>
                 
-                <!-- Input Row -->
-                <div class="architect-input-row" style="padding: 16px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; align-items: flex-end;">
+                <!-- Input Area -->
+                <div class="architect-input-area" style="padding: 20px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; flex-direction: column; gap: 12px; flex-shrink: 0;">
                     <textarea 
                         id="scenario-architect-input"
                         placeholder="Describe what this scenario should handle, or answer the AI's question..."
-                        style="flex: 1; padding: 10px 14px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 14px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: none; min-height: 60px; max-height: 120px; transition: all 0.3s;"
+                        style="width: 100%; padding: 14px 16px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 14px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical; min-height: 80px; max-height: 200px; transition: all 0.3s; line-height: 1.5;"
                         onfocus="this.style.borderColor='#10b981'"
                         onblur="this.style.borderColor='#d1d5db'"
-                        rows="2"
+                        rows="3"
                     ></textarea>
-                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
                         <button 
                             id="scenario-architect-send-btn"
                             type="button"
-                            style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.3s; white-space: nowrap;"
-                            onmouseover="this.style.background='#059669'"
-                            onmouseout="this.style.background='#10b981'"
+                            onclick="if(window.scenarioArchitectPanel){window.scenarioArchitectPanel.handleSend()}else{console.error('❌ ScenarioArchitectPanel not initialized')}"
+                            style="background: #10b981; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.3s; white-space: nowrap; box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);"
+                            onmouseover="this.style.background='#059669'; this.style.boxShadow='0 4px 8px rgba(16, 185, 129, 0.3)'"
+                            onmouseout="this.style.background='#10b981'; this.style.boxShadow='0 2px 4px rgba(16, 185, 129, 0.2)'"
                         >
                             ✨ Generate Draft
                         </button>
                         <button 
                             id="scenario-architect-apply-btn"
                             type="button"
-                            style="background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.3s; white-space: nowrap; display: none;"
-                            onmouseover="this.style.background='#2563eb'"
-                            onmouseout="this.style.background='#3b82f6'"
+                            onclick="if(window.scenarioArchitectPanel){window.scenarioArchitectPanel.handleApplyDraft()}else{console.error('❌ ScenarioArchitectPanel not initialized')}"
+                            style="background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.3s; white-space: nowrap; display: none; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);"
+                            onmouseover="this.style.background='#2563eb'; this.style.boxShadow='0 4px 8px rgba(59, 130, 246, 0.3)'"
+                            onmouseout="this.style.background='#3b82f6'; this.style.boxShadow='0 2px 4px rgba(59, 130, 246, 0.2)'"
                         >
                             ✅ Apply to Form
                         </button>
@@ -11743,6 +11745,11 @@ Continue?`;
             document.getElementById('scenario-modal').style.display = 'flex';
             
             // V7: Initialize Scenario Architect Panel (if enabled)
+            console.log('🧠 [V8] Checking panel initialization...', { 
+                featureFlag: window.useInlineScenarioArchitect, 
+                classAvailable: !!window.ScenarioArchitectPanel 
+            });
+            
             if (window.useInlineScenarioArchitect && window.ScenarioArchitectPanel) {
                 // Reset state for new scenario
                 window.aiAssistantState = {
@@ -11753,7 +11760,13 @@ Continue?`;
                 
                 // Initialize or reinitialize panel
                 window.scenarioArchitectPanel = new window.ScenarioArchitectPanel();
-                console.log('🧠 [V7] Scenario Architect Panel initialized for ADD mode');
+                console.log('✅ [V8] Scenario Architect Panel initialized for ADD mode', window.scenarioArchitectPanel);
+                
+                // Verify button element exists
+                const btn = document.getElementById('scenario-architect-send-btn');
+                console.log('🔍 [V8] Generate Draft button element:', btn);
+            } else {
+                console.warn('⚠️ [V8] Panel not initialized - feature disabled or class not loaded');
             }
         }
 
@@ -11798,6 +11811,11 @@ Continue?`;
                 document.getElementById('scenario-modal').style.display = 'flex';
                 
                 // V7: Initialize Scenario Architect Panel (if enabled)
+                console.log('🧠 [V8] Checking panel initialization (EDIT mode)...', { 
+                    featureFlag: window.useInlineScenarioArchitect, 
+                    classAvailable: !!window.ScenarioArchitectPanel 
+                });
+                
                 if (window.useInlineScenarioArchitect && window.ScenarioArchitectPanel) {
                     // Reset state for editing scenario
                     window.aiAssistantState = {
@@ -11808,7 +11826,13 @@ Continue?`;
                     
                     // Initialize or reinitialize panel
                     window.scenarioArchitectPanel = new window.ScenarioArchitectPanel();
-                    console.log('🧠 [V7] Scenario Architect Panel initialized for EDIT mode');
+                    console.log('✅ [V8] Scenario Architect Panel initialized for EDIT mode', window.scenarioArchitectPanel);
+                    
+                    // Verify button element exists
+                    const btn = document.getElementById('scenario-architect-send-btn');
+                    console.log('🔍 [V8] Generate Draft button element:', btn);
+                } else {
+                    console.warn('⚠️ [V8] Panel not initialized - feature disabled or class not loaded');
                 }
                 
             } catch (error) {
