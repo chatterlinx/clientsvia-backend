@@ -14866,6 +14866,7 @@ Continue?`;
         // Handle add category form submission
         async function handleAddDirectorySubmit(e) {
             e.preventDefault();
+            console.log('📋 [DIRECTORY] handleAddDirectorySubmit() called');
             
             try {
                 showNotification('⏳ Adding directory...', 'info');
@@ -14879,29 +14880,37 @@ Continue?`;
                     sortOrder: parseInt(document.getElementById('add-category-sort').value) || 999
                 };
 
+                console.log('📋 [DIRECTORY] Submitting data:', directoryData);
                 const token = getAuthToken();
+                console.log('📋 [DIRECTORY] Token present:', !!token);
+                
                 const response = await fetch('/api/admin/global-action-hook-directories', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
+                    credentials: 'include',
                     body: JSON.stringify(directoryData)
                 });
 
+                console.log('📋 [DIRECTORY] Response status:', response.status);
                 const result = await response.json();
+                console.log('📋 [DIRECTORY] Response body:', result);
 
                 if (response.ok && result.success) {
                     showNotification(`✅ Directory "${directoryData.name}" added successfully!`, 'success');
                     closeAddHookDirectoryModal();
+                    console.log('📋 [DIRECTORY] Modal closed, rendering directories...');
                     await renderDirectories();
                     await loadDirectoriesIntoDropdowns();
+                    console.log('📋 [DIRECTORY] ✅ Directory added and UI updated!');
                 } else {
                     console.error('❌ Add directory failed:', result);
-                    showNotification('Failed to add directory: ' + result.message, 'error');
+                    showNotification('Failed to add directory: ' + (result.message || 'Unknown error'), 'error');
                 }
             } catch (error) {
-                console.error('Error adding directory:', error);
+                console.error('❌ Error adding directory:', error);
                 showNotification('Error adding directory: ' + error.message, 'error');
             }
         }
@@ -15126,7 +15135,7 @@ Continue?`;
                                 
                                 <div class="flex items-center gap-2 flex-wrap">
                                     <span class="text-xs font-semibold px-3 py-1 rounded-full ${categoryColor}">
-                                        ${hook.category.replace('_', ' ').toUpperCase()}
+                                        ${(hook.category || 'system').replace(/_/g, ' ').toUpperCase()}
                                     </span>
                                     ${hook.isActive ? 
                                         '<span class="text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700">Active</span>' :
