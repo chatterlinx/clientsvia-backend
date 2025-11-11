@@ -11964,9 +11964,20 @@ Continue?`;
             generateBtn.textContent = '⏳ Processing...';
 
             try {
+                // Get token from localStorage (set during login)
+                const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+                if (!token) {
+                    errBox.textContent = '❌ Authentication error: No token found. Please log in again.';
+                    errBox.style.display = 'block';
+                    return;
+                }
+
                 const response = await fetch('/api/admin/scenario-assistant/draft', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
                     credentials: 'include',
                     body: JSON.stringify({
                         description: window.aiAssistantState.description,
