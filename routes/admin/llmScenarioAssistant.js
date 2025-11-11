@@ -22,7 +22,11 @@ const logger = require('../../utils/logger');
 const openaiClient = require('../../config/openai');
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const { getSettings } = require('../../services/llmSettingsService');
-const { DEFAULT_LLM_SETTINGS } = require('../../config/llmDefaultSettings');
+const {
+  DEFAULT_LLM_ENTERPRISE_SETTINGS,
+  buildScenarioArchitectSystemPromptFromSettings,
+  getEffectiveModelParams
+} = require('../../config/llmScenarioPrompts');
 
 const router = express.Router();
 
@@ -33,100 +37,8 @@ const router = express.Router();
 router.use(authenticateJWT);
 router.use(requireRole('admin'));
 
-// ============================================================================
-// LLM SETTINGS HELPERS
-// ============================================================================
-
-/**
- * Apply compliance guardrails to system prompt based on active compliance settings.
- */
-function buildComplianceSection(compliance) {
-  if (!compliance) return '';
-
-  const sections = [];
-
-  if (compliance.strictComplianceMode) {
-    sections.push(`
-**STRICT COMPLIANCE MODE ENABLED:**
-- Use conservative, safe language in all replies
-- Avoid slang, colloquialisms, or casual phrasing
-- Default to formal, professional tone
-- Do not include unverified claims or guarantees
-- Add disclaimers where appropriate`);
-  }
-
-  if (compliance.medicalOfficeMode) {
-    sections.push(`
-**MEDICAL OFFICE SAFETY MODE:**
-- NEVER provide medical advice, diagnosis, or treatment recommendations
-- Focus ONLY on scheduling, logistics, and general information
-- Include disclaimer: "This is not medical advice. Please consult your healthcare provider."
-- Redirect medical questions to staff or professionals`);
-  }
-
-  if (compliance.financialMode) {
-    sections.push(`
-**FINANCIAL / BILLING SAFETY MODE:**
-- NEVER provide investment, tax, or financial advice
-- Focus ONLY on billing status, payment methods, and general account info
-- Do not make guarantees or predictions about financial outcomes
-- Redirect complex financial questions to licensed advisors`);
-  }
-
-  if (compliance.emergencyServicesMode) {
-    sections.push(`
-**EMERGENCY SERVICES SAFETY MODE:**
-- ALWAYS instruct callers with active emergencies to dial emergency services immediately
-- Do not attempt triage or assessment
-- Focus on non-emergency scheduling and information only
-- Use urgent, clear language for active emergencies`);
-  }
-
-  if (compliance.notes && compliance.notes.trim()) {
-    sections.push(`
-**INTERNAL COMPLIANCE NOTES:**
-${compliance.notes.trim()}`);
-  }
-
-  return sections.length > 0 
-    ? `\n\n===== COMPLIANCE GUARDRAILS =====\n${sections.join('\n')}\n===== END COMPLIANCE =====\n\n`
-    : '';
-}
-
-/**
- * Get effective model parameters for the active profile with overrides and clamping.
- */
-function getEffectiveModelParams(settings) {
-  const activeProfileKey = settings.defaults?.activeProfile || 'compliance_safe';
-  const profile = settings.profiles?.[activeProfileKey] || DEFAULT_LLM_SETTINGS.profiles.compliance_safe;
-  const overrides = settings.overrides?.[activeProfileKey] || {};
-
-  // Start with profile defaults
-  let temperature = profile.temperature;
-  let topP = profile.topP;
-  let maxTokens = profile.maxTokens;
-  let model = profile.model;
-
-  // Apply overrides if present
-  if (typeof overrides.temperature === 'number') temperature = overrides.temperature;
-  if (typeof overrides.topP === 'number') topP = overrides.topP;
-  if (typeof overrides.maxTokens === 'number') maxTokens = overrides.maxTokens;
-
-  // Clamp for safety (especially important for compliance_safe profile)
-  if (activeProfileKey === 'compliance_safe') {
-    temperature = clampNumber(temperature, 0.1, 0.35, 0.2);
-    topP = clampNumber(topP, 0.7, 0.95, 0.9);
-    maxTokens = clampNumber(maxTokens, 1200, 2600, 2200);
-  }
-
-  return {
-    model,
-    temperature,
-    topP,
-    maxTokens,
-    profileName: activeProfileKey,
-  };
-}
+// LLM Settings helpers are now in config/llmScenarioPrompts.js
+// This keeps all prompt text and configuration in one place
 
 /**
  * ============================================================================
@@ -367,7 +279,7 @@ router.post('/draft', async (req, res) => {
       logger.warn('[LLM SCENARIO ASSISTANT] Failed to load settings, using defaults', {
         error: err.message,
       });
-      llmSettings = DEFAULT_LLM_SETTINGS;
+      llmSettings = DEFAULT_LLM_ENTERPRISE_SETTINGS;
     }
 
     // Get effective model parameters based on active profile
@@ -378,15 +290,18 @@ router.post('/draft', async (req, res) => {
       channel,
       templateVarCount: templateVariables.length,
       conversationTurns: Array.isArray(conversationLog) ? conversationLog.length : 0,
-      profile: modelParams.profileName,
+      profile: modelParams.profileKey,
       model: modelParams.model,
       temperature: modelParams.temperature,
     });
 
-    // Build comprehensive system prompt (Phase C.1: Enterprise-Grade Validation)
-    const systemPrompt = `You are a **SENIOR SCENARIO ARCHITECT** for ClientsVia.ai contact center AI.
+    // Build system prompt using centralized function (includes base + profile + compliance)
+    let systemPrompt = buildScenarioArchitectSystemPromptFromSettings(llmSettings);
 
-Your role:
+    // Append the scenario-specific instructions (output format, rules, etc.)
+    systemPrompt += `\n\n===== SCENARIO DRAFTING INSTRUCTIONS =====
+
+Your specific task:
 - Help admins design WORLD-CLASS call-handling scenarios
 - Ask THOROUGH clarifying questions (never lazy, never skip)
 - Validate settings against scenario type and reply strategy
@@ -581,8 +496,7 @@ OUTPUT RULES:
 - Never use real company names, phone numbers, or personal data.
 - Use {variable} syntax for template placeholders.
 - When you make an assumption (e.g., default cooldown, guess at priority), LIST it in checklistSummary.
-- This ensures admin can see EXACTLY what you decided and why.
-${buildComplianceSection(llmSettings.compliance)}`.trim();
+- This ensures admin can see EXACTLY what you decided and why.`.trim();
 
     const templateVarList = Array.isArray(templateVariables) && templateVariables.length > 0
       ? `\nKnown template variables (available to use as {variable} placeholders):\n${templateVariables.map(v => `- {${v}}`).join('\n')}`
@@ -693,10 +607,12 @@ Otherwise, return status="ready" with a comprehensive "draft" object.`.trim();
       checklistSummary: status === 'ready' ? checklistSummary : undefined,
       metadata: {
         model: modelParams.model,
-        profile: modelParams.profileName,
+        profile: modelParams.profileKey,
+        profileLabel: modelParams.profileLabel,
         temperature: modelParams.temperature,
         topP: modelParams.topP,
         maxTokens: modelParams.maxTokens,
+        safetyMode: modelParams.safetyMode,
         tokensUsed: completion.usage.total_tokens,
         generatedAt: new Date().toISOString(),
         phase: 'C.1-full-scenario-architect-with-enterprise-settings',

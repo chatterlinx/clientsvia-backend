@@ -4,15 +4,28 @@ const router = express.Router();
 
 const { getSettings, saveSettings, resetSettings } = require('../../services/llmSettingsService');
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
+const {
+  ARCHITECT_LLM_PROFILES,
+  getScenarioPromptPartsFromSettings
+} = require('../../config/llmScenarioPrompts');
 
 router.use(authenticateJWT);
 router.use(requireRole('admin'));
 
-// GET current settings
+// GET current settings + prompt text for UI display
 router.get('/', async (req, res, next) => {
   try {
     const settings = await getSettings('global');
-    res.json({ success: true, settings });
+    
+    // Get prompt parts so UI can display exactly what the LLM sees
+    const promptParts = getScenarioPromptPartsFromSettings(settings);
+    
+    res.json({
+      success: true,
+      settings,
+      profiles: ARCHITECT_LLM_PROFILES, // Profile metadata for UI
+      promptParts // Actual prompt text broken into parts
+    });
   } catch (err) {
     next(err);
   }
