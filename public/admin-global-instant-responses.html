@@ -11670,6 +11670,31 @@ Continue?`;
             
             // Switch to first tab
             switchScenarioTab('basic');
+            
+            // V8: Initialize Scenario Architect Panel (if enabled)
+            console.log('🧠 [V8] Checking panel initialization (editScenario)...', { 
+                featureFlag: window.useInlineScenarioArchitect, 
+                classAvailable: !!window.ScenarioArchitectPanel 
+            });
+            
+            if (window.useInlineScenarioArchitect && window.ScenarioArchitectPanel) {
+                // Reset state for editing scenario
+                window.aiAssistantState = {
+                    description: '',
+                    conversationLog: [],
+                    lastDraft: null,
+                };
+                
+                // Initialize or reinitialize panel
+                window.scenarioArchitectPanel = new window.ScenarioArchitectPanel();
+                console.log('✅ [V8] Scenario Architect Panel initialized (editScenario)', window.scenarioArchitectPanel);
+                
+                // Verify button element exists
+                const btn = document.getElementById('scenario-architect-send-btn');
+                console.log('🔍 [V8] Generate Draft button element:', btn);
+            } else {
+                console.warn('⚠️ [V8] Panel not initialized - feature disabled or class not loaded');
+            }
         }
 
 
@@ -11710,6 +11735,31 @@ Continue?`;
             
             // Switch to first tab
             switchScenarioTab('basic');
+            
+            // V8: Initialize Scenario Architect Panel (if enabled)
+            console.log('🧠 [V8] Checking panel initialization (addScenario)...', { 
+                featureFlag: window.useInlineScenarioArchitect, 
+                classAvailable: !!window.ScenarioArchitectPanel 
+            });
+            
+            if (window.useInlineScenarioArchitect && window.ScenarioArchitectPanel) {
+                // Reset state for new scenario
+                window.aiAssistantState = {
+                    description: '',
+                    conversationLog: [],
+                    lastDraft: null,
+                };
+                
+                // Initialize or reinitialize panel
+                window.scenarioArchitectPanel = new window.ScenarioArchitectPanel();
+                console.log('✅ [V8] Scenario Architect Panel initialized (addScenario)', window.scenarioArchitectPanel);
+                
+                // Verify button element exists
+                const btn = document.getElementById('scenario-architect-send-btn');
+                console.log('🔍 [V8] Generate Draft button element:', btn);
+            } else {
+                console.warn('⚠️ [V8] Panel not initialized - feature disabled or class not loaded');
+            }
         }
 
         // ============================================
