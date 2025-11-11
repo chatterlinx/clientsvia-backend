@@ -20,9 +20,16 @@
 const express = require('express');
 const logger = require('../../utils/logger');
 const openaiClient = require('../../config/openai');
-const { authenticateSingleSession, requireRole } = require('../../middleware/auth');
+const { authenticateJWT, requireRole } = require('../../middleware/auth');
 
 const router = express.Router();
+
+// ============================================================================
+// ADMIN-ONLY PROTECTION
+// ============================================================================
+// Apply JWT auth + admin role requirement to ALL routes in this file
+router.use(authenticateJWT);
+router.use(requireRole('admin'));
 
 /**
  * ============================================================================
@@ -234,7 +241,7 @@ function normalizeSynonyms(input) {
  *  - questions: string[] (only if needs_clarification)
  *  - draft: object (only if status === "ready")
  */
-router.post('/draft', authenticateSingleSession, requireRole('admin'), async (req, res) => {
+router.post('/draft', async (req, res) => {
   try {
     const {
       description,
