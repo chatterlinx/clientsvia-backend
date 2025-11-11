@@ -11938,6 +11938,7 @@ Continue?`;
                 const response = await fetch('/api/admin/scenario-assistant/draft', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',  // 🔐 CRITICAL: Include session cookies for auth
                     body: JSON.stringify({
                         companyId: window.currentCompanyId || null,
                         categoryName,
