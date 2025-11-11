@@ -5652,9 +5652,14 @@ Just checking in..."></textarea>
                         </span>
                         <span style="font-size: 11px; background: rgba(255,255,255,0.2); padding: 3px 8px; border-radius: 12px; font-weight: 600;">LIVE BETA</span>
                     </div>
-                    <button id="scenario-architect-toggle" type="button" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
-                        Hide
-                    </button>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button id="architect-settings-btn" type="button" title="LLM Enterprise Settings" style="background: rgba(255,255,255,0.1); border: none; color: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.25)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                        <button id="scenario-architect-toggle" type="button" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                            Hide
+                        </button>
+                    </div>
                 </div>
                 
                 <!-- Chat Area (scrollable) -->
@@ -5726,6 +5731,325 @@ Just checking in..."></textarea>
 
         </div>
     </div>
+
+    <!-- ============================================ -->
+    <!-- 🎛️ LLM ENTERPRISE SETTINGS (Full Page) -->
+    <!-- ============================================ -->
+    <section id="llm-enterprise-settings-section" style="display:none; position: fixed; inset: 0; background: #f3f4f6; z-index: 10002; overflow-y: auto;">
+      <div style="max-width:1200px; margin:0 auto; padding: 20px;">
+        <!-- Header -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; background: white; padding: 16px 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <div>
+            <h1 style="font-size:20px; font-weight:700; color:#111827; margin: 0;">
+              <i class="fas fa-cog mr-2"></i>LLM Enterprise Settings
+            </h1>
+            <div style="font-size:13px; color:#6b7280; margin-top:4px;">
+              Global behavior, compliance, and generation defaults for the AI Scenario Architect.
+            </div>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button id="llm-settings-reset-all" style="padding:8px 14px; border-radius:8px; border:1px solid #e5e7eb; background:white; font-size:13px; cursor:pointer; font-weight:500; transition: all 0.2s;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='white'">
+              <i class="fas fa-undo mr-1"></i>Reset All to Defaults
+            </button>
+            <button id="llm-settings-back" style="padding:8px 16px; border-radius:8px; border:none; background:#4f46e5; color:white; font-size:13px; font-weight:600; cursor:pointer; transition: all 0.2s;" onmouseover="this.style.background='#4338ca'" onmouseout="this.style.background='#4f46e5'">
+              <i class="fas fa-arrow-left mr-1"></i>Back to Scenario Editor
+            </button>
+          </div>
+        </div>
+
+        <!-- Two-column layout -->
+        <div style="display:flex; gap:20px;">
+          <!-- Left nav -->
+          <div style="width:240px;">
+            <div style="background:white; border-radius:10px; border:1px solid #e5e7eb; padding:12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+              <div class="llm-settings-nav-item" data-target="llm-settings-profiles" style="padding:10px 12px; border-radius:8px; font-size:13px; cursor:pointer; background:#eef2ff; font-weight:600; color:#4f46e5; transition: all 0.2s;">
+                <i class="fas fa-user-circle mr-2"></i>Profiles
+              </div>
+              <div class="llm-settings-nav-item" data-target="llm-settings-compliance" style="padding:10px 12px; border-radius:8px; font-size:13px; cursor:pointer; margin-top:4px; color:#6b7280; transition: all 0.2s;">
+                <i class="fas fa-shield-alt mr-2"></i>Compliance & Domains
+              </div>
+              <div class="llm-settings-nav-item" data-target="llm-settings-generation" style="padding:10px 12px; border-radius:8px; font-size:13px; cursor:pointer; margin-top:4px; color:#6b7280; transition: all 0.2s;">
+                <i class="fas fa-magic mr-2"></i>Generation Defaults
+              </div>
+              <div class="llm-settings-nav-item" data-target="llm-settings-advanced" style="padding:10px 12px; border-radius:8px; font-size:13px; cursor:pointer; margin-top:4px; color:#6b7280; transition: all 0.2s;">
+                <i class="fas fa-sliders-h mr-2"></i>Advanced Tuning
+              </div>
+            </div>
+          </div>
+
+          <!-- Right content -->
+          <div style="flex:1; display:flex; flex-direction:column; gap:16px;">
+            
+            <!-- Profiles Card -->
+            <div id="llm-settings-profiles" class="llm-settings-card" style="background:white; border-radius:10px; border:1px solid #e5e7eb; padding:20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+              <div style="font-size:17px; font-weight:700; margin-bottom:6px; color:#111827;">
+                <i class="fas fa-user-circle mr-2 text-indigo-600"></i>AI Profiles
+              </div>
+              <div style="font-size:13px; color:#6b7280; margin-bottom:16px; line-height:1.5;">
+                Choose the default behavior pattern used by the AI Scenario Architect. Each profile has different creativity, safety, and generation settings.
+              </div>
+
+              <div id="llm-profile-radios" style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
+                <label style="display:flex; gap:10px; cursor:pointer; padding:12px; border-radius:8px; border:2px solid #e5e7eb; transition: all 0.2s;" onmouseover="this.style.borderColor='#c7d2fe'" onmouseout="if(!this.querySelector('input').checked) this.style.borderColor='#e5e7eb'">
+                  <input type="radio" name="llm-active-profile" value="compliance_safe" style="margin-top:2px;" />
+                  <div style="flex:1;">
+                    <div style="font-weight:600; font-size:14px; color:#111827; margin-bottom:4px;">
+                      <i class="fas fa-shield-alt mr-1 text-green-600"></i>Compliance-Safe (Default)
+                    </div>
+                    <div style="font-size:12px; color:#6b7280; line-height:1.4;">
+                      Conservative, low creativity (temp 0.2). Prioritizes safety, clarity, policy alignment. Clamps priority±2, minConfidence 0.6-0.9.
+                    </div>
+                  </div>
+                </label>
+
+                <label style="display:flex; gap:10px; cursor:pointer; padding:12px; border-radius:8px; border:2px solid #e5e7eb; transition: all 0.2s;" onmouseover="this.style.borderColor='#c7d2fe'" onmouseout="if(!this.querySelector('input').checked) this.style.borderColor='#e5e7eb'">
+                  <input type="radio" name="llm-active-profile" value="call_center_optimized" style="margin-top:2px;" />
+                  <div style="flex:1;">
+                    <div style="font-weight:600; font-size:14px; color:#111827; margin-bottom:4px;">
+                      <i class="fas fa-phone-alt mr-1 text-blue-600"></i>Call Center Optimized
+                    </div>
+                    <div style="font-size:12px; color:#6b7280; line-height:1.4;">
+                      Balanced creativity (temp 0.35). Tuned for phone calls with richer triggers, more variants. Best for production call centers.
+                    </div>
+                  </div>
+                </label>
+
+                <label style="display:flex; gap:10px; cursor:pointer; padding:12px; border-radius:8px; border:2px solid #e5e7eb; transition: all 0.2s;" onmouseover="this.style.borderColor='#c7d2fe'" onmouseout="if(!this.querySelector('input').checked) this.style.borderColor='#e5e7eb'">
+                  <input type="radio" name="llm-active-profile" value="creative_exploration" style="margin-top:2px;" />
+                  <div style="flex:1;">
+                    <div style="font-weight:600; font-size:14px; color:#111827; margin-bottom:4px;">
+                      <i class="fas fa-lightbulb mr-1 text-purple-600"></i>Creative Exploration (Internal)
+                    </div>
+                    <div style="font-size:12px; color:#6b7280; line-height:1.4;">
+                      High creativity (temp 0.65), uses gpt-4o. Generates many variants for brainstorming. Review before production.
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              <div style="display:flex; justify-content:flex-end; gap:10px; padding-top:12px; border-top:1px solid #f3f4f6;">
+                <button id="llm-settings-profiles-reset" style="padding:8px 14px; border-radius:8px; border:1px solid #e5e7eb; background:white; font-size:13px; cursor:pointer; font-weight:500; transition: all 0.2s;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='white'">
+                  <i class="fas fa-undo mr-1"></i>Reset
+                </button>
+                <button id="llm-settings-profiles-save" style="padding:8px 16px; border-radius:8px; border:none; background:#10b981; color:white; font-size:13px; font-weight:600; cursor:pointer; transition: all 0.2s;" onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'">
+                  <i class="fas fa-check mr-1"></i>Save Profiles
+                </button>
+              </div>
+            </div>
+
+            <!-- Compliance Card -->
+            <div id="llm-settings-compliance" class="llm-settings-card" style="display:none; background:white; border-radius:10px; border:1px solid #e5e7eb; padding:20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+              <div style="font-size:17px; font-weight:700; margin-bottom:6px; color:#111827;">
+                <i class="fas fa-shield-alt mr-2 text-green-600"></i>Compliance & Domain Safety
+              </div>
+              <div style="font-size:13px; color:#6b7280; margin-bottom:16px; line-height:1.5;">
+                Extra guardrails and domain-specific rules applied on top of the selected profile. These affect system prompts and validation.
+              </div>
+
+              <div style="background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; padding:12px; margin-bottom:16px;">
+                <div style="font-size:12px; font-weight:600; color:#92400e; margin-bottom:6px;">
+                  <i class="fas fa-exclamation-triangle mr-1"></i>Strict Compliance Mode
+                </div>
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="llm-strict-compliance" />
+                  <span style="font-size:13px; color:#78350f;">Enforce strict compliance guardrails across all scenarios (conservative safety checks, restricted language)</span>
+                </label>
+              </div>
+
+              <div style="font-size:14px; font-weight:600; color:#111827; margin-bottom:10px;">Domain-Specific Safety Modes</div>
+              
+              <label style="display:flex; align-items:start; gap:10px; cursor:pointer; padding:10px; border-radius:8px; background:#f9fafb; margin-bottom:8px;">
+                <input type="checkbox" id="llm-medical-mode" style="margin-top:2px;" />
+                <div style="flex:1;">
+                  <div style="font-size:13px; font-weight:600; color:#111827;">Medical Office Safety Mode</div>
+                  <div style="font-size:12px; color:#6b7280; margin-top:2px;">Blocks medical advice, diagnosis, prescriptions. Focuses on scheduling and logistics only.</div>
+                </div>
+              </label>
+
+              <label style="display:flex; align-items:start; gap:10px; cursor:pointer; padding:10px; border-radius:8px; background:#f9fafb; margin-bottom:8px;">
+                <input type="checkbox" id="llm-financial-mode" style="margin-top:2px;" />
+                <div style="flex:1;">
+                  <div style="font-size:13px; font-weight:600; color:#111827;">Financial / Billing Safety Mode</div>
+                  <div style="font-size:12px; color:#6b7280; margin-top:2px;">Blocks investment/tax advice, guarantees. Handles billing status and payment methods only.</div>
+                </div>
+              </label>
+
+              <label style="display:flex; align-items:start; gap:10px; cursor:pointer; padding:10px; border-radius:8px; background:#f9fafb; margin-bottom:12px;">
+                <input type="checkbox" id="llm-emergency-mode" style="margin-top:2px;" />
+                <div style="flex:1;">
+                  <div style="font-size:13px; font-weight:600; color:#111827;">Emergency Services Safety Mode</div>
+                  <div style="font-size:12px; color:#6b7280; margin-top:2px;">Instructs callers to dial emergency number for active emergencies. Blocks triage attempts.</div>
+                </div>
+              </label>
+
+              <label style="font-size:13px; font-weight:600; color:#111827; margin-top:12px; display:block;">
+                Internal Notes (optional)
+              </label>
+              <textarea id="llm-compliance-notes" placeholder="Add notes about your compliance requirements..." style="width:100%; min-height:70px; margin-top:6px; font-size:12px; padding:8px 10px; border-radius:8px; border:1px solid #e5e7eb; font-family: inherit; resize: vertical;"></textarea>
+
+              <div style="display:flex; justify-content:flex-end; gap:10px; padding-top:12px; border-top:1px solid #f3f4f6; margin-top:16px;">
+                <button id="llm-settings-compliance-reset" style="padding:8px 14px; border-radius:8px; border:1px solid #e5e7eb; background:white; font-size:13px; cursor:pointer; font-weight:500; transition: all 0.2s;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='white'">
+                  <i class="fas fa-undo mr-1"></i>Reset
+                </button>
+                <button id="llm-settings-compliance-save" style="padding:8px 16px; border-radius:8px; border:none; background:#10b981; color:white; font-size:13px; font-weight:600; cursor:pointer; transition: all 0.2s;" onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'">
+                  <i class="fas fa-check mr-1"></i>Save Compliance
+                </button>
+              </div>
+            </div>
+
+            <!-- Generation Card -->
+            <div id="llm-settings-generation" class="llm-settings-card" style="display:none; background:white; border-radius:10px; border:1px solid #e5e7eb; padding:20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+              <div style="font-size:17px; font-weight:700; margin-bottom:6px; color:#111827;">
+                <i class="fas fa-magic mr-2 text-purple-600"></i>Scenario Generation Defaults
+              </div>
+              <div style="font-size:13px; color:#6b7280; margin-bottom:16px; line-height:1.5;">
+                Default behavior when you ask the AI Architect to draft a scenario. These can be overridden per request.
+              </div>
+
+              <div style="font-size:14px; font-weight:600; color:#111827; margin-bottom:10px;">Generation Mode</div>
+              <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px; background:#f9fafb; padding:12px; border-radius:8px;">
+                <label style="display:flex; gap:10px; cursor:pointer; align-items:center;">
+                  <input type="radio" name="llm-generation-mode" value="single" />
+                  <div>
+                    <div style="font-size:13px; font-weight:600; color:#111827;">Single Draft (Default)</div>
+                    <div style="font-size:12px; color:#6b7280;">Generate one complete scenario per request.</div>
+                  </div>
+                </label>
+                <label style="display:flex; gap:10px; cursor:pointer; align-items:center;">
+                  <input type="radio" name="llm-generation-mode" value="multi" />
+                  <div>
+                    <div style="font-size:13px; font-weight:600; color:#111827;">Multi-Variant Brainstorm</div>
+                    <div style="font-size:12px; color:#6b7280;">Generate multiple scenario variations for comparison.</div>
+                  </div>
+                </label>
+              </div>
+
+              <div style="display:flex; gap:20px; flex-wrap:wrap;">
+                <div style="display:flex; flex-direction:column; gap:6px; flex:1; min-width:180px;">
+                  <label for="llm-default-variants" style="font-size:13px; font-weight:600; color:#111827;">
+                    <i class="fas fa-clone mr-1"></i>Default Variant Count
+                  </label>
+                  <input type="number" id="llm-default-variants" min="1" max="15" value="1" style="width:100%; padding:8px 10px; font-size:13px; border-radius:8px; border:1px solid #e5e7eb;" />
+                  <span style="font-size:11px; color:#6b7280;">How many variants to generate by default</span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:6px; flex:1; min-width:180px;">
+                  <label for="llm-max-variants" style="font-size:13px; font-weight:600; color:#111827;">
+                    <i class="fas fa-layer-group mr-1"></i>Max Allowed Variants
+                  </label>
+                  <input type="number" id="llm-max-variants" min="1" max="20" value="15" style="width:100%; padding:8px 10px; font-size:13px; border-radius:8px; border:1px solid #e5e7eb;" />
+                  <span style="font-size:11px; color:#6b7280;">Maximum variants a user can request</span>
+                </div>
+              </div>
+
+              <div style="display:flex; justify-content:flex-end; gap:10px; padding-top:12px; border-top:1px solid #f3f4f6; margin-top:16px;">
+                <button id="llm-settings-generation-reset" style="padding:8px 14px; border-radius:8px; border:1px solid #e5e7eb; background:white; font-size:13px; cursor:pointer; font-weight:500; transition: all 0.2s;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='white'">
+                  <i class="fas fa-undo mr-1"></i>Reset
+                </button>
+                <button id="llm-settings-generation-save" style="padding:8px 16px; border-radius:8px; border:none; background:#10b981; color:white; font-size:13px; font-weight:600; cursor:pointer; transition: all 0.2s;" onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'">
+                  <i class="fas fa-check mr-1"></i>Save Generation
+                </button>
+              </div>
+            </div>
+
+            <!-- Advanced Card -->
+            <div id="llm-settings-advanced" class="llm-settings-card" style="display:none; background:white; border-radius:10px; border:1px solid #e5e7eb; padding:20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+              <div style="font-size:17px; font-weight:700; margin-bottom:6px; color:#111827;">
+                <i class="fas fa-sliders-h mr-2 text-orange-600"></i>Advanced Model Tuning
+              </div>
+              <div style="font-size:13px; color:#6b7280; margin-bottom:16px; line-height:1.5;">
+                Optional overrides for temperature, top_p, and max_tokens per profile. Leave blank to use profile defaults. Compliance-Safe values are clamped server-side.
+              </div>
+
+              <div id="llm-advanced-profiles" style="display:flex; flex-direction:column; gap:12px;">
+                
+                <!-- Compliance Safe -->
+                <div style="border:1px solid #e5e7eb; border-radius:8px; padding:14px; background:#fafafa;">
+                  <div style="font-size:14px; font-weight:600; margin-bottom:4px; color:#111827;">
+                    <i class="fas fa-shield-alt mr-1 text-green-600"></i>Compliance-Safe Overrides
+                  </div>
+                  <div style="font-size:11px; color:#6b7280; margin-bottom:10px;">
+                    Leave blank to use defaults: temp 0.2, top_p 0.9, max_tokens 2200. Server clamps: temp 0.1-0.35, top_p 0.7-0.95, tokens 1200-2600.
+                  </div>
+                  <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">Temperature</label>
+                      <input type="number" step="0.05" min="0" max="1" id="llm-adv-compliance-temp" placeholder="0.2" style="width:90px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">top_p</label>
+                      <input type="number" step="0.05" min="0.1" max="1" id="llm-adv-compliance-topP" placeholder="0.9" style="width:90px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">max_tokens</label>
+                      <input type="number" step="50" min="500" max="3200" id="llm-adv-compliance-maxTokens" placeholder="2200" style="width:100px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Call Center -->
+                <div style="border:1px solid #e5e7eb; border-radius:8px; padding:14px; background:#fafafa;">
+                  <div style="font-size:14px; font-weight:600; margin-bottom:4px; color:#111827;">
+                    <i class="fas fa-phone-alt mr-1 text-blue-600"></i>Call Center Optimized Overrides
+                  </div>
+                  <div style="font-size:11px; color:#6b7280; margin-bottom:10px;">
+                    Leave blank to use defaults: temp 0.35, top_p 0.9, max_tokens 2600.
+                  </div>
+                  <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">Temperature</label>
+                      <input type="number" step="0.05" min="0" max="1" id="llm-adv-callcenter-temp" placeholder="0.35" style="width:90px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">top_p</label>
+                      <input type="number" step="0.05" min="0.1" max="1" id="llm-adv-callcenter-topP" placeholder="0.9" style="width:90px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">max_tokens</label>
+                      <input type="number" step="50" min="500" max="3200" id="llm-adv-callcenter-maxTokens" placeholder="2600" style="width:100px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Creative -->
+                <div style="border:1px solid #e5e7eb; border-radius:8px; padding:14px; background:#fafafa;">
+                  <div style="font-size:14px; font-weight:600; margin-bottom:4px; color:#111827;">
+                    <i class="fas fa-lightbulb mr-1 text-purple-600"></i>Creative Exploration Overrides
+                  </div>
+                  <div style="font-size:11px; color:#6b7280; margin-bottom:10px;">
+                    Leave blank to use defaults: temp 0.65, top_p 0.95, max_tokens 3000.
+                  </div>
+                  <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">Temperature</label>
+                      <input type="number" step="0.05" min="0" max="1" id="llm-adv-creative-temp" placeholder="0.65" style="width:90px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">top_p</label>
+                      <input type="number" step="0.05" min="0.1" max="1" id="llm-adv-creative-topP" placeholder="0.95" style="width:90px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">max_tokens</label>
+                      <input type="number" step="50" min="500" max="3200" id="llm-adv-creative-maxTokens" placeholder="3000" style="width:100px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              <div style="display:flex; justify-content:flex-end; gap:10px; padding-top:12px; border-top:1px solid #f3f4f6; margin-top:16px;">
+                <button id="llm-settings-advanced-reset" style="padding:8px 14px; border-radius:8px; border:1px solid #e5e7eb; background:white; font-size:13px; cursor:pointer; font-weight:500; transition: all 0.2s;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='white'">
+                  <i class="fas fa-undo mr-1"></i>Reset
+                </button>
+                <button id="llm-settings-advanced-save" style="padding:8px 16px; border-radius:8px; border:none; background:#10b981; color:white; font-size:13px; font-weight:600; cursor:pointer; transition: all 0.2s;" onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'">
+                  <i class="fas fa-check mr-1"></i>Save Advanced
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- ============================================ -->
     <!-- BULK UPLOAD SCENARIOS MODAL -->
@@ -18974,6 +19298,327 @@ ${JSON.stringify(healthData, null, 2)}
             
             console.log('✅ [PAGE INIT] Page initialization complete (both Template and Company modes loaded)');
         });
+
+
+        // ============================================================================
+        // 🎛️ LLM ENTERPRISE SETTINGS PAGE CONTROLLER
+        // ============================================================================
+        const LLMSettingsPage = {
+            state: null,
+
+            async open() {
+                console.log('🎛️ [LLM SETTINGS] Opening settings page...');
+                document.getElementById('llm-enterprise-settings-section').style.display = 'block';
+                const scenarioModal = document.getElementById('big-scenario-modal');
+                if (scenarioModal) scenarioModal.classList.add('hidden');
+                await this.load();
+            },
+
+            close() {
+                console.log('🎛️ [LLM SETTINGS] Closing settings page...');
+                document.getElementById('llm-enterprise-settings-section').style.display = 'none';
+                const scenarioModal = document.getElementById('big-scenario-modal');
+                if (scenarioModal) scenarioModal.classList.remove('hidden');
+            },
+
+            async load() {
+                console.log('🎛️ [LLM SETTINGS] Loading settings from API...');
+                try {
+                    const res = await fetch('/api/admin/llm-settings', {
+                        credentials: 'include'
+                    });
+                    const data = await res.json();
+                    if (!data.success) throw new Error(data.error || 'Failed to load settings');
+                    this.state = data.settings;
+                    this.applyToUI();
+                    console.log('✅ [LLM SETTINGS] Settings loaded successfully', this.state);
+                } catch (err) {
+                    console.error('❌ [LLM SETTINGS] Load failed', err);
+                    if (typeof ToastManager !== 'undefined' && ToastManager.show) {
+                        ToastManager.show('Failed to load LLM settings', 'error');
+                    }
+                }
+            },
+
+            applyToUI() {
+                if (!this.state) return;
+                console.log('🎨 [LLM SETTINGS] Applying settings to UI...', this.state);
+
+                // Profiles - active profile selection
+                const active = this.state.defaults?.activeProfile || 'compliance_safe';
+                document.querySelectorAll('input[name="llm-active-profile"]').forEach((input) => {
+                    input.checked = input.value === active;
+                    // Update parent label border for checked state
+                    if (input.checked) {
+                        input.closest('label').style.borderColor = '#a5b4fc';
+                        input.closest('label').style.background = '#eef2ff';
+                    } else {
+                        input.closest('label').style.borderColor = '#e5e7eb';
+                        input.closest('label').style.background = 'white';
+                    }
+                });
+
+                // Compliance checkboxes
+                const compliance = this.state.compliance || {};
+                document.getElementById('llm-strict-compliance').checked = !!compliance.strictComplianceMode;
+                document.getElementById('llm-medical-mode').checked = !!compliance.medicalOfficeMode;
+                document.getElementById('llm-financial-mode').checked = !!compliance.financialMode;
+                document.getElementById('llm-emergency-mode').checked = !!compliance.emergencyServicesMode;
+                document.getElementById('llm-compliance-notes').value = compliance.notes || '';
+
+                // Generation defaults
+                const genMode = this.state.defaults?.generationMode || 'single';
+                document.querySelectorAll('input[name="llm-generation-mode"]').forEach((input) => {
+                    input.checked = input.value === genMode;
+                });
+                document.getElementById('llm-default-variants').value = this.state.defaults?.defaultVariantCount ?? 1;
+                document.getElementById('llm-max-variants').value = this.state.defaults?.maxVariantCount ?? 15;
+
+                // Advanced overrides
+                const overrides = this.state.overrides || {};
+                
+                // Compliance-safe
+                const oCompliance = overrides.compliance_safe || {};
+                document.getElementById('llm-adv-compliance-temp').value = oCompliance.temperature ?? '';
+                document.getElementById('llm-adv-compliance-topP').value = oCompliance.topP ?? '';
+                document.getElementById('llm-adv-compliance-maxTokens').value = oCompliance.maxTokens ?? '';
+
+                // Call center
+                const oCallCenter = overrides.call_center_optimized || {};
+                document.getElementById('llm-adv-callcenter-temp').value = oCallCenter.temperature ?? '';
+                document.getElementById('llm-adv-callcenter-topP').value = oCallCenter.topP ?? '';
+                document.getElementById('llm-adv-callcenter-maxTokens').value = oCallCenter.maxTokens ?? '';
+
+                // Creative
+                const oCreative = overrides.creative_exploration || {};
+                document.getElementById('llm-adv-creative-temp').value = oCreative.temperature ?? '';
+                document.getElementById('llm-adv-creative-topP').value = oCreative.topP ?? '';
+                document.getElementById('llm-adv-creative-maxTokens').value = oCreative.maxTokens ?? '';
+
+                console.log('✅ [LLM SETTINGS] UI updated with current settings');
+            },
+
+            async saveProfiles() {
+                console.log('💾 [LLM SETTINGS] Saving profiles...');
+                const activeInput = document.querySelector('input[name="llm-active-profile"]:checked');
+                const activeProfile = activeInput?.value || 'compliance_safe';
+
+                const payload = {
+                    defaults: {
+                        activeProfile
+                    }
+                };
+
+                await this.save(payload, 'Profile settings saved successfully');
+            },
+
+            async saveCompliance() {
+                console.log('💾 [LLM SETTINGS] Saving compliance...');
+                const payload = {
+                    compliance: {
+                        strictComplianceMode: document.getElementById('llm-strict-compliance').checked,
+                        medicalOfficeMode: document.getElementById('llm-medical-mode').checked,
+                        financialMode: document.getElementById('llm-financial-mode').checked,
+                        emergencyServicesMode: document.getElementById('llm-emergency-mode').checked,
+                        notes: document.getElementById('llm-compliance-notes').value || ''
+                    }
+                };
+                await this.save(payload, 'Compliance settings saved successfully');
+            },
+
+            async saveGeneration() {
+                console.log('💾 [LLM SETTINGS] Saving generation defaults...');
+                const modeInput = document.querySelector('input[name="llm-generation-mode"]:checked');
+                const generationMode = modeInput?.value || 'single';
+                const defaultVariantCount = parseInt(document.getElementById('llm-default-variants').value, 10);
+                const maxVariantCount = parseInt(document.getElementById('llm-max-variants').value, 10);
+
+                const payload = {
+                    defaults: {
+                        generationMode,
+                        defaultVariantCount: defaultVariantCount || 1,
+                        maxVariantCount: maxVariantCount || 15
+                    }
+                };
+                await this.save(payload, 'Generation defaults saved successfully');
+            },
+
+            async saveAdvanced() {
+                console.log('💾 [LLM SETTINGS] Saving advanced tuning...');
+                const payload = {
+                    overrides: {
+                        compliance_safe: {
+                            temperature: this._readNumberOrNull('llm-adv-compliance-temp'),
+                            topP: this._readNumberOrNull('llm-adv-compliance-topP'),
+                            maxTokens: this._readNumberOrNull('llm-adv-compliance-maxTokens')
+                        },
+                        call_center_optimized: {
+                            temperature: this._readNumberOrNull('llm-adv-callcenter-temp'),
+                            topP: this._readNumberOrNull('llm-adv-callcenter-topP'),
+                            maxTokens: this._readNumberOrNull('llm-adv-callcenter-maxTokens')
+                        },
+                        creative_exploration: {
+                            temperature: this._readNumberOrNull('llm-adv-creative-temp'),
+                            topP: this._readNumberOrNull('llm-adv-creative-topP'),
+                            maxTokens: this._readNumberOrNull('llm-adv-creative-maxTokens')
+                        }
+                    }
+                };
+                await this.save(payload, 'Advanced tuning saved successfully');
+            },
+
+            _readNumberOrNull(id) {
+                const el = document.getElementById(id);
+                if (!el) return null;
+                const val = el.value.trim();
+                if (val === '') return null;
+                const n = Number(val);
+                return Number.isFinite(n) ? n : null;
+            },
+
+            async save(partial, successMessage) {
+                try {
+                    const res = await fetch('/api/admin/llm-settings', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify(partial)
+                    });
+                    const data = await res.json();
+                    if (!data.success) throw new Error(data.error || 'Save failed');
+                    this.state = data.settings;
+                    this.applyToUI();
+                    console.log('✅ [LLM SETTINGS] Save successful', data.settings);
+                    if (typeof ToastManager !== 'undefined' && ToastManager.show) {
+                        ToastManager.show(successMessage, 'success');
+                    }
+                } catch (err) {
+                    console.error('❌ [LLM SETTINGS] Save failed', err);
+                    if (typeof ToastManager !== 'undefined' && ToastManager.show) {
+                        ToastManager.show('Failed to save settings', 'error');
+                    }
+                }
+            },
+
+            async reset(scope) {
+                console.log('🔄 [LLM SETTINGS] Resetting scope:', scope);
+                try {
+                    const res = await fetch('/api/admin/llm-settings/reset', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ scope })
+                    });
+                    const data = await res.json();
+                    if (!data.success) throw new Error(data.error || 'Reset failed');
+                    this.state = data.settings;
+                    this.applyToUI();
+                    console.log('✅ [LLM SETTINGS] Reset successful', data.settings);
+                    if (typeof ToastManager !== 'undefined' && ToastManager.show) {
+                        ToastManager.show('Settings reset to defaults', 'success');
+                    }
+                } catch (err) {
+                    console.error('❌ [LLM SETTINGS] Reset failed', err);
+                    if (typeof ToastManager !== 'undefined' && ToastManager.show) {
+                        ToastManager.show('Failed to reset settings', 'error');
+                    }
+                }
+            }
+        };
+
+        // Wire up LLM Settings buttons
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🎛️ [LLM SETTINGS] Wiring up event listeners...');
+
+            // Gear button in AI Architect header
+            const gearBtn = document.getElementById('architect-settings-btn');
+            if (gearBtn) {
+                gearBtn.addEventListener('click', () => LLMSettingsPage.open());
+                console.log('✅ [LLM SETTINGS] Gear button wired');
+            }
+
+            // Back button
+            const backBtn = document.getElementById('llm-settings-back');
+            if (backBtn) {
+                backBtn.addEventListener('click', () => LLMSettingsPage.close());
+                console.log('✅ [LLM SETTINGS] Back button wired');
+            }
+
+            // Reset all button
+            const resetAllBtn = document.getElementById('llm-settings-reset-all');
+            if (resetAllBtn) {
+                resetAllBtn.addEventListener('click', () => {
+                    if (confirm('Reset ALL LLM settings to recommended defaults? This will affect profiles, compliance, generation, and advanced tuning.')) {
+                        LLMSettingsPage.reset('all');
+                    }
+                });
+                console.log('✅ [LLM SETTINGS] Reset all button wired');
+            }
+
+            // Save buttons
+            const saveButtons = [
+                { id: 'llm-settings-profiles-save', handler: () => LLMSettingsPage.saveProfiles() },
+                { id: 'llm-settings-compliance-save', handler: () => LLMSettingsPage.saveCompliance() },
+                { id: 'llm-settings-generation-save', handler: () => LLMSettingsPage.saveGeneration() },
+                { id: 'llm-settings-advanced-save', handler: () => LLMSettingsPage.saveAdvanced() }
+            ];
+
+            saveButtons.forEach(({ id, handler }) => {
+                const btn = document.getElementById(id);
+                if (btn) {
+                    btn.addEventListener('click', handler);
+                    console.log(`✅ [LLM SETTINGS] ${id} wired`);
+                }
+            });
+
+            // Reset section buttons
+            const resetButtons = [
+                { id: 'llm-settings-profiles-reset', scope: 'profiles' },
+                { id: 'llm-settings-compliance-reset', scope: 'compliance' },
+                { id: 'llm-settings-generation-reset', scope: 'generation' },
+                { id: 'llm-settings-advanced-reset', scope: 'advanced' }
+            ];
+
+            resetButtons.forEach(({ id, scope }) => {
+                const btn = document.getElementById(id);
+                if (btn) {
+                    btn.addEventListener('click', () => LLMSettingsPage.reset(scope));
+                    console.log(`✅ [LLM SETTINGS] ${id} wired`);
+                }
+            });
+
+            // Left nav switching
+            document.querySelectorAll('.llm-settings-nav-item').forEach((item) => {
+                item.addEventListener('click', () => {
+                    const targetId = item.getAttribute('data-target');
+                    console.log('🎯 [LLM SETTINGS] Switching to tab:', targetId);
+                    
+                    // Hide all cards
+                    document.querySelectorAll('.llm-settings-card').forEach((card) => {
+                        card.style.display = card.id === targetId ? 'block' : 'none';
+                    });
+                    
+                    // Update nav item styles
+                    document.querySelectorAll('.llm-settings-nav-item').forEach((nav) => {
+                        if (nav === item) {
+                            nav.style.background = '#eef2ff';
+                            nav.style.fontWeight = '600';
+                            nav.style.color = '#4f46e5';
+                        } else {
+                            nav.style.background = 'transparent';
+                            nav.style.fontWeight = '400';
+                            nav.style.color = '#6b7280';
+                        }
+                    });
+                });
+            });
+
+            console.log('✅ [LLM SETTINGS] All event listeners initialized');
+        });
+
+        // Make LLMSettingsPage globally accessible
+        window.LLMSettingsPage = LLMSettingsPage;
+        console.log('✅ [LLM SETTINGS] Controller loaded and available globally');
         
     </script>
     <!-- 

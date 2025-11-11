@@ -21,6 +21,8 @@ const express = require('express');
 const logger = require('../../utils/logger');
 const openaiClient = require('../../config/openai');
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
+const { getSettings } = require('../../services/llmSettingsService');
+const { DEFAULT_LLM_SETTINGS } = require('../../config/llmDefaultSettings');
 
 const router = express.Router();
 
@@ -30,6 +32,101 @@ const router = express.Router();
 // Apply JWT auth + admin role requirement to ALL routes in this file
 router.use(authenticateJWT);
 router.use(requireRole('admin'));
+
+// ============================================================================
+// LLM SETTINGS HELPERS
+// ============================================================================
+
+/**
+ * Apply compliance guardrails to system prompt based on active compliance settings.
+ */
+function buildComplianceSection(compliance) {
+  if (!compliance) return '';
+
+  const sections = [];
+
+  if (compliance.strictComplianceMode) {
+    sections.push(`
+**STRICT COMPLIANCE MODE ENABLED:**
+- Use conservative, safe language in all replies
+- Avoid slang, colloquialisms, or casual phrasing
+- Default to formal, professional tone
+- Do not include unverified claims or guarantees
+- Add disclaimers where appropriate`);
+  }
+
+  if (compliance.medicalOfficeMode) {
+    sections.push(`
+**MEDICAL OFFICE SAFETY MODE:**
+- NEVER provide medical advice, diagnosis, or treatment recommendations
+- Focus ONLY on scheduling, logistics, and general information
+- Include disclaimer: "This is not medical advice. Please consult your healthcare provider."
+- Redirect medical questions to staff or professionals`);
+  }
+
+  if (compliance.financialMode) {
+    sections.push(`
+**FINANCIAL / BILLING SAFETY MODE:**
+- NEVER provide investment, tax, or financial advice
+- Focus ONLY on billing status, payment methods, and general account info
+- Do not make guarantees or predictions about financial outcomes
+- Redirect complex financial questions to licensed advisors`);
+  }
+
+  if (compliance.emergencyServicesMode) {
+    sections.push(`
+**EMERGENCY SERVICES SAFETY MODE:**
+- ALWAYS instruct callers with active emergencies to dial emergency services immediately
+- Do not attempt triage or assessment
+- Focus on non-emergency scheduling and information only
+- Use urgent, clear language for active emergencies`);
+  }
+
+  if (compliance.notes && compliance.notes.trim()) {
+    sections.push(`
+**INTERNAL COMPLIANCE NOTES:**
+${compliance.notes.trim()}`);
+  }
+
+  return sections.length > 0 
+    ? `\n\n===== COMPLIANCE GUARDRAILS =====\n${sections.join('\n')}\n===== END COMPLIANCE =====\n\n`
+    : '';
+}
+
+/**
+ * Get effective model parameters for the active profile with overrides and clamping.
+ */
+function getEffectiveModelParams(settings) {
+  const activeProfileKey = settings.defaults?.activeProfile || 'compliance_safe';
+  const profile = settings.profiles?.[activeProfileKey] || DEFAULT_LLM_SETTINGS.profiles.compliance_safe;
+  const overrides = settings.overrides?.[activeProfileKey] || {};
+
+  // Start with profile defaults
+  let temperature = profile.temperature;
+  let topP = profile.topP;
+  let maxTokens = profile.maxTokens;
+  let model = profile.model;
+
+  // Apply overrides if present
+  if (typeof overrides.temperature === 'number') temperature = overrides.temperature;
+  if (typeof overrides.topP === 'number') topP = overrides.topP;
+  if (typeof overrides.maxTokens === 'number') maxTokens = overrides.maxTokens;
+
+  // Clamp for safety (especially important for compliance_safe profile)
+  if (activeProfileKey === 'compliance_safe') {
+    temperature = clampNumber(temperature, 0.1, 0.35, 0.2);
+    topP = clampNumber(topP, 0.7, 0.95, 0.9);
+    maxTokens = clampNumber(maxTokens, 1200, 2600, 2200);
+  }
+
+  return {
+    model,
+    temperature,
+    topP,
+    maxTokens,
+    profileName: activeProfileKey,
+  };
+}
 
 /**
  * ============================================================================
@@ -258,11 +355,32 @@ router.post('/draft', async (req, res) => {
       });
     }
 
-    logger.info('[LLM SCENARIO ASSISTANT] Processing scenario request (Phase C.1)', {
+    // Load enterprise LLM settings
+    let llmSettings;
+    try {
+      llmSettings = await getSettings('global');
+      logger.debug('[LLM SCENARIO ASSISTANT] Loaded LLM enterprise settings', {
+        activeProfile: llmSettings.defaults?.activeProfile,
+        strictCompliance: llmSettings.compliance?.strictComplianceMode,
+      });
+    } catch (err) {
+      logger.warn('[LLM SCENARIO ASSISTANT] Failed to load settings, using defaults', {
+        error: err.message,
+      });
+      llmSettings = DEFAULT_LLM_SETTINGS;
+    }
+
+    // Get effective model parameters based on active profile
+    const modelParams = getEffectiveModelParams(llmSettings);
+
+    logger.info('[LLM SCENARIO ASSISTANT] Processing scenario request with LLM settings', {
       descriptionLength: description.length,
       channel,
       templateVarCount: templateVariables.length,
       conversationTurns: Array.isArray(conversationLog) ? conversationLog.length : 0,
+      profile: modelParams.profileName,
+      model: modelParams.model,
+      temperature: modelParams.temperature,
     });
 
     // Build comprehensive system prompt (Phase C.1: Enterprise-Grade Validation)
@@ -464,7 +582,7 @@ OUTPUT RULES:
 - Use {variable} syntax for template placeholders.
 - When you make an assumption (e.g., default cooldown, guess at priority), LIST it in checklistSummary.
 - This ensures admin can see EXACTLY what you decided and why.
-`.trim();
+${buildComplianceSection(llmSettings.compliance)}`.trim();
 
     const templateVarList = Array.isArray(templateVariables) && templateVariables.length > 0
       ? `\nKnown template variables (available to use as {variable} placeholders):\n${templateVariables.map(v => `- {${v}}`).join('\n')}`
@@ -486,22 +604,28 @@ ${conversationHistory}${templateVarList}
 If you need clarification before creating a full-quality scenario, return status="needs_clarification" with 1–3 clear questions.
 Otherwise, return status="ready" with a comprehensive "draft" object.`.trim();
 
-    // Call OpenAI
-    logger.debug('[LLM SCENARIO ASSISTANT] Calling OpenAI (Phase C.1)', {
+    // Call OpenAI with enterprise settings
+    logger.debug('[LLM SCENARIO ASSISTANT] Calling OpenAI with enterprise settings', {
       systemPromptLength: systemPrompt.length,
       userPromptLength: userPrompt.length,
       channel,
+      model: modelParams.model,
+      temperature: modelParams.temperature,
+      topP: modelParams.topP,
+      maxTokens: modelParams.maxTokens,
+      profile: modelParams.profileName,
     });
 
     const completion = await openaiClient.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: modelParams.model,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
-      temperature: 0.5,
-      max_tokens: 3000,
+      temperature: modelParams.temperature,
+      top_p: modelParams.topP,
+      max_tokens: modelParams.maxTokens,
     });
 
     // Parse response
@@ -568,10 +692,14 @@ Otherwise, return status="ready" with a comprehensive "draft" object.`.trim();
       draft: status === 'ready' ? draft : null,
       checklistSummary: status === 'ready' ? checklistSummary : undefined,
       metadata: {
-        model: 'gpt-4o-mini',
+        model: modelParams.model,
+        profile: modelParams.profileName,
+        temperature: modelParams.temperature,
+        topP: modelParams.topP,
+        maxTokens: modelParams.maxTokens,
         tokensUsed: completion.usage.total_tokens,
         generatedAt: new Date().toISOString(),
-        phase: 'C.1-full-scenario-architect-with-validation',
+        phase: 'C.1-full-scenario-architect-with-enterprise-settings',
       },
     });
   } catch (err) {
