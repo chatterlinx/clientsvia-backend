@@ -52,6 +52,9 @@
     <!-- 🎯 Template Data Manager - World-Class State Management -->
     <script src="/js/TemplateDataManager.js"></script>
     
+    <!-- 🧠 V7: Scenario Architect Panel - Persistent AI Co-Pilot -->
+    <script src="/js/managers/ScenarioArchitectPanel.js"></script>
+    
     <!-- 🚀 AI Gateway Manager - LLM Health Monitoring & Suggestion System -->
     <script src="/js/ai-gateway/HealthModal.js"></script>
     <script src="/js/ai-gateway/HealthReportModal.js"></script>
@@ -4998,11 +5001,11 @@
                     <p id="scenario-modal-subtitle" style="margin: 0; opacity: 0.9; font-size: 16px;">Category: <strong id="scenario-category-name">Loading...</strong></p>
                 </div>
                 <div style="display: flex; gap: 12px; align-items: center;">
-                    <!-- 🤖 PHASE A – STEP 4: AI Scenario Assistant Button -->
+                    <!-- 🤖 PHASE A – STEP 4: AI Scenario Assistant Button (V7: Feature flag for panel/modal) -->
                     <button
                       type="button"
                       id="scenario-ai-assistant-button"
-                      onclick="openScenarioAIAssistant()"
+                      onclick="window.useInlineScenarioArchitect ? focusScenarioArchitectPanel() : openScenarioAIAssistant()"
                       style="background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4); color: white; padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.3s; display: flex; align-items: center; gap: 8px;"
                       onmouseover="this.style.background='rgba(255,255,255,0.3)'; this.style.borderColor='rgba(255,255,255,0.6)'"
                       onmouseout="this.style.background='rgba(255,255,255,0.2)'; this.style.borderColor='rgba(255,255,255,0.4)'"
@@ -5631,6 +5634,70 @@ Just checking in..."></textarea>
                 </div>
 
             </form>
+
+            <!-- ============================================ -->
+            <!-- 🧠 AI SCENARIO ARCHITECT PANEL (PERSISTENT) -->
+            <!-- ============================================ -->
+            <div id="scenario-architect-panel" class="scenario-architect-region" data-collapsed="false" style="flex: 1 0 250px; border-top: 2px solid #e0e7ff; background: linear-gradient(180deg, #fafbff 0%, #f0f4ff 100%); display: flex; flex-direction: column; min-height: 250px; max-height: 400px;">
+                
+                <!-- Header -->
+                <div class="architect-header" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #059669;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 16px; font-weight: 700;">
+                            <i class="fas fa-brain mr-2"></i>AI Scenario Architect
+                        </span>
+                        <span style="font-size: 11px; background: rgba(255,255,255,0.2); padding: 3px 8px; border-radius: 12px; font-weight: 600;">LIVE BETA</span>
+                    </div>
+                    <button id="scenario-architect-toggle" type="button" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                        Hide
+                    </button>
+                </div>
+                
+                <!-- Chat Area (scrollable) -->
+                <div id="scenario-architect-chat" class="architect-chat-area" style="flex: 1 1 auto; overflow-y: auto; padding: 16px; font-size: 14px; background: white; border-bottom: 1px solid #e5e7eb;">
+                    <div style="color: #6c757d; font-style: italic; text-align: center; padding: 20px;">
+                        No conversation yet. Describe your scenario below to start.
+                    </div>
+                </div>
+                
+                <!-- Checklist Summary Area -->
+                <div id="scenario-architect-checklist" class="architect-checklist" style="padding: 0 16px; max-height: 150px; overflow-y: auto;"></div>
+                
+                <!-- Status Area -->
+                <div id="scenario-architect-status" class="architect-status" style="display: none; margin: 0 16px 12px;"></div>
+                
+                <!-- Input Row -->
+                <div class="architect-input-row" style="padding: 16px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; align-items: flex-end;">
+                    <textarea 
+                        id="scenario-architect-input"
+                        placeholder="Describe what this scenario should handle, or answer the AI's question..."
+                        style="flex: 1; padding: 10px 14px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 14px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: none; min-height: 60px; max-height: 120px; transition: all 0.3s;"
+                        onfocus="this.style.borderColor='#10b981'"
+                        onblur="this.style.borderColor='#d1d5db'"
+                        rows="2"
+                    ></textarea>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <button 
+                            id="scenario-architect-send-btn"
+                            type="button"
+                            style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.3s; white-space: nowrap;"
+                            onmouseover="this.style.background='#059669'"
+                            onmouseout="this.style.background='#10b981'"
+                        >
+                            ✨ Generate Draft
+                        </button>
+                        <button 
+                            id="scenario-architect-apply-btn"
+                            type="button"
+                            style="background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.3s; white-space: nowrap; display: none;"
+                            onmouseover="this.style.background='#2563eb'"
+                            onmouseout="this.style.background='#3b82f6'"
+                        >
+                            ✅ Apply to Form
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             <!-- FIXED FOOTER -->
             <div style="background: #f8f9fa; padding: 24px 40px; border-radius: 0 0 20px 20px; display: flex; align-items: center; justify-content: space-between; border-top: 2px solid #e9ecef;">
@@ -11666,6 +11733,20 @@ Continue?`;
             
             // Show modal
             document.getElementById('scenario-modal').style.display = 'flex';
+            
+            // V7: Initialize Scenario Architect Panel (if enabled)
+            if (window.useInlineScenarioArchitect && window.ScenarioArchitectPanel) {
+                // Reset state for new scenario
+                window.aiAssistantState = {
+                    description: '',
+                    conversationLog: [],
+                    lastDraft: null,
+                };
+                
+                // Initialize or reinitialize panel
+                window.scenarioArchitectPanel = new window.ScenarioArchitectPanel();
+                console.log('🧠 [V7] Scenario Architect Panel initialized for ADD mode');
+            }
         }
 
         /**
@@ -11707,6 +11788,20 @@ Continue?`;
                 
                 // Show modal
                 document.getElementById('scenario-modal').style.display = 'flex';
+                
+                // V7: Initialize Scenario Architect Panel (if enabled)
+                if (window.useInlineScenarioArchitect && window.ScenarioArchitectPanel) {
+                    // Reset state for editing scenario
+                    window.aiAssistantState = {
+                        description: '',
+                        conversationLog: [],
+                        lastDraft: null,
+                    };
+                    
+                    // Initialize or reinitialize panel
+                    window.scenarioArchitectPanel = new window.ScenarioArchitectPanel();
+                    console.log('🧠 [V7] Scenario Architect Panel initialized for EDIT mode');
+                }
                 
             } catch (error) {
                 console.error('❌ [EDIT SCENARIO] Error:', error);
@@ -11884,8 +11979,26 @@ Continue?`;
         // ===================================================================
         // 🤖 PHASE A – STEP 4: AI SCENARIO ASSISTANT FUNCTIONS
         // ===================================================================
+        
+        // ============================================================================
+        // V7: FEATURE FLAG - Persistent AI Architect Panel vs Legacy Modal
+        // ============================================================================
+        window.useInlineScenarioArchitect = true; // Set to false to revert to green modal
 
         let aiAssistantDraft = null;
+
+        /**
+         * V7: Focus the inline AI Architect Panel (called from "Ask AI to Draft" button)
+         */
+        function focusScenarioArchitectPanel() {
+            console.log('🧠 [V7] Focusing AI Architect Panel...');
+            
+            if (window.scenarioArchitectPanel) {
+                window.scenarioArchitectPanel.focus();
+            } else {
+                console.error('🧠 [V7] ScenarioArchitectPanel not initialized yet');
+            }
+        }
 
         function openScenarioAIAssistant() {
             console.log('🤖 [AI ASSISTANT] Opening...');
@@ -11915,7 +12028,165 @@ Continue?`;
             lastDraft: null,
         };
 
-        async function generateScenarioAIDraft() {
+        // ============================================================================
+        // V7: SCENARIO ARCHITECT - SHARED API HELPER (NO DOM ACCESS)
+        // ============================================================================
+        /**
+         * Core API helper for calling /api/admin/scenario-assistant/draft
+         * No DOM dependencies - pure token discovery + API call
+         * Used by both modal mode and panel mode
+         */
+        async function callScenarioAssistantAPI(aiState) {
+            console.log('🔍 [API HELPER] Calling scenario assistant API...');
+            
+            // 🔍 CHECKPOINT 1: Check all possible token locations
+            console.log('🔍 [CHECKPOINT 1] Searching for JWT token in all locations...');
+            
+            const tokenFromStandardKey = localStorage.getItem('token');
+            const tokenFromAdminToken = localStorage.getItem('dminToken');
+            const tokenFromAdminTokenFull = localStorage.getItem('adminToken');
+            const tokenFromSessionStorage = sessionStorage.getItem('token');
+            const tokenFromCookie = document.cookie.split('; ').find(row => row.startsWith('token='));
+            const allCookies = document.cookie;
+            
+            console.log('🔍 [CHECKPOINT 1A] localStorage "token":', tokenFromStandardKey ? `Found (length: ${tokenFromStandardKey.length})` : 'NOT FOUND');
+            console.log('🔍 [CHECKPOINT 1A2] localStorage "dminToken":', tokenFromAdminToken ? `Found (length: ${tokenFromAdminToken.length})` : 'NOT FOUND');
+            console.log('🔍 [CHECKPOINT 1A3] localStorage "adminToken":', tokenFromAdminTokenFull ? `Found (length: ${tokenFromAdminTokenFull.length})` : 'NOT FOUND');
+            console.log('🔍 [CHECKPOINT 1B] sessionStorage "token":', tokenFromSessionStorage ? `Found (length: ${tokenFromSessionStorage.length})` : 'NOT FOUND');
+            console.log('🔍 [CHECKPOINT 1C] Cookie token:', tokenFromCookie ? 'Found' : 'NOT FOUND');
+            console.log('🔍 [CHECKPOINT 1D] All cookies:', allCookies || 'EMPTY');
+            
+            const tokenFromWindow = window.jwtToken || window.authToken || window.getAuthToken;
+            console.log('🔍 [CHECKPOINT 1E] window.jwtToken/authToken:', tokenFromWindow ? 'Found' : 'NOT FOUND');
+            
+            // 🔍 CHECKPOINT 2: Check user object
+            console.log('🔍 [CHECKPOINT 2] Checking user/auth objects...');
+            const adminUser = localStorage.getItem('adminUser');
+            console.log('🔍 [CHECKPOINT 2A] localStorage "adminUser":', adminUser ? adminUser : 'NOT FOUND');
+            console.log('🔍 [CHECKPOINT 2B] window.user:', window.user ? JSON.stringify(window.user) : 'NOT FOUND');
+            console.log('🔍 [CHECKPOINT 2C] window.currentUser:', window.currentUser ? JSON.stringify(window.currentUser) : 'NOT FOUND');
+            
+            // 🔍 CHECKPOINT 3: Build token with fallback priority
+            const token = tokenFromStandardKey || tokenFromAdminToken || tokenFromAdminTokenFull || tokenFromSessionStorage || tokenFromWindow;
+            
+            console.log('🔍 [CHECKPOINT 3] Final token determination:');
+            if (token) {
+                const source = tokenFromStandardKey ? 'localStorage[token]' : 
+                               tokenFromAdminToken ? 'localStorage[dminToken]' :
+                               tokenFromAdminTokenFull ? 'localStorage[adminToken]' :
+                               tokenFromSessionStorage ? 'sessionStorage[token]' : 'window object';
+                console.log(`✅ Token found! Source: ${source}, Length: ${token.length}`);
+            } else {
+                console.error('❌ NO TOKEN FOUND IN ANY LOCATION!');
+                console.error('Available storage keys:');
+                console.error('  localStorage keys:', Object.keys(localStorage));
+                console.error('  sessionStorage keys:', Object.keys(sessionStorage));
+                console.error('  window properties (auth-related):', Object.keys(window).filter(k => k.toLowerCase().includes('auth') || k.toLowerCase().includes('token')));
+                
+                throw new Error('AUTHENTICATION ERROR: No token found in any location. You may need to log in again.');
+            }
+            
+            console.log('🔍 [CHECKPOINT 4] Sending request with token...');
+            const response = await fetch('/api/admin/scenario-assistant/draft', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    description: aiState.description,
+                    conversationLog: aiState.conversationLog,
+                    channel: 'voice',
+                    templateVariables: ['companyname', 'phone', 'address', 'website_url', 'office_hours'],
+                }),
+            });
+            
+            console.log('🔍 [CHECKPOINT 5] Response status:', response.status, response.statusText);
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to generate scenario');
+            }
+            
+            console.log('🔍 [API HELPER] ✅ API call successful, status:', data.status);
+            return data;
+        }
+
+        // ============================================================================
+        // V7: PANEL MODE - Persistent AI Architect Panel
+        // ============================================================================
+        /**
+         * Panel mode: Updates inline persistent panel (no modal closure)
+         * Called by ScenarioArchitectPanel class
+         */
+        async function generateScenarioAIDraftPanelMode(panelInstance) {
+            console.log('🧠 [PANEL MODE] Generating draft...');
+            
+            try {
+                const data = await callScenarioAssistantAPI(window.aiAssistantState);
+                
+                // CASE 1: Clarifying questions needed
+                if (data.status === 'needs_clarification') {
+                    const questions = Array.isArray(data.questions) && data.questions.length > 0
+                        ? data.questions
+                        : ['Please provide more details about this scenario.'];
+                    
+                    const combinedQuestion = questions.join(' ');
+                    window.aiAssistantState.conversationLog.push({ role: 'assistant', content: combinedQuestion });
+                    
+                    panelInstance.renderChat();
+                    panelInstance._setStatus('🤔 AI needs clarification. Answer below and click Continue.', 'info');
+                    
+                    if (panelInstance.sendBtn) {
+                        panelInstance.sendBtn.textContent = '↩️ Continue';
+                    }
+                    
+                    console.log('🧠 [PANEL MODE] Clarifying questions asked:', questions);
+                    return;
+                }
+                
+                // CASE 2: Draft is ready
+                if (data.status === 'ready' && data.draft) {
+                    window.aiAssistantState.lastDraft = data.draft;
+                    window.aiAssistantDraft = data.draft;
+                    
+                    panelInstance.renderChecklist(data.checklistSummary || null);
+                    panelInstance._setStatus('✅ Draft ready! Review above and click "Apply to Form".', 'success');
+                    
+                    if (panelInstance.applyBtn) {
+                        panelInstance.applyBtn.style.display = 'inline-block';
+                    }
+                    if (panelInstance.sendBtn) {
+                        panelInstance.sendBtn.textContent = '🔄 Refine Draft';
+                    }
+                    
+                    panelInstance.renderChat();
+                    
+                    console.log('🧠 [PANEL MODE] ✅ Full draft generated:', data.draft);
+                    console.log('🧠 [PANEL MODE] Checklist Summary:', data.checklistSummary);
+                    return;
+                }
+                
+                throw new Error('Unexpected response format from server');
+            } catch (err) {
+                console.error('🧠 [PANEL MODE] ❌ Error:', err);
+                panelInstance._setStatus(`❌ ${err.message || 'Error generating scenario'}`, 'error');
+                throw err;
+            }
+        }
+
+        // ============================================================================
+        // V7: MODAL MODE - Legacy Green Modal (keep for safety)
+        // ============================================================================
+        /**
+         * Modal mode wrapper: Uses existing modal DOM elements
+         * This is the original behavior, kept for backward compatibility
+         */
+        async function generateScenarioAIDraftModalMode() {
+            console.log('🤖 [MODAL MODE] Generating draft (legacy green modal)...');
+            
             const descEl = document.getElementById('scenario-ai-notes');
             const answerEl = document.getElementById('scenario-ai-answer');
             const answerWrapper = document.getElementById('scenario-ai-answer-wrapper');
@@ -11928,7 +12199,7 @@ Continue?`;
             const applyBtn = document.getElementById('scenario-ai-apply-btn');
 
             if (!errBox || !statusEl) {
-                console.error('🤖 [C.1 ERROR] Critical elements missing from DOM');
+                console.error('🤖 [MODAL MODE ERROR] Critical elements missing from DOM');
                 return;
             }
 
@@ -11964,82 +12235,8 @@ Continue?`;
             generateBtn.textContent = '⏳ Processing...';
 
             try {
-                // 🔍 CHECKPOINT 1: Check all possible token locations
-                console.log('🔍 [CHECKPOINT 1] Searching for JWT token in all locations...');
-                
-                // Try the actual keys found in localStorage
-                const tokenFromStandardKey = localStorage.getItem('token');
-                const tokenFromAdminToken = localStorage.getItem('dminToken'); // ← Found in console!
-                const tokenFromAdminTokenFull = localStorage.getItem('adminToken');
-                const tokenFromSessionStorage = sessionStorage.getItem('token');
-                const tokenFromCookie = document.cookie.split('; ').find(row => row.startsWith('token='));
-                const allCookies = document.cookie;
-                
-                console.log('🔍 [CHECKPOINT 1A] localStorage "token":', tokenFromStandardKey ? `Found (length: ${tokenFromStandardKey.length})` : 'NOT FOUND');
-                console.log('🔍 [CHECKPOINT 1A2] localStorage "dminToken":', tokenFromAdminToken ? `Found (length: ${tokenFromAdminToken.length})` : 'NOT FOUND');
-                console.log('🔍 [CHECKPOINT 1A3] localStorage "adminToken":', tokenFromAdminTokenFull ? `Found (length: ${tokenFromAdminTokenFull.length})` : 'NOT FOUND');
-                console.log('🔍 [CHECKPOINT 1B] sessionStorage "token":', tokenFromSessionStorage ? `Found (length: ${tokenFromSessionStorage.length})` : 'NOT FOUND');
-                console.log('🔍 [CHECKPOINT 1C] Cookie token:', tokenFromCookie ? 'Found' : 'NOT FOUND');
-                console.log('🔍 [CHECKPOINT 1D] All cookies:', allCookies || 'EMPTY');
-                
-                // Try to get token from JWT claim or window object
-                const tokenFromWindow = window.jwtToken || window.authToken || window.getAuthToken;
-                console.log('🔍 [CHECKPOINT 1E] window.jwtToken/authToken:', tokenFromWindow ? 'Found' : 'NOT FOUND');
-                
-                // 🔍 CHECKPOINT 2: Check user object
-                console.log('🔍 [CHECKPOINT 2] Checking user/auth objects...');
-                const adminUser = localStorage.getItem('adminUser');
-                console.log('🔍 [CHECKPOINT 2A] localStorage "adminUser":', adminUser ? adminUser : 'NOT FOUND');
-                console.log('🔍 [CHECKPOINT 2B] window.user:', window.user ? JSON.stringify(window.user) : 'NOT FOUND');
-                console.log('🔍 [CHECKPOINT 2C] window.currentUser:', window.currentUser ? JSON.stringify(window.currentUser) : 'NOT FOUND');
-                
-                // 🔍 CHECKPOINT 3: Build token with fallback priority (try all keys!)
-                const token = tokenFromStandardKey || tokenFromAdminToken || tokenFromAdminTokenFull || tokenFromSessionStorage || tokenFromWindow;
-                
-                console.log('🔍 [CHECKPOINT 3] Final token determination:');
-                if (token) {
-                    const source = tokenFromStandardKey ? 'localStorage[token]' : 
-                                   tokenFromAdminToken ? 'localStorage[dminToken]' :
-                                   tokenFromAdminTokenFull ? 'localStorage[adminToken]' :
-                                   tokenFromSessionStorage ? 'sessionStorage[token]' : 'window object';
-                    console.log(`✅ Token found! Source: ${source}, Length: ${token.length}`);
-                } else {
-                    console.error('❌ NO TOKEN FOUND IN ANY LOCATION!');
-                    console.error('Available storage keys:');
-                    console.error('  localStorage keys:', Object.keys(localStorage));
-                    console.error('  sessionStorage keys:', Object.keys(sessionStorage));
-                    console.error('  window properties (auth-related):', Object.keys(window).filter(k => k.toLowerCase().includes('auth') || k.toLowerCase().includes('token')));
-                    
-                    errBox.textContent = '❌ AUTHENTICATION ERROR: No token found in any location. Check browser console for details. You may need to log in again.';
-                    errBox.style.display = 'block';
-                    generateBtn.disabled = false;
-                    generateBtn.textContent = '✨ Generate Draft';
-                    return;
-                }
-
-                console.log('🔍 [CHECKPOINT 4] Sending request with token...');
-                const response = await fetch('/api/admin/scenario-assistant/draft', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify({
-                        description: window.aiAssistantState.description,
-                        conversationLog: window.aiAssistantState.conversationLog,
-                        channel: 'voice',
-                        templateVariables: ['companyname', 'phone', 'address', 'website_url', 'office_hours'],
-                    }),
-                });
-                
-                console.log('🔍 [CHECKPOINT 5] Response status:', response.status, response.statusText);
-
-                const data = await response.json();
-
-                if (!data.success) {
-                    throw new Error(data.error || 'Failed to generate scenario');
-                }
+                // V7: Delegate to shared API helper (no duplicate token logic)
+                const data = await callScenarioAssistantAPI(window.aiAssistantState);
 
                 // CASE 1: Clarifying questions needed
                 if (data.status === 'needs_clarification') {
@@ -12083,13 +12280,24 @@ Continue?`;
 
                 throw new Error('Unexpected response format from server');
             } catch (err) {
-                console.error('🤖 [C.1 ASSISTANT] Error:', err);
+                console.error('🤖 [MODAL MODE] ❌ Error:', err);
                 errBox.textContent = '❌ ' + (err.message || 'Error generating scenario');
                 errBox.style.display = 'block';
             } finally {
                 generateBtn.disabled = false;
                 generateBtn.textContent = '✨ Generate Draft';
             }
+        }
+
+        // ============================================================================
+        // V7: PUBLIC WRAPPER - Feature Flag Delegation
+        // ============================================================================
+        /**
+         * Public wrapper: existing code calls this via onclick="generateScenarioAIDraft()"
+         * Delegates to modal mode (keeps old behavior working)
+         */
+        async function generateScenarioAIDraft() {
+            return generateScenarioAIDraftModalMode();
         }
 
         /**
