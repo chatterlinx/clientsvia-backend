@@ -11662,6 +11662,10 @@ Continue?`;
             document.getElementById('scenario-modal-action').textContent = 'Edit';
             document.getElementById('scenario-category-name').textContent = category.name;
             
+            // Populate behavior dropdown dynamically from database (must do before populating form)
+            await fetchBehaviors(); // Refresh from DB
+            populateBehaviorDropdown('scenario-behavior');
+            
             // Populate ALL form fields using the restored function
             populateScenarioForm(scenario);
             
@@ -11734,6 +11738,10 @@ Continue?`;
             
             // Reset form
             document.getElementById('scenario-form').reset();
+            
+            // Populate behavior dropdown dynamically from database
+            await fetchBehaviors(); // Refresh from DB
+            populateBehaviorDropdown('scenario-behavior');
             
             // Load inherited fillers/synonyms
             if (typeof loadScenarioInheritedConfig === 'function') {
