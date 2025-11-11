@@ -11964,14 +11964,48 @@ Continue?`;
             generateBtn.textContent = '⏳ Processing...';
 
             try {
-                // Get token from localStorage (set during login)
-                const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-                if (!token) {
-                    errBox.textContent = '❌ Authentication error: No token found. Please log in again.';
+                // 🔍 CHECKPOINT 1: Check all possible token locations
+                console.log('🔍 [CHECKPOINT 1] Searching for JWT token in all locations...');
+                const tokenFromLocalStorage = localStorage.getItem('token');
+                const tokenFromSessionStorage = sessionStorage.getItem('token');
+                const tokenFromCookie = document.cookie.split('; ').find(row => row.startsWith('token='));
+                const allCookies = document.cookie;
+                
+                console.log('🔍 [CHECKPOINT 1A] localStorage token:', tokenFromLocalStorage ? `Found (length: ${tokenFromLocalStorage.length})` : 'NOT FOUND');
+                console.log('🔍 [CHECKPOINT 1B] sessionStorage token:', tokenFromSessionStorage ? `Found (length: ${tokenFromSessionStorage.length})` : 'NOT FOUND');
+                console.log('🔍 [CHECKPOINT 1C] Cookie token:', tokenFromCookie ? 'Found' : 'NOT FOUND');
+                console.log('🔍 [CHECKPOINT 1D] All cookies:', allCookies || 'EMPTY');
+                
+                // Try to get token from JWT claim or window object
+                const tokenFromWindow = window.jwtToken || window.authToken;
+                console.log('🔍 [CHECKPOINT 1E] window.jwtToken:', tokenFromWindow ? 'Found' : 'NOT FOUND');
+                
+                // 🔍 CHECKPOINT 2: Check user object
+                console.log('🔍 [CHECKPOINT 2] Checking user/auth objects...');
+                console.log('🔍 [CHECKPOINT 2A] window.user:', window.user ? JSON.stringify(window.user) : 'NOT FOUND');
+                console.log('🔍 [CHECKPOINT 2B] window.currentUser:', window.currentUser ? JSON.stringify(window.currentUser) : 'NOT FOUND');
+                
+                // 🔍 CHECKPOINT 3: Build token with fallback priority
+                const token = tokenFromLocalStorage || tokenFromSessionStorage || tokenFromWindow;
+                
+                console.log('🔍 [CHECKPOINT 3] Final token determination:');
+                if (token) {
+                    console.log(`✅ Token found! Source: ${tokenFromLocalStorage ? 'localStorage' : tokenFromSessionStorage ? 'sessionStorage' : 'window object'}`);
+                } else {
+                    console.error('❌ NO TOKEN FOUND IN ANY LOCATION!');
+                    console.error('Available storage keys:');
+                    console.error('  localStorage keys:', Object.keys(localStorage));
+                    console.error('  sessionStorage keys:', Object.keys(sessionStorage));
+                    console.error('  window properties (auth-related):', Object.keys(window).filter(k => k.toLowerCase().includes('auth') || k.toLowerCase().includes('token')));
+                    
+                    errBox.textContent = '❌ AUTHENTICATION ERROR: No token found in localStorage, sessionStorage, or window object. Check browser console for details. You may need to log in again.';
                     errBox.style.display = 'block';
+                    generateBtn.disabled = false;
+                    generateBtn.textContent = '✨ Generate Draft';
                     return;
                 }
 
+                console.log('🔍 [CHECKPOINT 4] Sending request with token...');
                 const response = await fetch('/api/admin/scenario-assistant/draft', {
                     method: 'POST',
                     headers: {
@@ -11986,6 +12020,8 @@ Continue?`;
                         templateVariables: ['companyname', 'phone', 'address', 'website_url', 'office_hours'],
                     }),
                 });
+                
+                console.log('🔍 [CHECKPOINT 5] Response status:', response.status, response.statusText);
 
                 const data = await response.json();
 
