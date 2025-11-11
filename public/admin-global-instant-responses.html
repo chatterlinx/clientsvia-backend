@@ -14849,13 +14849,18 @@ Continue?`;
 
         // Open add hook directory modal
         function openAddHookDirectoryModal() {
-            document.getElementById('add-hook-directory-modal').style.display = 'flex';
-            document.getElementById('add-hook-directory-form').reset();
+            const modal = document.getElementById('add-category-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+                const form = document.getElementById('add-category-form');
+                if (form) form.reset();
+            }
         }
 
         // Close add hook directory modal
         function closeAddHookDirectoryModal() {
-            document.getElementById('add-hook-directory-modal').style.display = 'none';
+            const modal = document.getElementById('add-category-modal');
+            if (modal) modal.style.display = 'none';
         }
 
         // Handle add category form submission
@@ -14866,12 +14871,12 @@ Continue?`;
                 showNotification('⏳ Adding directory...', 'info');
 
                 const directoryData = {
-                    directoryId: document.getElementById('add-hook-dir-id').value.trim(),
-                    name: document.getElementById('add-hook-dir-name').value.trim(),
-                    description: document.getElementById('add-hook-dir-description').value.trim(),
-                    icon: document.getElementById('add-hook-dir-icon').value.trim(),
-                    color: document.getElementById('add-hook-dir-color').value,
-                    sortOrder: parseInt(document.getElementById('add-hook-dir-sort').value) || 999
+                    directoryId: document.getElementById('add-category-id').value.trim(),
+                    name: document.getElementById('add-category-name').value.trim(),
+                    description: document.getElementById('add-category-description').value.trim(),
+                    icon: document.getElementById('add-category-icon').value.trim(),
+                    color: document.getElementById('add-category-color').value,
+                    sortOrder: parseInt(document.getElementById('add-category-sort').value) || 999
                 };
 
                 const token = getAuthToken();
@@ -14903,21 +14908,23 @@ Continue?`;
 
         // Edit action hook directory
         function editHookDirectory(dir) {
-            document.getElementById('edit-hook-dir-id-original').value = dir._id;
-            document.getElementById('edit-hook-dir-id').value = dir.directoryId;
-            document.getElementById('edit-hook-dir-name').value = dir.name;
-            document.getElementById('edit-hook-dir-description').value = dir.description || '';
-            document.getElementById('edit-hook-dir-icon').value = dir.icon || '';
-            document.getElementById('edit-hook-dir-color').value = dir.color || 'gray';
-            document.getElementById('edit-hook-dir-sort').value = dir.sortOrder || 0;
-            document.getElementById('edit-hook-dir-active').checked = dir.isActive !== false;
+            document.getElementById('edit-ahc-category-id-original').value = dir._id;
+            document.getElementById('edit-ahc-category-id').value = dir.directoryId;
+            document.getElementById('edit-ahc-category-name').value = dir.name;
+            document.getElementById('edit-ahc-category-description').value = dir.description || '';
+            document.getElementById('edit-ahc-category-icon').value = dir.icon || '';
+            document.getElementById('edit-ahc-category-color').value = dir.color || 'gray';
+            document.getElementById('edit-ahc-category-sort').value = dir.sortOrder || 0;
+            document.getElementById('edit-ahc-category-active').checked = dir.isActive !== false;
             
-            document.getElementById('edit-hook-directory-modal').style.display = 'flex';
+            const modal = document.getElementById('edit-action-hook-category-modal');
+            if (modal) modal.style.display = 'flex';
         }
 
         // Close edit action hook directory modal
         function closeEditHookDirectoryModal() {
-            document.getElementById('edit-hook-directory-modal').style.display = 'none';
+            const modal = document.getElementById('edit-action-hook-category-modal');
+            if (modal) modal.style.display = 'none';
         }
 
         // Handle edit action hook category form submission
@@ -14927,14 +14934,14 @@ Continue?`;
             try {
                 showNotification('⏳ Updating directory...', 'info');
 
-                const directoryId = document.getElementById('edit-hook-dir-id-original').value;
+                const directoryId = document.getElementById('edit-ahc-category-id-original').value;
                 const directoryData = {
-                    name: document.getElementById('edit-hook-dir-name').value.trim(),
-                    description: document.getElementById('edit-hook-dir-description').value.trim(),
-                    icon: document.getElementById('edit-hook-dir-icon').value.trim(),
-                    color: document.getElementById('edit-hook-dir-color').value,
-                    sortOrder: parseInt(document.getElementById('edit-hook-dir-sort').value) || 0,
-                    isActive: document.getElementById('edit-hook-dir-active').checked
+                    name: document.getElementById('edit-ahc-category-name').value.trim(),
+                    description: document.getElementById('edit-ahc-category-description').value.trim(),
+                    icon: document.getElementById('edit-ahc-category-icon').value.trim(),
+                    color: document.getElementById('edit-ahc-category-color').value,
+                    sortOrder: parseInt(document.getElementById('edit-ahc-category-sort').value) || 0,
+                    isActive: document.getElementById('edit-ahc-category-active').checked
                 };
 
                 const token = getAuthToken();
@@ -19337,7 +19344,7 @@ ${JSON.stringify(healthData, null, 2)}
                 </div>
 
                 <div class="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
-                    <button type="button" onclick="closeEditCategoryModal()" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                    <button type="button" onclick="closeEditHookDirectoryModal()" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
                         Cancel
                     </button>
                     <button type="submit" class="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all flex items-center gap-2">
