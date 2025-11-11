@@ -861,6 +861,17 @@ async function startServer() {
                     console.error('[Post-Startup] ❌ Failed to start AI Gateway LLM Analyzer:', error.message);
                     // Non-blocking: server continues even if analyzer fails
                 }
+                
+                // 📋 PHASE C.0: Start LLM Learning Worker for Tier-3 event processing
+                try {
+                    console.log('[Post-Startup] 📋 Starting LLM Learning Worker (Tier-3 event processor)...');
+                    const LLMLearningWorker = require('./services/LLMLearningWorker');
+                    LLMLearningWorker.start(30000); // Run every 30 seconds
+                    console.log('[Post-Startup] ✅ LLM Learning Worker started (processes Tier-3 events every 30s)');
+                } catch (error) {
+                    console.error('[Post-Startup] ❌ Failed to start LLM Learning Worker:', error.message);
+                    // Non-blocking: server continues even if worker fails to start
+                }
             }, 10000); // Wait 10 seconds after server starts to begin health checks
             
             // 🤖 AUTO-OPTIMIZATION SCHEDULER - DISABLED (Missing dependency: smartThresholdOptimizer)

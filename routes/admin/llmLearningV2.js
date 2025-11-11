@@ -21,6 +21,8 @@ const express = require('express');
 const router = express.Router();
 
 const ProductionLLMSuggestion = require('../../models/ProductionLLMSuggestion');
+const AIGatewaySuggestion = require('../../models/aiGateway/Suggestion');  // 📋 Phase C.0: Tier-3 suggestions
+const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');  // For Apply handlers
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
 
@@ -437,6 +439,259 @@ router.patch('/suggestions/:id/snooze', async (req, res, next) => {
     next(err);
   }
 });
+
+// ============================================================================
+// 📋 PHASE C.0 – NEW ROUTES: Tier-3 Event Suggestions
+// ============================================================================
+// These routes feed the console v2 with AIGatewaySuggestion docs created by
+// LLMLearningWorker from Tier-3 usage events.
+// ============================================================================
+
+/**
+ * ============================================================================
+ * GET /api/admin/llm-learning/v2/suggestions-c0
+ * ============================================================================
+ * PURPOSE: Fetch Tier-3-based suggestions from AIGatewaySuggestion
+ * (This powers the main console v2 UI with real Tier-3 events)
+ * 
+ * QUERY PARAMS:
+ * - templateId: Filter by template
+ * - companyId: Filter by company
+ * - status: 'pending' | 'applied' | 'rejected'
+ * - severity: 'low' | 'medium' | 'high'
+ * - limit: Max results (default 100)
+ * 
+ * RESPONSE:
+ * {
+ *   success: true,
+ *   data: [
+ *     {
+ *       id,
+ *       issueCode,
+ *       issueLabel,
+ *       why: "Tier path: T1 (0.25) -> T2 (0.30) -> T3...",
+ *       severity,
+ *       status,
+ *       latencyMs,
+ *       tierPath,
+ *       callSource,
+ *       createdAt
+ *     }
+ *   ]
+ * }
+ * ============================================================================
+ */
+router.get('/v2/suggestions-c0', async (req, res) => {
+  try {
+    const {
+      templateId,
+      companyId,
+      status,
+      severity,
+      limit = 100,
+    } = req.query;
+
+    const query = {};
+
+    if (templateId) query.templateId = templateId;
+    if (companyId) query.companyId = companyId;
+    if (status) query.status = status;
+    if (severity) query.priority = severity;
+
+    const docs = await AIGatewaySuggestion.find(query)
+      .sort({ createdAt: -1 })
+      .limit(Number(limit));
+
+    const rows = docs.map(doc => {
+      const m = doc.metadata || {};
+      return {
+        id: doc._id,
+        templateId: doc.templateId,
+        companyId: doc.companyId,
+        issueCode: m.issueCode || 'ADD_KEYWORDS',
+        issueLabel: mapIssueCodeToLabel(m.issueCode),
+        why: buildWhyText(doc),
+        severity: doc.priority || 'medium',
+        status: doc.status,
+        latencyMs: m.latencyMs ?? null,
+        tierPath: m.tierPath || null,
+        callSource: doc.callSource || 'voice',
+        createdAt: doc.createdAt,
+      };
+    });
+
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    logger.error('[LLM LEARNING V2] /v2/suggestions-c0 error', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * ============================================================================
+ * POST /api/admin/llm-learning/v2/suggestions-c0/:id/apply
+ * ============================================================================
+ * PURPOSE: Apply a Tier-3-based suggestion (update scenario with keywords/triggers)
+ * Supports: ADD_KEYWORDS, TIGHTEN_NEGATIVE_TRIGGERS
+ * 
+ * RESPONSE:
+ * { success: true }
+ * ============================================================================
+ */
+router.post('/v2/suggestions-c0/:id/apply', async (req, res) => {
+  try {
+    const suggestion = await AIGatewaySuggestion.findById(req.params.id);
+    if (!suggestion) {
+      return res.status(404).json({ success: false, error: 'Suggestion not found' });
+    }
+
+    const m = suggestion.metadata || {};
+    const issueCode = m.issueCode;
+    const targetScenarioId = m.targetScenarioId;
+
+    if (!targetScenarioId) {
+      // Nothing to apply, just mark applied
+      suggestion.status = 'applied';
+      suggestion.updatedAt = new Date();
+      await suggestion.save();
+      return res.json({ success: true });
+    }
+
+    const template = await GlobalInstantResponseTemplate.findById(suggestion.templateId);
+    if (!template) {
+      return res.status(404).json({ success: false, error: 'Template not found' });
+    }
+
+    const scenario = template.scenarios.id(targetScenarioId);
+    if (!scenario) {
+      return res.status(404).json({ success: false, error: 'Scenario not found on template' });
+    }
+
+    // Handle ADD_KEYWORDS
+    if (issueCode === 'ADD_KEYWORDS' && Array.isArray(m.suggestedKeywords)) {
+      const existing = new Set(scenario.triggers || []);
+      for (const kw of m.suggestedKeywords) {
+        if (typeof kw === 'string' && kw.trim()) {
+          existing.add(kw.trim());
+        }
+      }
+      scenario.triggers = Array.from(existing);
+      logger.info('[LLM LEARNING V2] Applied ADD_KEYWORDS', {
+        scenarioId: targetScenarioId,
+        count: m.suggestedKeywords.length,
+      });
+    }
+
+    // Handle TIGHTEN_NEGATIVE_TRIGGERS
+    if (issueCode === 'TIGHTEN_NEGATIVE_TRIGGERS' && Array.isArray(m.suggestedNegativePhrases)) {
+      const existingNeg = new Set(scenario.negativeUserPhrases || []);
+      for (const phrase of m.suggestedNegativePhrases) {
+        if (typeof phrase === 'string' && phrase.trim()) {
+          existingNeg.add(phrase.trim());
+        }
+      }
+      scenario.negativeUserPhrases = Array.from(existingNeg);
+      logger.info('[LLM LEARNING V2] Applied TIGHTEN_NEGATIVE_TRIGGERS', {
+        scenarioId: targetScenarioId,
+        count: m.suggestedNegativePhrases.length,
+      });
+    }
+
+    // TODO: Handle ADD_SYNONYMS if TemplateNLPConfig exists
+
+    await template.save();
+
+    suggestion.status = 'applied';
+    suggestion.updatedAt = new Date();
+    await suggestion.save();
+
+    res.json({ success: true });
+  } catch (err) {
+    logger.error('[LLM LEARNING V2] Apply failed', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * ============================================================================
+ * POST /api/admin/llm-learning/v2/suggestions-c0/:id/reject
+ * ============================================================================
+ * PURPOSE: Reject a Tier-3-based suggestion (no changes to scenario)
+ * 
+ * RESPONSE:
+ * { success: true }
+ * ============================================================================
+ */
+router.post('/v2/suggestions-c0/:id/reject', async (req, res) => {
+  try {
+    const suggestion = await AIGatewaySuggestion.findById(req.params.id);
+    if (!suggestion) {
+      return res.status(404).json({ success: false, error: 'Suggestion not found' });
+    }
+
+    suggestion.status = 'rejected';
+    suggestion.updatedAt = new Date();
+    await suggestion.save();
+
+    logger.info('[LLM LEARNING V2] Suggestion rejected', { id: req.params.id });
+
+    res.json({ success: true });
+  } catch (err) {
+    logger.error('[LLM LEARNING V2] Reject failed', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Map issueCode to human-readable label
+ */
+function mapIssueCodeToLabel(code) {
+  const map = {
+    ADD_KEYWORDS: 'Add keywords',
+    ADD_SYNONYMS: 'Add synonyms',
+    TIGHTEN_NEGATIVE_TRIGGERS: 'Tighten negative triggers',
+    SPLIT_SCENARIO: 'Split scenario',
+    ADD_NEW_SCENARIO: 'Add new scenario',
+  };
+  return map[code] || 'Improve matching';
+}
+
+/**
+ * Build a rich "WHY" explanation from suggestion metadata
+ */
+function buildWhyText(suggestion) {
+  const m = suggestion.metadata || {};
+  const parts = [];
+
+  if (m.tierPath) {
+    parts.push(`Tier path: ${m.tierPath}.`);
+  }
+  if (typeof m.tier1Score === 'number' && typeof m.tier1Threshold === 'number') {
+    parts.push(
+      `Tier 1 score (${m.tier1Score.toFixed(2)}) was below threshold (${m.tier1Threshold.toFixed(2)}).`
+    );
+  }
+  if (typeof m.tier2Score === 'number' && typeof m.tier2Threshold === 'number') {
+    parts.push(
+      `Tier 2 score (${m.tier2Score.toFixed(2)}) was below threshold (${m.tier2Threshold.toFixed(2)}).`
+    );
+  }
+  if (typeof m.tier3Confidence === 'number') {
+    parts.push(`Tier 3 confidence: ${m.tier3Confidence.toFixed(2)}.`);
+  }
+  if (m.tier3Rationale) {
+    parts.push(`LLM rationale: ${m.tier3Rationale}`);
+  }
+  if (m.summary) {
+    parts.push(`Summary: ${m.summary}`);
+  }
+
+  return parts.join(' ');
+}
 
 module.exports = router;
 

@@ -45,6 +45,7 @@ const AdminNotificationService = require('./AdminNotificationService');  // 🔔
 const SmartWarmupService = require('./SmartWarmupService');  // 🔥 Smart LLM Pre-warming
 const { logTier3SuggestionSmart } = require('./LlmLearningLogger');  // 🧠 V2 LLM Learning Console
 const LLMCallLog = require('../models/LLMCallLog');
+const LLMLearningTask = require('../models/LLMLearningTask');  // 📋 Phase C.0: Tier-3 event queue
 const logger = require('../utils/logger');
 
 class IntelligentRouter {
@@ -533,6 +534,51 @@ class IntelligentRouter {
                     });
                     result.response = null;
                     result.success = false;
+                }
+                
+                // 📋 PHASE C.0: Create LLMLearningTask for background worker to generate suggestions
+                if (result.tierUsed === 3 && result.matched && fullScenario) {
+                    try {
+                        const tier1Score = result.tier1Result?.confidence ?? null;
+                        const tier2Score = result.tier2Result?.confidence ?? null;
+                        const tier1Threshold = context.intelligenceConfig?.thresholds?.tier1 ?? this.config.defaultTier1Threshold;
+                        const tier2Threshold = context.intelligenceConfig?.thresholds?.tier2 ?? this.config.defaultTier2Threshold;
+                        
+                        await LLMLearningTask.create({
+                            status: 'PENDING',
+                            templateId: template._id,
+                            companyId: company?._id || null,
+                            callId: context.callId || callId || context.callSid || 'unknown',
+                            callSource: context.callSource || 'voice',
+                            
+                            tierPath: `T1 (${tier1Score?.toFixed(2) ?? 'n/a'}) -> T2 (${tier2Score?.toFixed(2) ?? 'n/a'}) -> T3`,
+                            tier1Score: typeof tier1Score === 'number' ? tier1Score : null,
+                            tier1Threshold: typeof tier1Threshold === 'number' ? tier1Threshold : null,
+                            tier2Score: typeof tier2Score === 'number' ? tier2Score : null,
+                            tier2Threshold: typeof tier2Threshold === 'number' ? tier2Threshold : null,
+                            
+                            tier3Confidence: result.tier3Result.confidence,
+                            tier3Rationale: result.tier3Result.rationale,
+                            tier3LatencyMs: result.tier3Result.performance?.responseTime ?? null,
+                            tier3Tokens: result.tier3Result.performance?.tokens ?? null,
+                            tier3Cost: result.cost.tier3 ?? null,
+                            
+                            primaryUtterance: callerInput || '',
+                            chosenScenarioId: fullScenario._id || fullScenario.scenarioId || null,
+                        });
+                        
+                        logger.info('[LLM LEARNING] Task created for Tier-3 event', {
+                            callId: context.callId || callId,
+                            templateId: template._id.toString(),
+                            tier3Confidence: result.tier3Result.confidence,
+                        });
+                    } catch (err) {
+                        logger.error('[LLM LEARNING] Failed to create LLMLearningTask', {
+                            error: err.message,
+                            callId: context.callId || callId,
+                        });
+                        // VERY IMPORTANT: Do not affect call flow
+                    }
                 }
                 
                 // 🧠 LEARNING: Extract patterns and teach Tier 1
