@@ -19051,5 +19051,303 @@ ${JSON.stringify(healthData, null, 2)}
         </div>
     </div>
 
+    <!-- ============================================ -->
+    <!-- ACTION HOOKS MODALS (RESTORED FROM COMMIT e0bc6b17) -->
+    <!-- ============================================ -->
+    
+    <!-- ADD ACTION HOOK MODAL -->
+    <div id="add-action-hook-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 16px; max-width: 700px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+            <div style="display: flex; align-items: center; justify-between; margin-bottom: 20px;">
+                <h2 style="font-size: 28px; font-weight: 700; color: #2c3e50; margin: 0;">
+                    <i class="fas fa-bolt text-yellow-500 mr-2"></i>
+                    Add Action Hook
+                </h2>
+                <button onclick="closeAddActionHookModal()" style="background: none; border: none; font-size: 32px; color: #95a5a6; cursor: pointer;">
+                    &times;
+                </button>
+            </div>
+
+            <form id="add-action-hook-form" class="space-y-4" onsubmit="handleAddActionHookSubmit(event); return false;">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Hook ID *</label>
+                        <input type="text" id="add-hook-id" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="escalate_to_human">
+                        <p class="text-xs text-gray-500 mt-1">Unique identifier (snake_case)</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Category *</label>
+                        <select id="add-hook-category" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                            <option value="escalation">Escalation</option>
+                            <option value="scheduling">Scheduling</option>
+                            <option value="communication">Communication</option>
+                            <option value="payment">Payment</option>
+                            <option value="information">Information</option>
+                            <option value="call_flow">Call Flow</option>
+                            <option value="system">System</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Display Name *</label>
+                    <input type="text" id="add-hook-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="Escalate to Human Agent">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Description</label>
+                    <textarea id="add-hook-description" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="Transfer call to live agent when AI cannot help"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Icon (emoji)</label>
+                    <input type="text" id="add-hook-icon" maxlength="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="📞">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Function Name</label>
+                    <input type="text" id="add-hook-function" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="escalateToHuman">
+                    <p class="text-xs text-gray-500 mt-1">Backend function to execute (camelCase)</p>
+                </div>
+
+                <div class="flex items-center">
+                    <input type="checkbox" id="add-hook-active" checked class="w-5 h-5 text-yellow-500 border-gray-300 rounded focus:ring-yellow-500 mr-2">
+                    <label class="text-sm font-bold text-gray-700">Active</label>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
+                    <button type="button" onclick="closeAddActionHookModal()" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all flex items-center gap-2">
+                        <i class="fas fa-plus-circle"></i>
+                        Add Action Hook
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- EDIT ACTION HOOK MODAL -->
+    <div id="edit-action-hook-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 16px; max-width: 700px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+            <div style="display: flex; align-items: center; justify-between; margin-bottom: 20px;">
+                <h2 style="font-size: 28px; font-weight: 700; color: #2c3e50; margin: 0;">
+                    <i class="fas fa-edit text-yellow-500 mr-2"></i>
+                    Edit Action Hook
+                </h2>
+                <button onclick="closeEditActionHookModal()" style="background: none; border: none; font-size: 32px; color: #95a5a6; cursor: pointer;">
+                    &times;
+                </button>
+            </div>
+
+            <form id="edit-action-hook-form" class="space-y-4" onsubmit="handleEditActionHookSubmit(event); return false;">
+                <input type="hidden" id="edit-hook-id-original">
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Hook ID *</label>
+                        <input type="text" id="edit-hook-id" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 bg-gray-100" readonly>
+                        <p class="text-xs text-gray-500 mt-1">Cannot be changed</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Category *</label>
+                        <select id="edit-hook-category" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                            <option value="escalation">Escalation</option>
+                            <option value="scheduling">Scheduling</option>
+                            <option value="communication">Communication</option>
+                            <option value="payment">Payment</option>
+                            <option value="information">Information</option>
+                            <option value="call_flow">Call Flow</option>
+                            <option value="system">System</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Display Name *</label>
+                    <input type="text" id="edit-hook-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Description</label>
+                    <textarea id="edit-hook-description" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Icon (emoji)</label>
+                    <input type="text" id="edit-hook-icon" maxlength="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Function Name</label>
+                    <input type="text" id="edit-hook-function" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                </div>
+
+                <div class="flex items-center">
+                    <input type="checkbox" id="edit-hook-active" class="w-5 h-5 text-yellow-500 border-gray-300 rounded focus:ring-yellow-500 mr-2">
+                    <label class="text-sm font-bold text-gray-700">Active</label>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
+                    <button type="button" onclick="closeEditActionHookModal()" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-all flex items-center gap-2">
+                        <i class="fas fa-save"></i>
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ADD CATEGORY MODAL (Action Hooks → Directories Tab) -->
+    <div id="add-category-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 16px; max-width: 600px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <h2 style="font-size: 28px; font-weight: 700; color: #2c3e50; margin: 0;">
+                    <i class="fas fa-folder-plus text-yellow-500 mr-2"></i>
+                    Add New Directory
+                </h2>
+                <button onclick="closeAddCategoryModal()" style="background: none; border: none; font-size: 32px; color: #95a5a6; cursor: pointer;">
+                    &times;
+                </button>
+            </div>
+
+            <form id="add-category-form" class="space-y-4" onsubmit="handleAddCategorySubmit(event); return false;">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Category ID *</label>
+                        <input type="text" id="add-category-id" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="phone_transfer">
+                        <p class="text-xs text-gray-500 mt-1">Unique identifier (snake_case)</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Display Name *</label>
+                        <input type="text" id="add-category-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="Phone Transfer">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Description</label>
+                    <textarea id="add-category-description" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="What hooks in this category do..."></textarea>
+                </div>
+
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Icon (emoji)</label>
+                        <input type="text" id="add-category-icon" maxlength="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 text-center text-3xl" placeholder="📞">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Badge Color *</label>
+                        <select id="add-category-color" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                            <option value="red">Red</option>
+                            <option value="blue">Blue</option>
+                            <option value="green">Green</option>
+                            <option value="purple">Purple</option>
+                            <option value="cyan">Cyan</option>
+                            <option value="indigo">Indigo</option>
+                            <option value="yellow">Yellow</option>
+                            <option value="gray" selected>Gray</option>
+                            <option value="pink">Pink</option>
+                            <option value="orange">Orange</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Sort Order</label>
+                        <input type="number" id="add-category-sort" value="999" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
+                    <button type="button" onclick="closeAddCategoryModal()" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all flex items-center gap-2">
+                        <i class="fas fa-plus-circle"></i>
+                        Add Directory
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- EDIT CATEGORY MODAL (Action Hooks → Directories Tab) -->
+    <div id="edit-action-hook-category-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 16px; max-width: 600px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <h2 style="font-size: 28px; font-weight: 700; color: #2c3e50; margin: 0;">
+                    <i class="fas fa-edit text-yellow-500 mr-2"></i>
+                    Edit Directory
+                </h2>
+                <button onclick="closeEditActionHookCategoryModal()" style="background: none; border: none; font-size: 32px; color: #95a5a6; cursor: pointer;">
+                    &times;
+                </button>
+            </div>
+
+            <form id="edit-action-hook-category-form" class="space-y-4" onsubmit="handleEditActionHookCategorySubmit(event); return false;">
+                <input type="hidden" id="edit-ahc-category-id-original">
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Category ID *</label>
+                        <input type="text" id="edit-ahc-category-id" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 bg-gray-100" readonly>
+                        <p class="text-xs text-gray-500 mt-1">Cannot be changed</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Display Name *</label>
+                        <input type="text" id="edit-ahc-category-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Description</label>
+                    <textarea id="edit-ahc-category-description" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500"></textarea>
+                </div>
+
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Icon (emoji)</label>
+                        <input type="text" id="edit-ahc-category-icon" maxlength="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 text-center text-3xl">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Badge Color *</label>
+                        <select id="edit-ahc-category-color" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                            <option value="red">Red</option>
+                            <option value="blue">Blue</option>
+                            <option value="green">Green</option>
+                            <option value="purple">Purple</option>
+                            <option value="cyan">Cyan</option>
+                            <option value="indigo">Indigo</option>
+                            <option value="yellow">Yellow</option>
+                            <option value="gray">Gray</option>
+                            <option value="pink">Pink</option>
+                            <option value="orange">Orange</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Sort Order</label>
+                        <input type="number" id="edit-ahc-category-sort" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                    </div>
+                </div>
+
+                <div class="flex items-center">
+                    <input type="checkbox" id="edit-ahc-category-active" class="w-5 h-5 text-yellow-500 border-gray-300 rounded focus:ring-yellow-500 mr-2">
+                    <label class="text-sm font-bold text-gray-700">Active</label>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
+                    <button type="button" onclick="closeEditCategoryModal()" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all flex items-center gap-2">
+                        <i class="fas fa-save"></i>
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 </body>
 </html>
