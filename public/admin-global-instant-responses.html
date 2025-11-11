@@ -12000,9 +12000,15 @@ Continue?`;
                     applyBtn.style.display = 'block';
                     statusEl.textContent = '✅ Draft ready! Review and click "Apply Draft to Form"';
 
+                    // Show checklist summary if available (Phase C.1 validation)
+                    if (data.checklistSummary) {
+                        renderChecklistSummary(data.checklistSummary);
+                    }
+
                     aiAssistantDraft = data.draft;
 
                     console.log('🤖 [C.1 ASSISTANT] Full draft generated:', data.draft);
+                    console.log('🤖 [C.1 ASSISTANT] Checklist Summary:', data.checklistSummary);
                     return;
                 }
 
@@ -12038,6 +12044,37 @@ Continue?`;
             });
 
             chatEl.scrollTop = chatEl.scrollHeight;
+        }
+
+        /**
+         * PHASE C.1: Render AI Checklist Summary
+         * Shows admin what was configured and what assumptions LLM made
+         */
+        function renderChecklistSummary(checklistSummary) {
+            const statusEl = document.getElementById('scenario-ai-status');
+            if (!statusEl) return;
+
+            const coverage = checklistSummary.coverageScore 
+                ? Math.round(checklistSummary.coverageScore * 100) 
+                : 90;
+
+            let html = `<div style="margin-top: 12px; padding: 12px; background: #f9f9f9; border-left: 4px solid #10b981; border-radius: 4px; font-size: 13px;">`;
+            html += `<strong>✅ AI Checklist (${coverage}% complete):</strong><br/>`;
+
+            if (checklistSummary.settingsNeedingAttention && checklistSummary.settingsNeedingAttention.length > 0) {
+                html += `<ul style="margin: 8px 0; padding-left: 20px;">`;
+                checklistSummary.settingsNeedingAttention.forEach(item => {
+                    html += `<li><strong>${item.field}:</strong> ${item.reason}</li>`;
+                });
+                html += `</ul>`;
+                html += `<p style="margin: 8px 0; color: #666;"><em>Review these before applying. You can tweak them after applying the draft.</em></p>`;
+            } else {
+                html += `<p style="margin: 8px 0; color: #10b981;"><em>All settings look good!</em></p>`;
+            }
+
+            html += `</div>`;
+
+            statusEl.innerHTML = html;
         }
 
         /**

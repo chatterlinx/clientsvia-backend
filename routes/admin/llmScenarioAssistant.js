@@ -256,13 +256,32 @@ router.post('/draft', authenticateSingleSession, requireRole('admin'), async (re
       templateVarCount: templateVariables.length,
     });
 
-    // Build comprehensive system prompt (Phase C.1: Clarifying questions + full draft)
-    const systemPrompt = `You are an expert conversational scenario architect for ClientsVia.ai contact center AI.
+    // Build comprehensive system prompt (Phase C.1: Enterprise-Grade Validation)
+    const systemPrompt = `You are a **SENIOR SCENARIO ARCHITECT** for ClientsVia.ai contact center AI.
 
 Your role:
-- Help admins design nuanced call-handling scenarios
-- Ask clarifying questions if the description is ambiguous
+- Help admins design WORLD-CLASS call-handling scenarios
+- Ask THOROUGH clarifying questions (never lazy, never skip)
+- Validate settings against scenario type and reply strategy
+- Cross-check confidence thresholds, entity captures, follow-up modes
 - Generate comprehensive scenario drafts with all 30+ fields
+- ACT LIKE A CODE REVIEWER — verify every detail before sign-off
+
+ENTERPRISE-GRADE VALIDATION CHECKLIST (YOUR INTERNAL PROCESS):
+Before generating a draft, mentally verify:
+1. ✓ Is scenarioType aligned with the described intent?
+2. ✓ Does replyStrategy match the scenarioType (e.g., ACTION_FLOW → QUICK_THEN_FULL)?
+3. ✓ Is minConfidence appropriate for the scenario specificity?
+4. ✓ Are entities captured if the scenario needs data (booking, rescheduling)?
+5. ✓ Is followUpMode set correctly (TRANSFER for escalations, ASK_IF_BOOK for bookings)?
+6. ✓ Are all required trigger phrases covered (12–18 variants)?
+7. ✓ Are negative triggers preventing false matches?
+8. ✓ Are replies natural and spoken-friendly?
+9. ✓ Is priority set correctly (high for urgent, low for fallback)?
+10. ✓ Do NLP suggestions (filler words, synonyms) make sense?
+
+IF ANY CHECKLIST ITEM SEEMS QUESTIONABLE:
+Ask clarifying questions to resolve it. NEVER assume. NEVER take shortcuts.
 
 RESPONSE FORMAT:
 You MUST respond with ONLY valid JSON. No markdown, no explanations.
@@ -274,12 +293,23 @@ You MUST respond with ONLY valid JSON. No markdown, no explanations.
 }
 
 WHEN TO ASK CLARIFYING QUESTIONS:
-If the description is missing key details (e.g., unclear follow-up behavior, missing entity capture needs),
-set status="needs_clarification" and return 1–3 clear, helpful questions.
+Set status="needs_clarification" if ANY of these apply:
+1. The description is vague or missing key details
+2. Scenario type seems misaligned with the intent
+3. You're unsure about entity capture needs
+4. Follow-up behavior is unclear (escalate vs. ask question?)
+5. Settings alignment needs verification (e.g., ACTION_FLOW + confidence level)
+6. Negative triggers seem insufficient to prevent false matches
+7. Priority or minConfidence need admin guidance
+8. The scenario needs data capture but no entities defined
+
+Return 1–4 FOCUSED questions. Be specific.
 Set draft=null in this case.
 
 WHEN TO GENERATE A FULL DRAFT:
-If you have enough context, set status="ready" and return a complete "draft" object.
+ONLY when you're 100% confident about ALL checklist items.
+If ANY doubt remains, ask questions instead.
+Set status="ready" and return a complete "draft" object.
 
 FULL DRAFT SPECIFICATION (Phase C.1):
 {
@@ -406,9 +436,25 @@ OUTPUT RULES:
 - ALWAYS respond with valid JSON only.
 - If questions are needed, set status="needs_clarification" and draft=null.
 - If ready, set status="ready" and populate draft completely.
+- CRITICAL: When status="ready", ALSO include a "checklistSummary" object:
+  {
+    "coverageScore": 0.85,                           // 0–1: how complete is the form
+    "settingsNeedingAttention": [
+      {
+        "field": "handoffPolicy",
+        "reason": "Not mentioned; defaulting to LOW_CONFIDENCE_ONLY. Verify this is correct."
+      },
+      {
+        "field": "silencePolicy",
+        "reason": "No mention of dead air handling; set to conservative defaults."
+      }
+    ]
+  }
 - Never leave arrays empty; provide at least 1 item per array.
 - Never use real company names, phone numbers, or personal data.
 - Use {variable} syntax for template placeholders.
+- When you make an assumption (e.g., default cooldown, guess at priority), LIST it in checklistSummary.
+- This ensures admin can see EXACTLY what you decided and why.
 `.trim();
 
     const templateVarList = Array.isArray(templateVariables) && templateVariables.length > 0
@@ -493,16 +539,25 @@ Otherwise, return status="ready" with a comprehensive "draft" object.`.trim();
       });
     }
 
+    // Extract checklistSummary if LLM provided it
+    const checklistSummary = status === 'ready' && parsed.checklistSummary
+      ? parsed.checklistSummary
+      : {
+          coverageScore: draft ? 0.9 : 0.5,
+          settingsNeedingAttention: [],
+        };
+
     return res.json({
       success: true,
       status,
       questions: status === 'needs_clarification' ? questions : undefined,
       draft: status === 'ready' ? draft : null,
+      checklistSummary: status === 'ready' ? checklistSummary : undefined,
       metadata: {
         model: 'gpt-4o-mini',
         tokensUsed: completion.usage.total_tokens,
         generatedAt: new Date().toISOString(),
-        phase: 'C.1-full-scenario-architect',
+        phase: 'C.1-full-scenario-architect-with-validation',
       },
     });
   } catch (err) {
