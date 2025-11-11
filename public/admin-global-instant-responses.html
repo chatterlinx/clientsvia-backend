@@ -5103,7 +5103,7 @@
                                     <i class="fas fa-filter text-gray-600"></i>
                                     <strong style="color: #374151;">Effective Filler Words:</strong>
                                     <span id="scenario-fillers-count" style="background: #e5e7eb; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">0</span>
-                                    <button onclick="openQuickAddFillerModal()" style="margin-left: auto; background: #059669; color: white; border: none; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#047857'" onmouseout="this.style.background='#059669'">
+                                    <button onclick="showAddFillerWordModal()" style="margin-left: auto; background: #059669; color: white; border: none; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#047857'" onmouseout="this.style.background='#059669'" title="Add filler word to template">
                                         <i class="fas fa-plus"></i>
                                         Quick Add
                                     </button>
@@ -5123,7 +5123,7 @@
                                     <i class="fas fa-language text-purple-600"></i>
                                     <strong style="color: #374151;">Effective Synonyms:</strong>
                                     <span id="scenario-synonyms-count" style="background: #e5e7eb; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">0 mappings</span>
-                                    <button onclick="openQuickAddSynonymModal()" style="margin-left: auto; background: #7c3aed; color: white; border: none; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#6d28d9'" onmouseout="this.style.background='#7c3aed'">
+                                    <button onclick="switchOverviewSubTab('synonyms');document.getElementById('new-technical-term').focus();" style="margin-left: auto; background: #7c3aed; color: white; border: none; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='#6d28d9'" onmouseout="this.style.background='#7c3aed'" title="Go to Synonyms tab to add mapping">
                                         <i class="fas fa-plus"></i>
                                         Quick Add
                                     </button>
@@ -12936,31 +12936,6 @@ Continue?`;
                 return null;
             }
         }
-
-        // ============================================
-        // QUICK ADD FILLER MODAL
-        // ============================================
-        
-        let quickFillerScope = 'template'; // default: template
-
-        function openQuickAddFillerModal() {
-            console.log('🚀 [QUICK ADD FILLER] Opening modal...');
-            
-            // Reset
-            document.getElementById('quick-filler-input').value = '';
-            quickFillerScope = 'template';
-            selectQuickFillerScope('template');
-            
-            // Show modal
-            document.getElementById('quick-add-filler-modal').style.display = 'flex';
-        }
-
-        function closeQuickAddFillerModal() {
-            console.log('❌ [QUICK ADD FILLER] Closing modal...');
-            document.getElementById('quick-add-filler-modal').style.display = 'none';
-        }
-
-
 
         // ============================================
         // POPULATE SCENARIO FORM (FOR EDIT MODE)
