@@ -11636,7 +11636,7 @@ Continue?`;
 
         // ❌ DELETED: Legacy openEditScenarioModal (6142-6155) - opened deleted edit-scenario-modal
 
-        function editScenario(categoryIndex, scenarioIndex) {
+        async function editScenario(categoryIndex, scenarioIndex) {
             console.log(`✏️ [EDIT SCENARIO] Opening BIG scenario-modal (4-page form) for category ${categoryIndex}, scenario ${scenarioIndex}`);
             
             // Get category and scenario from activeTemplate
@@ -11664,6 +11664,11 @@ Continue?`;
             
             // Populate ALL form fields using the restored function
             populateScenarioForm(scenario);
+            
+            // Load inherited fillers/synonyms
+            if (typeof loadScenarioInheritedConfig === 'function') {
+                await loadScenarioInheritedConfig(activeTemplateId, category.id);
+            }
             
             // Open the BIG 4-page scenario modal
             document.getElementById('scenario-modal').style.display = 'flex';
@@ -11706,7 +11711,7 @@ Continue?`;
         // ============================================
         let currentAddingCategory = null;
 
-        function addScenario(categoryIndex) {
+        async function addScenario(categoryIndex) {
             console.log(`🔥 [ADD SCENARIO] Opening BIG scenario-modal (4-page form) for category index: ${categoryIndex}`);
             
             // Get category details from activeTemplate
@@ -11729,6 +11734,11 @@ Continue?`;
             
             // Reset form
             document.getElementById('scenario-form').reset();
+            
+            // Load inherited fillers/synonyms
+            if (typeof loadScenarioInheritedConfig === 'function') {
+                await loadScenarioInheritedConfig(activeTemplateId, category.id);
+            }
             
             // Open the BIG 4-page scenario modal
             document.getElementById('scenario-modal').style.display = 'flex';
@@ -11759,6 +11769,120 @@ Continue?`;
                 console.log('🔍 [V8] Generate Draft button element:', btn);
             } else {
                 console.warn('⚠️ [V8] Panel not initialized - feature disabled or class not loaded');
+            }
+        }
+
+        // ============================================
+        // INHERITED CONFIGURATION LOADER (Fillers & Synonyms)
+        // ============================================
+        
+        /**
+         * Load and display inherited fillers and synonyms for a scenario
+         * @param {string} templateId - The template ID
+         * @param {string} categoryId - The category ID
+         */
+        async function loadScenarioInheritedConfig(templateId, categoryId) {
+            console.log('📥 [INHERITED CONFIG] Loading for template:', templateId, 'category:', categoryId);
+            
+            try {
+                const token = localStorage.getItem('adminToken');
+                
+                // Load fillers
+                const fillersResponse = await fetch(`/api/admin/global-instant-responses/${templateId}/fillers`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!fillersResponse.ok) {
+                    throw new Error(`Failed to load fillers: ${fillersResponse.status}`);
+                }
+                
+                const fillersData = await fillersResponse.json();
+                const fillers = fillersData.fillers || [];
+                
+                // Load synonyms
+                const synonymsResponse = await fetch(`/api/admin/global-instant-responses/${templateId}/synonyms`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!synonymsResponse.ok) {
+                    throw new Error(`Failed to load synonyms: ${synonymsResponse.status}`);
+                }
+                
+                const synonymsData = await synonymsResponse.json();
+                const synonyms = synonymsData.synonyms || {};
+                
+                // Render fillers
+                const fillersContainer = document.getElementById('scenario-inherited-fillers');
+                const fillersCountEl = document.getElementById('scenario-fillers-count');
+                
+                if (fillersContainer) {
+                    if (fillers.length === 0) {
+                        fillersContainer.innerHTML = '<span style="color: #9ca3af; font-size: 13px;">No filler words inherited</span>';
+                    } else {
+                        fillersContainer.innerHTML = fillers.map(word => `
+                            <span style="background: #dbeafe; color: #1e40af; padding: 4px 10px; border-radius: 12px; font-size: 13px; font-weight: 500;">
+                                ${word}
+                            </span>
+                        `).join('');
+                    }
+                }
+                
+                if (fillersCountEl) {
+                    fillersCountEl.textContent = fillers.length;
+                }
+                
+                // Render synonyms
+                const synonymsContainer = document.getElementById('scenario-inherited-synonyms');
+                const synonymsCountEl = document.getElementById('scenario-synonyms-count');
+                
+                if (synonymsContainer) {
+                    const synonymEntries = Object.entries(synonyms);
+                    
+                    if (synonymEntries.length === 0) {
+                        synonymsContainer.innerHTML = '<span style="color: #9ca3af; font-size: 13px;">No synonym mappings inherited</span>';
+                    } else {
+                        synonymsContainer.innerHTML = synonymEntries.map(([technical, colloquials]) => `
+                            <div style="padding: 10px; background: #f3e8ff; border-left: 3px solid #9333ea; border-radius: 6px; margin-bottom: 8px;">
+                                <div style="font-weight: 600; color: #581c87; font-size: 13px; margin-bottom: 4px;">
+                                    ${technical}
+                                </div>
+                                <div style="font-size: 12px; color: #6b21a8;">
+                                    ${Array.isArray(colloquials) ? colloquials.join(', ') : colloquials}
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                }
+                
+                if (synonymsCountEl) {
+                    synonymsCountEl.textContent = `${Object.keys(synonyms).length} mappings`;
+                }
+                
+                console.log('✅ [INHERITED CONFIG] Loaded successfully:', {
+                    fillers: fillers.length,
+                    synonyms: Object.keys(synonyms).length
+                });
+                
+            } catch (error) {
+                console.error('❌ [INHERITED CONFIG] Failed to load:', error);
+                
+                // Show error in containers
+                const fillersContainer = document.getElementById('scenario-inherited-fillers');
+                const synonymsContainer = document.getElementById('scenario-inherited-synonyms');
+                
+                if (fillersContainer) {
+                    fillersContainer.innerHTML = '<span style="color: #ef4444; font-size: 13px;">⚠️ Failed to load fillers</span>';
+                }
+                
+                if (synonymsContainer) {
+                    synonymsContainer.innerHTML = '<span style="color: #ef4444; font-size: 13px;">⚠️ Failed to load synonyms</span>';
+                }
             }
         }
 
