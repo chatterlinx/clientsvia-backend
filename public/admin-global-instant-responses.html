@@ -18726,6 +18726,330 @@ ${JSON.stringify(healthData, null, 2)}
             </div>
         </div>
     </div>
+    <!-- ============================================ -->
+    <!-- ADD BEHAVIOR MODAL (RESTORED FROM COMMIT 2255acd8) -->
+    <!-- ============================================ -->
+    <div id="add-behavior-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 16px; max-width: 700px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <h2 style="font-size: 28px; font-weight: 700; color: #2c3e50; margin: 0;">
+                    <i class="fas fa-plus-circle text-purple-600 mr-2"></i>
+                    Add New Behavior Template
+                </h2>
+                <button onclick="closeAddBehaviorModal()" style="background: none; border: none; font-size: 32px; color: #95a5a6; cursor: pointer;">
+                    &times;
+                </button>
+            </div>
+
+            <form id="add-behavior-form" onsubmit="handleAddBehavior(event)">
+                <div class="mb-4">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Behavior Name *</label>
+                    <input type="text" id="add-behavior-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" placeholder="e.g., Booking Coordinator">
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Icon (Emoji)</label>
+                    <input type="text" id="add-behavior-icon" maxlength="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-center text-3xl" placeholder="📅">
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Instructions * <span class="text-xs font-normal text-gray-500">(This is what the AI follows - ONE source of truth)</span></label>
+                    <textarea id="add-behavior-description" required rows="4" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" placeholder="e.g., Calm, slow pace, validating feelings, brief reassurance then practical next step. Avoid platitudes; be specific and human."></textarea>
+                    <p class="text-xs text-gray-500 mt-1">Write in plain English how the AI should behave. Include tone, pace, structure - everything in this one field.</p>
+                </div>
+
+                <div class="mb-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Best For * <span class="text-xs font-normal text-gray-500">(When to use this behavior)</span></label>
+                    <input type="text" id="add-behavior-usefor" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" placeholder="e.g., Scheduling appointments, booking services, reservations">
+                </div>
+
+                <!-- Vocal Characteristics Section -->
+                <div class="mb-6 border-t border-gray-200 pt-6">
+                    <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <i class="fas fa-volume-up text-purple-600"></i>
+                        Vocal Characteristics (for non-LLM AI voice synthesis)
+                    </h3>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">Tone *</label>
+                            <select id="add-behavior-tone" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                <optgroup label="Professional & Business">
+                                    <option value="professional">Professional</option>
+                                    <option value="authoritative">Authoritative</option>
+                                    <option value="business_casual">Business Casual</option>
+                                    <option value="confident">Confident</option>
+                                    <option value="executive">Executive</option>
+                                </optgroup>
+                                <optgroup label="Warm & Supportive">
+                                    <option value="warm">Warm</option>
+                                    <option value="empathetic">Empathetic</option>
+                                    <option value="compassionate">Compassionate</option>
+                                    <option value="reassuring">Reassuring</option>
+                                    <option value="nurturing">Nurturing</option>
+                                    <option value="caring">Caring</option>
+                                </optgroup>
+                                <optgroup label="Friendly & Upbeat">
+                                    <option value="friendly">Friendly</option>
+                                    <option value="cheerful">Cheerful</option>
+                                    <option value="enthusiastic">Enthusiastic</option>
+                                    <option value="energetic">Energetic</option>
+                                    <option value="upbeat">Upbeat</option>
+                                    <option value="playful">Playful</option>
+                                </optgroup>
+                                <optgroup label="Calm & Steady">
+                                    <option value="calm" selected>Calm (default)</option>
+                                    <option value="soothing">Soothing</option>
+                                    <option value="gentle">Gentle</option>
+                                    <option value="patient">Patient</option>
+                                    <option value="relaxed">Relaxed</option>
+                                    <option value="steady">Steady</option>
+                                </optgroup>
+                                <optgroup label="Urgent & Direct">
+                                    <option value="urgent">Urgent</option>
+                                    <option value="firm">Firm</option>
+                                    <option value="direct">Direct</option>
+                                    <option value="assertive">Assertive</option>
+                                    <option value="serious">Serious</option>
+                                </optgroup>
+                                <optgroup label="Apologetic & Humble">
+                                    <option value="apologetic">Apologetic</option>
+                                    <option value="humble">Humble</option>
+                                    <option value="regretful">Regretful</option>
+                                    <option value="sincere">Sincere</option>
+                                </optgroup>
+                                <optgroup label="Neutral">
+                                    <option value="neutral">Neutral</option>
+                                    <option value="matter_of_fact">Matter-of-Fact</option>
+                                </optgroup>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">How the AI should sound emotionally</p>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">Pace *</label>
+                            <select id="add-behavior-pace" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                <option value="very_slow">Very Slow (0.75x)</option>
+                                <option value="slow">Slow (0.85x)</option>
+                                <option value="slightly_slow">Slightly Slower than Normal (0.95x)</option>
+                                <option value="normal" selected>Normal (1.0x - default)</option>
+                                <option value="slightly_fast">Slightly Faster than Normal (1.1x)</option>
+                                <option value="fast">Fast (1.25x)</option>
+                                <option value="very_fast">Very Fast (1.5x)</option>
+                                <option value="rapid">Rapid (1.75x)</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">Speed of speech</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">Volume *</label>
+                            <select id="add-behavior-volume" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                <option value="whisper">Whisper (Very Soft)</option>
+                                <option value="very_soft">Very Soft</option>
+                                <option value="soft">Soft</option>
+                                <option value="slightly_soft">Slightly Below Normal</option>
+                                <option value="normal" selected>Normal (default)</option>
+                                <option value="slightly_above_normal">Slightly Above Normal</option>
+                                <option value="moderate">Moderate</option>
+                                <option value="firm">Firm</option>
+                                <option value="strong">Strong</option>
+                                <option value="loud">Loud</option>
+                                <option value="very_loud">Very Loud (Commanding)</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">Loudness/intensity of voice</p>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">Emotion Intensity * <span class="text-xs font-normal">(1=mild, 5=severe)</span></label>
+                            <select id="add-behavior-emotion-intensity" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                <option value="3">3 - Moderate (default)</option>
+                                <option value="1">1 - Very Mild</option>
+                                <option value="2">2 - Mild</option>
+                                <option value="4">4 - Strong</option>
+                                <option value="5">5 - Very Strong</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">How strong is the emotional context</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
+                    <button type="button" onclick="closeAddBehaviorModal()" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold hover:shadow-lg transition-all flex items-center gap-2">
+                        <i class="fas fa-plus-circle"></i>
+                        Add Behavior
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- EDIT BEHAVIOR MODAL (RESTORED FROM COMMIT 2255acd8) -->
+    <!-- ============================================ -->
+    <div id="edit-behavior-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 16px; max-width: 700px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <h2 style="font-size: 28px; font-weight: 700; color: #2c3e50; margin: 0;">
+                    <i class="fas fa-edit text-blue-600 mr-2"></i>
+                    Edit Behavior Template
+                </h2>
+                <button onclick="closeEditBehaviorModal()" style="background: none; border: none; font-size: 32px; color: #95a5a6; cursor: pointer;">
+                    &times;
+                </button>
+            </div>
+
+            <form id="edit-behavior-form" onsubmit="handleEditBehavior(event)">
+                <input type="hidden" id="edit-behavior-id">
+                
+                <div class="mb-4">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Behavior Name *</label>
+                    <input type="text" id="edit-behavior-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Icon (Emoji)</label>
+                    <input type="text" id="edit-behavior-icon" maxlength="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-center text-3xl">
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Description * <span class="text-xs font-normal text-gray-500">(This is what the AI follows)</span></label>
+                    <textarea id="edit-behavior-description" required rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+
+                <div class="mb-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Best For * <span class="text-xs font-normal text-gray-500">(When to use this behavior)</span></label>
+                    <input type="text" id="edit-behavior-usefor" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <!-- Vocal Characteristics Section -->
+                <div class="mb-6 border-t border-gray-200 pt-6">
+                    <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <i class="fas fa-volume-up text-blue-600"></i>
+                        Vocal Characteristics (for non-LLM AI voice synthesis)
+                    </h3>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">Tone *</label>
+                            <select id="edit-behavior-tone" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <optgroup label="Professional & Business">
+                                    <option value="professional">Professional</option>
+                                    <option value="authoritative">Authoritative</option>
+                                    <option value="business_casual">Business Casual</option>
+                                    <option value="confident">Confident</option>
+                                    <option value="executive">Executive</option>
+                                </optgroup>
+                                <optgroup label="Warm & Supportive">
+                                    <option value="warm">Warm</option>
+                                    <option value="empathetic">Empathetic</option>
+                                    <option value="compassionate">Compassionate</option>
+                                    <option value="reassuring">Reassuring</option>
+                                    <option value="nurturing">Nurturing</option>
+                                    <option value="caring">Caring</option>
+                                </optgroup>
+                                <optgroup label="Friendly & Upbeat">
+                                    <option value="friendly">Friendly</option>
+                                    <option value="cheerful">Cheerful</option>
+                                    <option value="enthusiastic">Enthusiastic</option>
+                                    <option value="energetic">Energetic</option>
+                                    <option value="upbeat">Upbeat</option>
+                                    <option value="playful">Playful</option>
+                                </optgroup>
+                                <optgroup label="Calm & Steady">
+                                    <option value="calm">Calm (default)</option>
+                                    <option value="soothing">Soothing</option>
+                                    <option value="gentle">Gentle</option>
+                                    <option value="patient">Patient</option>
+                                    <option value="relaxed">Relaxed</option>
+                                    <option value="steady">Steady</option>
+                                </optgroup>
+                                <optgroup label="Urgent & Direct">
+                                    <option value="urgent">Urgent</option>
+                                    <option value="firm">Firm</option>
+                                    <option value="direct">Direct</option>
+                                    <option value="assertive">Assertive</option>
+                                    <option value="serious">Serious</option>
+                                </optgroup>
+                                <optgroup label="Apologetic & Humble">
+                                    <option value="apologetic">Apologetic</option>
+                                    <option value="humble">Humble</option>
+                                    <option value="regretful">Regretful</option>
+                                    <option value="sincere">Sincere</option>
+                                </optgroup>
+                                <optgroup label="Neutral">
+                                    <option value="neutral">Neutral</option>
+                                    <option value="matter_of_fact">Matter-of-Fact</option>
+                                </optgroup>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">How the AI should sound emotionally</p>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">Pace *</label>
+                            <select id="edit-behavior-pace" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="very_slow">Very Slow (0.75x)</option>
+                                <option value="slow">Slow (0.85x)</option>
+                                <option value="slightly_slow">Slightly Slower than Normal (0.95x)</option>
+                                <option value="normal">Normal (1.0x - default)</option>
+                                <option value="slightly_fast">Slightly Faster than Normal (1.1x)</option>
+                                <option value="fast">Fast (1.25x)</option>
+                                <option value="very_fast">Very Fast (1.5x)</option>
+                                <option value="rapid">Rapid (1.75x)</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">Speed of speech</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">Volume *</label>
+                            <select id="edit-behavior-volume" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="whisper">Whisper (Very Soft)</option>
+                                <option value="very_soft">Very Soft</option>
+                                <option value="soft">Soft</option>
+                                <option value="slightly_soft">Slightly Below Normal</option>
+                                <option value="normal">Normal (default)</option>
+                                <option value="slightly_above_normal">Slightly Above Normal</option>
+                                <option value="moderate">Moderate</option>
+                                <option value="firm">Firm</option>
+                                <option value="strong">Strong</option>
+                                <option value="loud">Loud</option>
+                                <option value="very_loud">Very Loud (Commanding)</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">Loudness/intensity of voice</p>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">Emotion Intensity * <span class="text-xs font-normal">(1=mild, 5=severe)</span></label>
+                            <select id="edit-behavior-emotion-intensity" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="3">3 - Moderate (default)</option>
+                                <option value="1">1 - Very Mild</option>
+                                <option value="2">2 - Mild</option>
+                                <option value="4">4 - Strong</option>
+                                <option value="5">5 - Very Strong</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">How strong is the emotional context</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
+                    <button type="button" onclick="closeEditBehaviorModal()" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-all flex items-center gap-2">
+                        <i class="fas fa-save"></i>
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
 </body>
 </html>
