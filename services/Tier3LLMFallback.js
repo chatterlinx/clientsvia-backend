@@ -66,6 +66,7 @@ class Tier3LLMFallback {
       });
       return {
         success: false,
+        matched: false,  // Compatible with IntelligentRouter.js
         scenario: null,
         confidence: 0,
         tier: 3,
@@ -154,6 +155,7 @@ Choose the best matching scenario ID, or null.`;
         });
         return {
           success: false,
+          matched: false,  // Compatible with IntelligentRouter.js
           scenario: null,
           confidence: 0,
           tier: 3,
@@ -174,6 +176,7 @@ Choose the best matching scenario ID, or null.`;
         });
         return {
           success: false,
+          matched: false,  // Compatible with IntelligentRouter.js
           scenario: null,
           confidence: 0,
           tier: 3,
@@ -201,6 +204,7 @@ Choose the best matching scenario ID, or null.`;
         });
         return {
           success: true,
+          matched: false,  // Compatible with IntelligentRouter.js
           scenario: null,
           confidence,
           tier: 3,
@@ -219,6 +223,7 @@ Choose the best matching scenario ID, or null.`;
         });
         return {
           success: true,
+          matched: false,  // Compatible with IntelligentRouter.js
           scenario: null,
           confidence,
           tier: 3,
@@ -241,6 +246,7 @@ Choose the best matching scenario ID, or null.`;
 
       return {
         success: true,
+        matched: true,  // Compatible with IntelligentRouter.js
         scenario,
         confidence,
         tier: 3,
@@ -262,6 +268,7 @@ Choose the best matching scenario ID, or null.`;
 
       return {
         success: false,
+        matched: false,  // Compatible with IntelligentRouter.js
         scenario: null,
         confidence: 0,
         tier: 3,
