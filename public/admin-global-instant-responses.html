@@ -19217,12 +19217,12 @@ ${JSON.stringify(healthData, null, 2)}
                     <i class="fas fa-folder-plus text-yellow-500 mr-2"></i>
                     Add New Directory
                 </h2>
-                <button onclick="closeAddCategoryModal()" style="background: none; border: none; font-size: 32px; color: #95a5a6; cursor: pointer;">
+                <button onclick="closeAddHookDirectoryModal()" style="background: none; border: none; font-size: 32px; color: #95a5a6; cursor: pointer;">
                     &times;
                 </button>
             </div>
 
-            <form id="add-category-form" class="space-y-4" onsubmit="handleAddCategorySubmit(event); return false;">
+            <form id="add-category-form" class="space-y-4" onsubmit="handleAddDirectorySubmit(event); return false;">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Category ID *</label>
@@ -19267,7 +19267,7 @@ ${JSON.stringify(healthData, null, 2)}
                 </div>
 
                 <div class="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
-                    <button type="button" onclick="closeAddCategoryModal()" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                    <button type="button" onclick="closeAddHookDirectoryModal()" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
                         Cancel
                     </button>
                     <button type="submit" class="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all flex items-center gap-2">
