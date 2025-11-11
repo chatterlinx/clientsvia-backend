@@ -11905,64 +11905,111 @@ Continue?`;
             aiAssistantDraft = null;
         }
 
+        // ============================================================================
+        // PHASE C.1: Conversational Scenario Assistant
+        // ============================================================================
+        // State for multi-turn conversation with the AI
+        window.aiAssistantState = {
+            description: '',
+            conversationLog: [], // { role: 'assistant'|'user', content: string }
+            lastDraft: null,
+        };
+
         async function generateScenarioAIDraft() {
-            const notesEl = document.getElementById('scenario-ai-notes');
-            const notes = notesEl.value.trim();
+            const descEl = document.getElementById('scenario-ai-notes');
+            const answerEl = document.getElementById('scenario-ai-answer');
+            const chatEl = document.getElementById('scenario-ai-chat');
             const errBox = document.getElementById('scenario-ai-error');
+            const statusEl = document.getElementById('scenario-ai-status');
             const resultWrapper = document.getElementById('scenario-ai-result-wrapper');
             const resultTextarea = document.getElementById('scenario-ai-result-json');
-            const applyBtn = document.getElementById('scenario-ai-apply-btn');
             const generateBtn = document.getElementById('scenario-ai-generate-btn');
+            const applyBtn = document.getElementById('scenario-ai-apply-btn');
 
             errBox.style.display = 'none';
             errBox.textContent = '';
-            resultWrapper.style.display = 'none';
-            applyBtn.style.display = 'none';
+            statusEl.textContent = '';
 
-            if (!notes) {
-                errBox.textContent = '⚠️ Please describe what this scenario should do.';
-                errBox.style.display = 'block';
-                return;
+            // Step 1: Capture initial description if not yet stored
+            if (!window.aiAssistantState.description) {
+                const description = (descEl.value || '').trim();
+                if (!description) {
+                    errBox.textContent = '⚠️ Please describe what this scenario should do.';
+                    errBox.style.display = 'block';
+                    return;
+                }
+                window.aiAssistantState.description = description;
             }
 
+            // Step 2: If there's an answer visible, add it to conversation
+            if (answerEl && answerEl.style.display !== 'none') {
+                const answerText = (answerEl.value || '').trim();
+                if (answerText) {
+                    window.aiAssistantState.conversationLog.push({ role: 'user', content: answerText });
+                }
+                answerEl.value = '';
+                answerEl.style.display = 'none';
+            }
+
+            statusEl.textContent = '🤔 Thinking...';
+            generateBtn.disabled = true;
+            generateBtn.textContent = '⏳ Processing...';
+
             try {
-                generateBtn.disabled = true;
-                generateBtn.textContent = '🔄 Generating...';
-
-                const categoryName = document.getElementById('scenario-category-name')?.textContent || '';
-                const behaviorSelect = document.getElementById('scenario-behavior');
-                const behaviorName = behaviorSelect && behaviorSelect.options[behaviorSelect.selectedIndex]
-                    ? behaviorSelect.options[behaviorSelect.selectedIndex].text
-                    : '';
-
                 const response = await fetch('/api/admin/scenario-assistant/draft', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',  // 🔐 CRITICAL: Include session cookies for auth
+                    credentials: 'include',
                     body: JSON.stringify({
-                        companyId: window.currentCompanyId || null,
-                        categoryName,
-                        behaviorName,
-                        notesFromAdmin: notes,
-                        existingScenario: null
+                        description: window.aiAssistantState.description,
+                        channel: 'voice',
+                        templateVariables: ['companyname', 'phone', 'address', 'website_url', 'office_hours'],
                     }),
                 });
 
-                const json = await response.json();
+                const data = await response.json();
 
-                if (!json.success) {
-                    throw new Error(json.error || 'Unknown error from server');
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to generate scenario');
                 }
 
-                aiAssistantDraft = json.data;
-                resultTextarea.value = JSON.stringify(json.data, null, 2);
-                resultWrapper.style.display = 'block';
-                applyBtn.style.display = 'block';
+                // CASE 1: Clarifying questions needed
+                if (data.status === 'needs_clarification') {
+                    const questions = Array.isArray(data.questions) && data.questions.length > 0
+                        ? data.questions
+                        : ['Please provide more details about this scenario.'];
 
-                console.log('🤖 [AI ASSISTANT] Draft generated successfully:', aiAssistantDraft);
+                    const combinedQuestion = questions.join(' ');
+                    window.aiAssistantState.conversationLog.push({ role: 'assistant', content: combinedQuestion });
+                    renderAIAssistantChat();
+
+                    answerEl.style.display = 'block';
+                    answerEl.placeholder = 'Answer the AI question(s), then click "Generate Draft" again...';
+                    statusEl.textContent = '🤔 The AI needs clarification. Answer above and click again.';
+                    generateBtn.textContent = '↩️ Continue';
+
+                    console.log('🤖 [C.1 ASSISTANT] Clarifying questions asked:', questions);
+                    return;
+                }
+
+                // CASE 2: Draft is ready
+                if (data.status === 'ready' && data.draft) {
+                    window.aiAssistantState.lastDraft = data.draft;
+                    resultTextarea.value = JSON.stringify(data.draft, null, 2);
+                    resultWrapper.style.display = 'block';
+                    applyBtn.style.display = 'block';
+                    statusEl.textContent = '✅ Draft ready! Review and click "Apply Draft to Form"';
+
+                    aiAssistantDraft = data.draft;
+
+                    console.log('🤖 [C.1 ASSISTANT] Full draft generated:', data.draft);
+                    return;
+                }
+
+                throw new Error('Unexpected response format from server');
             } catch (err) {
-                console.error('🤖 [AI ASSISTANT] Error:', err);
-                errBox.textContent = '❌ ' + (err.message || 'Error generating draft scenario.');
+                console.error('🤖 [C.1 ASSISTANT] Error:', err);
+                errBox.textContent = '❌ ' + (err.message || 'Error generating scenario');
                 errBox.style.display = 'block';
             } finally {
                 generateBtn.disabled = false;
@@ -11970,79 +12017,185 @@ Continue?`;
             }
         }
 
+        /**
+         * Render the conversation chat history
+         */
+        function renderAIAssistantChat() {
+            const chatEl = document.getElementById('scenario-ai-chat');
+            if (!chatEl) return;
+
+            chatEl.innerHTML = '';
+            window.aiAssistantState.conversationLog.forEach(msg => {
+                const div = document.createElement('div');
+                div.style.marginBottom = '12px';
+                const who = msg.role === 'assistant' ? '🤖 AI' : '👤 You';
+                const bgColor = msg.role === 'assistant' ? '#e8f4f8' : '#f0f0f0';
+                div.style.padding = '8px 12px';
+                div.style.borderRadius = '6px';
+                div.style.backgroundColor = bgColor;
+                div.innerHTML = '<strong>' + who + ':</strong> ' + msg.content;
+                chatEl.appendChild(div);
+            });
+
+            chatEl.scrollTop = chatEl.scrollHeight;
+        }
+
+        /**
+         * PHASE C.1: Apply full-form draft to scenario editor
+         * Handles 30+ fields including triggers, replies, entities, advanced settings
+         */
         function applyScenarioAIDraft() {
             if (!aiAssistantDraft) {
-                console.warn('🤖 [AI ASSISTANT] No draft to apply');
+                console.warn('🤖 [C.1 ASSISTANT] No draft to apply');
                 return;
             }
 
             const draft = aiAssistantDraft;
-            console.log('🤖 [AI ASSISTANT] Applying draft to form (Phase A.4):', draft);
+            console.log('🤖 [C.1 ASSISTANT] Applying full-form draft:', draft);
 
-            // PHASE A.4: Handle both scenarioName (new) and name (legacy)
-            const scenarioName = draft.scenarioName || draft.name;
-            if (scenarioName) document.getElementById('scenario-name').value = scenarioName;
-            
-            if (draft.scenarioType) document.getElementById('scenario-type').value = draft.scenarioType;
-            if (draft.replyStrategy) document.getElementById('scenario-reply-strategy').value = draft.replyStrategy;
-
-            // Helpers
+            const getEl = id => document.getElementById(id);
             const joinLines = arr => {
-              if (!Array.isArray(arr)) return '';
-              return arr.map(item => {
-                // Handle both strings and weighted objects { text, weight }
-                if (typeof item === 'string') return item;
-                if (item && typeof item === 'object' && item.text) return item.text;
-                return '';
-              }).filter(s => s.length > 0).join('\n');
+                if (!Array.isArray(arr)) return '';
+                return arr.map(item => {
+                    if (typeof item === 'string') return item;
+                    if (item && typeof item === 'object' && item.text) return item.text;
+                    return '';
+                }).filter(s => s.length > 0).join('\n');
             };
 
-            // Triggers & phrases
-            if (draft.triggers) document.getElementById('scenario-triggers').value = joinLines(draft.triggers);
-            if (draft.negativeTriggers) document.getElementById('scenario-negative-triggers').value = joinLines(draft.negativeTriggers);
-            if (draft.exampleUserPhrases) {
-                const phraseEl = document.getElementById('scenario-example-user-phrases');
-                if (phraseEl) phraseEl.value = joinLines(draft.exampleUserPhrases);
-            }
-            if (draft.negativeUserPhrases) {
-                const negEl = document.getElementById('scenario-negative-user-phrases');
-                if (negEl) negEl.value = joinLines(draft.negativeUserPhrases);
+            // ═══════════════════════════════════════════════════════════════════
+            // 1. BASIC INFO
+            // ═══════════════════════════════════════════════════════════════════
+            if (draft.name && getEl('scenario-name')) getEl('scenario-name').value = draft.name;
+            if (draft.scenarioType && getEl('scenario-type')) getEl('scenario-type').value = draft.scenarioType;
+            if (draft.replyStrategy && getEl('scenario-reply-strategy')) getEl('scenario-reply-strategy').value = draft.replyStrategy;
+
+            // ═══════════════════════════════════════════════════════════════════
+            // 2. TRIGGERS & PHRASES (Multiple variants)
+            // ═══════════════════════════════════════════════════════════════════
+            if (draft.triggerPhrases && getEl('scenario-triggers')) 
+                getEl('scenario-triggers').value = joinLines(draft.triggerPhrases);
+            
+            if (draft.negativeTriggers && getEl('scenario-negative-triggers')) 
+                getEl('scenario-negative-triggers').value = joinLines(draft.negativeTriggers);
+            
+            if (draft.regexTriggers && getEl('scenario-regex-triggers')) 
+                getEl('scenario-regex-triggers').value = joinLines(draft.regexTriggers);
+
+            // ═══════════════════════════════════════════════════════════════════
+            // 3. REPLIES (Quick, Full, Follow-ups)
+            // ═══════════════════════════════════════════════════════════════════
+            if (draft.quickReplies && getEl('scenario-quick-replies')) 
+                getEl('scenario-quick-replies').value = joinLines(draft.quickReplies);
+            
+            if (draft.fullReplies && getEl('scenario-full-replies')) 
+                getEl('scenario-full-replies').value = joinLines(draft.fullReplies);
+            
+            if (draft.followUpPrompts && getEl('scenario-followup-prompts')) 
+                getEl('scenario-followup-prompts').value = joinLines(draft.followUpPrompts);
+
+            // ═══════════════════════════════════════════════════════════════════
+            // 4. FOLLOW-UP BEHAVIOR
+            // ═══════════════════════════════════════════════════════════════════
+            if (draft.followUpMode && getEl('scenario-followup-mode')) 
+                getEl('scenario-followup-mode').value = draft.followUpMode;
+            
+            if (draft.followUpQuestionText && getEl('scenario-followup-question')) 
+                getEl('scenario-followup-question').value = draft.followUpQuestionText;
+            
+            if (draft.transferTarget && getEl('scenario-followup-transfer-target')) 
+                getEl('scenario-followup-transfer-target').value = draft.transferTarget;
+
+            // ═══════════════════════════════════════════════════════════════════
+            // 5. CONFIDENCE & PRIORITY
+            // ═══════════════════════════════════════════════════════════════════
+            if (typeof draft.minConfidence === 'number' && getEl('scenario-min-confidence')) 
+                getEl('scenario-min-confidence').value = draft.minConfidence.toFixed(2);
+            
+            if (typeof draft.priority === 'number' && getEl('scenario-priority')) 
+                getEl('scenario-priority').value = draft.priority;
+
+            // ═══════════════════════════════════════════════════════════════════
+            // 6. ENTITIES & VARIABLES
+            // ═══════════════════════════════════════════════════════════════════
+            if (draft.entities && getEl('scenario-entities')) 
+                getEl('scenario-entities').value = joinLines(draft.entities);
+            
+            if (draft.dynamicTemplateVariables && getEl('scenario-dynamic-variables')) {
+                const varLines = Object.keys(draft.dynamicTemplateVariables).map(key => {
+                    const desc = draft.dynamicTemplateVariables[key];
+                    return `{${key}}=${desc}`;
+                });
+                getEl('scenario-dynamic-variables').value = varLines.join('\n');
             }
 
-            // Replies – PHASE A.4: Extract text from weighted objects
-            if (draft.quickReplies) document.getElementById('scenario-quick-replies').value = joinLines(draft.quickReplies);
-            if (draft.fullReplies) document.getElementById('scenario-full-replies').value = joinLines(draft.fullReplies);
+            // ═══════════════════════════════════════════════════════════════════
+            // 7. ADVANCED BEHAVIOR
+            // ═══════════════════════════════════════════════════════════════════
+            if (typeof draft.cooldownSeconds === 'number' && getEl('scenario-cooldown-seconds')) 
+                getEl('scenario-cooldown-seconds').value = draft.cooldownSeconds;
+            
+            if (draft.handoffPolicy && getEl('scenario-handoff-policy')) 
+                getEl('scenario-handoff-policy').value = draft.handoffPolicy;
 
-            // Follow-up prompts (if field exists, map it)
-            if (draft.followUpPrompts && draft.followUpPrompts.length > 0) {
-                const followupPromptsEl = document.getElementById('scenario-followup-prompts');
-                if (followupPromptsEl) followupPromptsEl.value = joinLines(draft.followUpPrompts);
-            }
-
-            // Follow-up behavior
-            if (draft.followUpMode) document.getElementById('scenario-followup-mode').value = draft.followUpMode;
-            if (typeof draft.followUpQuestionText === 'string' && draft.followUpQuestionText) {
-                document.getElementById('scenario-followup-question').value = draft.followUpQuestionText;
-            }
-            if (typeof draft.transferTarget === 'string' && draft.transferTarget) {
-                document.getElementById('scenario-followup-transfer-target').value = draft.transferTarget;
-            }
-
-            // PHASE A.4: minConfidence & priority (if fields exist)
-            if (typeof draft.minConfidence === 'number' && document.getElementById('scenario-min-confidence')) {
-                document.getElementById('scenario-min-confidence').value = draft.minConfidence.toFixed(2);
-            }
-            if (typeof draft.priority === 'number' && document.getElementById('scenario-priority')) {
-                document.getElementById('scenario-priority').value = draft.priority;
+            // Silence Policy
+            if (draft.silencePolicy) {
+                if (getEl('scenario-silence-enabled')) 
+                    getEl('scenario-silence-enabled').checked = !!draft.silencePolicy.enabled;
+                if (draft.silencePolicy.firstPrompt && getEl('scenario-silence-first')) 
+                    getEl('scenario-silence-first').value = draft.silencePolicy.firstPrompt;
+                if (draft.silencePolicy.repeatPrompt && getEl('scenario-silence-repeat')) 
+                    getEl('scenario-silence-repeat').value = draft.silencePolicy.repeatPrompt;
+                if (typeof draft.silencePolicy.maxPrompts === 'number' && getEl('scenario-silence-max-prompts')) 
+                    getEl('scenario-silence-max-prompts').value = draft.silencePolicy.maxPrompts;
+                if (typeof draft.silencePolicy.delaySeconds === 'number' && getEl('scenario-silence-delay')) 
+                    getEl('scenario-silence-delay').value = draft.silencePolicy.delaySeconds;
             }
 
-            // Admin notes
-            if (draft.notes) {
-                const notesEl = document.getElementById('scenario-notes');
-                if (notesEl) notesEl.value = draft.notes;
+            // Timed Follow-up
+            if (draft.timedFollowup) {
+                if (getEl('scenario-timed-followup-enabled')) 
+                    getEl('scenario-timed-followup-enabled').checked = !!draft.timedFollowup.enabled;
+                if (typeof draft.timedFollowup.delaySeconds === 'number' && getEl('scenario-timed-followup-delay')) 
+                    getEl('scenario-timed-followup-delay').value = draft.timedFollowup.delaySeconds;
+                if (typeof draft.timedFollowup.extensionSeconds === 'number' && getEl('scenario-timed-followup-extension')) 
+                    getEl('scenario-timed-followup-extension').value = draft.timedFollowup.extensionSeconds;
             }
 
-            console.log('✅ [AI ASSISTANT] Draft applied to form');
+            // ═══════════════════════════════════════════════════════════════════
+            // 8. ACTION HOOKS & TESTING
+            // ═══════════════════════════════════════════════════════════════════
+            if (draft.actionHooks && getEl('scenario-action-hooks')) 
+                getEl('scenario-action-hooks').value = joinLines(draft.actionHooks);
+            
+            if (draft.testPhrases && draft.testPhrases.length > 0) {
+                if (getEl('scenario-test-phrase')) 
+                    getEl('scenario-test-phrase').value = draft.testPhrases[0];
+                if (getEl('scenario-test-phrases-extra')) 
+                    getEl('scenario-test-phrases-extra').value = draft.testPhrases.join('\n');
+            }
+
+            // ═══════════════════════════════════════════════════════════════════
+            // 9. NLP SUGGESTIONS (Template-level)
+            // ═══════════════════════════════════════════════════════════════════
+            if (draft.suggestedFillerWords && getEl('scenario-suggested-filler-words')) 
+                getEl('scenario-suggested-filler-words').value = joinLines(draft.suggestedFillerWords);
+            
+            if (draft.suggestedSynonyms && getEl('scenario-suggested-synonyms')) {
+                const synLines = Object.keys(draft.suggestedSynonyms).map(base => {
+                    const variants = draft.suggestedSynonyms[base];
+                    return `${base}: ${variants.join(', ')}`;
+                });
+                getEl('scenario-suggested-synonyms').value = synLines.join('\n');
+            }
+
+            // ═══════════════════════════════════════════════════════════════════
+            // 10. NOTES
+            // ═══════════════════════════════════════════════════════════════════
+            if (draft.notes && getEl('scenario-notes')) 
+                getEl('scenario-notes').value = draft.notes;
+
+            console.log('✅ [C.1 ASSISTANT] Draft applied to form (30+ fields)');
             closeScenarioAIAssistant();
 
             // Switch to Basic Info tab to show filled form
