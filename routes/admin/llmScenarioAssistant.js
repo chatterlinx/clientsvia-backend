@@ -26,13 +26,14 @@ const router = express.Router();
 
 /**
  * ============================================================================
- * PHASE A.4: Helper to sanitize & normalize draft scenario
+ * EXTENDED: Sanitize & normalize RICH draft scenario (Phase C.1)
  * ============================================================================
- * Ensures all fields match spec, weights are valid, counts are reasonable.
+ * Now handles full scenario shape including entities, variables, advanced settings.
  */
-function sanitizeDraft(raw) {
+function sanitizeScenarioDraft(raw) {
   const draft = {
-    scenarioName: (raw.scenarioName || raw.name || 'Untitled Scenario').trim(),
+    // BASIC
+    name: (raw.name || raw.scenarioName || 'Untitled Scenario').trim(),
     scenarioType: ['INFO_FAQ', 'ACTION_FLOW', 'SYSTEM_ACK', 'SMALL_TALK'].includes(raw.scenarioType) 
       ? raw.scenarioType 
       : 'INFO_FAQ',
@@ -40,21 +41,24 @@ function sanitizeDraft(raw) {
       ? raw.replyStrategy
       : 'AUTO',
 
-    exampleUserPhrases: Array.isArray(raw.exampleUserPhrases) 
-      ? raw.exampleUserPhrases.filter(p => p && typeof p === 'string').slice(0, 18)
-      : [],
-    negativeUserPhrases: Array.isArray(raw.negativeUserPhrases)
-      ? raw.negativeUserPhrases.filter(p => p && typeof p === 'string').slice(0, 6)
-      : [],
-
-    triggers: Array.isArray(raw.triggers)
-      ? raw.triggers.filter(t => t && typeof t === 'string').slice(0, 18)
+    // TRIGGERS & PHRASES
+    triggerPhrases: Array.isArray(raw.triggerPhrases) 
+      ? raw.triggerPhrases.filter(t => t && typeof t === 'string').slice(0, 20)
       : [],
     negativeTriggers: Array.isArray(raw.negativeTriggers)
-      ? raw.negativeTriggers.filter(t => t && typeof t === 'string').slice(0, 6)
+      ? raw.negativeTriggers.filter(t => t && typeof t === 'string').slice(0, 15)
+      : [],
+    regexTriggers: Array.isArray(raw.regexTriggers)
+      ? raw.regexTriggers.filter(t => t && typeof t === 'string').slice(0, 10)
       : [],
 
-    followUpMode: ['NONE', 'ASK_FOLLOWUP_QUESTION', 'ASK_IF_BOOK', 'TRANSFER'].includes(raw.followUpMode)
+    // REPLIES (weighted)
+    quickReplies: normalizeWeightedReplies(raw.quickReplies, 3, 5),
+    fullReplies: normalizeWeightedReplies(raw.fullReplies, 4, 8),
+    followUpPrompts: normalizeWeightedReplies(raw.followUpPrompts, 2, 3),
+
+    // FOLLOW-UP BEHAVIOR
+    followUpMode: ['NONE', 'ASK_IF_BOOK', 'ASK_FOLLOWUP_QUESTION', 'TRANSFER'].includes(raw.followUpMode)
       ? raw.followUpMode
       : 'NONE',
     followUpQuestionText: (raw.followUpQuestionText && typeof raw.followUpQuestionText === 'string')
@@ -64,30 +68,53 @@ function sanitizeDraft(raw) {
       ? raw.transferTarget.trim()
       : null,
 
+    // ENTITIES & VARIABLES
+    entities: Array.isArray(raw.entities)
+      ? raw.entities.filter(e => e && typeof e === 'string').slice(0, 20)
+      : [],
+    dynamicTemplateVariables: normalizeVariables(raw.dynamicTemplateVariables),
+
+    // CONFIDENCE & PRIORITY
+    minConfidence: clampNumber(raw.minConfidence, 0.5, 0.9, 0.7),
+    priority: clampNumber(raw.priority, -10, 10, 0),
+
+    // ADVANCED BEHAVIOR
+    cooldownSeconds: typeof raw.cooldownSeconds === 'number' ? Math.max(0, raw.cooldownSeconds) : 0,
+    handoffPolicy: ['NEVER', 'LOW_CONFIDENCE_ONLY', 'ALWAYS_IF_REQUESTED'].includes(raw.handoffPolicy)
+      ? raw.handoffPolicy
+      : 'NEVER',
+
+    // SILENCE POLICY
+    silencePolicy: normalizeSilencePolicy(raw.silencePolicy),
+
+    // TIMED FOLLOW-UP
+    timedFollowup: normalizeTimedFollowup(raw.timedFollowup),
+
+    // HOOKS & TESTS
+    actionHooks: Array.isArray(raw.actionHooks)
+      ? raw.actionHooks.filter(h => h && typeof h === 'string').slice(0, 20)
+      : [],
+    testPhrases: Array.isArray(raw.testPhrases)
+      ? raw.testPhrases.filter(p => p && typeof p === 'string').slice(0, 10)
+      : [],
+
+    // NLP SUGGESTIONS
+    suggestedFillerWords: Array.isArray(raw.suggestedFillerWords)
+      ? raw.suggestedFillerWords.filter(w => w && typeof w === 'string').slice(0, 30)
+      : [],
+    suggestedSynonyms: normalizeSynonyms(raw.suggestedSynonyms),
+
+    // NOTES
     notes: (raw.notes && typeof raw.notes === 'string') ? raw.notes.trim() : '',
   };
-
-  // Normalize weighted replies
-  draft.quickReplies = normalizeWeightedReplies(raw.quickReplies, 4, 6, 'quick');
-  draft.fullReplies = normalizeWeightedReplies(raw.fullReplies, 6, 10, 'full');
-  draft.followUpPrompts = normalizeWeightedReplies(raw.followUpPrompts, 2, 3, 'followup');
-
-  // minConfidence: clamp to [0.5, 0.9], default 0.7
-  let minConf = typeof raw.minConfidence === 'number' ? raw.minConfidence : 0.7;
-  draft.minConfidence = Math.min(0.9, Math.max(0.5, minConf));
-
-  // priority: clamp to [-10, 10], default 0
-  let prio = typeof raw.priority === 'number' ? raw.priority : 0;
-  draft.priority = Math.min(10, Math.max(-10, prio));
 
   return draft;
 }
 
 /**
  * Normalize array of weighted replies or strings into { text, weight }[] format.
- * Slices to max count, defaults missing weights.
  */
-function normalizeWeightedReplies(input, minTarget, maxTarget, type) {
+function normalizeWeightedReplies(input, minTarget, maxTarget) {
   if (!Array.isArray(input)) return [];
 
   let items = input
@@ -106,156 +133,304 @@ function normalizeWeightedReplies(input, minTarget, maxTarget, type) {
     })
     .slice(0, maxTarget);
 
-  // If fewer than minTarget, still OK (best-effort)
   return items;
+}
+
+/**
+ * Clamp a number to [min, max] with a default fallback.
+ */
+function clampNumber(value, min, max, defaultValue) {
+  if (typeof value !== 'number') return defaultValue;
+  return Math.min(max, Math.max(min, value));
+}
+
+/**
+ * Normalize dynamic template variables (keys must not contain {})
+ */
+function normalizeVariables(input) {
+  if (!input || typeof input !== 'object') return {};
+  
+  const normalized = {};
+  Object.keys(input).forEach(key => {
+    const cleanKey = key.trim().replace(/[{}]/g, '');
+    if (cleanKey && typeof input[key] === 'string') {
+      normalized[cleanKey] = input[key].trim();
+    }
+  });
+  
+  return normalized;
+}
+
+/**
+ * Normalize silence policy object
+ */
+function normalizeSilencePolicy(input) {
+  if (!input || typeof input !== 'object') {
+    return { enabled: false };
+  }
+
+  return {
+    enabled: !!input.enabled,
+    firstPrompt: (input.firstPrompt && typeof input.firstPrompt === 'string') ? input.firstPrompt.trim() : '',
+    repeatPrompt: (input.repeatPrompt && typeof input.repeatPrompt === 'string') ? input.repeatPrompt.trim() : '',
+    maxPrompts: typeof input.maxPrompts === 'number' ? Math.max(1, input.maxPrompts) : 3,
+    delaySeconds: typeof input.delaySeconds === 'number' ? Math.max(0, input.delaySeconds) : 3,
+  };
+}
+
+/**
+ * Normalize timed followup object
+ */
+function normalizeTimedFollowup(input) {
+  if (!input || typeof input !== 'object') {
+    return { enabled: false };
+  }
+
+  return {
+    enabled: !!input.enabled,
+    delaySeconds: typeof input.delaySeconds === 'number' ? Math.max(0, input.delaySeconds) : 0,
+    extensionSeconds: typeof input.extensionSeconds === 'number' ? Math.max(0, input.extensionSeconds) : 0,
+  };
+}
+
+/**
+ * Normalize synonyms object { base: [variants...] }
+ */
+function normalizeSynonyms(input) {
+  if (!input || typeof input !== 'object') return {};
+
+  const normalized = {};
+  Object.keys(input).forEach(base => {
+    const variants = input[base];
+    if (Array.isArray(variants)) {
+      const cleanVariants = variants
+        .filter(v => v && typeof v === 'string')
+        .map(v => v.trim())
+        .slice(0, 10);
+      if (cleanVariants.length > 0) {
+        normalized[base.trim()] = cleanVariants;
+      }
+    }
+  });
+
+  return normalized;
 }
 
 /**
  * POST /api/admin/scenario-assistant/draft
  * 
- * Generate a draft scenario from admin description using LLM
+ * Generate a full-form scenario draft from admin description using LLM
+ * Supports clarifying questions for nuanced scenarios
  * 
- * Body:
- *  - companyId: string (optional)
- *  - categoryName: string (e.g., "Business Hours")
- *  - behaviorName: string (e.g., "Empathetic & Reassuring")
- *  - notesFromAdmin: string (REQUIRED - what the scenario should do)
- *  - existingScenario: object (optional, if editing existing)
+ * PHASE C.1: Full-form scenario architect with conversational questions
+ * 
+ * Request Body:
+ *  - description: string (REQUIRED - admin's description of scenario)
+ *  - channel: string (default 'voice')
+ *  - templateVariables: string[] (list of available variables like {companyname}, {phone})
+ * 
+ * Response:
+ *  - status: "ready" | "needs_clarification"
+ *  - questions: string[] (only if needs_clarification)
+ *  - draft: object (only if status === "ready")
  */
 router.post('/draft', authenticateSingleSession, requireRole('admin'), async (req, res) => {
   try {
     const {
-      companyId,
-      categoryName,
-      behaviorName,
-      notesFromAdmin,
-      existingScenario,
+      description,
+      channel = 'voice',
+      templateVariables = [],
     } = req.body || {};
 
     // Validate required input
-    if (!notesFromAdmin || !notesFromAdmin.trim()) {
+    if (!description || !description.trim()) {
       return res.status(400).json({
         success: false,
-        error: 'notesFromAdmin is required - describe what this scenario should do',
+        error: 'description is required - describe what this scenario should do',
       });
     }
 
-    logger.info('[LLM SCENARIO ASSISTANT] Generating draft', {
-      companyId,
-      categoryName,
-      behaviorName,
-      notesLength: notesFromAdmin.length,
-      isEdit: !!existingScenario,
+    logger.info('[LLM SCENARIO ASSISTANT] Processing scenario request (Phase C.1)', {
+      descriptionLength: description.length,
+      channel,
+      templateVarCount: templateVariables.length,
     });
 
-    // Build system prompt – PHASE A.4 SPEC
-    const systemPrompt = `You are an expert contact-center conversation designer for ClientVia.ai.
+    // Build comprehensive system prompt (Phase C.1: Clarifying questions + full draft)
+    const systemPrompt = `You are an expert conversational scenario architect for ClientsVia.ai contact center AI.
 
-Your job: turn the admin's description into a SINGLE scenario object with WEIGHTED REPLIES for our AI call assistant.
+Your role:
+- Help admins design nuanced call-handling scenarios
+- Ask clarifying questions if the description is ambiguous
+- Generate comprehensive scenario drafts with all 30+ fields
 
-Respond ONLY with valid JSON. No explanations, no markdown, just pure JSON.
+RESPONSE FORMAT:
+You MUST respond with ONLY valid JSON. No markdown, no explanations.
 
-JSON shape (PHASE A.4 SPEC):
 {
-  "scenarioName": "Short human-readable scenario name",
+  "status": "ready" | "needs_clarification",
+  "questions": [ "question1?", "question2?" ],   // ONLY if status === "needs_clarification"
+  "draft": { ... }                               // ONLY if status === "ready"
+}
+
+WHEN TO ASK CLARIFYING QUESTIONS:
+If the description is missing key details (e.g., unclear follow-up behavior, missing entity capture needs),
+set status="needs_clarification" and return 1–3 clear, helpful questions.
+Set draft=null in this case.
+
+WHEN TO GENERATE A FULL DRAFT:
+If you have enough context, set status="ready" and return a complete "draft" object.
+
+FULL DRAFT SPECIFICATION (Phase C.1):
+{
+  "name": "Human-readable scenario name",
+
   "scenarioType": "INFO_FAQ" | "ACTION_FLOW" | "SYSTEM_ACK" | "SMALL_TALK",
   "replyStrategy": "AUTO" | "FULL_ONLY" | "QUICK_ONLY" | "QUICK_THEN_FULL" | "LLM_WRAP" | "LLM_CONTEXT",
 
-  "exampleUserPhrases": [ "phrase1", "phrase2", ... ],           // Target: 12–18
-  "negativeUserPhrases": [ "phrase1", "phrase2", ... ],          // Target: 3–6
+  // 1. TRIGGERS & EXAMPLES (many variants for matching robustness)
+  "triggerPhrases": [ "phrase1", ... ],          // 12–18 natural caller phrases
+  "negativeTriggers": [ "phrase1", ... ],        // 5–10 phrases that should NOT match
+  "regexTriggers": [ "pattern1", ... ],          // Optional regex patterns
 
-  "triggers": [ "keyword1", "keyword2", ... ],                   // Target: 12–18
-  "negativeTriggers": [ "keyword1", "keyword2", ... ],           // Target: 3–6
-
-  "quickReplies": [                                              // Target: 4–6
-    { "text": "short natural intro", "weight": 3 },
-    { "text": "another intro variant", "weight": 2 }
+  // 2. REPLIES (weighted for selective delivery)
+  "quickReplies": [
+    { "text": "short acknowledgement", "weight": 3 },
+    { "text": "another variant", "weight": 2 }
   ],
-  "fullReplies": [                                               // Target: 6–10
-    { "text": "full info with all details", "weight": 4 },
+  "fullReplies": [
+    { "text": "complete answer with all details", "weight": 4 },
     { "text": "alternative full response", "weight": 3 }
   ],
-  "followUpPrompts": [                                           // Target: 2–3
-    { "text": "short follow-up sentence", "weight": 3 },
-    { "text": "alternative follow-up", "weight": 2 }
+  "followUpPrompts": [
+    { "text": "follow-up question or suggestion", "weight": 3 }
   ],
 
-  "followUpMode": "NONE" | "ASK_FOLLOWUP_QUESTION" | "ASK_IF_BOOK" | "TRANSFER",
-  "followUpQuestionText": "question string or null",
-  "transferTarget": "phone number or queue name or null",
+  // 3. FOLLOW-UP BEHAVIOR (shape next interaction)
+  "followUpMode": "NONE" | "ASK_IF_BOOK" | "ASK_FOLLOWUP_QUESTION" | "TRANSFER",
+  "followUpQuestionText": "Will you be scheduling a visit?" | null,
+  "transferTarget": "+15551234567" | "sales_queue" | null,
 
-  "minConfidence": 0.7,                                          // Numeric 0.5–0.9
-  "priority": 0,                                                 // Numeric -10 to +10
+  // 4. ENTITIES & VARIABLES (capture caller data)
+  "entities": [ "preferred_date", "preferred_time", "customer_name" ],  // What to capture from caller
+  "dynamicTemplateVariables": {
+    "companyname": "Your service provider's name",
+    "phone": "Your main phone number",
+    "office_city": "City where you're located"
+  },
+  // NOTE: ALWAYS use templates like {companyname}, {phone}, {office_city}.
+  // NEVER insert real values. The template will substitute them per company.
 
-  "notes": "Short internal note for admins"
+  // 5. CONFIDENCE & PRIORITY
+  "minConfidence": 0.7,                          // 0.5–0.9: when to accept this scenario
+  "priority": 0,                                 // -10..+10: tiebreaker preference
+
+  // 6. ADVANCED BEHAVIOR
+  "cooldownSeconds": 30,                         // Avoid repeating this scenario too soon
+  "handoffPolicy": "NEVER" | "LOW_CONFIDENCE_ONLY" | "ALWAYS_IF_REQUESTED",
+
+  "silencePolicy": {
+    "enabled": true,
+    "firstPrompt": "Are you still there?",
+    "repeatPrompt": "I'm here to help.",
+    "maxPrompts": 3,
+    "delaySeconds": 3
+  },
+
+  "timedFollowup": {
+    "enabled": false,
+    "delaySeconds": 0,
+    "extensionSeconds": 0
+  },
+
+  // 7. ACTION HOOKS & TESTING
+  "actionHooks": [ "offer_scheduling", "capture_email" ],  // Backend triggers
+  "testPhrases": [ "Can I reschedule my appointment?", "I need to move my visit", ... ],  // 5–10 phrases
+
+  // 8. NLP SUGGESTIONS (for template-level learning)
+  "suggestedFillerWords": [ "uh", "like", "you know", ... ],
+  "suggestedSynonyms": {
+    "appointment": [ "visit", "meeting", "consultation", "session" ],
+    "cancel": [ "reschedule", "change", "move", "delay" ]
+  },
+
+  "notes": "Internal note for admins (e.g., 'High-volume scenario, needs robust triggers')"
 }
 
-REPLY WEIGHTING GUIDANCE:
-- weight: higher = more likely to be selected by ResponseEngine.
-- Typical range: 1–5 (1 = rarely selected, 5 = often selected).
-- Distribute weights: don't put all weight on one reply.
-- Example: 5 quickReplies might have weights [3, 3, 2, 2, 1].
+GUIDELINES:
 
-TARGET COUNTS (best-effort):
-- exampleUserPhrases: 12–18 natural phrases covering caller intent variety.
-- negativeUserPhrases: 3–6 phrases that MUST NOT match (different intent).
-- triggers: 12–18 keyword-style triggers; can overlap with exampleUserPhrases.
-- negativeTriggers: 3–6 keywords that disqualify this scenario.
-- quickReplies: 4–6 short, natural, spoken-friendly intros (5–15 words).
-- fullReplies: 6–10 complete, detailed answers for voice (2–5 sentences).
-- followUpPrompts: 2–3 short sentences for potential follow-up context (future use).
+1. TRIGGERS & EXAMPLES:
+   - Provide 12–18 triggerPhrases covering realistic caller language
+   - Provide 5–10 negativeTriggers to prevent false matches
+   - Use natural, conversational phrases, not formal business-speak
 
-SCENARIO TYPE & STRATEGY:
-- INFO_FAQ: for facts (hours, pricing, policies, address).
-  - replyStrategy usually "AUTO".
-- ACTION_FLOW: for processes (booking, scheduling, escalation).
-  - replyStrategy usually "QUICK_THEN_FULL" or "AUTO".
-- SYSTEM_ACK: for confirmations (got it, one moment, transferring).
-  - replyStrategy usually "QUICK_ONLY" or "AUTO".
-- SMALL_TALK: for rapport, jokes, greetings.
-  - replyStrategy usually "QUICK_ONLY" or "AUTO".
+2. REPLIES:
+   - quickReplies (3–5): Brief acknowledgements, 5–15 words, spoken-friendly
+   - fullReplies (4–8): Complete answers with context, 2–5 sentences
+   - followUpPrompts (2–3): Gentle next-step invitations
+   - Balance weights so no single reply dominates
 
-FOLLOW-UP BEHAVIOR:
-- followUpMode "NONE": no follow-up action (default).
-- followUpMode "ASK_FOLLOWUP_QUESTION": append a question to invite continuation (set followUpQuestionText).
-- followUpMode "ASK_IF_BOOK": offer booking ("Would you like to schedule?").
-- followUpMode "TRANSFER": transfer to human (set transferTarget, e.g., "+15551234567" or "sales_queue").
-- If unsure about follow-up, use "NONE" (safest).
+3. ENTITIES:
+   - Identify what data the scenario should capture (date, time, name, email, etc.)
+   - These become variables in the conversation
 
-MIN CONFIDENCE & PRIORITY:
-- minConfidence: 0.5–0.9. Higher = only match if very confident.
-  - Set 0.8–0.9 for critical or specific scenarios.
-  - Set 0.5–0.7 for broad/fallback scenarios.
-- priority: -10 to +10. Higher = prefer this scenario in ambiguous ties.
-  - Use 0 for neutral.
-  - Use +5 to +10 for high-priority scenarios.
-  - Use -5 to -10 for fallback/generic scenarios.
+4. VARIABLES:
+   - Use ONLY template placeholders: {companyname}, {phone}, {address}, {website_url}, etc.
+   - NEVER insert real values
+   - Provide descriptions so the template admin understands what should be filled
 
-RULES:
-- Use simple, natural spoken English (short sentences).
-- Each reply should be unique and useful (not duplicates).
-- Weights reflect relative importance; balance them (don't clump all weight in one item).
-- Provide realistic counts; if fewer than target, that's OK.
-- Never return empty arrays; provide at least 1 of each type.
-- notes: Brief internal comment (e.g., "Business hours FAQ. High confidence needed.").
+5. SCENARIO TYPE DEFAULTS:
+   - INFO_FAQ (facts): replyStrategy often "AUTO" or "FULL_ONLY"
+   - ACTION_FLOW (flows): replyStrategy often "QUICK_THEN_FULL"
+   - SYSTEM_ACK (internal): replyStrategy often "QUICK_ONLY"
+   - SMALL_TALK: replyStrategy often "QUICK_ONLY"
 
-Output ONLY the JSON object. No explanation, no markdown.`;
+6. FOLLOW-UP MODES:
+   - NONE: scenario ends, no further action
+   - ASK_FOLLOWUP_QUESTION: append followUpQuestionText to the response
+   - ASK_IF_BOOK: offer booking ("Would you like to schedule?")
+   - TRANSFER: hand off to {transferTarget} (person or queue)
 
-    const userPrompt = `Company: ${companyId || 'unknown'}
-Category: ${categoryName || 'unspecified'}
-Behavior: ${behaviorName || 'unspecified'}
+7. CONFIDENCE & PRIORITY:
+   - minConfidence: 0.5–0.9 (higher for specific, lower for generic)
+   - priority: -10 to +10 (higher priority wins ties)
+   - Use minConfidence 0.8–0.9 for critical scenarios (emergencies, account cancellation)
+   - Use priority +5 to +10 for high-urgency scenarios
 
-Admin description:
+8. NLP SUGGESTIONS:
+   - suggestedFillerWords: junk phrases to strip from caller input
+   - suggestedSynonyms: colloquial phrases → normalized terms for matching
+   - These improve Tier 1 (rule-based) matching over time
+
+OUTPUT RULES:
+- ALWAYS respond with valid JSON only.
+- If questions are needed, set status="needs_clarification" and draft=null.
+- If ready, set status="ready" and populate draft completely.
+- Never leave arrays empty; provide at least 1 item per array.
+- Never use real company names, phone numbers, or personal data.
+- Use {variable} syntax for template placeholders.
+`.trim();
+
+    const templateVarList = Array.isArray(templateVariables) && templateVariables.length > 0
+      ? `\nKnown template variables (available to use as {variable} placeholders):\n${templateVariables.map(v => `- {${v}}`).join('\n')}`
+      : '';
+
+    const userPrompt = `Channel: ${channel}
+
+Admin's scenario description:
 """
-${notesFromAdmin}
+${description.trim()}
 """
+${templateVarList}
 
-${existingScenario ? `\nExisting scenario (edit mode):\n${JSON.stringify(existingScenario, null, 2)}` : ''}`;
+If you need clarification before creating a full-quality scenario, return status="needs_clarification" with 1–3 clear questions.
+Otherwise, return status="ready" with a comprehensive "draft" object.`.trim();
 
     // Call OpenAI
-    logger.debug('[LLM SCENARIO ASSISTANT] Calling OpenAI GPT-4o-mini', {
+    logger.debug('[LLM SCENARIO ASSISTANT] Calling OpenAI (Phase C.1)', {
       systemPromptLength: systemPrompt.length,
       userPromptLength: userPrompt.length,
+      channel,
     });
 
     const completion = await openaiClient.chat.completions.create({
@@ -266,66 +441,78 @@ ${existingScenario ? `\nExisting scenario (edit mode):\n${JSON.stringify(existin
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.5,
-      max_tokens: 2000,
+      max_tokens: 3000,
     });
 
     // Parse response
-    let rawDraft;
+    let parsed;
     try {
       const rawContent = completion.choices[0].message.content;
-      logger.debug('[LLM SCENARIO ASSISTANT] Raw LLM response', {
+      logger.debug('[LLM SCENARIO ASSISTANT] LLM response received', {
         length: rawContent.length,
-        preview: rawContent.substring(0, 100),
+        preview: rawContent.substring(0, 150),
       });
       
-      rawDraft = JSON.parse(rawContent);
+      parsed = JSON.parse(rawContent);
     } catch (parseErr) {
       logger.error('[LLM SCENARIO ASSISTANT] Failed to parse LLM JSON', {
         error: parseErr.message,
-        rawContent: completion.choices[0].message.content,
       });
       return res.status(500).json({
         success: false,
         error: 'LLM response was not valid JSON',
-        raw: completion.choices[0].message.content,
       });
     }
 
-    // PHASE A.4: Sanitize & normalize draft to match spec
-    const draft = sanitizeDraft(rawDraft);
+    // Route based on status
+    const status = parsed.status === 'needs_clarification' ? 'needs_clarification' : 'ready';
+    const questions = Array.isArray(parsed.questions) 
+      ? parsed.questions.filter(q => q && typeof q === 'string').slice(0, 5)
+      : [];
 
-    logger.info('[LLM SCENARIO ASSISTANT] ✅ Draft generated & sanitized (Phase A.4)', {
-      scenarioName: draft.scenarioName,
-      scenarioType: draft.scenarioType,
-      replyStrategy: draft.replyStrategy,
-      examplePhrasesCount: draft.exampleUserPhrases.length,
-      triggersCount: draft.triggers.length,
-      quickRepliesCount: draft.quickReplies.length,
-      fullRepliesCount: draft.fullReplies.length,
-      followUpPromptsCount: draft.followUpPrompts.length,
-      minConfidence: draft.minConfidence,
-      priority: draft.priority,
-      followUpMode: draft.followUpMode,
-    });
+    let draft = null;
+
+    if (status === 'ready' && parsed.draft && typeof parsed.draft === 'object') {
+      // Sanitize & normalize the draft (Phase C.1 extended)
+      draft = sanitizeScenarioDraft(parsed.draft);
+
+      logger.info('[LLM SCENARIO ASSISTANT] ✅ Full scenario draft generated (Phase C.1)', {
+        name: draft.name,
+        scenarioType: draft.scenarioType,
+        replyStrategy: draft.replyStrategy,
+        triggersCount: draft.triggerPhrases.length,
+        negativesCount: draft.negativeTriggers.length,
+        quickRepliesCount: draft.quickReplies.length,
+        fullRepliesCount: draft.fullReplies.length,
+        entitiesCount: draft.entities.length,
+        variablesCount: Object.keys(draft.dynamicTemplateVariables).length,
+      });
+    } else if (status === 'needs_clarification') {
+      logger.info('[LLM SCENARIO ASSISTANT] Clarifying questions needed', {
+        questionCount: questions.length,
+      });
+    }
 
     return res.json({
       success: true,
-      data: draft,
+      status,
+      questions: status === 'needs_clarification' ? questions : undefined,
+      draft: status === 'ready' ? draft : null,
       metadata: {
         model: 'gpt-4o-mini',
         tokensUsed: completion.usage.total_tokens,
         generatedAt: new Date().toISOString(),
-        phase: 'A.4-blueprint-spec',
+        phase: 'C.1-full-scenario-architect',
       },
     });
   } catch (err) {
-    logger.error('[LLM SCENARIO ASSISTANT] Error generating draft scenario', {
+    logger.error('[LLM SCENARIO ASSISTANT] Error processing scenario request', {
       error: err.message,
       stack: err.stack,
     });
     return res.status(500).json({
       success: false,
-      error: 'Internal error generating draft scenario',
+      error: 'Internal error processing scenario',
       details: err.message,
     });
   }
