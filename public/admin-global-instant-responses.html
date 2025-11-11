@@ -11918,6 +11918,7 @@ Continue?`;
         async function generateScenarioAIDraft() {
             const descEl = document.getElementById('scenario-ai-notes');
             const answerEl = document.getElementById('scenario-ai-answer');
+            const answerWrapper = document.getElementById('scenario-ai-answer-wrapper');
             const chatEl = document.getElementById('scenario-ai-chat');
             const errBox = document.getElementById('scenario-ai-error');
             const statusEl = document.getElementById('scenario-ai-status');
@@ -11926,8 +11927,14 @@ Continue?`;
             const generateBtn = document.getElementById('scenario-ai-generate-btn');
             const applyBtn = document.getElementById('scenario-ai-apply-btn');
 
+            if (!errBox || !statusEl) {
+                console.error('🤖 [C.1 ERROR] Critical elements missing from DOM');
+                return;
+            }
+
             errBox.style.display = 'none';
             errBox.textContent = '';
+            statusEl.style.display = 'none';
             statusEl.textContent = '';
 
             // Step 1: Capture initial description if not yet stored
@@ -11942,16 +11949,17 @@ Continue?`;
             }
 
             // Step 2: If there's an answer visible, add it to conversation
-            if (answerEl && answerEl.style.display !== 'none') {
+            if (answerEl && answerWrapper && answerWrapper.style.display !== 'none') {
                 const answerText = (answerEl.value || '').trim();
                 if (answerText) {
                     window.aiAssistantState.conversationLog.push({ role: 'user', content: answerText });
                 }
                 answerEl.value = '';
-                answerEl.style.display = 'none';
+                answerWrapper.style.display = 'none';
             }
 
             statusEl.textContent = '🤔 Thinking...';
+            statusEl.style.display = 'block';
             generateBtn.disabled = true;
             generateBtn.textContent = '⏳ Processing...';
 
@@ -11962,6 +11970,7 @@ Continue?`;
                     credentials: 'include',
                     body: JSON.stringify({
                         description: window.aiAssistantState.description,
+                        conversationLog: window.aiAssistantState.conversationLog,
                         channel: 'voice',
                         templateVariables: ['companyname', 'phone', 'address', 'website_url', 'office_hours'],
                     }),
@@ -11983,8 +11992,8 @@ Continue?`;
                     window.aiAssistantState.conversationLog.push({ role: 'assistant', content: combinedQuestion });
                     renderAIAssistantChat();
 
-                    answerEl.style.display = 'block';
-                    answerEl.placeholder = 'Answer the AI question(s), then click "Generate Draft" again...';
+                    if (answerWrapper) answerWrapper.style.display = 'block';
+                    if (answerEl) answerEl.placeholder = 'Answer the AI question(s), then click "Generate Draft" again...';
                     statusEl.textContent = '🤔 The AI needs clarification. Answer above and click again.';
                     generateBtn.textContent = '↩️ Continue';
 
@@ -11998,7 +12007,8 @@ Continue?`;
                     resultTextarea.value = JSON.stringify(data.draft, null, 2);
                     resultWrapper.style.display = 'block';
                     applyBtn.style.display = 'block';
-                    statusEl.textContent = '✅ Draft ready! Review and click "Apply Draft to Form"';
+                    statusEl.innerHTML = '✅ <strong>Draft ready!</strong> Review and click "Apply Draft to Form"';
+                    statusEl.style.display = 'block';
 
                     // Show checklist summary if available (Phase C.1 validation)
                     if (data.checklistSummary) {
@@ -12043,6 +12053,7 @@ Continue?`;
                 chatEl.appendChild(div);
             });
 
+            chatEl.style.display = 'block';
             chatEl.scrollTop = chatEl.scrollHeight;
         }
 
@@ -12051,30 +12062,31 @@ Continue?`;
          * Shows admin what was configured and what assumptions LLM made
          */
         function renderChecklistSummary(checklistSummary) {
-            const statusEl = document.getElementById('scenario-ai-status');
-            if (!statusEl) return;
+            const checklistEl = document.getElementById('scenario-ai-checklist');
+            if (!checklistEl) return;
 
             const coverage = checklistSummary.coverageScore 
                 ? Math.round(checklistSummary.coverageScore * 100) 
                 : 90;
 
-            let html = `<div style="margin-top: 12px; padding: 12px; background: #f9f9f9; border-left: 4px solid #10b981; border-radius: 4px; font-size: 13px;">`;
-            html += `<strong>✅ AI Checklist (${coverage}% complete):</strong><br/>`;
+            let html = `<div style="padding: 16px; background: #ecfdf5; border-left: 4px solid #10b981; border-radius: 8px; font-size: 13px;">`;
+            html += `<strong style="color: #047857;">✅ AI Checklist (${coverage}% complete):</strong><br/>`;
 
             if (checklistSummary.settingsNeedingAttention && checklistSummary.settingsNeedingAttention.length > 0) {
-                html += `<ul style="margin: 8px 0; padding-left: 20px;">`;
+                html += `<ul style="margin: 8px 0; padding-left: 20px; color: #047857;">`;
                 checklistSummary.settingsNeedingAttention.forEach(item => {
-                    html += `<li><strong>${item.field}:</strong> ${item.reason}</li>`;
+                    html += `<li style="margin-bottom: 6px;"><strong>${item.field}:</strong> ${item.reason}</li>`;
                 });
                 html += `</ul>`;
-                html += `<p style="margin: 8px 0; color: #666;"><em>Review these before applying. You can tweak them after applying the draft.</em></p>`;
+                html += `<p style="margin: 8px 0; color: #666; font-style: italic;">Review these before applying. You can tweak them after applying the draft.</p>`;
             } else {
-                html += `<p style="margin: 8px 0; color: #10b981;"><em>All settings look good!</em></p>`;
+                html += `<p style="margin: 8px 0; color: #047857;"><em>✨ All settings look good! Ready to apply.</em></p>`;
             }
 
             html += `</div>`;
 
-            statusEl.innerHTML = html;
+            checklistEl.innerHTML = html;
+            checklistEl.style.display = 'block';
         }
 
         /**
@@ -18611,6 +18623,20 @@ ${JSON.stringify(healthData, null, 2)}
                     <textarea id="scenario-ai-notes" style="width: 100%; padding: 12px; border: 2px solid #d1fae5; border-radius: 8px; font-size: 14px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical; min-height: 100px;" placeholder="What should this scenario do? Who calls? What information should the AI provide? What should happen after?"></textarea>
                 </div>
 
+                <!-- Conversation Area (for multi-turn Q&A) -->
+                <div id="scenario-ai-chat" style="display: none; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 24px; max-height: 250px; overflow-y: auto; font-size: 13px;"></div>
+
+                <!-- Status/Info Box -->
+                <div id="scenario-ai-status" style="display: none; background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px; border-radius: 8px; margin-bottom: 24px; font-size: 13px; color: #047857;"></div>
+
+                <!-- Answer Box (shown when AI asks clarifying questions) -->
+                <div style="margin-bottom: 24px; display: none;" id="scenario-ai-answer-wrapper">
+                    <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 14px;">
+                        <i class="fas fa-reply mr-2"></i>Your Answer
+                    </label>
+                    <textarea id="scenario-ai-answer" style="width: 100%; padding: 12px; border: 2px solid #fef3c7; border-radius: 8px; font-size: 14px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; resize: vertical; min-height: 80px;" placeholder="Answer the AI's question, then click Continue..."></textarea>
+                </div>
+
                 <!-- Result Area (hidden by default) -->
                 <div id="scenario-ai-result-wrapper" style="display: none; margin-bottom: 24px;">
                     <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 14px;">
@@ -18619,6 +18645,9 @@ ${JSON.stringify(healthData, null, 2)}
                     <textarea id="scenario-ai-result-json" style="width: 100%; padding: 12px; border: 2px solid #dbeafe; border-radius: 8px; font-size: 12px; font-family: 'Courier New', monospace; background: #f0f9ff; color: #0369a1; resize: vertical; min-height: 120px; max-height: 300px;" readonly></textarea>
                     <p style="margin: 8px 0 0; font-size: 12px; color: #6b7280;">Review this draft. You can still edit any field after applying.</p>
                 </div>
+
+                <!-- Checklist Summary (shown after draft is ready) -->
+                <div id="scenario-ai-checklist" style="display: none; margin-bottom: 24px;"></div>
 
                 <!-- Error Area (hidden by default) -->
                 <div id="scenario-ai-error" style="display: none; background: #fee2e2; border: 2px solid #f87171; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 24px; font-size: 14px;"></div>

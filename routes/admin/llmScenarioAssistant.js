@@ -238,6 +238,7 @@ router.post('/draft', authenticateSingleSession, requireRole('admin'), async (re
   try {
     const {
       description,
+      conversationLog = [],
       channel = 'voice',
       templateVariables = [],
     } = req.body || {};
@@ -254,6 +255,7 @@ router.post('/draft', authenticateSingleSession, requireRole('admin'), async (re
       descriptionLength: description.length,
       channel,
       templateVarCount: templateVariables.length,
+      conversationTurns: Array.isArray(conversationLog) ? conversationLog.length : 0,
     });
 
     // Build comprehensive system prompt (Phase C.1: Enterprise-Grade Validation)
@@ -461,13 +463,18 @@ OUTPUT RULES:
       ? `\nKnown template variables (available to use as {variable} placeholders):\n${templateVariables.map(v => `- {${v}}`).join('\n')}`
       : '';
 
+    // Build conversation history for multi-turn (Phase C.1 conversational)
+    const conversationHistory = Array.isArray(conversationLog) && conversationLog.length > 0
+      ? `\nPrevious conversation:\n${conversationLog.map(msg => `${msg.role === 'assistant' ? 'AI' : 'Admin'}: ${msg.content}`).join('\n')}\n`
+      : '';
+
     const userPrompt = `Channel: ${channel}
 
 Admin's scenario description:
 """
 ${description.trim()}
 """
-${templateVarList}
+${conversationHistory}${templateVarList}
 
 If you need clarification before creating a full-quality scenario, return status="needs_clarification" with 1–3 clear questions.
 Otherwise, return status="ready" with a comprehensive "draft" object.`.trim();
