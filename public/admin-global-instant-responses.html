@@ -11966,31 +11966,43 @@ Continue?`;
             try {
                 // 🔍 CHECKPOINT 1: Check all possible token locations
                 console.log('🔍 [CHECKPOINT 1] Searching for JWT token in all locations...');
-                const tokenFromLocalStorage = localStorage.getItem('token');
+                
+                // Try the actual keys found in localStorage
+                const tokenFromStandardKey = localStorage.getItem('token');
+                const tokenFromAdminToken = localStorage.getItem('dminToken'); // ← Found in console!
+                const tokenFromAdminTokenFull = localStorage.getItem('adminToken');
                 const tokenFromSessionStorage = sessionStorage.getItem('token');
                 const tokenFromCookie = document.cookie.split('; ').find(row => row.startsWith('token='));
                 const allCookies = document.cookie;
                 
-                console.log('🔍 [CHECKPOINT 1A] localStorage token:', tokenFromLocalStorage ? `Found (length: ${tokenFromLocalStorage.length})` : 'NOT FOUND');
-                console.log('🔍 [CHECKPOINT 1B] sessionStorage token:', tokenFromSessionStorage ? `Found (length: ${tokenFromSessionStorage.length})` : 'NOT FOUND');
+                console.log('🔍 [CHECKPOINT 1A] localStorage "token":', tokenFromStandardKey ? `Found (length: ${tokenFromStandardKey.length})` : 'NOT FOUND');
+                console.log('🔍 [CHECKPOINT 1A2] localStorage "dminToken":', tokenFromAdminToken ? `Found (length: ${tokenFromAdminToken.length})` : 'NOT FOUND');
+                console.log('🔍 [CHECKPOINT 1A3] localStorage "adminToken":', tokenFromAdminTokenFull ? `Found (length: ${tokenFromAdminTokenFull.length})` : 'NOT FOUND');
+                console.log('🔍 [CHECKPOINT 1B] sessionStorage "token":', tokenFromSessionStorage ? `Found (length: ${tokenFromSessionStorage.length})` : 'NOT FOUND');
                 console.log('🔍 [CHECKPOINT 1C] Cookie token:', tokenFromCookie ? 'Found' : 'NOT FOUND');
                 console.log('🔍 [CHECKPOINT 1D] All cookies:', allCookies || 'EMPTY');
                 
                 // Try to get token from JWT claim or window object
-                const tokenFromWindow = window.jwtToken || window.authToken;
-                console.log('🔍 [CHECKPOINT 1E] window.jwtToken:', tokenFromWindow ? 'Found' : 'NOT FOUND');
+                const tokenFromWindow = window.jwtToken || window.authToken || window.getAuthToken;
+                console.log('🔍 [CHECKPOINT 1E] window.jwtToken/authToken:', tokenFromWindow ? 'Found' : 'NOT FOUND');
                 
                 // 🔍 CHECKPOINT 2: Check user object
                 console.log('🔍 [CHECKPOINT 2] Checking user/auth objects...');
-                console.log('🔍 [CHECKPOINT 2A] window.user:', window.user ? JSON.stringify(window.user) : 'NOT FOUND');
-                console.log('🔍 [CHECKPOINT 2B] window.currentUser:', window.currentUser ? JSON.stringify(window.currentUser) : 'NOT FOUND');
+                const adminUser = localStorage.getItem('adminUser');
+                console.log('🔍 [CHECKPOINT 2A] localStorage "adminUser":', adminUser ? adminUser : 'NOT FOUND');
+                console.log('🔍 [CHECKPOINT 2B] window.user:', window.user ? JSON.stringify(window.user) : 'NOT FOUND');
+                console.log('🔍 [CHECKPOINT 2C] window.currentUser:', window.currentUser ? JSON.stringify(window.currentUser) : 'NOT FOUND');
                 
-                // 🔍 CHECKPOINT 3: Build token with fallback priority
-                const token = tokenFromLocalStorage || tokenFromSessionStorage || tokenFromWindow;
+                // 🔍 CHECKPOINT 3: Build token with fallback priority (try all keys!)
+                const token = tokenFromStandardKey || tokenFromAdminToken || tokenFromAdminTokenFull || tokenFromSessionStorage || tokenFromWindow;
                 
                 console.log('🔍 [CHECKPOINT 3] Final token determination:');
                 if (token) {
-                    console.log(`✅ Token found! Source: ${tokenFromLocalStorage ? 'localStorage' : tokenFromSessionStorage ? 'sessionStorage' : 'window object'}`);
+                    const source = tokenFromStandardKey ? 'localStorage[token]' : 
+                                   tokenFromAdminToken ? 'localStorage[dminToken]' :
+                                   tokenFromAdminTokenFull ? 'localStorage[adminToken]' :
+                                   tokenFromSessionStorage ? 'sessionStorage[token]' : 'window object';
+                    console.log(`✅ Token found! Source: ${source}, Length: ${token.length}`);
                 } else {
                     console.error('❌ NO TOKEN FOUND IN ANY LOCATION!');
                     console.error('Available storage keys:');
@@ -11998,7 +12010,7 @@ Continue?`;
                     console.error('  sessionStorage keys:', Object.keys(sessionStorage));
                     console.error('  window properties (auth-related):', Object.keys(window).filter(k => k.toLowerCase().includes('auth') || k.toLowerCase().includes('token')));
                     
-                    errBox.textContent = '❌ AUTHENTICATION ERROR: No token found in localStorage, sessionStorage, or window object. Check browser console for details. You may need to log in again.';
+                    errBox.textContent = '❌ AUTHENTICATION ERROR: No token found in any location. Check browser console for details. You may need to log in again.';
                     errBox.style.display = 'block';
                     generateBtn.disabled = false;
                     generateBtn.textContent = '✨ Generate Draft';
