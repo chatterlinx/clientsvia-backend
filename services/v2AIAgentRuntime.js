@@ -14,6 +14,13 @@ const logger = require('../utils/logger.js');
 
 const { redisClient } = require('../clients');
 
+// ═══════════════════════════════════════════════════════════════════
+// CHEAT SHEET SYSTEM - Phase 1 Integration
+// ═══════════════════════════════════════════════════════════════════
+const PolicyCompiler = require('./PolicyCompiler');
+const CheatSheetEngine = require('./CheatSheetEngine');
+const SessionManager = require('./SessionManager');
+
 class V2AIAgentRuntime {
     
     /**
@@ -57,6 +64,38 @@ class V2AIAgentRuntime {
             logger.debug(`🔍 V2 VOICE DEBUG: Has voiceSettings: ${Boolean(company.aiAgentLogic?.voiceSettings)}`);
             logger.debug(`🔍 V2 VOICE DEBUG: Voice ID: ${company.aiAgentLogic?.voiceSettings?.voiceId || 'NOT SET'}`);
             logger.debug(`🔍 V2 VOICE DEBUG: API Source: ${company.aiAgentLogic?.voiceSettings?.apiSource || 'NOT SET'}`);
+
+            // ─────────────────────────────────────────────────────────────
+            // 🧠 CHEAT SHEET: Compile policy if needed (Phase 1)
+            // ─────────────────────────────────────────────────────────────
+            if (company.aiAgentSettings?.cheatSheet) {
+                const cheatSheet = company.aiAgentSettings.cheatSheet;
+                
+                // Check if policy needs compilation (missing checksum or status changed to active)
+                if (!cheatSheet.checksum || cheatSheet.status === 'draft') {
+                    logger.info('[V2 AGENT] 🔧 Compiling cheat sheet policy...', {
+                        companyId: companyID,
+                        version: cheatSheet.version,
+                        status: cheatSheet.status
+                    });
+                    
+                    try {
+                        await PolicyCompiler.compile(companyID, cheatSheet);
+                        logger.info('[V2 AGENT] ✅ Cheat sheet policy compiled successfully');
+                    } catch (compileErr) {
+                        logger.error('[V2 AGENT] ❌ Cheat sheet compilation failed', {
+                            companyId: companyID,
+                            error: compileErr.message
+                        });
+                        // Continue without cheat sheet (graceful degradation)
+                    }
+                } else {
+                    logger.debug('[V2 AGENT] ✅ Cheat sheet policy already compiled', {
+                        companyId: companyID,
+                        checksum: cheatSheet.checksum.substring(0, 16) + '...'
+                    });
+                }
+            }
 
             // Generate V2 greeting from Agent Personality system (4-MODE SYSTEM)
             const greetingConfig = this.generateV2Greeting(company);
@@ -277,24 +316,119 @@ class V2AIAgentRuntime {
             }
 
             // V2 Response Generation - uses new Agent Personality system
-            const response = await this.generateV2Response(userInput, company, callState);
+            const baseResponse = await this.generateV2Response(userInput, company, callState);
+            
+            logger.info(`✅ V2 AGENT: Generated base response: "${baseResponse.text}"`);
+            
+            // ─────────────────────────────────────────────────────────────
+            // 🧠 CHEAT SHEET: Apply policy rules (Phase 1)
+            // ─────────────────────────────────────────────────────────────
+            let finalResponse = baseResponse.text;
+            let finalAction = baseResponse.action || 'continue';
+            let cheatSheetMeta = null;
+            
+            if (company.aiAgentSettings?.cheatSheet?.checksum) {
+                try {
+                    // Load compiled policy from Redis
+                    const redisKey = `policy:${companyID}:active`;
+                    const activePolicyKey = await redisClient.get(redisKey);
+                    
+                    if (activePolicyKey) {
+                        const policyCached = await redisClient.get(activePolicyKey);
+                        
+                        if (policyCached) {
+                            const policy = JSON.parse(policyCached);
+                            
+                            // Apply cheat sheet to base response
+                            const cheatSheetResult = await CheatSheetEngine.apply(
+                                baseResponse.text,
+                                userInput,
+                                {
+                                    companyId: companyID,
+                                    callId,
+                                    turnNumber: (callState.turnCount || 0) + 1,
+                                    isFirstTurn: (callState.turnCount || 0) === 0,
+                                    company,
+                                    collectedEntities: callState.collectedEntities || {}
+                                },
+                                policy
+                            );
+                            
+                            finalResponse = cheatSheetResult.response;
+                            finalAction = cheatSheetResult.action === 'TRANSFER' ? 'transfer' : finalAction;
+                            cheatSheetMeta = {
+                                appliedBlocks: cheatSheetResult.appliedBlocks,
+                                timeMs: cheatSheetResult.timeMs,
+                                shortCircuit: cheatSheetResult.shortCircuit,
+                                transferTarget: cheatSheetResult.transferTarget
+                            };
+                            
+                            logger.info('[V2 AGENT] 🧠 Cheat sheet applied', {
+                                companyId: companyID,
+                                callId,
+                                appliedBlocks: cheatSheetResult.appliedBlocks.map(b => b.type),
+                                timeMs: cheatSheetResult.timeMs,
+                                shortCircuit: cheatSheetResult.shortCircuit
+                            });
+                        }
+                    }
+                } catch (cheatSheetErr) {
+                    logger.error('[V2 AGENT] ❌ Cheat sheet application failed', {
+                        companyId: companyID,
+                        callId,
+                        error: cheatSheetErr.message
+                    });
+                    // Continue with base response (graceful degradation)
+                }
+            }
             
             // Update call state
             const updatedCallState = {
                 ...callState,
                 lastInput: userInput,
-                lastResponse: response.text,
+                lastResponse: finalResponse,
                 turnCount: (callState.turnCount || 0) + 1,
-                timestamp: new Date()
+                timestamp: new Date(),
+                cheatSheetApplied: cheatSheetMeta !== null,
+                cheatSheetMeta
             };
+            
+            // ─────────────────────────────────────────────────────────────
+            // 💾 SESSION: Update session in hybrid cache (Phase 1)
+            // ─────────────────────────────────────────────────────────────
+            try {
+                await SessionManager.setSession(callId, {
+                    callId,
+                    companyId: companyID,
+                    templateId: company.aiAgentSettings?.templateId,
+                    turnNumber: updatedCallState.turnCount,
+                    capturedEntities: updatedCallState.collectedEntities || {},
+                    lastInput: userInput,
+                    lastResponse: finalResponse,
+                    startedAt: callState.startTime || new Date(),
+                    lastActivityAt: new Date()
+                });
+                
+                logger.debug('[V2 AGENT] 💾 Session updated', {
+                    callId,
+                    turnNumber: updatedCallState.turnCount
+                });
+            } catch (sessionErr) {
+                logger.error('[V2 AGENT] ❌ Session update failed', {
+                    callId,
+                    error: sessionErr.message
+                });
+                // Continue without session (graceful degradation)
+            }
 
-            logger.info(`✅ V2 AGENT: Generated response: "${response.text}"`);
+            logger.info(`✅ V2 AGENT: Final response: "${finalResponse}"`);
 
             return {
-                response: response.text,
-                action: response.action || 'continue',
+                response: finalResponse,
+                action: finalAction,
                 callState: updatedCallState,
-                confidence: response.confidence || 0.8
+                confidence: baseResponse.confidence || 0.8,
+                cheatSheetMeta
             };
 
         } catch (error) {
