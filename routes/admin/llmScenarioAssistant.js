@@ -583,12 +583,38 @@ GUIDELINES:
    - Provide 5–10 negativeTriggers to prevent false matches
    - Use natural, conversational phrases, not formal business-speak
 
-2. REPLIES (GENERATE MANY VARIATIONS TO SOUND NATURAL, NOT ROBOTIC):
-   - quickReplies (7–10): Brief acknowledgements, 5–15 words, spoken-friendly, VARIED phrasing
-   - fullReplies (7–10): Complete answers with context, 2–5 sentences, VARIED tone and structure
-   - followUpPrompts (3–5): Gentle next-step invitations, customized to THIS scenario (not generic)
-   - Balance weights so no single reply dominates
-   - MORE VARIATIONS = MORE HUMAN-LIKE (avoid repetitive, robotic responses)
+2. REPLIES (CRITICAL: GENERATE MANY VARIATIONS TO SOUND NATURAL, NOT ROBOTIC):
+   
+   ⚠️ MANDATORY MINIMUMS (DO NOT GENERATE FEWER):
+   - quickReplies: MINIMUM 7, TARGET 10 (Brief acknowledgements, 5–15 words each)
+   - fullReplies: MINIMUM 7, TARGET 10 (Complete answers, 2–5 sentences each)
+   - followUpPrompts: MINIMUM 3, TARGET 5 (Gentle next-step invitations)
+   
+   WHY SO MANY? The AI agent rotates these randomly during live calls. With only 2-3 variations,
+   callers will hear the SAME replies repeatedly and it sounds ROBOTIC. With 7-10 variations,
+   every call feels unique and human-like.
+   
+   RULES:
+   - Each variation must be DISTINCT in phrasing and tone (not just word swaps)
+   - Mix formal/casual, short/long, direct/warm styles
+   - Balance weights so no single reply dominates (use weight: 3 for most)
+   - Use natural, spoken language (contractions, casual phrases)
+   
+   EXAMPLE (Full Replies for "Blank Thermostat"):
+   [
+     {text: "Your thermostat display might be blank due to several reasons. Would you like to try some preliminary checks or schedule a technician?", weight: 3},
+     {text: "A blank thermostat display can be caused by various issues like power supply problems. Would you like to go through some checks or have a technician visit?", weight: 3},
+     {text: "I can help with that blank screen issue. Let's see what we can do to get it working again.", weight: 3},
+     {text: "No worries, blank thermostats are pretty common and often have simple fixes. Want to troubleshoot together or book a tech?", weight: 3},
+     {text: "Let's figure out what's going on with your thermostat. We can either walk through some quick checks or I can send someone out.", weight: 3},
+     {text: "That blank display is definitely frustrating! I've got a few things we can try, or I can schedule a service call for you.", weight: 3},
+     {text: "Blank thermostat? That's a common issue. We can troubleshoot it right now or get a technician scheduled if you prefer.", weight: 3},
+     {text: "I understand how annoying that blank screen can be. Would you like me to guide you through some fixes or arrange a visit?", weight: 3},
+     {text: "There are several reasons your thermostat might be blank. Happy to help you check a few things or book an appointment.", weight: 3},
+     {text: "Let me help you with that thermostat. We have a couple of options: quick troubleshooting now or scheduling a pro to come out.", weight: 3}
+   ]
+   
+   ↑ THIS IS WHAT 10 VARIATIONS LOOKS LIKE. Generate this many for EVERY scenario.
 
 3. ENTITIES:
    - Identify what data the scenario should capture (date, time, name, email, etc.)
@@ -605,11 +631,29 @@ GUIDELINES:
    - SYSTEM_ACK (internal): replyStrategy often "QUICK_ONLY"
    - SMALL_TALK: replyStrategy often "QUICK_ONLY"
 
-6. FOLLOW-UP MODES:
-   - NONE: scenario ends, no further action
-   - ASK_FOLLOWUP_QUESTION: append followUpQuestionText to the response
-   - ASK_IF_BOOK: offer booking ("Would you like to schedule?")
-   - TRANSFER: hand off to {transferTarget} (person or queue)
+6. FOLLOW-UP MODES (CRITICAL: ALWAYS SET followUpMode AND GENERATE followUpQuestionText):
+   
+   ⚠️ MANDATORY: Every scenario MUST have a follow-up strategy!
+   
+   OPTIONS:
+   - ASK_FOLLOWUP_QUESTION: Append followUpQuestionText after the main reply
+     → ALWAYS generate a custom followUpQuestionText for this scenario
+     → Examples: "Is there anything else I can help you with?", 
+                 "Would you like to schedule a service call?",
+                 "Do you have any other HVAC questions?"
+     → Make it relevant to THIS scenario (not generic)
+   
+   - ASK_IF_BOOK: Offer booking automatically (for service/appointment scenarios)
+     → System will append: "Would you like to schedule an appointment?"
+     → Set followUpQuestionText to null for this mode
+   
+   - TRANSFER: Hand off to agent/queue
+     → Set transferTarget to the agent name or queue (e.g., "scheduling_team", "customer_service")
+     → Set followUpQuestionText to null for this mode
+   
+   - NONE: Scenario ends, no further prompting (rare - only for confirmations/acknowledgments)
+   
+   DEFAULT: Most scenarios should use ASK_FOLLOWUP_QUESTION with a custom, relevant question.
 
 7. TIMED FOLLOW-UP (AUTO-PROMPT WHEN CALLER IS SILENT):
    - ALWAYS enable timedFollowup (set enabled: true)
