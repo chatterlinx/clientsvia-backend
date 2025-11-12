@@ -20084,11 +20084,45 @@ ${JSON.stringify(healthData, null, 2)}
                 const scenarioModal = document.getElementById('big-scenario-modal');
                 if (scenarioModal) scenarioModal.classList.add('hidden');
                 
-                // Show preview immediately with fallbacks (so user sees text right away)
+                // Populate textareas with fallback data immediately (so user sees text right away)
+                this.populateTextareasWithFallback();
+                
+                // Show preview immediately with fallbacks
                 this.updatePromptPreview();
                 
                 // Then load from API (which will update if available)
                 await this.load();
+            },
+            
+            populateTextareasWithFallback() {
+                console.log('🎛️ [LLM SETTINGS] Populating textareas with fallback data...');
+                const fallbackPrompts = this.getFallbackPrompts();
+                if (!fallbackPrompts) return;
+                
+                // Base prompt
+                document.getElementById('llm-prompt-base-text').value = fallbackPrompts.base || '';
+                
+                // Profile prompts
+                document.getElementById('llm-prompt-profile-compliance-text').value = 
+                    fallbackPrompts.profiles?.compliance_safe || '';
+                document.getElementById('llm-prompt-profile-callcenter-text').value = 
+                    fallbackPrompts.profiles?.call_center_optimized || '';
+                document.getElementById('llm-prompt-profile-creative-text').value = 
+                    fallbackPrompts.profiles?.creative_exploration || '';
+                
+                // Domain safety prompts
+                document.getElementById('llm-prompt-domain-medical-text').value = 
+                    fallbackPrompts.domains?.medicalOfficeMode || '';
+                document.getElementById('llm-prompt-domain-financial-text').value = 
+                    fallbackPrompts.domains?.financialMode || '';
+                document.getElementById('llm-prompt-domain-emergency-text').value = 
+                    fallbackPrompts.domains?.emergencyServicesMode || '';
+                
+                // Strict compliance
+                document.getElementById('llm-prompt-strict-text').value = 
+                    fallbackPrompts.strictCompliance || '';
+                    
+                console.log('✅ [LLM SETTINGS] Textareas populated with fallback prompts');
             },
 
             close() {
@@ -20188,6 +20222,38 @@ ${JSON.stringify(healthData, null, 2)}
                 document.getElementById('llm-adv-creative-topP').value = oCreative.topP ?? '';
                 document.getElementById('llm-adv-creative-maxTokens').value = oCreative.maxTokens ?? '';
 
+                // Populate Prompt Editor textareas (if promptParts available)
+                const promptParts = this.promptParts || this.getFallbackPrompts();
+                if (promptParts) {
+                    // Base prompt
+                    document.getElementById('llm-prompt-base-text').value = promptParts.base || '';
+                    
+                    // Profile prompts (get from state.promptText if available)
+                    const promptText = this.state.promptText || {};
+                    const profiles = promptText.profiles || {};
+                    document.getElementById('llm-prompt-profile-compliance-text').value = 
+                        profiles.compliance_safe || promptParts.profiles?.compliance_safe || '';
+                    document.getElementById('llm-prompt-profile-callcenter-text').value = 
+                        profiles.call_center_optimized || promptParts.profiles?.call_center_optimized || '';
+                    document.getElementById('llm-prompt-profile-creative-text').value = 
+                        profiles.creative_exploration || promptParts.profiles?.creative_exploration || '';
+                    
+                    // Domain safety prompts
+                    const domains = promptText.domainSafety || {};
+                    document.getElementById('llm-prompt-domain-medical-text').value = 
+                        domains.medicalOffice || promptParts.domains?.medicalOfficeMode || '';
+                    document.getElementById('llm-prompt-domain-financial-text').value = 
+                        domains.financial || promptParts.domains?.financialMode || '';
+                    document.getElementById('llm-prompt-domain-emergency-text').value = 
+                        domains.emergency || promptParts.domains?.emergencyServicesMode || '';
+                    
+                    // Strict compliance
+                    document.getElementById('llm-prompt-strict-text').value = 
+                        promptText.strictCompliance || promptParts.strictCompliance || '';
+                        
+                    console.log('✅ [LLM SETTINGS] Prompt Editor textareas populated');
+                }
+
                 console.log('✅ [LLM SETTINGS] UI updated with current settings');
                 
                 // Update prompt preview
@@ -20206,7 +20272,8 @@ ${JSON.stringify(healthData, null, 2)}
                 activeParts.push('Base Prompt');
                 
                 const profileKey = state.defaults?.activeProfile || 'compliance_safe';
-                const profileName = this.profiles[profileKey]?.label || this.getProfileLabel(profileKey);
+                // Use fallback function since this.profiles may not be loaded yet
+                const profileName = this.getProfileLabel(profileKey);
                 activeParts.push(profileName);
 
                 const compliance = state.compliance || {};
