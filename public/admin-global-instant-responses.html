@@ -12901,6 +12901,46 @@ Continue?`;
             
             // Action Hooks
             document.getElementById('scenario-action-hooks').value = (data.actionHooks || []).join(', ');
+            
+            // 🧠 AI ENHANCE TAB - Intelligence Fields
+            console.log('🧠 [POPULATE FORM] Loading AI intelligence fields...');
+            
+            // Render keywords
+            if (data.keywords && Array.isArray(data.keywords) && data.keywords.length > 0) {
+                renderKeywords(data.keywords);
+            } else {
+                renderKeywords([]);
+            }
+            
+            // Render negative keywords
+            if (data.negativeKeywords && Array.isArray(data.negativeKeywords) && data.negativeKeywords.length > 0) {
+                renderNegativeKeywords(data.negativeKeywords);
+            } else {
+                renderNegativeKeywords([]);
+            }
+            
+            // Render Q&A pairs
+            if (data.qnaPairs && Array.isArray(data.qnaPairs) && data.qnaPairs.length > 0) {
+                renderQnAPairs(data.qnaPairs);
+            } else {
+                renderQnAPairs([]);
+            }
+            
+            // Render escalation flags
+            if (data.escalationFlags && Array.isArray(data.escalationFlags) && data.escalationFlags.length > 0) {
+                renderEscalationFlags(data.escalationFlags);
+            } else {
+                renderEscalationFlags([]);
+            }
+            
+            // Render training examples
+            if (data.examples && Array.isArray(data.examples) && data.examples.length > 0) {
+                renderTrainingExamples(data.examples);
+            } else {
+                renderTrainingExamples([]);
+            }
+            
+            console.log('✅ [POPULATE FORM] AI intelligence fields loaded');
         }
 
         /**
@@ -12929,6 +12969,304 @@ Continue?`;
             activeBtn.style.background = 'white';
             activeBtn.style.color = '#667eea';
             activeBtn.style.borderBottom = '3px solid #667eea';
+        }
+
+        // ===================================================================
+        // 🧠 AI INTELLIGENCE FIELDS - KEYWORDS, Q&A, ESCALATION
+        // ===================================================================
+        
+        let currentKeywords = [];
+        let currentNegativeKeywords = [];
+        let currentQnAPairs = [];
+        let currentEscalationFlags = [];
+        let currentTrainingExamples = [];
+        
+        // KEYWORDS FUNCTIONS
+        function renderKeywords(keywords) {
+            currentKeywords = keywords || [];
+            const container = document.getElementById('keywords-display');
+            if (!container) return;
+            
+            if (currentKeywords.length === 0) {
+                container.innerHTML = '<span style="color: #9ca3af; font-style: italic;">No keywords generated yet. Click "Regenerate from Triggers" or use AI to generate.</span>';
+                return;
+            }
+            
+            container.innerHTML = currentKeywords.map((keyword, idx) => `
+                <span style="background: #dcfce7; color: #166534; padding: 6px 12px; border-radius: 16px; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+                    ${keyword}
+                    <i class="fas fa-times" onclick="removeKeyword(${idx})" style="cursor: pointer; opacity: 0.7; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'"></i>
+                </span>
+            `).join('');
+        }
+        
+        function addKeyword() {
+            const input = document.getElementById('new-keyword-input');
+            const keyword = input.value.trim().toLowerCase();
+            if (!keyword) return;
+            if (currentKeywords.includes(keyword)) {
+                ToastManager.show('❌ Keyword already exists', 'error');
+                return;
+            }
+            currentKeywords.push(keyword);
+            renderKeywords(currentKeywords);
+            input.value = '';
+            ToastManager.show('✅ Keyword added', 'success');
+        }
+        
+        function removeKeyword(idx) {
+            currentKeywords.splice(idx, 1);
+            renderKeywords(currentKeywords);
+            ToastManager.show('🗑️ Keyword removed', 'success');
+        }
+        
+        function regenerateKeywords() {
+            const triggers = document.getElementById('scenario-triggers').value;
+            if (!triggers.trim()) {
+                ToastManager.show('⚠️ No triggers to extract keywords from', 'error');
+                return;
+            }
+            
+            // Extract unique words from triggers (simple keyword extraction)
+            const words = triggers.toLowerCase()
+                .split(/[\n,;]+/)
+                .flatMap(phrase => phrase.split(/\s+/))
+                .map(w => w.trim())
+                .filter(w => w.length > 2 && !['the', 'and', 'for', 'with', 'can', 'you', 'please'].includes(w));
+            
+            const uniqueWords = [...new Set(words)].sort().slice(0, 25);
+            currentKeywords = uniqueWords;
+            renderKeywords(currentKeywords);
+            ToastManager.show(`✅ Extracted ${uniqueWords.length} keywords from triggers`, 'success');
+        }
+        
+        // NEGATIVE KEYWORDS FUNCTIONS
+        function renderNegativeKeywords(keywords) {
+            currentNegativeKeywords = keywords || [];
+            const container = document.getElementById('negative-keywords-display');
+            if (!container) return;
+            
+            if (currentNegativeKeywords.length === 0) {
+                container.innerHTML = '<span style="color: #9ca3af; font-style: italic;">No negative keywords yet. Click "Regenerate" or add manually.</span>';
+                return;
+            }
+            
+            container.innerHTML = currentNegativeKeywords.map((keyword, idx) => `
+                <span style="background: #fee2e2; color: #991b1b; padding: 6px 12px; border-radius: 16px; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+                    ${keyword}
+                    <i class="fas fa-times" onclick="removeNegativeKeyword(${idx})" style="cursor: pointer; opacity: 0.7; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'"></i>
+                </span>
+            `).join('');
+        }
+        
+        function addNegativeKeyword() {
+            const input = document.getElementById('new-negative-keyword-input');
+            const keyword = input.value.trim().toLowerCase();
+            if (!keyword) return;
+            if (currentNegativeKeywords.includes(keyword)) {
+                ToastManager.show('❌ Negative keyword already exists', 'error');
+                return;
+            }
+            currentNegativeKeywords.push(keyword);
+            renderNegativeKeywords(currentNegativeKeywords);
+            input.value = '';
+            ToastManager.show('✅ Negative keyword added', 'success');
+        }
+        
+        function removeNegativeKeyword(idx) {
+            currentNegativeKeywords.splice(idx, 1);
+            renderNegativeKeywords(currentNegativeKeywords);
+            ToastManager.show('🗑️ Negative keyword removed', 'success');
+        }
+        
+        function regenerateNegativeKeywords() {
+            const negativeTriggers = document.getElementById('scenario-negative-triggers').value;
+            if (!negativeTriggers.trim()) {
+                ToastManager.show('⚠️ No negative triggers to extract keywords from', 'error');
+                return;
+            }
+            
+            const words = negativeTriggers.toLowerCase()
+                .split(/[\n,;]+/)
+                .flatMap(phrase => phrase.split(/\s+/))
+                .map(w => w.trim())
+                .filter(w => w.length > 2);
+            
+            const uniqueWords = [...new Set(words)].sort().slice(0, 15);
+            currentNegativeKeywords = uniqueWords;
+            renderNegativeKeywords(currentNegativeKeywords);
+            ToastManager.show(`✅ Extracted ${uniqueWords.length} negative keywords`, 'success');
+        }
+        
+        // Q&A PAIRS FUNCTIONS
+        function renderQnAPairs(pairs) {
+            currentQnAPairs = pairs || [];
+            const container = document.getElementById('qna-pairs-list');
+            if (!container) return;
+            
+            if (currentQnAPairs.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; color: #9ca3af; font-style: italic; padding: 24px; background: #f9fafb; border-radius: 8px; border: 2px dashed #d1d5db;">
+                        No Q&A pairs generated yet. Click "Regenerate" or use AI to generate.
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = currentQnAPairs.map((pair, idx) => `
+                <div style="background: #eff6ff; border: 2px solid #3b82f6; border-radius: 10px; padding: 16px;">
+                    <div style="display: flex; justify-content: between; align-items: start; margin-bottom: 10px;">
+                        <strong style="color: #1e40af; font-size: 14px;">❓ Question:</strong>
+                        <i class="fas fa-times" onclick="removeQnAPair(${idx})" style="cursor: pointer; color: #ef4444; margin-left: auto;" title="Remove"></i>
+                    </div>
+                    <p style="margin: 0 0 12px 0; color: #1e3a8a; font-weight: 600;">${pair.question}</p>
+                    <strong style="color: #1e40af; font-size: 14px;">💬 Answer:</strong>
+                    <p style="margin: 6px 0 8px 0; color: #334155;">${pair.answer}</p>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #6b7280;">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Confidence: ${((pair.confidence || 0.85) * 100).toFixed(0)}%</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function addQnAPair() {
+            const questionInput = document.getElementById('new-qna-question');
+            const answerInput = document.getElementById('new-qna-answer');
+            const question = questionInput.value.trim();
+            const answer = answerInput.value.trim();
+            
+            if (!question || !answer) {
+                ToastManager.show('⚠️ Please enter both question and answer', 'error');
+                return;
+            }
+            
+            currentQnAPairs.push({ question, answer, confidence: 0.85 });
+            renderQnAPairs(currentQnAPairs);
+            questionInput.value = '';
+            answerInput.value = '';
+            ToastManager.show('✅ Q&A pair added', 'success');
+        }
+        
+        function removeQnAPair(idx) {
+            currentQnAPairs.splice(idx, 1);
+            renderQnAPairs(currentQnAPairs);
+            ToastManager.show('🗑️ Q&A pair removed', 'success');
+        }
+        
+        function regenerateQnAPairs() {
+            const triggers = document.getElementById('scenario-triggers').value;
+            const replies = document.getElementById('scenario-full-replies').value;
+            
+            if (!triggers.trim() || !replies.trim()) {
+                ToastManager.show('⚠️ Need both triggers and replies to generate Q&A pairs', 'error');
+                return;
+            }
+            
+            const triggerLines = triggers.split('\n').filter(t => t.trim());
+            const replyLines = replies.split('\n').filter(r => r.trim());
+            
+            // Generate Q&A pairs by combining triggers with first reply
+            const pairs = triggerLines.slice(0, 10).map(trigger => ({
+                question: trigger.trim(),
+                answer: replyLines[0]?.trim() || 'Response not available',
+                confidence: 0.85
+            }));
+            
+            currentQnAPairs = pairs;
+            renderQnAPairs(currentQnAPairs);
+            ToastManager.show(`✅ Generated ${pairs.length} Q&A pairs`, 'success');
+        }
+        
+        // ESCALATION FLAGS FUNCTIONS
+        function renderEscalationFlags(flags) {
+            currentEscalationFlags = flags || [];
+            const container = document.getElementById('escalation-flags-display');
+            if (!container) return;
+            
+            if (currentEscalationFlags.length === 0) {
+                container.innerHTML = '<span style="color: #9ca3af; font-style: italic;">No escalation flags set. Add flags that should trigger human handoff.</span>';
+                return;
+            }
+            
+            container.innerHTML = currentEscalationFlags.map((flag, idx) => `
+                <span style="background: #fef3c7; color: #92400e; padding: 6px 12px; border-radius: 16px; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+                    🚨 ${flag}
+                    <i class="fas fa-times" onclick="removeEscalationFlag(${idx})" style="cursor: pointer; opacity: 0.7; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'"></i>
+                </span>
+            `).join('');
+        }
+        
+        function addEscalationFlag() {
+            const input = document.getElementById('new-escalation-flag-input');
+            const flag = input.value.trim().toLowerCase();
+            if (!flag) return;
+            if (currentEscalationFlags.includes(flag)) {
+                ToastManager.show('❌ Escalation flag already exists', 'error');
+                return;
+            }
+            currentEscalationFlags.push(flag);
+            renderEscalationFlags(currentEscalationFlags);
+            input.value = '';
+            ToastManager.show('✅ Escalation flag added', 'success');
+        }
+        
+        function removeEscalationFlag(idx) {
+            currentEscalationFlags.splice(idx, 1);
+            renderEscalationFlags(currentEscalationFlags);
+            ToastManager.show('🗑️ Escalation flag removed', 'success');
+        }
+        
+        // TRAINING EXAMPLES FUNCTIONS
+        function renderTrainingExamples(examples) {
+            currentTrainingExamples = examples || [];
+            const container = document.getElementById('training-examples-list');
+            if (!container) return;
+            
+            if (currentTrainingExamples.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; color: #9ca3af; font-style: italic; padding: 24px; background: #f9fafb; border-radius: 8px; border: 2px dashed #d1d5db;">
+                        No training examples yet. Use AI to generate or add manually.
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = currentTrainingExamples.map((example, idx) => `
+                <div style="background: #f5f3ff; border: 2px solid #8b5cf6; border-radius: 10px; padding: 16px;">
+                    <div style="display: flex; justify-content: between; align-items: start; margin-bottom: 10px;">
+                        <strong style="color: #6d28d9; font-size: 14px;">👤 Caller:</strong>
+                        <i class="fas fa-times" onclick="removeTrainingExample(${idx})" style="cursor: pointer; color: #ef4444; margin-left: auto;" title="Remove"></i>
+                    </div>
+                    <p style="margin: 0 0 12px 0; color: #5b21b6; font-style: italic;">"${example.caller}"</p>
+                    <strong style="color: #6d28d9; font-size: 14px;">🤖 AI:</strong>
+                    <p style="margin: 6px 0 0 0; color: #334155;">"${example.ai}"</p>
+                </div>
+            `).join('');
+        }
+        
+        function addTrainingExample() {
+            const callerInput = document.getElementById('new-example-caller');
+            const aiInput = document.getElementById('new-example-ai');
+            const caller = callerInput.value.trim();
+            const ai = aiInput.value.trim();
+            
+            if (!caller || !ai) {
+                ToastManager.show('⚠️ Please enter both caller and AI responses', 'error');
+                return;
+            }
+            
+            currentTrainingExamples.push({ caller, ai });
+            renderTrainingExamples(currentTrainingExamples);
+            callerInput.value = '';
+            aiInput.value = '';
+            ToastManager.show('✅ Training example added', 'success');
+        }
+        
+        function removeTrainingExample(idx) {
+            currentTrainingExamples.splice(idx, 1);
+            renderTrainingExamples(currentTrainingExamples);
+            ToastManager.show('🗑️ Training example removed', 'success');
         }
 
         /**
