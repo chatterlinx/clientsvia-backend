@@ -5757,6 +5757,24 @@ Just checking in..."></textarea>
           </div>
         </div>
 
+        <!-- Live Prompt Preview Box -->
+        <div id="llm-live-prompt-preview" style="background:#fefce8; border:2px solid #fbbf24; border-radius:10px; padding:16px; margin-bottom:20px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div style="font-size:14px; font-weight:700; color:#92400e;">
+              <i class="fas fa-eye mr-2"></i>Live Preview: What the AI Sees Right Now
+            </div>
+            <button id="toggle-prompt-preview" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid #fbbf24; background:white; cursor:pointer;">
+              Show Full Text
+            </button>
+          </div>
+          <div style="font-size:12px; color:#78350f; margin-bottom:8px;">
+            <strong>Active:</strong> <span id="preview-active-parts">Base Prompt + Compliance-Safe Profile + Strict Compliance Mode</span>
+          </div>
+          <div id="prompt-preview-text" style="display:none; background:white; border-radius:8px; padding:12px; font-family:monospace; font-size:11px; line-height:1.6; max-height:300px; overflow-y:auto; white-space:pre-wrap; color:#1f2937;">
+            Loading prompt text...
+          </div>
+        </div>
+
         <!-- Two-column layout -->
         <div style="display:flex; gap:20px;">
           <!-- Left nav -->
@@ -19344,10 +19362,26 @@ ${JSON.stringify(healthData, null, 2)}
                 if (!this.state) return;
                 console.log('🎨 [LLM SETTINGS] Applying settings to UI...', this.state);
 
+                // Store promptParts and profiles for prompt preview
+                this.promptParts = this.state.promptParts || null;
+                this.profiles = this.state.profiles || {};
+
                 // Profiles - active profile selection
                 const active = this.state.defaults?.activeProfile || 'compliance_safe';
                 document.querySelectorAll('input[name="llm-active-profile"]').forEach((input) => {
+                    const profileKey = input.value;
+                    const profile = this.profiles[profileKey];
+                    
                     input.checked = input.value === active;
+                    
+                    // Update description with model info if available
+                    if (profile) {
+                        const descDiv = input.closest('label')?.querySelector('[style*="font-size:12px"]');
+                        if (descDiv && profile.description && !descDiv.textContent.includes('Model:')) {
+                            descDiv.textContent = `${profile.description} | Model: ${profile.model}`;
+                        }
+                    }
+                    
                     // Update parent label border for checked state
                     if (input.checked) {
                         input.closest('label').style.borderColor = '#a5b4fc';
@@ -19396,6 +19430,81 @@ ${JSON.stringify(healthData, null, 2)}
                 document.getElementById('llm-adv-creative-maxTokens').value = oCreative.maxTokens ?? '';
 
                 console.log('✅ [LLM SETTINGS] UI updated with current settings');
+                
+                // Update prompt preview
+                this.updatePromptPreview();
+            },
+
+            updatePromptPreview() {
+                if (!this.promptParts || !this.state) return;
+
+                // Build active parts summary
+                const activeParts = [];
+                activeParts.push('Base Prompt');
+                
+                const profileKey = this.state.defaults?.activeProfile || 'compliance_safe';
+                const profileName = this.profiles[profileKey]?.label || 'Unknown Profile';
+                activeParts.push(profileName);
+
+                const compliance = this.state.compliance || {};
+                if (compliance.strictComplianceMode && profileKey !== 'compliance_safe') {
+                    activeParts.push('Strict Compliance Override');
+                }
+                if (compliance.medicalOfficeMode) activeParts.push('Medical Safety');
+                if (compliance.financialMode) activeParts.push('Financial Safety');
+                if (compliance.emergencyServicesMode) activeParts.push('Emergency Safety');
+
+                // Update summary
+                const summaryEl = document.getElementById('preview-active-parts');
+                if (summaryEl) {
+                    summaryEl.textContent = activeParts.join(' + ');
+                }
+
+                // Build full prompt text
+                let fullPrompt = '';
+                
+                // Add base
+                if (this.promptParts.base) {
+                    fullPrompt += '===== BASE SCENARIO ARCHITECT PROMPT (ALWAYS APPLIED) =====\n\n';
+                    fullPrompt += this.promptParts.base + '\n\n';
+                }
+
+                // Add profile
+                if (this.promptParts.profile) {
+                    fullPrompt += `===== ACTIVE PROFILE: ${profileName.toUpperCase()} =====\n\n`;
+                    fullPrompt += this.promptParts.profile + '\n\n';
+                }
+
+                // Add domain safety prompts
+                if (this.promptParts.domains) {
+                    if (this.promptParts.domains.medicalOfficeMode) {
+                        fullPrompt += '===== DOMAIN SAFETY: MEDICAL OFFICE =====\n\n';
+                        fullPrompt += this.promptParts.domains.medicalOfficeMode + '\n\n';
+                    }
+                    if (this.promptParts.domains.financialMode) {
+                        fullPrompt += '===== DOMAIN SAFETY: FINANCIAL & BILLING =====\n\n';
+                        fullPrompt += this.promptParts.domains.financialMode + '\n\n';
+                    }
+                    if (this.promptParts.domains.emergencyServicesMode) {
+                        fullPrompt += '===== DOMAIN SAFETY: EMERGENCY SERVICES =====\n\n';
+                        fullPrompt += this.promptParts.domains.emergencyServicesMode + '\n\n';
+                    }
+                }
+
+                // Add strict compliance
+                if (this.promptParts.strictCompliance) {
+                    fullPrompt += '===== STRICT COMPLIANCE MODE =====\n\n';
+                    fullPrompt += this.promptParts.strictCompliance + '\n\n';
+                }
+
+                fullPrompt += '\n===== END OF SYSTEM PROMPT =====\n';
+                fullPrompt += `\nTotal length: ${fullPrompt.length} characters`;
+
+                // Update preview text
+                const previewEl = document.getElementById('prompt-preview-text');
+                if (previewEl) {
+                    previewEl.textContent = fullPrompt;
+                }
             },
 
             async saveProfiles() {
@@ -19612,6 +19721,18 @@ ${JSON.stringify(healthData, null, 2)}
                     });
                 });
             });
+
+            // Toggle prompt preview button
+            const toggleBtn = document.getElementById('toggle-prompt-preview');
+            const previewText = document.getElementById('prompt-preview-text');
+            if (toggleBtn && previewText) {
+                toggleBtn.addEventListener('click', () => {
+                    const isVisible = previewText.style.display !== 'none';
+                    previewText.style.display = isVisible ? 'none' : 'block';
+                    toggleBtn.textContent = isVisible ? 'Show Full Text' : 'Hide Full Text';
+                });
+                console.log('✅ [LLM SETTINGS] Prompt preview toggle wired');
+            }
 
             console.log('✅ [LLM SETTINGS] All event listeners initialized');
         });
