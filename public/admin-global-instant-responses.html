@@ -20897,6 +20897,153 @@ Safety:
                         ToastManager.show('Failed to reset settings', 'error');
                     }
                 }
+            },
+
+            // PROMPT EDITOR: Save individual prompt section
+            async savePromptSection(section, textareaId) {
+                console.log(`💾 [PROMPT EDITOR] Saving section: ${section}`);
+                try {
+                    const textarea = document.getElementById(textareaId);
+                    if (!textarea) {
+                        throw new Error(`Textarea ${textareaId} not found`);
+                    }
+
+                    const newText = textarea.value.trim();
+                    if (!newText) {
+                        if (typeof ToastManager !== 'undefined' && ToastManager.show) {
+                            ToastManager.show('Prompt text cannot be empty', 'error');
+                        }
+                        return;
+                    }
+
+                    // Build nested promptText object
+                    const parts = section.split('.');
+                    const promptText = {};
+                    
+                    if (parts.length === 1) {
+                        // Top-level: base, strictCompliance
+                        promptText[parts[0]] = newText;
+                    } else if (parts.length === 2) {
+                        // Nested: profiles.compliance_safe, domains.medicalOfficeMode
+                        promptText[parts[0]] = { [parts[1]]: newText };
+                    }
+
+                    const payload = { promptText };
+                    console.log('💾 [PROMPT EDITOR] Payload:', payload);
+
+                    await this.save(payload, `${section} prompt saved successfully`);
+                    
+                    // Update prompt preview
+                    await this.updatePromptPreview();
+                    
+                    console.log(`✅ [PROMPT EDITOR] ${section} saved`);
+                } catch (err) {
+                    console.error(`❌ [PROMPT EDITOR] Save failed for ${section}:`, err);
+                    if (typeof ToastManager !== 'undefined' && ToastManager.show) {
+                        ToastManager.show('Failed to save prompt text', 'error');
+                    }
+                }
+            },
+
+            // PROMPT EDITOR: Reset individual prompt section
+            async resetPromptSection(section, textareaId) {
+                console.log(`🔄 [PROMPT EDITOR] Resetting section: ${section}`);
+                try {
+                    const token = getAuthToken();
+                    const res = await fetch('/api/admin/llm-settings/reset', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({ scope: `promptText.${section}` })
+                    });
+                    
+                    const data = await res.json();
+                    if (!data.success) throw new Error(data.error || 'Reset failed');
+                    
+                    this.state = data.settings;
+                    
+                    // Get fallback text and update textarea
+                    const fallbackPrompts = this.getFallbackPrompts();
+                    const textarea = document.getElementById(textareaId);
+                    
+                    if (textarea) {
+                        const parts = section.split('.');
+                        let defaultText = '';
+                        
+                        if (parts.length === 1) {
+                            defaultText = fallbackPrompts[parts[0]] || '';
+                        } else if (parts.length === 2 && fallbackPrompts[parts[0]]) {
+                            defaultText = fallbackPrompts[parts[0]][parts[1]] || '';
+                        }
+                        
+                        textarea.value = defaultText;
+                        
+                        // Update character count
+                        const charCountId = textareaId.replace('-text', '-charcount');
+                        const charCountEl = document.getElementById(charCountId);
+                        if (charCountEl) {
+                            charCountEl.textContent = defaultText.length;
+                        }
+                    }
+                    
+                    // Update prompt preview
+                    await this.updatePromptPreview();
+                    
+                    if (typeof ToastManager !== 'undefined' && ToastManager.show) {
+                        ToastManager.show(`${section} prompt reset to default`, 'success');
+                    }
+                    
+                    console.log(`✅ [PROMPT EDITOR] ${section} reset`);
+                } catch (err) {
+                    console.error(`❌ [PROMPT EDITOR] Reset failed for ${section}:`, err);
+                    if (typeof ToastManager !== 'undefined' && ToastManager.show) {
+                        ToastManager.show('Failed to reset prompt text', 'error');
+                    }
+                }
+            },
+
+            // PROMPT EDITOR: Reset all prompts
+            async resetAllPrompts() {
+                console.log('🔄 [PROMPT EDITOR] Resetting all prompt text...');
+                try {
+                    const token = getAuthToken();
+                    const res = await fetch('/api/admin/llm-settings/reset', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({ scope: 'promptText' })
+                    });
+                    
+                    const data = await res.json();
+                    if (!data.success) throw new Error(data.error || 'Reset failed');
+                    
+                    this.state = data.settings;
+                    this.promptParts = data.promptParts;
+                    this.profiles = data.profiles;
+                    
+                    // Repopulate all textareas with defaults
+                    this.populateTextareasWithFallback();
+                    
+                    // Update prompt preview
+                    await this.updatePromptPreview();
+                    
+                    if (typeof ToastManager !== 'undefined' && ToastManager.show) {
+                        ToastManager.show('All prompt text reset to defaults', 'success');
+                    }
+                    
+                    console.log('✅ [PROMPT EDITOR] All prompts reset');
+                } catch (err) {
+                    console.error('❌ [PROMPT EDITOR] Reset all failed:', err);
+                    if (typeof ToastManager !== 'undefined' && ToastManager.show) {
+                        ToastManager.show('Failed to reset prompt text', 'error');
+                    }
+                }
             }
         };
 
@@ -20998,6 +21145,91 @@ Safety:
                 });
                 console.log('✅ [LLM SETTINGS] Prompt preview toggle wired');
             }
+
+            // PROMPT EDITOR: Individual Save Buttons
+            const promptSaveButtons = [
+                { id: 'llm-prompt-base-save', section: 'base', textarea: 'llm-prompt-base-text' },
+                { id: 'llm-prompt-profile-compliance-save', section: 'profiles.compliance_safe', textarea: 'llm-prompt-profile-compliance-text' },
+                { id: 'llm-prompt-profile-callcenter-save', section: 'profiles.call_center_optimized', textarea: 'llm-prompt-profile-callcenter-text' },
+                { id: 'llm-prompt-profile-creative-save', section: 'profiles.creative_exploration', textarea: 'llm-prompt-profile-creative-text' },
+                { id: 'llm-prompt-domain-medical-save', section: 'domains.medicalOfficeMode', textarea: 'llm-prompt-domain-medical-text' },
+                { id: 'llm-prompt-domain-financial-save', section: 'domains.financialMode', textarea: 'llm-prompt-domain-financial-text' },
+                { id: 'llm-prompt-domain-emergency-save', section: 'domains.emergencyServicesMode', textarea: 'llm-prompt-domain-emergency-text' },
+                { id: 'llm-prompt-strict-save', section: 'strictCompliance', textarea: 'llm-prompt-strict-text' }
+            ];
+
+            promptSaveButtons.forEach(({ id, section, textarea }) => {
+                const btn = document.getElementById(id);
+                if (btn) {
+                    btn.addEventListener('click', async () => {
+                        console.log(`💾 [PROMPT EDITOR] Saving ${section}...`);
+                        await LLMSettingsPage.savePromptSection(section, textarea);
+                    });
+                    console.log(`✅ [PROMPT EDITOR] ${id} save button wired`);
+                }
+            });
+
+            // PROMPT EDITOR: Individual Reset Buttons
+            const promptResetButtons = [
+                { id: 'llm-prompt-base-reset', section: 'base', textarea: 'llm-prompt-base-text' },
+                { id: 'llm-prompt-profile-compliance-reset', section: 'profiles.compliance_safe', textarea: 'llm-prompt-profile-compliance-text' },
+                { id: 'llm-prompt-profile-callcenter-reset', section: 'profiles.call_center_optimized', textarea: 'llm-prompt-profile-callcenter-text' },
+                { id: 'llm-prompt-profile-creative-reset', section: 'profiles.creative_exploration', textarea: 'llm-prompt-profile-creative-text' },
+                { id: 'llm-prompt-domain-medical-reset', section: 'domains.medicalOfficeMode', textarea: 'llm-prompt-domain-medical-text' },
+                { id: 'llm-prompt-domain-financial-reset', section: 'domains.financialMode', textarea: 'llm-prompt-domain-financial-text' },
+                { id: 'llm-prompt-domain-emergency-reset', section: 'domains.emergencyServicesMode', textarea: 'llm-prompt-domain-emergency-text' },
+                { id: 'llm-prompt-strict-reset', section: 'strictCompliance', textarea: 'llm-prompt-strict-text' }
+            ];
+
+            promptResetButtons.forEach(({ id, section, textarea }) => {
+                const btn = document.getElementById(id);
+                if (btn) {
+                    btn.addEventListener('click', async () => {
+                        if (confirm(`Reset this prompt to default?`)) {
+                            console.log(`🔄 [PROMPT EDITOR] Resetting ${section}...`);
+                            await LLMSettingsPage.resetPromptSection(section, textarea);
+                        }
+                    });
+                    console.log(`✅ [PROMPT EDITOR] ${id} reset button wired`);
+                }
+            });
+
+            // PROMPT EDITOR: Reset All Prompts Button
+            const resetAllPromptsBtn = document.getElementById('llm-prompt-reset-all');
+            if (resetAllPromptsBtn) {
+                resetAllPromptsBtn.addEventListener('click', async () => {
+                    if (confirm('⚠️ Reset ALL prompt text to defaults? This will reset base prompt, all profile prompts, domain safety prompts, and strict compliance prompt.')) {
+                        console.log('🔄 [PROMPT EDITOR] Resetting all prompts...');
+                        await LLMSettingsPage.resetAllPrompts();
+                    }
+                });
+                console.log('✅ [PROMPT EDITOR] Reset all prompts button wired');
+            }
+
+            // PROMPT EDITOR: Character count updates
+            const promptTextareas = [
+                { textarea: 'llm-prompt-base-text', counter: 'llm-prompt-base-charcount' },
+                { textarea: 'llm-prompt-profile-compliance-text', counter: 'llm-prompt-profile-compliance-charcount' },
+                { textarea: 'llm-prompt-profile-callcenter-text', counter: 'llm-prompt-profile-callcenter-charcount' },
+                { textarea: 'llm-prompt-profile-creative-text', counter: 'llm-prompt-profile-creative-charcount' },
+                { textarea: 'llm-prompt-domain-medical-text', counter: 'llm-prompt-domain-medical-charcount' },
+                { textarea: 'llm-prompt-domain-financial-text', counter: 'llm-prompt-domain-financial-charcount' },
+                { textarea: 'llm-prompt-domain-emergency-text', counter: 'llm-prompt-domain-emergency-charcount' },
+                { textarea: 'llm-prompt-strict-text', counter: 'llm-prompt-strict-charcount' }
+            ];
+
+            promptTextareas.forEach(({ textarea, counter }) => {
+                const textareaEl = document.getElementById(textarea);
+                const counterEl = document.getElementById(counter);
+                if (textareaEl && counterEl) {
+                    textareaEl.addEventListener('input', () => {
+                        counterEl.textContent = textareaEl.value.length;
+                    });
+                    // Initialize count
+                    counterEl.textContent = textareaEl.value.length;
+                }
+            });
+            console.log('✅ [PROMPT EDITOR] Character counters wired');
 
             console.log('✅ [LLM SETTINGS] All event listeners initialized');
         });
