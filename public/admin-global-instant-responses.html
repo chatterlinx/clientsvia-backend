@@ -20121,8 +20121,27 @@ ${JSON.stringify(healthData, null, 2)}
                 // Strict compliance
                 document.getElementById('llm-prompt-strict-text').value = 
                     fallbackPrompts.strictCompliance || '';
+                
+                // Advanced Tuning - populate with defaults immediately
+                const profileDefaults = {
+                    compliance_safe: { temperature: 0.2, topP: 0.9, maxTokens: 2200 },
+                    call_center_optimized: { temperature: 0.35, topP: 0.9, maxTokens: 2600 },
+                    creative_exploration: { temperature: 0.65, topP: 0.95, maxTokens: 3000 }
+                };
+                
+                document.getElementById('llm-adv-compliance-temp').value = profileDefaults.compliance_safe.temperature;
+                document.getElementById('llm-adv-compliance-topP').value = profileDefaults.compliance_safe.topP;
+                document.getElementById('llm-adv-compliance-maxTokens').value = profileDefaults.compliance_safe.maxTokens;
+                
+                document.getElementById('llm-adv-callcenter-temp').value = profileDefaults.call_center_optimized.temperature;
+                document.getElementById('llm-adv-callcenter-topP').value = profileDefaults.call_center_optimized.topP;
+                document.getElementById('llm-adv-callcenter-maxTokens').value = profileDefaults.call_center_optimized.maxTokens;
+                
+                document.getElementById('llm-adv-creative-temp').value = profileDefaults.creative_exploration.temperature;
+                document.getElementById('llm-adv-creative-topP').value = profileDefaults.creative_exploration.topP;
+                document.getElementById('llm-adv-creative-maxTokens').value = profileDefaults.creative_exploration.maxTokens;
                     
-                console.log('✅ [LLM SETTINGS] Textareas populated with fallback prompts');
+                console.log('✅ [LLM SETTINGS] Textareas and Advanced Tuning populated with fallback defaults');
             },
 
             close() {
@@ -20201,26 +20220,33 @@ ${JSON.stringify(healthData, null, 2)}
                 document.getElementById('llm-default-variants').value = this.state.defaults?.defaultVariantCount ?? 1;
                 document.getElementById('llm-max-variants').value = this.state.defaults?.maxVariantCount ?? 15;
 
-                // Advanced overrides
+                // Advanced overrides - Show defaults from profiles, not empty strings
                 const overrides = this.state.overrides || {};
                 
-                // Compliance-safe
+                // Get default values from profiles
+                const profileDefaults = {
+                    compliance_safe: { temperature: 0.2, topP: 0.9, maxTokens: 2200 },
+                    call_center_optimized: { temperature: 0.35, topP: 0.9, maxTokens: 2600 },
+                    creative_exploration: { temperature: 0.65, topP: 0.95, maxTokens: 3000 }
+                };
+                
+                // Compliance-safe - show defaults if not overridden
                 const oCompliance = overrides.compliance_safe || {};
-                document.getElementById('llm-adv-compliance-temp').value = oCompliance.temperature ?? '';
-                document.getElementById('llm-adv-compliance-topP').value = oCompliance.topP ?? '';
-                document.getElementById('llm-adv-compliance-maxTokens').value = oCompliance.maxTokens ?? '';
+                document.getElementById('llm-adv-compliance-temp').value = oCompliance.temperature ?? profileDefaults.compliance_safe.temperature;
+                document.getElementById('llm-adv-compliance-topP').value = oCompliance.topP ?? profileDefaults.compliance_safe.topP;
+                document.getElementById('llm-adv-compliance-maxTokens').value = oCompliance.maxTokens ?? profileDefaults.compliance_safe.maxTokens;
 
-                // Call center
+                // Call center - show defaults if not overridden
                 const oCallCenter = overrides.call_center_optimized || {};
-                document.getElementById('llm-adv-callcenter-temp').value = oCallCenter.temperature ?? '';
-                document.getElementById('llm-adv-callcenter-topP').value = oCallCenter.topP ?? '';
-                document.getElementById('llm-adv-callcenter-maxTokens').value = oCallCenter.maxTokens ?? '';
+                document.getElementById('llm-adv-callcenter-temp').value = oCallCenter.temperature ?? profileDefaults.call_center_optimized.temperature;
+                document.getElementById('llm-adv-callcenter-topP').value = oCallCenter.topP ?? profileDefaults.call_center_optimized.topP;
+                document.getElementById('llm-adv-callcenter-maxTokens').value = oCallCenter.maxTokens ?? profileDefaults.call_center_optimized.maxTokens;
 
-                // Creative
+                // Creative - show defaults if not overridden
                 const oCreative = overrides.creative_exploration || {};
-                document.getElementById('llm-adv-creative-temp').value = oCreative.temperature ?? '';
-                document.getElementById('llm-adv-creative-topP').value = oCreative.topP ?? '';
-                document.getElementById('llm-adv-creative-maxTokens').value = oCreative.maxTokens ?? '';
+                document.getElementById('llm-adv-creative-temp').value = oCreative.temperature ?? profileDefaults.creative_exploration.temperature;
+                document.getElementById('llm-adv-creative-topP').value = oCreative.topP ?? profileDefaults.creative_exploration.topP;
+                document.getElementById('llm-adv-creative-maxTokens').value = oCreative.maxTokens ?? profileDefaults.creative_exploration.maxTokens;
 
                 // Populate Prompt Editor textareas (if promptParts available)
                 const promptParts = this.promptParts || this.getFallbackPrompts();
