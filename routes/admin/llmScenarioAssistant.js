@@ -121,6 +121,48 @@ function sanitizeScenarioDraft(raw) {
       : [],
     suggestedSynonyms: normalizeSynonyms(raw.suggestedSynonyms),
 
+    // AI INTELLIGENCE FIELDS
+    behavior: (raw.behavior && typeof raw.behavior === 'string') ? raw.behavior.trim() : null,
+    
+    keywords: Array.isArray(raw.keywords)
+      ? raw.keywords.filter(k => k && typeof k === 'string').map(k => k.toLowerCase().trim()).slice(0, 30)
+      : [],
+    
+    negativeKeywords: Array.isArray(raw.negativeKeywords)
+      ? raw.negativeKeywords.filter(k => k && typeof k === 'string').map(k => k.toLowerCase().trim()).slice(0, 20)
+      : [],
+    
+    qnaPairs: Array.isArray(raw.qnaPairs)
+      ? raw.qnaPairs
+          .filter(pair => pair && pair.question && pair.answer)
+          .map(pair => ({
+            question: String(pair.question).trim(),
+            answer: String(pair.answer).trim(),
+            confidence: typeof pair.confidence === 'number' 
+              ? Math.min(1, Math.max(0, pair.confidence))
+              : 0.85
+          }))
+          .slice(0, 20)
+      : [],
+    
+    testPhrases: Array.isArray(raw.testPhrases)
+      ? raw.testPhrases.filter(p => p && typeof p === 'string').map(p => p.trim()).slice(0, 20)
+      : [],
+    
+    examples: Array.isArray(raw.examples)
+      ? raw.examples
+          .filter(ex => ex && ex.caller && ex.ai)
+          .map(ex => ({
+            caller: String(ex.caller).trim(),
+            ai: String(ex.ai).trim()
+          }))
+          .slice(0, 10)
+      : [],
+    
+    escalationFlags: Array.isArray(raw.escalationFlags)
+      ? raw.escalationFlags.filter(f => f && typeof f === 'string').map(f => f.trim()).slice(0, 10)
+      : [],
+
     // NOTES
     notes: (raw.notes && typeof raw.notes === 'string') ? raw.notes.trim() : '',
   };
@@ -368,12 +410,26 @@ ONLY when you're 100% confident about ALL checklist items.
 If ANY doubt remains, ask questions instead.
 Set status="ready" and return a complete "draft" object.
 
+🎭 AVAILABLE AI BEHAVIORS (SELECT ONE):
+${behaviors.length > 0 ? behaviors.map(b => 
+  `- "${b.behaviorId}": ${b.name} (${b.bestFor || b.instructions.substring(0, 80)}...)`
+).join('\n') : '- No behaviors loaded (use null)'}
+
+Select the MOST APPROPRIATE behavior based on the scenario's emotional tone and use case.
+Examples:
+- Empathetic scenarios → use empathetic/reassuring behavior
+- Business queries → use professional/efficient behavior
+- Urgent situations → use urgent/action-oriented behavior
+
 FULL DRAFT SPECIFICATION (Phase C.1):
 {
   "name": "Human-readable scenario name",
 
   "scenarioType": "INFO_FAQ" | "ACTION_FLOW" | "SYSTEM_ACK" | "SMALL_TALK",
   "replyStrategy": "AUTO" | "FULL_ONLY" | "QUICK_ONLY" | "QUICK_THEN_FULL" | "LLM_WRAP" | "LLM_CONTEXT",
+
+  // 🎭 AI BEHAVIOR (SELECT FROM LIST ABOVE)
+  "behavior": "behavioral-id-string",  // REQUIRED: Select from available behaviors list above
 
   // 1. TRIGGERS & EXAMPLES (many variants for matching robustness)
   "triggerPhrases": [ "phrase1", ... ],          // 12–18 natural caller phrases
@@ -434,7 +490,34 @@ FULL DRAFT SPECIFICATION (Phase C.1):
   "actionHooks": [ "offer_scheduling", "capture_email" ],  // Backend triggers
   "testPhrases": [ "Can I reschedule my appointment?", "I need to move my visit", ... ],  // 5–10 phrases
 
-  // 8. NLP SUGGESTIONS (for template-level learning)
+  // 8. AI INTELLIGENCE & MATCHING (CRITICAL - DO NOT SKIP)
+  "keywords": [ "appointment", "schedule", "book", "visit", ... ],  // REQUIRED: 10-20 keywords extracted from triggers
+  "negativeKeywords": [ "don't", "not", "never", "cancel", ... ],  // REQUIRED: 5-10 words that VETO this scenario
+  
+  "qnaPairs": [  // REQUIRED: Generate 8-15 Q&A pairs from triggers + replies
+    {
+      "question": "How do I book an appointment?",
+      "answer": "I'd be happy to help you schedule an appointment. What day works best?",
+      "confidence": 0.92
+    },
+    {
+      "question": "Can I schedule a visit?",
+      "answer": "Of course! Let's get you scheduled.",
+      "confidence": 0.88
+    }
+    // ... more Q&A pairs
+  ],
+  
+  "escalationFlags": [ "angry", "confused", "frustrated", "urgent" ],  // When to escalate to human
+  
+  "examples": [  // Training examples (2-4 sample conversations)
+    {
+      "caller": "I need to reschedule my appointment",
+      "ai": "I'd be happy to help you move your appointment. What's your current appointment date?"
+    }
+  ],
+
+  // 9. NLP SUGGESTIONS (for template-level learning)
   "suggestedFillerWords": [ "uh", "like", "you know", ... ],
   "suggestedSynonyms": {
     "appointment": [ "visit", "meeting", "consultation", "session" ],
@@ -484,7 +567,24 @@ GUIDELINES:
    - Use minConfidence 0.8–0.9 for critical scenarios (emergencies, account cancellation)
    - Use priority +5 to +10 for high-urgency scenarios
 
-8. NLP SUGGESTIONS:
+8. AI INTELLIGENCE FIELDS (CRITICAL - ALWAYS GENERATE):
+   - keywords: Extract 10-20 single words from triggerPhrases (lowercase, no duplicates)
+     Example: ["appointment", "schedule", "book", "visit", "reschedule", "time", "date"]
+   
+   - negativeKeywords: Extract 5-10 words from negativeTriggers that VETO matches
+     Example: ["don't", "not", "never", "won't", "cancel", "refuse"]
+   
+   - qnaPairs: Generate 8-15 Q&A pairs combining triggers with replies
+     Each pair needs: question (natural), answer (from replies), confidence (0.8-0.95)
+     Vary the questions to cover different phrasings
+   
+   - escalationFlags: List 3-6 sentiment/situation triggers for human handoff
+     Example: ["angry", "confused", "frustrated", "technical_issue", "urgent", "vip"]
+   
+   - examples: Provide 2-4 sample conversations showing expected flow
+     Keep caller phrases natural, AI responses from the fullReplies you generated
+
+9. NLP SUGGESTIONS:
    - suggestedFillerWords: junk phrases to strip from caller input
    - suggestedSynonyms: colloquial phrases → normalized terms for matching
    - These improve Tier 1 (rule-based) matching over time
