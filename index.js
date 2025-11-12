@@ -167,6 +167,7 @@ async function loadAllRoutes() {
         routes.globalAIBehaviorsRoutes = await loadRouteWithTimeout('./routes/admin/globalAIBehaviors', 'globalAIBehaviorsRoutes');
         routes.llmScenarioAssistantRoutes = await loadRouteWithTimeout('./routes/admin/llmScenarioAssistant', 'llmScenarioAssistantRoutes');
         routes.llmSettingsRoutes = await loadRouteWithTimeout('./routes/admin/llmSettings', 'llmSettingsRoutes');
+        routes.cheatSheetRoutes = await loadRouteWithTimeout('./routes/admin/cheatSheet', 'cheatSheetRoutes'); // 🧠 Cheat Sheet Management (Phase 1)
         // V1 LLM Console removed - 2025-11-08
         routes.llmLearningV2Routes = await loadRouteWithTimeout('./routes/admin/llmLearningV2', 'llmLearningV2Routes');
         routes.llmLearningV2UIRoutes = await loadRouteWithTimeout('./routes/admin/llmLearningConsoleV2UI', 'llmLearningV2UIRoutes');
@@ -382,6 +383,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/global-behaviors', routes.globalAIBehaviorsRoutes); // Global AI Behavior Templates
     app.use('/api/admin/scenario-assistant', routes.llmScenarioAssistantRoutes); // 🤖 LLM Scenario Assistant (admin drafting tool)
     app.use('/api/admin/llm-settings', routes.llmSettingsRoutes); // 🎛️ LLM Enterprise Settings (profiles, compliance, advanced tuning)
+    app.use('/api/admin/cheat-sheet', routes.cheatSheetRoutes); // 🧠 Cheat Sheet Management (Phase 1)
     // V1 LLM Console API removed - 2025-11-08 (use V2 instead)
     app.use('/api/admin/llm-learning/v2', routes.llmLearningV2Routes); // LLM Learning Console V2 API (Enhanced with latency tracking)
     app.use('/admin', routes.llmLearningV2UIRoutes); // LLM Learning Console V2 UI (Standalone page at /admin/llm-learning-v2)
