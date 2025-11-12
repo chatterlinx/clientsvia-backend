@@ -1,8 +1,9 @@
 // services/llmSettingsService.js
 const LLMSettings = require('../models/LLMSettings');
-const { DEFAULT_LLM_SETTINGS } = require('../config/llmDefaultSettings');
+const { DEFAULT_LLM_ENTERPRISE_SETTINGS } = require('../config/llmScenarioPrompts');
 
 const GLOBAL_SCOPE = 'global';
+const DEFAULT_LLM_SETTINGS = DEFAULT_LLM_ENTERPRISE_SETTINGS; // Alias for backwards compat
 
 async function getSettings(scope = GLOBAL_SCOPE) {
   let doc = await LLMSettings.findOne({ scope }).lean();
