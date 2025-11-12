@@ -14114,6 +14114,11 @@ Continue?`;
                 });
                 getEl('scenario-dynamic-variables').value = varLines.join('\n');
             }
+            
+            if (draft.entityValidationRules && Object.keys(draft.entityValidationRules).length > 0 && getEl('scenario-entity-validation')) {
+                getEl('scenario-entity-validation').value = JSON.stringify(draft.entityValidationRules, null, 2);
+                console.log('✅ [C.1 ASSISTANT] Applied entity validation rules:', Object.keys(draft.entityValidationRules).length);
+            }
 
             // ═══════════════════════════════════════════════════════════════════
             // 7. ADVANCED BEHAVIOR

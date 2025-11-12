@@ -90,6 +90,7 @@ function sanitizeScenarioDraft(raw) {
       ? raw.entities.filter(e => e && typeof e === 'string').slice(0, 20)
       : [],
     dynamicTemplateVariables: normalizeVariables(raw.dynamicTemplateVariables),
+    entityValidationRules: normalizeEntityValidationRules(raw.entityValidationRules),
 
     // CONFIDENCE & PRIORITY
     minConfidence: clampNumber(raw.minConfidence, 0.5, 0.9, 0.7),
@@ -214,6 +215,28 @@ function normalizeVariables(input) {
     const cleanKey = key.trim().replace(/[{}]/g, '');
     if (cleanKey && typeof input[key] === 'string') {
       normalized[cleanKey] = input[key].trim();
+    }
+  });
+  
+  return normalized;
+}
+
+/**
+ * Normalize entity validation rules
+ */
+function normalizeEntityValidationRules(input) {
+  if (!input || typeof input !== 'object') return {};
+  
+  const normalized = {};
+  Object.keys(input).forEach(entityName => {
+    const rule = input[entityName];
+    if (rule && typeof rule === 'object' && rule.pattern) {
+      normalized[entityName.trim().toLowerCase()] = {
+        pattern: String(rule.pattern).trim(),
+        prompt: rule.prompt && typeof rule.prompt === 'string' 
+          ? rule.prompt.trim() 
+          : `Please provide a valid ${entityName}`
+      };
     }
   });
   
@@ -499,7 +522,12 @@ FULL DRAFT SPECIFICATION (Phase C.1):
   "transferTarget": "+15551234567" | "sales_queue" | null,
 
   // 4. ENTITIES & VARIABLES (capture caller data)
-  "entities": [ "preferred_date", "preferred_time", "customer_name" ],  // What to capture from caller
+  "entities": [ "name: PERSON", "phone: PHONE", "date: DATE", "time: TIME" ],  // What to capture from caller
+  "entityValidationRules": {
+    "phone": { "pattern": "^[0-9]{10}$", "prompt": "Please provide a 10-digit phone number" },
+    "email": { "pattern": "@", "prompt": "Please provide a valid email address" },
+    "date": { "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "prompt": "Please provide a date (YYYY-MM-DD)" }
+  },
   "dynamicTemplateVariables": {
     "companyname": "Your service provider's name",
     "phone": "Your main phone number",
@@ -616,9 +644,53 @@ GUIDELINES:
    
    ↑ THIS IS WHAT 10 VARIATIONS LOOKS LIKE. Generate this many for EVERY scenario.
 
-3. ENTITIES:
-   - Identify what data the scenario should capture (date, time, name, email, etc.)
-   - These become variables in the conversation
+3. ENTITIES & VALIDATION (CRITICAL: Generate validation rules for data quality):
+   
+   ⚠️ TWO-PART REQUIREMENT:
+   
+   A) entities[] - List what data to capture (formatted as "entity_name: TYPE"):
+      Examples:
+      - "name: PERSON"
+      - "phone: PHONE"
+      - "email: EMAIL"
+      - "date: DATE"
+      - "time: TIME"
+      - "address: ADDRESS"
+      - "issue: TEXT"
+   
+   B) entityValidationRules{} - Define validation patterns for each entity:
+      Format: JSON object where each key matches an entity name
+      
+      EXAMPLE:
+      {
+        "phone": {
+          "pattern": "^[0-9]{10}$",
+          "prompt": "Please provide a 10-digit phone number"
+        },
+        "email": {
+          "pattern": "@",
+          "prompt": "Please provide a valid email address"
+        },
+        "date": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$|^\\d{1,2}/\\d{1,2}/\\d{4}$",
+          "prompt": "Please provide a date (e.g., 2025-11-15 or 11/15/2025)"
+        },
+        "time": {
+          "pattern": "^\\d{1,2}:\\d{2}|^\\d{1,2}(am|pm)$",
+          "prompt": "Please provide a time (e.g., 2:00 PM or 14:00)"
+        }
+      }
+      
+   COMMON PATTERNS:
+   - phone: "^[0-9]{10}$" (10 digits)
+   - email: "@" (contains @)
+   - date: "^\\d{4}-\\d{2}-\\d{2}$" (YYYY-MM-DD)
+   - time: "^\\d{1,2}:\\d{2}" (HH:MM)
+   - zip: "^\\d{5}$" (5 digits)
+   - name: "^[A-Za-z\\s]{2,}$" (letters and spaces, 2+ chars)
+   
+   WHY? The AI agent will validate captured data during calls and re-prompt if invalid,
+   ensuring data quality before saving.
 
 4. VARIABLES:
    - Use ONLY template placeholders: {companyname}, {phone}, {address}, {website_url}, etc.
