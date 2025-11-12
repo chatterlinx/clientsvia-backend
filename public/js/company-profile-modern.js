@@ -3995,6 +3995,12 @@ class CompanyProfileManager {
             this.spamFilterManagerInitialized = true;
         }
         
+        if (tabName === 'cheat-sheet' && !this.cheatSheetManagerInitialized) {
+            logger.info('🧠 Initializing Cheat Sheet Manager...');
+            this.initializeCheatSheetManager();
+            this.cheatSheetManagerInitialized = true;
+        }
+        
     }
 
     /**
@@ -4067,6 +4073,32 @@ class CompanyProfileManager {
             
         } catch (error) {
             logger.error('❌ [SPAM FILTER] Failed to initialize manager:', error);
+        }
+    }
+
+    /**
+     * Initialize Cheat Sheet Manager
+     */
+    initializeCheatSheetManager() {
+        logger.info('🧠 [CHEAT SHEET] Initializing manager for company:', this.companyId);
+        
+        try {
+            // Check if CheatSheetManager class exists
+            if (typeof cheatSheetManager === 'undefined') {
+                logger.error('❌ [CHEAT SHEET] CheatSheetManager not found!');
+                return;
+            }
+            
+            // Load cheat sheet data
+            cheatSheetManager.load(this.companyId);
+            
+            logger.info('✅ [CHEAT SHEET] Manager initialized successfully');
+            
+            // Store reference for later use
+            this.cheatSheetManager = cheatSheetManager;
+            
+        } catch (error) {
+            logger.error('❌ [CHEAT SHEET] Failed to initialize manager:', error);
         }
     }
 

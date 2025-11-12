@@ -425,6 +425,33 @@ class CheatSheetManager {
   }
   
   // ═══════════════════════════════════════════════════════════════════
+  // TRANSFER RULE MANAGEMENT
+  // ═══════════════════════════════════════════════════════════════════
+  
+  addTransferRule() {
+    if (!this.cheatSheet.transferRules) {
+      this.cheatSheet.transferRules = [];
+    }
+    
+    this.cheatSheet.transferRules.push({
+      id: `tr-${Date.now()}`,
+      intentTag: 'general',
+      contactNameOrQueue: '',
+      phoneNumber: '',
+      script: 'Transferring your call...',
+      collectEntities: [],
+      afterHoursOnly: false,
+      priority: 10,
+      enabled: true,
+      createdAt: new Date().toISOString(),
+      createdBy: 'admin'
+    });
+    
+    this.markDirty();
+    this.renderTransferRules();
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
   // SAVE & COMPILE
   // ═══════════════════════════════════════════════════════════════════
   
