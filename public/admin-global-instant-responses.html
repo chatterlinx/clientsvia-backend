@@ -6155,23 +6155,89 @@ Just checking in..."></textarea>
                 
                 <!-- Compliance Safe -->
                 <div style="border:1px solid #e5e7eb; border-radius:8px; padding:14px; background:#fafafa;">
-                  <div style="font-size:14px; font-weight:600; margin-bottom:4px; color:#111827;">
+                  <div style="font-size:14px; font-weight:600; margin-bottom:10px; color:#111827;">
                     <i class="fas fa-shield-alt mr-1 text-green-600"></i>Compliance-Safe Overrides
                   </div>
-                  <div style="font-size:11px; color:#6b7280; margin-bottom:10px;">
-                    Leave blank to use defaults: temp 0.2, top_p 0.9, max_tokens 2200. Server clamps: temp 0.1-0.35, top_p 0.7-0.95, tokens 1200-2600.
-                  </div>
                   <div style="display:flex; gap:12px; flex-wrap:wrap;">
-                    <div style="display:flex; flex-direction:column; gap:4px;">
-                      <label style="font-size:11px; font-weight:600; color:#111827;">Temperature</label>
+                    <div style="display:flex; flex-direction:column; gap:4px; position:relative;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">
+                        Temperature
+                        <i class="fas fa-info-circle" style="margin-left:4px; color:#3b82f6; cursor:help; font-size:10px;" title="CREATIVITY vs CONSISTENCY
+
+🎯 What it does:
+Controls how creative or consistent the LLM responses are.
+
+📊 Scale:
+• 0.0-0.2 = Robot mode (exact same response every time)
+• 0.2-0.4 = Consistent (slight variation, professional)
+• 0.4-0.6 = Balanced (natural human-like responses)
+• 0.6-1.0 = Creative (lots of variety, less predictable)
+
+💡 Why it matters:
+Lower temperature = safer, more predictable (good for compliance)
+Higher temperature = more natural, less robotic (good for conversation)
+
+🔧 When to adjust:
+• Legal/Medical: Keep LOW (0.1-0.2) for consistency
+• General business: Use DEFAULT (0.2-0.35) for balance
+• Creative brainstorming: Go HIGHER (0.5-0.7) for variety
+
+⚠️ Default: 0.2 (Server clamps: 0.1-0.35)"></i>
+                      </label>
                       <input type="number" step="0.05" min="0" max="1" id="llm-adv-compliance-temp" placeholder="0.2" style="width:90px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
                     </div>
-                    <div style="display:flex; flex-direction:column; gap:4px;">
-                      <label style="font-size:11px; font-weight:600; color:#111827;">top_p</label>
+                    <div style="display:flex; flex-direction:column; gap:4px; position:relative;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">
+                        top_p
+                        <i class="fas fa-info-circle" style="margin-left:4px; color:#3b82f6; cursor:help; font-size:10px;" title="VOCABULARY DIVERSITY
+
+🎯 What it does:
+Controls how diverse the vocabulary is in responses.
+
+📊 Scale:
+• 0.5 = Only very common words (formal, repetitive)
+• 0.9 = Balanced vocabulary (natural, professional)
+• 1.0 = All words available (can be too creative)
+
+💡 Why it matters:
+Lower top_p = safer vocabulary, fewer surprises
+Higher top_p = richer vocabulary, more expressive
+
+🔧 When to adjust:
+• Formal settings: Keep DEFAULT (0.9) - works for 99% of cases
+• Too robotic: Increase slightly (0.92-0.95)
+• Too casual: Decrease slightly (0.85-0.88)
+
+⚠️ Default: 0.9 (Server clamps: 0.7-0.95)"></i>
+                      </label>
                       <input type="number" step="0.05" min="0.1" max="1" id="llm-adv-compliance-topP" placeholder="0.9" style="width:90px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
                     </div>
-                    <div style="display:flex; flex-direction:column; gap:4px;">
-                      <label style="font-size:11px; font-weight:600; color:#111827;">max_tokens</label>
+                    <div style="display:flex; flex-direction:column; gap:4px; position:relative;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">
+                        max_tokens
+                        <i class="fas fa-info-circle" style="margin-left:4px; color:#3b82f6; cursor:help; font-size:10px;" title="MAXIMUM RESPONSE LENGTH
+
+🎯 What it does:
+Controls how long the LLM's scenario draft can be.
+
+📊 Token Guide:
+• 1 token ≈ 0.75 words
+• 2200 tokens ≈ 1650 words ≈ 3 pages
+• 2600 tokens ≈ 1950 words ≈ 4 pages
+• 3000 tokens ≈ 2250 words ≈ 4.5 pages
+
+💡 Why it matters:
+Lower = concise, focused scenarios (faster, cheaper)
+Higher = detailed, thorough scenarios (more context)
+
+🔧 When to adjust:
+• Simple scenarios: Use DEFAULT (2200) - plenty for most
+• Complex flows: Increase (2400-2600) for more detail
+• Getting cut off: Increase max_tokens
+• Too verbose: Decrease max_tokens
+
+⚠️ Default: 2200 (Server clamps: 1200-2600)"></i>
+                      </label>
                       <input type="number" step="50" min="500" max="3200" id="llm-adv-compliance-maxTokens" placeholder="2200" style="width:100px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
                     </div>
                   </div>
@@ -6179,23 +6245,89 @@ Just checking in..."></textarea>
 
                 <!-- Call Center -->
                 <div style="border:1px solid #e5e7eb; border-radius:8px; padding:14px; background:#fafafa;">
-                  <div style="font-size:14px; font-weight:600; margin-bottom:4px; color:#111827;">
+                  <div style="font-size:14px; font-weight:600; margin-bottom:10px; color:#111827;">
                     <i class="fas fa-phone-alt mr-1 text-blue-600"></i>Call Center Optimized Overrides
                   </div>
-                  <div style="font-size:11px; color:#6b7280; margin-bottom:10px;">
-                    Leave blank to use defaults: temp 0.35, top_p 0.9, max_tokens 2600.
-                  </div>
                   <div style="display:flex; gap:12px; flex-wrap:wrap;">
-                    <div style="display:flex; flex-direction:column; gap:4px;">
-                      <label style="font-size:11px; font-weight:600; color:#111827;">Temperature</label>
+                    <div style="display:flex; flex-direction:column; gap:4px; position:relative;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">
+                        Temperature
+                        <i class="fas fa-info-circle" style="margin-left:4px; color:#3b82f6; cursor:help; font-size:10px;" title="CREATIVITY vs CONSISTENCY
+
+🎯 What it does:
+Controls how creative or consistent the LLM responses are.
+
+📊 Scale:
+• 0.0-0.2 = Robot mode (exact same response every time)
+• 0.2-0.4 = Consistent (slight variation, professional)
+• 0.4-0.6 = Balanced (natural human-like responses)
+• 0.6-1.0 = Creative (lots of variety, less predictable)
+
+💡 Why it matters:
+Lower temperature = safer, more predictable (good for compliance)
+Higher temperature = more natural, less robotic (good for conversation)
+
+🔧 When to adjust:
+• Legal/Medical: Keep LOW (0.1-0.2) for consistency
+• General business: Use DEFAULT (0.2-0.35) for balance
+• Creative brainstorming: Go HIGHER (0.5-0.7) for variety
+
+⚠️ Default: 0.35 (Call center balance - natural but reliable)"></i>
+                      </label>
                       <input type="number" step="0.05" min="0" max="1" id="llm-adv-callcenter-temp" placeholder="0.35" style="width:90px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
                     </div>
-                    <div style="display:flex; flex-direction:column; gap:4px;">
-                      <label style="font-size:11px; font-weight:600; color:#111827;">top_p</label>
+                    <div style="display:flex; flex-direction:column; gap:4px; position:relative;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">
+                        top_p
+                        <i class="fas fa-info-circle" style="margin-left:4px; color:#3b82f6; cursor:help; font-size:10px;" title="VOCABULARY DIVERSITY
+
+🎯 What it does:
+Controls how diverse the vocabulary is in responses.
+
+📊 Scale:
+• 0.5 = Only very common words (formal, repetitive)
+• 0.9 = Balanced vocabulary (natural, professional)
+• 1.0 = All words available (can be too creative)
+
+💡 Why it matters:
+Lower top_p = safer vocabulary, fewer surprises
+Higher top_p = richer vocabulary, more expressive
+
+🔧 When to adjust:
+• Formal settings: Keep DEFAULT (0.9) - works for 99% of cases
+• Too robotic: Increase slightly (0.92-0.95)
+• Too casual: Decrease slightly (0.85-0.88)
+
+⚠️ Default: 0.9 (Optimal for call center - natural and professional)"></i>
+                      </label>
                       <input type="number" step="0.05" min="0.1" max="1" id="llm-adv-callcenter-topP" placeholder="0.9" style="width:90px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
                     </div>
-                    <div style="display:flex; flex-direction:column; gap:4px;">
-                      <label style="font-size:11px; font-weight:600; color:#111827;">max_tokens</label>
+                    <div style="display:flex; flex-direction:column; gap:4px; position:relative;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">
+                        max_tokens
+                        <i class="fas fa-info-circle" style="margin-left:4px; color:#3b82f6; cursor:help; font-size:10px;" title="MAXIMUM RESPONSE LENGTH
+
+🎯 What it does:
+Controls how long the LLM's scenario draft can be.
+
+📊 Token Guide:
+• 1 token ≈ 0.75 words
+• 2200 tokens ≈ 1650 words ≈ 3 pages
+• 2600 tokens ≈ 1950 words ≈ 4 pages
+• 3000 tokens ≈ 2250 words ≈ 4.5 pages
+
+💡 Why it matters:
+Lower = concise, focused scenarios (faster, cheaper)
+Higher = detailed, thorough scenarios (more context)
+
+🔧 When to adjust:
+• Simple scenarios: Use DEFAULT (2200) - plenty for most
+• Complex flows: Increase (2400-2600) for more detail
+• Getting cut off: Increase max_tokens
+• Too verbose: Decrease max_tokens
+
+⚠️ Default: 2600 (Call center - slightly more detail for complex flows)"></i>
+                      </label>
                       <input type="number" step="50" min="500" max="3200" id="llm-adv-callcenter-maxTokens" placeholder="2600" style="width:100px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
                     </div>
                   </div>
@@ -6203,23 +6335,89 @@ Just checking in..."></textarea>
 
                 <!-- Creative -->
                 <div style="border:1px solid #e5e7eb; border-radius:8px; padding:14px; background:#fafafa;">
-                  <div style="font-size:14px; font-weight:600; margin-bottom:4px; color:#111827;">
+                  <div style="font-size:14px; font-weight:600; margin-bottom:10px; color:#111827;">
                     <i class="fas fa-lightbulb mr-1 text-purple-600"></i>Creative Exploration Overrides
                   </div>
-                  <div style="font-size:11px; color:#6b7280; margin-bottom:10px;">
-                    Leave blank to use defaults: temp 0.65, top_p 0.95, max_tokens 3000.
-                  </div>
                   <div style="display:flex; gap:12px; flex-wrap:wrap;">
-                    <div style="display:flex; flex-direction:column; gap:4px;">
-                      <label style="font-size:11px; font-weight:600; color:#111827;">Temperature</label>
+                    <div style="display:flex; flex-direction:column; gap:4px; position:relative;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">
+                        Temperature
+                        <i class="fas fa-info-circle" style="margin-left:4px; color:#3b82f6; cursor:help; font-size:10px;" title="CREATIVITY vs CONSISTENCY
+
+🎯 What it does:
+Controls how creative or consistent the LLM responses are.
+
+📊 Scale:
+• 0.0-0.2 = Robot mode (exact same response every time)
+• 0.2-0.4 = Consistent (slight variation, professional)
+• 0.4-0.6 = Balanced (natural human-like responses)
+• 0.6-1.0 = Creative (lots of variety, less predictable)
+
+💡 Why it matters:
+Lower temperature = safer, more predictable (good for compliance)
+Higher temperature = more natural, less robotic (good for conversation)
+
+🔧 When to adjust:
+• Legal/Medical: Keep LOW (0.1-0.2) for consistency
+• General business: Use DEFAULT (0.2-0.35) for balance
+• Creative brainstorming: Go HIGHER (0.5-0.7) for variety
+
+⚠️ Default: 0.65 (Creative mode - lots of variation and ideas)"></i>
+                      </label>
                       <input type="number" step="0.05" min="0" max="1" id="llm-adv-creative-temp" placeholder="0.65" style="width:90px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
                     </div>
-                    <div style="display:flex; flex-direction:column; gap:4px;">
-                      <label style="font-size:11px; font-weight:600; color:#111827;">top_p</label>
+                    <div style="display:flex; flex-direction:column; gap:4px; position:relative;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">
+                        top_p
+                        <i class="fas fa-info-circle" style="margin-left:4px; color:#3b82f6; cursor:help; font-size:10px;" title="VOCABULARY DIVERSITY
+
+🎯 What it does:
+Controls how diverse the vocabulary is in responses.
+
+📊 Scale:
+• 0.5 = Only very common words (formal, repetitive)
+• 0.9 = Balanced vocabulary (natural, professional)
+• 1.0 = All words available (can be too creative)
+
+💡 Why it matters:
+Lower top_p = safer vocabulary, fewer surprises
+Higher top_p = richer vocabulary, more expressive
+
+🔧 When to adjust:
+• Formal settings: Keep DEFAULT (0.9) - works for 99% of cases
+• Too robotic: Increase slightly (0.92-0.95)
+• Too casual: Decrease slightly (0.85-0.88)
+
+⚠️ Default: 0.95 (Creative mode - broadest vocabulary range)"></i>
+                      </label>
                       <input type="number" step="0.05" min="0.1" max="1" id="llm-adv-creative-topP" placeholder="0.95" style="width:90px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
                     </div>
-                    <div style="display:flex; flex-direction:column; gap:4px;">
-                      <label style="font-size:11px; font-weight:600; color:#111827;">max_tokens</label>
+                    <div style="display:flex; flex-direction:column; gap:4px; position:relative;">
+                      <label style="font-size:11px; font-weight:600; color:#111827;">
+                        max_tokens
+                        <i class="fas fa-info-circle" style="margin-left:4px; color:#3b82f6; cursor:help; font-size:10px;" title="MAXIMUM RESPONSE LENGTH
+
+🎯 What it does:
+Controls how long the LLM's scenario draft can be.
+
+📊 Token Guide:
+• 1 token ≈ 0.75 words
+• 2200 tokens ≈ 1650 words ≈ 3 pages
+• 2600 tokens ≈ 1950 words ≈ 4 pages
+• 3000 tokens ≈ 2250 words ≈ 4.5 pages
+
+💡 Why it matters:
+Lower = concise, focused scenarios (faster, cheaper)
+Higher = detailed, thorough scenarios (more context)
+
+🔧 When to adjust:
+• Simple scenarios: Use DEFAULT (2200) - plenty for most
+• Complex flows: Increase (2400-2600) for more detail
+• Getting cut off: Increase max_tokens
+• Too verbose: Decrease max_tokens
+
+⚠️ Default: 3000 (Creative mode - maximum detail and exploration)"></i>
+                      </label>
                       <input type="number" step="50" min="500" max="3200" id="llm-adv-creative-maxTokens" placeholder="3000" style="width:100px; padding:6px 8px; font-size:12px; border-radius:6px; border:1px solid #e5e7eb;" />
                     </div>
                   </div>
