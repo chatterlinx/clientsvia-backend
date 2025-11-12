@@ -192,6 +192,9 @@ class AIAgentSettingsManager {
                 case 'aicore-live-scenarios':
                     await this.loadAiCoreLiveScenarios();
                     break;
+                case 'aicore-cheat-sheet':
+                    await this.loadAiCoreCheatSheet();
+                    break;
                 case 'aicore-knowledgebase':
                     await this.loadAiCoreKnowledgebase();
                     break;
@@ -309,6 +312,25 @@ class AIAgentSettingsManager {
         }
         
         await this.aiCoreLiveScenariosManager.load();
+    }
+    
+    /**
+     * Load AiCore Cheat Sheet sub-tab
+     */
+    async loadAiCoreCheatSheet() {
+        console.log('🧠 [AI AGENT SETTINGS] Loading AiCore Cheat Sheet...');
+        
+        // CheatSheetManager is loaded globally from CheatSheetManager.js
+        if (typeof cheatSheetManager === 'undefined') {
+            console.error('❌ [AI AGENT SETTINGS] CheatSheetManager not found!');
+            this.showError('Cheat Sheet manager failed to load');
+            return;
+        }
+        
+        // Load cheat sheet data for this company
+        await cheatSheetManager.load(this.companyId);
+        
+        console.log('✅ [AI AGENT SETTINGS] Cheat Sheet loaded successfully');
     }
     
     /**
