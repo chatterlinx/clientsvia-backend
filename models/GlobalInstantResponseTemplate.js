@@ -1404,6 +1404,175 @@ const globalInstantResponseTemplateSchema = new Schema({
             default: ''
             // Admin notes about NLP changes (e.g., "Added HVAC synonyms 2025-11-10")
         }
+    },
+    
+    // ============================================
+    // 🧠 DEFAULT CHEAT SHEET - TEMPLATE INHERITANCE
+    // ============================================
+    // Industry-optimized cheat sheet defaults that companies inherit
+    // when they select this template. Companies can customize from these
+    // defaults rather than starting from scratch.
+    // Multi-tenant pattern: Template → Company customization
+    defaultCheatSheet: {
+        // ========== BEHAVIOR RULES ==========
+        // Tone & style adjustments applied to all responses
+        behaviorRules: {
+            type: [String],
+            enum: [
+                'ACK_OK', 'NEVER_INTERRUPT', 'USE_COMPANY_NAME', 
+                'CONFIRM_ENTITIES', 'POLITE_PROFESSIONAL', 'WAIT_FOR_PAUSE'
+            ],
+            default: []
+            // Applied last in precedence chain (after edge cases, transfers, guardrails)
+        },
+        
+        // ========== GUARDRAILS ==========
+        // Content filtering & safety enforcement (server-side)
+        guardrails: {
+            type: [String],
+            enum: [
+                'NO_PRICES', 'NO_DIAGNOSES', 'NO_APOLOGIES_SPAM',
+                'NO_PHONE_NUMBERS', 'NO_URLS', 'NO_MEDICAL_ADVICE',
+                'NO_LEGAL_ADVICE', 'NO_INTERRUPTING'
+            ],
+            default: []
+            // LLMs cannot bypass these - enforced at runtime
+        },
+        
+        // ========== ACTION ALLOWLIST ==========
+        // Authorized actions the AI agent can perform
+        actionAllowlist: {
+            type: [String],
+            enum: [
+                'BOOK_APPT', 'TAKE_MESSAGE', 'TRANSFER_BILLING',
+                'TRANSFER_EMERGENCY', 'TRANSFER_GENERAL', 'COLLECT_INFO',
+                'PROVIDE_HOURS', 'PROVIDE_PRICING'
+            ],
+            default: []
+            // Unauthorized actions blocked at runtime
+        },
+        
+        // ========== EDGE CASES ==========
+        // High-priority pattern matching for unusual inputs
+        // Short-circuits all other rules when matched
+        edgeCases: [{
+            name: {
+                type: String,
+                required: true,
+                trim: true
+                // Human-readable name (e.g., "Emergency Detection")
+            },
+            triggerPatterns: {
+                type: [String],
+                required: true,
+                default: []
+                // Regex patterns to match (e.g., ["no (heat|cooling)", "smell gas"])
+            },
+            responseText: {
+                type: String,
+                required: true,
+                trim: true
+                // What AI says when matched
+            },
+            action: {
+                type: String,
+                enum: ['respond', 'transfer', 'hang_up', 'escalate'],
+                default: 'respond'
+            },
+            priority: {
+                type: Number,
+                default: 5,
+                min: 1,
+                max: 10
+                // Higher = more priority (10 = emergency, 1 = low)
+            },
+            enabled: {
+                type: Boolean,
+                default: true
+            }
+        }],
+        
+        // ========== TRANSFER RULES ==========
+        // Intent-based routing to departments/people
+        transferRules: [{
+            name: {
+                type: String,
+                required: true,
+                trim: true
+                // Human-readable name (e.g., "Emergency Service Transfer")
+            },
+            intentTag: {
+                type: String,
+                enum: ['billing', 'emergency', 'scheduling', 'technical', 'general'],
+                required: true
+                // What type of call this is
+            },
+            contactNameOrQueue: {
+                type: String,
+                required: true,
+                trim: true,
+                default: '{{CONTACT_NAME}}'
+                // Use placeholders for company-specific data
+                // e.g., "{{EMERGENCY_CONTACT}}", "{{BILLING_CONTACT}}"
+            },
+            phoneNumber: {
+                type: String,
+                trim: true,
+                default: '{{PHONE_NUMBER}}'
+                // Placeholder: "{{EMERGENCY_PHONE}}", "{{BILLING_PHONE}}"
+            },
+            script: {
+                type: String,
+                trim: true,
+                default: 'Let me transfer you now.'
+                // What AI says before transferring
+            },
+            collectEntities: [{
+                name: { type: String, required: true },
+                type: {
+                    type: String,
+                    enum: ['text', 'phone', 'email', 'date', 'address'],
+                    default: 'text'
+                },
+                required: { type: Boolean, default: false },
+                prompt: { type: String, trim: true },
+                validationPattern: { type: String, trim: true },
+                validationPrompt: { type: String, trim: true },
+                maxRetries: { type: Number, default: 2 },
+                escalateOnFail: { type: Boolean, default: false }
+            }],
+            afterHoursOnly: {
+                type: Boolean,
+                default: false
+            },
+            priority: {
+                type: Number,
+                default: 5,
+                min: 1,
+                max: 10
+            },
+            enabled: {
+                type: Boolean,
+                default: true
+            }
+        }],
+        
+        // ========== METADATA ==========
+        updatedAt: {
+            type: Date,
+            default: Date.now
+        },
+        updatedBy: {
+            type: String,
+            trim: true,
+            default: 'Platform Admin'
+        },
+        notes: {
+            type: String,
+            trim: true,
+            default: ''
+            // Admin notes about default cheat sheet setup
+        }
     }
     
 }, { 
