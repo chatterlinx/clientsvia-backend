@@ -13911,10 +13911,24 @@ Continue?`;
                 preconditions: tryParseJSON(document.getElementById('scenario-preconditions').value),
                 effects: tryParseJSON(document.getElementById('scenario-effects').value),
                 
-                actionHooks: document.getElementById('scenario-action-hooks').value.split(',').map(h => h.trim()).filter(Boolean)
+                actionHooks: document.getElementById('scenario-action-hooks').value.split(',').map(h => h.trim()).filter(Boolean),
+                
+                // 🧠 AI INTELLIGENCE FIELDS
+                keywords: currentKeywords || [],
+                negativeKeywords: currentNegativeKeywords || [],
+                qnaPairs: currentQnAPairs || [],
+                escalationFlags: currentEscalationFlags || [],
+                examples: currentTrainingExamples || []
             };
             
             console.log('📦 [SAVE SCENARIO] Built data:', scenarioData);
+            console.log('🧠 [SAVE SCENARIO] Intelligence fields:', {
+                keywords: currentKeywords.length,
+                negativeKeywords: currentNegativeKeywords.length,
+                qnaPairs: currentQnAPairs.length,
+                escalationFlags: currentEscalationFlags.length,
+                examples: currentTrainingExamples.length
+            });
             
             try {
                 let response;
