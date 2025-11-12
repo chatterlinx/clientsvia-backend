@@ -13755,7 +13755,8 @@ Continue?`;
                 // CASE 2: Draft is ready
                 if (data.status === 'ready' && data.draft) {
                     window.aiAssistantState.lastDraft = data.draft;
-                    aiAssistantDraft = data.draft; // Fixed: use local variable, not window property
+                    aiAssistantDraft = data.draft; // Set local variable
+                    window.aiAssistantDraft = data.draft; // Also set window property for panel access
                     
                     panelInstance.renderChecklist(data.checklistSummary || null);
                     panelInstance._setStatus('✅ Draft ready! Review above and click "Apply to Form".', 'success');
