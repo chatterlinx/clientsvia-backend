@@ -451,6 +451,85 @@ const scenarioSchema = new Schema({
     },
     
     // ============================================
+    // AI INTELLIGENCE & LEARNING
+    // ============================================
+    
+    // 🔑 KEYWORDS: Fast Tier-1 matching keywords (positive)
+    // Extracted from triggers for rapid matching before semantic analysis
+    keywords: {
+        type: [String],
+        default: [],
+        lowercase: true
+        // Example: ["appointment", "schedule", "book", "visit"]
+        // Used for fast keyword matching before running expensive LLM/embedding lookups
+    },
+    
+    // ❌ NEGATIVE KEYWORDS: Keywords that PREVENT this scenario from matching
+    // Even if positive keywords match, these will veto the match
+    negativeKeywords: {
+        type: [String],
+        default: [],
+        lowercase: true
+        // Example: ["don't", "not", "never", "cancel", "won't"]
+        // Critical for preventing false positives
+    },
+    
+    // 💬 Q&A PAIRS: Training data for semantic matching
+    // Auto-generated from triggers + replies for AI training
+    qnaPairs: [{
+        question: {
+            type: String,
+            required: true,
+            trim: true
+            // Example: "How do I book an appointment?"
+        },
+        answer: {
+            type: String,
+            required: true,
+            trim: true
+            // Example: "I'd be happy to help you schedule an appointment..."
+        },
+        confidence: {
+            type: Number,
+            min: 0,
+            max: 1,
+            default: 0.85
+            // How confident we are this Q&A pair matches the scenario
+        }
+    }],
+    
+    // 🧪 TEST PHRASES: Validation test cases
+    // Phrases used to test if scenario matching works correctly
+    testPhrases: [{
+        type: String,
+        trim: true
+        // Example: "I need an appointment", "Can I schedule a visit?"
+    }],
+    
+    // 💡 TRAINING EXAMPLES: Sample conversations
+    // Show admin expected conversation flow
+    examples: [{
+        caller: {
+            type: String,
+            trim: true
+            // What caller says
+        },
+        ai: {
+            type: String,
+            trim: true
+            // How AI should respond
+        }
+    }],
+    
+    // 🚨 ESCALATION FLAGS: Triggers for human handoff
+    // Sentiment/situation flags that trigger escalation
+    escalationFlags: {
+        type: [String],
+        default: []
+        // Example: ["angry", "confused", "technical_issue", "vip_customer", "urgent"]
+    },
+    
+    // ============================================
     // VOICE & TTS CONTROL
     // ============================================
     
