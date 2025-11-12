@@ -20384,6 +20384,12 @@ ALWAYS follow these rules:
 Your output must always include a checklistSummary explaining key assumptions,
 risks, and anything the human admin should double-check before going live.`,
                     profile: this.getProfilePrompt(profileKey),
+                    // Add profiles object with all 3 profiles for textarea population
+                    profiles: {
+                        compliance_safe: this.getProfilePrompt('compliance_safe'),
+                        call_center_optimized: this.getProfilePrompt('call_center_optimized'),
+                        creative_exploration: this.getProfilePrompt('creative_exploration')
+                    },
                     domains: {
                         medicalOfficeMode: `DOMAIN SAFETY: MEDICAL OFFICE
 
