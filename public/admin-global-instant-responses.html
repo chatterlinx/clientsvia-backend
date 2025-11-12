@@ -20451,14 +20451,16 @@ ${JSON.stringify(healthData, null, 2)}
                 document.getElementById('llm-adv-creative-topP').value = oCreative.topP ?? profileDefaults.creative_exploration.topP;
                 document.getElementById('llm-adv-creative-maxTokens').value = oCreative.maxTokens ?? profileDefaults.creative_exploration.maxTokens;
 
-                // Populate Prompt Editor textareas (if promptParts available)
+                // Populate Prompt Editor textareas (use state.promptText for saved data, promptParts as fallback)
                 const promptParts = this.promptParts || this.getFallbackPrompts();
+                const promptText = this.state.promptText || {};
+                
                 if (promptParts) {
-                    // Base prompt
-                    document.getElementById('llm-prompt-base-text').value = promptParts.base || '';
+                    // Base prompt - USE promptText.base (saved data), fallback to promptParts.base (display data)
+                    document.getElementById('llm-prompt-base-text').value = 
+                        promptText.base || promptParts.base || '';
                     
-                    // Profile prompts (get from state.promptText if available)
-                    const promptText = this.state.promptText || {};
+                    // Profile prompts - USE promptText.profiles (saved data), fallback to promptParts.profiles
                     const profiles = promptText.profiles || {};
                     document.getElementById('llm-prompt-profile-compliance-text').value = 
                         profiles.compliance_safe || promptParts.profiles?.compliance_safe || '';
@@ -20467,7 +20469,7 @@ ${JSON.stringify(healthData, null, 2)}
                     document.getElementById('llm-prompt-profile-creative-text').value = 
                         profiles.creative_exploration || promptParts.profiles?.creative_exploration || '';
                     
-                    // Domain safety prompts
+                    // Domain safety prompts - USE promptText.domainSafety (saved data), fallback to promptParts.domains
                     const domains = promptText.domainSafety || {};
                     document.getElementById('llm-prompt-domain-medical-text').value = 
                         domains.medicalOffice || promptParts.domains?.medicalOfficeMode || '';
@@ -20476,11 +20478,14 @@ ${JSON.stringify(healthData, null, 2)}
                     document.getElementById('llm-prompt-domain-emergency-text').value = 
                         domains.emergency || promptParts.domains?.emergencyServicesMode || '';
                     
-                    // Strict compliance
+                    // Strict compliance - USE promptText.strictCompliance (saved data), fallback to promptParts
                     document.getElementById('llm-prompt-strict-text').value = 
                         promptText.strictCompliance || promptParts.strictCompliance || '';
                         
-                    console.log('✅ [LLM SETTINGS] Prompt Editor textareas populated');
+                    console.log('✅ [LLM SETTINGS] Prompt Editor textareas populated', { 
+                        hasPromptText: !!this.state.promptText, 
+                        hasPromptParts: !!this.promptParts 
+                    });
                 }
 
                 console.log('✅ [LLM SETTINGS] UI updated with current settings');
