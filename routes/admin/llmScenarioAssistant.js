@@ -27,6 +27,7 @@ const {
   buildScenarioArchitectSystemPromptFromSettings,
   getEffectiveModelParams
 } = require('../../config/llmScenarioPrompts');
+const GlobalAIBehaviorTemplate = require('../../models/GlobalAIBehaviorTemplate');
 
 const router = express.Router();
 
@@ -285,6 +286,19 @@ router.post('/draft', async (req, res) => {
     // Get effective model parameters based on active profile
     const modelParams = getEffectiveModelParams(llmSettings);
 
+    // Fetch available AI behaviors for LLM to select from
+    let behaviors = [];
+    try {
+      behaviors = await GlobalAIBehaviorTemplate.getActiveBehaviors();
+      logger.debug('[LLM SCENARIO ASSISTANT] Loaded AI behaviors', {
+        behaviorCount: behaviors.length
+      });
+    } catch (err) {
+      logger.warn('[LLM SCENARIO ASSISTANT] Failed to load behaviors', {
+        error: err.message
+      });
+    }
+
     logger.info('[LLM SCENARIO ASSISTANT] Processing scenario request with LLM settings', {
       descriptionLength: description.length,
       channel,
@@ -293,6 +307,7 @@ router.post('/draft', async (req, res) => {
       profile: modelParams.profileKey,
       model: modelParams.model,
       temperature: modelParams.temperature,
+      behaviorCount: behaviors.length
     });
 
     // Build system prompt using centralized function (includes base + profile + compliance)
