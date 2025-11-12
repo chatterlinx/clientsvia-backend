@@ -824,5 +824,208 @@ Otherwise, return status="ready" with a comprehensive "draft" object.`.trim();
   }
 });
 
+/**
+ * ============================================================================
+ * GET /suggestions - Generate scenario suggestions based on category context
+ * ============================================================================
+ * Purpose: Help admins discover what scenarios they should add to a category
+ * 
+ * Query Params:
+ *  - categoryName: string (e.g., "Appointment Booking")
+ *  - categoryDescription: string (optional)
+ *  - templateName: string (e.g., "Dental Office Template")
+ *  - templateIndustry: string (e.g., "Dental", "HVAC")
+ *  - existingScenarios: number (how many scenarios already exist in category)
+ * 
+ * Response:
+ *  - suggestions: string[] (10 scenario ideas)
+ */
+router.get('/suggestions', async (req, res) => {
+  try {
+    const {
+      categoryName = 'General',
+      categoryDescription = '',
+      templateName = 'Universal AI Brain',
+      templateIndustry = 'All Industries',
+      existingScenarios = 0,
+    } = req.query;
+
+    logger.info('[LLM SCENARIO SUGGESTIONS] Generating suggestions', {
+      categoryName,
+      templateIndustry,
+      existingScenarios: Number(existingScenarios),
+    });
+
+    // Load enterprise LLM settings
+    let llmSettings;
+    try {
+      llmSettings = await getSettings('global');
+    } catch (err) {
+      logger.warn('[LLM SCENARIO SUGGESTIONS] Failed to load settings, using defaults', {
+        error: err.message,
+      });
+      llmSettings = DEFAULT_LLM_ENTERPRISE_SETTINGS;
+    }
+
+    // Get effective model parameters
+    const modelParams = getEffectiveModelParams(llmSettings);
+
+    // Build system prompt (use base prompt for consistency)
+    const basePrompt = buildScenarioArchitectSystemPromptFromSettings(llmSettings);
+
+    // Build suggestions-specific prompt
+    const suggestionsPrompt = `${basePrompt}
+
+===== SCENARIO SUGGESTIONS TASK =====
+
+Your task: Suggest 10 common, practical scenarios that should exist in this category.
+
+CONTEXT:
+- Category: "${categoryName}"
+- Category Description: "${categoryDescription || 'Not provided'}"
+- Template: "${templateName}"
+- Industry: "${templateIndustry}"
+- Existing Scenarios: ${existingScenarios}
+
+RULES:
+1. Suggest scenarios that are COMMON in this industry and category
+2. Think about what REAL customers call about
+3. Cover the most important 10 use cases
+4. Be specific but not too narrow
+5. Use natural, human-friendly names (not technical jargon)
+6. If existingScenarios > 0, suggest DIFFERENT scenarios (avoid duplicates)
+7. Prioritize high-volume, high-impact scenarios
+
+OUTPUT FORMAT (MUST BE VALID JSON):
+{
+  "suggestions": [
+    "Scenario name 1",
+    "Scenario name 2",
+    "Scenario name 3",
+    ...10 total
+  ]
+}
+
+EXAMPLES FOR CONTEXT:
+
+Category: "Appointment Booking" | Industry: "Dental"
+{
+  "suggestions": [
+    "Schedule Dental Cleaning",
+    "Reschedule Existing Appointment",
+    "Cancel Appointment",
+    "Same-Day Emergency Appointment",
+    "New Patient First Visit",
+    "Book Root Canal Consultation",
+    "Schedule Follow-Up After Procedure",
+    "Check Appointment Availability",
+    "Confirm Upcoming Appointment",
+    "Waitlist for Earlier Slot"
+  ]
+}
+
+Category: "Emergency Service" | Industry: "HVAC"
+{
+  "suggestions": [
+    "No Heat in Winter",
+    "AC Not Cooling in Summer",
+    "Furnace Making Loud Noise",
+    "Thermostat Not Responding",
+    "Water Leaking from AC Unit",
+    "Strange Smell from Vents",
+    "System Won't Turn On",
+    "Frozen AC Coils",
+    "Circuit Breaker Keeps Tripping",
+    "Emergency After-Hours Service"
+  ]
+}
+
+Now generate 10 suggestions for:
+Category: "${categoryName}"
+Industry: "${templateIndustry}"
+
+RESPOND WITH ONLY VALID JSON.`;
+
+    // Call OpenAI
+    const completion = await openaiClient.chat.completions.create({
+      model: modelParams.model,
+      messages: [
+        {
+          role: 'system',
+          content: suggestionsPrompt,
+        },
+      ],
+      temperature: modelParams.temperature,
+      top_p: modelParams.topP,
+      max_tokens: 1000, // Suggestions are shorter than full drafts
+    });
+
+    const rawResponse = completion.choices[0]?.message?.content || '';
+    logger.debug('[LLM SCENARIO SUGGESTIONS] Raw LLM response received', {
+      length: rawResponse.length,
+    });
+
+    // Parse JSON
+    let parsed;
+    try {
+      const cleaned = rawResponse
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/```\s*$/i, '')
+        .trim();
+      parsed = JSON.parse(cleaned);
+    } catch (parseErr) {
+      logger.error('[LLM SCENARIO SUGGESTIONS] Failed to parse JSON', {
+        error: parseErr.message,
+      });
+      return res.status(500).json({
+        success: false,
+        error: 'LLM response was not valid JSON',
+      });
+    }
+
+    // Validate suggestions
+    const suggestions = Array.isArray(parsed.suggestions)
+      ? parsed.suggestions.filter(s => s && typeof s === 'string').slice(0, 15)
+      : [];
+
+    if (suggestions.length === 0) {
+      return res.status(500).json({
+        success: false,
+        error: 'No valid suggestions generated',
+      });
+    }
+
+    logger.info('[LLM SCENARIO SUGGESTIONS] ✅ Generated suggestions', {
+      count: suggestions.length,
+      categoryName,
+      templateIndustry,
+    });
+
+    return res.json({
+      success: true,
+      suggestions,
+      metadata: {
+        model: modelParams.model,
+        profile: modelParams.profileKey,
+        categoryName,
+        templateIndustry,
+        tokensUsed: completion.usage.total_tokens,
+        generatedAt: new Date().toISOString(),
+      },
+    });
+  } catch (err) {
+    logger.error('[LLM SCENARIO SUGGESTIONS] Error generating suggestions', {
+      error: err.message,
+      stack: err.stack,
+    });
+    return res.status(500).json({
+      success: false,
+      error: 'Internal error generating suggestions',
+      details: err.message,
+    });
+  }
+});
+
 module.exports = router;
 

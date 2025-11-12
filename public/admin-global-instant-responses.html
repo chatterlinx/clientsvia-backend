@@ -12828,8 +12828,72 @@ Continue?`;
                 // Verify button element exists
                 const btn = document.getElementById('scenario-architect-send-btn');
                 console.log('🔍 [V8] Generate Draft button element:', btn);
+                
+                // 💡 NEW: Fetch and show AI suggestions for this category
+                fetchAndShowScenarioSuggestions(category, activeTemplate);
             } else {
                 console.warn('⚠️ [V8] Panel not initialized - feature disabled or class not loaded');
+            }
+        }
+        
+        /**
+         * Fetch scenario suggestions from LLM and display in AI panel
+         */
+        async function fetchAndShowScenarioSuggestions(category, template) {
+            console.log('💡 [SUGGESTIONS] Fetching for category:', category.name);
+            
+            try {
+                const token = localStorage.getItem('adminToken') || localStorage.getItem('authToken');
+                if (!token) {
+                    console.warn('⚠️ [SUGGESTIONS] No auth token found, skipping');
+                    return;
+                }
+                
+                // Build query parameters
+                const params = new URLSearchParams({
+                    categoryName: category.name || 'General',
+                    categoryDescription: category.description || '',
+                    templateName: template.name || 'Universal AI Brain',
+                    templateIndustry: template.industry || 'All Industries',
+                    existingScenarios: (category.scenarios || []).length
+                });
+                
+                console.log('📡 [SUGGESTIONS] Requesting from API...', params.toString());
+                
+                // Call suggestions API
+                const response = await fetch(`/api/admin/scenario-assistant/suggestions?${params}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    console.warn('⚠️ [SUGGESTIONS] API returned error:', response.status);
+                    return;
+                }
+                
+                const data = await response.json();
+                console.log('✅ [SUGGESTIONS] Received from API:', data);
+                
+                if (data.success && Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+                    // Display suggestions in AI panel
+                    if (window.scenarioArchitectPanel && typeof window.scenarioArchitectPanel.showSuggestions === 'function') {
+                        window.scenarioArchitectPanel.showSuggestions(data.suggestions, {
+                            categoryName: category.name,
+                            templateName: template.name
+                        });
+                        console.log('✅ [SUGGESTIONS] Displayed in AI panel');
+                    } else {
+                        console.warn('⚠️ [SUGGESTIONS] Panel not available to show suggestions');
+                    }
+                } else {
+                    console.warn('⚠️ [SUGGESTIONS] No suggestions in response');
+                }
+            } catch (error) {
+                console.error('❌ [SUGGESTIONS] Error fetching suggestions:', error);
+                // Don't block the UI - suggestions are optional
             }
         }
 

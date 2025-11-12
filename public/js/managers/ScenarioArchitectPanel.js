@@ -324,6 +324,104 @@ class ScenarioArchitectPanel {
     }
     
     /**
+     * Show scenario suggestions (called when panel first opens)
+     */
+    showSuggestions(suggestions, context = {}) {
+        if (!Array.isArray(suggestions) || suggestions.length === 0) {
+            this._log('⚠️ No suggestions to show');
+            return;
+        }
+        
+        this._log('💡 Showing suggestions', { count: suggestions.length, context });
+        
+        // Build suggestions HTML
+        const categoryName = context.categoryName || 'this category';
+        const templateName = context.templateName || 'current template';
+        
+        let html = `
+            <div style="padding: 16px; background: #f0f9ff; border: 2px solid #0ea5e9; border-radius: 10px; margin-bottom: 16px;">
+                <div style="font-weight: 600; color: #0c4a6e; margin-bottom: 12px; font-size: 15px;">
+                    💡 Scenario Suggestions for "${categoryName}"
+                </div>
+                <div style="color: #475569; font-size: 13px; margin-bottom: 16px;">
+                    Click any suggestion to generate, or type your own below:
+                </div>
+                <div style="display: grid; gap: 8px;">
+        `;
+        
+        suggestions.forEach((suggestion, index) => {
+            const safeId = `suggestion-${index}`;
+            html += `
+                <button 
+                    id="${safeId}"
+                    onclick="window.scenarioArchitectPanel.selectSuggestion('${this._escapeHtml(suggestion)}')"
+                    style="
+                        text-align: left; 
+                        padding: 12px 16px; 
+                        background: white; 
+                        border: 2px solid #e0e7ff; 
+                        border-radius: 8px; 
+                        cursor: pointer; 
+                        transition: all 0.2s;
+                        font-size: 14px;
+                        color: #1e293b;
+                        font-weight: 500;
+                    "
+                    onmouseover="this.style.background='#eff6ff'; this.style.borderColor='#3b82f6';"
+                    onmouseout="this.style.background='white'; this.style.borderColor='#e0e7ff';"
+                >
+                    ${index + 1}. ${this._escapeHtml(suggestion)}
+                </button>
+            `;
+        });
+        
+        html += `
+                </div>
+            </div>
+        `;
+        
+        // Display in chat area
+        if (this.chatEl) {
+            this.chatEl.innerHTML = html;
+        }
+        
+        // Update status
+        this._setStatus(`💡 ${suggestions.length} suggestions ready! Click one to generate, or type your own scenario below.`, 'info');
+    }
+    
+    /**
+     * Handle suggestion selection
+     */
+    selectSuggestion(suggestionText) {
+        this._log('✅ Suggestion selected', { text: suggestionText });
+        
+        // Set as description
+        this.state.description = suggestionText;
+        
+        // Update input to show what was selected
+        if (this.inputEl) {
+            this.inputEl.value = suggestionText;
+        }
+        
+        // Clear suggestions display
+        if (this.chatEl) {
+            this.chatEl.innerHTML = `
+                <div style="padding: 12px; background: #ecfdf5; border-left: 4px solid #10b981; border-radius: 8px; margin-bottom: 12px;">
+                    <strong style="color: #047857;">✅ Selected:</strong> ${this._escapeHtml(suggestionText)}
+                </div>
+            `;
+        }
+        
+        // Update status
+        this._setStatus('🤔 Analyzing your scenario...', 'info');
+        
+        // Automatically trigger generation
+        setTimeout(() => {
+            this.handleSend();
+        }, 500);
+    }
+    
+    /**
      * Console logging with namespace
      */
     _log(msg, data) {
