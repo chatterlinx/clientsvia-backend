@@ -14078,7 +14078,57 @@ Continue?`;
             if (draft.notes && getEl('scenario-notes')) 
                 getEl('scenario-notes').value = draft.notes;
 
-            console.log('✅ [C.1 ASSISTANT] Draft applied to form (30+ fields)');
+            // ═══════════════════════════════════════════════════════════════════
+            // 11. AI ENHANCE TAB (Keywords, Q&A, Escalation, Training Examples)
+            // ═══════════════════════════════════════════════════════════════════
+            console.log('🤖 [C.1 ASSISTANT] Populating AI Enhance tab fields...');
+            
+            // Positive Keywords
+            if (draft.keywords && Array.isArray(draft.keywords) && draft.keywords.length > 0) {
+                console.log('🔑 [C.1 ASSISTANT] Applying keywords:', draft.keywords.length);
+                window.currentKeywords = draft.keywords;
+                if (typeof window.renderKeywords === 'function') {
+                    window.renderKeywords(draft.keywords);
+                }
+            }
+            
+            // Negative Keywords
+            if (draft.negativeKeywords && Array.isArray(draft.negativeKeywords) && draft.negativeKeywords.length > 0) {
+                console.log('❌ [C.1 ASSISTANT] Applying negative keywords:', draft.negativeKeywords.length);
+                window.currentNegativeKeywords = draft.negativeKeywords;
+                if (typeof window.renderNegativeKeywords === 'function') {
+                    window.renderNegativeKeywords(draft.negativeKeywords);
+                }
+            }
+            
+            // Q&A Training Pairs
+            if (draft.qnaPairs && Array.isArray(draft.qnaPairs) && draft.qnaPairs.length > 0) {
+                console.log('💬 [C.1 ASSISTANT] Applying Q&A pairs:', draft.qnaPairs.length);
+                window.currentQnAPairs = draft.qnaPairs;
+                if (typeof window.renderQnAPairs === 'function') {
+                    window.renderQnAPairs(draft.qnaPairs);
+                }
+            }
+            
+            // Escalation Flags
+            if (draft.escalationFlags && Array.isArray(draft.escalationFlags) && draft.escalationFlags.length > 0) {
+                console.log('🚨 [C.1 ASSISTANT] Applying escalation flags:', draft.escalationFlags.length);
+                window.currentEscalationFlags = draft.escalationFlags;
+                if (typeof window.renderEscalationFlags === 'function') {
+                    window.renderEscalationFlags(draft.escalationFlags);
+                }
+            }
+            
+            // Training Examples (conversation flows)
+            if (draft.examples && Array.isArray(draft.examples) && draft.examples.length > 0) {
+                console.log('💡 [C.1 ASSISTANT] Applying training examples:', draft.examples.length);
+                window.currentTrainingExamples = draft.examples;
+                if (typeof window.renderTrainingExamples === 'function') {
+                    window.renderTrainingExamples(draft.examples);
+                }
+            }
+
+            console.log('✅ [C.1 ASSISTANT] Draft applied to form (40+ fields including AI Enhance)');
             closeScenarioAIAssistant();
 
             // Switch to Basic Info tab to show filled form
