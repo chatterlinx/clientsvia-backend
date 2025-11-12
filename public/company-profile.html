@@ -1502,7 +1502,7 @@
                                 <div id="cheatsheet-container">
                                     
                                     <!-- Header -->
-                                    <div class="mb-8">
+                                    <div class="mb-6">
                                         <h2 class="text-3xl font-bold text-gray-900 mb-2">
                                             <i class="fas fa-brain mr-3 text-indigo-600"></i>Cheat Sheet Management
                                         </h2>
@@ -1510,6 +1510,30 @@
                                             Define intelligent AI behavior rules, edge case handling, transfer routing, and safety guardrails. 
                                             Cheat sheets are compiled into optimized runtime policies for sub-10ms application.
                                         </p>
+                                    </div>
+
+                                    <!-- Import/Export Toolbar -->
+                                    <div class="mb-6 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-lg p-4">
+                                        <div class="flex items-center justify-between flex-wrap gap-3">
+                                            <div class="flex items-center gap-2">
+                                                <i class="fas fa-magic text-indigo-600"></i>
+                                                <span class="text-sm font-semibold text-gray-700">Quick Setup</span>
+                                            </div>
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <button onclick="cheatSheetManager.showImportFromTemplateModal()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium shadow-sm hover:shadow-md">
+                                                    <i class="fas fa-download mr-2"></i>Import from Template
+                                                </button>
+                                                <button onclick="cheatSheetManager.showImportFromCompanyModal()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium shadow-sm hover:shadow-md">
+                                                    <i class="fas fa-copy mr-2"></i>Copy from Company
+                                                </button>
+                                                <button onclick="cheatSheetManager.exportAsJSON()" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium shadow-sm hover:shadow-md">
+                                                    <i class="fas fa-file-export mr-2"></i>Export JSON
+                                                </button>
+                                                <button onclick="cheatSheetManager.resetToDefaults()" class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm font-medium shadow-sm hover:shadow-md">
+                                                    <i class="fas fa-undo mr-2"></i>Reset to Template Defaults
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <!-- Status Bar -->
