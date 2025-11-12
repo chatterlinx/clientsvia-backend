@@ -9,6 +9,7 @@
 const express = require('express');
 const router = express.Router();
 const Company = require('../../models/v2Company');
+const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 const PolicyCompiler = require('../../services/PolicyCompiler');
 const CheatSheetEngine = require('../../services/CheatSheetEngine');
 const { authenticateJWT } = require('../../middleware/auth');
@@ -363,6 +364,277 @@ router.get('/stats/:companyId', authenticateJWT, async (req, res) => {
     
   } catch (error) {
     logger.error('[CHEAT SHEET API] Stats failed', {
+      companyId,
+      error: error.message
+    });
+    
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /api/admin/cheat-sheet/template/:templateId
+// ═══════════════════════════════════════════════════════════════════
+// Get default cheat sheet from template
+// ═══════════════════════════════════════════════════════════════════
+
+router.get('/template/:templateId', authenticateJWT, async (req, res) => {
+  const { templateId } = req.params;
+  
+  logger.info('[CHEAT SHEET API] Template defaults request', { templateId });
+  
+  try {
+    const template = await GlobalInstantResponseTemplate.findById(templateId);
+    
+    if (!template) {
+      return res.status(404).json({
+        success: false,
+        error: 'Template not found'
+      });
+    }
+    
+    const defaults = template.defaultCheatSheet || {
+      behaviorRules: [],
+      guardrails: [],
+      actionAllowlist: [],
+      edgeCases: [],
+      transferRules: []
+    };
+    
+    logger.info('[CHEAT SHEET API] Template defaults loaded', {
+      templateId,
+      templateName: template.name,
+      behaviorRulesCount: defaults.behaviorRules.length,
+      edgeCasesCount: defaults.edgeCases.length
+    });
+    
+    return res.json({
+      success: true,
+      template: {
+        id: template._id,
+        name: template.name,
+        industryLabel: template.industryLabel
+      },
+      defaultCheatSheet: defaults
+    });
+    
+  } catch (error) {
+    logger.error('[CHEAT SHEET API] Template defaults failed', {
+      templateId,
+      error: error.message
+    });
+    
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /api/admin/cheat-sheet/import/:companyId
+// ═══════════════════════════════════════════════════════════════════
+// Import cheat sheet from template or another company
+// ═══════════════════════════════════════════════════════════════════
+
+router.post('/import/:companyId', authenticateJWT, async (req, res) => {
+  const { companyId } = req.params;
+  const { templateId, sourceCompanyId, cheatSheetData } = req.body;
+  
+  logger.info('[CHEAT SHEET API] Import request', {
+    companyId,
+    templateId,
+    sourceCompanyId,
+    hasDirectData: !!cheatSheetData
+  });
+  
+  try {
+    const company = await Company.findById(companyId);
+    
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        error: 'Target company not found'
+      });
+    }
+    
+    let importedCheatSheet;
+    
+    // Import from template
+    if (templateId) {
+      const template = await GlobalInstantResponseTemplate.findById(templateId);
+      
+      if (!template) {
+        return res.status(404).json({
+          success: false,
+          error: 'Template not found'
+        });
+      }
+      
+      importedCheatSheet = template.defaultCheatSheet || {};
+      logger.info('[CHEAT SHEET API] Importing from template', {
+        templateId,
+        templateName: template.name
+      });
+    }
+    // Import from another company
+    else if (sourceCompanyId) {
+      const sourceCompany = await Company.findById(sourceCompanyId);
+      
+      if (!sourceCompany) {
+        return res.status(404).json({
+          success: false,
+          error: 'Source company not found'
+        });
+      }
+      
+      importedCheatSheet = sourceCompany.aiAgentSettings?.cheatSheet || {};
+      logger.info('[CHEAT SHEET API] Importing from company', {
+        sourceCompanyId,
+        sourceCompanyName: sourceCompany.name
+      });
+    }
+    // Import from direct JSON data
+    else if (cheatSheetData) {
+      importedCheatSheet = cheatSheetData;
+      logger.info('[CHEAT SHEET API] Importing from direct data');
+    }
+    else {
+      return res.status(400).json({
+        success: false,
+        error: 'Must provide templateId, sourceCompanyId, or cheatSheetData'
+      });
+    }
+    
+    // Initialize aiAgentSettings if needed
+    if (!company.aiAgentSettings) {
+      company.aiAgentSettings = {};
+    }
+    
+    // Merge imported data with version/metadata
+    const mergedCheatSheet = {
+      version: 1,
+      status: 'draft',
+      behaviorRules: importedCheatSheet.behaviorRules || [],
+      edgeCases: importedCheatSheet.edgeCases || [],
+      transferRules: importedCheatSheet.transferRules || [],
+      guardrails: importedCheatSheet.guardrails || [],
+      actionAllowlist: importedCheatSheet.actionAllowlist || [],
+      updatedAt: new Date(),
+      updatedBy: req.user.email || req.user._id.toString(),
+      importedFrom: templateId ? `template:${templateId}` : (sourceCompanyId ? `company:${sourceCompanyId}` : 'json')
+    };
+    
+    company.aiAgentSettings.cheatSheet = mergedCheatSheet;
+    await company.save();
+    
+    logger.info('[CHEAT SHEET API] Import successful', {
+      companyId,
+      source: mergedCheatSheet.importedFrom
+    });
+    
+    return res.json({
+      success: true,
+      cheatSheet: mergedCheatSheet,
+      message: 'Cheat sheet imported successfully. Review and customize for this company.'
+    });
+    
+  } catch (error) {
+    logger.error('[CHEAT SHEET API] Import failed', {
+      companyId,
+      error: error.message,
+      stack: error.stack
+    });
+    
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /api/admin/cheat-sheet/export-json/:companyId
+// ═══════════════════════════════════════════════════════════════════
+// Export company's cheat sheet as JSON (for copying to other companies)
+// ═══════════════════════════════════════════════════════════════════
+
+router.post('/export-json/:companyId', authenticateJWT, async (req, res) => {
+  const { companyId } = req.params;
+  const { stripMetadata } = req.body;
+  
+  logger.info('[CHEAT SHEET API] Export JSON request', { companyId, stripMetadata });
+  
+  try {
+    const company = await Company.findById(companyId);
+    
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        error: 'Company not found'
+      });
+    }
+    
+    const cheatSheet = company.aiAgentSettings?.cheatSheet;
+    
+    if (!cheatSheet) {
+      return res.status(404).json({
+        success: false,
+        error: 'Company does not have a cheat sheet configured'
+      });
+    }
+    
+    // Create exportable copy
+    let exportData = {
+      behaviorRules: cheatSheet.behaviorRules || [],
+      guardrails: cheatSheet.guardrails || [],
+      actionAllowlist: cheatSheet.actionAllowlist || [],
+      edgeCases: (cheatSheet.edgeCases || []).map(ec => ({
+        name: ec.name,
+        triggerPatterns: ec.triggerPatterns,
+        responseText: ec.responseText,
+        action: ec.action,
+        priority: ec.priority,
+        enabled: ec.enabled
+      })),
+      transferRules: (cheatSheet.transferRules || []).map(tr => ({
+        name: tr.name,
+        intentTag: tr.intentTag,
+        contactNameOrQueue: tr.contactNameOrQueue,
+        phoneNumber: tr.phoneNumber,
+        script: tr.script,
+        collectEntities: tr.collectEntities || [],
+        afterHoursOnly: tr.afterHoursOnly,
+        priority: tr.priority,
+        enabled: tr.enabled
+      }))
+    };
+    
+    if (!stripMetadata) {
+      exportData.exportedFrom = {
+        companyId: company._id.toString(),
+        companyName: company.name,
+        exportedAt: new Date().toISOString(),
+        exportedBy: req.user.email || req.user._id.toString()
+      };
+    }
+    
+    logger.info('[CHEAT SHEET API] Export successful', {
+      companyId,
+      companyName: company.name
+    });
+    
+    return res.json({
+      success: true,
+      cheatSheet: exportData,
+      filename: `cheatsheet-${company.name.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.json`
+    });
+    
+  } catch (error) {
+    logger.error('[CHEAT SHEET API] Export failed', {
       companyId,
       error: error.message
     });
