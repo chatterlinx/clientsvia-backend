@@ -12654,6 +12654,19 @@ Continue?`;
         async function editScenario(categoryIndex, scenarioIndex) {
             console.log(`✏️ [EDIT SCENARIO] Opening BIG scenario-modal (4-page form) for category ${categoryIndex}, scenario ${scenarioIndex}`);
             
+            // 🧹 RESET AI PANEL STATE (prevent bleeding between scenarios)
+            if (window.aiAssistantState) {
+                window.aiAssistantState = {
+                    description: '',
+                    conversationLog: [],
+                    lastDraft: null
+                };
+            }
+            if (window.aiAssistantDraft) {
+                window.aiAssistantDraft = null;
+            }
+            console.log('🧹 [EDIT SCENARIO] AI panel state reset');
+            
             // Get category and scenario from activeTemplate
             const category = activeTemplate.categories[categoryIndex];
             const scenario = category.scenarios[scenarioIndex];
@@ -12713,6 +12726,12 @@ Continue?`;
                 window.scenarioArchitectPanel = new window.ScenarioArchitectPanel();
                 console.log('✅ [V8] Scenario Architect Panel initialized (editScenario)', window.scenarioArchitectPanel);
                 
+                // 🧹 Reset panel UI to fresh state
+                if (window.scenarioArchitectPanel && typeof window.scenarioArchitectPanel._resetPanel === 'function') {
+                    window.scenarioArchitectPanel._resetPanel();
+                    console.log('🧹 [V8] Panel UI reset to fresh state');
+                }
+                
                 // Verify button element exists
                 const btn = document.getElementById('scenario-architect-send-btn');
                 console.log('🔍 [V8] Generate Draft button element:', btn);
@@ -12732,6 +12751,19 @@ Continue?`;
 
         async function addScenario(categoryIndex) {
             console.log(`🔥 [ADD SCENARIO] Opening BIG scenario-modal (4-page form) for category index: ${categoryIndex}`);
+            
+            // 🧹 RESET AI PANEL STATE (prevent bleeding between scenarios)
+            if (window.aiAssistantState) {
+                window.aiAssistantState = {
+                    description: '',
+                    conversationLog: [],
+                    lastDraft: null
+                };
+            }
+            if (window.aiAssistantDraft) {
+                window.aiAssistantDraft = null;
+            }
+            console.log('🧹 [ADD SCENARIO] AI panel state reset');
             
             // Get category details from activeTemplate
             const category = activeTemplate.categories[categoryIndex];
@@ -12786,6 +12818,12 @@ Continue?`;
                 // Initialize or reinitialize panel
                 window.scenarioArchitectPanel = new window.ScenarioArchitectPanel();
                 console.log('✅ [V8] Scenario Architect Panel initialized (addScenario)', window.scenarioArchitectPanel);
+                
+                // 🧹 Reset panel UI to fresh state
+                if (window.scenarioArchitectPanel && typeof window.scenarioArchitectPanel._resetPanel === 'function') {
+                    window.scenarioArchitectPanel._resetPanel();
+                    console.log('🧹 [V8] Panel UI reset to fresh state');
+                }
                 
                 // Verify button element exists
                 const btn = document.getElementById('scenario-architect-send-btn');
