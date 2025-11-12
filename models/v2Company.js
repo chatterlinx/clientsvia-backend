@@ -1097,6 +1097,100 @@ const companySchema = new mongoose.Schema({
         },
         
         // -------------------------------------------------------------------
+        // CHEAT SHEET - Company-Level AI Agent Behavior Rules
+        // -------------------------------------------------------------------
+        // Global behavior rules, edge cases, transfer protocols, and guardrails
+        // Applied AFTER scenario matching to ensure consistent behavior
+        // Compiled into optimized runtime policy by PolicyCompiler service
+        cheatSheet: {
+            // Metadata & Versioning
+            version: { type: Number, default: 1 },
+            status: { 
+                type: String, 
+                enum: ['draft', 'active'], 
+                default: 'draft' 
+            },
+            updatedBy: { type: String, default: 'System' },
+            updatedAt: { type: Date, default: Date.now },
+            lastCompiledAt: { type: Date, default: null },
+            checksum: { type: String, default: null },
+            compileLock: { type: String, default: null }, // UUID for optimistic locking
+            
+            // Behavior Rules (touch-and-go protocol)
+            behaviorRules: [{
+                type: String,
+                enum: [
+                    'ACK_OK', 'NEVER_INTERRUPT', 'USE_COMPANY_NAME',
+                    'CONFIRM_ENTITIES', 'POLITE_PROFESSIONAL', 'WAIT_FOR_PAUSE'
+                ]
+            }],
+            
+            // Edge Cases (high-priority pattern-response pairs)
+            edgeCases: [{
+                id: { type: String, required: true },
+                name: { type: String, required: true },
+                triggerPatterns: [{ type: String }], // Regex patterns
+                responseText: { type: String, required: true },
+                priority: { type: Number, default: 100 },
+                enabled: { type: Boolean, default: true },
+                createdAt: { type: Date, default: Date.now },
+                createdBy: { type: String, default: 'System' }
+            }],
+            
+            // Transfer Rules (intent-based handoff protocol)
+            transferRules: [{
+                id: { type: String, required: true },
+                intentTag: { 
+                    type: String, 
+                    enum: ['billing', 'emergency', 'scheduling', 'technical', 'general'], 
+                    required: true 
+                },
+                contactNameOrQueue: { type: String, required: true },
+                phoneNumber: { type: String, default: null },
+                script: { type: String, default: null },
+                collectEntities: [{
+                    name: { type: String, required: true },
+                    type: { 
+                        type: String, 
+                        enum: ['PERSON', 'PHONE', 'EMAIL', 'DATE', 'TIME', 'TEXT'], 
+                        required: true 
+                    },
+                    required: { type: Boolean, default: false },
+                    prompt: { type: String, default: null },
+                    validationPattern: { type: String, default: null },
+                    validationPrompt: { type: String, default: null },
+                    maxRetries: { type: Number, default: 2 },
+                    escalateOnFail: { type: Boolean, default: true }
+                }],
+                afterHoursOnly: { type: Boolean, default: false },
+                priority: { type: Number, default: 50 },
+                enabled: { type: Boolean, default: true },
+                createdAt: { type: Date, default: Date.now },
+                createdBy: { type: String, default: 'System' }
+            }],
+            
+            // Guardrails (content filtering & compliance)
+            guardrails: [{
+                type: String,
+                enum: [
+                    'NO_PRICES', 'NO_DIAGNOSES', 'NO_APOLOGIES_SPAM',
+                    'NO_PHONE_NUMBERS', 'NO_URLS', 'NO_MEDICAL_ADVICE',
+                    'NO_LEGAL_ADVICE', 'NO_INTERRUPTING'
+                ]
+            }],
+            
+            // Action Allowlist (whitelist of permitted runtime actions)
+            allowedActions: [{
+                type: String,
+                enum: [
+                    'BOOK_APPT', 'TAKE_MESSAGE', 'TRANSFER_BILLING',
+                    'TRANSFER_EMERGENCY', 'TRANSFER_GENERAL', 'COLLECT_INFO',
+                    'PROVIDE_HOURS', 'PROVIDE_PRICING'
+                ]
+            }]
+        },
+        
+        // -------------------------------------------------------------------
         // FILLER WORDS - AI Agent runtime word filtering
         // -------------------------------------------------------------------
         // Filler words (inherited from template + custom additions)

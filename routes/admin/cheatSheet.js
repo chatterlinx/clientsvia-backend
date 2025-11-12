@@ -11,8 +11,130 @@ const router = express.Router();
 const Company = require('../../models/v2Company');
 const PolicyCompiler = require('../../services/PolicyCompiler');
 const CheatSheetEngine = require('../../services/CheatSheetEngine');
-const { authenticateToken } = require('../../middleware/auth');
+const { authenticateJWT } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /api/admin/cheat-sheet/:companyId
+// ═══════════════════════════════════════════════════════════════════
+// Fetch company's cheat sheet configuration
+// ═══════════════════════════════════════════════════════════════════
+
+router.get('/:companyId', authenticateJWT, async (req, res) => {
+  const { companyId } = req.params;
+  
+  logger.info('[CHEAT SHEET API] Fetch request', { companyId });
+  
+  try {
+    const company = await Company.findById(companyId);
+    
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        error: 'Company not found'
+      });
+    }
+    
+    const cheatSheet = company.aiAgentSettings?.cheatSheet || {
+      version: 1,
+      status: 'draft',
+      behaviorRules: [],
+      edgeCases: [],
+      transferRules: [],
+      guardrails: [],
+      allowedActions: []
+    };
+    
+    logger.info('[CHEAT SHEET API] Fetch successful', {
+      companyId,
+      status: cheatSheet.status,
+      version: cheatSheet.version
+    });
+    
+    return res.json({
+      success: true,
+      cheatSheet
+    });
+    
+  } catch (error) {
+    logger.error('[CHEAT SHEET API] Fetch failed', {
+      companyId,
+      error: error.message
+    });
+    
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// PUT /api/admin/cheat-sheet/:companyId
+// ═══════════════════════════════════════════════════════════════════
+// Update company's cheat sheet configuration
+// ═══════════════════════════════════════════════════════════════════
+
+router.put('/:companyId', authenticateJWT, async (req, res) => {
+  const { companyId } = req.params;
+  const { cheatSheet } = req.body;
+  
+  logger.info('[CHEAT SHEET API] Update request', { 
+    companyId,
+    updates: Object.keys(cheatSheet || {})
+  });
+  
+  try {
+    const company = await Company.findById(companyId);
+    
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        error: 'Company not found'
+      });
+    }
+    
+    // Initialize aiAgentSettings if it doesn't exist
+    if (!company.aiAgentSettings) {
+      company.aiAgentSettings = {};
+    }
+    
+    // Update cheat sheet
+    const updatedCheatSheet = {
+      ...company.aiAgentSettings.cheatSheet,
+      ...cheatSheet,
+      status: 'draft', // Mark as draft when edited
+      updatedAt: new Date(),
+      updatedBy: req.user.email || req.user._id.toString()
+    };
+    
+    company.aiAgentSettings.cheatSheet = updatedCheatSheet;
+    await company.save();
+    
+    logger.info('[CHEAT SHEET API] Update successful', {
+      companyId,
+      version: updatedCheatSheet.version,
+      status: updatedCheatSheet.status
+    });
+    
+    return res.json({
+      success: true,
+      cheatSheet: updatedCheatSheet
+    });
+    
+  } catch (error) {
+    logger.error('[CHEAT SHEET API] Update failed', {
+      companyId,
+      error: error.message,
+      stack: error.stack
+    });
+    
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // POST /api/admin/cheat-sheet/compile/:companyId
@@ -20,7 +142,7 @@ const logger = require('../../utils/logger');
 // Compile company's cheat sheet into runtime policy
 // ═══════════════════════════════════════════════════════════════════
 
-router.post('/compile/:companyId', authenticateToken, async (req, res) => {
+router.post('/compile/:companyId', authenticateJWT, async (req, res) => {
   const { companyId } = req.params;
   
   logger.info('[CHEAT SHEET API] Compile request', { companyId });
@@ -82,7 +204,7 @@ router.post('/compile/:companyId', authenticateToken, async (req, res) => {
 // Test cheat sheet rules with sample input
 // ═══════════════════════════════════════════════════════════════════
 
-router.post('/test/:companyId', authenticateToken, async (req, res) => {
+router.post('/test/:companyId', authenticateJWT, async (req, res) => {
   const { companyId } = req.params;
   const { userInput, baseResponse } = req.body;
   
@@ -185,7 +307,7 @@ router.post('/test/:companyId', authenticateToken, async (req, res) => {
 // Get cheat sheet statistics and usage metrics
 // ═══════════════════════════════════════════════════════════════════
 
-router.get('/stats/:companyId', authenticateToken, async (req, res) => {
+router.get('/stats/:companyId', authenticateJWT, async (req, res) => {
   const { companyId } = req.params;
   
   logger.info('[CHEAT SHEET API] Stats request', { companyId });
