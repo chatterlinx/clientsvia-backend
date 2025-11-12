@@ -20352,7 +20352,12 @@ ${JSON.stringify(healthData, null, 2)}
             async load() {
                 console.log('🎛️ [LLM SETTINGS] Loading settings from API...');
                 try {
+                    const token = getAuthToken();
                     const res = await fetch('/api/admin/llm-settings', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
                         credentials: 'include'
                     });
                     const data = await res.json();
@@ -20839,9 +20844,13 @@ Safety:
 
             async save(partial, successMessage) {
                 try {
+                    const token = getAuthToken();
                     const res = await fetch('/api/admin/llm-settings', {
                         method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
                         credentials: 'include',
                         body: JSON.stringify(partial)
                     });
@@ -20864,9 +20873,13 @@ Safety:
             async reset(scope) {
                 console.log('🔄 [LLM SETTINGS] Resetting scope:', scope);
                 try {
+                    const token = getAuthToken();
                     const res = await fetch('/api/admin/llm-settings/reset', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
                         credentials: 'include',
                         body: JSON.stringify({ scope })
                     });
