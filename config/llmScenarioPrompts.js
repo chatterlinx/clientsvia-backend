@@ -276,6 +276,23 @@ const DEFAULT_LLM_ENTERPRISE_SETTINGS = {
       topP: null,
       maxTokens: null
     }
+  },
+
+  // ✨ NEW: All prompt text is editable by admin
+  // These are the DEFAULTS - admin can customize and reset back to these
+  promptText: {
+    base: BASE_SCENARIO_ARCHITECT_PROMPT,
+    profiles: {
+      compliance_safe: PROFILE_PROMPT_COMPLIANCE_SAFE,
+      call_center_optimized: PROFILE_PROMPT_CALL_CENTER,
+      creative_exploration: PROFILE_PROMPT_CREATIVE
+    },
+    domainSafety: {
+      medicalOffice: DOMAIN_PROMPT_MEDICAL,
+      financial: DOMAIN_PROMPT_FINANCIAL,
+      emergency: DOMAIN_PROMPT_EMERGENCY
+    },
+    strictCompliance: GLOBAL_STRICT_COMPLIANCE_ADDON
   }
 };
 
@@ -301,6 +318,18 @@ function buildScenarioArchitectSystemPromptFromSettings(settings = {}) {
     compliance: {
       ...DEFAULT_LLM_ENTERPRISE_SETTINGS.compliance,
       ...(settings.compliance || {})
+    },
+    promptText: {
+      ...DEFAULT_LLM_ENTERPRISE_SETTINGS.promptText,
+      ...(settings.promptText || {}),
+      profiles: {
+        ...DEFAULT_LLM_ENTERPRISE_SETTINGS.promptText.profiles,
+        ...(settings.promptText?.profiles || {})
+      },
+      domainSafety: {
+        ...DEFAULT_LLM_ENTERPRISE_SETTINGS.promptText.domainSafety,
+        ...(settings.promptText?.domainSafety || {})
+      }
     }
   };
 
@@ -309,28 +338,33 @@ function buildScenarioArchitectSystemPromptFromSettings(settings = {}) {
       ? merged.defaults.activeProfile
       : DEFAULT_PROFILE_KEY;
 
-  let prompt = BASE_SCENARIO_ARCHITECT_PROMPT;
+  // Use custom promptText if admin edited it, otherwise fall back to defaults
+  let prompt = merged.promptText.base || BASE_SCENARIO_ARCHITECT_PROMPT;
 
-  // Add profile-specific block
-  const profileBlock = PROFILE_PROMPTS[profileKey];
+  // Add profile-specific block (use custom text if available)
+  const profileBlock = merged.promptText.profiles[profileKey] || PROFILE_PROMPTS[profileKey];
   if (profileBlock) {
     prompt += '\n\n' + profileBlock;
   }
 
-  // Add domain safety blocks
+  // Add domain safety blocks (use custom text if available)
   if (merged.compliance.medicalOfficeMode) {
-    prompt += '\n\n' + DOMAIN_PROMPT_MEDICAL;
+    const medicalBlock = merged.promptText.domainSafety.medicalOffice || DOMAIN_PROMPT_MEDICAL;
+    prompt += '\n\n' + medicalBlock;
   }
   if (merged.compliance.financialMode) {
-    prompt += '\n\n' + DOMAIN_PROMPT_FINANCIAL;
+    const financialBlock = merged.promptText.domainSafety.financial || DOMAIN_PROMPT_FINANCIAL;
+    prompt += '\n\n' + financialBlock;
   }
   if (merged.compliance.emergencyServicesMode) {
-    prompt += '\n\n' + DOMAIN_PROMPT_EMERGENCY;
+    const emergencyBlock = merged.promptText.domainSafety.emergency || DOMAIN_PROMPT_EMERGENCY;
+    prompt += '\n\n' + emergencyBlock;
   }
 
-  // Add strict compliance override (if enabled and not already in compliance_safe)
+  // Add strict compliance override (use custom text if available)
   if (merged.compliance.strictComplianceMode && profileKey !== 'compliance_safe') {
-    prompt += '\n\n' + GLOBAL_STRICT_COMPLIANCE_ADDON;
+    const strictBlock = merged.promptText.strictCompliance || GLOBAL_STRICT_COMPLIANCE_ADDON;
+    prompt += '\n\n' + strictBlock;
   }
 
   return prompt.trim();
@@ -358,6 +392,18 @@ function getScenarioPromptPartsFromSettings(settings = {}) {
     compliance: {
       ...DEFAULT_LLM_ENTERPRISE_SETTINGS.compliance,
       ...(settings.compliance || {})
+    },
+    promptText: {
+      ...DEFAULT_LLM_ENTERPRISE_SETTINGS.promptText,
+      ...(settings.promptText || {}),
+      profiles: {
+        ...DEFAULT_LLM_ENTERPRISE_SETTINGS.promptText.profiles,
+        ...(settings.promptText?.profiles || {})
+      },
+      domainSafety: {
+        ...DEFAULT_LLM_ENTERPRISE_SETTINGS.promptText.domainSafety,
+        ...(settings.promptText?.domainSafety || {})
+      }
     }
   };
 
@@ -367,17 +413,24 @@ function getScenarioPromptPartsFromSettings(settings = {}) {
       : DEFAULT_PROFILE_KEY;
 
   return {
-    base: BASE_SCENARIO_ARCHITECT_PROMPT,
+    // Use custom text if admin edited it, otherwise use defaults
+    base: merged.promptText.base || BASE_SCENARIO_ARCHITECT_PROMPT,
     profileKey,
-    profile: PROFILE_PROMPTS[profileKey],
+    profile: merged.promptText.profiles[profileKey] || PROFILE_PROMPTS[profileKey],
     domains: {
-      medicalOfficeMode: merged.compliance.medicalOfficeMode ? DOMAIN_PROMPT_MEDICAL : '',
-      financialMode: merged.compliance.financialMode ? DOMAIN_PROMPT_FINANCIAL : '',
-      emergencyServicesMode: merged.compliance.emergencyServicesMode ? DOMAIN_PROMPT_EMERGENCY : ''
+      medicalOfficeMode: merged.compliance.medicalOfficeMode 
+        ? (merged.promptText.domainSafety.medicalOffice || DOMAIN_PROMPT_MEDICAL)
+        : '',
+      financialMode: merged.compliance.financialMode 
+        ? (merged.promptText.domainSafety.financial || DOMAIN_PROMPT_FINANCIAL)
+        : '',
+      emergencyServicesMode: merged.compliance.emergencyServicesMode 
+        ? (merged.promptText.domainSafety.emergency || DOMAIN_PROMPT_EMERGENCY)
+        : ''
     },
     strictCompliance:
       merged.compliance.strictComplianceMode && profileKey !== 'compliance_safe'
-        ? GLOBAL_STRICT_COMPLIANCE_ADDON
+        ? (merged.promptText.strictCompliance || GLOBAL_STRICT_COMPLIANCE_ADDON)
         : ''
   };
 }
@@ -453,6 +506,33 @@ function getEffectiveModelParams(settings = {}) {
 }
 
 // ============================================================================
+// 10. HELPER: GET DEFAULT PROMPT TEXT (FOR RESET BUTTONS)
+// ============================================================================
+
+/**
+ * Returns the hardcoded default prompt text.
+ * Used by the "Reset to Default" buttons in the UI.
+ * 
+ * @returns {Object} - Default prompt text for all sections
+ */
+function getDefaultPromptText() {
+  return {
+    base: BASE_SCENARIO_ARCHITECT_PROMPT,
+    profiles: {
+      compliance_safe: PROFILE_PROMPT_COMPLIANCE_SAFE,
+      call_center_optimized: PROFILE_PROMPT_CALL_CENTER,
+      creative_exploration: PROFILE_PROMPT_CREATIVE
+    },
+    domainSafety: {
+      medicalOffice: DOMAIN_PROMPT_MEDICAL,
+      financial: DOMAIN_PROMPT_FINANCIAL,
+      emergency: DOMAIN_PROMPT_EMERGENCY
+    },
+    strictCompliance: GLOBAL_STRICT_COMPLIANCE_ADDON
+  };
+}
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -473,6 +553,7 @@ module.exports = {
   // Helpers
   buildScenarioArchitectSystemPromptFromSettings,
   getScenarioPromptPartsFromSettings,
-  getEffectiveModelParams
+  getEffectiveModelParams,
+  getDefaultPromptText
 };
 

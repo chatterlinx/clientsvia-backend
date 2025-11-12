@@ -30,6 +30,18 @@ async function getSettings(scope = GLOBAL_SCOPE) {
     overrides: {
       ...DEFAULT_LLM_SETTINGS.overrides,
       ...(doc.settings.overrides || {})
+    },
+    promptText: {
+      ...DEFAULT_LLM_SETTINGS.promptText,
+      ...(doc.settings.promptText || {}),
+      profiles: {
+        ...DEFAULT_LLM_SETTINGS.promptText.profiles,
+        ...(doc.settings.promptText?.profiles || {})
+      },
+      domainSafety: {
+        ...DEFAULT_LLM_SETTINGS.promptText.domainSafety,
+        ...(doc.settings.promptText?.domainSafety || {})
+      }
     }
   };
 }
@@ -54,6 +66,18 @@ async function saveSettings(partialSettings, scope = GLOBAL_SCOPE) {
     overrides: {
       ...existing.overrides,
       ...(partialSettings.overrides || {})
+    },
+    promptText: {
+      ...existing.promptText,
+      ...(partialSettings.promptText || {}),
+      profiles: {
+        ...existing.promptText.profiles,
+        ...(partialSettings.promptText?.profiles || {})
+      },
+      domainSafety: {
+        ...existing.promptText.domainSafety,
+        ...(partialSettings.promptText?.domainSafety || {})
+      }
     }
   };
 
@@ -81,6 +105,10 @@ async function resetSettings(scope = GLOBAL_SCOPE, section = 'all') {
       break;
     case 'advanced':
       settings.overrides = DEFAULT_LLM_SETTINGS.overrides;
+      break;
+    case 'promptText':
+      // Reset all prompt text to defaults
+      settings.promptText = DEFAULT_LLM_SETTINGS.promptText;
       break;
     case 'all':
     default:

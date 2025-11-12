@@ -36,7 +36,16 @@ router.put('/', async (req, res, next) => {
   try {
     const partial = req.body || {};
     const settings = await saveSettings(partial, 'global');
-    res.json({ success: true, settings });
+    
+    // Return updated prompt parts so UI shows live changes
+    const promptParts = getScenarioPromptPartsFromSettings(settings);
+    
+    res.json({ 
+      success: true, 
+      settings,
+      profiles: ARCHITECT_LLM_PROFILES,
+      promptParts
+    });
   } catch (err) {
     next(err);
   }
@@ -48,7 +57,16 @@ router.post('/reset', async (req, res, next) => {
     const scope = 'global';
     const section = req.body?.scope || 'all';
     const settings = await resetSettings(scope, section);
-    res.json({ success: true, settings });
+    
+    // Return updated prompt parts so UI shows defaults
+    const promptParts = getScenarioPromptPartsFromSettings(settings);
+    
+    res.json({ 
+      success: true, 
+      settings,
+      profiles: ARCHITECT_LLM_PROFILES,
+      promptParts
+    });
   } catch (err) {
     next(err);
   }
