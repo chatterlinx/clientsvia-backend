@@ -5036,6 +5036,9 @@
                 <button id="tab-test" class="scenario-tab" onclick="switchScenarioTab('test')" style="padding: 10px 20px; border: none; background: transparent; color: #6c757d; font-weight: 600; font-size: 14px; cursor: pointer; border-radius: 8px 8px 0 0; transition: all 0.3s; border-bottom: 3px solid transparent;">
                     <i class="fas fa-flask mr-1"></i>🔥 Test & Preview
                 </button>
+                <button id="tab-enhance" class="scenario-tab" onclick="switchScenarioTab('enhance')" style="padding: 10px 20px; border: none; background: transparent; color: #6c757d; font-weight: 600; font-size: 14px; cursor: pointer; border-radius: 8px 8px 0 0; transition: all 0.3s; border-bottom: 3px solid transparent;">
+                    <i class="fas fa-brain mr-1"></i>🤖 AI Enhance
+                </button>
             </div>
 
             <!-- MAIN CONTENT AREA: 2/3 Form + 1/3 AI Panel -->
@@ -5633,6 +5636,165 @@ Just checking in..."></textarea>
                                 </ul>
                             </div>
                         </details>
+
+                    </div>
+                </div>
+
+                <!-- TAB 6: AI ENHANCE (INTELLIGENCE FIELDS) -->
+                <div id="content-enhance" class="scenario-tab-content" style="display: none;">
+                    <div style="display: grid; gap: 28px;">
+                        
+                        <!-- Header -->
+                        <div style="border: 3px solid #10b981; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius: 16px; padding: 24px;">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <i class="fas fa-brain" style="font-size: 32px; color: #10b981;"></i>
+                                <div>
+                                    <h3 style="margin: 0; font-size: 22px; font-weight: 700; color: #065f46;">AI Intelligence & Matching</h3>
+                                    <p style="margin: 4px 0 0; color: #059669; font-size: 14px;">Keywords, Q&A Pairs, Testing, and Escalation Flags</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- KEYWORDS SECTION -->
+                        <div style="border: 2px solid #10b981; border-radius: 12px; background: white; padding: 20px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                                <h4 style="margin: 0; font-size: 18px; font-weight: 700; color: #065f46;">
+                                    <i class="fas fa-key text-green-600 mr-2"></i>🔑 Positive Keywords
+                                </h4>
+                                <button type="button" onclick="regenerateKeywords()" style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer;">
+                                    <i class="fas fa-sync mr-1"></i>Regenerate from Triggers
+                                </button>
+                            </div>
+                            <p style="color: #6b7280; font-size: 14px; margin: 0 0 12px 0;">Fast Tier-1 matching keywords (extracted from triggers). These enable instant recognition without expensive LLM calls.</p>
+                            
+                            <!-- Keywords Display/Edit -->
+                            <div id="keywords-display" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; min-height: 40px; padding: 12px; background: #f9fafb; border-radius: 8px; border: 2px dashed #d1d5db;">
+                                <!-- Keywords chips will be inserted here -->
+                                <span style="color: #9ca3af; font-style: italic;">No keywords generated yet. Click "Regenerate from Triggers" or use AI to generate.</span>
+                            </div>
+                            
+                            <!-- Add Keyword -->
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="new-keyword-input" placeholder="Add keyword..." style="flex: 1; padding: 10px 16px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 14px;">
+                                <button type="button" onclick="addKeyword()" style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                                    <i class="fas fa-plus mr-1"></i>Add
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- NEGATIVE KEYWORDS SECTION -->
+                        <div style="border: 2px solid #ef4444; border-radius: 12px; background: white; padding: 20px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                                <h4 style="margin: 0; font-size: 18px; font-weight: 700; color: #dc2626;">
+                                    <i class="fas fa-ban text-red-600 mr-2"></i>❌ Negative Keywords
+                                </h4>
+                                <button type="button" onclick="regenerateNegativeKeywords()" style="background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer;">
+                                    <i class="fas fa-sync mr-1"></i>Regenerate from Negative Triggers
+                                </button>
+                            </div>
+                            <p style="color: #6b7280; font-size: 14px; margin: 0 0 12px 0;">Words that VETO this scenario (prevent false positives). If any of these appear, scenario will NOT match.</p>
+                            
+                            <!-- Negative Keywords Display/Edit -->
+                            <div id="negative-keywords-display" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; min-height: 40px; padding: 12px; background: #fef2f2; border-radius: 8px; border: 2px dashed #fca5a5;">
+                                <!-- Negative keywords chips will be inserted here -->
+                                <span style="color: #9ca3af; font-style: italic;">No negative keywords yet. Click "Regenerate" or add manually.</span>
+                            </div>
+                            
+                            <!-- Add Negative Keyword -->
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="new-negative-keyword-input" placeholder="Add negative keyword (e.g., don't, not, never)..." style="flex: 1; padding: 10px 16px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 14px;">
+                                <button type="button" onclick="addNegativeKeyword()" style="background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                                    <i class="fas fa-plus mr-1"></i>Add
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Q&A PAIRS SECTION -->
+                        <div style="border: 2px solid #3b82f6; border-radius: 12px; background: white; padding: 20px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                                <h4 style="margin: 0; font-size: 18px; font-weight: 700; color: #1e40af;">
+                                    <i class="fas fa-comments text-blue-600 mr-2"></i>💬 Q&A Training Pairs
+                                </h4>
+                                <button type="button" onclick="regenerateQnAPairs()" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer;">
+                                    <i class="fas fa-sync mr-1"></i>Regenerate from Triggers + Replies
+                                </button>
+                            </div>
+                            <p style="color: #6b7280; font-size: 14px; margin: 0 0 16px 0;">Training data for semantic AI matching. These Q&A pairs help the AI understand intent.</p>
+                            
+                            <!-- Q&A Pairs List -->
+                            <div id="qna-pairs-list" style="display: grid; gap: 12px;">
+                                <!-- Q&A pairs will be inserted here -->
+                                <div style="text-align: center; color: #9ca3af; font-style: italic; padding: 24px; background: #f9fafb; border-radius: 8px; border: 2px dashed #d1d5db;">
+                                    No Q&A pairs generated yet. Click "Regenerate" or use AI to generate.
+                                </div>
+                            </div>
+                            
+                            <!-- Add Q&A Pair -->
+                            <div style="margin-top: 16px; padding: 16px; background: #eff6ff; border-radius: 8px; border: 2px dashed #3b82f6;">
+                                <h5 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: #1e40af;">
+                                    <i class="fas fa-plus-circle mr-1"></i>Add Custom Q&A Pair
+                                </h5>
+                                <input type="text" id="new-qna-question" placeholder="Question (e.g., 'How do I book an appointment?')" style="width: 100%; padding: 10px 16px; border: 2px solid #3b82f6; border-radius: 8px; font-size: 14px; margin-bottom: 8px;">
+                                <textarea id="new-qna-answer" placeholder="Answer (e.g., 'I'd be happy to help you schedule...')" rows="2" style="width: 100%; padding: 10px 16px; border: 2px solid #3b82f6; border-radius: 8px; font-size: 14px; margin-bottom: 8px; resize: vertical;"></textarea>
+                                <button type="button" onclick="addQnAPair()" style="background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                                    <i class="fas fa-plus mr-1"></i>Add Q&A Pair
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- ESCALATION FLAGS SECTION -->
+                        <div style="border: 2px solid #f59e0b; border-radius: 12px; background: white; padding: 20px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                                <h4 style="margin: 0; font-size: 18px; font-weight: 700; color: #d97706;">
+                                    <i class="fas fa-exclamation-triangle text-yellow-600 mr-2"></i>🚨 Escalation Flags
+                                </h4>
+                            </div>
+                            <p style="color: #6b7280; font-size: 14px; margin: 0 0 12px 0;">Sentiment/situation triggers for human handoff (e.g., angry, confused, urgent, technical issue).</p>
+                            
+                            <!-- Escalation Flags Display/Edit -->
+                            <div id="escalation-flags-display" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; min-height: 40px; padding: 12px; background: #fffbeb; border-radius: 8px; border: 2px dashed #fcd34d;">
+                                <!-- Escalation flags chips will be inserted here -->
+                                <span style="color: #9ca3af; font-style: italic;">No escalation flags set. Add flags that should trigger human handoff.</span>
+                            </div>
+                            
+                            <!-- Add Escalation Flag -->
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="new-escalation-flag-input" placeholder="Add flag (e.g., angry, confused, urgent)..." style="flex: 1; padding: 10px 16px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 14px;">
+                                <button type="button" onclick="addEscalationFlag()" style="background: #f59e0b; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                                    <i class="fas fa-plus mr-1"></i>Add
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- TRAINING EXAMPLES SECTION -->
+                        <div style="border: 2px solid #8b5cf6; border-radius: 12px; background: white; padding: 20px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                                <h4 style="margin: 0; font-size: 18px; font-weight: 700; color: #6d28d9;">
+                                    <i class="fas fa-chalkboard-teacher text-purple-600 mr-2"></i>💡 Training Examples
+                                </h4>
+                            </div>
+                            <p style="color: #6b7280; font-size: 14px; margin: 0 0 16px 0;">Sample conversations showing expected AI behavior for this scenario.</p>
+                            
+                            <!-- Examples List -->
+                            <div id="training-examples-list" style="display: grid; gap: 12px;">
+                                <!-- Examples will be inserted here -->
+                                <div style="text-align: center; color: #9ca3af; font-style: italic; padding: 24px; background: #f9fafb; border-radius: 8px; border: 2px dashed #d1d5db;">
+                                    No training examples yet. Use AI to generate or add manually.
+                                </div>
+                            </div>
+                            
+                            <!-- Add Training Example -->
+                            <div style="margin-top: 16px; padding: 16px; background: #f5f3ff; border-radius: 8px; border: 2px dashed #8b5cf6;">
+                                <h5 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: #6d28d9;">
+                                    <i class="fas fa-plus-circle mr-1"></i>Add Training Example
+                                </h5>
+                                <input type="text" id="new-example-caller" placeholder="Caller says..." style="width: 100%; padding: 10px 16px; border: 2px solid #8b5cf6; border-radius: 8px; font-size: 14px; margin-bottom: 8px;">
+                                <textarea id="new-example-ai" placeholder="AI responds..." rows="2" style="width: 100%; padding: 10px 16px; border: 2px solid #8b5cf6; border-radius: 8px; font-size: 14px; margin-bottom: 8px; resize: vertical;"></textarea>
+                                <button type="button" onclick="addTrainingExample()" style="background: #8b5cf6; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                                    <i class="fas fa-plus mr-1"></i>Add Example
+                                </button>
+                            </div>
+                        </div>
 
                     </div>
                 </div>
