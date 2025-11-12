@@ -13005,25 +13005,25 @@ Continue?`;
             const keyword = input.value.trim().toLowerCase();
             if (!keyword) return;
             if (currentKeywords.includes(keyword)) {
-                ToastManager.show('❌ Keyword already exists', 'error');
+                showNotification('❌ Keyword already exists', 'error');
                 return;
             }
             currentKeywords.push(keyword);
             renderKeywords(currentKeywords);
             input.value = '';
-            ToastManager.show('✅ Keyword added', 'success');
+            showNotification('✅ Keyword added', 'success');
         }
         
         function removeKeyword(idx) {
             currentKeywords.splice(idx, 1);
             renderKeywords(currentKeywords);
-            ToastManager.show('🗑️ Keyword removed', 'success');
+            showNotification('🗑️ Keyword removed', 'success');
         }
         
         function regenerateKeywords() {
             const triggers = document.getElementById('scenario-triggers').value;
             if (!triggers.trim()) {
-                ToastManager.show('⚠️ No triggers to extract keywords from', 'error');
+                showNotification('⚠️ No triggers to extract keywords from', 'error');
                 return;
             }
             
@@ -13037,7 +13037,7 @@ Continue?`;
             const uniqueWords = [...new Set(words)].sort().slice(0, 25);
             currentKeywords = uniqueWords;
             renderKeywords(currentKeywords);
-            ToastManager.show(`✅ Extracted ${uniqueWords.length} keywords from triggers`, 'success');
+            showNotification(`✅ Extracted ${uniqueWords.length} keywords from triggers`, 'success');
         }
         
         // NEGATIVE KEYWORDS FUNCTIONS
@@ -13064,25 +13064,25 @@ Continue?`;
             const keyword = input.value.trim().toLowerCase();
             if (!keyword) return;
             if (currentNegativeKeywords.includes(keyword)) {
-                ToastManager.show('❌ Negative keyword already exists', 'error');
+                showNotification('❌ Negative keyword already exists', 'error');
                 return;
             }
             currentNegativeKeywords.push(keyword);
             renderNegativeKeywords(currentNegativeKeywords);
             input.value = '';
-            ToastManager.show('✅ Negative keyword added', 'success');
+            showNotification('✅ Negative keyword added', 'success');
         }
         
         function removeNegativeKeyword(idx) {
             currentNegativeKeywords.splice(idx, 1);
             renderNegativeKeywords(currentNegativeKeywords);
-            ToastManager.show('🗑️ Negative keyword removed', 'success');
+            showNotification('🗑️ Negative keyword removed', 'success');
         }
         
         function regenerateNegativeKeywords() {
             const negativeTriggers = document.getElementById('scenario-negative-triggers').value;
             if (!negativeTriggers.trim()) {
-                ToastManager.show('⚠️ No negative triggers to extract keywords from', 'error');
+                showNotification('⚠️ No negative triggers to extract keywords from', 'error');
                 return;
             }
             
@@ -13095,7 +13095,7 @@ Continue?`;
             const uniqueWords = [...new Set(words)].sort().slice(0, 15);
             currentNegativeKeywords = uniqueWords;
             renderNegativeKeywords(currentNegativeKeywords);
-            ToastManager.show(`✅ Extracted ${uniqueWords.length} negative keywords`, 'success');
+            showNotification(`✅ Extracted ${uniqueWords.length} negative keywords`, 'success');
         }
         
         // Q&A PAIRS FUNCTIONS
@@ -13137,7 +13137,7 @@ Continue?`;
             const answer = answerInput.value.trim();
             
             if (!question || !answer) {
-                ToastManager.show('⚠️ Please enter both question and answer', 'error');
+                showNotification('⚠️ Please enter both question and answer', 'error');
                 return;
             }
             
@@ -13145,13 +13145,13 @@ Continue?`;
             renderQnAPairs(currentQnAPairs);
             questionInput.value = '';
             answerInput.value = '';
-            ToastManager.show('✅ Q&A pair added', 'success');
+            showNotification('✅ Q&A pair added', 'success');
         }
         
         function removeQnAPair(idx) {
             currentQnAPairs.splice(idx, 1);
             renderQnAPairs(currentQnAPairs);
-            ToastManager.show('🗑️ Q&A pair removed', 'success');
+            showNotification('🗑️ Q&A pair removed', 'success');
         }
         
         function regenerateQnAPairs() {
@@ -13159,7 +13159,7 @@ Continue?`;
             const replies = document.getElementById('scenario-full-replies').value;
             
             if (!triggers.trim() || !replies.trim()) {
-                ToastManager.show('⚠️ Need both triggers and replies to generate Q&A pairs', 'error');
+                showNotification('⚠️ Need both triggers and replies to generate Q&A pairs', 'error');
                 return;
             }
             
@@ -13175,7 +13175,7 @@ Continue?`;
             
             currentQnAPairs = pairs;
             renderQnAPairs(currentQnAPairs);
-            ToastManager.show(`✅ Generated ${pairs.length} Q&A pairs`, 'success');
+            showNotification(`✅ Generated ${pairs.length} Q&A pairs`, 'success');
         }
         
         // ESCALATION FLAGS FUNCTIONS
@@ -13202,19 +13202,19 @@ Continue?`;
             const flag = input.value.trim().toLowerCase();
             if (!flag) return;
             if (currentEscalationFlags.includes(flag)) {
-                ToastManager.show('❌ Escalation flag already exists', 'error');
+                showNotification('❌ Escalation flag already exists', 'error');
                 return;
             }
             currentEscalationFlags.push(flag);
             renderEscalationFlags(currentEscalationFlags);
             input.value = '';
-            ToastManager.show('✅ Escalation flag added', 'success');
+            showNotification('✅ Escalation flag added', 'success');
         }
         
         function removeEscalationFlag(idx) {
             currentEscalationFlags.splice(idx, 1);
             renderEscalationFlags(currentEscalationFlags);
-            ToastManager.show('🗑️ Escalation flag removed', 'success');
+            showNotification('🗑️ Escalation flag removed', 'success');
         }
         
         // TRAINING EXAMPLES FUNCTIONS
@@ -13252,7 +13252,7 @@ Continue?`;
             const ai = aiInput.value.trim();
             
             if (!caller || !ai) {
-                ToastManager.show('⚠️ Please enter both caller and AI responses', 'error');
+                showNotification('⚠️ Please enter both caller and AI responses', 'error');
                 return;
             }
             
@@ -13260,13 +13260,13 @@ Continue?`;
             renderTrainingExamples(currentTrainingExamples);
             callerInput.value = '';
             aiInput.value = '';
-            ToastManager.show('✅ Training example added', 'success');
+            showNotification('✅ Training example added', 'success');
         }
         
         function removeTrainingExample(idx) {
             currentTrainingExamples.splice(idx, 1);
             renderTrainingExamples(currentTrainingExamples);
-            ToastManager.show('🗑️ Training example removed', 'success');
+            showNotification('🗑️ Training example removed', 'success');
         }
 
         /**
