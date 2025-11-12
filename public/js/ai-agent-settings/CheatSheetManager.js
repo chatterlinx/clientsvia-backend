@@ -564,6 +564,228 @@ class CheatSheetManager {
   }
   
   // ═══════════════════════════════════════════════════════════════════
+  // IMPORT/EXPORT METHODS
+  // ═══════════════════════════════════════════════════════════════════
+  
+  async showImportFromTemplateModal() {
+    console.log('[CHEAT SHEET] Showing import from template modal');
+    
+    try {
+      // Get company's active template
+      const token = localStorage.getItem('authToken');
+      const companyResponse = await fetch(`/api/company/${this.companyId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!companyResponse.ok) throw new Error('Failed to load company data');
+      
+      const companyData = await companyResponse.json();
+      const company = companyData.company || companyData;
+      const templateId = company.instantResponseTemplateId;
+      
+      if (!templateId) {
+        this.showNotification('Company does not have an active template assigned', 'error');
+        return;
+      }
+      
+      // Confirm import
+      const confirmed = confirm(
+        `This will import default cheat sheet rules from your template.\n\n` +
+        `Current data will be replaced with industry-optimized defaults.\n\n` +
+        `Continue?`
+      );
+      
+      if (!confirmed) return;
+      
+      // Import from template
+      const importResponse = await fetch(`/api/admin/cheat-sheet/import/${this.companyId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ templateId })
+      });
+      
+      if (!importResponse.ok) throw new Error('Import failed');
+      
+      const result = await importResponse.json();
+      
+      this.cheatSheet = result.cheatSheet;
+      this.render();
+      this.showNotification('✅ Template defaults imported successfully! Review and customize for this company.', 'success');
+      
+    } catch (error) {
+      console.error('[CHEAT SHEET] Import from template failed:', error);
+      this.showNotification(`Failed to import: ${error.message}`, 'error');
+    }
+  }
+  
+  async showImportFromCompanyModal() {
+    console.log('[CHEAT SHEET] Showing import from company modal');
+    
+    try {
+      // Get list of companies
+      const token = localStorage.getItem('authToken');
+      const companiesResponse = await fetch('/api/company', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!companiesResponse.ok) throw new Error('Failed to load companies');
+      
+      const companiesData = await companiesResponse.json();
+      const companies = companiesData.companies || companiesData || [];
+      
+      // Filter out current company
+      const otherCompanies = companies.filter(c => c._id !== this.companyId);
+      
+      if (otherCompanies.length === 0) {
+        this.showNotification('No other companies available to copy from', 'info');
+        return;
+      }
+      
+      // Show selection prompt
+      const companyList = otherCompanies.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
+      const selection = prompt(
+        `Select a company to copy cheat sheet from:\n\n${companyList}\n\nEnter number (1-${otherCompanies.length}):`
+      );
+      
+      if (!selection) return;
+      
+      const index = parseInt(selection) - 1;
+      if (index < 0 || index >= otherCompanies.length) {
+        this.showNotification('Invalid selection', 'error');
+        return;
+      }
+      
+      const sourceCompany = otherCompanies[index];
+      
+      // Confirm import
+      const confirmed = confirm(
+        `Copy cheat sheet from "${sourceCompany.name}"?\n\n` +
+        `This will replace your current configuration.\n\n` +
+        `Continue?`
+      );
+      
+      if (!confirmed) return;
+      
+      // Import from company
+      const importResponse = await fetch(`/api/admin/cheat-sheet/import/${this.companyId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ sourceCompanyId: sourceCompany._id })
+      });
+      
+      if (!importResponse.ok) throw new Error('Import failed');
+      
+      const result = await importResponse.json();
+      
+      this.cheatSheet = result.cheatSheet;
+      this.render();
+      this.showNotification(`✅ Cheat sheet copied from "${sourceCompany.name}"! Review and customize for this company.`, 'success');
+      
+    } catch (error) {
+      console.error('[CHEAT SHEET] Import from company failed:', error);
+      this.showNotification(`Failed to import: ${error.message}`, 'error');
+    }
+  }
+  
+  async exportAsJSON() {
+    console.log('[CHEAT SHEET] Exporting as JSON');
+    
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`/api/admin/cheat-sheet/export-json/${this.companyId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ stripMetadata: false })
+      });
+      
+      if (!response.ok) throw new Error('Export failed');
+      
+      const result = await response.json();
+      
+      // Create downloadable file
+      const blob = new Blob([JSON.stringify(result.cheatSheet, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = result.filename || 'cheatsheet.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      this.showNotification('✅ Cheat sheet exported successfully!', 'success');
+      
+    } catch (error) {
+      console.error('[CHEAT SHEET] Export failed:', error);
+      this.showNotification(`Failed to export: ${error.message}`, 'error');
+    }
+  }
+  
+  async resetToDefaults() {
+    console.log('[CHEAT SHEET] Resetting to template defaults');
+    
+    // Confirm reset
+    const confirmed = confirm(
+      `⚠️ RESET TO TEMPLATE DEFAULTS\n\n` +
+      `This will DELETE all your current cheat sheet rules and reload defaults from your template.\n\n` +
+      `This action cannot be undone.\n\n` +
+      `Continue?`
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      // Get company's active template
+      const token = localStorage.getItem('authToken');
+      const companyResponse = await fetch(`/api/company/${this.companyId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!companyResponse.ok) throw new Error('Failed to load company data');
+      
+      const companyData = await companyResponse.json();
+      const company = companyData.company || companyData;
+      const templateId = company.instantResponseTemplateId;
+      
+      if (!templateId) {
+        this.showNotification('Company does not have an active template assigned', 'error');
+        return;
+      }
+      
+      // Import from template
+      const importResponse = await fetch(`/api/admin/cheat-sheet/import/${this.companyId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ templateId })
+      });
+      
+      if (!importResponse.ok) throw new Error('Reset failed');
+      
+      const result = await importResponse.json();
+      
+      this.cheatSheet = result.cheatSheet;
+      this.render();
+      this.showNotification('✅ Cheat sheet reset to template defaults!', 'success');
+      
+    } catch (error) {
+      console.error('[CHEAT SHEET] Reset failed:', error);
+      this.showNotification(`Failed to reset: ${error.message}`, 'error');
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
   // HELPERS
   // ═══════════════════════════════════════════════════════════════════
   
