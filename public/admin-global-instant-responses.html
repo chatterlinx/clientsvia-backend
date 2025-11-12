@@ -20550,11 +20550,12 @@ ${JSON.stringify(healthData, null, 2)}
             },
 
             updatePromptPreview() {
-                // Use fallback prompts if API didn't load yet
-                const promptParts = this.promptParts || this.getFallbackPrompts();
+                // Use SAVED promptText from state (user edits), fallback to promptParts (display data)
                 const state = this.state || this.getFallbackState();
+                const promptText = state.promptText || {};
+                const promptParts = this.promptParts || this.getFallbackPrompts();
                 
-                if (!promptParts) return;
+                if (!promptParts && !promptText) return;
 
                 // Build active parts summary
                 const activeParts = [];
@@ -20579,41 +20580,53 @@ ${JSON.stringify(healthData, null, 2)}
                     summaryEl.textContent = activeParts.join(' + ');
                 }
 
-                // Build full prompt text
+                // Build full prompt text - PRIORITIZE SAVED promptText OVER promptParts
                 let fullPrompt = '';
                 
-                // Add base
-                if (promptParts.base) {
+                // Add base - USE SAVED DATA FIRST
+                const baseText = promptText.base || promptParts.base;
+                if (baseText) {
                     fullPrompt += '===== BASE SCENARIO ARCHITECT PROMPT (ALWAYS APPLIED) =====\n\n';
-                    fullPrompt += promptParts.base + '\n\n';
+                    fullPrompt += baseText + '\n\n';
                 }
 
-                // Add profile
-                if (promptParts.profile) {
+                // Add profile - USE SAVED DATA FIRST
+                const profiles = promptText.profiles || {};
+                const profileText = profiles[profileKey] || promptParts.profiles?.[profileKey] || promptParts.profile;
+                if (profileText) {
                     fullPrompt += `===== ACTIVE PROFILE: ${profileName.toUpperCase()} =====\n\n`;
-                    fullPrompt += promptParts.profile + '\n\n';
+                    fullPrompt += profileText + '\n\n';
                 }
 
-                // Add domain safety prompts
-                if (promptParts.domains) {
-                    if (promptParts.domains.medicalOfficeMode) {
+                // Add domain safety prompts - USE SAVED DATA FIRST
+                const domains = promptText.domainSafety || {};
+                if (compliance.medicalOfficeMode) {
+                    const medicalText = domains.medicalOffice || promptParts.domains?.medicalOfficeMode;
+                    if (medicalText) {
                         fullPrompt += '===== DOMAIN SAFETY: MEDICAL OFFICE =====\n\n';
-                        fullPrompt += promptParts.domains.medicalOfficeMode + '\n\n';
+                        fullPrompt += medicalText + '\n\n';
                     }
-                    if (promptParts.domains.financialMode) {
+                }
+                if (compliance.financialMode) {
+                    const financialText = domains.financial || promptParts.domains?.financialMode;
+                    if (financialText) {
                         fullPrompt += '===== DOMAIN SAFETY: FINANCIAL & BILLING =====\n\n';
-                        fullPrompt += promptParts.domains.financialMode + '\n\n';
+                        fullPrompt += financialText + '\n\n';
                     }
-                    if (promptParts.domains.emergencyServicesMode) {
+                }
+                if (compliance.emergencyServicesMode) {
+                    const emergencyText = domains.emergency || promptParts.domains?.emergencyServicesMode;
+                    if (emergencyText) {
                         fullPrompt += '===== DOMAIN SAFETY: EMERGENCY SERVICES =====\n\n';
-                        fullPrompt += promptParts.domains.emergencyServicesMode + '\n\n';
+                        fullPrompt += emergencyText + '\n\n';
                     }
                 }
 
-                // Add strict compliance
-                if (promptParts.strictCompliance) {
+                // Add strict compliance - USE SAVED DATA FIRST
+                const strictText = promptText.strictCompliance || promptParts.strictCompliance;
+                if (compliance.strictComplianceMode && strictText) {
                     fullPrompt += '===== STRICT COMPLIANCE MODE =====\n\n';
-                    fullPrompt += promptParts.strictCompliance + '\n\n';
+                    fullPrompt += strictText + '\n\n';
                 }
 
                 fullPrompt += '\n===== END OF SYSTEM PROMPT =====\n';
@@ -20624,6 +20637,11 @@ ${JSON.stringify(healthData, null, 2)}
                 if (previewEl) {
                     previewEl.textContent = fullPrompt;
                 }
+                
+                console.log('👁️ [LIVE PREVIEW] Updated with saved promptText', {
+                    hasPromptText: !!promptText && Object.keys(promptText).length > 0,
+                    hasPromptParts: !!promptParts
+                });
             },
 
             // Fallback prompts if API fails - show actual text immediately
