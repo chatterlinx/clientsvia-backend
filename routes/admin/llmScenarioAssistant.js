@@ -69,10 +69,10 @@ function sanitizeScenarioDraft(raw) {
       ? raw.regexTriggers.filter(t => t && typeof t === 'string').slice(0, 10)
       : [],
 
-    // REPLIES (weighted)
-    quickReplies: normalizeWeightedReplies(raw.quickReplies, 3, 5),
-    fullReplies: normalizeWeightedReplies(raw.fullReplies, 4, 8),
-    followUpPrompts: normalizeWeightedReplies(raw.followUpPrompts, 2, 3),
+    // REPLIES (weighted) - Generate many variations to sound natural, not robotic
+    quickReplies: normalizeWeightedReplies(raw.quickReplies, 7, 12),
+    fullReplies: normalizeWeightedReplies(raw.fullReplies, 7, 12),
+    followUpPrompts: normalizeWeightedReplies(raw.followUpPrompts, 3, 6),
 
     // FOLLOW-UP BEHAVIOR
     followUpMode: ['NONE', 'ASK_IF_BOOK', 'ASK_FOLLOWUP_QUESTION', 'TRANSFER'].includes(raw.followUpMode)
@@ -225,15 +225,39 @@ function normalizeVariables(input) {
  */
 function normalizeSilencePolicy(input) {
   if (!input || typeof input !== 'object') {
-    return { enabled: false };
+    return { 
+      enabled: false,
+      prompts: [],
+      maxPrompts: 3,
+      delaySeconds: 50,
+      extensionSeconds: 30
+    };
+  }
+
+  // Handle both old format (firstPrompt/repeatPrompt) and new format (prompts array)
+  let prompts = [];
+  if (Array.isArray(input.prompts)) {
+    prompts = input.prompts
+      .filter(p => p && typeof p === 'string')
+      .map(p => p.trim())
+      .slice(0, 10); // Max 10 variations
+  } else if (input.firstPrompt || input.repeatPrompt) {
+    // Legacy format - convert to array
+    if (input.firstPrompt) prompts.push(input.firstPrompt.trim());
+    if (input.repeatPrompt) prompts.push(input.repeatPrompt.trim());
+  }
+
+  // Ensure we have at least one prompt
+  if (prompts.length === 0) {
+    prompts = ['Are you still there?'];
   }
 
   return {
     enabled: !!input.enabled,
-    firstPrompt: (input.firstPrompt && typeof input.firstPrompt === 'string') ? input.firstPrompt.trim() : '',
-    repeatPrompt: (input.repeatPrompt && typeof input.repeatPrompt === 'string') ? input.repeatPrompt.trim() : '',
+    prompts: prompts,
     maxPrompts: typeof input.maxPrompts === 'number' ? Math.max(1, input.maxPrompts) : 3,
-    delaySeconds: typeof input.delaySeconds === 'number' ? Math.max(0, input.delaySeconds) : 3,
+    delaySeconds: typeof input.delaySeconds === 'number' ? Math.max(0, input.delaySeconds) : 50,
+    extensionSeconds: typeof input.extensionSeconds === 'number' ? Math.max(0, input.extensionSeconds) : 30,
   };
 }
 
@@ -242,13 +266,33 @@ function normalizeSilencePolicy(input) {
  */
 function normalizeTimedFollowup(input) {
   if (!input || typeof input !== 'object') {
-    return { enabled: false };
+    return { 
+      enabled: false,
+      delaySeconds: 50,
+      extensionSeconds: 30,
+      messages: []
+    };
+  }
+
+  // Extract messages array
+  let messages = [];
+  if (Array.isArray(input.messages)) {
+    messages = input.messages
+      .filter(m => m && typeof m === 'string')
+      .map(m => m.trim())
+      .slice(0, 10); // Max 10 variations
+  }
+
+  // Ensure we have at least one message if enabled
+  if (input.enabled && messages.length === 0) {
+    messages = ['Are you still there?'];
   }
 
   return {
     enabled: !!input.enabled,
-    delaySeconds: typeof input.delaySeconds === 'number' ? Math.max(0, input.delaySeconds) : 0,
-    extensionSeconds: typeof input.extensionSeconds === 'number' ? Math.max(0, input.extensionSeconds) : 0,
+    delaySeconds: typeof input.delaySeconds === 'number' ? Math.max(0, input.delaySeconds) : 50,
+    extensionSeconds: typeof input.extensionSeconds === 'number' ? Math.max(0, input.extensionSeconds) : 30,
+    messages: messages,
   };
 }
 
@@ -473,17 +517,22 @@ FULL DRAFT SPECIFICATION (Phase C.1):
   "handoffPolicy": "NEVER" | "LOW_CONFIDENCE_ONLY" | "ALWAYS_IF_REQUESTED",
 
   "silencePolicy": {
-    "enabled": true,
-    "firstPrompt": "Are you still there?",
-    "repeatPrompt": "I'm here to help.",
-    "maxPrompts": 3,
-    "delaySeconds": 3
+    "enabled": false,
+    "maxConsecutive": 2,
+    "finalWarning": "Hello? Did I lose you?"
   },
 
   "timedFollowup": {
-    "enabled": false,
-    "delaySeconds": 0,
-    "extensionSeconds": 0
+    "enabled": true,
+    "delaySeconds": 50,
+    "extensionSeconds": 30,
+    "messages": [  // Generate 3-5 variations (system will rotate randomly)
+      "Are you still there?",
+      "Just checking in...",
+      "Hello? I'm still here if you need me.",
+      "Take your time—I'm here when you're ready.",
+      "Still on the line? Let me know if you need anything."
+    ]
   },
 
   // 7. ACTION HOOKS & TESTING
@@ -534,11 +583,12 @@ GUIDELINES:
    - Provide 5–10 negativeTriggers to prevent false matches
    - Use natural, conversational phrases, not formal business-speak
 
-2. REPLIES:
-   - quickReplies (3–5): Brief acknowledgements, 5–15 words, spoken-friendly
-   - fullReplies (4–8): Complete answers with context, 2–5 sentences
-   - followUpPrompts (2–3): Gentle next-step invitations
+2. REPLIES (GENERATE MANY VARIATIONS TO SOUND NATURAL, NOT ROBOTIC):
+   - quickReplies (7–10): Brief acknowledgements, 5–15 words, spoken-friendly, VARIED phrasing
+   - fullReplies (7–10): Complete answers with context, 2–5 sentences, VARIED tone and structure
+   - followUpPrompts (3–5): Gentle next-step invitations, customized to THIS scenario (not generic)
    - Balance weights so no single reply dominates
+   - MORE VARIATIONS = MORE HUMAN-LIKE (avoid repetitive, robotic responses)
 
 3. ENTITIES:
    - Identify what data the scenario should capture (date, time, name, email, etc.)
@@ -561,13 +611,32 @@ GUIDELINES:
    - ASK_IF_BOOK: offer booking ("Would you like to schedule?")
    - TRANSFER: hand off to {transferTarget} (person or queue)
 
-7. CONFIDENCE & PRIORITY:
+7. TIMED FOLLOW-UP (AUTO-PROMPT WHEN CALLER IS SILENT):
+   - ALWAYS enable timedFollowup (set enabled: true)
+   - Generate 3-5 varied "Are you still there?" messages in timedFollowup.messages[]
+   - Make them natural, friendly, and conversational
+   - Avoid sounding robotic or impatient
+   - Examples: "Are you still there?", "Just checking in...", "Hello? I'm still here if you need me."
+   - The system will rotate these randomly so the AI doesn't repeat the same phrase
+   - Set reasonable defaults: delaySeconds: 50, extensionSeconds: 30
+
+8. BEHAVIOR SELECTION (REQUIRED - NEVER LEAVE NULL):
+   - Review the AVAILABLE AI BEHAVIORS list above
+   - Select the MOST APPROPRIATE behaviorId for this scenario's emotional tone
+   - Examples:
+     * Troubleshooting → "Professional & Helpful" or "Patient & Reassuring"
+     * Urgent/Emergency → "Urgent & Action-Oriented"
+     * Sales/Marketing → "Friendly & Enthusiastic"
+     * Technical Support → "Technical & Precise"
+   - NEVER set behavior to null - always select one from the available list
+
+9. CONFIDENCE & PRIORITY:
    - minConfidence: 0.5–0.9 (higher for specific, lower for generic)
    - priority: -10 to +10 (higher priority wins ties)
    - Use minConfidence 0.8–0.9 for critical scenarios (emergencies, account cancellation)
    - Use priority +5 to +10 for high-urgency scenarios
 
-8. AI INTELLIGENCE FIELDS (CRITICAL - ALWAYS GENERATE):
+10. AI INTELLIGENCE FIELDS (CRITICAL - ALWAYS GENERATE):
    - keywords: Extract 10-20 single words from triggerPhrases (lowercase, no duplicates)
      Example: ["appointment", "schedule", "book", "visit", "reschedule", "time", "date"]
    
@@ -584,7 +653,16 @@ GUIDELINES:
    - examples: Provide 2-4 sample conversations showing expected flow
      Keep caller phrases natural, AI responses from the fullReplies you generated
 
-9. NLP SUGGESTIONS:
+11. ENTITY FORMATTING (IMPORTANT):
+   - Format entities as: "entity_name: ENTITY_TYPE"
+   - Examples:
+     * "name: PERSON" (not just "name")
+     * "phone: PHONE_NUMBER" (not just "phone")
+     * "preferred_date: DATE" (not just "preferred_date")
+     * "preferred_time: TIME" (not just "time")
+   - This helps the frontend display them correctly
+
+12. NLP SUGGESTIONS:
    - suggestedFillerWords: junk phrases to strip from caller input
    - suggestedSynonyms: colloquial phrases → normalized terms for matching
    - These improve Tier 1 (rule-based) matching over time

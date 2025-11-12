@@ -14076,12 +14076,14 @@ Continue?`;
 
             // Timed Follow-up
             if (draft.timedFollowup) {
-                if (getEl('scenario-timed-followup-enabled')) 
-                    getEl('scenario-timed-followup-enabled').checked = !!draft.timedFollowup.enabled;
-                if (typeof draft.timedFollowup.delaySeconds === 'number' && getEl('scenario-timed-followup-delay')) 
-                    getEl('scenario-timed-followup-delay').value = draft.timedFollowup.delaySeconds;
-                if (typeof draft.timedFollowup.extensionSeconds === 'number' && getEl('scenario-timed-followup-extension')) 
-                    getEl('scenario-timed-followup-extension').value = draft.timedFollowup.extensionSeconds;
+                if (getEl('scenario-timed-enabled')) 
+                    getEl('scenario-timed-enabled').checked = !!draft.timedFollowup.enabled;
+                if (typeof draft.timedFollowup.delaySeconds === 'number' && getEl('scenario-timed-delay')) 
+                    getEl('scenario-timed-delay').value = draft.timedFollowup.delaySeconds;
+                if (typeof draft.timedFollowup.extensionSeconds === 'number' && getEl('scenario-timed-extension')) 
+                    getEl('scenario-timed-extension').value = draft.timedFollowup.extensionSeconds;
+                if (Array.isArray(draft.timedFollowup.messages) && draft.timedFollowup.messages.length > 0 && getEl('scenario-timed-messages')) 
+                    getEl('scenario-timed-messages').value = draft.timedFollowup.messages.join('\n');
             }
 
             // ═══════════════════════════════════════════════════════════════════
