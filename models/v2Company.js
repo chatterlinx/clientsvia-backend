@@ -1176,6 +1176,308 @@ const companySchema = new mongoose.Schema({
         }],
         
         // -------------------------------------------------------------------
+        // CHEAT SHEET - Company-specific behavior rules and protocols
+        // -------------------------------------------------------------------
+        // PURPOSE: Layer of company-specific behavior on top of shared scenarios
+        // ARCHITECTURE: Scenarios = WHAT to say (shared), Cheat Sheet = HOW to say it (custom)
+        // PRECEDENCE: EdgeCase → Transfer → Guardrails → Behavior (strict, deterministic)
+        // PERFORMANCE: Compiled to runtime artifact, sub-10ms application budget
+        // LEARNING: Separate learning loop from scenarios, both active and complementary
+        // -------------------------------------------------------------------
+        cheatSheet: {
+            // METADATA & VERSIONING
+            version: { 
+                type: Number, 
+                default: 1,
+                min: 1
+                // Incremented on each compilation
+            },
+            status: {
+                type: String,
+                enum: ['draft', 'active'],
+                default: 'draft'
+                // draft = being edited, active = live in production
+            },
+            updatedBy: {
+                type: String,
+                trim: true,
+                default: null
+                // Email of admin who last edited
+            },
+            updatedAt: {
+                type: Date,
+                default: Date.now
+                // Last edit timestamp
+            },
+            lastCompiledAt: {
+                type: Date,
+                default: null
+                // When policy artifact was last generated
+            },
+            checksum: {
+                type: String,
+                trim: true,
+                default: null
+                // SHA-256 of compiled artifact for immutability
+            },
+            compileLock: {
+                type: String,
+                trim: true,
+                default: null
+                // UUID for optimistic locking during compilation
+                // Prevents race conditions when admin saves twice quickly
+            },
+            
+            // -------------------------------------------------------------------
+            // BEHAVIOR RULES - Deterministic tone/style flags
+            // -------------------------------------------------------------------
+            // Applied LAST in precedence chain (after guardrails)
+            // Format: Enum flags for O(1) lookup (no parsing)
+            // Examples: Prepend "Ok", inject {companyname}, confirm entities back
+            // -------------------------------------------------------------------
+            behaviorRules: [{
+                type: String,
+                enum: [
+                    'ACK_OK',              // Prepend "Ok" to responses
+                    'NEVER_INTERRUPT',     // Wait for caller pause
+                    'USE_COMPANY_NAME',    // Inject {companyname} in first-turn greeting
+                    'CONFIRM_ENTITIES',    // Repeat back collected info for verification
+                    'POLITE_PROFESSIONAL', // Formal tone, avoid contractions
+                    'WAIT_FOR_PAUSE'       // Delay before speaking (prevent talk-over)
+                ],
+                default: []
+            }],
+            
+            // -------------------------------------------------------------------
+            // EDGE CASES - Unusual caller inputs (highest precedence)
+            // -------------------------------------------------------------------
+            // Triggered: Pattern matching against caller input
+            // Precedence: HIGHEST (overrides everything if matched)
+            // Purpose: Handle "It's a machine", "System delay", etc.
+            // Learning: Separate queue suggests new edge cases from Tier-3 calls
+            // -------------------------------------------------------------------
+            edgeCases: [{
+                id: { 
+                    type: String, 
+                    required: true,
+                    trim: true
+                    // Unique ID for forensics/audit trail
+                },
+                name: { 
+                    type: String, 
+                    required: true,
+                    trim: true
+                    // Human-readable name (e.g., "Machine Detection")
+                },
+                triggerPatterns: [{
+                    type: String,
+                    lowercase: true,
+                    trim: true
+                    // Regex patterns: "machine|robot|ai"
+                    // Matched case-insensitively at runtime
+                }],
+                responseText: { 
+                    type: String, 
+                    required: true,
+                    maxlength: 500,
+                    trim: true
+                    // Pre-written response (no LLM, deterministic)
+                },
+                priority: { 
+                    type: Number, 
+                    default: 10,
+                    min: 1,
+                    max: 100
+                    // Lower number = higher priority
+                    // Used for conflict resolution (1 = highest)
+                },
+                enabled: { 
+                    type: Boolean, 
+                    default: true
+                    // Soft delete without losing data
+                },
+                createdAt: {
+                    type: Date,
+                    default: Date.now
+                },
+                createdBy: {
+                    type: String,
+                    trim: true,
+                    default: null
+                }
+            }],
+            
+            // -------------------------------------------------------------------
+            // TRANSFER RULES - Company-specific routing protocols
+            // -------------------------------------------------------------------
+            // Triggered: Intent tag matching + optional patterns
+            // Precedence: SECOND (after edge cases, before guardrails)
+            // Purpose: Custom transfer contacts, scripts, entity collection
+            // Learning: Suggests new transfer patterns from Tier-3 calls
+            // -------------------------------------------------------------------
+            transferRules: [{
+                id: { 
+                    type: String, 
+                    required: true,
+                    trim: true
+                    // Unique ID for forensics
+                },
+                intentTag: { 
+                    type: String, 
+                    required: true,
+                    enum: ['billing', 'emergency', 'scheduling', 'technical', 'general'],
+                    trim: true
+                    // Category of transfer (used for pattern matching)
+                },
+                contactNameOrQueue: { 
+                    type: String, 
+                    required: true,
+                    trim: true
+                    // "Steven Ferris, x105" or "billing_team"
+                },
+                phoneNumber: { 
+                    type: String, 
+                    trim: true,
+                    default: null
+                    // Direct phone number if not using queue
+                },
+                script: { 
+                    type: String, 
+                    required: true,
+                    maxlength: 300,
+                    trim: true
+                    // What AI says before transfer
+                    // Example: "Let me connect you to Steven Ferris. Please hold."
+                },
+                
+                // FIRST-CLASS ENTITY COLLECTION
+                // Collect info before transfer (name, phone, issue)
+                // Retry logic, validation patterns, escalation handling
+                collectEntities: [{
+                    name: { 
+                        type: String, 
+                        required: true,
+                        trim: true
+                        // Entity name: "name", "phone", "email", "issue"
+                    },
+                    type: { 
+                        type: String, 
+                        required: true,
+                        enum: ['PERSON', 'PHONE', 'EMAIL', 'DATE', 'TIME', 'ADDRESS', 'TEXT'],
+                        // Data type for validation + formatting
+                    },
+                    required: { 
+                        type: Boolean, 
+                        default: true
+                        // Must collect before proceeding?
+                    },
+                    prompt: { 
+                        type: String, 
+                        required: true,
+                        trim: true
+                        // "May I have your phone number?"
+                    },
+                    validationPattern: { 
+                        type: String, 
+                        trim: true,
+                        default: null
+                        // Regex: "^[0-9]{10}$" for phone validation
+                    },
+                    validationPrompt: { 
+                        type: String, 
+                        trim: true,
+                        default: null
+                        // Re-prompt: "Please provide a 10-digit phone number"
+                    },
+                    maxRetries: { 
+                        type: Number, 
+                        default: 2,
+                        min: 1,
+                        max: 5
+                        // How many attempts before escalation
+                    },
+                    escalateOnFail: { 
+                        type: Boolean, 
+                        default: true
+                        // If validation fails after maxRetries, transfer anyway?
+                    }
+                }],
+                
+                afterHoursOnly: { 
+                    type: Boolean, 
+                    default: false
+                    // Only apply this rule after business hours (7pm-7am)
+                },
+                priority: { 
+                    type: Number, 
+                    default: 10,
+                    min: 1,
+                    max: 100
+                    // Lower = higher priority (same as edge cases)
+                },
+                enabled: { 
+                    type: Boolean, 
+                    default: true
+                },
+                createdAt: {
+                    type: Date,
+                    default: Date.now
+                },
+                createdBy: {
+                    type: String,
+                    trim: true,
+                    default: null
+                }
+            }],
+            
+            // -------------------------------------------------------------------
+            // GUARDRAILS - Content filtering and safety (server-side enforcement)
+            // -------------------------------------------------------------------
+            // Applied: THIRD in precedence (after transfer rules)
+            // Purpose: Block unauthorized content (prices, phone numbers, medical advice)
+            // Format: Enum flags compiled to regex patterns
+            // Enforcement: Server-side only (LLM cannot override)
+            // -------------------------------------------------------------------
+            guardrails: [{
+                type: String,
+                enum: [
+                    'NO_PRICES',           // Block $ amounts not in approved variables
+                    'NO_DIAGNOSES',        // Block technical diagnostic language
+                    'NO_APOLOGIES_SPAM',   // Limit "sorry" to 1x per turn
+                    'NO_PHONE_NUMBERS',    // Block phone # unless in variables
+                    'NO_URLS',             // Block URLs unless whitelisted
+                    'NO_MEDICAL_ADVICE',   // Block medical terminology
+                    'NO_LEGAL_ADVICE',     // Block legal terminology
+                    'NO_INTERRUPTING'      // Never speak over caller
+                ],
+                default: []
+            }],
+            
+            // -------------------------------------------------------------------
+            // ACTION ALLOWLIST - Security boundary (what AI can do)
+            // -------------------------------------------------------------------
+            // Purpose: Whitelist of permitted actions per company
+            // Enforcement: Validated before execution (LLM can't invent actions)
+            // Audit: Unauthorized attempts logged to SecurityLog
+            // Default: Empty = no actions allowed (must explicitly enable)
+            // -------------------------------------------------------------------
+            allowedActions: [{
+                type: String,
+                enum: [
+                    'BOOK_APPT',           // Schedule appointments
+                    'TAKE_MESSAGE',        // Log caller info for callback
+                    'TRANSFER_BILLING',    // Transfer to billing contact
+                    'TRANSFER_EMERGENCY',  // Transfer to emergency line
+                    'TRANSFER_GENERAL',    // Transfer to main queue
+                    'COLLECT_INFO',        // Collect caller information
+                    'PROVIDE_HOURS',       // Share business hours
+                    'PROVIDE_PRICING'      // Share pricing from variables
+                ],
+                default: []
+            }]
+        },
+        
+        // -------------------------------------------------------------------
         // VARIABLE SCAN STATUS - Enterprise scan tracking
         // -------------------------------------------------------------------
         variableScanStatus: {
