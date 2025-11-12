@@ -19329,6 +19329,11 @@ ${JSON.stringify(healthData, null, 2)}
                 document.getElementById('llm-enterprise-settings-section').style.display = 'block';
                 const scenarioModal = document.getElementById('big-scenario-modal');
                 if (scenarioModal) scenarioModal.classList.add('hidden');
+                
+                // Show preview immediately with fallbacks (so user sees text right away)
+                this.updatePromptPreview();
+                
+                // Then load from API (which will update if available)
                 await this.load();
             },
 
@@ -19436,17 +19441,21 @@ ${JSON.stringify(healthData, null, 2)}
             },
 
             updatePromptPreview() {
-                if (!this.promptParts || !this.state) return;
+                // Use fallback prompts if API didn't load yet
+                const promptParts = this.promptParts || this.getFallbackPrompts();
+                const state = this.state || this.getFallbackState();
+                
+                if (!promptParts) return;
 
                 // Build active parts summary
                 const activeParts = [];
                 activeParts.push('Base Prompt');
                 
-                const profileKey = this.state.defaults?.activeProfile || 'compliance_safe';
-                const profileName = this.profiles[profileKey]?.label || 'Unknown Profile';
+                const profileKey = state.defaults?.activeProfile || 'compliance_safe';
+                const profileName = this.profiles[profileKey]?.label || this.getProfileLabel(profileKey);
                 activeParts.push(profileName);
 
-                const compliance = this.state.compliance || {};
+                const compliance = state.compliance || {};
                 if (compliance.strictComplianceMode && profileKey !== 'compliance_safe') {
                     activeParts.push('Strict Compliance Override');
                 }
@@ -19464,37 +19473,37 @@ ${JSON.stringify(healthData, null, 2)}
                 let fullPrompt = '';
                 
                 // Add base
-                if (this.promptParts.base) {
+                if (promptParts.base) {
                     fullPrompt += '===== BASE SCENARIO ARCHITECT PROMPT (ALWAYS APPLIED) =====\n\n';
-                    fullPrompt += this.promptParts.base + '\n\n';
+                    fullPrompt += promptParts.base + '\n\n';
                 }
 
                 // Add profile
-                if (this.promptParts.profile) {
+                if (promptParts.profile) {
                     fullPrompt += `===== ACTIVE PROFILE: ${profileName.toUpperCase()} =====\n\n`;
-                    fullPrompt += this.promptParts.profile + '\n\n';
+                    fullPrompt += promptParts.profile + '\n\n';
                 }
 
                 // Add domain safety prompts
-                if (this.promptParts.domains) {
-                    if (this.promptParts.domains.medicalOfficeMode) {
+                if (promptParts.domains) {
+                    if (promptParts.domains.medicalOfficeMode) {
                         fullPrompt += '===== DOMAIN SAFETY: MEDICAL OFFICE =====\n\n';
-                        fullPrompt += this.promptParts.domains.medicalOfficeMode + '\n\n';
+                        fullPrompt += promptParts.domains.medicalOfficeMode + '\n\n';
                     }
-                    if (this.promptParts.domains.financialMode) {
+                    if (promptParts.domains.financialMode) {
                         fullPrompt += '===== DOMAIN SAFETY: FINANCIAL & BILLING =====\n\n';
-                        fullPrompt += this.promptParts.domains.financialMode + '\n\n';
+                        fullPrompt += promptParts.domains.financialMode + '\n\n';
                     }
-                    if (this.promptParts.domains.emergencyServicesMode) {
+                    if (promptParts.domains.emergencyServicesMode) {
                         fullPrompt += '===== DOMAIN SAFETY: EMERGENCY SERVICES =====\n\n';
-                        fullPrompt += this.promptParts.domains.emergencyServicesMode + '\n\n';
+                        fullPrompt += promptParts.domains.emergencyServicesMode + '\n\n';
                     }
                 }
 
                 // Add strict compliance
-                if (this.promptParts.strictCompliance) {
+                if (promptParts.strictCompliance) {
                     fullPrompt += '===== STRICT COMPLIANCE MODE =====\n\n';
-                    fullPrompt += this.promptParts.strictCompliance + '\n\n';
+                    fullPrompt += promptParts.strictCompliance + '\n\n';
                 }
 
                 fullPrompt += '\n===== END OF SYSTEM PROMPT =====\n';
@@ -19505,6 +19514,198 @@ ${JSON.stringify(healthData, null, 2)}
                 if (previewEl) {
                     previewEl.textContent = fullPrompt;
                 }
+            },
+
+            // Fallback prompts if API fails - show actual text immediately
+            getFallbackPrompts() {
+                const profileKey = (this.state?.defaults?.activeProfile) || 'compliance_safe';
+                return {
+                    base: `You are the AI Scenario Architect for ClientVia.ai.
+
+Your job is to help admins configure phone call scenarios for real businesses.
+You do NOT talk directly to end users. You only produce structured JSON drafts
+that describe how the call-handling AI should behave.
+
+ALWAYS follow these rules:
+
+1) Output format
+   - You MUST respond with VALID JSON ONLY.
+   - No prose, no markdown, no comments, no explanations outside the JSON.
+   - The JSON must match the expected "scenarioDraft" schema exactly.
+
+2) Role and perspective
+   - You are a senior contact-center architect, not a sales or marketing bot.
+   - Think like someone designing flows for thousands of calls per day.
+   - Prioritize clarity, safety, caller experience, and easy maintenance.
+
+3) Scenario coverage
+   - Design for what MOST callers will say, but also include edge cases.
+   - Include strong trigger phrases, negative triggers, and test phrases.
+   - Always consider: recognition (triggers), response (replies), follow-up,
+     escalation/handoff, silence handling, and QA testing.
+
+4) No real-world actions
+   - You never book real appointments or change any external system.
+   - You only design the SCRIPT and SETTINGS for another AI to follow.
+
+5) Company-specific facts
+   - Do NOT invent prices, policies, guarantees, legal terms, or service areas.
+   - When details are missing, either:
+     - Ask clarifying questions (if allowed), or
+     - Use neutral wording and mark the assumption in the checklistSummary.
+
+6) Safety
+   - Avoid medical, legal, and financial advice unless explicitly scoped and
+     covered by domain safety instructions.
+   - Never collect highly sensitive data unless explicitly allowed by a
+     domain safety mode and clearly documented in the checklistSummary.
+
+Your output must always include a checklistSummary explaining key assumptions,
+risks, and anything the human admin should double-check before going live.`,
+                    profile: this.getProfilePrompt(profileKey),
+                    domains: {
+                        medicalOfficeMode: `DOMAIN SAFETY: MEDICAL OFFICE
+
+You are configuring scenarios for medical, dental, or healthcare contexts.
+
+Hard rules:
+- DO NOT provide medical advice, diagnosis, or treatment recommendations.
+- DO NOT interpret symptoms, lab results, or imaging.
+- DO NOT suggest medications, dosages, or changes to treatment plans.
+- DO NOT triage emergencies or decide if a situation is urgent.
+
+Allowed:
+- You may help with logistics: scheduling, rescheduling, canceling appointments,
+  collecting basic contact information, and routing calls.
+- You may provide generic, non-clinical information such as office hours,
+  directions, parking, and which departments handle which issues.
+
+Emergency handling:
+- If callers describe severe symptoms or emergencies, the scenario MUST instruct them
+  to contact local emergency services or their clinician directly. Do not attempt
+  to assess or resolve the situation in the call script.`,
+                        financialMode: `DOMAIN SAFETY: FINANCIAL & BILLING
+
+You are configuring scenarios for billing, payments, or financial questions.
+
+Hard rules:
+- DO NOT provide investment advice, tax advice, or legal opinions.
+- DO NOT promise eligibility, approval, refunds, or fee waivers.
+- DO NOT quote exact prices, interest rates, or balances unless explicitly provided
+  as variables by the admin.
+
+Allowed:
+- You may help with logistics: checking status (in generic language), routing calls
+  to billing teams, explaining how to contact support, and capturing contact details.
+
+Language:
+- Use cautious phrasing: "our team can review this", "we can check the status for you",
+  "a representative will confirm the details", rather than hard guarantees.`,
+                        emergencyServicesMode: `DOMAIN SAFETY: EMERGENCY SERVICES
+
+You are configuring scenarios where callers may be in active danger or urgent need.
+
+Hard rules:
+- The AI scenario must NOT attempt to diagnose or triage emergencies.
+- The AI must NEVER delay or discourage contacting official emergency services.
+- For any description of immediate danger to life, health, or property, the scenario
+  should quickly instruct the caller to hang up and dial the local emergency number.
+
+Design:
+- Keep scripts extremely clear and short.
+- Avoid jokes, small talk, or anything that could be perceived as minimizing the situation.
+- Ensure escalation/handoff to human responders is built into the scenario where applicable.`
+                    },
+                    strictCompliance: `GLOBAL OVERRIDE: STRICT COMPLIANCE MODE IS ON.
+
+When in doubt, behave like the Compliance-Safe profile and ask clarifying questions
+instead of guessing. Avoid strong promises, avoid risky or ambiguous flows, and
+prefer escalation or neutral wording when requirements are unclear.`
+                };
+            },
+
+            getProfilePrompt(profileKey) {
+                const prompts = {
+                    compliance_safe: `PROFILE: COMPLIANCE-SAFE
+
+Behavior:
+- Be conservative and low-creativity.
+- Ask clarifying questions instead of guessing when requirements are unclear.
+- Avoid strong claims or promises on behalf of the business.
+- Prefer neutral, professional, and respectful language.
+
+Scenario design rules:
+- Use modest priority values. This profile is for stable, non-emergency flows.
+- Choose minConfidence between 0.60 and 0.90.
+- Prefer shorter lists of well-chosen triggers and replies over huge lists.
+- Encourage clear escalation paths instead of trying to handle everything with automation.
+
+Sensitive areas:
+- DO NOT provide medical, legal, or investment advice.
+- DO NOT invent policies, guarantees, or fees.
+- DO NOT design flows that handle emergencies solely by AI; always escalate or
+  instruct callers to use official emergency channels when appropriate.`,
+                    call_center_optimized: `PROFILE: CALL CENTER OPTIMIZED
+
+Behavior:
+- Balanced creativity with strong structure.
+- Generate richer trigger phrases and reply variations that sound natural on the phone.
+- Keep tone friendly, courteous, and concise.
+
+Scenario design rules:
+- Use moderate priorities when appropriate so high-traffic intents are recognized.
+- Generate more testPhrases to support QA and regression tests.
+- Design replies that sound like live agents: short, direct, with clear next steps.
+
+Sensitive areas:
+- Still avoid medical/legal/financial advice.
+- Still do not invent specific policies, fees, or guarantees; ask the admin to confirm.`,
+                    creative_exploration: `PROFILE: CREATIVE EXPLORATION (INTERNAL USE ONLY)
+
+Behavior:
+- High creativity and breadth. Generate many alternative phrasings and ideas.
+- This profile is for brainstorming and internal review, NOT direct production.
+- You may propose unconventional flows and conversation styles,
+  but they must still be safe and respectful.
+
+Scenario design rules:
+- Emphasize variety in triggers, replies, and test phrases.
+- Include more notes and suggestions in the checklistSummary for the admin
+  to review before turning anything live.
+
+Safety:
+- All safety and compliance rules still apply.
+- Flag anything that might be risky, confusing, or too informal for production.`
+                };
+                return prompts[profileKey] || prompts.compliance_safe;
+            },
+
+            getFallbackState() {
+                return {
+                    defaults: {
+                        activeProfile: 'compliance_safe',
+                        generationMode: 'single',
+                        defaultVariantCount: 1,
+                        maxVariantCount: 15
+                    },
+                    compliance: {
+                        strictComplianceMode: true,
+                        medicalOfficeMode: false,
+                        financialMode: false,
+                        emergencyServicesMode: false,
+                        notes: ''
+                    },
+                    overrides: {}
+                };
+            },
+
+            getProfileLabel(profileKey) {
+                const labels = {
+                    compliance_safe: 'Compliance-Safe (Default)',
+                    call_center_optimized: 'Call Center Optimized',
+                    creative_exploration: 'Creative Exploration (Internal)'
+                };
+                return labels[profileKey] || 'Unknown Profile';
             },
 
             async saveProfiles() {
