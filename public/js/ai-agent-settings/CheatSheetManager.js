@@ -174,13 +174,22 @@ class CheatSheetManager {
                 The intelligent command layer that processes EVERY call before routing
               </p>
             </div>
-            <button 
-              onclick="cheatSheetManager.resetFrontlineIntel()" 
-              class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium flex items-center space-x-2"
-            >
-              <span>🔄</span>
-              <span>Reset to Default</span>
-            </button>
+            <div class="flex items-center space-x-3">
+              <button 
+                onclick="cheatSheetManager.openFullEditor()" 
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center space-x-2"
+              >
+                <span>📝</span>
+                <span>Open Full Editor</span>
+              </button>
+              <button 
+                onclick="cheatSheetManager.resetFrontlineIntel()" 
+                class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium flex items-center space-x-2"
+              >
+                <span>🔄</span>
+                <span>Reset to Default</span>
+              </button>
+            </div>
           </div>
         </div>
         
@@ -958,6 +967,44 @@ class CheatSheetManager {
       console.error('[CHEAT SHEET] Reset failed:', error);
       this.showNotification(`Failed to reset: ${error.message}`, 'error');
     }
+  }
+  
+  /**
+   * Open Full Screen Editor for Frontline-Intel
+   * Opens a new window with a large textarea for easier editing
+   */
+  openFullEditor() {
+    if (!this.companyId) {
+      this.showNotification('Error: No company ID', 'error');
+      return;
+    }
+    
+    const width = Math.min(1400, window.screen.availWidth * 0.9);
+    const height = Math.min(900, window.screen.availHeight * 0.9);
+    const left = (window.screen.availWidth - width) / 2;
+    const top = (window.screen.availHeight - height) / 2;
+    
+    const editorWindow = window.open(
+      `/frontline-intel-editor.html?companyId=${this.companyId}`,
+      'FrontlineIntelEditor',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+    
+    if (!editorWindow) {
+      this.showNotification('❌ Please allow popups for this site', 'error');
+      return;
+    }
+    
+    // Listen for updates from the editor
+    window.addEventListener('message', (event) => {
+      if (event.data.type === 'frontlineIntelUpdated') {
+        console.log('[CHEAT SHEET] Frontline-Intel updated from full editor');
+        // Reload to get latest data
+        this.load(this.companyId);
+      }
+    });
+    
+    console.log('[CHEAT SHEET] Opened full screen editor');
   }
   
   // ═══════════════════════════════════════════════════════════════════

@@ -723,5 +723,16 @@ router.post('/:companyId/reset-instructions', authenticateJWT, async (req, res) 
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════
+// POST /api/admin/cheat-sheet/:companyId/reset-frontline-intel
+// ═══════════════════════════════════════════════════════════════════
+// Alias for reset-instructions (for consistency)
+// ═══════════════════════════════════════════════════════════════════
+router.post('/:companyId/reset-frontline-intel', authenticateJWT, async (req, res) => {
+  // Just proxy to the existing reset-instructions endpoint
+  req.url = `/${req.params.companyId}/reset-instructions`;
+  return router.handle(req, res);
+});
+
 module.exports = router;
 
