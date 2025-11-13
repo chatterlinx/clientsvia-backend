@@ -34,7 +34,7 @@ class CallFlowManager {
     console.log('[CALL FLOW] Loading config for company:', companyId);
     
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('adminToken');
       const response = await fetch(`/api/admin/call-flow/${companyId}`, {
         method: 'GET',
         headers: {
@@ -429,7 +429,7 @@ class CallFlowManager {
     console.log('[CALL FLOW] Saving changes...');
     
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('adminToken');
       const response = await fetch(`/api/admin/call-flow/${this.companyId}`, {
         method: 'PUT',
         headers: {
@@ -481,7 +481,7 @@ class CallFlowManager {
     console.log('[CALL FLOW] Resetting to defaults...');
     
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('adminToken');
       const response = await fetch(`/api/admin/call-flow/${this.companyId}/reset`, {
         method: 'POST',
         headers: {
