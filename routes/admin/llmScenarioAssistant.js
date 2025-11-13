@@ -362,6 +362,14 @@ function normalizeSynonyms(input) {
  */
 router.post('/draft', async (req, res) => {
   try {
+    // Check if OpenAI is available
+    if (!openaiClient) {
+      return res.status(503).json({
+        success: false,
+        error: 'OpenAI service is not configured. Please set OPENAI_API_KEY environment variable.',
+      });
+    }
+    
     const {
       description,
       conversationLog = [],
@@ -958,6 +966,14 @@ Otherwise, return status="ready" with a comprehensive "draft" object.`.trim();
  */
 router.get('/suggestions', async (req, res) => {
   try {
+    // Check if OpenAI is available
+    if (!openaiClient) {
+      return res.status(503).json({
+        success: false,
+        error: 'OpenAI service is not configured. Please set OPENAI_API_KEY environment variable.',
+      });
+    }
+    
     const {
       categoryName = 'General',
       categoryDescription = '',

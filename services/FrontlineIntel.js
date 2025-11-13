@@ -265,6 +265,11 @@ CRITICAL: Return ONLY the JSON object, no other text before or after!`;
      * Call OpenAI LLM with retry logic
      */
     static async callLLMWithRetry(systemPrompt, userInput, params, startTime) {
+        // Check if OpenAI client is available
+        if (!openai) {
+            throw new Error('OpenAI client not initialized - check OPENAI_API_KEY environment variable');
+        }
+        
         const model = params.model || 'gpt-4o-mini';
         const timeout = params.timeout || 5000;
         const retries = params.retries || 1;

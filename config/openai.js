@@ -11,8 +11,8 @@
  * 
  * Environment: OPENAI_API_KEY
  * 
- * IMPORTANT: Uses lazy initialization to prevent server crashes if API key
- * is not available during module load. Client is created on first use.
+ * IMPORTANT: Safe initialization - server will start even if API key is missing.
+ * OpenAI features will fail gracefully with proper error messages.
  * ============================================================================
  */
 
@@ -21,28 +21,20 @@ const logger = require('../utils/logger');
 
 let openaiClient = null;
 
-function getOpenAIClient() {
-  if (!openaiClient) {
-    if (!process.env.OPENAI_API_KEY) {
-      logger.error('❌ [OPENAI] OPENAI_API_KEY environment variable is not set!');
-      throw new Error('OPENAI_API_KEY is required but not configured');
-    }
-    
+// Initialize OpenAI client safely (won't crash server if key is missing)
+try {
+  if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim() !== '') {
     openaiClient = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
-    
     logger.info('🤖 [OPENAI] Client initialized successfully');
+  } else {
+    logger.warn('⚠️ [OPENAI] OPENAI_API_KEY not configured - LLM features will be unavailable');
   }
-  
-  return openaiClient;
+} catch (error) {
+  logger.error('❌ [OPENAI] Failed to initialize OpenAI client:', error.message);
+  openaiClient = null;
 }
 
-// For backward compatibility, export a Proxy that lazily initializes
-module.exports = new Proxy({}, {
-  get(target, prop) {
-    const client = getOpenAIClient();
-    return client[prop];
-  }
-});
+module.exports = openaiClient;
 
