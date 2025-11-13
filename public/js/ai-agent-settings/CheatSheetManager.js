@@ -70,7 +70,7 @@ class CheatSheetManager {
       updatedBy: 'admin',
       updatedAt: new Date().toISOString(),
       
-      companyInstructions: null, // Will be populated from backend with default template
+      frontlineIntel: null, // Will be populated from backend with default template
       behaviorRules: [],
       edgeCases: [],
       transferRules: [],
@@ -156,7 +156,7 @@ class CheatSheetManager {
     const container = document.getElementById('company-instructions-section');
     if (!container) return;
     
-    const instructions = this.cheatSheet.companyInstructions || '';
+    const instructions = this.cheatSheet.frontlineIntel || '';
     const charCount = instructions.length;
     
     container.innerHTML = `
@@ -167,15 +167,15 @@ class CheatSheetManager {
           <div class="flex items-center justify-between">
             <div>
               <h3 class="text-lg font-semibold text-gray-900 flex items-center">
-                <span class="mr-2">📝</span>
-                Company Instructions
+                <span class="mr-2">🧠</span>
+                Frontline-Intel
               </h3>
               <p class="text-sm text-gray-600 mt-1">
-                Free-form natural language guidance for your AI agent's conversation behavior
+                The intelligent command layer that processes EVERY call before routing
               </p>
             </div>
             <button 
-              onclick="cheatSheetManager.resetCompanyInstructions()" 
+              onclick="cheatSheetManager.resetFrontlineIntel()" 
               class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium flex items-center space-x-2"
             >
               <span>🔄</span>
@@ -192,10 +192,10 @@ class CheatSheetManager {
             <div class="flex items-start space-x-3">
               <span class="text-blue-600 text-xl">💡</span>
               <div class="flex-1">
-                <h4 class="text-sm font-semibold text-blue-900 mb-1">What are Company Instructions?</h4>
+                <h4 class="text-sm font-semibold text-blue-900 mb-1">What is Frontline-Intel?</h4>
                 <p class="text-sm text-blue-800 mb-2">
-                  Company Instructions let you define your AI agent's personality, conversation protocols, and business-specific rules in plain English.
-                  No technical knowledge or regex required!
+                  Frontline-Intel is your AI receptionist - an intelligent gatekeeper that extracts intent, looks up customers, validates company/service, and normalizes input before routing.
+                  Acts like a human front desk, but smarter!
                 </p>
                 <ul class="text-sm text-blue-800 space-y-1">
                   <li>• <strong>Conversational Tone:</strong> "Never interrupt the caller", "Always say 'Ok' instead of 'Got it!'"</li>
@@ -218,8 +218,8 @@ class CheatSheetManager {
             <textarea 
               id="company-instructions-textarea"
               class="w-full h-96 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm resize-y"
-              placeholder="Enter your company-specific instructions here..."
-              onchange="cheatSheetManager.updateCompanyInstructions()"
+              placeholder="Enter your Frontline-Intel protocols here..."
+              onchange="cheatSheetManager.updateFrontlineIntel()"
             >${instructions}</textarea>
             
             <!-- Character Counter -->
@@ -236,16 +236,16 @@ class CheatSheetManager {
           <!-- Action Buttons -->
           <div class="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
             <button 
-              onclick="cheatSheetManager.resetCompanyInstructions()" 
+              onclick="cheatSheetManager.resetFrontlineIntel()" 
               class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
             >
               🔄 Reset to Default
             </button>
             <button 
-              onclick="cheatSheetManager.saveCompanyInstructions()" 
+              onclick="cheatSheetManager.saveFrontlineIntel()" 
               class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
             >
-              💾 Save Instructions
+              💾 Save Frontline-Intel
             </button>
           </div>
           
@@ -258,33 +258,33 @@ class CheatSheetManager {
   // COMPANY INSTRUCTIONS HANDLERS
   // ═══════════════════════════════════════════════════════════════════
   
-  updateCompanyInstructions() {
+  updateFrontlineIntel() {
     const textarea = document.getElementById('company-instructions-textarea');
     if (!textarea) return;
     
-    this.cheatSheet.companyInstructions = textarea.value;
+    this.cheatSheet.frontlineIntel = textarea.value;
     this.markDirty();
     
     console.log('[CHEAT SHEET] Company instructions updated:', textarea.value.length, 'characters');
   }
   
-  async saveCompanyInstructions() {
-    console.log('[CHEAT SHEET] Saving company instructions...');
+  async saveFrontlineIntel() {
+    console.log('[CHEAT SHEET] Saving Frontline-Intel...');
     
     const textarea = document.getElementById('company-instructions-textarea');
     if (!textarea) return;
     
-    this.cheatSheet.companyInstructions = textarea.value;
+    this.cheatSheet.frontlineIntel = textarea.value;
     
     await this.save();
-    this.showNotification('✅ Company instructions saved successfully!', 'success');
+    this.showNotification('✅ Frontline-Intel saved successfully!', 'success');
   }
   
-  async resetCompanyInstructions() {
+  async resetFrontlineIntel() {
     const confirmed = confirm(
-      '🔄 Reset Company Instructions to Default Template?\n\n' +
+      '🔄 Reset Frontline-Intel to Default Template?\n\n' +
       'This will restore the professional starter template.\n' +
-      'Your custom instructions will be replaced.\n\n' +
+      'Your custom Frontline-Intel protocols will be replaced.\n\n' +
       'Continue?'
     );
     
@@ -307,13 +307,13 @@ class CheatSheetManager {
       const result = await response.json();
       
       // Update local state
-      this.cheatSheet.companyInstructions = result.companyInstructions;
+      this.cheatSheet.frontlineIntel = result.frontlineIntel;
       
       // Re-render to show updated instructions
       this.renderCompanyInstructions();
       this.markDirty();
       
-      this.showNotification('✅ Company instructions reset to default template!', 'success');
+      this.showNotification('✅ Frontline-Intel reset to default template!', 'success');
       
     } catch (error) {
       console.error('[CHEAT SHEET] Reset failed:', error);

@@ -14,7 +14,7 @@ const PolicyCompiler = require('../../services/PolicyCompiler');
 const CheatSheetEngine = require('../../services/CheatSheetEngine');
 const { authenticateJWT } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
-const defaultCompanyInstructions = require('../../config/defaultCompanyInstructions');
+const defaultFrontlineIntel = require('../../config/defaultFrontlineIntel');
 
 // ═══════════════════════════════════════════════════════════════════
 // GET /api/admin/cheat-sheet/:companyId
@@ -40,7 +40,7 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
     const cheatSheet = company.aiAgentSettings?.cheatSheet || {
       version: 1,
       status: 'draft',
-      companyInstructions: null,
+      frontlineIntel: null,
       behaviorRules: [],
       edgeCases: [],
       transferRules: [],
@@ -48,9 +48,9 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
       allowedActions: []
     };
     
-    // If companyInstructions is null/empty, provide default template
-    if (!cheatSheet.companyInstructions) {
-      cheatSheet.companyInstructions = defaultCompanyInstructions;
+    // If frontlineIntel is null/empty, provide default template
+    if (!cheatSheet.frontlineIntel) {
+      cheatSheet.frontlineIntel = defaultFrontlineIntel;
     }
     
     logger.info('[CHEAT SHEET API] Fetch successful', {
@@ -690,23 +690,23 @@ router.post('/:companyId/reset-instructions', authenticateJWT, async (req, res) 
       };
     }
     
-    // Reset company instructions to default template
-    company.aiAgentSettings.cheatSheet.companyInstructions = defaultCompanyInstructions;
+    // Reset Frontline-Intel to default template
+    company.aiAgentSettings.cheatSheet.frontlineIntel = defaultFrontlineIntel;
     company.aiAgentSettings.cheatSheet.status = 'draft'; // Mark as draft after reset
     company.aiAgentSettings.cheatSheet.updatedAt = new Date();
     company.aiAgentSettings.cheatSheet.updatedBy = req.user.email || req.user._id.toString();
     
     await company.save();
     
-    logger.info('[CHEAT SHEET API] Instructions reset successful', {
+    logger.info('[CHEAT SHEET API] Frontline-Intel reset successful', {
       companyId,
       resetBy: req.user.email || req.user._id.toString()
     });
     
     return res.json({
       success: true,
-      message: 'Company instructions reset to default template',
-      companyInstructions: defaultCompanyInstructions
+      message: 'Frontline-Intel reset to default template',
+      frontlineIntel: defaultFrontlineIntel
     });
     
   } catch (error) {
