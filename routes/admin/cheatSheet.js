@@ -14,6 +14,7 @@ const PolicyCompiler = require('../../services/PolicyCompiler');
 const CheatSheetEngine = require('../../services/CheatSheetEngine');
 const { authenticateJWT } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
+const defaultCompanyInstructions = require('../../config/defaultCompanyInstructions');
 
 // ═══════════════════════════════════════════════════════════════════
 // GET /api/admin/cheat-sheet/:companyId
@@ -39,12 +40,18 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
     const cheatSheet = company.aiAgentSettings?.cheatSheet || {
       version: 1,
       status: 'draft',
+      companyInstructions: null,
       behaviorRules: [],
       edgeCases: [],
       transferRules: [],
       guardrails: [],
       allowedActions: []
     };
+    
+    // If companyInstructions is null/empty, provide default template
+    if (!cheatSheet.companyInstructions) {
+      cheatSheet.companyInstructions = defaultCompanyInstructions;
+    }
     
     logger.info('[CHEAT SHEET API] Fetch successful', {
       companyId,
@@ -637,6 +644,76 @@ router.post('/export-json/:companyId', authenticateJWT, async (req, res) => {
     logger.error('[CHEAT SHEET API] Export failed', {
       companyId,
       error: error.message
+    });
+    
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /api/admin/cheat-sheet/:companyId/reset-instructions
+// ═══════════════════════════════════════════════════════════════════
+// Reset Company Instructions to default template
+// ═══════════════════════════════════════════════════════════════════
+
+router.post('/:companyId/reset-instructions', authenticateJWT, async (req, res) => {
+  const { companyId } = req.params;
+  
+  logger.info('[CHEAT SHEET API] Reset instructions request', { companyId });
+  
+  try {
+    const company = await Company.findById(companyId);
+    
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        error: 'Company not found'
+      });
+    }
+    
+    // Initialize aiAgentSettings if needed
+    if (!company.aiAgentSettings) {
+      company.aiAgentSettings = {};
+    }
+    if (!company.aiAgentSettings.cheatSheet) {
+      company.aiAgentSettings.cheatSheet = {
+        version: 1,
+        status: 'draft',
+        behaviorRules: [],
+        edgeCases: [],
+        transferRules: [],
+        guardrails: [],
+        allowedActions: []
+      };
+    }
+    
+    // Reset company instructions to default template
+    company.aiAgentSettings.cheatSheet.companyInstructions = defaultCompanyInstructions;
+    company.aiAgentSettings.cheatSheet.status = 'draft'; // Mark as draft after reset
+    company.aiAgentSettings.cheatSheet.updatedAt = new Date();
+    company.aiAgentSettings.cheatSheet.updatedBy = req.user.email || req.user._id.toString();
+    
+    await company.save();
+    
+    logger.info('[CHEAT SHEET API] Instructions reset successful', {
+      companyId,
+      resetBy: req.user.email || req.user._id.toString()
+    });
+    
+    return res.json({
+      success: true,
+      message: 'Company instructions reset to default template',
+      companyInstructions: defaultCompanyInstructions
+    });
+    
+  } catch (error) {
+    logger.error('[CHEAT SHEET API] Reset instructions failed', {
+      companyId,
+      error: error.message,
+      stack: error.stack
     });
     
     return res.status(500).json({

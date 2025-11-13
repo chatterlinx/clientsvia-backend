@@ -1323,6 +1323,30 @@ const companySchema = new mongoose.Schema({
             },
             
             // -------------------------------------------------------------------
+            // COMPANY INSTRUCTIONS - Free-form natural language guidance
+            // -------------------------------------------------------------------
+            // Purpose: Company-specific conversational protocols and behavior rules
+            // Scope: Per companyId (NOT global - isolated to this business)
+            // Format: Free-form text (natural language, no regex required)
+            // Usage: Passed to AI agent as high-priority system prompt instructions
+            // Precedence: HIGHER than structured rules (more specific guidance)
+            // Examples:
+            //   - "Never interrupt the caller"
+            //   - "Always say 'Ok' instead of 'Got it!'"
+            //   - "If caller says 'How are you?' respond with..."
+            //   - "Round appointment times to next hour + 2 hour buffer"
+            // -------------------------------------------------------------------
+            companyInstructions: {
+                type: String,
+                trim: true,
+                default: null
+                // Large text field for detailed conversational protocols
+                // Pre-filled with professional default template
+                // Fully editable by admin per company
+                // Can be reset to default via "Reset to Default" button
+            },
+            
+            // -------------------------------------------------------------------
             // BEHAVIOR RULES - Deterministic tone/style flags
             // -------------------------------------------------------------------
             // Applied LAST in precedence chain (after guardrails)

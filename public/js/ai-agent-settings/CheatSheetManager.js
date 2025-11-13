@@ -70,6 +70,7 @@ class CheatSheetManager {
       updatedBy: 'admin',
       updatedAt: new Date().toISOString(),
       
+      companyInstructions: null, // Will be populated from backend with default template
       behaviorRules: [],
       edgeCases: [],
       transferRules: [],
@@ -84,6 +85,7 @@ class CheatSheetManager {
   
   render() {
     this.renderStatus();
+    this.renderCompanyInstructions();
     this.renderBehaviorRules();
     this.renderEdgeCases();
     this.renderTransferRules();
@@ -144,6 +146,179 @@ class CheatSheetManager {
         </div>
       </div>
     `;
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // RENDER COMPANY INSTRUCTIONS
+  // ═══════════════════════════════════════════════════════════════════
+  
+  renderCompanyInstructions() {
+    const container = document.getElementById('company-instructions-section');
+    if (!container) return;
+    
+    const instructions = this.cheatSheet.companyInstructions || '';
+    const charCount = instructions.length;
+    
+    container.innerHTML = `
+      <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+        
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-gray-200 px-6 py-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <span class="mr-2">📝</span>
+                Company Instructions
+              </h3>
+              <p class="text-sm text-gray-600 mt-1">
+                Free-form natural language guidance for your AI agent's conversation behavior
+              </p>
+            </div>
+            <button 
+              onclick="cheatSheetManager.resetCompanyInstructions()" 
+              class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium flex items-center space-x-2"
+            >
+              <span>🔄</span>
+              <span>Reset to Default</span>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Content -->
+        <div class="p-6">
+          
+          <!-- Info Box -->
+          <div class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div class="flex items-start space-x-3">
+              <span class="text-blue-600 text-xl">💡</span>
+              <div class="flex-1">
+                <h4 class="text-sm font-semibold text-blue-900 mb-1">What are Company Instructions?</h4>
+                <p class="text-sm text-blue-800 mb-2">
+                  Company Instructions let you define your AI agent's personality, conversation protocols, and business-specific rules in plain English.
+                  No technical knowledge or regex required!
+                </p>
+                <ul class="text-sm text-blue-800 space-y-1">
+                  <li>• <strong>Conversational Tone:</strong> "Never interrupt the caller", "Always say 'Ok' instead of 'Got it!'"</li>
+                  <li>• <strong>Booking Protocols:</strong> "Round appointment times to next hour + 2 hour buffer"</li>
+                  <li>• <strong>Transfer Rules:</strong> "Before transferring, collect name, phone, and reason for call"</li>
+                  <li>• <strong>Emergency Handling:</strong> "If caller says 'emergency', connect immediately"</li>
+                </ul>
+                <p class="text-sm text-blue-700 mt-2 font-medium">
+                  ✏️ Fully customizable • 🔄 Resettable to default template • 📋 Works alongside structured rules
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Textarea -->
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              Instructions (Natural Language)
+            </label>
+            <textarea 
+              id="company-instructions-textarea"
+              class="w-full h-96 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm resize-y"
+              placeholder="Enter your company-specific instructions here..."
+              onchange="cheatSheetManager.updateCompanyInstructions()"
+            >${instructions}</textarea>
+            
+            <!-- Character Counter -->
+            <div class="flex items-center justify-between mt-2">
+              <span class="text-xs text-gray-500">
+                <strong>${charCount.toLocaleString()}</strong> characters
+              </span>
+              <span class="text-xs text-gray-400 italic">
+                Changes auto-save when you edit
+              </span>
+            </div>
+          </div>
+          
+          <!-- Action Buttons -->
+          <div class="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+            <button 
+              onclick="cheatSheetManager.resetCompanyInstructions()" 
+              class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+            >
+              🔄 Reset to Default
+            </button>
+            <button 
+              onclick="cheatSheetManager.saveCompanyInstructions()" 
+              class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+            >
+              💾 Save Instructions
+            </button>
+          </div>
+          
+        </div>
+      </div>
+    `;
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // COMPANY INSTRUCTIONS HANDLERS
+  // ═══════════════════════════════════════════════════════════════════
+  
+  updateCompanyInstructions() {
+    const textarea = document.getElementById('company-instructions-textarea');
+    if (!textarea) return;
+    
+    this.cheatSheet.companyInstructions = textarea.value;
+    this.markDirty();
+    
+    console.log('[CHEAT SHEET] Company instructions updated:', textarea.value.length, 'characters');
+  }
+  
+  async saveCompanyInstructions() {
+    console.log('[CHEAT SHEET] Saving company instructions...');
+    
+    const textarea = document.getElementById('company-instructions-textarea');
+    if (!textarea) return;
+    
+    this.cheatSheet.companyInstructions = textarea.value;
+    
+    await this.save();
+    this.showNotification('✅ Company instructions saved successfully!', 'success');
+  }
+  
+  async resetCompanyInstructions() {
+    const confirmed = confirm(
+      '🔄 Reset Company Instructions to Default Template?\n\n' +
+      'This will restore the professional starter template.\n' +
+      'Your custom instructions will be replaced.\n\n' +
+      'Continue?'
+    );
+    
+    if (!confirmed) return;
+    
+    console.log('[CHEAT SHEET] Resetting company instructions to default...');
+    
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`/api/admin/cheat-sheet/${this.companyId}/reset-instructions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) throw new Error('Reset failed');
+      
+      const result = await response.json();
+      
+      // Update local state
+      this.cheatSheet.companyInstructions = result.companyInstructions;
+      
+      // Re-render to show updated instructions
+      this.renderCompanyInstructions();
+      this.markDirty();
+      
+      this.showNotification('✅ Company instructions reset to default template!', 'success');
+      
+    } catch (error) {
+      console.error('[CHEAT SHEET] Reset failed:', error);
+      this.showNotification(`Failed to reset: ${error.message}`, 'error');
+    }
   }
   
   renderBehaviorRules() {
