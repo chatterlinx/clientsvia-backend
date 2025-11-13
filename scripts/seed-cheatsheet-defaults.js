@@ -44,7 +44,7 @@ const defaultEdgeCases = [
       'free cruise',
       'you have been chosen'
     ],
-    responseText: 'We don\'t accept unsolicited sales calls. Please remove us from your list. Goodbye.',
+    responseText: '{companyName} does not accept unsolicited sales calls. Please remove us from your list. Goodbye.',
     action: 'hang_up',
     priority: 9,
     enabled: true
@@ -93,7 +93,7 @@ const defaultEdgeCases = [
       '\\(multiple_voices\\)',
       '\\(call_center_ambient\\)'
     ],
-    responseText: 'We don\'t accept telemarketing calls. Goodbye.',
+    responseText: '{companyName} doesn\'t accept telemarketing calls. If you need HVAC service, please visit our office at {officeAddress}. Goodbye.',
     action: 'hang_up',
     priority: 8,
     enabled: true
@@ -143,9 +143,9 @@ const defaultTransferRules = [
   {
     name: 'Emergency Service Transfer',
     intentTag: 'emergency',
-    contactNameOrQueue: '{{EMERGENCY_CONTACT}}',
-    phoneNumber: '{{EMERGENCY_PHONE}}',
-    script: 'This sounds urgent. Let me connect you to our emergency service line right now.',
+    contactNameOrQueue: '{serviceAdvisorName}',
+    phoneNumber: '{emergencyPhone}',
+    script: 'This sounds urgent. Let me connect you to our emergency service line at {emergencyPhone} right now.',
     collectEntities: [
       {
         name: 'caller_name',
@@ -181,9 +181,9 @@ const defaultTransferRules = [
   {
     name: 'Billing Department Transfer',
     intentTag: 'billing',
-    contactNameOrQueue: '{{BILLING_CONTACT}}',
-    phoneNumber: '{{BILLING_PHONE}}',
-    script: 'Let me transfer you to our billing department. They\'ll take great care of you.',
+    contactNameOrQueue: 'Billing Department',
+    phoneNumber: '{billingPhone}',
+    script: 'Let me transfer you to our billing department at {billingPhone}. They\'ll take great care of you.',
     collectEntities: [
       {
         name: 'caller_name',
@@ -201,9 +201,9 @@ const defaultTransferRules = [
   {
     name: 'General Scheduling Transfer',
     intentTag: 'scheduling',
-    contactNameOrQueue: '{{SCHEDULING_CONTACT}}',
-    phoneNumber: '{{SCHEDULING_PHONE}}',
-    script: 'Perfect! Let me connect you with our scheduling team to book your appointment.',
+    contactNameOrQueue: 'Scheduling Team',
+    phoneNumber: '{schedulingPhone}',
+    script: 'Perfect! Let me connect you with {companyName} scheduling team at {schedulingPhone} to book your appointment.',
     collectEntities: [],
     afterHoursOnly: false,
     priority: 5,

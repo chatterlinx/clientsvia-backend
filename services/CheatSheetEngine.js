@@ -10,6 +10,7 @@
 // ============================================================================
 
 const logger = require('../utils/logger');
+const { replacePlaceholders } = require('../utils/placeholderReplacer');
 
 class CheatSheetEngine {
   
@@ -61,7 +62,13 @@ class CheatSheetEngine {
     const edgeCase = this.detectEdgeCase(userInput, deserializedPolicy.edgeCases);
     
     if (edgeCase) {
+      // ✨ VARIABLE REPLACEMENT - Replace {variables} in edge case response
       response = edgeCase.response;
+      if (response && context.company) {
+        logger.info('[CHEAT SHEET ENGINE] Replacing variables in edge case response...');
+        response = replacePlaceholders(response, context.company);
+      }
+      
       appliedBlocks.push({ 
         type: 'EDGE_CASE', 
         id: edgeCase.id,
@@ -192,7 +199,13 @@ class CheatSheetEngine {
         
       } else {
         // Transfer is authorized
+        // ✨ VARIABLE REPLACEMENT - Replace {variables} in transfer script
         response = transferRule.script;
+        if (response && context.company) {
+          logger.info('[CHEAT SHEET ENGINE] Replacing variables in transfer script...');
+          response = replacePlaceholders(response, context.company);
+        }
+        
         appliedBlocks.push({ 
           type: 'TRANSFER_RULE', 
           id: transferRule.id,
