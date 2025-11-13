@@ -311,6 +311,112 @@ class EnterpriseVariableScanService {
             }
             
             // ═══════════════════════════════════════════════════════════════
+            // STEP 3.5: Scan Frontline-Intel (NEW!)
+            // ═══════════════════════════════════════════════════════════════
+            logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 6.5: Scanning Frontline-Intel...`);
+            
+            const frontlineIntel = company.aiAgentSettings?.cheatSheet?.frontlineIntel || '';
+            let frontlineIntelReport = {
+                source: 'Frontline-Intel',
+                enabled: true,
+                charactersScanned: frontlineIntel.length,
+                variablesFound: {
+                    unique: 0,
+                    totalOccurrences: 0,
+                    breakdown: []
+                },
+                wordAnalysis: {
+                    totalWords: 0,
+                    uniqueWords: 0,
+                    placeholderWords: 0,
+                    regularWords: 0
+                }
+            };
+            
+            if (frontlineIntel && frontlineIntel.trim()) {
+                logger.info(`📝 [ENTERPRISE SCAN ${scanId}] Checkpoint 6.5.1: Frontline-Intel text: ${frontlineIntel.length} characters`);
+                
+                // Word count analysis
+                const words = frontlineIntel.toLowerCase().match(/\b\w+\b/g) || [];
+                const wordCount = words.length;
+                frontlineIntelReport.wordAnalysis.totalWords = wordCount;
+                totalWords += wordCount;
+                
+                const uniqueWordsInFI = new Set(words);
+                frontlineIntelReport.wordAnalysis.uniqueWords = uniqueWordsInFI.size;
+                words.forEach(word => uniqueWordsSet.add(word));
+                
+                // Extract {variables}
+                const variableMatches = frontlineIntel.match(/\{([a-zA-Z0-9_]+)\}/g) || [];
+                const variablesInFI = variableMatches.map(m => m.slice(1, -1)); // Remove { }
+                
+                frontlineIntelReport.wordAnalysis.placeholderWords = variableMatches.length;
+                totalPlaceholders += variableMatches.length;
+                
+                logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 6.5.2: Found ${variableMatches.length} variable occurrences in Frontline-Intel`);
+                
+                // SMART CASE-INSENSITIVE VARIABLE GROUPING (same as scenarios)
+                const uniqueVarsInFI = [...new Set(variablesInFI)];
+                uniqueVarsInFI.forEach(varKey => {
+                    const count = variablesInFI.filter(v => v === varKey).length;
+                    
+                    // Use lowercase as grouping key (case-insensitive)
+                    const normalizedKey = varKey.toLowerCase();
+                    
+                    if (!allVariables.has(normalizedKey)) {
+                        allVariables.set(normalizedKey, {
+                            normalizedKey: normalizedKey,
+                            preferredFormat: varKey,
+                            formatVariations: new Set([varKey]),
+                            formatCounts: { [varKey]: 0 },
+                            occurrences: 0,
+                            locations: []
+                        });
+                    }
+                    
+                    const varData = allVariables.get(normalizedKey);
+                    
+                    // Track this format variation
+                    varData.formatVariations.add(varKey);
+                    varData.formatCounts[varKey] = (varData.formatCounts[varKey] || 0) + count;
+                    varData.occurrences += count;
+                    
+                    // Update preferred format (most used format wins)
+                    const currentPreferredCount = varData.formatCounts[varData.preferredFormat] || 0;
+                    if (varData.formatCounts[varKey] > currentPreferredCount) {
+                        varData.preferredFormat = varKey;
+                    }
+                    
+                    varData.locations.push({
+                        source: 'Frontline-Intel',
+                        category: 'Cheat Sheet',
+                        location: 'Frontline-Intel Protocols',
+                        count,
+                        format: varKey
+                    });
+                    
+                    logger.info(`  📌 [ENTERPRISE SCAN ${scanId}] Variable {${varKey}} found ${count} time(s) in Frontline-Intel`);
+                });
+                
+                // Update report
+                frontlineIntelReport.variablesFound.unique = uniqueVarsInFI.length;
+                frontlineIntelReport.variablesFound.totalOccurrences = variableMatches.length;
+                frontlineIntelReport.variablesFound.breakdown = uniqueVarsInFI.map(varKey => ({
+                    key: varKey,
+                    occurrences: variablesInFI.filter(v => v === varKey).length
+                }));
+                frontlineIntelReport.wordAnalysis.regularWords = wordCount - variableMatches.length;
+                
+                logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 6.5.3: Frontline-Intel scan complete`);
+                logger.info(`📊 [ENTERPRISE SCAN ${scanId}] ${frontlineIntelReport.variablesFound.unique} unique variables, ${wordCount} words`);
+            } else {
+                logger.info(`ℹ️  [ENTERPRISE SCAN ${scanId}] Checkpoint 6.5.1: Frontline-Intel is empty - skipping`);
+            }
+            
+            // Add Frontline-Intel report to scanned sources
+            templatesScanned.push(frontlineIntelReport);
+            
+            // ═══════════════════════════════════════════════════════════════
             // STEP 4: Build Variable Definitions
             // ═══════════════════════════════════════════════════════════════
             logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 7: Building variable definitions...`);

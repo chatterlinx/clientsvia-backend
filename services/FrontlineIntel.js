@@ -30,6 +30,7 @@
 
 const openai = require('../config/openai');
 const logger = require('../utils/logger');
+const { replacePlaceholders } = require('../utils/placeholderReplacer');
 
 // Lazy-load to avoid circular dependencies
 let Contact;
@@ -161,11 +162,25 @@ class FrontlineIntel {
     
     /**
      * Build system prompt for Frontline-Intel LLM
+     * Now with VARIABLE REPLACEMENT! 🔥
      */
     static buildSystemPrompt(company) {
         const companyName = company?.businessName || company?.companyName || 'the company';
         const services = company?.services || ['HVAC services'];
-        const frontlineIntel = company?.aiAgentSettings?.cheatSheet?.frontlineIntel || '';
+        
+        // ═══════════════════════════════════════════════════════════
+        // VARIABLE REPLACEMENT 🎯
+        // ═══════════════════════════════════════════════════════════
+        // Get raw Frontline-Intel text
+        let frontlineIntel = company?.aiAgentSettings?.cheatSheet?.frontlineIntel || '';
+        
+        // Replace all {variables} with actual values from Variables tab
+        if (frontlineIntel) {
+            logger.info('🔄 [FRONTLINE-INTEL] Replacing variables in Frontline-Intel text...');
+            const originalLength = frontlineIntel.length;
+            frontlineIntel = replacePlaceholders(frontlineIntel, company);
+            logger.info(`✅ [FRONTLINE-INTEL] Variables replaced: ${originalLength} → ${frontlineIntel.length} chars`);
+        }
         
         return `You are the Frontline-Intel for ${companyName}.
 
