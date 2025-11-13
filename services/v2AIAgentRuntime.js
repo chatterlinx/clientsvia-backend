@@ -21,6 +21,11 @@ const PolicyCompiler = require('./PolicyCompiler');
 const CheatSheetEngine = require('./CheatSheetEngine');
 const SessionManager = require('./SessionManager');
 
+// ═══════════════════════════════════════════════════════════════════
+// FRONTLINE-INTEL - The Command Layer
+// ═══════════════════════════════════════════════════════════════════
+const FrontlineIntel = require('./FrontlineIntel');
+
 class V2AIAgentRuntime {
     
     /**
@@ -315,8 +320,78 @@ class V2AIAgentRuntime {
                 };
             }
 
-            // V2 Response Generation - uses new Agent Personality system
-            const baseResponse = await this.generateV2Response(userInput, company, callState);
+            // ─────────────────────────────────────────────────────────────
+            // 🎯 FRONTLINE-INTEL: The Command Layer (Phase 1)
+            // ─────────────────────────────────────────────────────────────
+            // Processes EVERY call before routing to scenarios
+            // - Extracts intent from messy input
+            // - Looks up customer (returning customer?)
+            // - Validates company/service
+            // - Short-circuits wrong numbers/services
+            // - Normalizes input for Tier 1/2/3
+            // ─────────────────────────────────────────────────────────────
+            let frontlineIntelResult = null;
+            let processedInput = userInput;  // Default to raw input
+            
+            try {
+                const callerPhone = callState.from || callState.callerPhone;
+                frontlineIntelResult = await FrontlineIntel.run(userInput, company, callerPhone);
+                
+                logger.info('[V2 AGENT] 🧠 Frontline-Intel complete', {
+                    companyId: companyID,
+                    callId,
+                    timeMs: frontlineIntelResult.timeMs,
+                    cost: frontlineIntelResult.cost?.toFixed(4),
+                    intent: frontlineIntelResult.detectedIntent,
+                    confidence: frontlineIntelResult.confidence,
+                    shortCircuit: frontlineIntelResult.shouldShortCircuit
+                });
+                
+                // If short-circuit detected (wrong number, wrong service, etc.)
+                if (frontlineIntelResult.shouldShortCircuit) {
+                    logger.warn('[V2 AGENT] ⚠️ Frontline-Intel short-circuit detected', {
+                        reason: frontlineIntelResult.callValidation?.reasoning,
+                        response: frontlineIntelResult.shortCircuitResponse?.substring(0, 100)
+                    });
+                    
+                    return {
+                        response: frontlineIntelResult.shortCircuitResponse,
+                        action: frontlineIntelResult.callValidation?.correctService === false ? 'hangup' : 'continue',
+                        callState: {
+                            ...callState,
+                            lastInput: userInput,
+                            lastResponse: frontlineIntelResult.shortCircuitResponse,
+                            frontlineIntel: frontlineIntelResult,
+                            shortCircuit: true
+                        },
+                        confidence: frontlineIntelResult.confidence,
+                        frontlineIntelMeta: {
+                            timeMs: frontlineIntelResult.timeMs,
+                            cost: frontlineIntelResult.cost,
+                            shortCircuit: true
+                        }
+                    };
+                }
+                
+                // Use cleaned input for routing
+                processedInput = frontlineIntelResult.cleanedInput || userInput;
+                
+                logger.info('[V2 AGENT] ✅ Using Frontline-Intel cleaned input', {
+                    original: userInput.substring(0, 100),
+                    cleaned: processedInput.substring(0, 100)
+                });
+                
+            } catch (frontlineErr) {
+                logger.error('[V2 AGENT] ❌ Frontline-Intel failed, using raw input', {
+                    companyId: companyID,
+                    callId,
+                    error: frontlineErr.message
+                });
+                // Continue with raw input (graceful degradation)
+            }
+
+            // V2 Response Generation - uses cleaned input from Frontline-Intel
+            const baseResponse = await this.generateV2Response(processedInput, company, callState);
             
             logger.info(`✅ V2 AGENT: Generated base response: "${baseResponse.text}"`);
             
@@ -389,6 +464,19 @@ class V2AIAgentRuntime {
                 lastResponse: finalResponse,
                 turnCount: (callState.turnCount || 0) + 1,
                 timestamp: new Date(),
+                
+                // Frontline-Intel metadata
+                frontlineIntel: frontlineIntelResult ? {
+                    cleanedInput: frontlineIntelResult.cleanedInput,
+                    intent: frontlineIntelResult.detectedIntent,
+                    confidence: frontlineIntelResult.confidence,
+                    customer: frontlineIntelResult.customer,
+                    context: frontlineIntelResult.context,
+                    timeMs: frontlineIntelResult.timeMs,
+                    cost: frontlineIntelResult.cost
+                } : null,
+                
+                // Cheat Sheet metadata
                 cheatSheetApplied: cheatSheetMeta !== null,
                 cheatSheetMeta
             };

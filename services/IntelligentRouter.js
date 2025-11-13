@@ -1122,19 +1122,20 @@ You are handling ${templateName} inquiries.
 Your role is to understand caller needs, provide helpful information, and guide them to the appropriate next step.`;
         
         // ═══════════════════════════════════════════════════════════
-        // LAYER 2: COMPANY INSTRUCTIONS (THE "WARM-UP" LAYER)
+        // LAYER 2: FRONTLINE-INTEL (THE "COMMAND LAYER")
         // ═══════════════════════════════════════════════════════════
-        // This is the PERSONALITY and TONE layer that makes the AI sound human
-        const companyInstructions = company?.aiAgentSettings?.cheatSheet?.companyInstructions;
+        // The intelligent gatekeeper protocols that make the AI sound human
+        // This is the PERSONALITY and TONE layer
+        const frontlineIntel = company?.aiAgentSettings?.cheatSheet?.frontlineIntel;
         
-        if (companyInstructions && companyInstructions.trim()) {
-            logger.info('🎭 [SYSTEM PROMPT] Adding Company Instructions (personality layer)');
+        if (frontlineIntel && frontlineIntel.trim()) {
+            logger.info('🎯 [SYSTEM PROMPT] Adding Frontline-Intel protocols (command layer)');
             systemPrompt += '\n\n' + '═'.repeat(60);
-            systemPrompt += '\n📋 COMPANY-SPECIFIC PROTOCOLS & CONVERSATION GUIDELINES\n';
+            systemPrompt += '\n📋 FRONTLINE-INTEL PROTOCOLS & CONVERSATION GUIDELINES\n';
             systemPrompt += '═'.repeat(60);
-            systemPrompt += '\n\n' + companyInstructions.trim();
+            systemPrompt += '\n\n' + frontlineIntel.trim();
         } else {
-            logger.info('ℹ️ [SYSTEM PROMPT] No Company Instructions - using base prompt only');
+            logger.info('ℹ️ [SYSTEM PROMPT] No Frontline-Intel protocols - using base prompt only');
         }
         
         // ═══════════════════════════════════════════════════════════

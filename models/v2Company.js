@@ -1336,69 +1336,88 @@ const companySchema = new mongoose.Schema({
             //   - "If caller says 'How are you?' respond with..."
             //   - "Round appointment times to next hour + 2 hour buffer"
             // -------------------------------------------------------------------
-            companyInstructions: {
+            // -------------------------------------------------------------------
+            // FRONTLINE-INTEL - The Command Layer (formerly Company Instructions)
+            // -------------------------------------------------------------------
+            // The intelligent gatekeeper that processes EVERY call before routing
+            // Acts as a human receptionist: thinks, verifies, organizes
+            // 
+            // Capabilities:
+            // - Listens to rambling, extracts key request
+            // - Looks up customer in database (returning customer?)
+            // - Validates: Right company? Right service?
+            // - Detects wrong number/service, politely redirects
+            // - Normalizes messy input for Tier 1/2/3 routing
+            // - Captures context for human-like responses
+            // 
+            // This is THE HUB - the intelligence layer that makes calls feel human
+            // -------------------------------------------------------------------
+            frontlineIntel: {
                 type: String,
                 trim: true,
                 default: null
-                // Large text field for detailed conversational protocols
+                // Large text field for Frontline-Intel protocols
                 // Pre-filled with professional default template
                 // Fully editable by admin per company
                 // Can be reset to default via "Reset to Default" button
+                // 
+                // Example protocols:
+                // - "Always say 'Ok' instead of 'Got it!'"
+                // - "Extract key request from long stories"
+                // - "If caller mentions wrong company, politely redirect"
+                // - "Look up customer by name or phone"
             },
             
             // -------------------------------------------------------------------
-            // CALL FLOW SEQUENCE - Dynamic execution order control
+            // CALL FLOW CONFIG - Dynamic execution order control
             // -------------------------------------------------------------------
-            // Allows admin to reorder the processing steps of incoming calls
-            // Simple priority-based system (no drag-and-drop complexity)
-            // Runtime sorts by priority and executes in order
-            // Each step can be enabled/disabled independently
+            // Allows per-company customization of call processing sequence
+            // Each step can be enabled/disabled and reordered
+            // System validates dependencies and warns about cost/time impacts
             // -------------------------------------------------------------------
-            flowSequence: [{
-                step: {
+            callFlowConfig: [{
+                id: {
                     type: String,
                     enum: [
-                        'spam_filter',      // Phone number blacklist/whitelist
-                        'edge_cases',       // AI spam, robocalls, dead air
-                        'transfer_rules',   // Emergency, billing, scheduling transfers
-                        'ai_routing',       // 3-tier intelligence (keywords → semantic → LLM)
-                        'guardrails',       // Content filtering (prices, phone numbers, etc.)
-                        'behavior_rules'    // Text polishing (ACK_OK, POLITE_PROFESSIONAL)
+                        'spamFilter',        // Phone number blacklist/whitelist (Layer 0, locked)
+                        'edgeCases',         // AI spam, robocalls, dead air detection
+                        'transferRules',     // Emergency, billing, scheduling transfers
+                        'frontlineIntel',    // THE HUB - intelligent gatekeeper
+                        'scenarioMatching',  // 3-tier intelligence (keywords → semantic → LLM)
+                        'guardrails',        // Content filtering (prices, phone numbers, etc.)
+                        'behaviorPolish',    // Text polishing (ACK_OK, POLITE_PROFESSIONAL)
+                        'contextInjection'   // Inject context from Frontline-Intel
                     ],
                     required: true
-                },
-                priority: {
-                    type: Number,
-                    required: true,
-                    min: 1,
-                    max: 100
-                    // Lower number = executes first
-                    // Default order: 1=spam, 2=edge, 3=transfer, 4=routing, 5=guardrails, 6=behavior
                 },
                 enabled: {
                     type: Boolean,
                     default: true
                     // If false, step is skipped during call processing
                 },
-                name: {
-                    type: String,
-                    trim: true
-                    // Human-readable name for UI display
-                },
-                description: {
-                    type: String,
-                    trim: true
-                    // Short description of what this step does
-                },
-                canDisable: {
+                locked: {
                     type: Boolean,
-                    default: true
-                    // Some steps (like spam_filter) might be mandatory
+                    default: false
+                    // If true, cannot be reordered (e.g., spamFilter always first)
                 },
-                canReorder: {
-                    type: Boolean,
-                    default: true
-                    // Some steps might have fixed positions
+                params: {
+                    type: Object,
+                    default: {}
+                    // Step-specific configuration
+                    // Example for frontlineIntel:
+                    // {
+                    //   model: "gpt-4o-mini",
+                    //   timeout: 5000,
+                    //   enableCustomerLookup: true,
+                    //   enableServiceValidation: true,
+                    //   maxCostPerCall: 0.01,
+                    //   fastPath: {
+                    //     enabled: false,
+                    //     patterns: [],
+                    //     minCallsBeforeEnable: 1000,
+                    //     minTier1HitRate: 0.90
+                    //   }
+                    // }
                 }
             }],
             
