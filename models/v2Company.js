@@ -2697,6 +2697,8 @@ const companySchema = new mongoose.Schema({
         // ========================================================================
         // BLACKLIST - Company-specific numbers to block
         // ========================================================================
+        // 🆕 ENHANCED SCHEMA (Nov 2025): Added auto-blacklist support
+        // ────────────────────────────────────────────────────────────────────────
         blacklist: [{
             phoneNumber: { type: String, required: true, trim: true },
             addedAt: { type: Date, default: Date.now },
@@ -2704,9 +2706,48 @@ const companySchema = new mongoose.Schema({
             reason: { type: String, trim: true, default: null },
             status: { 
                 type: String, 
-                enum: ['active', 'removed'], 
+                enum: ['active', 'removed', 'pending'],  // 'pending' = awaiting admin approval
                 default: 'active' 
-            }
+            },
+            
+            // ────────────────────────────────────────────────────────────────────
+            // 🤖 AUTO-BLACKLIST METADATA (Nov 2025)
+            // ────────────────────────────────────────────────────────────────────
+            // These fields track auto-detected spam numbers from edge case detection
+            source: { 
+                type: String, 
+                enum: ['manual', 'auto'], 
+                default: 'manual',
+                index: true  // Index for filtering UI (show manual vs auto)
+            },
+            detectionMethod: { 
+                type: String, 
+                enum: ['admin', 'edge_case', 'frequency', 'robocall', 'global_db'], 
+                default: 'admin' 
+            },
+            edgeCaseName: { 
+                type: String, 
+                trim: true, 
+                default: null  // e.g., "AI Telemarketer", "Robocall Detection"
+            },
+            
+            // ────────────────────────────────────────────────────────────────────
+            // 📊 BLOCKING STATISTICS
+            // ────────────────────────────────────────────────────────────────────
+            timesBlocked: { 
+                type: Number, 
+                default: 0  // Incremented each time this number is blocked
+            },
+            lastBlockedAt: { 
+                type: Date, 
+                default: null  // Most recent block timestamp
+            },
+            
+            // ────────────────────────────────────────────────────────────────────
+            // ✅ APPROVAL TRACKING (for pending entries)
+            // ────────────────────────────────────────────────────────────────────
+            approvedAt: { type: Date, default: null },
+            approvedBy: { type: String, trim: true, default: null }
         }],
         
         // ========================================================================
@@ -2750,7 +2791,40 @@ const companySchema = new mongoose.Schema({
             // ----------------------------------------------------------------
             blockInvalidNumbers: { type: Boolean, default: true },          // Format validation (e.g., non-E.164)
             frequencyThreshold: { type: Number, default: 5 },               // Max calls per 10 minutes
-            notifyOnBlock: { type: Boolean, default: false }                // Send email/SMS on block
+            notifyOnBlock: { type: Boolean, default: false },               // Send email/SMS on block
+            
+            // ----------------------------------------------------------------
+            // 🤖 AUTO-BLACKLIST SETTINGS (Nov 2025)
+            // ----------------------------------------------------------------
+            // Automatic blacklisting from edge case detection
+            autoBlacklistEnabled: { type: Boolean, default: false },        // Master toggle for auto-blacklist
+            autoBlacklistThreshold: { 
+                type: Number, 
+                default: 1,                                                  // Add to blacklist after N detections
+                min: 1,
+                max: 10
+            },
+            autoBlacklistTriggers: { 
+                type: [String], 
+                enum: [
+                    'ai_telemarketer',      // AI telemarketing script detected
+                    'robocall',             // Robocall/IVR system detected
+                    'dead_air',             // No response / dead air (risky - can be false positive)
+                    'ivr_system',           // Automated IVR menu detected
+                    'call_center_noise'     // Call center background noise detected
+                ],
+                default: ['ai_telemarketer', 'robocall']                     // Conservative defaults
+            },
+            requireAdminApproval: { 
+                type: Boolean, 
+                default: true                                                // If true, numbers added as 'pending' status
+            },
+            autoBlacklistExpiration: { 
+                type: Number, 
+                default: 0,                                                  // Days until auto-removal (0 = never expire)
+                min: 0,
+                max: 365
+            }
         },
         
         // ========================================================================

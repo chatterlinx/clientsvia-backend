@@ -465,6 +465,259 @@ class SmartCallFilter {
             return null;
         }
     }
+
+    /**
+     * ────────────────────────────────────────────────────────────────────────
+     * 🤖 AUTO-ADD TO BLACKLIST (from edge case detection)
+     * ────────────────────────────────────────────────────────────────────────
+     * Purpose: Automatically add spam numbers to blacklist when edge cases detect them
+     * 
+     * Flow:
+     * 1. Check if auto-blacklist is enabled for company
+     * 2. Verify number isn't already blacklisted or whitelisted
+     * 3. Check detection threshold (must be detected N times)
+     * 4. Add to blacklist with appropriate status (pending or active)
+     * 5. Clear Redis cache
+     * 6. Log comprehensive audit trail
+     * 
+     * @param {Object} data - Auto-blacklist data
+     * @param {String} data.companyId - Company MongoDB ID
+     * @param {String} data.phoneNumber - E.164 phone number to blacklist
+     * @param {String} data.edgeCaseName - Name of edge case that triggered detection
+     * @param {String} data.detectionMethod - Detection method (default: 'edge_case')
+     * @returns {Object} { success: boolean, status?: string, reason?: string, error?: string }
+     * ────────────────────────────────────────────────────────────────────────
+     */
+    static async autoAddToBlacklist(data) {
+        const { companyId, phoneNumber, edgeCaseName, detectionMethod = 'edge_case' } = data;
+        
+        // ====================================================================
+        // CHECKPOINT 1: Input validation
+        // ====================================================================
+        logger.security(`🤖 [AUTO-BLACKLIST] CHECKPOINT 1: Triggered for ${phoneNumber} (Edge Case: ${edgeCaseName})`);
+        
+        if (!companyId || !phoneNumber || !edgeCaseName) {
+            logger.error(`❌ [AUTO-BLACKLIST] CHECKPOINT 1 FAILED: Missing required fields`, {
+                companyId: !!companyId,
+                phoneNumber: !!phoneNumber,
+                edgeCaseName: !!edgeCaseName
+            });
+            return { success: false, error: 'Missing required fields' };
+        }
+        
+        try {
+            // ====================================================================
+            // CHECKPOINT 2: Load company settings
+            // ====================================================================
+            logger.security(`🤖 [AUTO-BLACKLIST] CHECKPOINT 2: Loading company settings...`);
+            
+            const company = await v2Company.findById(companyId);
+            if (!company) {
+                logger.error(`❌ [AUTO-BLACKLIST] CHECKPOINT 2 FAILED: Company not found: ${companyId}`);
+                return { success: false, error: 'Company not found' };
+            }
+            
+            logger.security(`✅ [AUTO-BLACKLIST] CHECKPOINT 2 PASSED: Company found`);
+            
+            // ====================================================================
+            // CHECKPOINT 3: Check if auto-blacklist is enabled
+            // ====================================================================
+            logger.security(`🤖 [AUTO-BLACKLIST] CHECKPOINT 3: Checking if auto-blacklist enabled...`);
+            
+            const autoBlacklistEnabled = company.callFiltering?.settings?.autoBlacklistEnabled || false;
+            
+            if (!autoBlacklistEnabled) {
+                logger.info(`⏭️ [AUTO-BLACKLIST] CHECKPOINT 3 SKIPPED: Auto-blacklist disabled for company ${companyId}`);
+                return { success: false, reason: 'Auto-blacklist disabled' };
+            }
+            
+            logger.security(`✅ [AUTO-BLACKLIST] CHECKPOINT 3 PASSED: Auto-blacklist enabled`);
+            
+            // ====================================================================
+            // CHECKPOINT 4: Check if edge case is in triggers
+            // ====================================================================
+            logger.security(`🤖 [AUTO-BLACKLIST] CHECKPOINT 4: Checking if edge case matches triggers...`);
+            
+            const triggers = company.callFiltering?.settings?.autoBlacklistTriggers || [];
+            const edgeCaseId = edgeCaseName.toLowerCase().replace(/\s+/g, '_');
+            
+            if (!triggers.includes(edgeCaseId)) {
+                logger.info(`⏭️ [AUTO-BLACKLIST] CHECKPOINT 4 SKIPPED: Edge case "${edgeCaseName}" (${edgeCaseId}) not in triggers`, {
+                    configuredTriggers: triggers
+                });
+                return { success: false, reason: 'Edge case not in triggers' };
+            }
+            
+            logger.security(`✅ [AUTO-BLACKLIST] CHECKPOINT 4 PASSED: Edge case matches trigger "${edgeCaseId}"`);
+            
+            // ====================================================================
+            // CHECKPOINT 5: Initialize callFiltering if needed
+            // ====================================================================
+            logger.security(`🤖 [AUTO-BLACKLIST] CHECKPOINT 5: Initializing callFiltering structure...`);
+            
+            if (!company.callFiltering) {
+                company.callFiltering = { 
+                    enabled: true, 
+                    blacklist: [], 
+                    whitelist: [], 
+                    settings: {}, 
+                    stats: {} 
+                };
+                logger.info(`✅ [AUTO-BLACKLIST] CHECKPOINT 5: Initialized empty callFiltering`);
+            } else {
+                logger.security(`✅ [AUTO-BLACKLIST] CHECKPOINT 5: callFiltering already exists`);
+            }
+            
+            // ====================================================================
+            // CHECKPOINT 6: Check if number is whitelisted (always override)
+            // ====================================================================
+            logger.security(`🤖 [AUTO-BLACKLIST] CHECKPOINT 6: Checking whitelist...`);
+            
+            const isWhitelisted = company.callFiltering.whitelist?.some(entry => 
+                entry.phoneNumber === phoneNumber && entry.status !== 'removed'
+            ) || false;
+            
+            if (isWhitelisted) {
+                logger.security(`⏭️ [AUTO-BLACKLIST] CHECKPOINT 6 BLOCKED: Number ${phoneNumber} is whitelisted - NEVER auto-blacklist`);
+                return { success: false, reason: 'Number is whitelisted' };
+            }
+            
+            logger.security(`✅ [AUTO-BLACKLIST] CHECKPOINT 6 PASSED: Number not whitelisted`);
+            
+            // ====================================================================
+            // CHECKPOINT 7: Check if already blacklisted
+            // ====================================================================
+            logger.security(`🤖 [AUTO-BLACKLIST] CHECKPOINT 7: Checking if already blacklisted...`);
+            
+            const existing = company.callFiltering.blacklist.find(entry => 
+                entry.phoneNumber === phoneNumber && 
+                (entry.status === 'active' || entry.status === 'pending')
+            );
+            
+            if (existing) {
+                logger.info(`⏭️ [AUTO-BLACKLIST] CHECKPOINT 7 SKIPPED: Number already in blacklist`, {
+                    status: existing.status,
+                    source: existing.source,
+                    addedAt: existing.addedAt
+                });
+                return { success: false, reason: 'Already blacklisted', existingStatus: existing.status };
+            }
+            
+            logger.security(`✅ [AUTO-BLACKLIST] CHECKPOINT 7 PASSED: Number not in blacklist`);
+            
+            // ====================================================================
+            // CHECKPOINT 8: Check detection threshold
+            // ====================================================================
+            logger.security(`🤖 [AUTO-BLACKLIST] CHECKPOINT 8: Checking detection threshold...`);
+            
+            const threshold = company.callFiltering.settings?.autoBlacklistThreshold || 1;
+            
+            // Count recent detections in BlockedCallLog
+            const recentDetections = await BlockedCallLog.countDocuments({
+                callerPhone: phoneNumber,
+                companyId,
+                detectionMethod: 'edge_case',
+                attemptTime: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Last 24 hours
+            });
+            
+            logger.security(`🤖 [AUTO-BLACKLIST] CHECKPOINT 8: Recent detections: ${recentDetections}, Threshold: ${threshold}`);
+            
+            if (recentDetections < threshold) {
+                logger.info(`⏭️ [AUTO-BLACKLIST] CHECKPOINT 8 NOT MET: Threshold not reached (${recentDetections}/${threshold})`);
+                return { 
+                    success: false, 
+                    reason: 'Threshold not met', 
+                    detections: recentDetections,
+                    threshold
+                };
+            }
+            
+            logger.security(`✅ [AUTO-BLACKLIST] CHECKPOINT 8 PASSED: Threshold met (${recentDetections}/${threshold})`);
+            
+            // ====================================================================
+            // CHECKPOINT 9: Determine status (pending vs active)
+            // ====================================================================
+            logger.security(`🤖 [AUTO-BLACKLIST] CHECKPOINT 9: Determining status...`);
+            
+            const requireApproval = company.callFiltering.settings?.requireAdminApproval !== false; // Default true
+            const status = requireApproval ? 'pending' : 'active';
+            
+            logger.security(`✅ [AUTO-BLACKLIST] CHECKPOINT 9: Status determined: "${status}" (requireApproval: ${requireApproval})`);
+            
+            // ====================================================================
+            // CHECKPOINT 10: Add to blacklist
+            // ====================================================================
+            logger.security(`🤖 [AUTO-BLACKLIST] CHECKPOINT 10: Adding to blacklist...`);
+            
+            company.callFiltering.blacklist.push({
+                phoneNumber,
+                reason: `Auto-detected: ${edgeCaseName}`,
+                addedAt: new Date(),
+                addedBy: 'system',
+                status,
+                source: 'auto',
+                detectionMethod,
+                edgeCaseName,
+                timesBlocked: 0,  // Will be incremented when actually blocks a call
+                lastBlockedAt: null
+            });
+            
+            logger.security(`✅ [AUTO-BLACKLIST] CHECKPOINT 10: Added to blacklist (status: ${status})`);
+            
+            // ====================================================================
+            // CHECKPOINT 11: Save to MongoDB
+            // ====================================================================
+            logger.security(`🤖 [AUTO-BLACKLIST] CHECKPOINT 11: Saving to MongoDB...`);
+            
+            await company.save();
+            
+            logger.security(`✅ [AUTO-BLACKLIST] CHECKPOINT 11: Saved to MongoDB successfully`);
+            
+            // ====================================================================
+            // CHECKPOINT 12: Clear Redis cache
+            // ====================================================================
+            logger.security(`🤖 [AUTO-BLACKLIST] CHECKPOINT 12: Clearing Redis cache...`);
+            
+            const { redisClient } = require('../clients');
+            try {
+                await redisClient.del(`company:${companyId}`);
+                logger.security(`✅ [AUTO-BLACKLIST] CHECKPOINT 12: Redis cache cleared`);
+            } catch (cacheError) {
+                logger.warn(`⚠️ [AUTO-BLACKLIST] CHECKPOINT 12 WARNING: Cache clear failed (non-critical):`, cacheError.message);
+            }
+            
+            // ====================================================================
+            // SUCCESS: Log comprehensive summary
+            // ====================================================================
+            logger.security(`🎉 [AUTO-BLACKLIST] SUCCESS: Number auto-blacklisted`, {
+                phoneNumber,
+                edgeCaseName,
+                status,
+                requireApproval,
+                companyId,
+                detectionMethod,
+                willBlockCalls: status === 'active'
+            });
+            
+            return { 
+                success: true, 
+                status,
+                message: status === 'pending' 
+                    ? 'Added to blacklist (pending admin approval)' 
+                    : 'Added to blacklist (active - blocking calls)'
+            };
+            
+        } catch (error) {
+            logger.error(`❌ [AUTO-BLACKLIST] CRITICAL ERROR:`, {
+                error: error.message,
+                stack: error.stack,
+                companyId,
+                phoneNumber,
+                edgeCaseName
+            });
+            return { success: false, error: error.message };
+        }
+    }
 }
 
 // ============================================================================

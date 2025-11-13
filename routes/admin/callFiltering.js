@@ -639,11 +639,19 @@ async function updateFilteringSettings(req, res) {
             // This purges old schema keys (blockKnownSpam, etc) on save
             // Do NOT use Object.assign() or spread operator - would merge old keys
             company.callFiltering.settings = {
-                // Only save the new schema keys (with explicit true/false cast)
-                // The "=== true" cast prevents undefined from being saved
+                // Core detection settings
                 checkGlobalSpamDB: settings.checkGlobalSpamDB === true,
                 enableFrequencyCheck: settings.enableFrequencyCheck === true,
-                enableRobocallDetection: settings.enableRobocallDetection === true
+                enableRobocallDetection: settings.enableRobocallDetection === true,
+                
+                // 🤖 AUTO-BLACKLIST SETTINGS (Nov 2025)
+                autoBlacklistEnabled: settings.autoBlacklistEnabled === true,
+                autoBlacklistThreshold: settings.autoBlacklistThreshold ? parseInt(settings.autoBlacklistThreshold) : 1,
+                autoBlacklistTriggers: Array.isArray(settings.autoBlacklistTriggers) 
+                    ? settings.autoBlacklistTriggers 
+                    : ['ai_telemarketer', 'robocall'],
+                requireAdminApproval: settings.requireAdminApproval !== false,  // Default true
+                autoBlacklistExpiration: settings.autoBlacklistExpiration ? parseInt(settings.autoBlacklistExpiration) : 0
             };
             
             // 🔥 CRITICAL: Mark the nested path as modified so Mongoose detects the change
@@ -712,6 +720,206 @@ router.get('/admin/call-filtering/global-spam-database', authenticateJWT, requir
             success: false,
             message: 'Failed to fetch global spam database',
             error: error.message
+        });
+    }
+});
+
+// ============================================================================
+// 🤖 AUTO-BLACKLIST APPROVAL ROUTES (Nov 2025)
+// ============================================================================
+
+// ────────────────────────────────────────────────────────────────────────────
+// APPROVE SINGLE PENDING SPAM NUMBER
+// ────────────────────────────────────────────────────────────────────────────
+router.post('/admin/call-filtering/:companyId/blacklist/:phoneNumber/approve', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { companyId, phoneNumber } = req.params;
+        
+        logger.security(`✅ [CALL FILTERING] Approving spam: ${phoneNumber} for company: ${companyId}`);
+        
+        const company = await v2Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ success: false, message: 'Company not found' });
+        }
+        
+        // Find pending entry
+        const entry = company.callFiltering?.blacklist?.find(e => 
+            e.phoneNumber === decodeURIComponent(phoneNumber) && e.status === 'pending'
+        );
+        
+        if (!entry) {
+            logger.warn(`⚠️ [CALL FILTERING] Pending entry not found for: ${phoneNumber}`);
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Pending entry not found. It may have already been approved or removed.' 
+            });
+        }
+        
+        // Change status to active
+        entry.status = 'active';
+        entry.approvedAt = new Date();
+        entry.approvedBy = req.user.email || 'admin';
+        
+        await company.save();
+        
+        // Clear Redis cache
+        const { redisClient } = require('../../clients');
+        try {
+            await redisClient.del(`company:${companyId}`);
+            logger.debug(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
+        } catch (cacheError) {
+            logger.warn(`⚠️ [CALL FILTERING] Cache clear failed (non-critical):`, cacheError);
+        }
+        
+        logger.security(`✅ [CALL FILTERING] Approved: ${phoneNumber} now blocking calls`);
+        
+        res.json({
+            success: true,
+            message: 'Spam number approved and now blocking calls',
+            data: {
+                phoneNumber,
+                status: 'active',
+                approvedAt: entry.approvedAt,
+                approvedBy: entry.approvedBy
+            }
+        });
+        
+    } catch (error) {
+        logger.error(`❌ [CALL FILTERING] Approval error:`, error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to approve spam number',
+            error: error.message 
+        });
+    }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// APPROVE ALL PENDING SPAM NUMBERS
+// ────────────────────────────────────────────────────────────────────────────
+router.post('/admin/call-filtering/:companyId/blacklist/approve-all', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        logger.security(`✅ [CALL FILTERING] Approving all pending for company: ${companyId}`);
+        
+        const company = await v2Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ success: false, message: 'Company not found' });
+        }
+        
+        // Find all pending entries
+        const pendingEntries = company.callFiltering?.blacklist?.filter(e => e.status === 'pending') || [];
+        
+        if (pendingEntries.length === 0) {
+            logger.info(`⏭️ [CALL FILTERING] No pending entries to approve for company: ${companyId}`);
+            return res.json({
+                success: true,
+                message: 'No pending numbers to approve',
+                count: 0
+            });
+        }
+        
+        // Approve all pending entries
+        let approvedCount = 0;
+        company.callFiltering.blacklist.forEach(entry => {
+            if (entry.status === 'pending') {
+                entry.status = 'active';
+                entry.approvedAt = new Date();
+                entry.approvedBy = req.user.email || 'admin';
+                approvedCount++;
+            }
+        });
+        
+        await company.save();
+        
+        // Clear Redis cache
+        const { redisClient } = require('../../clients');
+        try {
+            await redisClient.del(`company:${companyId}`);
+            logger.debug(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
+        } catch (cacheError) {
+            logger.warn(`⚠️ [CALL FILTERING] Cache clear failed (non-critical):`, cacheError);
+        }
+        
+        logger.security(`✅ [CALL FILTERING] Approved ${approvedCount} pending numbers`);
+        
+        res.json({
+            success: true,
+            message: `Approved ${approvedCount} spam numbers`,
+            count: approvedCount
+        });
+        
+    } catch (error) {
+        logger.error(`❌ [CALL FILTERING] Bulk approval error:`, error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to approve all pending numbers',
+            error: error.message 
+        });
+    }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// REJECT ALL PENDING SPAM NUMBERS (remove from list)
+// ────────────────────────────────────────────────────────────────────────────
+router.post('/admin/call-filtering/:companyId/blacklist/reject-all', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        logger.security(`❌ [CALL FILTERING] Rejecting all pending for company: ${companyId}`);
+        
+        const company = await v2Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ success: false, message: 'Company not found' });
+        }
+        
+        // Count pending entries before removal
+        const pendingCount = company.callFiltering?.blacklist?.filter(e => e.status === 'pending').length || 0;
+        
+        if (pendingCount === 0) {
+            logger.info(`⏭️ [CALL FILTERING] No pending entries to reject for company: ${companyId}`);
+            return res.json({
+                success: true,
+                message: 'No pending numbers to reject',
+                count: 0
+            });
+        }
+        
+        // Remove all pending entries
+        company.callFiltering.blacklist = company.callFiltering.blacklist.filter(entry => {
+            if (entry.status === 'pending') {
+                logger.info(`🗑️ [CALL FILTERING] Rejecting pending entry: ${entry.phoneNumber}`);
+                return false;  // Remove from array
+            }
+            return true;  // Keep in array
+        });
+        
+        await company.save();
+        
+        // Clear Redis cache
+        const { redisClient } = require('../../clients');
+        try {
+            await redisClient.del(`company:${companyId}`);
+            logger.debug(`✅ [CALL FILTERING] Redis cache cleared for company: ${companyId}`);
+        } catch (cacheError) {
+            logger.warn(`⚠️ [CALL FILTERING] Cache clear failed (non-critical):`, cacheError);
+        }
+        
+        logger.security(`✅ [CALL FILTERING] Rejected ${pendingCount} pending numbers`);
+        
+        res.json({
+            success: true,
+            message: `Rejected ${pendingCount} spam numbers`,
+            count: pendingCount
+        });
+        
+    } catch (error) {
+        logger.error(`❌ [CALL FILTERING] Bulk rejection error:`, error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to reject all pending numbers',
+            error: error.message 
         });
     }
 });
