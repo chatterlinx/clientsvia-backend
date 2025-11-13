@@ -78,6 +78,71 @@ class CheatSheetEngine {
         timeMs: elapsed
       });
       
+      // ────────────────────────────────────────────────────────────────
+      // 🤖 AUTO-BLACKLIST TRIGGER (Nov 2025)
+      // ────────────────────────────────────────────────────────────────
+      // Check if this edge case should trigger auto-blacklist
+      // This is ASYNC and NON-BLOCKING - don't wait for completion
+      // 
+      // Auto-blacklist will:
+      // 1. Check if auto-blacklist is enabled for company
+      // 2. Check if this edge case is in configured triggers
+      // 3. Check detection threshold
+      // 4. Add to blacklist (pending or active based on settings)
+      // 5. Clear Redis cache
+      // 
+      // Future calls from this number will be blocked at Layer 1
+      // (before reaching AI agent, saving AI credits)
+      // ────────────────────────────────────────────────────────────────
+      
+      if (context.callerPhone) {
+        const SmartCallFilter = require('./SmartCallFilter');
+        
+        logger.security('[CHEAT SHEET ENGINE] 🤖 Checking auto-blacklist trigger...', {
+          companyId: context.companyId,
+          callerPhone: context.callerPhone,
+          edgeCaseId: edgeCase.id,
+          edgeCaseName: edgeCase.name
+        });
+        
+        // Trigger auto-blacklist (async, non-blocking)
+        SmartCallFilter.autoAddToBlacklist({
+          companyId: context.companyId,
+          phoneNumber: context.callerPhone,
+          edgeCaseName: edgeCase.name,
+          detectionMethod: 'edge_case'
+        }).then(result => {
+          if (result.success) {
+            logger.security('[CHEAT SHEET ENGINE] 🎉 Auto-blacklist SUCCESS:', {
+              companyId: context.companyId,
+              phoneNumber: context.callerPhone,
+              edgeCaseName: edgeCase.name,
+              status: result.status,
+              message: result.message
+            });
+          } else {
+            // Not an error - just didn't meet criteria (disabled, threshold not met, etc.)
+            logger.debug('[CHEAT SHEET ENGINE] ⏭️ Auto-blacklist skipped:', {
+              companyId: context.companyId,
+              phoneNumber: context.callerPhone,
+              reason: result.reason,
+              detections: result.detections,
+              threshold: result.threshold
+            });
+          }
+        }).catch(error => {
+          // Log error but don't fail the call
+          logger.error('[CHEAT SHEET ENGINE] ❌ Auto-blacklist error (non-critical):', {
+            error: error.message,
+            companyId: context.companyId,
+            phoneNumber: context.callerPhone,
+            edgeCaseName: edgeCase.name
+          });
+        });
+      } else {
+        logger.warn('[CHEAT SHEET ENGINE] ⚠️ Auto-blacklist skipped: No caller phone number in context');
+      }
+      
       // Enforce performance budget
       this.enforcePerformanceBudget(startTime, 10, context);
       
