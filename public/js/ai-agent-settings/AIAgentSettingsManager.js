@@ -195,6 +195,9 @@ class AIAgentSettingsManager {
                 case 'aicore-cheat-sheet':
                     await this.loadAiCoreCheatSheet();
                     break;
+                case 'aicore-call-flow':
+                    await this.loadAiCoreCallFlow();
+                    break;
                 case 'aicore-knowledgebase':
                     await this.loadAiCoreKnowledgebase();
                     break;
@@ -331,6 +334,25 @@ class AIAgentSettingsManager {
         await cheatSheetManager.load(this.companyId);
         
         console.log('✅ [AI AGENT SETTINGS] Cheat Sheet loaded successfully');
+    }
+    
+    /**
+     * Load AiCore Call Flow sub-tab
+     */
+    async loadAiCoreCallFlow() {
+        console.log('🎯 [AI AGENT SETTINGS] Loading AiCore Call Flow...');
+        
+        // CallFlowManager is loaded globally from CallFlowManager.js
+        if (typeof callFlowManager === 'undefined') {
+            console.error('❌ [AI AGENT SETTINGS] CallFlowManager not found!');
+            this.showError('Call Flow manager failed to load');
+            return;
+        }
+        
+        // Load call flow data for this company
+        await callFlowManager.load(this.companyId);
+        
+        console.log('✅ [AI AGENT SETTINGS] Call Flow loaded successfully');
     }
     
     /**
