@@ -32,11 +32,10 @@ const openai = require('../config/openai');
 const logger = require('../config/logger');
 
 // Lazy-load to avoid circular dependencies
-let Customer, ServiceCall;
+let Contact;
 const getModels = () => {
-    if (!Customer) Customer = require('../models/Customer');
-    if (!ServiceCall) ServiceCall = require('../models/ServiceCall');
-    return { Customer, ServiceCall };
+    if (!Contact) Contact = require('../models/v2Contact');
+    return { Contact };
 };
 
 class FrontlineIntel {
@@ -323,7 +322,7 @@ CRITICAL: Return ONLY the JSON object, no other text before or after!`;
      */
     static async lookupCustomer({ name, phone, companyId }) {
         try {
-            const { Customer, ServiceCall } = getModels();
+            const { Contact } = getModels();
             
             // Build query (fuzzy name match OR exact phone match)
             const query = {
@@ -332,48 +331,57 @@ CRITICAL: Return ONLY the JSON object, no other text before or after!`;
             };
             
             if (name) {
-                query.$or.push({ name: new RegExp(name, 'i') });  // Case-insensitive
+                // Search in both fullName and firstName/lastName
+                query.$or.push({ fullName: new RegExp(name, 'i') });
+                query.$or.push({ firstName: new RegExp(name, 'i') });
+                query.$or.push({ lastName: new RegExp(name, 'i') });
             }
             if (phone) {
                 // Normalize phone (remove formatting)
                 const normalizedPhone = phone.replace(/\D/g, '');
-                query.$or.push({ phone: new RegExp(normalizedPhone) });
+                query.$or.push({ primaryPhone: new RegExp(normalizedPhone) });
+                query.$or.push({ alternatePhone: new RegExp(normalizedPhone) });
             }
             
             if (query.$or.length === 0) {
                 return null;  // No search criteria
             }
             
-            // Find customer (most recent first)
-            const customer = await Customer.findOne(query)
-                .sort({ lastServiceDate: -1 })
+            // Find contact (most recent first)
+            const contact = await Contact.findOne(query)
+                .sort({ lastContactDate: -1 })
                 .lean();
             
-            if (!customer) {
+            if (!contact) {
                 return null;
             }
             
-            // Get recent service history
-            const recentServices = await ServiceCall.find({
-                customerId: customer._id,
-                companyId: companyId
-            })
-            .sort({ date: -1 })
-            .limit(3)
-            .select('date issue technicianName')
-            .lean();
+            // Extract recent service history from interactions
+            const recentServices = (contact.interactions || [])
+                .filter(i => i.type === 'call' || i.type === 'appointment')
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                .slice(0, 3)
+                .map(interaction => ({
+                    date: interaction.timestamp,
+                    issue: interaction.summary || 'No summary',
+                    outcome: interaction.outcome
+                }));
             
             return {
-                customerId: customer._id.toString(),
-                name: customer.name,
-                phone: customer.phone,
-                email: customer.email,
-                lastServiceDate: customer.lastServiceDate,
-                preferredTech: customer.preferredTechnician,
-                recentServices: recentServices.map(s => ({
-                    date: s.date,
-                    issue: s.issue,
-                    tech: s.technicianName
+                customerId: contact._id.toString(),
+                name: contact.fullName || `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
+                phone: contact.primaryPhone,
+                alternatePhone: contact.alternatePhone,
+                email: contact.email,
+                lastContactDate: contact.lastContactDate,
+                status: contact.status,
+                customerType: contact.customerType,
+                totalCalls: contact.totalCalls || 0,
+                recentServices,
+                serviceRequests: (contact.serviceRequests || []).slice(0, 3).map(sr => ({
+                    serviceType: sr.serviceType,
+                    status: sr.status,
+                    requestedDate: sr.requestedDate
                 }))
             };
             
