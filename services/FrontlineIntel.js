@@ -29,7 +29,7 @@
  */
 
 const openai = require('../config/openai');
-const logger = require('../config/logger');
+const logger = require('../utils/logger');
 
 // Lazy-load to avoid circular dependencies
 let Contact;
