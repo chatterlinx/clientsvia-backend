@@ -1084,16 +1084,109 @@ class IntelligentRouter {
     }
     
     /**
-     * Helper: Build system prompt for LLM
+     * Helper: Build system prompt for LLM (TIER 3 - LLM FALLBACK)
+     * 
+     * 🎯 SYSTEM PROMPT ARCHITECTURE (4-Layer Construction):
+     * 
+     * ┌─────────────────────────────────────────────────────────────┐
+     * │ LAYER 1: BASE IDENTITY (who you are)                       │
+     * │ - Company name, template context, role                     │
+     * ├─────────────────────────────────────────────────────────────┤
+     * │ LAYER 2: COMPANY INSTRUCTIONS (personality & tone)         │
+     * │ - Conversational protocols (from Cheat Sheet)              │
+     * │ - Tone guidelines ("Always say 'Ok'", never interrupt)     │
+     * │ - Business-specific rules (booking protocols, transfers)   │
+     * ├─────────────────────────────────────────────────────────────┤
+     * │ LAYER 3: BEHAVIOR RULES (structural polish)                │
+     * │ - ACK_OK, POLITE_PROFESSIONAL, etc.                        │
+     * │ - Applied as explicit instructions to LLM                  │
+     * ├─────────────────────────────────────────────────────────────┤
+     * │ LAYER 4: CALL CONTEXT (current state)                      │
+     * │ - Caller input, conversation history                       │
+     * │ - Captured entities, previous responses                    │
+     * └─────────────────────────────────────────────────────────────┘
+     * 
+     * @param {Object} template - Active template with scenarios
+     * @param {Object} company - Company document with cheatSheet
+     * @returns {string} Complete system prompt for LLM
      */
     buildSystemPrompt(template, company) {
         const companyName = company?.businessName || company?.companyName || 'the company';
         const templateName = template?.name || 'general';
         
-        return `You are a helpful AI assistant for ${companyName}. 
-You are helping with ${templateName} inquiries.
-Provide accurate, professional, and helpful responses based on the available knowledge.
-Be concise but thorough. If you're not sure about something, say so.`;
+        // ═══════════════════════════════════════════════════════════
+        // LAYER 1: BASE IDENTITY
+        // ═══════════════════════════════════════════════════════════
+        let systemPrompt = `You are a professional AI receptionist for ${companyName}.
+You are handling ${templateName} inquiries.
+Your role is to understand caller needs, provide helpful information, and guide them to the appropriate next step.`;
+        
+        // ═══════════════════════════════════════════════════════════
+        // LAYER 2: COMPANY INSTRUCTIONS (THE "WARM-UP" LAYER)
+        // ═══════════════════════════════════════════════════════════
+        // This is the PERSONALITY and TONE layer that makes the AI sound human
+        const companyInstructions = company?.aiAgentSettings?.cheatSheet?.companyInstructions;
+        
+        if (companyInstructions && companyInstructions.trim()) {
+            logger.info('🎭 [SYSTEM PROMPT] Adding Company Instructions (personality layer)');
+            systemPrompt += '\n\n' + '═'.repeat(60);
+            systemPrompt += '\n📋 COMPANY-SPECIFIC PROTOCOLS & CONVERSATION GUIDELINES\n';
+            systemPrompt += '═'.repeat(60);
+            systemPrompt += '\n\n' + companyInstructions.trim();
+        } else {
+            logger.info('ℹ️ [SYSTEM PROMPT] No Company Instructions - using base prompt only');
+        }
+        
+        // ═══════════════════════════════════════════════════════════
+        // LAYER 3: BEHAVIOR RULES (STRUCTURAL POLISH)
+        // ═══════════════════════════════════════════════════════════
+        // These are the checkboxes from the Cheat Sheet UI
+        const behaviorRules = company?.aiAgentSettings?.cheatSheet?.behaviorRules || [];
+        
+        if (behaviorRules.length > 0) {
+            logger.info(`🎨 [SYSTEM PROMPT] Adding ${behaviorRules.length} Behavior Rules (polish layer)`);
+            systemPrompt += '\n\n' + '═'.repeat(60);
+            systemPrompt += '\n🎯 REQUIRED BEHAVIOR RULES (Always Follow)\n';
+            systemPrompt += '═'.repeat(60) + '\n';
+            
+            behaviorRules.forEach(rule => {
+                const instruction = this.translateBehaviorRuleToInstruction(rule);
+                if (instruction) {
+                    systemPrompt += `\n✓ ${instruction}`;
+                }
+            });
+        }
+        
+        // ═══════════════════════════════════════════════════════════
+        // FINAL SAFETY INSTRUCTION
+        // ═══════════════════════════════════════════════════════════
+        systemPrompt += '\n\n' + '═'.repeat(60);
+        systemPrompt += '\nIf you are unsure or the request is outside your knowledge, politely acknowledge and offer to take a message or transfer to a staff member.';
+        
+        return systemPrompt;
+    }
+    
+    /**
+     * Helper: Translate behavior rule enum to human-readable LLM instruction
+     * 
+     * @param {string} ruleEnum - Behavior rule enum from database
+     * @returns {string|null} - LLM instruction or null if unknown
+     */
+    translateBehaviorRuleToInstruction(ruleEnum) {
+        const translations = {
+            'ACK_OK': 'Always start your responses with "Ok" to acknowledge the caller (e.g., "Ok, I understand...")',
+            'NEVER_INTERRUPT': 'Let the caller finish speaking completely before responding. Be patient with long explanations.',
+            'USE_COMPANY_NAME': `Reference the company name naturally in conversation when appropriate`,
+            'CONFIRM_ENTITIES': 'Always repeat back important details (name, phone, address, appointment time) to confirm accuracy',
+            'POLITE_PROFESSIONAL': 'Maintain a courteous, respectful, and professional tone at all times',
+            'WAIT_FOR_PAUSE': 'Wait for natural pauses in conversation before responding. Never talk over the caller.',
+            'EMPATHIZE_FIRST': 'When callers express frustration or problems, acknowledge their feelings before offering solutions',
+            'SHORT_SENTENCES': 'Use brief, clear sentences. Avoid long-winded explanations.',
+            'ACTIVE_LISTENING': 'Demonstrate active listening by referencing what the caller said (e.g., "You mentioned your AC stopped cooling...")',
+            'NO_JARGON': 'Avoid technical jargon unless the caller uses it first. Speak in plain, everyday language.'
+        };
+        
+        return translations[ruleEnum] || null;
     }
     
     /**

@@ -1347,6 +1347,62 @@ const companySchema = new mongoose.Schema({
             },
             
             // -------------------------------------------------------------------
+            // CALL FLOW SEQUENCE - Dynamic execution order control
+            // -------------------------------------------------------------------
+            // Allows admin to reorder the processing steps of incoming calls
+            // Simple priority-based system (no drag-and-drop complexity)
+            // Runtime sorts by priority and executes in order
+            // Each step can be enabled/disabled independently
+            // -------------------------------------------------------------------
+            flowSequence: [{
+                step: {
+                    type: String,
+                    enum: [
+                        'spam_filter',      // Phone number blacklist/whitelist
+                        'edge_cases',       // AI spam, robocalls, dead air
+                        'transfer_rules',   // Emergency, billing, scheduling transfers
+                        'ai_routing',       // 3-tier intelligence (keywords → semantic → LLM)
+                        'guardrails',       // Content filtering (prices, phone numbers, etc.)
+                        'behavior_rules'    // Text polishing (ACK_OK, POLITE_PROFESSIONAL)
+                    ],
+                    required: true
+                },
+                priority: {
+                    type: Number,
+                    required: true,
+                    min: 1,
+                    max: 100
+                    // Lower number = executes first
+                    // Default order: 1=spam, 2=edge, 3=transfer, 4=routing, 5=guardrails, 6=behavior
+                },
+                enabled: {
+                    type: Boolean,
+                    default: true
+                    // If false, step is skipped during call processing
+                },
+                name: {
+                    type: String,
+                    trim: true
+                    // Human-readable name for UI display
+                },
+                description: {
+                    type: String,
+                    trim: true
+                    // Short description of what this step does
+                },
+                canDisable: {
+                    type: Boolean,
+                    default: true
+                    // Some steps (like spam_filter) might be mandatory
+                },
+                canReorder: {
+                    type: Boolean,
+                    default: true
+                    // Some steps might have fixed positions
+                }
+            }],
+            
+            // -------------------------------------------------------------------
             // BEHAVIOR RULES - Deterministic tone/style flags
             // -------------------------------------------------------------------
             // Applied LAST in precedence chain (after guardrails)
