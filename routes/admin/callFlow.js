@@ -19,7 +19,7 @@ const router = express.Router();
 const { authenticateJWT } = require('../../middleware/auth');
 const Company = require('../../models/v2Company');
 const defaultCallFlowConfig = require('../../config/defaultCallFlowConfig');
-const logger = require('../../config/logger');
+const logger = require('../../utils/logger');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // GET /api/admin/call-flow/:companyId
