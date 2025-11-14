@@ -155,6 +155,17 @@ router.get('/:companyId/configuration/variables', async (req, res) => {
         logger.info(`📋 [COMPANY CONFIG GET] company.aiAgentSettings.variableDefinitions exists: ${!!company?.aiAgentSettings?.variableDefinitions}`);
         logger.info(`📋 [COMPANY CONFIG GET] variableDefinitions is array: ${Array.isArray(company?.aiAgentSettings?.variableDefinitions)}`);
         
+        // ✨ DEBUGGING: Check what's actually in MongoDB
+        if (company?.aiAgentSettings?.variableDefinitions) {
+            const defs = company.aiAgentSettings.variableDefinitions;
+            logger.info(`📋 [COMPANY CONFIG GET] MONGODB HAS ${defs.length} definitions in aiAgentSettings.variableDefinitions`);
+            if (defs.length > 0) {
+                logger.info(`📋 [COMPANY CONFIG GET] First 3 definition keys: ${defs.slice(0, 3).map(d => d.key).join(', ')}`);
+            }
+        } else {
+            logger.info(`📋 [COMPANY CONFIG GET] ❌ MongoDB aiAgentSettings.variableDefinitions is NULL/UNDEFINED/EMPTY`);
+        }
+        
         if (company?.aiAgentSettings?.variableDefinitions && Array.isArray(company.aiAgentSettings.variableDefinitions)) {
             const savedDefinitions = company.aiAgentSettings.variableDefinitions;
             logger.info(`📋 [COMPANY CONFIG GET] ✅ Found ${savedDefinitions.length} saved cheat sheet definitions in database`);
