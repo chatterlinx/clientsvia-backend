@@ -1171,57 +1171,7 @@ class EnterpriseVariableScanService {
                 lastReport: scanReport
             };
             
-            // ✨ CRITICAL: Merge cheat sheet variables into main variableDefinitions array
-            // This ensures they persist and show up in the Variables table after save/reload
-            if (!company.aiAgentSettings.variableDefinitions) {
-                company.aiAgentSettings.variableDefinitions = [];
-            }
-            
-            // Get existing keys to avoid duplicates (handle both array and potential Map)
-            const existingDefs = Array.isArray(company.aiAgentSettings.variableDefinitions) 
-                ? company.aiAgentSettings.variableDefinitions 
-                : [];
-            
-            const existingKeys = new Set(
-                existingDefs.map(v => 
-                    (v.normalizedKey || v.key || '').toLowerCase()
-                )
-            );
-            
-            // Add only new cheat sheet variables (avoid duplicates)
-            const newVariables = variableDefinitions.filter(varDef => {
-                const normalizedKey = (varDef.normalizedKey || varDef.key || '').toLowerCase();
-                return !existingKeys.has(normalizedKey);
-            });
-            
-            // Ensure variableDefinitions is an array
-            if (!Array.isArray(company.aiAgentSettings.variableDefinitions)) {
-                company.aiAgentSettings.variableDefinitions = [];
-            }
-            
-            // Merge new variables into main array
-            company.aiAgentSettings.variableDefinitions.push(...newVariables);
-            
-            logger.info(`📊 [CHEAT SHEET SCAN ${scanId}] Merged ${newVariables.length} new variables into main definitions (total now: ${company.aiAgentSettings.variableDefinitions.length})`);
-            
-            // Mark the nested path as modified for Mongoose to detect the change
-            company.markModified('aiAgentSettings.variableDefinitions');
-            company.markModified('aiAgentSettings.cheatSheetScanStatus');
-            
-            logger.info(`📊 [CHEAT SHEET SCAN ${scanId}] Attempting to save company document...`);
-            
-            try {
-                await company.save();
-                logger.info(`✅ [CHEAT SHEET SCAN ${scanId}] Company document saved successfully`);
-            } catch (saveError) {
-                logger.error(`❌ [CHEAT SHEET SCAN ${scanId}] Mongoose save failed:`, saveError);
-                logger.error(`❌ [CHEAT SHEET SCAN ${scanId}] Save error name:`, saveError.name);
-                logger.error(`❌ [CHEAT SHEET SCAN ${scanId}] Save error message:`, saveError.message);
-                if (saveError.errors) {
-                    logger.error(`❌ [CHEAT SHEET SCAN ${scanId}] Validation errors:`, JSON.stringify(saveError.errors, null, 2));
-                }
-                throw saveError;
-            }
+            await company.save();
             
             logger.info(`✅ [CHEAT SHEET SCAN ${scanId}] Scan complete`);
             logger.info(`📊 [CHEAT SHEET SCAN ${scanId}] ${variableDefinitions.length} variables, ${totalPlaceholders} occurrences`);

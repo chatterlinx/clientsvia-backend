@@ -201,14 +201,29 @@ router.patch('/:companyId/configuration/variables', async (req, res) => {
     logger.info(`[COMPANY CONFIG] PATCH /configuration/variables for company: ${req.params.companyId}`);
     
     try {
-        const { variables } = req.body;
+        const { variables, variableDefinitions } = req.body;
         
         if (!variables || typeof variables !== 'object') {
             return res.status(400).json({ error: 'Invalid variables data' });
         }
         
-        // Load definitions for validation
-        const { definitions } = await CompanyVariablesService.getVariablesForCompany(req.params.companyId);
+        // ✨ If variableDefinitions are provided, save them too (for cheat sheet variables)
+        if (variableDefinitions && Array.isArray(variableDefinitions)) {
+            logger.info(`[COMPANY CONFIG] Saving ${variableDefinitions.length} variable definitions`);
+            const company = await Company.findById(req.params.companyId);
+            if (company) {
+                if (!company.aiAgentSettings) {
+                    company.aiAgentSettings = {};
+                }
+                company.aiAgentSettings.variableDefinitions = variableDefinitions;
+                company.markModified('aiAgentSettings.variableDefinitions');
+                await company.save();
+                logger.info(`✅ [COMPANY CONFIG] Variable definitions saved for company: ${req.params.companyId}`);
+            }
+        }
+        
+        // Load definitions for validation (use provided or fetch existing)
+        const definitions = variableDefinitions || (await CompanyVariablesService.getVariablesForCompany(req.params.companyId)).definitions;
         
         // Validate all variables
         const validation = validateBatch(variables, definitions);

@@ -1290,22 +1290,50 @@ class VariablesManager {
                 scanId: data.scanReport?.scanId
             });
             
+            // Merge cheat sheet variables with existing template variables  
+            // This ensures both template AND cheat sheet variables appear in the table
+            const cheatSheetDefinitions = data.variableDefinitions || [];
+            
+            // Merge with existing definitions (avoid duplicates by normalizedKey)
+            const existingKeys = new Set(this.variableDefinitions.map(v => v.normalizedKey || v.key.toLowerCase()));
+            const newDefinitions = cheatSheetDefinitions.filter(v => {
+                const normalizedKey = v.normalizedKey || v.key.toLowerCase();
+                return !existingKeys.has(normalizedKey);
+            });
+            
+            // Add new cheat sheet variables to existing list
+            this.variableDefinitions = [...this.variableDefinitions, ...newDefinitions];
+            
+            // Update meta
+            this.meta = {
+                ...this.meta,
+                lastScanDate: data.meta?.timestamp || new Date().toISOString(),
+                totalVariables: this.variableDefinitions.length
+            };
+            
             console.log('✅ [CHEAT SHEET SCAN] Scan complete!');
+            console.log('📊 [CHEAT SHEET SCAN] Total variables in table:', this.variableDefinitions.length);
+            console.log('📊 [CHEAT SHEET SCAN] New from cheat sheet:', newDefinitions.length);
             
             // Clear Redis cache
             console.log('📋 [CHEAT SHEET SCAN] Clearing cache...');
             await this.clearCache();
             
-            // Reload variables from database (backend has merged cheat sheet variables)
-            console.log('📋 [CHEAT SHEET SCAN] Reloading variables from database...');
-            await this.load();
-            
             // Show success message
-            const variablesFound = data.meta?.variablesFound || 0;
-            const message = `✅ Cheat Sheet Scan Complete! Found ${variablesFound} variables from Cheat Sheet (Frontline-Intel, Edge Cases, Transfer Rules). Variables have been added to the table below.`;
-            console.log('✅ [CHEAT SHEET SCAN SUCCESS]', message);
-            if (this.parent.showSuccess) {
-                this.parent.showSuccess(message);
+            if (newDefinitions.length > 0) {
+                const message = `✅ Cheat Sheet Scan Complete! Found ${newDefinitions.length} new variables from Cheat Sheet (Frontline-Intel, Edge Cases, Transfer Rules). Total variables: ${this.variableDefinitions.length}`;
+                console.log('✅ [CHEAT SHEET SCAN SUCCESS]', message);
+                if (this.parent.showSuccess) {
+                    this.parent.showSuccess(message);
+                }
+            } else {
+                const message = `ℹ️ Cheat Sheet Scan Complete! All ${cheatSheetDefinitions.length} variables from Cheat Sheet already exist in the Variables table.`;
+                console.log('ℹ️ [CHEAT SHEET SCAN INFO]', message);
+                if (this.parent.showInfo) {
+                    this.parent.showInfo(message, 8000);
+                } else if (this.parent.showSuccess) {
+                    this.parent.showSuccess(message);
+                }
             }
             
         } catch (error) {
@@ -1354,13 +1382,17 @@ class VariablesManager {
             const token = localStorage.getItem('adminToken');
             
             console.log('💾 [SAVE] Checkpoint 33: Calling API PATCH /variables');
+            console.log('💾 [SAVE] Saving', this.variableDefinitions.length, 'definitions and', Object.keys(this.variables).length, 'values');
             const response = await fetch(`/api/company/${this.companyId}/configuration/variables`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ variables: this.variables })
+                body: JSON.stringify({ 
+                    variables: this.variables,
+                    variableDefinitions: this.variableDefinitions // ✨ SAVE DEFINITIONS TOO!
+                })
             });
             
             console.log('💾 [SAVE] Checkpoint 34: Response received - HTTP', response.status);
