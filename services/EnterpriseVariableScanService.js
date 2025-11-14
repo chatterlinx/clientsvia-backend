@@ -1171,6 +1171,30 @@ class EnterpriseVariableScanService {
                 lastReport: scanReport
             };
             
+            // ✨ CRITICAL: Merge cheat sheet variables into main variableDefinitions array
+            // This ensures they persist and show up in the Variables table after save/reload
+            if (!company.aiAgentSettings.variableDefinitions) {
+                company.aiAgentSettings.variableDefinitions = [];
+            }
+            
+            // Get existing keys to avoid duplicates
+            const existingKeys = new Set(
+                company.aiAgentSettings.variableDefinitions.map(v => 
+                    (v.normalizedKey || v.key || '').toLowerCase()
+                )
+            );
+            
+            // Add only new cheat sheet variables (avoid duplicates)
+            const newVariables = variableDefinitions.filter(varDef => {
+                const normalizedKey = (varDef.normalizedKey || varDef.key || '').toLowerCase();
+                return !existingKeys.has(normalizedKey);
+            });
+            
+            // Merge new variables into main array
+            company.aiAgentSettings.variableDefinitions.push(...newVariables);
+            
+            logger.info(`📊 [CHEAT SHEET SCAN ${scanId}] Merged ${newVariables.length} new variables into main definitions (total now: ${company.aiAgentSettings.variableDefinitions.length})`);
+            
             await company.save();
             
             logger.info(`✅ [CHEAT SHEET SCAN ${scanId}] Scan complete`);
