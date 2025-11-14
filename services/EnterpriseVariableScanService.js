@@ -1204,7 +1204,24 @@ class EnterpriseVariableScanService {
             
             logger.info(`📊 [CHEAT SHEET SCAN ${scanId}] Merged ${newVariables.length} new variables into main definitions (total now: ${company.aiAgentSettings.variableDefinitions.length})`);
             
-            await company.save();
+            // Mark the nested path as modified for Mongoose to detect the change
+            company.markModified('aiAgentSettings.variableDefinitions');
+            company.markModified('aiAgentSettings.cheatSheetScanStatus');
+            
+            logger.info(`📊 [CHEAT SHEET SCAN ${scanId}] Attempting to save company document...`);
+            
+            try {
+                await company.save();
+                logger.info(`✅ [CHEAT SHEET SCAN ${scanId}] Company document saved successfully`);
+            } catch (saveError) {
+                logger.error(`❌ [CHEAT SHEET SCAN ${scanId}] Mongoose save failed:`, saveError);
+                logger.error(`❌ [CHEAT SHEET SCAN ${scanId}] Save error name:`, saveError.name);
+                logger.error(`❌ [CHEAT SHEET SCAN ${scanId}] Save error message:`, saveError.message);
+                if (saveError.errors) {
+                    logger.error(`❌ [CHEAT SHEET SCAN ${scanId}] Validation errors:`, JSON.stringify(saveError.errors, null, 2));
+                }
+                throw saveError;
+            }
             
             logger.info(`✅ [CHEAT SHEET SCAN ${scanId}] Scan complete`);
             logger.info(`📊 [CHEAT SHEET SCAN ${scanId}] ${variableDefinitions.length} variables, ${totalPlaceholders} occurrences`);

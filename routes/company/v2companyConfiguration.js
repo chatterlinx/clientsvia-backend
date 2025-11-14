@@ -1738,10 +1738,17 @@ router.post('/:companyId/configuration/variables/scan-cheatsheet', async (req, r
         
     } catch (error) {
         logger.error(`❌ [CHEAT SHEET SCAN] Error:`, error);
+        logger.error(`❌ [CHEAT SHEET SCAN] Error name:`, error.name);
+        logger.error(`❌ [CHEAT SHEET SCAN] Error message:`, error.message);
+        logger.error(`❌ [CHEAT SHEET SCAN] Error stack:`, error.stack);
+        if (error.errors) {
+            logger.error(`❌ [CHEAT SHEET SCAN] Validation errors:`, JSON.stringify(error.errors, null, 2));
+        }
         res.status(500).json({
             success: false,
             error: 'Failed to scan cheat sheet',
-            message: error.message
+            message: error.message,
+            errorName: error.name
         });
     }
 });
