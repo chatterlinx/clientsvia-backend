@@ -210,15 +210,42 @@ router.patch('/:companyId/configuration/variables', async (req, res) => {
         // ✨ If variableDefinitions are provided, save them too (for cheat sheet variables)
         if (variableDefinitions && Array.isArray(variableDefinitions)) {
             logger.info(`[COMPANY CONFIG] Saving ${variableDefinitions.length} variable definitions`);
-            const company = await Company.findById(req.params.companyId);
-            if (company) {
-                if (!company.aiAgentSettings) {
-                    company.aiAgentSettings = {};
+            
+            try {
+                const company = await Company.findById(req.params.companyId);
+                if (company) {
+                    if (!company.aiAgentSettings) {
+                        company.aiAgentSettings = {};
+                    }
+                    
+                    // Clean the definitions (ensure no Sets, circular references, etc)
+                    const cleanedDefinitions = variableDefinitions.map(def => ({
+                        key: def.key,
+                        normalizedKey: def.normalizedKey,
+                        label: def.label,
+                        category: def.category,
+                        usageCount: def.usageCount,
+                        required: def.required,
+                        type: def.type,
+                        example: def.example,
+                        locations: def.locations,
+                        source: def.source,
+                        formatVariations: Array.isArray(def.formatVariations) ? def.formatVariations : [],
+                        formatCounts: def.formatCounts || {},
+                        hasMultipleFormats: def.hasMultipleFormats || false,
+                        preferredFormat: def.preferredFormat
+                    }));
+                    
+                    company.aiAgentSettings.variableDefinitions = cleanedDefinitions;
+                    company.markModified('aiAgentSettings.variableDefinitions');
+                    await company.save();
+                    logger.info(`✅ [COMPANY CONFIG] Variable definitions saved for company: ${req.params.companyId}`);
                 }
-                company.aiAgentSettings.variableDefinitions = variableDefinitions;
-                company.markModified('aiAgentSettings.variableDefinitions');
-                await company.save();
-                logger.info(`✅ [COMPANY CONFIG] Variable definitions saved for company: ${req.params.companyId}`);
+            } catch (defSaveError) {
+                logger.error(`❌ [COMPANY CONFIG] Failed to save definitions:`, defSaveError);
+                logger.error(`❌ [COMPANY CONFIG] Error message:`, defSaveError.message);
+                logger.error(`❌ [COMPANY CONFIG] Error stack:`, defSaveError.stack);
+                // Continue anyway to try to save values
             }
         }
         
@@ -253,12 +280,19 @@ router.patch('/:companyId/configuration/variables', async (req, res) => {
         
     } catch (error) {
         logger.error('[COMPANY CONFIG] Error updating variables:', error);
+        logger.error('[COMPANY CONFIG] Error name:', error.name);
+        logger.error('[COMPANY CONFIG] Error message:', error.message);
+        logger.error('[COMPANY CONFIG] Error stack:', error.stack);
         
         if (error.message.includes('not found')) {
             return res.status(404).json({ error: 'Company not found' });
         }
         
-        res.status(500).json({ error: 'Failed to update variables' });
+        res.status(500).json({ 
+            error: 'Failed to update variables',
+            message: error.message,
+            errorName: error.name
+        });
     }
 });
 
