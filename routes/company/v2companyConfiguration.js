@@ -150,9 +150,15 @@ router.get('/:companyId/configuration/variables', async (req, res) => {
         // ✨ MERGE: Combine template definitions with saved cheat sheet definitions
         let allDefinitions = result.definitions || [];
         
+        logger.info(`📋 [COMPANY CONFIG GET] Template definitions from service: ${allDefinitions.length}`);
+        logger.info(`📋 [COMPANY CONFIG GET] company.aiAgentSettings exists: ${!!company?.aiAgentSettings}`);
+        logger.info(`📋 [COMPANY CONFIG GET] company.aiAgentSettings.variableDefinitions exists: ${!!company?.aiAgentSettings?.variableDefinitions}`);
+        logger.info(`📋 [COMPANY CONFIG GET] variableDefinitions is array: ${Array.isArray(company?.aiAgentSettings?.variableDefinitions)}`);
+        
         if (company?.aiAgentSettings?.variableDefinitions && Array.isArray(company.aiAgentSettings.variableDefinitions)) {
             const savedDefinitions = company.aiAgentSettings.variableDefinitions;
-            logger.info(`📋 [COMPANY CONFIG] Found ${savedDefinitions.length} saved cheat sheet definitions`);
+            logger.info(`📋 [COMPANY CONFIG GET] ✅ Found ${savedDefinitions.length} saved cheat sheet definitions in database`);
+            logger.info(`📋 [COMPANY CONFIG GET] Saved definition keys: ${savedDefinitions.map(d => d.key).join(', ')}`);
             
             // Get existing keys from template definitions
             const existingKeys = new Set(allDefinitions.map(d => (d.normalizedKey || d.key || '').toLowerCase()));
@@ -164,7 +170,9 @@ router.get('/:companyId/configuration/variables', async (req, res) => {
             });
             
             allDefinitions = [...allDefinitions, ...newDefinitions];
-            logger.info(`📋 [COMPANY CONFIG] Total definitions: ${allDefinitions.length} (${result.definitions.length} template + ${newDefinitions.length} cheat sheet)`);
+            logger.info(`📋 [COMPANY CONFIG GET] ✅ Total definitions: ${allDefinitions.length} (${result.definitions.length} template + ${newDefinitions.length} cheat sheet)`);
+        } else {
+            logger.info(`📋 [COMPANY CONFIG GET] ⚠️ NO saved cheat sheet definitions found in database`);
         }
         
         const response = {
@@ -229,13 +237,17 @@ router.patch('/:companyId/configuration/variables', async (req, res) => {
         
         // ✨ If variableDefinitions are provided, save them too (for cheat sheet variables)
         if (variableDefinitions && Array.isArray(variableDefinitions)) {
-            logger.info(`[COMPANY CONFIG] Saving ${variableDefinitions.length} variable definitions`);
+            logger.info(`📥 [COMPANY CONFIG PATCH] Received ${variableDefinitions.length} variable definitions to save`);
+            logger.info(`📥 [COMPANY CONFIG PATCH] Definition keys: ${variableDefinitions.map(d => d.key).slice(0, 5).join(', ')}${variableDefinitions.length > 5 ? '...' : ''}`);
             
             try {
                 const company = await Company.findById(req.params.companyId);
                 if (company) {
+                    logger.info(`📋 [COMPANY CONFIG PATCH] Company found, preparing to save definitions`);
+                    
                     if (!company.aiAgentSettings) {
                         company.aiAgentSettings = {};
+                        logger.info(`📋 [COMPANY CONFIG PATCH] Created new aiAgentSettings object`);
                     }
                     
                     // Clean the definitions (ensure no Sets, circular references, etc)
@@ -256,17 +268,25 @@ router.patch('/:companyId/configuration/variables', async (req, res) => {
                         preferredFormat: def.preferredFormat
                     }));
                     
+                    logger.info(`📋 [COMPANY CONFIG PATCH] Cleaned definitions, setting to company.aiAgentSettings.variableDefinitions`);
                     company.aiAgentSettings.variableDefinitions = cleanedDefinitions;
                     company.markModified('aiAgentSettings.variableDefinitions');
+                    logger.info(`📋 [COMPANY CONFIG PATCH] Marked as modified, calling save()...`);
+                    
                     await company.save();
-                    logger.info(`✅ [COMPANY CONFIG] Variable definitions saved for company: ${req.params.companyId}`);
+                    logger.info(`✅ [COMPANY CONFIG PATCH] ✅✅✅ Variable definitions SAVED to database for company: ${req.params.companyId}`);
+                    logger.info(`✅ [COMPANY CONFIG PATCH] Saved ${cleanedDefinitions.length} definitions`);
+                } else {
+                    logger.error(`❌ [COMPANY CONFIG PATCH] Company not found: ${req.params.companyId}`);
                 }
             } catch (defSaveError) {
-                logger.error(`❌ [COMPANY CONFIG] Failed to save definitions:`, defSaveError);
-                logger.error(`❌ [COMPANY CONFIG] Error message:`, defSaveError.message);
-                logger.error(`❌ [COMPANY CONFIG] Error stack:`, defSaveError.stack);
+                logger.error(`❌ [COMPANY CONFIG PATCH] Failed to save definitions:`, defSaveError);
+                logger.error(`❌ [COMPANY CONFIG PATCH] Error message:`, defSaveError.message);
+                logger.error(`❌ [COMPANY CONFIG PATCH] Error stack:`, defSaveError.stack);
                 // Continue anyway to try to save values
             }
+        } else {
+            logger.info(`⚠️ [COMPANY CONFIG PATCH] No variableDefinitions provided in request (or not an array)`);
         }
         
         // Load definitions for validation (use provided or fetch existing)
