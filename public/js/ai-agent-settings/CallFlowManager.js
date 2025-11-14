@@ -191,7 +191,8 @@ class CallFlowManager {
       </div>
     `;
     
-    this.isDirty = false;  // Reset dirty flag after render
+    // ⚠️ DO NOT reset isDirty here! It should only reset after successful save
+    // this.isDirty = false;  // BUG: This was resetting change tracking every render
   }
   
   /**
