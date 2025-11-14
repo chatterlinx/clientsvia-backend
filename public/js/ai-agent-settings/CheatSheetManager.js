@@ -28,7 +28,7 @@ class CheatSheetManager {
     console.log('[CHEAT SHEET] Loading for company:', companyId);
     
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('adminToken');
       const response = await fetch(`/api/company/${companyId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -302,7 +302,7 @@ class CheatSheetManager {
     console.log('[CHEAT SHEET] Resetting company instructions to default...');
     
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('adminToken'); // FIX: Use correct token key
       const response = await fetch(`/api/admin/cheat-sheet/${this.companyId}/reset-instructions`, {
         method: 'POST',
         headers: {
@@ -648,7 +648,7 @@ class CheatSheetManager {
     console.log('[CHEAT SHEET] Saving...');
     
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('adminToken');
       const response = await fetch(`/api/company/${this.companyId}`, {
         method: 'PATCH',
         headers: {
@@ -686,7 +686,7 @@ class CheatSheetManager {
     this.showNotification('Compiling policy...', 'info');
     
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('adminToken');
       const response = await fetch(`/api/admin/cheat-sheet/compile/${this.companyId}`, {
         method: 'POST',
         headers: {
@@ -756,7 +756,7 @@ class CheatSheetManager {
     
     try {
       // Get company's active template
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('adminToken');
       const companyResponse = await fetch(`/api/company/${this.companyId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -810,7 +810,7 @@ class CheatSheetManager {
     
     try {
       // Get list of companies
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('adminToken');
       const companiesResponse = await fetch('/api/company', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -881,7 +881,7 @@ class CheatSheetManager {
     console.log('[CHEAT SHEET] Exporting as JSON');
     
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('adminToken');
       const response = await fetch(`/api/admin/cheat-sheet/export-json/${this.companyId}`, {
         method: 'POST',
         headers: {
@@ -929,7 +929,7 @@ class CheatSheetManager {
     
     try {
       // Get company's active template
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('adminToken');
       const companyResponse = await fetch(`/api/company/${this.companyId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
