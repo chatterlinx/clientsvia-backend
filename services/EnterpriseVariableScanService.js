@@ -1164,42 +1164,12 @@ class EnterpriseVariableScanService {
                 company.aiAgentSettings.cheatSheetScanStatus = {};
             }
             
-            // Save scan status
             company.aiAgentSettings.cheatSheetScanStatus = {
                 lastScanDate: endTime,
                 lastScanId: scanId,
                 variablesFound: variableDefinitions.length,
                 lastReport: scanReport
             };
-            
-            // ═══════════════════════════════════════════════════════════════
-            // CRITICAL: Save variable definitions so they persist on refresh
-            // ═══════════════════════════════════════════════════════════════
-            if (!company.aiAgentSettings.variableDefinitions) {
-                company.aiAgentSettings.variableDefinitions = [];
-            }
-            
-            // Smart merge: Add new cheat sheet variables without overwriting template variables
-            const existingDefs = company.aiAgentSettings.variableDefinitions;
-            const existingKeys = new Set(existingDefs.map(d => (d.key || '').toLowerCase()));
-            
-            let addedCount = 0;
-            variableDefinitions.forEach(newDef => {
-                const keyLower = (newDef.key || '').toLowerCase();
-                if (!existingKeys.has(keyLower)) {
-                    existingDefs.push(newDef);
-                    addedCount++;
-                    logger.info(`  ➕ [CHEAT SHEET SCAN] Added new variable: {${newDef.key}}`);
-                } else {
-                    logger.info(`  ⏭️  [CHEAT SHEET SCAN] Skipped existing variable: {${newDef.key}}`);
-                }
-            });
-            
-            logger.info(`✅ [CHEAT SHEET SCAN ${scanId}] Saved ${addedCount} new definitions (${existingDefs.length} total)`);
-            
-            // Mark modified for Mongoose
-            company.markModified('aiAgentSettings.variableDefinitions');
-            company.markModified('aiAgentSettings.cheatSheetScanStatus');
             
             await company.save();
             
