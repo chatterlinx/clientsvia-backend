@@ -43,6 +43,7 @@ class VariablesManager {
         this.scanStatus = null;
         this.lastScanResult = null;
         this.isScanning = false;
+        this.isScanningCheatSheet = false;  // For cheat sheet scanning
         this.pollInterval = null; // For real-time scan progress polling
         
         // ENTERPRISE: Validation & audit trail
@@ -339,11 +340,18 @@ class VariablesManager {
      * Attach event listeners for Scan & Status tab
      */
     attachScanStatusListeners() {
-        // Force Scan button
+        // Force Scan button (Templates/Scenarios)
         const forceScanBtn = document.getElementById('variables-force-scan-btn');
         if (forceScanBtn) {
             forceScanBtn.onclick = () => this.forceScan();
             console.log('✅ [VARIABLES] Force Scan button listener attached');
+        }
+        
+        // Cheat Sheet Scan button
+        const cheatSheetScanBtn = document.getElementById('variables-cheatsheet-scan-btn');
+        if (cheatSheetScanBtn) {
+            cheatSheetScanBtn.onclick = () => this.scanCheatSheet();
+            console.log('✅ [VARIABLES] Cheat Sheet Scan button listener attached');
         }
         
         // "Fill Now" buttons in alerts
@@ -618,6 +626,41 @@ class VariablesManager {
                         >
                             <i class="fas fa-radar text-2xl mr-3"></i>
                             ${this.isScanning ? 'Scanning...' : 'Force Scan Now'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Cheat Sheet Scan Card -->
+            <div class="bg-gradient-to-r from-teal-600 to-cyan-600 rounded-2xl shadow-lg p-6 mb-6 text-white">
+                <div class="flex items-center justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3 mb-2">
+                            <span class="text-4xl">📋</span>
+                            <div>
+                                <h2 class="text-2xl font-bold">CHEAT SHEET VARIABLES</h2>
+                                <p class="text-teal-100 text-sm">Scan Frontline-Intel, Edge Cases & Transfer Rules</p>
+                            </div>
+                        </div>
+                        <div class="mt-4 text-sm">
+                            <div class="bg-teal-700/30 rounded-lg p-3">
+                                <p class="text-teal-50">
+                                    <i class="fas fa-info-circle mr-2"></i>
+                                    This scans your <strong>Cheat Sheet tab</strong> (Frontline-Intel, Edge Cases, Transfer Rules) 
+                                    and loads all {variables} found into the Variables table below for you to fill out.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ml-6">
+                        <button 
+                            id="variables-cheatsheet-scan-btn"
+                            class="bg-white text-teal-700 hover:bg-teal-50 rounded-xl px-8 py-4 font-bold text-lg transition-all shadow-lg hover:shadow-xl ${this.isScanningCheatSheet ? 'opacity-50 cursor-not-allowed' : ''}"
+                            ${this.isScanningCheatSheet ? 'disabled' : ''}
+                            title="Scan cheat sheet for variables"
+                        >
+                            <i class="fas fa-clipboard-list text-2xl mr-3"></i>
+                            ${this.isScanningCheatSheet ? 'Scanning...' : 'Scan Cheat Sheet'}
                         </button>
                     </div>
                 </div>
@@ -1193,6 +1236,111 @@ class VariablesManager {
         } finally {
             this.isScanning = false;
             console.log('🔘 [SCAN] Checkpoint 30: Setting isScanning = false');
+            
+            // Re-render to show results
+            this.render();
+        }
+    }
+    
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * SCAN CHEAT SHEET ONLY
+     * Scans Frontline-Intel, Edge Cases, and Transfer Rules for {variables}
+     * Loads them into the Variables table for admin to fill out
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    async scanCheatSheet() {
+        console.log('📋 [CHEAT SHEET SCAN] Button clicked');
+        
+        if (this.isScanningCheatSheet) {
+            console.log('⚠️ [CHEAT SHEET SCAN] Already scanning, ignoring click');
+            return;
+        }
+        
+        this.isScanningCheatSheet = true;
+        console.log('📋 [CHEAT SHEET SCAN] Setting isScanningCheatSheet = true');
+        
+        // Re-render to show "Scanning..." state
+        this.render();
+        
+        try {
+            console.log('📋 [CHEAT SHEET SCAN] Calling API POST /variables/scan-cheatsheet');
+            const token = localStorage.getItem('adminToken');
+            
+            const response = await fetch(`/api/company/${this.companyId}/configuration/variables/scan-cheatsheet`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            console.log('📋 [CHEAT SHEET SCAN] Response received - HTTP', response.status);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            console.log('📋 [CHEAT SHEET SCAN] Parsing JSON response...');
+            const data = await response.json();
+            
+            console.log('📋 [CHEAT SHEET SCAN] Data received:', {
+                variablesFound: data.meta?.variablesFound || 0,
+                scanId: data.scanReport?.scanId
+            });
+            
+            // Merge cheat sheet variables with existing template variables
+            // This ensures both template AND cheat sheet variables appear in the table
+            const cheatSheetDefinitions = data.variableDefinitions || [];
+            
+            // Merge with existing definitions (avoid duplicates by normalizedKey)
+            const existingKeys = new Set(this.variableDefinitions.map(v => v.normalizedKey || v.key.toLowerCase()));
+            const newDefinitions = cheatSheetDefinitions.filter(v => {
+                const normalizedKey = v.normalizedKey || v.key.toLowerCase();
+                return !existingKeys.has(normalizedKey);
+            });
+            
+            // Add new cheat sheet variables to existing list
+            this.variableDefinitions = [...this.variableDefinitions, ...newDefinitions];
+            
+            // Update meta
+            this.meta = {
+                ...this.meta,
+                lastScanDate: data.meta?.timestamp || new Date().toISOString(),
+                totalVariables: this.variableDefinitions.length
+            };
+            
+            console.log('✅ [CHEAT SHEET SCAN] Scan complete!');
+            console.log('📊 [CHEAT SHEET SCAN] Total variables in table:', this.variableDefinitions.length);
+            console.log('📊 [CHEAT SHEET SCAN] New from cheat sheet:', newDefinitions.length);
+            
+            // Clear Redis cache
+            console.log('📋 [CHEAT SHEET SCAN] Clearing cache...');
+            await this.clearCache();
+            
+            // Show success message
+            if (newDefinitions.length > 0) {
+                const message = `✅ Cheat Sheet Scan Complete! Found ${newDefinitions.length} new variables from Cheat Sheet (Frontline-Intel, Edge Cases, Transfer Rules). Total variables: ${this.variableDefinitions.length}`;
+                console.log('✅ [CHEAT SHEET SCAN SUCCESS]', message);
+                if (this.parent.showSuccess) {
+                    this.parent.showSuccess(message);
+                }
+            } else {
+                const message = `ℹ️ Cheat Sheet Scan Complete! All ${cheatSheetDefinitions.length} variables from Cheat Sheet already exist in the Variables table.`;
+                console.log('ℹ️ [CHEAT SHEET SCAN INFO]', message);
+                if (this.parent.showInfo) {
+                    this.parent.showInfo(message, 8000);
+                } else if (this.parent.showSuccess) {
+                    this.parent.showSuccess(message);
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ [CHEAT SHEET SCAN] Failed:', error);
+            this.parent.showError('Cheat Sheet scan failed. Please try again.');
+        } finally {
+            this.isScanningCheatSheet = false;
+            console.log('📋 [CHEAT SHEET SCAN] Setting isScanningCheatSheet = false');
             
             // Re-render to show results
             this.render();
