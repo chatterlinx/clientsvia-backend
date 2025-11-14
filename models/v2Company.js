@@ -1018,7 +1018,8 @@ const companySchema = new mongoose.Schema({
             },
             type: { 
                 type: String, 
-                enum: ['text', 'tel', 'email', 'url', 'currency', 'number', 'multiline'],
+                enum: ['text', 'tel', 'phone', 'email', 'url', 'currency', 'number', 'multiline'],
+                //             ^^^ Added 'phone' to match template schema (both 'tel' and 'phone' now valid)
                 default: 'text'
                 // Smart type inference from placeholder name
             },
