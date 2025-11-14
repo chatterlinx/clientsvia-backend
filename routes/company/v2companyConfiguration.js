@@ -145,12 +145,32 @@ router.get('/:companyId/configuration/variables', async (req, res) => {
         
         // ✨ ENTERPRISE: Include last scan report if available  
         const company = await Company.findById(req.params.companyId)
-            .select('aiAgentSettings.variableScanStatus.lastReport');
+            .select('aiAgentSettings.variableScanStatus.lastReport aiAgentSettings.variableDefinitions');
+        
+        // ✨ MERGE: Combine template definitions with saved cheat sheet definitions
+        let allDefinitions = result.definitions || [];
+        
+        if (company?.aiAgentSettings?.variableDefinitions && Array.isArray(company.aiAgentSettings.variableDefinitions)) {
+            const savedDefinitions = company.aiAgentSettings.variableDefinitions;
+            logger.info(`📋 [COMPANY CONFIG] Found ${savedDefinitions.length} saved cheat sheet definitions`);
+            
+            // Get existing keys from template definitions
+            const existingKeys = new Set(allDefinitions.map(d => (d.normalizedKey || d.key || '').toLowerCase()));
+            
+            // Add cheat sheet definitions that aren't already in template definitions
+            const newDefinitions = savedDefinitions.filter(d => {
+                const normalizedKey = (d.normalizedKey || d.key || '').toLowerCase();
+                return !existingKeys.has(normalizedKey);
+            });
+            
+            allDefinitions = [...allDefinitions, ...newDefinitions];
+            logger.info(`📋 [COMPANY CONFIG] Total definitions: ${allDefinitions.length} (${result.definitions.length} template + ${newDefinitions.length} cheat sheet)`);
+        }
         
         const response = {
             success: true,
             variables: result.variables,
-            definitions: result.definitions,
+            definitions: allDefinitions, // ✅ Return merged definitions
             meta: result.meta
         };
         
