@@ -315,7 +315,9 @@ class EnterpriseVariableScanService {
             // ═══════════════════════════════════════════════════════════════
             logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 6.5: Scanning Frontline-Intel...`);
             
-            const frontlineIntel = company.aiAgentSettings?.cheatSheet?.frontlineIntel || '';
+            // Safe access with fallback for companies without cheatSheet initialized
+            const cheatSheet = company.aiAgentSettings?.cheatSheet || {};
+            const frontlineIntel = cheatSheet.frontlineIntel || '';
             let frontlineIntelReport = {
                 source: 'Frontline-Intel',
                 enabled: true,
@@ -421,7 +423,8 @@ class EnterpriseVariableScanService {
             // ═══════════════════════════════════════════════════════════════
             logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 6.6: Scanning Edge Cases...`);
             
-            const edgeCases = company.aiAgentSettings?.cheatSheet?.edgeCases || [];
+            // Safe access - reuse cheatSheet from above
+            const edgeCases = cheatSheet.edgeCases || [];
             let edgeCasesReport = {
                 source: 'Edge Cases',
                 enabled: true,
@@ -524,7 +527,8 @@ class EnterpriseVariableScanService {
             // ═══════════════════════════════════════════════════════════════
             logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 6.7: Scanning Transfer Rules...`);
             
-            const transferRules = company.aiAgentSettings?.cheatSheet?.transferRules || [];
+            // Safe access - reuse cheatSheet from above
+            const transferRules = cheatSheet.transferRules || [];
             let transferRulesReport = {
                 source: 'Transfer Rules',
                 enabled: true,
