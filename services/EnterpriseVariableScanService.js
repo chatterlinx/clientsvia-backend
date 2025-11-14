@@ -1164,6 +1164,7 @@ class EnterpriseVariableScanService {
                 company.aiAgentSettings.cheatSheetScanStatus = {};
             }
             
+            // Save scan status metadata
             company.aiAgentSettings.cheatSheetScanStatus = {
                 lastScanDate: endTime,
                 lastScanId: scanId,
@@ -1171,7 +1172,70 @@ class EnterpriseVariableScanService {
                 lastReport: scanReport
             };
             
+            // ═══════════════════════════════════════════════════════════════
+            // CRITICAL FIX: Merge cheat sheet variables with existing definitions
+            // This ensures variables persist across page refreshes
+            // ═══════════════════════════════════════════════════════════════
+            if (!company.aiAgentSettings.variableDefinitions) {
+                company.aiAgentSettings.variableDefinitions = [];
+            }
+            
+            const existingDefs = company.aiAgentSettings.variableDefinitions;
+            let newCount = 0;
+            let updatedCount = 0;
+            
+            logger.info(`📋 [CHEAT SHEET SCAN ${scanId}] Merging variables...`);
+            logger.info(`📋 [CHEAT SHEET SCAN ${scanId}] Existing definitions: ${existingDefs.length}`);
+            logger.info(`📋 [CHEAT SHEET SCAN ${scanId}] New from cheat sheet: ${variableDefinitions.length}`);
+            
+            variableDefinitions.forEach(newDef => {
+                // Find by normalized key to avoid duplicates
+                const normalizedKey = (newDef.normalizedKey || newDef.key || '').toLowerCase();
+                const existingIndex = existingDefs.findIndex(d => {
+                    const existingNormalized = (d.normalizedKey || d.key || '').toLowerCase();
+                    return existingNormalized === normalizedKey;
+                });
+                
+                if (existingIndex === -1) {
+                    // New variable from cheat sheet - add it
+                    existingDefs.push({
+                        ...newDef,
+                        source: 'Cheat Sheet',
+                        addedBy: 'cheat_sheet_scan',
+                        addedAt: endTime
+                    });
+                    newCount++;
+                    logger.info(`  ➕ NEW: {${newDef.key}} (from Cheat Sheet)`);
+                } else {
+                    // Existing variable - update metadata but preserve user-filled value
+                    const existing = existingDefs[existingIndex];
+                    existingDefs[existingIndex] = {
+                        ...existing,
+                        // Update metadata
+                        usageCount: (existing.usageCount || 0) + (newDef.usageCount || 0),
+                        locations: [...(existing.locations || []), ...(newDef.locations || [])],
+                        source: existing.source === 'Cheat Sheet' ? 'Cheat Sheet' : `${existing.source}, Cheat Sheet`,
+                        lastUpdated: endTime,
+                        // Preserve user-filled value if it exists
+                        value: existing.value || newDef.value || ''
+                    };
+                    updatedCount++;
+                    logger.info(`  🔄 UPDATE: {${newDef.key}} (usage: ${existingDefs[existingIndex].usageCount})`);
+                }
+            });
+            
+            logger.info(`✅ [CHEAT SHEET SCAN ${scanId}] Merge complete - ${newCount} new, ${updatedCount} updated`);
+            logger.info(`📊 [CHEAT SHEET SCAN ${scanId}] Total definitions now: ${existingDefs.length}`);
+            
+            // Mark as modified (required for Mongoose nested objects)
+            company.markModified('aiAgentSettings.variableDefinitions');
+            company.markModified('aiAgentSettings.cheatSheetScanStatus');
+            
             await company.save();
+            
+            // Clear cache to ensure fresh data loads immediately
+            await CacheHelper.clearCompanyCache(companyId);
+            logger.info(`🗑️  [CHEAT SHEET SCAN ${scanId}] Cache cleared for company: ${companyId}`);
             
             logger.info(`✅ [CHEAT SHEET SCAN ${scanId}] Scan complete`);
             logger.info(`📊 [CHEAT SHEET SCAN ${scanId}] ${variableDefinitions.length} variables, ${totalPlaceholders} occurrences`);
