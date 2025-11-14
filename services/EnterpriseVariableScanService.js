@@ -661,7 +661,7 @@ class EnterpriseVariableScanService {
                     locations: data.locations,
                     source: data.locations.length > 0 
                         ? templatesScanned.find(t => 
-                            t.scenarios.list.some(s => s.scenarioId === data.locations[0].scenarioId)
+                            t.scenarios?.list?.some(s => s.scenarioId === data.locations[0].scenarioId)
                           )?.templateName || 'Unknown'
                         : 'Unknown',
                     
