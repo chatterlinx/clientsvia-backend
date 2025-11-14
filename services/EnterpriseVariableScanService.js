@@ -1174,27 +1174,47 @@ class EnterpriseVariableScanService {
             // ═══════════════════════════════════════════════════════════════
             // SAVE DEFINITIONS TO MONGODB (like Force Scan does)
             // ═══════════════════════════════════════════════════════════════
-            if (!company.aiAgentSettings.variableDefinitions) {
-                company.aiAgentSettings.variableDefinitions = [];
-            }
-            
-            const existingDefs = company.aiAgentSettings.variableDefinitions;
-            const existingKeys = new Set(existingDefs.map(d => (d.key || '').toLowerCase()));
-            
-            let addedCount = 0;
-            variableDefinitions.forEach(newDef => {
-                const keyLower = (newDef.key || '').toLowerCase();
-                if (!existingKeys.has(keyLower)) {
-                    existingDefs.push(newDef);
-                    addedCount++;
-                    logger.info(`  ➕ [CHEAT SHEET] Added: {${newDef.key}}`);
+            try {
+                logger.info(`💾 [CHEAT SHEET SCAN ${scanId}] Starting definition save...`);
+                logger.info(`💾 [CHEAT SHEET SCAN ${scanId}] Company ID: ${company._id}`);
+                logger.info(`💾 [CHEAT SHEET SCAN ${scanId}] aiAgentSettings exists: ${!!company.aiAgentSettings}`);
+                
+                if (!company.aiAgentSettings.variableDefinitions) {
+                    company.aiAgentSettings.variableDefinitions = [];
+                    logger.info(`💾 [CHEAT SHEET SCAN ${scanId}] Initialized empty variableDefinitions array`);
                 }
-            });
-            
-            logger.info(`💾 [CHEAT SHEET SCAN ${scanId}] Merged ${addedCount} new definitions (${existingDefs.length} total in MongoDB)`);
-            company.markModified('aiAgentSettings.variableDefinitions');
-            
-            await company.save();
+                
+                const existingDefs = company.aiAgentSettings.variableDefinitions;
+                logger.info(`💾 [CHEAT SHEET SCAN ${scanId}] Existing definitions: ${existingDefs.length}`);
+                
+                const existingKeys = new Set(existingDefs.map(d => (d.key || '').toLowerCase()));
+                logger.info(`💾 [CHEAT SHEET SCAN ${scanId}] Existing keys: ${Array.from(existingKeys).join(', ')}`);
+                
+                let addedCount = 0;
+                variableDefinitions.forEach(newDef => {
+                    const keyLower = (newDef.key || '').toLowerCase();
+                    if (!existingKeys.has(keyLower)) {
+                        existingDefs.push(newDef);
+                        addedCount++;
+                        logger.info(`  ➕ [CHEAT SHEET] Added: {${newDef.key}}`);
+                    }
+                });
+                
+                logger.info(`💾 [CHEAT SHEET SCAN ${scanId}] Merged ${addedCount} new definitions (${existingDefs.length} total)`);
+                logger.info(`💾 [CHEAT SHEET SCAN ${scanId}] Calling markModified...`);
+                company.markModified('aiAgentSettings.variableDefinitions');
+                
+                logger.info(`💾 [CHEAT SHEET SCAN ${scanId}] Calling company.save()...`);
+                await company.save();
+                logger.info(`✅ [CHEAT SHEET SCAN ${scanId}] Successfully saved to MongoDB`);
+                
+            } catch (saveError) {
+                logger.error(`❌ [CHEAT SHEET SCAN ${scanId}] SAVE FAILED:`, saveError);
+                logger.error(`❌ [CHEAT SHEET SCAN ${scanId}] Error name:`, saveError.name);
+                logger.error(`❌ [CHEAT SHEET SCAN ${scanId}] Error message:`, saveError.message);
+                logger.error(`❌ [CHEAT SHEET SCAN ${scanId}] Error stack:`, saveError.stack);
+                throw new Error(`Failed to save variable definitions: ${saveError.message}`);
+            }
             
             logger.info(`✅ [CHEAT SHEET SCAN ${scanId}] Scan complete`);
             logger.info(`📊 [CHEAT SHEET SCAN ${scanId}] ${variableDefinitions.length} variables, ${totalPlaceholders} occurrences`);
