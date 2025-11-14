@@ -1314,34 +1314,7 @@ class VariablesManager {
             console.log('✅ [CHEAT SHEET SCAN] Scan complete!');
             console.log('📊 [CHEAT SHEET SCAN] Total variables in table:', this.variableDefinitions.length);
             console.log('📊 [CHEAT SHEET SCAN] New from cheat sheet:', newDefinitions.length);
-            
-            // ═══════════════════════════════════════════════════════════════
-            // CRITICAL FIX: Save definitions to MongoDB so they persist on refresh
-            // ═══════════════════════════════════════════════════════════════
-            if (newDefinitions.length > 0) {
-                console.log('💾 [CHEAT SHEET SCAN] Saving definitions to database...');
-                try {
-                    const saveResponse = await fetch(`/api/company/${this.companyId}/configuration/variables`, {
-                        method: 'PATCH',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            variables: this.variables || {},
-                            variableDefinitions: this.variableDefinitions
-                        })
-                    });
-                    
-                    if (saveResponse.ok) {
-                        console.log('✅ [CHEAT SHEET SCAN] Definitions saved to database');
-                    } else {
-                        console.warn('⚠️ [CHEAT SHEET SCAN] Failed to save definitions (HTTP', saveResponse.status, ')');
-                    }
-                } catch (saveError) {
-                    console.error('❌ [CHEAT SHEET SCAN] Error saving definitions:', saveError);
-                }
-            }
+            console.log('💾 [CHEAT SHEET SCAN] Backend saved definitions to MongoDB directly (like Force Scan)');
             
             // Clear Redis cache
             console.log('📋 [CHEAT SHEET SCAN] Clearing cache...');

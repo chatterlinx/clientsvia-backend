@@ -1171,6 +1171,29 @@ class EnterpriseVariableScanService {
                 lastReport: scanReport
             };
             
+            // ═══════════════════════════════════════════════════════════════
+            // SAVE DEFINITIONS TO MONGODB (like Force Scan does)
+            // ═══════════════════════════════════════════════════════════════
+            if (!company.aiAgentSettings.variableDefinitions) {
+                company.aiAgentSettings.variableDefinitions = [];
+            }
+            
+            const existingDefs = company.aiAgentSettings.variableDefinitions;
+            const existingKeys = new Set(existingDefs.map(d => (d.key || '').toLowerCase()));
+            
+            let addedCount = 0;
+            variableDefinitions.forEach(newDef => {
+                const keyLower = (newDef.key || '').toLowerCase();
+                if (!existingKeys.has(keyLower)) {
+                    existingDefs.push(newDef);
+                    addedCount++;
+                    logger.info(`  ➕ [CHEAT SHEET] Added: {${newDef.key}}`);
+                }
+            });
+            
+            logger.info(`💾 [CHEAT SHEET SCAN ${scanId}] Merged ${addedCount} new definitions (${existingDefs.length} total in MongoDB)`);
+            company.markModified('aiAgentSettings.variableDefinitions');
+            
             await company.save();
             
             logger.info(`✅ [CHEAT SHEET SCAN ${scanId}] Scan complete`);
