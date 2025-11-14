@@ -632,19 +632,19 @@ class VariablesManager {
             </div>
             
             <!-- Cheat Sheet Scan Card -->
-            <div class="bg-gradient-to-r from-teal-600 to-cyan-600 rounded-2xl shadow-lg p-6 mb-6 text-white">
+            <div style="background-color: #0d9488;" class="rounded-2xl shadow-lg p-6 mb-6 text-white">
                 <div class="flex items-center justify-between">
                     <div class="flex-1">
                         <div class="flex items-center gap-3 mb-2">
                             <span class="text-4xl">📋</span>
                             <div>
                                 <h2 class="text-2xl font-bold">CHEAT SHEET VARIABLES</h2>
-                                <p class="text-teal-100 text-sm">Scan Frontline-Intel, Edge Cases & Transfer Rules</p>
+                                <p class="text-white opacity-90 text-sm">Scan Frontline-Intel, Edge Cases & Transfer Rules</p>
                             </div>
                         </div>
                         <div class="mt-4 text-sm">
-                            <div class="bg-teal-700/30 rounded-lg p-3">
-                                <p class="text-teal-50">
+                            <div style="background-color: rgba(13, 148, 136, 0.3);" class="rounded-lg p-3">
+                                <p class="text-white">
                                     <i class="fas fa-info-circle mr-2"></i>
                                     This scans your <strong>Cheat Sheet tab</strong> (Frontline-Intel, Edge Cases, Transfer Rules) 
                                     and loads all {variables} found into the Variables table below for you to fill out.
@@ -655,7 +655,8 @@ class VariablesManager {
                     <div class="ml-6">
                         <button 
                             id="variables-cheatsheet-scan-btn"
-                            class="bg-white text-teal-700 hover:bg-teal-50 rounded-xl px-8 py-4 font-bold text-lg transition-all shadow-lg hover:shadow-xl ${this.isScanningCheatSheet ? 'opacity-50 cursor-not-allowed' : ''}"
+                            style="background-color: white; color: #0d9488;"
+                            class="hover:bg-teal-50 rounded-xl px-8 py-4 font-bold text-lg transition-all shadow-lg hover:shadow-xl ${this.isScanningCheatSheet ? 'opacity-50 cursor-not-allowed' : ''}"
                             ${this.isScanningCheatSheet ? 'disabled' : ''}
                             title="Scan cheat sheet for variables"
                         >
