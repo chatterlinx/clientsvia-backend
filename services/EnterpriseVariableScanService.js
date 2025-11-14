@@ -311,327 +311,13 @@ class EnterpriseVariableScanService {
             }
             
             // ═══════════════════════════════════════════════════════════════
-            // STEP 3.5: Scan Frontline-Intel (NEW!)
+            // NOTE: Cheat Sheet scanning (Frontline Intel, Edge Cases, Transfer Rules)
+            // has been moved to a separate scanCheatSheetOnly() method with its own
+            // dedicated endpoint. Use that method to scan cheat sheet variables.
             // ═══════════════════════════════════════════════════════════════
-            logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 6.5: Scanning Frontline-Intel...`);
-            
-            // Safe access with fallback for companies without cheatSheet initialized
-            const cheatSheet = company.aiAgentSettings?.cheatSheet || {};
-            const frontlineIntel = cheatSheet.frontlineIntel || '';
-            let frontlineIntelReport = {
-                source: 'Frontline-Intel',
-                enabled: true,
-                charactersScanned: frontlineIntel.length,
-                variablesFound: {
-                    unique: 0,
-                    totalOccurrences: 0,
-                    breakdown: []
-                },
-                wordAnalysis: {
-                    totalWords: 0,
-                    uniqueWords: 0,
-                    placeholderWords: 0,
-                    regularWords: 0
-                }
-            };
-            
-            if (frontlineIntel && frontlineIntel.trim()) {
-                logger.info(`📝 [ENTERPRISE SCAN ${scanId}] Checkpoint 6.5.1: Frontline-Intel text: ${frontlineIntel.length} characters`);
-                
-                // Word count analysis
-                const words = frontlineIntel.toLowerCase().match(/\b\w+\b/g) || [];
-                const wordCount = words.length;
-                frontlineIntelReport.wordAnalysis.totalWords = wordCount;
-                totalWords += wordCount;
-                
-                const uniqueWordsInFI = new Set(words);
-                frontlineIntelReport.wordAnalysis.uniqueWords = uniqueWordsInFI.size;
-                words.forEach(word => uniqueWordsSet.add(word));
-                
-                // Extract {variables}
-                const variableMatches = frontlineIntel.match(/\{([a-zA-Z0-9_]+)\}/g) || [];
-                const variablesInFI = variableMatches.map(m => m.slice(1, -1)); // Remove { }
-                
-                frontlineIntelReport.wordAnalysis.placeholderWords = variableMatches.length;
-                totalPlaceholders += variableMatches.length;
-                
-                logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 6.5.2: Found ${variableMatches.length} variable occurrences in Frontline-Intel`);
-                
-                // SMART CASE-INSENSITIVE VARIABLE GROUPING (same as scenarios)
-                const uniqueVarsInFI = [...new Set(variablesInFI)];
-                uniqueVarsInFI.forEach(varKey => {
-                    const count = variablesInFI.filter(v => v === varKey).length;
-                    
-                    // Use lowercase as grouping key (case-insensitive)
-                    const normalizedKey = varKey.toLowerCase();
-                    
-                    if (!allVariables.has(normalizedKey)) {
-                        allVariables.set(normalizedKey, {
-                            normalizedKey: normalizedKey,
-                            preferredFormat: varKey,
-                            formatVariations: new Set([varKey]),
-                            formatCounts: { [varKey]: 0 },
-                            occurrences: 0,
-                            locations: []
-                        });
-                    }
-                    
-                    const varData = allVariables.get(normalizedKey);
-                    
-                    // Track this format variation
-                    varData.formatVariations.add(varKey);
-                    varData.formatCounts[varKey] = (varData.formatCounts[varKey] || 0) + count;
-                    varData.occurrences += count;
-                    
-                    // Update preferred format (most used format wins)
-                    const currentPreferredCount = varData.formatCounts[varData.preferredFormat] || 0;
-                    if (varData.formatCounts[varKey] > currentPreferredCount) {
-                        varData.preferredFormat = varKey;
-                    }
-                    
-                    varData.locations.push({
-                        source: 'Frontline-Intel',
-                        category: 'Cheat Sheet',
-                        location: 'Frontline-Intel Protocols',
-                        count,
-                        format: varKey
-                    });
-                    
-                    logger.info(`  📌 [ENTERPRISE SCAN ${scanId}] Variable {${varKey}} found ${count} time(s) in Frontline-Intel`);
-                });
-                
-                // Update report
-                frontlineIntelReport.variablesFound.unique = uniqueVarsInFI.length;
-                frontlineIntelReport.variablesFound.totalOccurrences = variableMatches.length;
-                frontlineIntelReport.variablesFound.breakdown = uniqueVarsInFI.map(varKey => ({
-                    key: varKey,
-                    occurrences: variablesInFI.filter(v => v === varKey).length
-                }));
-                frontlineIntelReport.wordAnalysis.regularWords = wordCount - variableMatches.length;
-                
-                logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 6.5.3: Frontline-Intel scan complete`);
-                logger.info(`📊 [ENTERPRISE SCAN ${scanId}] ${frontlineIntelReport.variablesFound.unique} unique variables, ${wordCount} words`);
-            } else {
-                logger.info(`ℹ️  [ENTERPRISE SCAN ${scanId}] Checkpoint 6.5.1: Frontline-Intel is empty - skipping`);
-            }
-            
-            // Add Frontline-Intel report to scanned sources
-            templatesScanned.push(frontlineIntelReport);
             
             // ═══════════════════════════════════════════════════════════════
-            // STEP 3.6: Scan Edge Cases (NEW!)
-            // ═══════════════════════════════════════════════════════════════
-            logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 6.6: Scanning Edge Cases...`);
-            
-            // Safe access - reuse cheatSheet from above
-            const edgeCases = cheatSheet.edgeCases || [];
-            let edgeCasesReport = {
-                source: 'Edge Cases',
-                enabled: true,
-                itemsScanned: edgeCases.length,
-                variablesFound: {
-                    unique: 0,
-                    totalOccurrences: 0,
-                    breakdown: []
-                },
-                wordAnalysis: {
-                    totalWords: 0,
-                    uniqueWords: 0,
-                    placeholderWords: 0,
-                    regularWords: 0
-                }
-            };
-            
-            if (edgeCases.length > 0) {
-                logger.info(`📝 [ENTERPRISE SCAN ${scanId}] Checkpoint 6.6.1: Scanning ${edgeCases.length} edge cases`);
-                
-                for (const edgeCase of edgeCases) {
-                    const edgeCaseName = edgeCase.name || 'Unnamed';
-                    const responseText = edgeCase.responseText || '';
-                    
-                    if (!responseText) continue;
-                    
-                    // Word count analysis
-                    const words = responseText.toLowerCase().match(/\b\w+\b/g) || [];
-                    const wordCount = words.length;
-                    edgeCasesReport.wordAnalysis.totalWords += wordCount;
-                    totalWords += wordCount;
-                    
-                    const uniqueWordsInEC = new Set(words);
-                    edgeCasesReport.wordAnalysis.uniqueWords += uniqueWordsInEC.size;
-                    words.forEach(word => uniqueWordsSet.add(word));
-                    
-                    // Extract {variables}
-                    const variableMatches = responseText.match(/\{([a-zA-Z0-9_]+)\}/g) || [];
-                    const variablesInEC = variableMatches.map(m => m.slice(1, -1));
-                    
-                    edgeCasesReport.wordAnalysis.placeholderWords += variableMatches.length;
-                    totalPlaceholders += variableMatches.length;
-                    
-                    // SMART CASE-INSENSITIVE VARIABLE GROUPING
-                    const uniqueVarsInEC = [...new Set(variablesInEC)];
-                    uniqueVarsInEC.forEach(varKey => {
-                        const count = variablesInEC.filter(v => v === varKey).length;
-                        const normalizedKey = varKey.toLowerCase();
-                        
-                        if (!allVariables.has(normalizedKey)) {
-                            allVariables.set(normalizedKey, {
-                                normalizedKey: normalizedKey,
-                                preferredFormat: varKey,
-                                formatVariations: new Set([varKey]),
-                                formatCounts: { [varKey]: 0 },
-                                occurrences: 0,
-                                locations: []
-                            });
-                        }
-                        
-                        const varData = allVariables.get(normalizedKey);
-                        varData.formatVariations.add(varKey);
-                        varData.formatCounts[varKey] = (varData.formatCounts[varKey] || 0) + count;
-                        varData.occurrences += count;
-                        
-                        const currentPreferredCount = varData.formatCounts[varData.preferredFormat] || 0;
-                        if (varData.formatCounts[varKey] > currentPreferredCount) {
-                            varData.preferredFormat = varKey;
-                        }
-                        
-                        varData.locations.push({
-                            source: 'Edge Case',
-                            category: 'Cheat Sheet',
-                            location: `Edge Case: ${edgeCaseName}`,
-                            count,
-                            format: varKey
-                        });
-                        
-                        logger.info(`  📌 [ENTERPRISE SCAN ${scanId}] Variable {${varKey}} found ${count} time(s) in edge case "${edgeCaseName}"`);
-                    });
-                }
-                
-                edgeCasesReport.variablesFound.unique = [...new Set(edgeCases.flatMap(ec => {
-                    const matches = (ec.responseText || '').match(/\{([a-zA-Z0-9_]+)\}/g) || [];
-                    return matches.map(m => m.slice(1, -1).toLowerCase());
-                }))].length;
-                edgeCasesReport.variablesFound.totalOccurrences = edgeCasesReport.wordAnalysis.placeholderWords;
-                edgeCasesReport.wordAnalysis.regularWords = edgeCasesReport.wordAnalysis.totalWords - edgeCasesReport.wordAnalysis.placeholderWords;
-                
-                logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 6.6.2: Edge Cases scan complete`);
-                logger.info(`📊 [ENTERPRISE SCAN ${scanId}] ${edgeCasesReport.variablesFound.unique} unique variables, ${edgeCasesReport.wordAnalysis.totalWords} words`);
-            } else {
-                logger.info(`ℹ️  [ENTERPRISE SCAN ${scanId}] Checkpoint 6.6.1: No edge cases configured - skipping`);
-            }
-            
-            templatesScanned.push(edgeCasesReport);
-            
-            // ═══════════════════════════════════════════════════════════════
-            // STEP 3.7: Scan Transfer Rules (NEW!)
-            // ═══════════════════════════════════════════════════════════════
-            logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 6.7: Scanning Transfer Rules...`);
-            
-            // Safe access - reuse cheatSheet from above
-            const transferRules = cheatSheet.transferRules || [];
-            let transferRulesReport = {
-                source: 'Transfer Rules',
-                enabled: true,
-                itemsScanned: transferRules.length,
-                variablesFound: {
-                    unique: 0,
-                    totalOccurrences: 0,
-                    breakdown: []
-                },
-                wordAnalysis: {
-                    totalWords: 0,
-                    uniqueWords: 0,
-                    placeholderWords: 0,
-                    regularWords: 0
-                }
-            };
-            
-            if (transferRules.length > 0) {
-                logger.info(`📝 [ENTERPRISE SCAN ${scanId}] Checkpoint 6.7.1: Scanning ${transferRules.length} transfer rules`);
-                
-                for (const rule of transferRules) {
-                    const ruleName = rule.name || 'Unnamed';
-                    const script = rule.script || '';
-                    const phoneNumber = rule.phoneNumber || '';
-                    const contact = rule.contactNameOrQueue || '';
-                    
-                    // Combine all text fields
-                    const allText = [script, phoneNumber, contact].join(' ');
-                    
-                    // Word count analysis
-                    const words = allText.toLowerCase().match(/\b\w+\b/g) || [];
-                    const wordCount = words.length;
-                    transferRulesReport.wordAnalysis.totalWords += wordCount;
-                    totalWords += wordCount;
-                    
-                    const uniqueWordsInTR = new Set(words);
-                    transferRulesReport.wordAnalysis.uniqueWords += uniqueWordsInTR.size;
-                    words.forEach(word => uniqueWordsSet.add(word));
-                    
-                    // Extract {variables}
-                    const variableMatches = allText.match(/\{([a-zA-Z0-9_]+)\}/g) || [];
-                    const variablesInTR = variableMatches.map(m => m.slice(1, -1));
-                    
-                    transferRulesReport.wordAnalysis.placeholderWords += variableMatches.length;
-                    totalPlaceholders += variableMatches.length;
-                    
-                    // SMART CASE-INSENSITIVE VARIABLE GROUPING
-                    const uniqueVarsInTR = [...new Set(variablesInTR)];
-                    uniqueVarsInTR.forEach(varKey => {
-                        const count = variablesInTR.filter(v => v === varKey).length;
-                        const normalizedKey = varKey.toLowerCase();
-                        
-                        if (!allVariables.has(normalizedKey)) {
-                            allVariables.set(normalizedKey, {
-                                normalizedKey: normalizedKey,
-                                preferredFormat: varKey,
-                                formatVariations: new Set([varKey]),
-                                formatCounts: { [varKey]: 0 },
-                                occurrences: 0,
-                                locations: []
-                            });
-                        }
-                        
-                        const varData = allVariables.get(normalizedKey);
-                        varData.formatVariations.add(varKey);
-                        varData.formatCounts[varKey] = (varData.formatCounts[varKey] || 0) + count;
-                        varData.occurrences += count;
-                        
-                        const currentPreferredCount = varData.formatCounts[varData.preferredFormat] || 0;
-                        if (varData.formatCounts[varKey] > currentPreferredCount) {
-                            varData.preferredFormat = varKey;
-                        }
-                        
-                        varData.locations.push({
-                            source: 'Transfer Rule',
-                            category: 'Cheat Sheet',
-                            location: `Transfer Rule: ${ruleName}`,
-                            count,
-                            format: varKey
-                        });
-                        
-                        logger.info(`  📌 [ENTERPRISE SCAN ${scanId}] Variable {${varKey}} found ${count} time(s) in transfer rule "${ruleName}"`);
-                    });
-                }
-                
-                transferRulesReport.variablesFound.unique = [...new Set(transferRules.flatMap(rule => {
-                    const allText = [rule.script || '', rule.phoneNumber || '', rule.contactNameOrQueue || ''].join(' ');
-                    const matches = allText.match(/\{([a-zA-Z0-9_]+)\}/g) || [];
-                    return matches.map(m => m.slice(1, -1).toLowerCase());
-                }))].length;
-                transferRulesReport.variablesFound.totalOccurrences = transferRulesReport.wordAnalysis.placeholderWords;
-                transferRulesReport.wordAnalysis.regularWords = transferRulesReport.wordAnalysis.totalWords - transferRulesReport.wordAnalysis.placeholderWords;
-                
-                logger.info(`✅ [ENTERPRISE SCAN ${scanId}] Checkpoint 6.7.2: Transfer Rules scan complete`);
-                logger.info(`📊 [ENTERPRISE SCAN ${scanId}] ${transferRulesReport.variablesFound.unique} unique variables, ${transferRulesReport.wordAnalysis.totalWords} words`);
-            } else {
-                logger.info(`ℹ️  [ENTERPRISE SCAN ${scanId}] Checkpoint 6.7.1: No transfer rules configured - skipping`);
-            }
-            
-            templatesScanned.push(transferRulesReport);
-            
-            // ═══════════════════════════════════════════════════════════════
-            // STEP 4: Build Variable Definitions
+            // STEP 4: Build Variable Definitions (TEMPLATES ONLY)
             // ═══════════════════════════════════════════════════════════════
             logger.info(`🔍 [ENTERPRISE SCAN ${scanId}] Checkpoint 7: Building variable definitions...`);
             
@@ -1138,6 +824,365 @@ class EnterpriseVariableScanService {
             .replace(/([A-Z])/g, ' $1')
             .replace(/^./, str => str.toUpperCase())
             .trim();
+    }
+    
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * SCAN CHEAT SHEET ONLY - ISOLATED METHOD
+     * ═══════════════════════════════════════════════════════════════════════
+     * 
+     * PURPOSE: Scans ONLY Cheat Sheet tab data (Frontline Intel, Edge Cases, Transfer Rules)
+     *          Completely isolated from Templates/Scenarios scanning
+     *          Has its own button, own endpoint, own scanning logic
+     */
+    async scanCheatSheetOnly(companyId, options = {}) {
+        const scanId = `cheatsheet-scan-${Date.now()}-${uuidv4().slice(0, 8)}`;
+        const startTime = new Date();
+        
+        logger.info(`📋 [CHEAT SHEET SCAN ${scanId}] ═══════════════════════════════════════════════════`);
+        logger.info(`📋 [CHEAT SHEET SCAN ${scanId}] Starting Cheat Sheet Only scan`);
+        logger.info(`📋 [CHEAT SHEET SCAN ${scanId}] Company: ${companyId}`);
+        logger.info(`📋 [CHEAT SHEET SCAN ${scanId}] Trigger: ${options.reason || 'manual'}`);
+        logger.info(`📋 [CHEAT SHEET SCAN ${scanId}] Triggered By: ${options.triggeredBy || 'system'}`);
+        
+        try {
+            // ═══════════════════════════════════════════════════════════════
+            // STEP 1: Load Company
+            // ═══════════════════════════════════════════════════════════════
+            const company = await Company.findById(companyId);
+            if (!company) {
+                throw new Error(`Company ${companyId} not found`);
+            }
+            
+            const cheatSheet = company.aiAgentSettings?.cheatSheet || {};
+            const allVariables = new Map();
+            const sourcesScanned = [];
+            
+            let totalWords = 0;
+            let uniqueWordsSet = new Set();
+            let totalPlaceholders = 0;
+            
+            // ═══════════════════════════════════════════════════════════════
+            // SCAN 1: Frontline-Intel
+            // ═══════════════════════════════════════════════════════════════
+            logger.info(`📋 [CHEAT SHEET SCAN ${scanId}] Scanning Frontline-Intel...`);
+            
+            const frontlineIntel = cheatSheet.frontlineIntel || '';
+            const frontlineIntelReport = {
+                source: 'Frontline-Intel',
+                enabled: true,
+                charactersScanned: frontlineIntel.length,
+                variablesFound: { unique: 0, totalOccurrences: 0, breakdown: [] },
+                wordAnalysis: { totalWords: 0, uniqueWords: 0, placeholderWords: 0, regularWords: 0 }
+            };
+            
+            if (frontlineIntel && frontlineIntel.trim()) {
+                const words = frontlineIntel.toLowerCase().match(/\b\w+\b/g) || [];
+                frontlineIntelReport.wordAnalysis.totalWords = words.length;
+                totalWords += words.length;
+                
+                const uniqueWordsInFI = new Set(words);
+                frontlineIntelReport.wordAnalysis.uniqueWords = uniqueWordsInFI.size;
+                words.forEach(word => uniqueWordsSet.add(word));
+                
+                const variableMatches = frontlineIntel.match(/\{([a-zA-Z0-9_]+)\}/g) || [];
+                const variablesInFI = variableMatches.map(m => m.slice(1, -1));
+                
+                frontlineIntelReport.wordAnalysis.placeholderWords = variableMatches.length;
+                totalPlaceholders += variableMatches.length;
+                
+                const uniqueVarsInFI = [...new Set(variablesInFI)];
+                uniqueVarsInFI.forEach(varKey => {
+                    const count = variablesInFI.filter(v => v === varKey).length;
+                    const normalizedKey = varKey.toLowerCase();
+                    
+                    if (!allVariables.has(normalizedKey)) {
+                        allVariables.set(normalizedKey, {
+                            normalizedKey: normalizedKey,
+                            preferredFormat: varKey,
+                            formatVariations: new Set([varKey]),
+                            formatCounts: { [varKey]: 0 },
+                            occurrences: 0,
+                            locations: []
+                        });
+                    }
+                    
+                    const varData = allVariables.get(normalizedKey);
+                    varData.formatVariations.add(varKey);
+                    varData.formatCounts[varKey] = (varData.formatCounts[varKey] || 0) + count;
+                    varData.occurrences += count;
+                    
+                    if (varData.formatCounts[varKey] > (varData.formatCounts[varData.preferredFormat] || 0)) {
+                        varData.preferredFormat = varKey;
+                    }
+                    
+                    varData.locations.push({
+                        source: 'Frontline-Intel',
+                        category: 'Cheat Sheet',
+                        location: 'Frontline-Intel',
+                        count,
+                        format: varKey
+                    });
+                });
+                
+                frontlineIntelReport.variablesFound.unique = uniqueVarsInFI.length;
+                frontlineIntelReport.variablesFound.totalOccurrences = variableMatches.length;
+                frontlineIntelReport.wordAnalysis.regularWords = frontlineIntelReport.wordAnalysis.totalWords - frontlineIntelReport.wordAnalysis.placeholderWords;
+            }
+            
+            sourcesScanned.push(frontlineIntelReport);
+            
+            // ═══════════════════════════════════════════════════════════════
+            // SCAN 2: Edge Cases
+            // ═══════════════════════════════════════════════════════════════
+            logger.info(`📋 [CHEAT SHEET SCAN ${scanId}] Scanning Edge Cases...`);
+            
+            const edgeCases = cheatSheet.edgeCases || [];
+            const edgeCasesReport = {
+                source: 'Edge Cases',
+                enabled: true,
+                itemsScanned: edgeCases.length,
+                variablesFound: { unique: 0, totalOccurrences: 0, breakdown: [] },
+                wordAnalysis: { totalWords: 0, uniqueWords: 0, placeholderWords: 0, regularWords: 0 }
+            };
+            
+            if (edgeCases.length > 0) {
+                for (const edgeCase of edgeCases) {
+                    const edgeCaseName = edgeCase.name || 'Unnamed';
+                    const responseText = edgeCase.responseText || '';
+                    
+                    if (!responseText) continue;
+                    
+                    const words = responseText.toLowerCase().match(/\b\w+\b/g) || [];
+                    edgeCasesReport.wordAnalysis.totalWords += words.length;
+                    totalWords += words.length;
+                    
+                    const uniqueWordsInEC = new Set(words);
+                    edgeCasesReport.wordAnalysis.uniqueWords += uniqueWordsInEC.size;
+                    words.forEach(word => uniqueWordsSet.add(word));
+                    
+                    const variableMatches = responseText.match(/\{([a-zA-Z0-9_]+)\}/g) || [];
+                    const variablesInEC = variableMatches.map(m => m.slice(1, -1));
+                    
+                    edgeCasesReport.wordAnalysis.placeholderWords += variableMatches.length;
+                    totalPlaceholders += variableMatches.length;
+                    
+                    const uniqueVarsInEC = [...new Set(variablesInEC)];
+                    uniqueVarsInEC.forEach(varKey => {
+                        const count = variablesInEC.filter(v => v === varKey).length;
+                        const normalizedKey = varKey.toLowerCase();
+                        
+                        if (!allVariables.has(normalizedKey)) {
+                            allVariables.set(normalizedKey, {
+                                normalizedKey: normalizedKey,
+                                preferredFormat: varKey,
+                                formatVariations: new Set([varKey]),
+                                formatCounts: { [varKey]: 0 },
+                                occurrences: 0,
+                                locations: []
+                            });
+                        }
+                        
+                        const varData = allVariables.get(normalizedKey);
+                        varData.formatVariations.add(varKey);
+                        varData.formatCounts[varKey] = (varData.formatCounts[varKey] || 0) + count;
+                        varData.occurrences += count;
+                        
+                        if (varData.formatCounts[varKey] > (varData.formatCounts[varData.preferredFormat] || 0)) {
+                            varData.preferredFormat = varKey;
+                        }
+                        
+                        varData.locations.push({
+                            source: 'Edge Case',
+                            category: 'Cheat Sheet',
+                            location: `Edge Case: ${edgeCaseName}`,
+                            count,
+                            format: varKey
+                        });
+                    });
+                }
+                
+                edgeCasesReport.variablesFound.unique = [...new Set(edgeCases.flatMap(ec => {
+                    const matches = (ec.responseText || '').match(/\{([a-zA-Z0-9_]+)\}/g) || [];
+                    return matches.map(m => m.slice(1, -1).toLowerCase());
+                }))].length;
+                edgeCasesReport.variablesFound.totalOccurrences = edgeCasesReport.wordAnalysis.placeholderWords;
+                edgeCasesReport.wordAnalysis.regularWords = edgeCasesReport.wordAnalysis.totalWords - edgeCasesReport.wordAnalysis.placeholderWords;
+            }
+            
+            sourcesScanned.push(edgeCasesReport);
+            
+            // ═══════════════════════════════════════════════════════════════
+            // SCAN 3: Transfer Rules
+            // ═══════════════════════════════════════════════════════════════
+            logger.info(`📋 [CHEAT SHEET SCAN ${scanId}] Scanning Transfer Rules...`);
+            
+            const transferRules = cheatSheet.transferRules || [];
+            const transferRulesReport = {
+                source: 'Transfer Rules',
+                enabled: true,
+                itemsScanned: transferRules.length,
+                variablesFound: { unique: 0, totalOccurrences: 0, breakdown: [] },
+                wordAnalysis: { totalWords: 0, uniqueWords: 0, placeholderWords: 0, regularWords: 0 }
+            };
+            
+            if (transferRules.length > 0) {
+                for (const rule of transferRules) {
+                    const ruleName = rule.name || 'Unnamed';
+                    const allText = [rule.script || '', rule.phoneNumber || '', rule.contactNameOrQueue || ''].join(' ');
+                    
+                    const words = allText.toLowerCase().match(/\b\w+\b/g) || [];
+                    transferRulesReport.wordAnalysis.totalWords += words.length;
+                    totalWords += words.length;
+                    
+                    const uniqueWordsInTR = new Set(words);
+                    transferRulesReport.wordAnalysis.uniqueWords += uniqueWordsInTR.size;
+                    words.forEach(word => uniqueWordsSet.add(word));
+                    
+                    const variableMatches = allText.match(/\{([a-zA-Z0-9_]+)\}/g) || [];
+                    const variablesInTR = variableMatches.map(m => m.slice(1, -1));
+                    
+                    transferRulesReport.wordAnalysis.placeholderWords += variableMatches.length;
+                    totalPlaceholders += variableMatches.length;
+                    
+                    const uniqueVarsInTR = [...new Set(variablesInTR)];
+                    uniqueVarsInTR.forEach(varKey => {
+                        const count = variablesInTR.filter(v => v === varKey).length;
+                        const normalizedKey = varKey.toLowerCase();
+                        
+                        if (!allVariables.has(normalizedKey)) {
+                            allVariables.set(normalizedKey, {
+                                normalizedKey: normalizedKey,
+                                preferredFormat: varKey,
+                                formatVariations: new Set([varKey]),
+                                formatCounts: { [varKey]: 0 },
+                                occurrences: 0,
+                                locations: []
+                            });
+                        }
+                        
+                        const varData = allVariables.get(normalizedKey);
+                        varData.formatVariations.add(varKey);
+                        varData.formatCounts[varKey] = (varData.formatCounts[varKey] || 0) + count;
+                        varData.occurrences += count;
+                        
+                        if (varData.formatCounts[varKey] > (varData.formatCounts[varData.preferredFormat] || 0)) {
+                            varData.preferredFormat = varKey;
+                        }
+                        
+                        varData.locations.push({
+                            source: 'Transfer Rule',
+                            category: 'Cheat Sheet',
+                            location: `Transfer Rule: ${ruleName}`,
+                            count,
+                            format: varKey
+                        });
+                    });
+                }
+                
+                transferRulesReport.variablesFound.unique = [...new Set(transferRules.flatMap(rule => {
+                    const allText = [rule.script || '', rule.phoneNumber || '', rule.contactNameOrQueue || ''].join(' ');
+                    const matches = allText.match(/\{([a-zA-Z0-9_]+)\}/g) || [];
+                    return matches.map(m => m.slice(1, -1).toLowerCase());
+                }))].length;
+                transferRulesReport.variablesFound.totalOccurrences = transferRulesReport.wordAnalysis.placeholderWords;
+                transferRulesReport.wordAnalysis.regularWords = transferRulesReport.wordAnalysis.totalWords - transferRulesReport.wordAnalysis.placeholderWords;
+            }
+            
+            sourcesScanned.push(transferRulesReport);
+            
+            // ═══════════════════════════════════════════════════════════════
+            // Build Variable Definitions
+            // ═══════════════════════════════════════════════════════════════
+            const variableDefinitions = [];
+            
+            for (const [normalizedKey, data] of allVariables.entries()) {
+                const canonicalKey = data.preferredFormat || normalizedKey;
+                const formatVariations = Array.from(data.formatVariations);
+                const hasMultipleFormats = formatVariations.length > 1;
+                
+                if (!canonicalKey) continue;
+                
+                const varDef = {
+                    key: canonicalKey,
+                    normalizedKey: normalizedKey,
+                    label: this.humanize(canonicalKey),
+                    category: this.categorizeVariable(canonicalKey),
+                    usageCount: data.occurrences,
+                    required: this.isRequired(canonicalKey),
+                    type: this.inferType(canonicalKey),
+                    example: this.getExample(canonicalKey),
+                    locations: data.locations,
+                    source: 'Cheat Sheet',
+                    formatVariations: formatVariations,
+                    formatCounts: data.formatCounts,
+                    hasMultipleFormats: hasMultipleFormats,
+                    preferredFormat: data.preferredFormat
+                };
+                
+                variableDefinitions.push(varDef);
+            }
+            
+            // ═══════════════════════════════════════════════════════════════
+            // Build Final Report
+            // ═══════════════════════════════════════════════════════════════
+            const endTime = new Date();
+            const durationMs = endTime - startTime;
+            
+            const scanReport = {
+                scanId,
+                timestamp: endTime,
+                scanType: 'cheat_sheet_only',
+                companyId,
+                trigger: {
+                    reason: options.reason || 'manual',
+                    triggeredBy: options.triggeredBy || 'system'
+                },
+                scanDuration: {
+                    ms: durationMs,
+                    seconds: (durationMs / 1000).toFixed(2)
+                },
+                sourcesScanned: sourcesScanned,
+                variables: variableDefinitions,
+                summary: {
+                    uniqueVariables: variableDefinitions.length,
+                    totalOccurrences: totalPlaceholders,
+                    totalWords: totalWords,
+                    uniqueWords: uniqueWordsSet.size,
+                    placeholderWords: totalPlaceholders,
+                    regularWords: totalWords - totalPlaceholders
+                }
+            };
+            
+            // ═══════════════════════════════════════════════════════════════
+            // Save to Company (separate from template scan)
+            // ═══════════════════════════════════════════════════════════════
+            if (!company.aiAgentSettings) {
+                company.aiAgentSettings = {};
+            }
+            if (!company.aiAgentSettings.cheatSheetScanStatus) {
+                company.aiAgentSettings.cheatSheetScanStatus = {};
+            }
+            
+            company.aiAgentSettings.cheatSheetScanStatus = {
+                lastScanDate: endTime,
+                lastScanId: scanId,
+                variablesFound: variableDefinitions.length,
+                lastReport: scanReport
+            };
+            
+            await company.save();
+            
+            logger.info(`✅ [CHEAT SHEET SCAN ${scanId}] Scan complete`);
+            logger.info(`📊 [CHEAT SHEET SCAN ${scanId}] ${variableDefinitions.length} variables, ${totalPlaceholders} occurrences`);
+            logger.info(`⏱️  [CHEAT SHEET SCAN ${scanId}] Duration: ${scanReport.scanDuration.seconds}s`);
+            
+            return scanReport;
+            
+        } catch (error) {
+            logger.error(`❌ [CHEAT SHEET SCAN ${scanId}] Scan failed:`, error);
+            throw error;
+        }
     }
 }
 
