@@ -86,6 +86,7 @@ class CheatSheetManager {
   render() {
     this.renderStatus();
     this.renderCompanyInstructions();
+    this.renderTriageBuilder(); // 🤖 AI Triage Builder (enterprise content generator)
     this.renderBehaviorRules();
     this.renderEdgeCases();
     this.renderTransferRules();
@@ -328,6 +329,661 @@ class CheatSheetManager {
       console.error('[CHEAT SHEET] Reset failed:', error);
       this.showNotification(`Failed to reset: ${error.message}`, 'error');
     }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // AI TRIAGE BUILDER - ENTERPRISE CONTENT GENERATOR
+  // ═══════════════════════════════════════════════════════════════════
+  // Purpose: LLM-powered triage content generator for service type classification
+  // Role: Offline admin tool - generates content for human review/approval
+  // Output: Frontline-Intel section, Cheat Sheet map, Response Library
+  // ═══════════════════════════════════════════════════════════════════
+  
+  renderTriageBuilder() {
+    const container = document.getElementById('triage-builder-section');
+    if (!container) return;
+    
+    // Get company data for context
+    const companyData = this.getCompanyContext();
+    
+    container.innerHTML = `
+      <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+        
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-gray-200 px-6 py-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <span class="mr-2">✨</span>
+                AI Triage Builder
+                <span class="ml-3 px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-700 rounded-full">
+                  ENTERPRISE
+                </span>
+              </h3>
+              <p class="text-sm text-gray-600 mt-1">
+                LLM-powered content generator for service type triage rules & response scripts
+              </p>
+            </div>
+            <button 
+              onclick="cheatSheetManager.toggleTriageBuilder()" 
+              id="triage-builder-toggle-btn"
+              class="p-2 text-gray-600 hover:text-gray-900 transition-colors"
+              title="Expand/Collapse"
+            >
+              <i class="fas fa-chevron-down" id="triage-builder-toggle-icon"></i>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Collapsible Content -->
+        <div id="triage-builder-content" class="hidden">
+          
+          <!-- Info Banner -->
+          <div class="px-6 pt-4">
+            <div class="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg">
+              <div class="flex items-start space-x-3">
+                <span class="text-purple-600 text-xl">💡</span>
+                <div class="flex-1">
+                  <h4 class="text-sm font-semibold text-purple-900 mb-1">How This Works</h4>
+                  <p class="text-sm text-purple-800 mb-2">
+                    Describe a triage scenario (e.g., "customer wants cheap maintenance but AC isn't cooling"), and the AI will generate:
+                  </p>
+                  <ul class="text-sm text-purple-800 space-y-1">
+                    <li>• <strong>Frontline-Intel procedural text</strong> — How to handle the scenario step-by-step</li>
+                    <li>• <strong>Cheat Sheet triage map</strong> — Symptom keywords → service type classification</li>
+                    <li>• <strong>Response Library</strong> — 7-10 natural, human-like phrase variations</li>
+                  </ul>
+                  <p class="text-sm text-purple-700 mt-2 font-medium">
+                    ⚠️ Output is for admin review only — NOT used for live calls until you approve & paste it in.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Input Form -->
+          <div class="px-6 py-4">
+            <form id="triage-builder-form" onsubmit="cheatSheetManager.handleTriageGenerate(event); return false;">
+              
+              <!-- Trade Selection -->
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  <i class="fas fa-industry mr-1 text-indigo-600"></i>
+                  Trade / Industry
+                </label>
+                <select 
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" 
+                  id="triage-trade-select" 
+                  required
+                >
+                  <option value="">-- Select Trade --</option>
+                  <option value="HVAC" ${companyData.trade === 'HVAC' ? 'selected' : ''}>HVAC</option>
+                  <option value="Plumbing" ${companyData.trade === 'Plumbing' ? 'selected' : ''}>Plumbing</option>
+                  <option value="Electrical" ${companyData.trade === 'Electrical' ? 'selected' : ''}>Electrical</option>
+                  <option value="Dental" ${companyData.trade === 'Dental' ? 'selected' : ''}>Dental</option>
+                  <option value="Medical" ${companyData.trade === 'Medical' ? 'selected' : ''}>Medical</option>
+                  <option value="Veterinary" ${companyData.trade === 'Veterinary' ? 'selected' : ''}>Veterinary</option>
+                  <option value="Roofing" ${companyData.trade === 'Roofing' ? 'selected' : ''}>Roofing</option>
+                  <option value="Landscaping" ${companyData.trade === 'Landscaping' ? 'selected' : ''}>Landscaping</option>
+                  <option value="Pest Control" ${companyData.trade === 'Pest Control' ? 'selected' : ''}>Pest Control</option>
+                  <option value="Locksmith" ${companyData.trade === 'Locksmith' ? 'selected' : ''}>Locksmith</option>
+                  <option value="Appliance Repair" ${companyData.trade === 'Appliance Repair' ? 'selected' : ''}>Appliance Repair</option>
+                  <option value="Auto Repair" ${companyData.trade === 'Auto Repair' ? 'selected' : ''}>Auto Repair</option>
+                </select>
+              </div>
+
+              <!-- Situation Description -->
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  <i class="fas fa-file-alt mr-1 text-indigo-600"></i>
+                  Triage Situation / Scenario
+                </label>
+                <textarea 
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 font-mono text-sm" 
+                  id="triage-situation-textarea" 
+                  rows="4" 
+                  placeholder="Example: Customer wants a cheap maintenance special even though their AC is not cooling."
+                  required
+                ></textarea>
+                <p class="mt-1 text-xs text-gray-500">
+                  <i class="fas fa-lightbulb mr-1"></i>
+                  Describe the scenario where the AI needs to correctly classify service type and prevent downgrades.
+                </p>
+              </div>
+
+              <!-- Service Types -->
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  <i class="fas fa-list-check mr-1 text-indigo-600"></i>
+                  Service Types to Include
+                </label>
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <label class="flex items-center cursor-pointer">
+                      <input type="checkbox" class="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" value="REPAIR" id="triage-service-repair" checked>
+                      <span class="ml-2 text-sm">
+                        <strong class="text-gray-900">REPAIR</strong>
+                        <span class="block text-xs text-gray-600">Something is broken</span>
+                      </span>
+                    </label>
+                  </div>
+                  <div class="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <label class="flex items-center cursor-pointer">
+                      <input type="checkbox" class="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" value="MAINTENANCE" id="triage-service-maintenance" checked>
+                      <span class="ml-2 text-sm">
+                        <strong class="text-gray-900">MAINTENANCE</strong>
+                        <span class="block text-xs text-gray-600">Routine service, tune-up</span>
+                      </span>
+                    </label>
+                  </div>
+                  <div class="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <label class="flex items-center cursor-pointer">
+                      <input type="checkbox" class="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" value="EMERGENCY" id="triage-service-emergency" checked>
+                      <span class="ml-2 text-sm">
+                        <strong class="text-gray-900">EMERGENCY</strong>
+                        <span class="block text-xs text-gray-600">Urgent, after-hours</span>
+                      </span>
+                    </label>
+                  </div>
+                  <div class="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <label class="flex items-center cursor-pointer">
+                      <input type="checkbox" class="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" value="OTHER" id="triage-service-other" checked>
+                      <span class="ml-2 text-sm">
+                        <strong class="text-gray-900">OTHER</strong>
+                        <span class="block text-xs text-gray-600">Quotes, consultations</span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Generate Button -->
+              <div class="flex justify-end">
+                <button 
+                  type="submit" 
+                  id="triage-generate-btn"
+                  class="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all transform hover:scale-105 shadow-md font-medium flex items-center space-x-2"
+                >
+                  <i class="fas fa-sparkles"></i>
+                  <span>Generate Triage Package</span>
+                </button>
+              </div>
+            </form>
+          </div>
+          
+          <!-- Error Display -->
+          <div id="triage-error-container" class="px-6 pb-4 hidden">
+            <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div class="flex items-start space-x-3">
+                <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+                <div class="flex-1">
+                  <h4 class="text-sm font-semibold text-red-900 mb-1">Generation Failed</h4>
+                  <p id="triage-error-message" class="text-sm text-red-800"></p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Results Container -->
+          <div id="triage-results-container" class="hidden px-6 pb-6 space-y-4">
+            
+            <!-- Success Banner -->
+            <div class="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div class="flex items-center space-x-2">
+                <i class="fas fa-circle-check text-green-600"></i>
+                <span class="text-sm font-semibold text-green-900">Triage package generated successfully!</span>
+                <span class="text-sm text-green-700">Review content below and copy sections as needed.</span>
+              </div>
+            </div>
+            
+            <!-- Section 1: Frontline-Intel -->
+            <div class="border border-gray-200 rounded-lg overflow-hidden">
+              <div class="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 flex items-center justify-between border-b border-gray-200">
+                <div class="flex items-center space-x-2">
+                  <i class="fas fa-brain text-blue-600"></i>
+                  <h4 class="text-sm font-semibold text-gray-900">Frontline-Intel Section</h4>
+                  <span id="frontline-stats" class="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600 rounded-full"></span>
+                </div>
+                <button 
+                  onclick="cheatSheetManager.copyTriageSection('frontline')" 
+                  class="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center space-x-1"
+                  data-section="frontline"
+                >
+                  <i class="fas fa-copy"></i>
+                  <span>Copy</span>
+                </button>
+              </div>
+              <div class="p-4 bg-gray-50">
+                <pre id="frontline-content" class="bg-white border border-gray-200 rounded p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-words max-h-96 overflow-y-auto"></pre>
+              </div>
+            </div>
+            
+            <!-- Section 2: Cheat Sheet -->
+            <div class="border border-gray-200 rounded-lg overflow-hidden">
+              <div class="bg-gradient-to-r from-purple-50 to-pink-50 px-4 py-3 flex items-center justify-between border-b border-gray-200">
+                <div class="flex items-center space-x-2">
+                  <i class="fas fa-map text-purple-600"></i>
+                  <h4 class="text-sm font-semibold text-gray-900">Cheat Sheet Triage Map</h4>
+                  <span id="cheatsheet-stats" class="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600 rounded-full"></span>
+                </div>
+                <button 
+                  onclick="cheatSheetManager.copyTriageSection('cheatsheet')" 
+                  class="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center space-x-1"
+                  data-section="cheatsheet"
+                >
+                  <i class="fas fa-copy"></i>
+                  <span>Copy</span>
+                </button>
+              </div>
+              <div class="p-4 bg-gray-50">
+                <pre id="cheatsheet-content" class="bg-white border border-gray-200 rounded p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-words max-h-96 overflow-y-auto"></pre>
+              </div>
+            </div>
+            
+            <!-- Section 3: Response Library -->
+            <div class="border border-gray-200 rounded-lg overflow-hidden">
+              <div class="bg-gradient-to-r from-green-50 to-teal-50 px-4 py-3 flex items-center justify-between border-b border-gray-200">
+                <div class="flex items-center space-x-2">
+                  <i class="fas fa-comments text-green-600"></i>
+                  <h4 class="text-sm font-semibold text-gray-900">Response Library</h4>
+                  <span id="response-stats" class="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600 rounded-full"></span>
+                </div>
+                <button 
+                  onclick="cheatSheetManager.copyTriageSection('responses')" 
+                  class="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center space-x-1"
+                  data-section="responses"
+                >
+                  <i class="fas fa-copy"></i>
+                  <span>Copy All</span>
+                </button>
+              </div>
+              <div id="response-library-container" class="p-4 bg-gray-50 space-y-2"></div>
+            </div>
+            
+          </div>
+          
+        </div>
+        
+      </div>
+    `;
+  }
+  
+  /**
+   * Get company context for auto-populating triage builder
+   */
+  getCompanyContext() {
+    // Try to extract trade from company data
+    // This will be populated when we have access to full company object
+    return {
+      trade: this.companyTrade || 'HVAC' // Default to HVAC
+    };
+  }
+  
+  /**
+   * Toggle triage builder expand/collapse
+   */
+  toggleTriageBuilder() {
+    const content = document.getElementById('triage-builder-content');
+    const icon = document.getElementById('triage-builder-toggle-icon');
+    
+    if (!content || !icon) return;
+    
+    if (content.classList.contains('hidden')) {
+      content.classList.remove('hidden');
+      icon.classList.remove('fa-chevron-down');
+      icon.classList.add('fa-chevron-up');
+    } else {
+      content.classList.add('hidden');
+      icon.classList.remove('fa-chevron-up');
+      icon.classList.add('fa-chevron-down');
+    }
+  }
+  
+  /**
+   * Handle triage generation form submit
+   */
+  async handleTriageGenerate(event) {
+    event.preventDefault();
+    
+    console.log('[TRIAGE BUILDER] Generate button clicked');
+    
+    // Get form values
+    const trade = document.getElementById('triage-trade-select').value;
+    const situation = document.getElementById('triage-situation-textarea').value.trim();
+    const serviceTypes = this.getSelectedServiceTypes();
+    
+    // Validation
+    if (!trade) {
+      this.showTriageError('Please select a trade/industry');
+      return;
+    }
+    
+    if (!situation) {
+      this.showTriageError('Please describe the triage situation');
+      return;
+    }
+    
+    if (serviceTypes.length === 0) {
+      this.showTriageError('Please select at least one service type');
+      return;
+    }
+    
+    console.log('[TRIAGE BUILDER] Input validation passed', { trade, situation, serviceTypes });
+    
+    // Hide errors/results
+    this.hideTriageError();
+    this.hideTriageResults();
+    
+    // Show loading state
+    this.setTriageGenerating(true);
+    
+    try {
+      // Call backend API
+      const result = await this.callTriageBuilderAPI(trade, situation, serviceTypes);
+      
+      console.log('[TRIAGE BUILDER] Generation successful', {
+        frontlineLength: result.frontlineIntelSection.length,
+        cheatsheetLength: result.cheatSheetTriageMap.length,
+        responseCount: result.responseLibrary.length
+      });
+      
+      // Store results
+      this.triageResults = result;
+      
+      // Display results
+      this.displayTriageResults(result);
+      
+    } catch (error) {
+      console.error('[TRIAGE BUILDER] Generation failed:', error);
+      this.showTriageError(error.message || 'An unexpected error occurred');
+    } finally {
+      this.setTriageGenerating(false);
+    }
+  }
+  
+  /**
+   * Get selected service types from checkboxes
+   */
+  getSelectedServiceTypes() {
+    const serviceTypes = [];
+    
+    if (document.getElementById('triage-service-repair')?.checked) {
+      serviceTypes.push('REPAIR');
+    }
+    if (document.getElementById('triage-service-maintenance')?.checked) {
+      serviceTypes.push('MAINTENANCE');
+    }
+    if (document.getElementById('triage-service-emergency')?.checked) {
+      serviceTypes.push('EMERGENCY');
+    }
+    if (document.getElementById('triage-service-other')?.checked) {
+      serviceTypes.push('OTHER');
+    }
+    
+    return serviceTypes;
+  }
+  
+  /**
+   * Call backend triage builder API
+   */
+  async callTriageBuilderAPI(trade, situation, serviceTypes) {
+    const token = localStorage.getItem('adminToken');
+    
+    if (!token) {
+      throw new Error('Authentication required. Please log in.');
+    }
+    
+    console.log('[TRIAGE BUILDER] Calling API endpoint...');
+    
+    const response = await fetch('/api/admin/triage-builder/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        trade,
+        situation,
+        serviceTypes
+      })
+    });
+    
+    console.log('[TRIAGE BUILDER] API response status:', response.status);
+    
+    if (!response.ok) {
+      let errorMsg = `HTTP ${response.status}`;
+      
+      try {
+        const errorData = await response.json();
+        errorMsg = errorData.error || errorMsg;
+      } catch (e) {
+        // Failed to parse error JSON
+      }
+      
+      throw new Error(errorMsg);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Generation failed');
+    }
+    
+    // Validate response structure
+    if (!data.frontlineIntelSection || !data.cheatSheetTriageMap || !data.responseLibrary) {
+      throw new Error('Invalid response structure from API');
+    }
+    
+    return {
+      frontlineIntelSection: data.frontlineIntelSection,
+      cheatSheetTriageMap: data.cheatSheetTriageMap,
+      responseLibrary: data.responseLibrary
+    };
+  }
+  
+  /**
+   * Display triage results in UI
+   */
+  displayTriageResults(result) {
+    console.log('[TRIAGE BUILDER] Displaying results');
+    
+    // Section 1: Frontline Intel
+    document.getElementById('frontline-content').textContent = result.frontlineIntelSection;
+    document.getElementById('frontline-stats').textContent = `${result.frontlineIntelSection.length} chars`;
+    
+    // Section 2: Cheat Sheet
+    document.getElementById('cheatsheet-content').textContent = result.cheatSheetTriageMap;
+    document.getElementById('cheatsheet-stats').textContent = `${result.cheatSheetTriageMap.length} chars`;
+    
+    // Section 3: Response Library
+    document.getElementById('response-stats').textContent = `${result.responseLibrary.length} responses`;
+    const responseContainer = document.getElementById('response-library-container');
+    responseContainer.innerHTML = '';
+    
+    result.responseLibrary.forEach((response, index) => {
+      const item = document.createElement('div');
+      item.className = 'flex items-start space-x-3 p-3 bg-white border border-gray-200 rounded-lg';
+      
+      item.innerHTML = `
+        <div class="flex-shrink-0 w-6 h-6 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold">
+          ${index + 1}
+        </div>
+        <div class="flex-1 text-sm text-gray-800 leading-relaxed">${this.escapeHtml(response)}</div>
+        <button 
+          onclick="cheatSheetManager.copyIndividualResponse(${index})" 
+          class="flex-shrink-0 px-2 py-1 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors"
+          title="Copy this response"
+        >
+          <i class="fas fa-copy"></i>
+        </button>
+      `;
+      
+      responseContainer.appendChild(item);
+    });
+    
+    // Show results container
+    this.showTriageResults();
+  }
+  
+  /**
+   * Copy triage section to clipboard
+   */
+  async copyTriageSection(section) {
+    if (!this.triageResults) {
+      console.warn('[TRIAGE BUILDER] No results to copy');
+      return;
+    }
+    
+    let content = '';
+    let buttonSelector = '';
+    
+    switch (section) {
+      case 'frontline':
+        content = this.triageResults.frontlineIntelSection;
+        buttonSelector = '[data-section="frontline"]';
+        break;
+      case 'cheatsheet':
+        content = this.triageResults.cheatSheetTriageMap;
+        buttonSelector = '[data-section="cheatsheet"]';
+        break;
+      case 'responses':
+        content = this.triageResults.responseLibrary.join('\n\n');
+        buttonSelector = '[data-section="responses"]';
+        break;
+      default:
+        console.error('[TRIAGE BUILDER] Unknown section:', section);
+        return;
+    }
+    
+    await this.copyToClipboard(content, buttonSelector);
+  }
+  
+  /**
+   * Copy individual response to clipboard
+   */
+  async copyIndividualResponse(index) {
+    if (!this.triageResults || !this.triageResults.responseLibrary[index]) {
+      console.warn('[TRIAGE BUILDER] Invalid response index');
+      return;
+    }
+    
+    const content = this.triageResults.responseLibrary[index];
+    await this.copyToClipboard(content, null);
+  }
+  
+  /**
+   * Copy content to clipboard with visual feedback
+   */
+  async copyToClipboard(content, buttonSelector) {
+    try {
+      await navigator.clipboard.writeText(content);
+      
+      // Visual feedback
+      if (buttonSelector) {
+        const button = document.querySelector(buttonSelector);
+        if (button) {
+          const originalHTML = button.innerHTML;
+          button.classList.add('bg-green-50', 'border-green-300', 'text-green-700');
+          button.innerHTML = '<i class="fas fa-check"></i><span>Copied!</span>';
+          
+          setTimeout(() => {
+            button.classList.remove('bg-green-50', 'border-green-300', 'text-green-700');
+            button.innerHTML = originalHTML;
+          }, 2000);
+        }
+      }
+      
+      this.showNotification('✅ Copied to clipboard!', 'success');
+      console.log('[TRIAGE BUILDER] Content copied to clipboard');
+    } catch (error) {
+      console.error('[TRIAGE BUILDER] Failed to copy:', error);
+      this.showNotification('❌ Failed to copy to clipboard', 'error');
+    }
+  }
+  
+  /**
+   * Set generating state
+   */
+  setTriageGenerating(isGenerating) {
+    const button = document.getElementById('triage-generate-btn');
+    if (!button) return;
+    
+    if (isGenerating) {
+      button.disabled = true;
+      button.innerHTML = `
+        <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span>Generating...</span>
+      `;
+    } else {
+      button.disabled = false;
+      button.innerHTML = `
+        <i class="fas fa-sparkles"></i>
+        <span>Generate Triage Package</span>
+      `;
+    }
+  }
+  
+  /**
+   * Show triage error
+   */
+  showTriageError(message) {
+    const container = document.getElementById('triage-error-container');
+    const messageEl = document.getElementById('triage-error-message');
+    
+    if (container && messageEl) {
+      messageEl.textContent = message;
+      container.classList.remove('hidden');
+      
+      // Scroll to error
+      container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+  
+  /**
+   * Hide triage error
+   */
+  hideTriageError() {
+    const container = document.getElementById('triage-error-container');
+    if (container) {
+      container.classList.add('hidden');
+    }
+  }
+  
+  /**
+   * Show triage results
+   */
+  showTriageResults() {
+    const container = document.getElementById('triage-results-container');
+    if (container) {
+      container.classList.remove('hidden');
+      
+      // Scroll to results
+      setTimeout(() => {
+        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }
+  
+  /**
+   * Hide triage results
+   */
+  hideTriageResults() {
+    const container = document.getElementById('triage-results-container');
+    if (container) {
+      container.classList.add('hidden');
+    }
+  }
+  
+  /**
+   * Escape HTML for safe display
+   */
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
   
   renderBehaviorRules() {
