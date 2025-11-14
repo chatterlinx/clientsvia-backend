@@ -1479,12 +1479,16 @@ class VariablesManager {
         const token = localStorage.getItem('adminToken');
         
         // Clear company cache
-        await fetch(`/api/admin/cache/company/${this.companyId}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        console.log('✅ [CACHE] Cache cleared for company:', this.companyId);
+        try {
+            await fetch(`/api/admin/clear-cache/${this.companyId}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            console.log('✅ [CACHE] Cache cleared for company:', this.companyId);
+        } catch (error) {
+            console.warn('⚠️ [CACHE] Failed to clear cache (non-critical):', error.message);
+        }
     }
     
     /**
