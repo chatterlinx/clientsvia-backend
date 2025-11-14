@@ -1177,9 +1177,13 @@ class EnterpriseVariableScanService {
                 company.aiAgentSettings.variableDefinitions = [];
             }
             
-            // Get existing keys to avoid duplicates
+            // Get existing keys to avoid duplicates (handle both array and potential Map)
+            const existingDefs = Array.isArray(company.aiAgentSettings.variableDefinitions) 
+                ? company.aiAgentSettings.variableDefinitions 
+                : [];
+            
             const existingKeys = new Set(
-                company.aiAgentSettings.variableDefinitions.map(v => 
+                existingDefs.map(v => 
                     (v.normalizedKey || v.key || '').toLowerCase()
                 )
             );
@@ -1189,6 +1193,11 @@ class EnterpriseVariableScanService {
                 const normalizedKey = (varDef.normalizedKey || varDef.key || '').toLowerCase();
                 return !existingKeys.has(normalizedKey);
             });
+            
+            // Ensure variableDefinitions is an array
+            if (!Array.isArray(company.aiAgentSettings.variableDefinitions)) {
+                company.aiAgentSettings.variableDefinitions = [];
+            }
             
             // Merge new variables into main array
             company.aiAgentSettings.variableDefinitions.push(...newVariables);
@@ -1205,6 +1214,9 @@ class EnterpriseVariableScanService {
             
         } catch (error) {
             logger.error(`❌ [CHEAT SHEET SCAN ${scanId}] Scan failed:`, error);
+            logger.error(`❌ [CHEAT SHEET SCAN ${scanId}] Error stack:`, error.stack);
+            logger.error(`❌ [CHEAT SHEET SCAN ${scanId}] Error name:`, error.name);
+            logger.error(`❌ [CHEAT SHEET SCAN ${scanId}] Error message:`, error.message);
             throw error;
         }
     }
