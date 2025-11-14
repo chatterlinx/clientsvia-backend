@@ -168,6 +168,7 @@ async function loadAllRoutes() {
         routes.llmScenarioAssistantRoutes = await loadRouteWithTimeout('./routes/admin/llmScenarioAssistant', 'llmScenarioAssistantRoutes');
         routes.llmSettingsRoutes = await loadRouteWithTimeout('./routes/admin/llmSettings', 'llmSettingsRoutes');
         routes.cheatSheetRoutes = await loadRouteWithTimeout('./routes/admin/cheatSheet', 'cheatSheetRoutes'); // 🧠 Cheat Sheet Management (Phase 1)
+        routes.triageBuilderRoutes = await loadRouteWithTimeout('./routes/admin/triageBuilder', 'triageBuilderRoutes'); // 🤖 LLM Triage Builder (admin content generator)
         routes.callFlowRoutes = await loadRouteWithTimeout('./routes/admin/callFlow', 'callFlowRoutes'); // 🎯 Call Flow Management (Frontline-Intel)
         // V1 LLM Console removed - 2025-11-08
         routes.llmLearningV2Routes = await loadRouteWithTimeout('./routes/admin/llmLearningV2', 'llmLearningV2Routes');
@@ -385,6 +386,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/scenario-assistant', routes.llmScenarioAssistantRoutes); // 🤖 LLM Scenario Assistant (admin drafting tool)
     app.use('/api/admin/llm-settings', routes.llmSettingsRoutes); // 🎛️ LLM Enterprise Settings (profiles, compliance, advanced tuning)
     app.use('/api/admin/cheat-sheet', routes.cheatSheetRoutes); // 🧠 Cheat Sheet Management (Phase 1)
+    app.use('/api/admin/triage-builder', routes.triageBuilderRoutes); // 🤖 LLM Triage Builder (admin content generator)
     app.use('/api/admin/call-flow', routes.callFlowRoutes); // 🎯 Call Flow Management (Frontline-Intel)
     // V1 LLM Console API removed - 2025-11-08 (use V2 instead)
     app.use('/api/admin/llm-learning/v2', routes.llmLearningV2Routes); // LLM Learning Console V2 API (Enhanced with latency tracking)
