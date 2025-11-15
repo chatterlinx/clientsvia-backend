@@ -559,11 +559,11 @@ class CheatSheetManager {
               </div>
             </div>
             
-            <!-- Section 2: Cheat Sheet -->
+            <!-- Section 2: Cheat Sheet Triage Map (Table View) -->
             <div class="border border-gray-200 rounded-lg overflow-hidden">
               <div class="bg-gradient-to-r from-purple-50 to-pink-50 px-4 py-3 flex items-center justify-between border-b border-gray-200">
                 <div class="flex items-center space-x-2">
-                  <i class="fas fa-map text-purple-600"></i>
+                  <i class="fas fa-table text-purple-600"></i>
                   <h4 class="text-sm font-semibold text-gray-900">Cheat Sheet Triage Map</h4>
                   <span id="cheatsheet-stats" class="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600 rounded-full"></span>
                 </div>
@@ -577,7 +577,9 @@ class CheatSheetManager {
                 </button>
               </div>
               <div class="p-4 bg-gray-50">
-                <pre id="cheatsheet-content" class="bg-white border border-gray-200 rounded p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-words max-h-96 overflow-y-auto"></pre>
+                <div id="cheatsheet-content" class="overflow-x-auto max-h-96 overflow-y-auto">
+                  <!-- Table will be rendered here -->
+                </div>
               </div>
             </div>
             
@@ -786,22 +788,34 @@ class CheatSheetManager {
    * Display triage results in UI
    */
   displayTriageResults(result) {
-    console.log('[TRIAGE BUILDER] Displaying results');
+    console.log('[TRIAGE BUILDER] Displaying results', result);
+    
+    // Store the full result for later use (saving)
+    this.triageResults = result;
     
     // Section 1: Frontline Intel
-    document.getElementById('frontline-content').textContent = result.frontlineIntelSection;
-    document.getElementById('frontline-stats').textContent = `${result.frontlineIntelSection.length} chars`;
+    document.getElementById('frontline-content').textContent = result.frontlineIntelBlock || result.frontlineIntelSection || '';
+    document.getElementById('frontline-stats').textContent = `${(result.frontlineIntelBlock || result.frontlineIntelSection || '').length} chars`;
     
-    // Section 2: Cheat Sheet
-    document.getElementById('cheatsheet-content').textContent = result.cheatSheetTriageMap;
-    document.getElementById('cheatsheet-stats').textContent = `${result.cheatSheetTriageMap.length} chars`;
+    // Section 2: Cheat Sheet Triage Map - DISPLAY AS TABLE!
+    const cheatsheetContainer = document.getElementById('cheatsheet-content');
+    if (result.triageMap && Array.isArray(result.triageMap)) {
+      // Display structured triageMap as a beautiful table
+      cheatsheetContainer.innerHTML = this.renderTriageMapTable(result.triageMap);
+      document.getElementById('cheatsheet-stats').textContent = `${result.triageMap.length} rules`;
+    } else {
+      // Fallback to raw text if triageMap is not structured
+      cheatsheetContainer.textContent = result.cheatSheetTriageMap || 'No triage map generated';
+      document.getElementById('cheatsheet-stats').textContent = `${(result.cheatSheetTriageMap || '').length} chars`;
+    }
     
     // Section 3: Response Library
-    document.getElementById('response-stats').textContent = `${result.responseLibrary.length} responses`;
+    const responses = result.responses || result.responseLibrary || [];
+    document.getElementById('response-stats').textContent = `${responses.length} responses`;
     const responseContainer = document.getElementById('response-library-container');
     responseContainer.innerHTML = '';
     
-    result.responseLibrary.forEach((response, index) => {
+    responses.forEach((response, index) => {
       const item = document.createElement('div');
       item.className = 'flex items-start space-x-3 p-3 bg-white border border-gray-200 rounded-lg';
       
