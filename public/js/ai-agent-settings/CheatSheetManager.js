@@ -1735,6 +1735,9 @@ class CheatSheetManager {
           ${cards.length === 0 ? this.renderEmptyState() : cards.map(card => this.renderTriageCard(card)).join('')}
         </div>
         
+        <!-- 🧪 Test THE BRAIN Section -->
+        ${cards.length > 0 ? this.renderTestBrainSection() : ''}
+        
       </div>
     `;
   }
@@ -1751,6 +1754,218 @@ class CheatSheetManager {
         </p>
       </div>
     `;
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // TEST THE BRAIN SECTION
+  // ═══════════════════════════════════════════════════════════════════
+  
+  renderTestBrainSection() {
+    return `
+      <div class="border-t border-gray-200 bg-gray-50 px-6 py-6">
+        <div class="max-w-3xl">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h4 class="text-md font-semibold text-gray-900 flex items-center">
+                <span class="mr-2">🧪</span>
+                Test THE BRAIN
+              </h4>
+              <p class="text-xs text-gray-600 mt-1">
+                Enter sample caller input to see which triage rule fires
+              </p>
+            </div>
+          </div>
+          
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs font-medium text-gray-700 mb-1">Sample Caller Input</label>
+              <input 
+                type="text" 
+                id="test-brain-input" 
+                placeholder="e.g., my ac is not cooling at all"
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            
+            <div class="flex items-center space-x-2">
+              <button 
+                onclick="cheatSheetManager.testTriageInput()" 
+                class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium flex items-center space-x-2"
+              >
+                <i class="fas fa-flask"></i>
+                <span>Test</span>
+              </button>
+              
+              <span class="text-xs text-gray-500">
+                Uses same matching logic as production
+              </span>
+            </div>
+            
+            <!-- Test Results -->
+            <div id="test-brain-results" class="hidden mt-4 p-4 bg-white border border-gray-200 rounded-lg">
+              <!-- Results will be dynamically inserted here -->
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  
+  async testTriageInput() {
+    console.log('[TEST BRAIN] Testing input...');
+    
+    try {
+      const input = document.getElementById('test-brain-input').value.trim();
+      
+      if (!input) {
+        this.showNotification('Please enter sample caller input', 'error');
+        return;
+      }
+      
+      const token = localStorage.getItem('adminToken');
+      
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+      
+      // Call test endpoint
+      const response = await fetch(`/api/company/${this.companyId}/triage-cards/test-match`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          callerInput: input,
+          llmKeywords: [] // In production, LLM extracts these
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Test failed');
+      }
+      
+      const result = await response.json();
+      
+      // Display results
+      this.displayTestResults(result, input);
+      
+    } catch (error) {
+      console.error('[TEST BRAIN] Test failed:', error);
+      this.showNotification(`❌ Test failed: ${error.message}`, 'error');
+    }
+  }
+  
+  displayTestResults(result, input) {
+    const container = document.getElementById('test-brain-results');
+    
+    if (!container) return;
+    
+    if (result.matched && result.result.ruleMatched) {
+      const rule = result.result.ruleMatched;
+      
+      container.innerHTML = `
+        <div class="space-y-3">
+          <div class="flex items-start space-x-3">
+            <div class="flex-shrink-0">
+              <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <i class="fas fa-check text-green-600"></i>
+              </div>
+            </div>
+            <div class="flex-1">
+              <h5 class="font-semibold text-gray-900 mb-1">✅ Rule Matched</h5>
+              <p class="text-xs text-gray-600 mb-3">Input: "${this.escapeHtml(input)}"</p>
+              
+              <div class="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span class="font-medium text-gray-700">Source:</span>
+                  <span class="ml-2 px-2 py-1 bg-${rule.source === 'MANUAL' ? 'blue' : rule.source === 'AI_CARD' ? 'purple' : 'gray'}-100 text-${rule.source === 'MANUAL' ? 'blue' : rule.source === 'AI_CARD' ? 'purple' : 'gray'}-700 rounded">${rule.source}</span>
+                </div>
+                <div>
+                  <span class="font-medium text-gray-700">Priority:</span>
+                  <span class="ml-2">${rule.priority}</span>
+                </div>
+                <div>
+                  <span class="font-medium text-gray-700">Service Type:</span>
+                  <span class="ml-2 px-2 py-1 bg-yellow-100 text-yellow-800 rounded font-mono">${rule.serviceType}</span>
+                </div>
+                <div>
+                  <span class="font-medium text-gray-700">Action:</span>
+                  <span class="ml-2 px-2 py-1 bg-indigo-100 text-indigo-800 rounded font-mono text-xs">${rule.action}</span>
+                </div>
+              </div>
+              
+              <div class="mt-3 p-3 bg-gray-50 rounded border border-gray-200">
+                <div class="text-xs space-y-2">
+                  <div>
+                    <span class="font-medium text-gray-700">Keywords:</span>
+                    <div class="mt-1 flex flex-wrap gap-1">
+                      ${rule.keywords.map(kw => `<span class="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">${this.escapeHtml(kw)}</span>`).join('')}
+                    </div>
+                  </div>
+                  
+                  ${rule.excludeKeywords && rule.excludeKeywords.length > 0 ? `
+                    <div>
+                      <span class="font-medium text-gray-700">Exclude Keywords:</span>
+                      <div class="mt-1 flex flex-wrap gap-1">
+                        ${rule.excludeKeywords.map(kw => `<span class="px-2 py-1 bg-red-100 text-red-700 rounded text-xs">${this.escapeHtml(kw)}</span>`).join('')}
+                      </div>
+                    </div>
+                  ` : ''}
+                  
+                  ${rule.categorySlug ? `
+                    <div>
+                      <span class="font-medium text-gray-700">Category:</span>
+                      <span class="ml-2 font-mono text-gray-600">${this.escapeHtml(rule.categorySlug)}</span>
+                    </div>
+                  ` : ''}
+                  
+                  ${rule.explanation ? `
+                    <div>
+                      <span class="font-medium text-gray-700">Explanation:</span>
+                      <p class="mt-1 text-gray-600">${this.escapeHtml(rule.explanation)}</p>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+              
+              <div class="mt-3 p-3 bg-blue-50 rounded border border-blue-200">
+                <span class="text-xs font-medium text-blue-900">What happens next:</span>
+                <p class="text-xs text-blue-700 mt-1">${this.escapeHtml(result.result.whatHappensNext)}</p>
+              </div>
+              
+              <div class="mt-2 text-xs text-gray-500">
+                Matched at index ${result.result.matchedAtIndex} of ${result.result.totalRulesChecked} total rules
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+    } else {
+      container.innerHTML = `
+        <div class="flex items-start space-x-3">
+          <div class="flex-shrink-0">
+            <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+              <i class="fas fa-times text-red-600"></i>
+            </div>
+          </div>
+          <div class="flex-1">
+            <h5 class="font-semibold text-gray-900 mb-1">❌ No Match</h5>
+            <p class="text-xs text-gray-600">Input: "${this.escapeHtml(input)}"</p>
+            <p class="text-xs text-yellow-700 mt-2">
+              ⚠️ This should not happen if fallback rule exists!
+            </p>
+          </div>
+        </div>
+      `;
+    }
+    
+    // Show results container
+    container.classList.remove('hidden');
+    
+    // Scroll to results
+    container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
   
   // ═══════════════════════════════════════════════════════════════════

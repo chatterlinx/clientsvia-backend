@@ -347,6 +347,95 @@ router.post('/invalidate-cache', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// TEST THE BRAIN (TEST WHICH RULE FIRES FOR SAMPLE INPUT)
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/company/:companyId/triage-cards/test-match
+// Body: { callerInput: "my ac is not cooling", llmKeywords: ["not cooling", "ac"] }
+// Purpose: Test which triage rule would fire for a given input
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/test-match', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { callerInput, llmKeywords } = req.body;
+
+    if (!callerInput) {
+      return res.status(400).json({
+        success: false,
+        error: 'callerInput is required'
+      });
+    }
+
+    logger.info('[TRIAGE CARDS API] 🧪 Test THE BRAIN request', { companyId, callerInput });
+
+    // Load compiled triage config
+    const compiledConfig = await TriageCardService.compileActiveCards(companyId);
+
+    // Import FrontlineIntel for matching logic
+    const FrontlineIntel = require('../../services/FrontlineIntel');
+
+    // Run matching logic (same as production)
+    const matchResult = FrontlineIntel.matchTriageRules(
+      callerInput,
+      compiledConfig.triageRules || [],
+      {
+        llmKeywords: llmKeywords || [],
+        llmIntent: 'test'
+      }
+    );
+
+    if (matchResult) {
+      logger.info('[TRIAGE CARDS API] 🧪 Test result: MATCH FOUND', {
+        source: matchResult.source,
+        priority: matchResult.priority,
+        serviceType: matchResult.serviceType,
+        action: matchResult.action
+      });
+
+      res.json({
+        success: true,
+        matched: true,
+        result: {
+          ruleMatched: {
+            source: matchResult.source,
+            priority: matchResult.priority,
+            keywords: matchResult.keywords,
+            excludeKeywords: matchResult.excludeKeywords,
+            serviceType: matchResult.serviceType,
+            action: matchResult.action,
+            categorySlug: matchResult.categorySlug,
+            explanation: matchResult.explanation,
+            matchMethod: matchResult.matchMethod,
+            matchedKeywords: matchResult.matchedKeywords
+          },
+          matchedAtIndex: matchResult.ruleIndex,
+          totalRulesChecked: compiledConfig.triageRules.length,
+          whatHappensNext: this.explainAction(matchResult.action)
+        }
+      });
+    } else {
+      logger.warn('[TRIAGE CARDS API] 🧪 Test result: NO MATCH (should not happen!)');
+
+      res.json({
+        success: true,
+        matched: false,
+        result: {
+          message: 'No rule matched (fallback rule should always match)',
+          totalRulesChecked: compiledConfig.triageRules.length
+        }
+      });
+    }
+
+  } catch (error) {
+    logger.error('[TRIAGE CARDS API] Test match failed', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET COMPILED CONFIG (FOR DEBUGGING)
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/company/:companyId/triage-cards/compiled/config
@@ -374,6 +463,22 @@ router.get('/compiled/config', async (req, res) => {
     });
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPER: Explain what happens for each action
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.explainAction = function(action) {
+  const explanations = {
+    'DIRECT_TO_3TIER': 'Call immediately routes to 3-Tier Scenario Matching with this serviceType and categorySlug',
+    'EXPLAIN_AND_PUSH': 'Agent explains the situation to caller first, then routes to 3-Tier if caller agrees',
+    'ESCALATE_TO_HUMAN': 'Call transfers to human agent immediately, no 3-Tier processing',
+    'TAKE_MESSAGE': 'Agent takes a message for callback, no 3-Tier processing',
+    'END_CALL_POLITE': 'Call ends politely, no 3-Tier processing'
+  };
+  
+  return explanations[action] || 'Unknown action';
+};
 
 module.exports = router;
 
