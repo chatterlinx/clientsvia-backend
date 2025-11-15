@@ -87,7 +87,8 @@ class CheatSheetManager {
     this.renderStatus();
     this.renderCompanyInstructions();
     this.renderTriageCardsList(); // 🎯 Triage Cards Management (atomic source of truth) - FIRST
-    this.renderTriageBuilder(); // 🤖 AI Triage Builder (enterprise content generator) - SECOND
+    this.renderManualTriageTable(); // 📋 Manual Triage Rules Editor (quick add/edit) - SECOND
+    this.renderTriageBuilder(); // 🤖 AI Triage Builder (enterprise content generator) - THIRD
     this.renderBehaviorRules();
     this.renderEdgeCases();
     this.renderTransferRules();
@@ -1746,9 +1747,183 @@ class CheatSheetManager {
         </div>
         <h4 class="text-lg font-semibold text-gray-900 mb-2">No Triage Cards Yet</h4>
         <p class="text-sm text-gray-600 mb-4">
-          Use the AI Triage Builder above to generate your first card.
+          Use the AI Triage Builder below to generate your first card, or add manual rules in the Quick Rules table.
         </p>
       </div>
+    `;
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // MANUAL TRIAGE TABLE EDITOR
+  // ═══════════════════════════════════════════════════════════════════
+  
+  renderManualTriageTable() {
+    const container = document.getElementById('manual-triage-table-section');
+    if (!container) return;
+    
+    // Get existing manual rules from cheatSheet
+    const manualRules = this.cheatSheet.manualTriageRules || [];
+    
+    container.innerHTML = `
+      <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+        
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-50 to-cyan-50 border-b border-gray-200 px-6 py-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <span class="mr-2">📋</span>
+                Quick Triage Rules
+                <span class="ml-3 px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-700 rounded-full">
+                  ${manualRules.length} RULES
+                </span>
+              </h3>
+              <p class="text-sm text-gray-600 mt-1">
+                Simple keyword matching rules (no full card needed)
+              </p>
+            </div>
+            <button 
+              onclick="cheatSheetManager.addManualRule()" 
+              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center space-x-2"
+            >
+              <i class="fas fa-plus"></i>
+              <span>Add Rule</span>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Rules Table -->
+        <div class="p-6">
+          ${manualRules.length === 0 ? this.renderManualTableEmpty() : this.renderManualTableContent(manualRules)}
+        </div>
+        
+      </div>
+    `;
+  }
+  
+  renderManualTableEmpty() {
+    return `
+      <div class="text-center py-12 text-gray-500">
+        <i class="fas fa-table text-4xl mb-3 opacity-50"></i>
+        <p class="text-sm font-medium">No manual rules yet</p>
+        <p class="text-xs mt-1">Click "Add Rule" to create simple triage rules</p>
+        <p class="text-xs text-gray-400 mt-2">Example: "not cooling" + "repair" → DIRECT_TO_3TIER</p>
+      </div>
+    `;
+  }
+  
+  renderManualTableContent(rules) {
+    return `
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border-collapse border border-gray-300">
+          <thead>
+            <tr class="bg-gray-100">
+              <th class="border border-gray-300 px-3 py-2 text-left font-semibold text-xs">Keywords (Must Have)</th>
+              <th class="border border-gray-300 px-3 py-2 text-left font-semibold text-xs">Exclude Keywords</th>
+              <th class="border border-gray-300 px-3 py-2 text-left font-semibold text-xs">Service Type</th>
+              <th class="border border-gray-300 px-3 py-2 text-left font-semibold text-xs">Action</th>
+              <th class="border border-gray-300 px-3 py-2 text-left font-semibold text-xs">Explanation / Reason</th>
+              <th class="border border-gray-300 px-3 py-2 text-left font-semibold text-xs">QnA Card</th>
+              <th class="border border-gray-300 px-3 py-2 text-center font-semibold text-xs">Priority</th>
+              <th class="border border-gray-300 px-3 py-2 text-center font-semibold text-xs w-24">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rules.map((rule, index) => this.renderManualTableRow(rule, index)).join('')}
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="mt-4 flex justify-end space-x-2">
+        <button 
+          onclick="cheatSheetManager.saveManualRules()" 
+          class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+          ${!this.isDirty ? 'disabled opacity-50 cursor-not-allowed' : ''}
+        >
+          💾 Save Rules
+        </button>
+      </div>
+    `;
+  }
+  
+  renderManualTableRow(rule, index) {
+    const serviceTypes = ['REPAIR', 'MAINTENANCE', 'EMERGENCY', 'INSTALL', 'INSPECTION', 'QUOTE', 'OTHER', 'UNKNOWN'];
+    const actions = ['DIRECT_TO_3TIER', 'EXPLAIN_AND_PUSH', 'ESCALATE_TO_HUMAN', 'TAKE_MESSAGE', 'END_CALL_POLITE'];
+    
+    return `
+      <tr class="hover:bg-gray-50" data-rule-index="${index}">
+        <td class="border border-gray-300 px-2 py-2">
+          <input 
+            type="text" 
+            value="${(rule.keywords || []).join(', ')}" 
+            onchange="cheatSheetManager.updateManualRuleField(${index}, 'keywords', this.value)"
+            placeholder="e.g., not cooling, hot"
+            class="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </td>
+        <td class="border border-gray-300 px-2 py-2">
+          <input 
+            type="text" 
+            value="${(rule.excludeKeywords || []).join(', ')}" 
+            onchange="cheatSheetManager.updateManualRuleField(${index}, 'excludeKeywords', this.value)"
+            placeholder="e.g., maintenance, $89"
+            class="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </td>
+        <td class="border border-gray-300 px-2 py-2">
+          <select 
+            onchange="cheatSheetManager.updateManualRuleField(${index}, 'serviceType', this.value)"
+            class="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            ${serviceTypes.map(st => `<option value="${st}" ${rule.serviceType === st ? 'selected' : ''}>${st}</option>`).join('')}
+          </select>
+        </td>
+        <td class="border border-gray-300 px-2 py-2">
+          <select 
+            onchange="cheatSheetManager.updateManualRuleField(${index}, 'action', this.value)"
+            class="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            ${actions.map(act => `<option value="${act}" ${rule.action === act ? 'selected' : ''}>${act}</option>`).join('')}
+          </select>
+        </td>
+        <td class="border border-gray-300 px-2 py-2">
+          <input 
+            type="text" 
+            value="${this.escapeHtml(rule.explanation || '')}" 
+            onchange="cheatSheetManager.updateManualRuleField(${index}, 'explanation', this.value)"
+            placeholder="e.g., Prevent downgrade to maintenance when AC broken"
+            class="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </td>
+        <td class="border border-gray-300 px-2 py-2">
+          <input 
+            type="text" 
+            value="${this.escapeHtml(rule.qnaCard || '')}" 
+            onchange="cheatSheetManager.updateManualRuleField(${index}, 'qnaCard', this.value)"
+            placeholder="e.g., ac-not-cooling-repair"
+            class="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
+          />
+        </td>
+        <td class="border border-gray-300 px-2 py-2 text-center">
+          <input 
+            type="number" 
+            value="${rule.priority || 100}" 
+            onchange="cheatSheetManager.updateManualRuleField(${index}, 'priority', parseInt(this.value))"
+            min="1"
+            max="1000"
+            class="w-16 px-2 py-1 text-xs text-center border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </td>
+        <td class="border border-gray-300 px-2 py-2 text-center">
+          <button 
+            onclick="cheatSheetManager.deleteManualRule(${index})" 
+            class="px-2 py-1 text-xs bg-red-100 text-red-700 border border-red-300 rounded hover:bg-red-200 transition-colors"
+            title="Delete rule"
+          >
+            🗑️
+          </button>
+        </td>
+      </tr>
     `;
   }
   
@@ -2171,6 +2346,124 @@ class CheatSheetManager {
   // ═══════════════════════════════════════════════════════════════════
   // HELPERS
   // ═══════════════════════════════════════════════════════════════════
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // MANUAL TRIAGE TABLE CRUD OPERATIONS
+  // ═══════════════════════════════════════════════════════════════════
+  
+  addManualRule() {
+    console.log('[MANUAL TRIAGE] Adding new rule');
+    
+    // Initialize manualTriageRules array if it doesn't exist
+    if (!this.cheatSheet.manualTriageRules) {
+      this.cheatSheet.manualTriageRules = [];
+    }
+    
+    // Add new empty rule
+    const newRule = {
+      keywords: [],
+      excludeKeywords: [],
+      serviceType: 'REPAIR',
+      action: 'DIRECT_TO_3TIER',
+      explanation: '',
+      qnaCard: '',
+      priority: 100
+    };
+    
+    this.cheatSheet.manualTriageRules.push(newRule);
+    this.markDirty();
+    this.renderManualTriageTable();
+    
+    // Scroll to the new rule
+    setTimeout(() => {
+      const table = document.querySelector('#manual-triage-table-section table tbody');
+      if (table) {
+        table.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+  }
+  
+  updateManualRuleField(index, field, value) {
+    console.log('[MANUAL TRIAGE] Updating rule', { index, field, value });
+    
+    if (!this.cheatSheet.manualTriageRules || !this.cheatSheet.manualTriageRules[index]) {
+      console.error('[MANUAL TRIAGE] Rule not found at index:', index);
+      return;
+    }
+    
+    const rule = this.cheatSheet.manualTriageRules[index];
+    
+    // Handle array fields (keywords, excludeKeywords)
+    if (field === 'keywords' || field === 'excludeKeywords') {
+      // Split by comma, trim, filter empty
+      rule[field] = value.split(',').map(k => k.trim()).filter(k => k.length > 0);
+    } else {
+      rule[field] = value;
+    }
+    
+    this.markDirty();
+    console.log('[MANUAL TRIAGE] Rule updated:', rule);
+  }
+  
+  deleteManualRule(index) {
+    console.log('[MANUAL TRIAGE] Deleting rule at index:', index);
+    
+    if (!this.cheatSheet.manualTriageRules || !this.cheatSheet.manualTriageRules[index]) {
+      console.error('[MANUAL TRIAGE] Rule not found at index:', index);
+      return;
+    }
+    
+    // Confirm deletion
+    if (!confirm('Delete this triage rule?')) {
+      return;
+    }
+    
+    this.cheatSheet.manualTriageRules.splice(index, 1);
+    this.markDirty();
+    this.renderManualTriageTable();
+    this.showNotification('Rule deleted', 'success');
+  }
+  
+  async saveManualRules() {
+    console.log('[MANUAL TRIAGE] Saving rules...');
+    
+    try {
+      const token = localStorage.getItem('adminToken');
+      
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+      
+      // Save entire cheatSheet (which includes manualTriageRules)
+      const response = await fetch(`/api/company/${this.companyId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          aiAgentSettings: {
+            cheatSheet: this.cheatSheet
+          }
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Save failed');
+      }
+      
+      this.isDirty = false;
+      this.renderManualTriageTable();
+      this.showNotification('✅ Manual rules saved successfully!', 'success');
+      
+      console.log('[MANUAL TRIAGE] Save successful');
+      
+    } catch (error) {
+      console.error('[MANUAL TRIAGE] Save failed:', error);
+      this.showNotification(`❌ Save failed: ${error.message}`, 'error');
+    }
+  }
   
   markDirty() {
     this.isDirty = true;
