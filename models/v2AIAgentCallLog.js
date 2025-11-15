@@ -37,6 +37,74 @@ const aiAgentCallLogSchema = new mongoose.Schema({
         index: true // For tracking entire customer sessions
     },
     
+    // ============================================================================
+    // 📞 CALL BASICS (Brain-Wired Analytics)
+    // ============================================================================
+    direction: {
+        type: String,
+        enum: ['inbound', 'outbound'],
+        default: 'inbound',
+        index: true
+    },
+    
+    fromNumber: {
+        type: String,
+        trim: true
+    },
+    
+    toNumber: {
+        type: String,
+        trim: true
+    },
+    
+    startedAt: {
+        type: Date,
+        index: true
+    },
+    
+    endedAt: {
+        type: Date
+    },
+    
+    durationMs: {
+        type: Number,
+        min: 0
+    },
+    
+    // ============================================================================
+    // 🧠 BRAIN / CHEAT SHEET (Brain-Wired Analytics)
+    // ============================================================================
+    serviceType: {
+        type: String, // e.g. 'REPAIR', 'MAINTENANCE', 'INSPECTION'
+        trim: true,
+        index: true
+    },
+    
+    categorySlug: {
+        type: String, // Triage category from Brain
+        trim: true,
+        index: true
+    },
+    
+    matchedScenarioId: {
+        type: ObjectId, // Which scenario from Cheat Sheet was triggered
+        ref: 'GlobalInstantResponseTemplate',
+        index: true
+    },
+    
+    usedFallback: {
+        type: Boolean,
+        default: false,
+        index: true
+    },
+    
+    confidence: {
+        type: Number, // 0-1 confidence from Brain matching
+        min: 0,
+        max: 1,
+        index: true
+    },
+    
     // Query Information
     customerQuery: {
         type: String,
@@ -131,6 +199,120 @@ const aiAgentCallLogSchema = new mongoose.Schema({
         index: true
     },
     
+    // ============================================================================
+    // 🎯 OUTCOME (Brain-Wired Analytics)
+    // ============================================================================
+    outcome: {
+        status: {
+            type: String,
+            enum: ['BOOKED', 'TRANSFERRED', 'MESSAGE_TAKEN', 'HUNG_UP', 'FAILED', 'IN_PROGRESS', 'UNKNOWN'],
+            default: 'UNKNOWN',
+            index: true
+        },
+        details: {
+            type: String,
+            trim: true,
+            maxLength: 500
+        },
+        successScore: {
+            type: Number, // 0-100 numeric score
+            min: 0,
+            max: 100,
+            index: true
+        },
+        goodCall: {
+            type: Boolean,
+            default: null,
+            index: true
+        }
+    },
+    
+    // ============================================================================
+    // ⏱️ METRICS (Brain-Wired Analytics)
+    // ============================================================================
+    metrics: {
+        avgAgentLatencyMs: {
+            type: Number,
+            min: 0
+        },
+        maxAgentLatencyMs: {
+            type: Number,
+            min: 0
+        },
+        deadAirMsTotal: {
+            type: Number,
+            min: 0
+        },
+        deadAirSegments: {
+            type: Number,
+            min: 0
+        },
+        turnsCaller: {
+            type: Number,
+            min: 0
+        },
+        turnsAgent: {
+            type: Number,
+            min: 0
+        }
+    },
+    
+    // ============================================================================
+    // 📝 CALL SUMMARY & INTENT (Brain-Wired Analytics)
+    // ============================================================================
+    summary: {
+        type: String,
+        trim: true,
+        maxLength: 1000 // One-paragraph call summary
+    },
+    
+    callerIntent: {
+        type: String,
+        trim: true,
+        maxLength: 500
+    },
+    
+    sentiment: {
+        type: String,
+        enum: ['positive', 'neutral', 'negative', 'frustrated'],
+        index: true
+    },
+    
+    sentimentScore: {
+        type: Number, // -1 to 1
+        min: -1,
+        max: 1
+    },
+    
+    // ============================================================================
+    // 📊 CALL EVENTS (Brain-Wired Analytics)
+    // ============================================================================
+    events: [{
+        type: {
+            type: String,
+            enum: ['caller_utterance', 'agent_reply', 'booking_done', 'call_transfer', 'distress_transfer', 'hangup', 'escalation', 'other'],
+            required: true
+        },
+        text: {
+            type: String,
+            trim: true
+        },
+        at: {
+            type: Date,
+            required: true
+        },
+        tOffsetMs: {
+            type: Number, // milliseconds from call start
+            min: 0
+        },
+        meta: {
+            serviceType: String,
+            categorySlug: String,
+            scenarioId: String,
+            confidence: Number
+        }
+    }],
+    
     // Context Information
     timeOfDay: {
         type: String,
@@ -161,7 +343,9 @@ const aiAgentCallLogSchema = new mongoose.Schema({
     conversation: {
         turns: [{
             timestamp: Date,
+            tOffsetMs: Number, // milliseconds from call start (for playback sync)
             speaker: { type: String, enum: ['customer', 'ai', 'system'] },
+            role: { type: String, enum: ['caller', 'agent', 'system'] }, // Alias for speaker
             text: String,
             audioUrl: String,
             confidence: Number,
@@ -250,7 +434,16 @@ const aiAgentCallLogSchema = new mongoose.Schema({
         // NEW: System 2 indexes
         { 'searchMetadata.keywords': 1 }, // Keyword search
         { 'searchMetadata.sentiment': 1 }, // Sentiment filtering
-        { 'conversation.recordingStatus': 1 } // Recording status filtering
+        { 'conversation.recordingStatus': 1 }, // Recording status filtering
+        // NEW: Brain-Wired Analytics indexes
+        { companyId: 1, startedAt: -1 }, // Call list by date
+        { companyId: 1, 'outcome.status': 1 }, // Outcome filtering
+        { companyId: 1, 'outcome.goodCall': 1 }, // Good/bad call filtering
+        { companyId: 1, serviceType: 1 }, // Service type filtering
+        { companyId: 1, categorySlug: 1 }, // Category filtering
+        { companyId: 1, matchedScenarioId: 1 }, // Scenario performance
+        { companyId: 1, sentiment: 1 }, // Sentiment filtering
+        { 'outcome.successScore': 1 } // Success score sorting
     ]
 });
 

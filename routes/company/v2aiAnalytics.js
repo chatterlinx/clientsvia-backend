@@ -445,5 +445,267 @@ router.get('/company/:companyId/analytics/business', async (req, res) => {
     }
 });
 
+/**
+ * ============================================================================
+ * CALL-LEVEL ANALYTICS (Brain-Wired)
+ * ============================================================================
+ */
+
+/**
+ * GET /api/company/:companyId/analytics/calls
+ * 
+ * Returns paginated list of calls with metrics and outcomes
+ * Query params: from, to, page, pageSize, status, sentiment, goodCall
+ */
+router.get('/company/:companyId/analytics/calls', async (req, res) => {
+    const { companyId } = req.params;
+    const {
+        from,
+        to,
+        page = 1,
+        pageSize = 20,
+        status, // Filter by outcome.status
+        sentiment, // Filter by sentiment
+        goodCall, // Filter by goodCall (true/false)
+        serviceType, // Filter by serviceType
+        categorySlug // Filter by categorySlug
+    } = req.query;
+    
+    try {
+        logger.info('📞 [CALL ANALYTICS] Fetching call list', {
+            companyId,
+            page,
+            pageSize,
+            filters: { status, sentiment, goodCall, serviceType, categorySlug }
+        });
+        
+        // Build query filter
+        const filter = { companyId };
+        
+        // Date range filter
+        if (from || to) {
+            filter.startedAt = {};
+            if (from) filter.startedAt.$gte = new Date(from);
+            if (to) filter.startedAt.$lte = new Date(to);
+        } else {
+            // Default: Last 30 days
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            filter.startedAt = { $gte: thirtyDaysAgo };
+        }
+        
+        // Status filter
+        if (status) {
+            filter['outcome.status'] = status.toUpperCase();
+        }
+        
+        // Sentiment filter
+        if (sentiment) {
+            filter.sentiment = sentiment.toLowerCase();
+        }
+        
+        // Good call filter
+        if (goodCall !== undefined) {
+            filter['outcome.goodCall'] = goodCall === 'true';
+        }
+        
+        // Service type filter
+        if (serviceType) {
+            filter.serviceType = serviceType;
+        }
+        
+        // Category filter
+        if (categorySlug) {
+            filter.categorySlug = categorySlug;
+        }
+        
+        // Count total matching calls
+        const total = await v2AIAgentCallLog.countDocuments(filter);
+        
+        // Fetch paginated calls
+        const skip = (parseInt(page) - 1) * parseInt(pageSize);
+        const calls = await v2AIAgentCallLog.find(filter)
+            .select({
+                callId: 1,
+                direction: 1,
+                fromNumber: 1,
+                toNumber: 1,
+                startedAt: 1,
+                durationMs: 1,
+                serviceType: 1,
+                categorySlug: 1,
+                matchedScenarioId: 1,
+                'outcome.status': 1,
+                'outcome.successScore': 1,
+                'outcome.goodCall': 1,
+                sentiment: 1,
+                sentimentScore: 1,
+                summary: 1,
+                callerIntent: 1
+            })
+            .sort({ startedAt: -1 })
+            .skip(skip)
+            .limit(parseInt(pageSize))
+            .lean();
+        
+        logger.info(`✅ [CALL ANALYTICS] Fetched ${calls.length} calls (total: ${total})`);
+        
+        res.json({
+            success: true,
+            calls: calls.map(call => ({
+                callId: call.callId,
+                direction: call.direction,
+                fromNumber: call.fromNumber,
+                toNumber: call.toNumber,
+                startedAt: call.startedAt,
+                durationMs: call.durationMs,
+                serviceType: call.serviceType,
+                categorySlug: call.categorySlug,
+                outcome: call.outcome || {},
+                sentiment: call.sentiment,
+                sentimentScore: call.sentimentScore,
+                summary: call.summary,
+                callerIntent: call.callerIntent
+            })),
+            pagination: {
+                total,
+                page: parseInt(page),
+                pageSize: parseInt(pageSize),
+                totalPages: Math.ceil(total / parseInt(pageSize))
+            }
+        });
+        
+    } catch (error) {
+        logger.error('❌ [CALL ANALYTICS] Error fetching call list:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch call list',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/company/:companyId/analytics/calls/:callId
+ * 
+ * Returns detailed information for a single call
+ */
+router.get('/company/:companyId/analytics/calls/:callId', async (req, res) => {
+    const { companyId, callId } = req.params;
+    
+    try {
+        logger.info('📞 [CALL ANALYTICS] Fetching call detail', {
+            companyId,
+            callId
+        });
+        
+        // Fetch call with all details
+        const call = await v2AIAgentCallLog.findOne({
+            companyId,
+            callId
+        })
+        .populate('matchedScenarioId', 'name description')
+        .lean();
+        
+        if (!call) {
+            logger.warn(`⚠️ [CALL ANALYTICS] Call not found: ${callId}`);
+            return res.status(404).json({
+                success: false,
+                error: 'Call not found'
+            });
+        }
+        
+        // Build transcript from conversation.turns or events
+        let transcript = [];
+        if (call.conversation && call.conversation.turns && call.conversation.turns.length > 0) {
+            transcript = call.conversation.turns.map(turn => ({
+                role: turn.role || turn.speaker || 'unknown',
+                text: turn.text || '',
+                tOffsetMs: turn.tOffsetMs || 0,
+                timestamp: turn.timestamp
+            }));
+        } else if (call.events && call.events.length > 0) {
+            transcript = call.events
+                .filter(e => e.type === 'caller_utterance' || e.type === 'agent_reply')
+                .map(e => ({
+                    role: e.type === 'caller_utterance' ? 'caller' : 'agent',
+                    text: e.text || '',
+                    tOffsetMs: e.tOffsetMs || 0,
+                    timestamp: e.at
+                }));
+        }
+        
+        logger.info(`✅ [CALL ANALYTICS] Call detail fetched`, {
+            callId,
+            transcriptLength: transcript.length,
+            eventsCount: call.events?.length || 0
+        });
+        
+        res.json({
+            success: true,
+            call: {
+                // Basic info
+                callId: call.callId,
+                direction: call.direction,
+                fromNumber: call.fromNumber,
+                toNumber: call.toNumber,
+                startedAt: call.startedAt,
+                endedAt: call.endedAt,
+                durationMs: call.durationMs,
+                
+                // Brain / Cheat Sheet
+                serviceType: call.serviceType,
+                categorySlug: call.categorySlug,
+                matchedScenarioId: call.matchedScenarioId,
+                matchedScenario: call.matchedScenarioId ? {
+                    id: call.matchedScenarioId._id,
+                    name: call.matchedScenarioId.name,
+                    description: call.matchedScenarioId.description
+                } : null,
+                usedFallback: call.usedFallback,
+                confidence: call.confidence,
+                
+                // Outcome
+                outcome: call.outcome || {
+                    status: 'UNKNOWN',
+                    details: '',
+                    successScore: 0,
+                    goodCall: false
+                },
+                
+                // Metrics
+                metrics: call.metrics || {
+                    avgAgentLatencyMs: 0,
+                    maxAgentLatencyMs: 0,
+                    deadAirMsTotal: 0,
+                    deadAirSegments: 0,
+                    turnsCaller: 0,
+                    turnsAgent: 0
+                },
+                
+                // Summary & Analysis
+                summary: call.summary,
+                callerIntent: call.callerIntent,
+                sentiment: call.sentiment,
+                sentimentScore: call.sentimentScore,
+                
+                // Transcript
+                transcript,
+                
+                // Events (for debugging/advanced view)
+                events: call.events || []
+            }
+        });
+        
+    } catch (error) {
+        logger.error('❌ [CALL ANALYTICS] Error fetching call detail:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch call detail',
+            message: error.message
+        });
+    }
+});
+
 module.exports = router;
 
