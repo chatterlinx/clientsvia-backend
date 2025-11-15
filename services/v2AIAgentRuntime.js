@@ -25,6 +25,7 @@ const SessionManager = require('./SessionManager');
 // FRONTLINE-INTEL - The Command Layer
 // ═══════════════════════════════════════════════════════════════════
 const FrontlineIntel = require('./FrontlineIntel');
+const CallFlowExecutor = require('./CallFlowExecutor');
 
 class V2AIAgentRuntime {
     
@@ -320,231 +321,64 @@ class V2AIAgentRuntime {
                 };
             }
 
-            // ─────────────────────────────────────────────────────────────
-            // 🎯 FRONTLINE-INTEL: The Command Layer (Phase 1)
-            // ─────────────────────────────────────────────────────────────
-            // Processes EVERY call before routing to scenarios
-            // - Extracts intent from messy input
-            // - Looks up customer (returning customer?)
-            // - Validates company/service
-            // - Short-circuits wrong numbers/services
-            // - Normalizes input for Tier 1/2/3
-            // ─────────────────────────────────────────────────────────────
-            let frontlineIntelResult = null;
-            let processedInput = userInput;  // Default to raw input
+            // ═════════════════════════════════════════════════════════════════
+            // 🎯 DYNAMIC CALL FLOW EXECUTION
+            // ═════════════════════════════════════════════════════════════════
+            // Execute steps based on callFlowConfig order and enabled flags
+            // This replaces the old hardcoded: Frontline → generateV2Response → CheatSheet
+            // ═════════════════════════════════════════════════════════════════
             
-            try {
-                const callerPhone = callState.from || callState.callerPhone;
-                frontlineIntelResult = await FrontlineIntel.run(userInput, company, callerPhone);
-                
-                logger.info('[V2 AGENT] 🧠 Frontline-Intel complete', {
-                    companyId: companyID,
-                    callId,
-                    timeMs: frontlineIntelResult.timeMs,
-                    cost: frontlineIntelResult.cost?.toFixed(4),
-                    intent: frontlineIntelResult.detectedIntent,
-                    confidence: frontlineIntelResult.confidence,
-                    shortCircuit: frontlineIntelResult.shouldShortCircuit
+            logger.info('[CALL FLOW] 🎯 Starting dynamic call flow execution', {
+                companyId: companyID,
+                callId,
+                userInput: userInput.substring(0, 100)
+            });
+            
+            // Execute call flow dynamically
+            const executionContext = await CallFlowExecutor.execute({
+                userInput,
+                company,
+                callState,
+                callId,
+                companyID,
+                generateV2Response: this.generateV2Response.bind(this)
+            });
+            
+            logger.info('[CALL FLOW] ✅ Call flow execution complete', {
+                shortCircuit: executionContext.shortCircuit,
+                finalAction: executionContext.finalAction
+            });
+            
+            // Check for short-circuit (early exit from any step)
+            if (executionContext.shortCircuit) {
+                logger.info('[CALL FLOW] 🔥 Short-circuit detected, returning early', {
+                    response: executionContext.finalResponse?.substring(0, 100),
+                    action: executionContext.finalAction
                 });
                 
-                // If short-circuit detected (wrong number, wrong service, etc.)
-                if (frontlineIntelResult.shouldShortCircuit) {
-                    logger.warn('[V2 AGENT] ⚠️ Frontline-Intel short-circuit detected', {
-                        reason: frontlineIntelResult.callValidation?.reasoning,
-                        response: frontlineIntelResult.shortCircuitResponse?.substring(0, 100)
-                    });
-                    
-                    return {
-                        response: frontlineIntelResult.shortCircuitResponse,
-                        action: frontlineIntelResult.callValidation?.correctService === false ? 'hangup' : 'continue',
-                        callState: {
-                            ...callState,
-                            lastInput: userInput,
-                            lastResponse: frontlineIntelResult.shortCircuitResponse,
-                            frontlineIntel: frontlineIntelResult,
-                            shortCircuit: true
-                        },
-                        confidence: frontlineIntelResult.confidence,
-                        frontlineIntelMeta: {
-                            timeMs: frontlineIntelResult.timeMs,
-                            cost: frontlineIntelResult.cost,
-                            shortCircuit: true
-                        }
-                    };
-                }
-                
-                // Use cleaned input for routing
-                processedInput = frontlineIntelResult.cleanedInput || userInput;
-                
-                logger.info('[V2 AGENT] ✅ Using Frontline-Intel cleaned input', {
-                    original: userInput.substring(0, 100),
-                    cleaned: processedInput.substring(0, 100)
-                });
-                
-                // ═════════════════════════════════════════════════════════════════════
-                // 🧠 THE BRAIN: Execute Triage Action
-                // ═════════════════════════════════════════════════════════════════════
-                // THE BRAIN has made a decision (serviceType + action + categorySlug)
-                // Execute the action immediately before touching 3-Tier
-                // ═════════════════════════════════════════════════════════════════════
-                
-                if (frontlineIntelResult.triageDecision) {
-                    const triage = frontlineIntelResult.triageDecision;
-                    
-                    logger.info('[V2 AGENT] 🧠 THE BRAIN: Executing triage action', {
-                        action: triage.action,
-                        serviceType: triage.serviceType,
-                        categorySlug: triage.categorySlug,
-                        source: triage.source,
-                        priority: triage.priority
-                    });
-                    
-                    // Execute action based on THE BRAIN's decision
-                    switch (triage.action) {
-                        case 'ESCALATE_TO_HUMAN':
-                            logger.info('[V2 AGENT] 🧠 THE BRAIN → ESCALATE_TO_HUMAN');
-                            return {
-                                response: `I understand. Let me transfer you to someone who can assist with that right away. Please hold.`,
-                                action: 'transfer',
-                                callState: {
-                                    ...callState,
-                                    lastInput: userInput,
-                                    lastResponse: 'Transferring to human agent',
-                                    frontlineIntel: frontlineIntelResult,
-                                    triageDecision: triage,
-                                    stage: 'transfer'
-                                },
-                                triageDecision: triage
-                            };
-                        
-                        case 'TAKE_MESSAGE':
-                            logger.info('[V2 AGENT] 🧠 THE BRAIN → TAKE_MESSAGE');
-                            return {
-                                response: `I'd be happy to take a message. Could you please provide your name and phone number, and I'll make sure someone gets back to you?`,
-                                action: 'continue',
-                                callState: {
-                                    ...callState,
-                                    lastInput: userInput,
-                                    lastResponse: 'Taking message',
-                                    frontlineIntel: frontlineIntelResult,
-                                    triageDecision: triage,
-                                    stage: 'message'
-                                },
-                                triageDecision: triage
-                            };
-                        
-                        case 'END_CALL_POLITE':
-                            logger.info('[V2 AGENT] 🧠 THE BRAIN → END_CALL_POLITE');
-                            return {
-                                response: `Thank you for calling. Have a great day!`,
-                                action: 'hangup',
-                                callState: {
-                                    ...callState,
-                                    lastInput: userInput,
-                                    lastResponse: 'Ending call politely',
-                                    frontlineIntel: frontlineIntelResult,
-                                    triageDecision: triage,
-                                    stage: 'ended'
-                                },
-                                triageDecision: triage
-                            };
-                        
-                        case 'EXPLAIN_AND_PUSH':
-                            logger.info('[V2 AGENT] 🧠 THE BRAIN → EXPLAIN_AND_PUSH (explain first, then route to 3-Tier if agreed)');
-                            // Store triage decision in call state, continue to 3-Tier with explanation flag
-                            callState.triageDecision = triage;
-                            callState.triageAction = 'EXPLAIN_AND_PUSH';
-                            // Continue to 3-Tier below (will use categorySlug from triage)
-                            break;
-                        
-                        case 'DIRECT_TO_3TIER':
-                        default:
-                            logger.info('[V2 AGENT] 🧠 THE BRAIN → DIRECT_TO_3TIER (route to scenario matching)');
-                            // Store triage decision in call state, continue to 3-Tier below
-                            callState.triageDecision = triage;
-                            callState.triageAction = 'DIRECT_TO_3TIER';
-                            // Continue to 3-Tier below (will use categorySlug from triage)
-                            break;
-                    }
-                }
-                
-            } catch (frontlineErr) {
-                logger.error('[V2 AGENT] ❌ Frontline-Intel failed, using raw input', {
-                    companyId: companyID,
-                    callId,
-                    error: frontlineErr.message
-                });
-                // Continue with raw input (graceful degradation)
+                return {
+                    response: executionContext.finalResponse,
+                    action: executionContext.finalAction,
+                    callState: {
+                        ...callState,
+                        lastInput: userInput,
+                        lastResponse: executionContext.finalResponse,
+                        frontlineIntel: executionContext.frontlineIntelResult,
+                        triageDecision: executionContext.triageDecision,
+                        shortCircuit: true
+                    },
+                    confidence: executionContext.frontlineIntelResult?.confidence || 0.8,
+                    frontlineIntelMeta: executionContext.frontlineIntelMeta,
+                    cheatSheetMeta: executionContext.cheatSheetMeta
+                };
             }
-
-            // V2 Response Generation - uses cleaned input from Frontline-Intel
-            // If THE BRAIN said DIRECT_TO_3TIER or EXPLAIN_AND_PUSH, we continue here
-            // with the triageDecision in callState for 3-Tier to use
-            const baseResponse = await this.generateV2Response(processedInput, company, callState);
             
-            logger.info(`✅ V2 AGENT: Generated base response: "${baseResponse.text}"`);
-            
-            // ─────────────────────────────────────────────────────────────
-            // 🧠 CHEAT SHEET: Apply policy rules (Phase 1)
-            // ─────────────────────────────────────────────────────────────
-            let finalResponse = baseResponse.text;
-            let finalAction = baseResponse.action || 'continue';
-            let cheatSheetMeta = null;
-            
-            if (company.aiAgentSettings?.cheatSheet?.checksum) {
-                try {
-                    // Load compiled policy from Redis
-                    const redisKey = `policy:${companyID}:active`;
-                    const activePolicyKey = await redisClient.get(redisKey);
-                    
-                    if (activePolicyKey) {
-                        const policyCached = await redisClient.get(activePolicyKey);
-                        
-                        if (policyCached) {
-                            const policy = JSON.parse(policyCached);
-                            
-                            // Apply cheat sheet to base response
-                            const cheatSheetResult = await CheatSheetEngine.apply(
-                                baseResponse.text,
-                                userInput,
-                                {
-                                    companyId: companyID,
-                                    callId,
-                                    turnNumber: (callState.turnCount || 0) + 1,
-                                    isFirstTurn: (callState.turnCount || 0) === 0,
-                                    company,
-                                    collectedEntities: callState.collectedEntities || {}
-                                },
-                                policy
-                            );
-                            
-                            finalResponse = cheatSheetResult.response;
-                            finalAction = cheatSheetResult.action === 'TRANSFER' ? 'transfer' : finalAction;
-                            cheatSheetMeta = {
-                                appliedBlocks: cheatSheetResult.appliedBlocks,
-                                timeMs: cheatSheetResult.timeMs,
-                                shortCircuit: cheatSheetResult.shortCircuit,
-                                transferTarget: cheatSheetResult.transferTarget
-                            };
-                            
-                            logger.info('[V2 AGENT] 🧠 Cheat sheet applied', {
-                                companyId: companyID,
-                                callId,
-                                appliedBlocks: cheatSheetResult.appliedBlocks.map(b => b.type),
-                                timeMs: cheatSheetResult.timeMs,
-                                shortCircuit: cheatSheetResult.shortCircuit
-                            });
-                        }
-                    }
-                } catch (cheatSheetErr) {
-                    logger.error('[V2 AGENT] ❌ Cheat sheet application failed', {
-                        companyId: companyID,
-                        callId,
-                        error: cheatSheetErr.message
-                    });
-                    // Continue with base response (graceful degradation)
-                }
-            }
+            // Extract results from execution context
+            const finalResponse = executionContext.finalResponse;
+            const finalAction = executionContext.finalAction;
+            const frontlineIntelResult = executionContext.frontlineIntelResult;
+            const cheatSheetMeta = executionContext.cheatSheetMeta;
+            const baseResponse = executionContext.baseResponse;
             
             // Update call state
             const updatedCallState = {
