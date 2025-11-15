@@ -1370,6 +1370,63 @@ const companySchema = new mongoose.Schema({
             },
             
             // -------------------------------------------------------------------
+            // MANUAL TRIAGE RULES (Quick Triage Table)
+            // -------------------------------------------------------------------
+            // Simple keyword-based rules for quick call classification
+            // Compiled together with AI Triage Cards into ONE unified brain
+            // Part of THE BRAIN triage system
+            // -------------------------------------------------------------------
+            manualTriageRules: [{
+                keywords: {
+                    type: [String],
+                    default: [],
+                    description: 'Keywords that must ALL be present for this rule to match'
+                },
+                excludeKeywords: {
+                    type: [String],
+                    default: [],
+                    description: 'Keywords that if ANY is present, this rule will NOT match'
+                },
+                serviceType: {
+                    type: String,
+                    enum: ['REPAIR', 'MAINTENANCE', 'EMERGENCY', 'INSTALL', 'INSPECTION', 'QUOTE', 'OTHER', 'UNKNOWN'],
+                    required: true,
+                    description: 'Service type classification'
+                },
+                action: {
+                    type: String,
+                    enum: ['DIRECT_TO_3TIER', 'EXPLAIN_AND_PUSH', 'ESCALATE_TO_HUMAN', 'TAKE_MESSAGE', 'END_CALL_POLITE'],
+                    required: true,
+                    description: 'What should happen when this rule matches'
+                },
+                categorySlug: {
+                    type: String,
+                    trim: true,
+                    default: '',
+                    description: 'Category to route to (for 3-Tier system)'
+                },
+                qnaCard: {
+                    type: String,
+                    trim: true,
+                    default: '',
+                    description: 'Q&A card to use (alias for categorySlug)'
+                },
+                explanation: {
+                    type: String,
+                    trim: true,
+                    default: '',
+                    description: 'Why this rule exists (for admin reference)'
+                },
+                priority: {
+                    type: Number,
+                    default: 100,
+                    min: 1,
+                    max: 1000,
+                    description: 'Priority (1-1000, higher = checked first)'
+                }
+            }],
+            
+            // -------------------------------------------------------------------
             // CALL FLOW CONFIG - Dynamic execution order control
             // -------------------------------------------------------------------
             // Allows per-company customization of call processing sequence
