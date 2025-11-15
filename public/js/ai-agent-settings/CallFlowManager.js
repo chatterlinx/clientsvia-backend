@@ -21,6 +21,7 @@ class CallFlowManager {
     this.callFlowConfig = [];
     this.originalConfig = [];  // For detecting changes
     this.isDirty = false;
+    this.realMetrics = null;  // Will hold REAL production metrics
     
     console.log('[CALL FLOW] Manager initialized');
   }
@@ -58,11 +59,53 @@ class CallFlowManager {
       
       console.log('[CALL FLOW] Config loaded:', this.callFlowConfig.length, 'steps');
       
+      // Fetch REAL production metrics
+      await this.loadRealMetrics();
+      
       this.render();
       
     } catch (error) {
       console.error('[CALL FLOW] Load failed:', error);
       this.showNotification(`Failed to load call flow: ${error.message}`, 'error');
+    }
+  }
+  
+  /**
+   * Load REAL production metrics from call logs
+   */
+  async loadRealMetrics() {
+    try {
+      console.log('[CALL FLOW] 📊 Fetching REAL production metrics...');
+      
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`/api/admin/call-flow/${this.companyId}/metrics`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        console.warn('[CALL FLOW] Metrics endpoint returned error, using estimates');
+        return;
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        this.realMetrics = data;
+        console.log('[CALL FLOW] ✅ Real metrics loaded:', {
+          hasRealData: data.hasRealData,
+          totalCalls: data.totalCalls,
+          period: data.period
+        });
+      }
+      
+    } catch (error) {
+      console.error('[CALL FLOW] ❌ Failed to load real metrics:', error);
+      // Fall back to estimates if metrics fetch fails
+      this.realMetrics = null;
     }
   }
   
@@ -78,7 +121,24 @@ class CallFlowManager {
     
     console.log('[CALL FLOW] Rendering UI...');
     
-    const performanceEstimate = this.calculatePerformance();
+    // Use REAL metrics if available, otherwise calculate estimates
+    let performanceEstimate;
+    let hasRealData = false;
+    let period = '';
+    let totalCalls = 0;
+    
+    if (this.realMetrics && this.realMetrics.metrics) {
+      performanceEstimate = this.realMetrics.metrics;
+      hasRealData = this.realMetrics.hasRealData;
+      period = this.realMetrics.period || '';
+      totalCalls = this.realMetrics.totalCalls || 0;
+      console.log('[CALL FLOW] Using REAL production metrics:', performanceEstimate);
+    } else {
+      performanceEstimate = this.calculatePerformance();
+      hasRealData = false;
+      period = 'Estimates';
+      console.log('[CALL FLOW] Using calculated estimates:', performanceEstimate);
+    }
     
     container.innerHTML = `
       <!-- Header -->
@@ -92,6 +152,20 @@ class CallFlowManager {
       </div>
       
       <!-- Performance Dashboard -->
+      <div class="mb-2 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <span class="text-sm font-medium text-gray-700">Performance Metrics</span>
+          ${hasRealData ? 
+            `<span class="px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full border border-green-300">
+              ✅ REAL DATA (${totalCalls} calls)
+            </span>` : 
+            `<span class="px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded-full border border-yellow-300">
+              ⚠️ ESTIMATES (No production calls yet)
+            </span>`
+          }
+        </div>
+        <span class="text-xs text-gray-500">${period}</span>
+      </div>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         
         <!-- Avg Response Time -->

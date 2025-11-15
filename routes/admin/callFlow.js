@@ -7,6 +7,7 @@
  * 
  * Routes:
  * - GET    /api/admin/call-flow/:companyId              → Get current config
+ * - GET    /api/admin/call-flow/:companyId/metrics      → Get REAL production metrics
  * - PUT    /api/admin/call-flow/:companyId              → Update config
  * - POST   /api/admin/call-flow/:companyId/analyze      → Analyze performance
  * - POST   /api/admin/call-flow/:companyId/reset        → Reset to defaults
@@ -18,6 +19,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateJWT } = require('../../middleware/auth');
 const Company = require('../../models/v2Company');
+const LLMCallLog = require('../../models/LLMCallLog');
 const defaultCallFlowConfig = require('../../config/defaultCallFlowConfig');
 const logger = require('../../utils/logger');
 
@@ -62,6 +64,137 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to fetch call flow config',
+            error: error.message
+        });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GET /api/admin/call-flow/:companyId/metrics
+// Get REAL production metrics (replaces hardcoded estimates)
+// ═══════════════════════════════════════════════════════════════════════════
+router.get('/:companyId/metrics', authenticateJWT, async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        logger.info(`📊 [CALL FLOW METRICS] Fetching real metrics for company: ${companyId}`);
+        
+        // Load company
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found'
+            });
+        }
+        
+        // Calculate date range (Last 30 days)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        // Aggregate REAL metrics from call logs
+        const callMetrics = await LLMCallLog.aggregate([
+            {
+                $match: {
+                    companyId: company._id,
+                    createdAt: { $gte: thirtyDaysAgo }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalCalls: { $sum: 1 },
+                    avgTotalTime: { $avg: '$performanceMetrics.totalTime' },
+                    avgCost: { $avg: '$costBreakdown.totalCost' },
+                    totalCost: { $sum: '$costBreakdown.totalCost' },
+                    tier1Calls: {
+                        $sum: {
+                            $cond: ['$tier1Result.attempted', 1, 0]
+                        }
+                    },
+                    tier2Calls: {
+                        $sum: {
+                            $cond: ['$tier2Result.attempted', 1, 0]
+                        }
+                    },
+                    tier3Calls: {
+                        $sum: {
+                            $cond: ['$tier3Result.attempted', 1, 0]
+                        }
+                    }
+                }
+            }
+        ]);
+        
+        const hasRealData = callMetrics.length > 0 && callMetrics[0].totalCalls > 0;
+        
+        if (hasRealData) {
+            const metrics = callMetrics[0];
+            
+            // Real production metrics
+            const avgResponseTimeMs = Math.round(metrics.avgTotalTime || 0);
+            const avgCostPerCall = (metrics.avgCost || 0).toFixed(4);
+            const monthlyEstimate1000Calls = (parseFloat(avgCostPerCall) * 1000).toFixed(2);
+            
+            logger.info(`✅ [CALL FLOW METRICS] Real metrics calculated`, {
+                companyId,
+                totalCalls: metrics.totalCalls,
+                avgResponseTimeMs,
+                avgCostPerCall
+            });
+            
+            res.json({
+                success: true,
+                hasRealData: true,
+                period: 'Last 30 days',
+                totalCalls: metrics.totalCalls,
+                metrics: {
+                    avgResponseTimeMs,
+                    avgCostPerCall,
+                    monthlyEstimate1000Calls
+                },
+                tierBreakdown: {
+                    tier1: metrics.tier1Calls,
+                    tier2: metrics.tier2Calls,
+                    tier3: metrics.tier3Calls
+                },
+                totalCost30Days: metrics.totalCost.toFixed(2)
+            });
+            
+        } else {
+            // No real data yet - return estimates with clear warning
+            logger.warn(`⚠️ [CALL FLOW METRICS] No real data found, returning estimates`, {
+                companyId
+            });
+            
+            const callFlowConfig = company.aiAgentSettings?.callFlowConfig || defaultCallFlowConfig;
+            const estimates = calculatePerformanceEstimate(callFlowConfig);
+            
+            res.json({
+                success: true,
+                hasRealData: false,
+                period: 'Estimates (No calls yet)',
+                totalCalls: 0,
+                metrics: {
+                    avgResponseTimeMs: estimates.avgResponseTimeMs,
+                    avgCostPerCall: estimates.avgCostPerCall,
+                    monthlyEstimate1000Calls: estimates.monthlyEstimate1000Calls
+                },
+                tierBreakdown: {
+                    tier1: 0,
+                    tier2: 0,
+                    tier3: 0
+                },
+                totalCost30Days: '0.00',
+                warning: 'These are estimated values. Real metrics will appear after processing calls.'
+            });
+        }
+        
+    } catch (error) {
+        logger.error('❌ [CALL FLOW METRICS] Failed to fetch metrics:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch call flow metrics',
             error: error.message
         });
     }
