@@ -31,7 +31,6 @@ class AIAgentSettingsManager {
         this.aiCoreLiveScenariosManager = null;
         this.aiCoreKnowledgebaseManager = null;
         this.analyticsManager = null;
-        this.aiPerformanceDashboard = null;
         
         console.log(`🤖 [AI AGENT SETTINGS] Initialized for company: ${companyId}`);
     }

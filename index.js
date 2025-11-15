@@ -198,7 +198,6 @@ async function loadAllRoutes() {
         routes.v2AICoreScenarios = await loadRouteWithTimeout('./routes/company/v2aiCoreScenarios', 'v2AICoreScenarios');
         routes.v2AIAnalyticsRoutes = await loadRouteWithTimeout('./routes/company/v2aiAnalytics', 'v2AIAnalyticsRoutes');
         routes.v2FillerFilterRoutes = await loadRouteWithTimeout('./routes/company/v2FillerFilter', 'v2FillerFilterRoutes');
-        routes.v2AIPerformanceRoutes = await loadRouteWithTimeout('./routes/company/v2aiPerformance', 'v2AIPerformanceRoutes');
         routes.callArchivesRoutes = await loadRouteWithTimeout('./routes/admin/callArchives', 'callArchivesRoutes');
         routes.callFilteringRoutes = await loadRouteWithTimeout('./routes/admin/callFiltering', 'callFilteringRoutes');
         routes.adminNotificationsRoutes = await loadRouteWithTimeout('./routes/admin/adminNotifications', 'adminNotificationsRoutes');
@@ -415,7 +414,6 @@ function registerRoutes(routes) {
     app.use('/api', routes.v2AICoreScenarios); // V2: AiCore Scenario Controls (per-company enable/disable toggles)
     app.use('/api', routes.v2AIAnalyticsRoutes); // V2: AI Analytics (real-time performance dashboard)
     app.use('/api', routes.v2FillerFilterRoutes); // V2: AiCore Filler Filter (inherited + custom filler words management)
-    app.use('/api', routes.v2AIPerformanceRoutes); // V2: AI Performance Dashboard (speed tracking, index usage, DB stats)
     app.use('/api', routes.callArchivesRoutes); // ADMIN: Call Archives (search transcripts, export call history)
     app.use('/api', routes.callFilteringRoutes); // ADMIN: Call Filtering (spam detection, blacklist/whitelist management)
     app.use('/api/admin/notifications', routes.adminNotificationsRoutes); // ADMIN: Notification Center (platform alerts, SMS delivery, health checks)
@@ -427,7 +425,7 @@ function registerRoutes(routes) {
     app.use('/api/admin', routes.globalIntelligenceRoutes); // ADMIN: Global Production Intelligence API (platform-wide 3-tier defaults, inheritance system)
     app.use('/api/admin/ai-gateway', routes.aiGatewayRoutes); // ADMIN: AI Gateway (LLM health monitoring, suggestion system, call log analysis)
     app.use('/api/admin/suggestions', routes.enterpriseSuggestionsRoutes); // ADMIN: Enterprise Test Pilot (deep analysis, suggestions, trends, conflicts, cost projections)
-    app.use('/api', routes.healthRoutes); // SYSTEM: Health check endpoint for all 3 new systems (AI Performance, Call Archives, Spam Filter)
+    app.use('/api', routes.healthRoutes); // SYSTEM: Health check endpoint for systems (Call Archives, Spam Filter)
     // app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     // V2 DELETED: Legacy enhancedAgentSettings route mount - used external LLMs, violates in-house AI system
 

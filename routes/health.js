@@ -32,7 +32,6 @@ router.get('/health', async (req, res) => {
             systems: {
                 mongodb: 'unknown',
                 redis: 'unknown',
-                aiPerformance: 'unknown',
                 callArchives: 'unknown',
                 spamFilter: 'unknown'
             },
@@ -97,27 +96,7 @@ router.get('/health', async (req, res) => {
         }
 
         // ================================================================
-        // CHECK 3: AI Performance System (System 1)
-        // ================================================================
-        try {
-            const v2AIPerformanceMetric = require('../models/v2AIPerformanceMetric');
-            const sampleMetric = await v2AIPerformanceMetric.findOne().limit(1);
-            health.systems.aiPerformance = 'ok';
-            health.details.aiPerformance = {
-                status: 'ready',
-                hasData: Boolean(sampleMetric),
-                message: sampleMetric ? 'Model and data accessible' : 'Model ready, no data yet'
-            };
-            logger.info('✅ [HEALTH CHECK] AI Performance: Ready');
-        } catch (error) {
-            health.systems.aiPerformance = 'error';
-            health.status = 'degraded';
-            health.details.aiPerformance = { error: error.message };
-            logger.error('❌ [HEALTH CHECK] AI Performance error:', error);
-        }
-
-        // ================================================================
-        // CHECK 4: Call Archives System (System 2)
+        // CHECK 3: Call Archives System
         // ================================================================
         try {
             const v2AIAgentCallLog = require('../models/v2AIAgentCallLog');
@@ -153,7 +132,7 @@ router.get('/health', async (req, res) => {
         }
 
         // ================================================================
-        // CHECK 5: Spam Filter System (System 3)
+        // CHECK 4: Spam Filter System
         // ================================================================
         try {
             const v2Company = require('../models/v2Company');

@@ -943,9 +943,6 @@
                             <button onclick="viewCallHistory('${company.companyId}')" class="action-btn" title="View Call History">
                                 <i class="fas fa-phone-volume"></i>
                             </button>
-                            <button onclick="viewAIPerformance('${company.companyId}')" class="action-btn" title="AI Performance">
-                                <i class="fas fa-chart-line"></i>
-                            </button>
                             <button onclick="manageSpamFilter('${company.companyId}')" class="action-btn" title="Spam Filter">
                                 <i class="fas fa-shield-alt"></i>
                             </button>
@@ -961,11 +958,6 @@
         function viewCallHistory(companyId) {
             console.log('[DATA CENTER] 📞 Opening Call History for:', companyId);
             window.location.href = `/admin-call-archives.html?companyId=${companyId}`;
-        }
-
-        function viewAIPerformance(companyId) {
-            console.log('[DATA CENTER] 📊 Opening AI Performance for:', companyId);
-            window.location.href = `/company-profile.html?id=${companyId}#ai-performance`;
         }
 
         function manageSpamFilter(companyId) {

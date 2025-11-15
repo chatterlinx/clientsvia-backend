@@ -3983,12 +3983,6 @@ class CompanyProfileManager {
         }
         
         // Initialize tab-specific managers on first visit
-        if (tabName === 'ai-performance' && !this.aiPerformanceDashboardInitialized) {
-            logger.info('🚀 Initializing AI Performance Dashboard...');
-            this.initializeAIPerformanceDashboard();
-            this.aiPerformanceDashboardInitialized = true;
-        }
-        
         if (tabName === 'spam-filter' && !this.spamFilterManagerInitialized) {
             logger.info('🛡️ Initializing Spam Filter Manager...');
             this.initializeSpamFilterManager();
@@ -4018,33 +4012,6 @@ class CompanyProfileManager {
 
     // Legacy sub-tab system completely removed - using modern AI Agent Logic 4-tab system
     // Old switchKnowledgeSubTab() function eliminated - functionality moved to new system
-
-    /**
-     * Initialize AI Performance Dashboard
-     */
-    initializeAIPerformanceDashboard() {
-        logger.info('📊 [AI PERFORMANCE] Initializing dashboard for company:', this.companyId);
-        
-        try {
-            // Check if AIPerformanceDashboard class exists
-            if (typeof AIPerformanceDashboard === 'undefined') {
-                logger.error('❌ [AI PERFORMANCE] AIPerformanceDashboard class not found!');
-                return;
-            }
-            
-            // Initialize the dashboard
-            const dashboard = new AIPerformanceDashboard(this.companyId);
-            dashboard.init();
-            
-            logger.info('✅ [AI PERFORMANCE] Dashboard initialized successfully');
-            
-            // Store reference for later use
-            this.aiPerformanceDashboard = dashboard;
-            
-        } catch (error) {
-            logger.error('❌ [AI PERFORMANCE] Failed to initialize dashboard:', error);
-        }
-    }
 
     /**
      * Initialize Spam Filter Manager

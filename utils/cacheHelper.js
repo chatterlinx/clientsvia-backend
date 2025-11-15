@@ -211,8 +211,7 @@ class CacheHelper {
             const additionalKeys = [
                 `sessions:${companyId}:*`,                 // User sessions
                 `metrics:${companyId}:*`,                  // Performance metrics
-                `callLogs:${companyId}:*`,                 // Call logs
-                `aiPerformance:${companyId}:*`             // AI performance stats
+                `callLogs:${companyId}:*`                  // Call logs
             ];
 
             // Use Redis SCAN for pattern-based deletion (safer than KEYS)

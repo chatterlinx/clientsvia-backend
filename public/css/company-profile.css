@@ -99,20 +99,6 @@ body {
 }
 
 /* Specific tab colors */
-#tab-ai-performance.tab-button-active {
-    background-color: #10B981;
-    color: white;
-}
-
-#tab-ai-performance.tab-button-inactive {
-    background-color: #D1FAE5;
-    color: #065F46;
-}
-
-#tab-ai-performance.tab-button-inactive:hover {
-    background-color: #A7F3D0;
-}
-
 #tab-spam-filter.tab-button-active {
     background-color: #F97316;
     color: white;
