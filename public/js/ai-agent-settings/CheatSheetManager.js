@@ -2453,9 +2453,27 @@ class CheatSheetManager {
         throw new Error(errorData.message || 'Save failed');
       }
       
+      // 🧠 Invalidate compiled triage cache (manual rules changed!)
+      try {
+        const cacheInvalidateResponse = await fetch(`/api/company/${this.companyId}/triage-cards/invalidate-cache`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (cacheInvalidateResponse.ok) {
+          console.log('[MANUAL TRIAGE] ✅ Compiled triage cache invalidated - THE BRAIN will rebuild on next call');
+        } else {
+          console.warn('[MANUAL TRIAGE] ⚠️ Cache invalidation failed (non-critical)');
+        }
+      } catch (cacheErr) {
+        console.warn('[MANUAL TRIAGE] ⚠️ Cache invalidation error (non-critical):', cacheErr.message);
+      }
+      
       this.isDirty = false;
       this.renderManualTriageTable();
-      this.showNotification('✅ Manual rules saved successfully!', 'success');
+      this.showNotification('✅ Manual rules saved successfully! THE BRAIN will use updated rules on next call.', 'success');
       
       console.log('[MANUAL TRIAGE] Save successful');
       

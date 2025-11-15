@@ -318,9 +318,39 @@ router.post('/:cardId/deactivate', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// INVALIDATE COMPILED TRIAGE CACHE
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/company/:companyId/triage-cards/invalidate-cache
+// Purpose: Clear cached compiled config when manual rules or cards change
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/invalidate-cache', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+
+    logger.info('[TRIAGE CARDS API] 🧠 Cache invalidation requested', { companyId });
+
+    await TriageCardService.invalidateCache(companyId);
+
+    res.json({
+      success: true,
+      message: 'Compiled triage cache invalidated. THE BRAIN will rebuild on next call.'
+    });
+
+  } catch (error) {
+    logger.error('[TRIAGE CARDS API] Cache invalidation failed', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET COMPILED CONFIG (FOR DEBUGGING)
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/company/:companyId/triage-cards/compiled/config
+// Purpose: View the final merged triage table (manual + AI cards + fallback)
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.get('/compiled/config', async (req, res) => {

@@ -280,12 +280,12 @@ class TriageCardService {
   // ───────────────────────────────────────────────────────────────────────────
 
   /**
-   * Compile all ACTIVE cards into runtime-optimized config
+   * Compile all ACTIVE cards + manual rules into ONE unified runtime config
    * @param {String} companyId
    * @returns {Promise<CompiledTriageConfig>}
    */
   static async compileActiveCards(companyId) {
-    logger.info('[TRIAGE CARD SERVICE] Compiling active cards', { companyId });
+    logger.info('[TRIAGE CARD SERVICE] 🧠 Compiling unified triage brain (cards + manual rules)', { companyId });
 
     try {
       // Check cache first
@@ -302,18 +302,24 @@ class TriageCardService {
         logger.debug('[TRIAGE CARD SERVICE] Cache check failed, continuing without cache', { error: redisErr.message });
       }
 
-      // Fetch all active cards
+      // 1️⃣ Fetch all ACTIVE TriageCards (AI-generated cards)
       const activeCards = await TriageCard.findActiveByCompany(companyId);
+      logger.debug('[TRIAGE CARD SERVICE] Found active AI cards', { count: activeCards.length });
 
-      logger.debug('[TRIAGE CARD SERVICE] Found active cards', { count: activeCards.length });
+      // 2️⃣ Fetch manual triage rules from company settings
+      const Company = require('../models/v2Company');
+      const company = await Company.findById(companyId).select('aiAgentSettings.cheatSheet.manualTriageRules');
+      const manualRules = company?.aiAgentSettings?.cheatSheet?.manualTriageRules || [];
+      logger.debug('[TRIAGE CARD SERVICE] Found manual rules', { count: manualRules.length });
 
-      // Build compiled config
+      // 3️⃣ Build compiled config structure
       const compiledConfig = {
         companyId,
         compiledAt: new Date().toISOString(),
         cardCount: activeCards.length,
+        manualRuleCount: manualRules.length,
         
-        // Merge all triage rules (sorted by priority)
+        // ONE unified triage rules array (manual + cards)
         triageRules: [],
         
         // Response library pools
@@ -326,15 +332,25 @@ class TriageCardService {
         frontlineIntelBlocks: []
       };
 
-      // Process each card
+      // 4️⃣ Add all rules from TriageCards (AI-generated)
       activeCards.forEach(card => {
         
-        // Add triage rules (already sorted by priority in schema)
+        // Extract triage rules from card
         card.triageMap.forEach(rule => {
           compiledConfig.triageRules.push({
-            ...rule.toObject(),
+            // Rule data
+            keywords: rule.keywords || [],
+            excludeKeywords: rule.excludeKeywords || [],
+            serviceType: rule.serviceType,
+            action: rule.action,
+            categorySlug: rule.categorySlug || card.category.slug,
+            priority: rule.priority,
+            reason: rule.reason,
+            
+            // Metadata for tracing
+            source: 'AI_CARD',
             cardId: card._id,
-            categorySlug: card.category.slug
+            updatedAt: card.updatedAt
           });
         });
 
@@ -363,12 +379,69 @@ class TriageCardService {
 
       });
 
-      // Re-sort all triage rules by priority (highest first)
-      compiledConfig.triageRules.sort((a, b) => b.priority - a.priority);
+      // 5️⃣ Add all MANUAL rules (from Quick Triage Table)
+      manualRules.forEach((rule, index) => {
+        compiledConfig.triageRules.push({
+          // Rule data
+          keywords: Array.isArray(rule.keywords) ? rule.keywords : [],
+          excludeKeywords: Array.isArray(rule.excludeKeywords) ? rule.excludeKeywords : [],
+          serviceType: rule.serviceType || 'OTHER',
+          action: rule.action || 'DIRECT_TO_3TIER',
+          categorySlug: rule.qnaCard || rule.categorySlug || 'manual-rule',
+          priority: rule.priority || 100,
+          reason: rule.explanation || '',
+          
+          // Metadata for tracing
+          source: 'MANUAL',
+          manualRuleIndex: index,
+          updatedAt: company.updatedAt // Use company's updatedAt for manual rules
+        });
+      });
 
-      logger.info('[TRIAGE CARD SERVICE] ✅ Compilation complete', {
+      // 6️⃣ Add FALLBACK rule (lowest priority, catches everything)
+      compiledConfig.triageRules.push({
+        keywords: [],
+        excludeKeywords: [],
+        serviceType: 'UNKNOWN',
+        action: 'ESCALATE_TO_HUMAN',
+        categorySlug: 'general-question',
+        priority: 0, // Lowest priority
+        reason: 'Fallback rule - no specific match found',
+        source: 'SYSTEM',
+        isFallback: true,
+        updatedAt: new Date()
+      });
+
+      // 7️⃣ Sort rules with TIE-BREAKER logic
+      // Primary: priority (highest first)
+      // Tie-breaker 1: source (MANUAL beats AI_CARD)
+      // Tie-breaker 2: updatedAt (most recent wins)
+      compiledConfig.triageRules.sort((a, b) => {
+        // Primary: priority descending
+        if (a.priority !== b.priority) {
+          return b.priority - a.priority;
+        }
+        
+        // Tie-breaker 1: MANUAL > AI_CARD > SYSTEM
+        const sourceRank = { MANUAL: 3, AI_CARD: 2, SYSTEM: 1 };
+        const rankA = sourceRank[a.source] || 0;
+        const rankB = sourceRank[b.source] || 0;
+        if (rankA !== rankB) {
+          return rankB - rankA;
+        }
+        
+        // Tie-breaker 2: Most recent updatedAt wins
+        const dateA = new Date(a.updatedAt).getTime();
+        const dateB = new Date(b.updatedAt).getTime();
+        return dateB - dateA;
+      });
+
+      logger.info('[TRIAGE CARD SERVICE] ✅ ONE BRAIN compiled successfully', {
         companyId,
-        ruleCount: compiledConfig.triageRules.length,
+        totalRules: compiledConfig.triageRules.length,
+        aiCardRules: compiledConfig.triageRules.filter(r => r.source === 'AI_CARD').length,
+        manualRules: compiledConfig.triageRules.filter(r => r.source === 'MANUAL').length,
+        fallbackRules: compiledConfig.triageRules.filter(r => r.source === 'SYSTEM').length,
         responsePoolCount: Object.keys(compiledConfig.responsePools).length
       });
 
@@ -376,6 +449,7 @@ class TriageCardService {
       try {
         const redis = getRedisClient();
         await redis.setex(cacheKey, 3600, JSON.stringify(compiledConfig));
+        logger.debug('[TRIAGE CARD SERVICE] ✅ Compiled config cached');
       } catch (redisErr) {
         logger.debug('[TRIAGE CARD SERVICE] Cache set failed (non-critical)', { error: redisErr.message });
       }
@@ -383,7 +457,7 @@ class TriageCardService {
       return compiledConfig;
 
     } catch (error) {
-      logger.error('[TRIAGE CARD SERVICE] ❌ Compilation failed', { error: error.message });
+      logger.error('[TRIAGE CARD SERVICE] ❌ Compilation failed', { error: error.message, stack: error.stack });
       throw error;
     }
   }
