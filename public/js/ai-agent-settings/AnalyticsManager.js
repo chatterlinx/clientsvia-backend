@@ -194,6 +194,9 @@ class AnalyticsManager {
             case 'business':
                 this.renderBusiness(contentContainer);
                 break;
+            case 'call-insights':
+                this.renderCallInsights(contentContainer);
+                break;
         }
     }
 
@@ -748,6 +751,499 @@ class AnalyticsManager {
                 <button onclick="window.analyticsManager.load()" style="padding: 12px 24px; background: #6366f1; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
                     Try Again
                 </button>
+            </div>
+        `;
+    }
+
+    // ========================================================================
+    // CALL INSIGHTS (Brain-Wired Analytics)
+    // ========================================================================
+
+    /**
+     * Render Call Insights tab
+     */
+    async renderCallInsights(container) {
+        console.log('📞 [CALL INSIGHTS] Rendering Call Insights tab...');
+        
+        // Show loading state initially
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #6b7280;">
+                <div style="font-size: 48px; margin-bottom: 16px;">📞</div>
+                <p>Loading call insights...</p>
+            </div>
+        `;
+        
+        try {
+            // Load calls
+            const calls = await this.loadCallsList();
+            
+            if (!calls || calls.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 60px 20px;">
+                        <div style="font-size: 64px; margin-bottom: 16px;">📞</div>
+                        <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 8px;">No Calls Yet</h3>
+                        <p style="font-size: 14px; color: #6b7280;">Make some test calls to see call-level analytics here!</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Render call cards
+            container.innerHTML = `
+                <div style="margin-bottom: 24px;">
+                    <div style="display: flex; align-items: center; justify-content: between; margin-bottom: 16px;">
+                        <h2 style="font-size: 24px; font-weight: 700; color: #111827; flex: 1;">📞 Call Insights</h2>
+                        <span style="font-size: 14px; color: #6b7280;">${calls.length} recent calls</span>
+                    </div>
+                    <p style="font-size: 14px; color: #6b7280; margin-bottom: 24px;">Detailed analysis of every call with Brain metrics, outcomes, and transcripts</p>
+                </div>
+                
+                <!-- Call Cards -->
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    ${calls.map(call => this.renderCallCard(call)).join('')}
+                </div>
+            `;
+            
+            console.log('✅ [CALL INSIGHTS] Rendered ${calls.length} call cards');
+            
+        } catch (error) {
+            console.error('❌ [CALL INSIGHTS] Error rendering:', error);
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #ef4444;">
+                    <p>Error loading call insights: ${error.message}</p>
+                </div>
+            `;
+        }
+    }
+
+    /**
+     * Load calls list from API
+     */
+    async loadCallsList(page = 1, pageSize = 20) {
+        try {
+            const token = localStorage.getItem('adminToken');
+            if (!token) {
+                throw new Error('Authentication required');
+            }
+            
+            const response = await fetch(
+                `/api/company/${this.companyId}/analytics/calls?page=${page}&pageSize=${pageSize}`,
+                {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }
+            );
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('📞 [CALL INSIGHTS] Loaded calls:', data.calls?.length || 0);
+            
+            return data.calls || [];
+            
+        } catch (error) {
+            console.error('❌ [CALL INSIGHTS] Error loading calls:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Render a single call card
+     */
+    renderCallCard(call) {
+        const duration = this.formatDuration(call.durationMs);
+        const sentiment = call.sentiment || 'neutral';
+        const sentimentEmoji = this.getSentimentEmoji(sentiment);
+        const goodCall = call.outcome?.goodCall;
+        const successScore = call.outcome?.successScore || 0;
+        const statusBadge = this.getOutcomeStatusBadge(call.outcome?.status);
+        
+        return `
+            <div onclick="window.analyticsManager.openCallDetailModal('${call.callId}')" 
+                 style="background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 20px; cursor: pointer; transition: all 0.2s; border-left: 4px solid ${goodCall ? '#10b981' : '#f59e0b'};"
+                 onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'; this.style.transform='translateY(-2px)';"
+                 onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,0.1)'; this.style.transform='translateY(0)';">
+                
+                <!-- Header Row -->
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 24px;">${sentimentEmoji}</span>
+                        <div>
+                            <div style="font-size: 16px; font-weight: 600; color: #111827;">${call.fromNumber || 'Unknown'}</div>
+                            <div style="font-size: 12px; color: #6b7280;">${new Date(call.startedAt).toLocaleString()}</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        ${statusBadge}
+                        <div style="text-align: right;">
+                            <div style="font-size: 20px; font-weight: 700; color: ${this.getScoreColor(successScore)};">${successScore}</div>
+                            <div style="font-size: 11px; color: #6b7280; text-transform: uppercase;">Score</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Summary -->
+                ${call.summary ? `
+                    <div style="font-size: 14px; color: #374151; margin-bottom: 12px; line-height: 1.5;">
+                        ${call.summary}
+                    </div>
+                ` : ''}
+                
+                <!-- Footer Row -->
+                <div style="display: flex; align-items: center; gap: 16px; font-size: 12px; color: #6b7280; padding-top: 12px; border-top: 1px solid #f3f4f6;">
+                    <span>⏱️ ${duration}</span>
+                    ${call.serviceType ? `<span>🔧 ${call.serviceType}</span>` : ''}
+                    ${call.categorySlug ? `<span>📂 ${call.categorySlug}</span>` : ''}
+                    <span style="margin-left: auto;">${goodCall ? '✅ Good Call' : '⚠️ Needs Attention'}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Open call detail modal
+     */
+    async openCallDetailModal(callId) {
+        console.log('📞 [CALL INSIGHTS] Opening detail modal for:', callId);
+        
+        try {
+            const token = localStorage.getItem('adminToken');
+            if (!token) {
+                throw new Error('Authentication required');
+            }
+            
+            // Fetch call detail
+            const response = await fetch(
+                `/api/company/${this.companyId}/analytics/calls/${callId}`,
+                {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }
+            );
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            const call = data.call;
+            
+            // Render modal
+            this.renderCallDetailModal(call);
+            
+        } catch (error) {
+            console.error('❌ [CALL INSIGHTS] Error loading call detail:', error);
+            alert('Failed to load call details: ' + error.message);
+        }
+    }
+
+    /**
+     * Render call detail modal
+     */
+    renderCallDetailModal(call) {
+        const goodCall = call.outcome?.goodCall;
+        const sentiment = call.sentiment || 'neutral';
+        const sentimentEmoji = this.getSentimentEmoji(sentiment);
+        
+        // Build execution steps from events
+        const steps = this.buildExecutionSteps(call.events);
+        
+        const modalHTML = `
+            <div id="call-detail-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px;" onclick="if(event.target.id === 'call-detail-modal') this.remove();">
+                <div onclick="event.stopPropagation();" style="background: white; border-radius: 16px; max-width: 900px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+                    
+                    <!-- Judgement Bar -->
+                    <div style="background: linear-gradient(135deg, ${goodCall ? '#10b981' : '#f59e0b'}, ${goodCall ? '#059669' : '#d97706'}); color: white; padding: 24px; border-radius: 16px 16px 0 0;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                            <h2 style="font-size: 24px; font-weight: 700; margin: 0;">${goodCall ? '✅ Good Call' : '⚠️ Needs Attention'}</h2>
+                            <button onclick="document.getElementById('call-detail-modal').remove();" style="background: rgba(255,255,255,0.2); border: none; color: white; font-size: 24px; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">×</button>
+                        </div>
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                            ${this.getOutcomeStatusBadge(call.outcome?.status, true)}
+                            <span style="background: rgba(255,255,255,0.2); padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 600;">${sentimentEmoji} ${sentiment}</span>
+                            <span style="background: rgba(255,255,255,0.2); padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 600;">Score: ${call.outcome?.successScore || 0}</span>
+                            <span style="background: rgba(255,255,255,0.2); padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 600;">⏱️ ${this.formatDuration(call.durationMs)}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Content -->
+                    <div style="padding: 24px;">
+                        
+                        <!-- Section 1: Caller Request -->
+                        <div style="margin-bottom: 24px;">
+                            <h3 style="font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 12px;">📋 Caller Request</h3>
+                            <div style="background: #f9fafb; padding: 16px; border-radius: 8px; border-left: 4px solid #6366f1;">
+                                <p style="font-size: 14px; color: #374151; margin-bottom: 8px;"><strong>Intent:</strong> ${call.callerIntent || 'Unknown'}</p>
+                                <p style="font-size: 14px; color: #374151; line-height: 1.6;">${call.summary || 'No summary available'}</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Section 2: Execution Steps -->
+                        <div style="margin-bottom: 24px;">
+                            <h3 style="font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 12px;">⚡ Execution Steps</h3>
+                            <ul style="list-style: none; padding: 0; margin: 0;">
+                                ${steps.map((step, i) => `
+                                    <li style="display: flex; align-items: start; gap: 12px; margin-bottom: 12px;">
+                                        <span style="background: #6366f1; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;">${i + 1}</span>
+                                        <span style="font-size: 14px; color: #374151; line-height: 1.5;">${step}</span>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                        
+                        <!-- Section 3: Timing Metrics -->
+                        <div style="margin-bottom: 24px;">
+                            <h3 style="font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 12px;">⏱️ Timing Metrics</h3>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                                ${this.renderMetricCard('Average Response', `${call.metrics?.avgAgentLatencyMs || 0}ms`)}
+                                ${this.renderMetricCard('Longest Pause', `${call.metrics?.maxAgentLatencyMs || 0}ms`)}
+                                ${this.renderMetricCard('Total Dead Air', `${call.metrics?.deadAirMsTotal || 0}ms`)}
+                                ${this.renderMetricCard('Back & Forth', `${call.metrics?.turnsCaller || 0} turns`)}
+                            </div>
+                        </div>
+                        
+                        <!-- Section 4: Brain Decision (Phase 5) -->
+                        <div style="margin-bottom: 24px;">
+                            <h3 style="font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 12px;">🧠 Brain Decision</h3>
+                            <div style="background: #f9fafb; padding: 16px; border-radius: 8px;">
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                                    <div>
+                                        <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Triage Category</div>
+                                        <div style="font-size: 14px; font-weight: 600; color: #111827;">${call.categorySlug || 'Unknown'}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Scenario</div>
+                                        <div style="font-size: 14px; font-weight: 600; color: #111827;">${call.matchedScenario?.name || 'Unknown'}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Confidence</div>
+                                        <div style="font-size: 14px; font-weight: 600; color: ${this.getConfidenceColor((call.confidence || 0) * 100)};">${Math.round((call.confidence || 0) * 100)}%</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Fallback Used</div>
+                                        <div style="font-size: 14px; font-weight: 600; color: ${call.usedFallback ? '#ef4444' : '#10b981'};">${call.usedFallback ? 'Yes' : 'No'}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Section 5: Outcome -->
+                        <div style="margin-bottom: 24px;">
+                            <h3 style="font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 12px;">🎯 Outcome</h3>
+                            <div style="background: #f9fafb; padding: 16px; border-radius: 8px;">
+                                <p style="font-size: 14px; color: #374151; margin-bottom: 8px;"><strong>Status:</strong> ${call.outcome?.status || 'UNKNOWN'}</p>
+                                <p style="font-size: 14px; color: #6b7280;">${call.outcome?.details || 'No details available'}</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Buttons -->
+                        <div style="display: flex; gap: 12px;">
+                            <button onclick="window.analyticsManager.openTranscriptModal('${call.callId}')" style="flex: 1; padding: 12px; background: #6366f1; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                                📝 View Transcript
+                            </button>
+                            <button onclick="document.getElementById('call-detail-modal').remove();" style="padding: 12px 24px; background: #e5e7eb; color: #374151; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Append to body
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    }
+
+    /**
+     * Open transcript modal
+     */
+    async openTranscriptModal(callId) {
+        console.log('📝 [TRANSCRIPT] Opening transcript for:', callId);
+        
+        try {
+            const token = localStorage.getItem('adminToken');
+            if (!token) {
+                throw new Error('Authentication required');
+            }
+            
+            // Fetch call detail (includes transcript)
+            const response = await fetch(
+                `/api/company/${this.companyId}/analytics/calls/${callId}`,
+                {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }
+            );
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            const call = data.call;
+            
+            // Render transcript modal
+            this.renderTranscriptModal(call);
+            
+        } catch (error) {
+            console.error('❌ [TRANSCRIPT] Error loading transcript:', error);
+            alert('Failed to load transcript: ' + error.message);
+        }
+    }
+
+    /**
+     * Render transcript modal
+     */
+    renderTranscriptModal(call) {
+        const transcript = call.transcript || [];
+        
+        const modalHTML = `
+            <div id="transcript-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10001; display: flex; align-items: center; justify-content: center; padding: 20px;" onclick="if(event.target.id === 'transcript-modal') this.remove();">
+                <div onclick="event.stopPropagation();" style="background: white; border-radius: 16px; max-width: 700px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+                    
+                    <!-- Header -->
+                    <div style="background: #6366f1; color: white; padding: 20px; border-radius: 16px 16px 0 0; display: flex; align-items: center; justify-content: space-between;">
+                        <h2 style="font-size: 20px; font-weight: 700; margin: 0;">📝 Call Transcript</h2>
+                        <button onclick="document.getElementById('transcript-modal').remove();" style="background: rgba(255,255,255,0.2); border: none; color: white; font-size: 24px; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">×</button>
+                    </div>
+                    
+                    <!-- Transcript -->
+                    <div style="padding: 24px;">
+                        ${transcript.length > 0 ? `
+                            <div style="font-family: monospace; font-size: 13px; line-height: 1.8;">
+                                ${transcript.map(turn => {
+                                    const timestamp = this.formatTimestamp(turn.tOffsetMs || 0);
+                                    const isCaller = turn.role === 'caller';
+                                    return `
+                                        <div style="margin-bottom: 16px; display: flex; gap: 12px;">
+                                            <span style="color: #6b7280; min-width: 60px; flex-shrink: 0;">[${timestamp}]</span>
+                                            <span style="font-weight: 700; color: ${isCaller ? '#6366f1' : '#10b981'}; min-width: 60px; flex-shrink: 0;">${isCaller ? 'Caller:' : 'Agent:'}</span>
+                                            <span style="color: #374151; flex: 1;">${turn.text || ''}</span>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        ` : `
+                            <div style="text-align: center; padding: 40px; color: #6b7280;">
+                                <p>No transcript available</p>
+                            </div>
+                        `}
+                    </div>
+                    
+                    <!-- Footer -->
+                    <div style="padding: 20px; border-top: 1px solid #e5e7eb; text-align: right;">
+                        <button onclick="document.getElementById('transcript-modal').remove();" style="padding: 12px 24px; background: #e5e7eb; color: #374151; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Append to body
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    }
+
+    // ========================================================================
+    // HELPER METHODS
+    // ========================================================================
+
+    formatDuration(ms) {
+        if (!ms) return '0:00';
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    formatTimestamp(ms) {
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    getSentimentEmoji(sentiment) {
+        const map = {
+            'positive': '😊',
+            'neutral': '😐',
+            'negative': '😟',
+            'frustrated': '😤'
+        };
+        return map[sentiment] || '😐';
+    }
+
+    getScoreColor(score) {
+        if (score >= 80) return '#10b981';
+        if (score >= 60) return '#f59e0b';
+        return '#ef4444';
+    }
+
+    getOutcomeStatusBadge(status, light = false) {
+        const styles = {
+            'BOOKED': { color: '#10b981', label: '✅ Booked' },
+            'TRANSFERRED': { color: '#6366f1', label: '📞 Transferred' },
+            'MESSAGE_TAKEN': { color: '#0ea5e9', label: '📝 Message' },
+            'HUNG_UP': { color: '#f59e0b', label: '⚠️ Hung Up' },
+            'FAILED': { color: '#ef4444', label: '❌ Failed' },
+            'IN_PROGRESS': { color: '#8b5cf6', label: '⏳ In Progress' },
+            'UNKNOWN': { color: '#6b7280', label: '❓ Unknown' }
+        };
+        
+        const style = styles[status] || styles['UNKNOWN'];
+        const bgColor = light ? 'rgba(255,255,255,0.2)' : style.color + '20';
+        const textColor = light ? 'white' : style.color;
+        
+        return `
+            <span style="background: ${bgColor}; color: ${textColor}; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; white-space: nowrap;">
+                ${style.label}
+            </span>
+        `;
+    }
+
+    buildExecutionSteps(events) {
+        if (!events || events.length === 0) {
+            return ['No execution steps recorded'];
+        }
+        
+        const steps = [];
+        
+        events.forEach(event => {
+            switch (event.type) {
+                case 'booking_done':
+                    steps.push('✅ Booked repair appointment');
+                    break;
+                case 'call_transfer':
+                    steps.push('📞 Transferred to agent');
+                    break;
+                case 'distress_transfer':
+                    steps.push('🚨 Escalated due to distress');
+                    break;
+                case 'escalation':
+                    steps.push('⚠️ Escalated to supervisor');
+                    break;
+                case 'hangup':
+                    steps.push('👋 Customer ended call');
+                    break;
+            }
+        });
+        
+        // Add generic steps if none found
+        if (steps.length === 0) {
+            const callerTurns = events.filter(e => e.type === 'caller_utterance').length;
+            const agentTurns = events.filter(e => e.type === 'agent_reply').length;
+            
+            if (callerTurns > 0) steps.push(`💬 Exchanged ${callerTurns} messages with customer`);
+            if (agentTurns > 0) steps.push(`🤖 AI responded ${agentTurns} times`);
+        }
+        
+        return steps.length > 0 ? steps : ['Call completed'];
+    }
+
+    renderMetricCard(label, value) {
+        return `
+            <div style="background: #f9fafb; padding: 16px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">${label}</div>
+                <div style="font-size: 18px; font-weight: 700; color: #111827;">${value}</div>
             </div>
         `;
     }
