@@ -10,7 +10,9 @@
 // ═════════════════════════════════════════════════════════════════════════════
 
 const TriageCard = require('../models/TriageCard');
-const Category = require('../models/Category');
+// NOTE: Category model does not exist in this codebase
+// Category/Scenario management is handled differently in v2Company model
+// const Category = require('../models/Category');
 const logger = require('../utils/logger');
 const redisClient = require('../config/redis');
 
@@ -47,7 +49,9 @@ class TriageCardService {
 
       // Auto-sync category if status is ACTIVE
       if (card.status === 'ACTIVE') {
-        await this.autoSyncCategory(card);
+        // NOTE: Category auto-sync disabled - Category model doesn't exist in this codebase
+        // Scenario/Category management handled differently via v2Company model
+        // await this.autoSyncCategory(card);
         await this.invalidateCache(companyId);
       }
 
@@ -142,7 +146,8 @@ class TriageCardService {
 
       // Auto-sync category if status is ACTIVE
       if (card.status === 'ACTIVE') {
-        await this.autoSyncCategory(card);
+        // NOTE: Category auto-sync disabled - Category model doesn't exist
+        // await this.autoSyncCategory(card);
         await this.invalidateCache(companyId);
       }
 
@@ -197,7 +202,8 @@ class TriageCardService {
       logger.info('[TRIAGE CARD SERVICE] ✅ Card activated', { cardId });
 
       // Auto-sync category and invalidate cache
-      await this.autoSyncCategory(card);
+      // NOTE: Category auto-sync disabled - Category model doesn't exist
+      // await this.autoSyncCategory(card);
       await this.invalidateCache(companyId);
 
       return card;
@@ -342,83 +348,42 @@ class TriageCardService {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // CATEGORY AUTO-SYNC
+  // CATEGORY AUTO-SYNC (DISABLED - Category model doesn't exist in this codebase)
+  // ───────────────────────────────────────────────────────────────────────────
+  // NOTE: This functionality was designed to auto-create Category documents,
+  // but the Category model doesn't exist in this codebase.
+  // Scenario/Category management is handled differently via v2Company model.
+  // Triage Cards remain fully functional without this feature.
+  // Scenario seeds are stored in card.category.scenarioSeeds[] and can be
+  // manually used in AI Scenario Architect when admin is ready.
   // ───────────────────────────────────────────────────────────────────────────
 
   /**
    * Auto-create or update Category document based on card
    * @param {TriageCard} card
-   * @returns {Promise<Category>}
+   * @returns {Promise<null>}
+   * @deprecated Category model doesn't exist - feature disabled
    */
-  static async autoSyncCategory(card) {
-    logger.info('[TRIAGE CARD SERVICE] Auto-syncing category', { 
-      categorySlug: card.category.slug 
-    });
-
-    try {
-      // Check if category exists
-      let category = await Category.findOne({ 
-        companyId: card.companyId, 
-        categorySlug: card.category.slug 
-      });
-
-      if (!category) {
-        // Create new category
-        category = new Category({
-          companyId: card.companyId,
-          categoryName: card.category.name,
-          categorySlug: card.category.slug,
-          categoryDescription: card.category.description,
-          trade: card.trade,
-          templateType: this._inferTemplateType(card.serviceTypes),
-          serviceTypes: card.serviceTypes,
-          status: 'ACTIVE',
-          isActive: true,
-          generatedFromTriageCard: card._id
-        });
-
-        await category.save();
-
-        logger.info('[TRIAGE CARD SERVICE] ✅ Category created', { 
-          categoryId: category._id,
-          categorySlug: card.category.slug 
-        });
-
-      } else {
-        // Update existing category (only description and metadata)
-        category.categoryDescription = card.category.description;
-        category.lastUpdatedFromTriageCard = card._id;
-        category.updatedAt = new Date();
-
-        await category.save();
-
-        logger.info('[TRIAGE CARD SERVICE] ✅ Category updated', { 
-          categoryId: category._id 
-        });
-      }
-
-      return category;
-
-    } catch (error) {
-      logger.error('[TRIAGE CARD SERVICE] ❌ Category sync failed', { 
-        error: error.message 
-      });
-      // Don't throw - this is a non-critical operation
-      return null;
-    }
-  }
+  // static async autoSyncCategory(card) {
+  //   logger.info('[TRIAGE CARD SERVICE] Auto-syncing category', { 
+  //     categorySlug: card.category.slug 
+  //   });
+  //   // DISABLED: Category model doesn't exist in this codebase
+  //   return null;
+  // }
 
   /**
    * Infer template type from service types
    * @private
+   * @deprecated Not used since autoSyncCategory is disabled
    */
-  static _inferTemplateType(serviceTypes) {
-    if (serviceTypes.includes('EMERGENCY')) return 'EMERGENCY';
-    if (serviceTypes.includes('REPAIR')) return 'APPOINTMENT';
-    if (serviceTypes.includes('MAINTENANCE')) return 'APPOINTMENT';
-    if (serviceTypes.includes('INSTALL')) return 'QUOTE';
-    return 'INQUIRY';
-  }
+  // static _inferTemplateType(serviceTypes) {
+  //   if (serviceTypes.includes('EMERGENCY')) return 'EMERGENCY';
+  //   if (serviceTypes.includes('REPAIR')) return 'APPOINTMENT';
+  //   if (serviceTypes.includes('MAINTENANCE')) return 'APPOINTMENT';
+  //   if (serviceTypes.includes('INSTALL')) return 'QUOTE';
+  //   return 'INQUIRY';
+  // }
 
   // ───────────────────────────────────────────────────────────────────────────
   // CACHE MANAGEMENT
