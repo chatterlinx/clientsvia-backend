@@ -86,8 +86,8 @@ class CheatSheetManager {
   render() {
     this.renderStatus();
     this.renderCompanyInstructions();
-    this.renderTriageBuilder(); // 🤖 AI Triage Builder (enterprise content generator)
-    this.renderTriageCardsList(); // 🎯 Triage Cards Management (atomic source of truth)
+    this.renderTriageCardsList(); // 🎯 Triage Cards Management (atomic source of truth) - FIRST
+    this.renderTriageBuilder(); // 🤖 AI Triage Builder (enterprise content generator) - SECOND
     this.renderBehaviorRules();
     this.renderEdgeCases();
     this.renderTransferRules();
