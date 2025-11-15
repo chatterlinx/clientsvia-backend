@@ -1508,11 +1508,10 @@
                                     <!-- Header -->
                                     <div class="mb-6">
                                         <h2 class="text-3xl font-bold text-gray-900 mb-2">
-                                            <i class="fas fa-brain mr-3 text-indigo-600"></i>Cheat Sheet Management
+                                            <i class="fas fa-brain mr-3 text-indigo-600"></i>Cheat Sheet - The Config Place
                                         </h2>
                                         <p class="text-gray-600 text-sm">
-                                            Define intelligent AI behavior rules, edge case handling, transfer routing, and safety guardrails. 
-                                            Cheat sheets are compiled into optimized runtime policies for sub-10ms application.
+                                            Configure THE BRAIN (Triage Engine), Frontline-Intel protocol, transfer routing, edge cases, behavior, and guardrails.
                                         </p>
                                     </div>
 
@@ -1540,59 +1539,230 @@
                                         </div>
                                     </div>
 
-                                    <!-- Status Bar -->
-                                    <div id="cheatsheet-status" class="mb-8">
-                                        <!-- Status will be rendered by CheatSheetManager.js -->
+                                    <!-- SUB-TAB NAVIGATION -->
+                                    <div class="mb-6 border-b border-gray-200">
+                                        <nav class="flex flex-wrap -mb-px space-x-2" role="tablist">
+                                            <button 
+                                                class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" 
+                                                data-subtab="triage"
+                                                onclick="cheatSheetManager.switchSubTab('triage')"
+                                            >
+                                                <i class="fas fa-brain mr-2"></i>🧠 Triage
+                                            </button>
+                                            <button 
+                                                class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" 
+                                                data-subtab="frontline-intel"
+                                                onclick="cheatSheetManager.switchSubTab('frontline-intel')"
+                                            >
+                                                <i class="fas fa-robot mr-2"></i>Frontline-Intel
+                                            </button>
+                                            <button 
+                                                class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" 
+                                                data-subtab="transfer-calls"
+                                                onclick="cheatSheetManager.switchSubTab('transfer-calls')"
+                                            >
+                                                <i class="fas fa-phone-square mr-2"></i>Transfer Calls
+                                            </button>
+                                            <button 
+                                                class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" 
+                                                data-subtab="edge-cases"
+                                                onclick="cheatSheetManager.switchSubTab('edge-cases')"
+                                            >
+                                                <i class="fas fa-exclamation-triangle mr-2"></i>Edge Cases
+                                            </button>
+                                            <button 
+                                                class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" 
+                                                data-subtab="behavior"
+                                                onclick="cheatSheetManager.switchSubTab('behavior')"
+                                            >
+                                                <i class="fas fa-sliders-h mr-2"></i>Behavior
+                                            </button>
+                                            <button 
+                                                class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" 
+                                                data-subtab="guardrails"
+                                                onclick="cheatSheetManager.switchSubTab('guardrails')"
+                                            >
+                                                <i class="fas fa-shield-alt mr-2"></i>Guardrails
+                                            </button>
+                                        </nav>
                                     </div>
 
-                                    <!-- Company Instructions Section -->
-                                    <div id="company-instructions-section" class="mb-8">
-                                        <!-- Company Instructions will be rendered by CheatSheetManager.js -->
-                                    </div>
-
-                                    <!-- Triage Cards List Section (Shows existing cards table) -->
-                                    <div id="triage-cards-list-section" class="mb-8">
-                                        <!-- Triage Cards List will be rendered by CheatSheetManager.js -->
-                                    </div>
-
-                                    <!-- Manual Triage Table Section (Quick add/edit rules) -->
-                                    <div id="manual-triage-table-section" class="mb-8">
-                                        <!-- Manual Triage Table will be rendered by CheatSheetManager.js -->
-                                    </div>
-
-                                    <!-- AI Triage Builder Section (LLM input form) -->
-                                    <div id="triage-builder-section" class="mb-8">
-                                        <!-- Triage Builder will be rendered by CheatSheetManager.js -->
-                                    </div>
-
-                                    <!-- Main Content Grid -->
-                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                    <!-- SUB-TAB CONTENT CONTAINERS -->
+                                    
+                                    <!-- ========================================== -->
+                                    <!-- SUB-TAB 1: TRIAGE (THE BRAIN CONFIG) -->
+                                    <!-- ========================================== -->
+                                    <div id="cheatsheet-subtab-triage" class="cheatsheet-subtab-content">
                                         
-                                        <!-- Left Column -->
+                                        <div class="mb-6">
+                                            <h3 class="text-2xl font-bold text-gray-900 mb-2">
+                                                <i class="fas fa-brain mr-2 text-purple-600"></i>🧠 Triage - THE BRAIN Config
+                                            </h3>
+                                            <p class="text-sm text-gray-600">
+                                                Configure THE BRAIN (Triage Engine) that lives inside Frontline-Intel. All triage rules (manual + AI cards) are compiled into a unified decision tree.
+                                            </p>
+                                        </div>
+                                        
+                                        <!-- Triage Cards List Section -->
+                                        <div id="triage-cards-list-section" class="mb-8">
+                                            <!-- Triage Cards List will be rendered by CheatSheetManager.js -->
+                                        </div>
+
+                                        <!-- Manual Triage Table Section -->
+                                        <div id="manual-triage-table-section" class="mb-8">
+                                            <!-- Manual Triage Table will be rendered by CheatSheetManager.js -->
+                                        </div>
+
+                                        <!-- AI Triage Builder Section -->
+                                        <div id="triage-builder-section" class="mb-8">
+                                            <!-- Triage Builder will be rendered by CheatSheetManager.js -->
+                                        </div>
+                                        
+                                    </div>
+                                    
+                                    <!-- ========================================== -->
+                                    <!-- SUB-TAB 2: FRONTLINE-INTEL (THE BODY PROTOCOL) -->
+                                    <!-- ========================================== -->
+                                    <div id="cheatsheet-subtab-frontline-intel" class="cheatsheet-subtab-content hidden">
+                                        
+                                        <div class="mb-6">
+                                            <h3 class="text-2xl font-bold text-gray-900 mb-2">
+                                                <i class="fas fa-robot mr-2 text-blue-600"></i>Frontline-Intel - THE BODY Protocol
+                                            </h3>
+                                            <p class="text-sm text-gray-600">
+                                                Configure how Frontline-Intel (the body that contains THE BRAIN) speaks and behaves. This is the protocol text for the LLM.
+                                            </p>
+                                        </div>
+                                        
+                                        <!-- Company Instructions Section -->
+                                        <div id="company-instructions-section" class="mb-8">
+                                            <!-- Company Instructions will be rendered by CheatSheetManager.js -->
+                                        </div>
+                                        
+                                    </div>
+                                    
+                                    <!-- ========================================== -->
+                                    <!-- SUB-TAB 3: TRANSFER CALLS (ROUTING DEPARTMENT) -->
+                                    <!-- ========================================== -->
+                                    <div id="cheatsheet-subtab-transfer-calls" class="cheatsheet-subtab-content hidden">
+                                        
+                                        <div class="mb-6">
+                                            <h3 class="text-2xl font-bold text-gray-900 mb-2">
+                                                <i class="fas fa-phone-square mr-2 text-blue-600"></i>Transfer Calls - Routing Department
+                                            </h3>
+                                            <p class="text-sm text-gray-600">
+                                                Configure transfer routing rules. Route calls to specific departments or people based on intent.
+                                            </p>
+                                        </div>
+                                        
+                                        <!-- Transfer Rules Section -->
+                                        <div class="bg-white rounded-lg shadow-sm border border-blue-200 p-6">
+                                            <div class="flex items-center justify-between mb-4">
+                                                <h4 class="text-lg font-semibold text-gray-900">
+                                                    <i class="fas fa-phone-square mr-2 text-blue-600"></i>Transfer Rules
+                                                </h4>
+                                                <button onclick="cheatSheetManager.addTransferRule()" class="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                                                    <i class="fas fa-plus mr-1"></i>Add Transfer Rule
+                                                </button>
+                                            </div>
+                                            <p class="text-sm text-gray-600 mb-4">
+                                                Transfer rules route calls to specific departments or people based on intent. Second priority after edge cases.
+                                            </p>
+                                            <div id="transfer-rules-list" class="space-y-3 max-h-96 overflow-y-auto">
+                                                <!-- Transfer rules will be rendered here -->
+                                            </div>
+                                        </div>
+                                        
+                                    </div>
+                                    
+                                    <!-- ========================================== -->
+                                    <!-- SUB-TAB 4: EDGE CASES (SPAM + ABNORMAL HANDLING) -->
+                                    <!-- ========================================== -->
+                                    <div id="cheatsheet-subtab-edge-cases" class="cheatsheet-subtab-content hidden">
+                                        
+                                        <div class="mb-6">
+                                            <h3 class="text-2xl font-bold text-gray-900 mb-2">
+                                                <i class="fas fa-exclamation-triangle mr-2 text-yellow-600"></i>Edge Cases - Spam + Abnormal Handling
+                                            </h3>
+                                            <p class="text-sm text-gray-600">
+                                                Handle unusual caller inputs (machine detection, delays, wrong numbers, spam, etc.). Highest priority - short-circuits all other rules.
+                                            </p>
+                                        </div>
+                                        
+                                        <!-- Edge Cases Section -->
+                                        <div class="bg-white rounded-lg shadow-sm border border-yellow-200 p-6">
+                                            <div class="flex items-center justify-between mb-4">
+                                                <h4 class="text-lg font-semibold text-gray-900">
+                                                    <i class="fas fa-exclamation-triangle mr-2 text-yellow-600"></i>Edge Cases
+                                                </h4>
+                                                <button onclick="cheatSheetManager.addEdgeCase()" class="px-3 py-1 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm font-medium">
+                                                    <i class="fas fa-plus mr-1"></i>Add Edge Case
+                                                </button>
+                                            </div>
+                                            <p class="text-sm text-gray-600 mb-4">
+                                                Edge cases handle unusual caller inputs (machine detection, delays, etc.). Highest priority - short-circuits all other rules when matched.
+                                            </p>
+                                            <div id="edge-cases-list" class="space-y-3 max-h-96 overflow-y-auto">
+                                                <!-- Edge cases will be rendered here -->
+                                            </div>
+                                        </div>
+                                        
+                                    </div>
+                                    
+                                    <!-- ========================================== -->
+                                    <!-- SUB-TAB 5: BEHAVIOR (TONE, POLITENESS, ESCALATION) -->
+                                    <!-- ========================================== -->
+                                    <div id="cheatsheet-subtab-behavior" class="cheatsheet-subtab-content hidden">
+                                        
+                                        <div class="mb-6">
+                                            <h3 class="text-2xl font-bold text-gray-900 mb-2">
+                                                <i class="fas fa-sliders-h mr-2 text-indigo-600"></i>Behavior - Tone, Politeness, Escalation
+                                            </h3>
+                                            <p class="text-sm text-gray-600">
+                                                Control how the AI agent behaves emotionally and socially. Tone adjustments, acknowledgments, and confirmations.
+                                            </p>
+                                        </div>
+                                        
+                                        <!-- Behavior Rules Section -->
+                                        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                                            <div class="flex items-center justify-between mb-4">
+                                                <h4 class="text-lg font-semibold text-gray-900">
+                                                    <i class="fas fa-sliders-h mr-2 text-indigo-600"></i>Behavior Rules
+                                                </h4>
+                                                <span class="text-xs text-gray-500 italic">Tone & Style Adjustments</span>
+                                            </div>
+                                            <p class="text-sm text-gray-600 mb-4">
+                                                Behavior rules polish AI responses with tone adjustments, acknowledgments, and confirmations. Applied last in the precedence chain.
+                                            </p>
+                                            <div id="behavior-rules-list" class="space-y-2">
+                                                <!-- Behavior rules will be rendered here -->
+                                            </div>
+                                        </div>
+                                        
+                                    </div>
+                                    
+                                    <!-- ========================================== -->
+                                    <!-- SUB-TAB 6: GUARDRAILS (FILTERS & HARD LIMITS) -->
+                                    <!-- ========================================== -->
+                                    <div id="cheatsheet-subtab-guardrails" class="cheatsheet-subtab-content hidden">
+                                        
+                                        <div class="mb-6">
+                                            <h3 class="text-2xl font-bold text-gray-900 mb-2">
+                                                <i class="fas fa-shield-alt mr-2 text-red-600"></i>Guardrails - Filters & Hard Limits
+                                            </h3>
+                                            <p class="text-sm text-gray-600">
+                                                Safety and constraints: price/sales guardrails, forbidden topics, legal/compliance guardrails, action allowlist/blocklist.
+                                            </p>
+                                        </div>
+                                        
                                         <div class="space-y-8">
                                             
-                                            <!-- Behavior Rules Section -->
-                                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                                                <div class="flex items-center justify-between mb-4">
-                                                    <h3 class="text-lg font-semibold text-gray-900">
-                                                        <i class="fas fa-sliders-h mr-2 text-indigo-600"></i>Behavior Rules
-                                                    </h3>
-                                                    <span class="text-xs text-gray-500 italic">Tone & Style Adjustments</span>
-                                                </div>
-                                                <p class="text-sm text-gray-600 mb-4">
-                                                    Behavior rules polish AI responses with tone adjustments, acknowledgments, and confirmations. Applied last in the precedence chain.
-                                                </p>
-                                                <div id="behavior-rules-list" class="space-y-2">
-                                                    <!-- Behavior rules will be rendered here -->
-                                                </div>
-                                            </div>
-
                                             <!-- Guardrails Section -->
                                             <div class="bg-white rounded-lg shadow-sm border border-red-200 p-6">
                                                 <div class="flex items-center justify-between mb-4">
-                                                    <h3 class="text-lg font-semibold text-gray-900">
+                                                    <h4 class="text-lg font-semibold text-gray-900">
                                                         <i class="fas fa-shield-alt mr-2 text-red-600"></i>Guardrails
-                                                    </h3>
+                                                    </h4>
                                                     <span class="text-xs text-gray-500 italic">Safety & Compliance</span>
                                                 </div>
                                                 <p class="text-sm text-gray-600 mb-4">
@@ -1606,9 +1776,9 @@
                                             <!-- Action Allowlist Section -->
                                             <div class="bg-white rounded-lg shadow-sm border border-green-200 p-6">
                                                 <div class="flex items-center justify-between mb-4">
-                                                    <h3 class="text-lg font-semibold text-gray-900">
+                                                    <h4 class="text-lg font-semibold text-gray-900">
                                                         <i class="fas fa-check-circle mr-2 text-green-600"></i>Action Allowlist
-                                                    </h3>
+                                                    </h4>
                                                     <span class="text-xs text-gray-500 italic">Security Boundary</span>
                                                 </div>
                                                 <p class="text-sm text-gray-600 mb-4">
@@ -1618,89 +1788,9 @@
                                                     <!-- Action allowlist will be rendered here -->
                                                 </div>
                                             </div>
-
-                                        </div>
-
-                                        <!-- Right Column -->
-                                        <div class="space-y-8">
                                             
-                                            <!-- Edge Cases Section -->
-                                            <div class="bg-white rounded-lg shadow-sm border border-yellow-200 p-6">
-                                                <div class="flex items-center justify-between mb-4">
-                                                    <h3 class="text-lg font-semibold text-gray-900">
-                                                        <i class="fas fa-exclamation-triangle mr-2 text-yellow-600"></i>Edge Cases
-                                                    </h3>
-                                                    <button onclick="cheatSheetManager.addEdgeCase()" class="px-3 py-1 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm font-medium">
-                                                        <i class="fas fa-plus mr-1"></i>Add Edge Case
-                                                    </button>
-                                                </div>
-                                                <p class="text-sm text-gray-600 mb-4">
-                                                    Edge cases handle unusual caller inputs (machine detection, delays, etc.). Highest priority - short-circuits all other rules when matched.
-                                                </p>
-                                                <div id="edge-cases-list" class="space-y-3 max-h-96 overflow-y-auto">
-                                                    <!-- Edge cases will be rendered here -->
-                                                </div>
-                                            </div>
-
-                                            <!-- Transfer Rules Section -->
-                                            <div class="bg-white rounded-lg shadow-sm border border-blue-200 p-6">
-                                                <div class="flex items-center justify-between mb-4">
-                                                    <h3 class="text-lg font-semibold text-gray-900">
-                                                        <i class="fas fa-phone-square mr-2 text-blue-600"></i>Transfer Rules
-                                                    </h3>
-                                                    <button onclick="cheatSheetManager.addTransferRule()" class="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
-                                                        <i class="fas fa-plus mr-1"></i>Add Transfer Rule
-                                                    </button>
-                                                </div>
-                                                <p class="text-sm text-gray-600 mb-4">
-                                                    Transfer rules route calls to specific departments or people based on intent. Second priority after edge cases.
-                                                </p>
-                                                <div id="transfer-rules-list" class="space-y-3 max-h-96 overflow-y-auto">
-                                                    <!-- Transfer rules will be rendered here -->
-                                                </div>
-                                            </div>
-
                                         </div>
-
-                                    </div>
-
-                                    <!-- Actions Bar -->
-                                    <div class="mt-8 flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-4">
-                                        <div class="flex items-center space-x-4">
-                                            <button onclick="cheatSheetManager.save()" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium shadow-sm hover:shadow-md">
-                                                <i class="fas fa-save mr-2"></i>Save Changes
-                                            </button>
-                                            <button onclick="cheatSheetManager.compilePolicy()" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium shadow-sm hover:shadow-md">
-                                                <i class="fas fa-rocket mr-2"></i>Compile Policy
-                                            </button>
-                                        </div>
-                                        <div class="flex items-center space-x-3">
-                                            <button onclick="cheatSheetManager.testRules()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium">
-                                                <i class="fas fa-vial mr-2"></i>Test Rules
-                                            </button>
-                                            <button onclick="location.reload()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium">
-                                                <i class="fas fa-redo mr-2"></i>Discard
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <!-- Documentation -->
-                                    <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-                                        <h4 class="text-sm font-semibold text-blue-900 mb-2">
-                                            <i class="fas fa-book mr-2"></i>How Cheat Sheets Work
-                                        </h4>
-                                        <div class="text-sm text-blue-800 space-y-2">
-                                            <p><strong>Precedence Order (Strict):</strong></p>
-                                            <ol class="list-decimal list-inside space-y-1 ml-4">
-                                                <li><strong>Edge Cases</strong> (highest priority) - Short-circuits all other rules</li>
-                                                <li><strong>Transfer Rules</strong> - Intent-based routing</li>
-                                                <li><strong>Guardrails</strong> - Content filtering & safety</li>
-                                                <li><strong>Behavior Rules</strong> (lowest priority) - Tone adjustments</li>
-                                            </ol>
-                                            <p class="mt-4"><strong>Performance Budget:</strong> 10ms maximum (strict enforcement)</p>
-                                            <p><strong>Compilation:</strong> Policies are pre-compiled with regex optimization and cached in Redis</p>
-                                            <p><strong>Security:</strong> Immutable checksums prevent runtime tampering</p>
-                                        </div>
+                                        
                                     </div>
                                     
                                 </div>
