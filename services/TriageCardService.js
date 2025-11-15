@@ -14,7 +14,42 @@ const TriageCard = require('../models/TriageCard');
 // Category/Scenario management is handled differently in v2Company model
 // const Category = require('../models/Category');
 const logger = require('../utils/logger');
-const redisClient = require('../config/redis');
+const Redis = require('ioredis');
+
+// Redis client (lazy initialization)
+let redisClient = null;
+function getRedisClient() {
+  if (!redisClient) {
+    // Parse REDIS_URL if available, otherwise use individual env vars
+    const redisUrl = process.env.REDIS_URL;
+    if (redisUrl) {
+      redisClient = new Redis(redisUrl, {
+        retryDelayOnFailover: 100,
+        retryStrategy(times) {
+          const delay = Math.min(times * 50, 2000);
+          return delay;
+        }
+      });
+    } else {
+      redisClient = new Redis({
+        host: process.env.REDIS_HOST || 'localhost',
+        port: process.env.REDIS_PORT || 6379,
+        password: process.env.REDIS_PASSWORD || null,
+        db: process.env.REDIS_DB || 0,
+        retryDelayOnFailover: 100,
+        retryStrategy(times) {
+          const delay = Math.min(times * 50, 2000);
+          return delay;
+        }
+      });
+    }
+    
+    redisClient.on('error', (err) => {
+      logger.warn('[TRIAGE CARD SERVICE] Redis error (non-critical, will fallback to DB)', { error: err.message });
+    });
+  }
+  return redisClient;
+}
 
 class TriageCardService {
 
@@ -256,12 +291,15 @@ class TriageCardService {
       // Check cache first
       const cacheKey = `triage:compiled:${companyId}`;
       
-      if (redisClient) {
-        const cached = await redisClient.get(cacheKey);
+      try {
+        const redis = getRedisClient();
+        const cached = await redis.get(cacheKey);
         if (cached) {
           logger.debug('[TRIAGE CARD SERVICE] ✅ Returning cached compiled config');
           return JSON.parse(cached);
         }
+      } catch (redisErr) {
+        logger.debug('[TRIAGE CARD SERVICE] Cache check failed, continuing without cache', { error: redisErr.message });
       }
 
       // Fetch all active cards
@@ -335,8 +373,11 @@ class TriageCardService {
       });
 
       // Cache the compiled config (TTL: 1 hour)
-      if (redisClient) {
-        await redisClient.setex(cacheKey, 3600, JSON.stringify(compiledConfig));
+      try {
+        const redis = getRedisClient();
+        await redis.setex(cacheKey, 3600, JSON.stringify(compiledConfig));
+      } catch (redisErr) {
+        logger.debug('[TRIAGE CARD SERVICE] Cache set failed (non-critical)', { error: redisErr.message });
       }
 
       return compiledConfig;
@@ -397,11 +438,10 @@ class TriageCardService {
     logger.debug('[TRIAGE CARD SERVICE] Invalidating cache', { companyId });
 
     try {
-      if (redisClient) {
-        const cacheKey = `triage:compiled:${companyId}`;
-        await redisClient.del(cacheKey);
-        logger.debug('[TRIAGE CARD SERVICE] ✅ Cache invalidated');
-      }
+      const redis = getRedisClient();
+      const cacheKey = `triage:compiled:${companyId}`;
+      await redis.del(cacheKey);
+      logger.debug('[TRIAGE CARD SERVICE] ✅ Cache invalidated');
     } catch (error) {
       logger.warn('[TRIAGE CARD SERVICE] ⚠️ Cache invalidation failed', { 
         error: error.message 
