@@ -31,6 +31,7 @@
 const openai = require('../config/openai');
 const logger = require('../utils/logger');
 const { replacePlaceholders } = require('../utils/placeholderReplacer');
+const TriageCardService = require('./TriageCardService');
 
 // Lazy-load to avoid circular dependencies
 let Contact;
@@ -119,6 +120,51 @@ class FrontlineIntel {
                 }
             }
             
+            // ═════════════════════════════════════════════════════════════════════
+            // 🧠 THE BRAIN: Triage Engine - Determine service type & routing action
+            // ═════════════════════════════════════════════════════════════════════
+            // This is where we classify the call and decide what to do with it.
+            // Loads ONE unified triage brain (manual rules + AI cards + fallback)
+            // First match wins by priority.
+            // ═════════════════════════════════════════════════════════════════════
+            
+            let triageDecision = null;
+            
+            try {
+                logger.info('🧠 [THE BRAIN] Loading compiled triage config...');
+                const compiledConfig = await TriageCardService.compileActiveCards(company._id);
+                
+                logger.info(`🧠 [THE BRAIN] Loaded ${compiledConfig.triageRules?.length || 0} rules (manual + AI + fallback)`);
+                
+                // Match caller input against triage rules (first match wins)
+                triageDecision = this.matchTriageRules(
+                    userInput,
+                    compiledConfig.triageRules || [],
+                    {
+                        llmKeywords: llmResult.keywords || [],
+                        llmIntent: llmResult.detectedIntent
+                    }
+                );
+                
+                if (triageDecision) {
+                    logger.info('🧠 [THE BRAIN] Triage decision made', {
+                        source: triageDecision.source,
+                        priority: triageDecision.priority,
+                        keywords: triageDecision.keywords,
+                        serviceType: triageDecision.serviceType,
+                        action: triageDecision.action,
+                        categorySlug: triageDecision.categorySlug
+                    });
+                } else {
+                    logger.warn('🧠 [THE BRAIN] No triage rule matched (should not happen with fallback)');
+                }
+                
+            } catch (triageError) {
+                logger.error('❌ [THE BRAIN] Triage matching failed:', triageError.message);
+                // Non-critical: continue without triage decision
+                // The 3-Tier system can still handle the call
+            }
+            
             // Step 5: Calculate telemetry
             const timeMs = Date.now() - startTime;
             const cost = this.calculateCost(llmResult.tokens, config.params?.model || 'gpt-4o-mini');
@@ -132,6 +178,7 @@ class FrontlineIntel {
             
             return {
                 ...llmResult,
+                triageDecision,  // 🧠 THE BRAIN's decision
                 timeMs,
                 cost,
                 model: config.params?.model || 'gpt-4o-mini'
@@ -456,6 +503,127 @@ CRITICAL: Return ONLY the JSON object, no other text before or after!`;
         const outputCost = (tokens.completion_tokens / 1000000) * rates.output;
         
         return inputCost + outputCost;
+    }
+    
+    // ═════════════════════════════════════════════════════════════════════════════
+    // 🧠 THE BRAIN: Triage Matching Engine
+    // ═════════════════════════════════════════════════════════════════════════════
+    
+    /**
+     * Match caller input against triage rules (ONE LOOP, FIRST MATCH WINS)
+     * @param {string} userInput - Raw caller speech
+     * @param {Array} triageRules - Compiled rules (manual + AI cards + fallback, sorted by priority)
+     * @param {Object} context - Additional context from LLM (keywords, intent)
+     * @returns {Object|null} Matched rule or null
+     */
+    static matchTriageRules(userInput, triageRules, context = {}) {
+        if (!triageRules || triageRules.length === 0) {
+            logger.warn('🧠 [THE BRAIN] No triage rules provided');
+            return null;
+        }
+        
+        const input = userInput.toLowerCase().trim();
+        const llmKeywords = (context.llmKeywords || []).map(k => k.toLowerCase());
+        
+        logger.info(`🧠 [THE BRAIN] Matching against ${triageRules.length} rules...`);
+        logger.info(`🧠 [THE BRAIN] Input: "${input.substring(0, 100)}${input.length > 100 ? '...' : ''}"`);
+        logger.info(`🧠 [THE BRAIN] LLM extracted keywords: [${llmKeywords.join(', ')}]`);
+        
+        // Loop through rules ONCE (first match wins by priority)
+        for (let i = 0; i < triageRules.length; i++) {
+            const rule = triageRules[i];
+            
+            // Check if this rule matches
+            const matchResult = this.checkRuleMatch(input, llmKeywords, rule);
+            
+            if (matchResult.matched) {
+                logger.info(`🧠 [THE BRAIN] ✅ MATCH FOUND at index ${i}`, {
+                    source: rule.source,
+                    priority: rule.priority,
+                    keywords: rule.keywords,
+                    excludeKeywords: rule.excludeKeywords,
+                    serviceType: rule.serviceType,
+                    action: rule.action,
+                    categorySlug: rule.categorySlug,
+                    matchedKeywords: matchResult.matchedKeywords,
+                    matchMethod: matchResult.matchMethod
+                });
+                
+                // FIRST MATCH WINS - return immediately
+                return {
+                    source: rule.source,
+                    priority: rule.priority,
+                    keywords: rule.keywords,
+                    excludeKeywords: rule.excludeKeywords,
+                    serviceType: rule.serviceType,
+                    action: rule.action,
+                    categorySlug: rule.categorySlug,
+                    explanation: rule.reason || rule.explanation || '',
+                    matchedAt: new Date().toISOString(),
+                    matchedKeywords: matchResult.matchedKeywords,
+                    matchMethod: matchResult.matchMethod,
+                    ruleIndex: i
+                };
+            }
+        }
+        
+        // Should never reach here if fallback rule exists
+        logger.error('🧠 [THE BRAIN] ❌ No rule matched (fallback rule should catch everything!)');
+        return null;
+    }
+    
+    /**
+     * Check if a single rule matches the input
+     * @param {string} input - Normalized user input (lowercase)
+     * @param {Array} llmKeywords - Keywords extracted by LLM
+     * @param {Object} rule - Triage rule to check
+     * @returns {Object} { matched: boolean, matchedKeywords: [], matchMethod: string }
+     */
+    static checkRuleMatch(input, llmKeywords, rule) {
+        // Special case: Fallback rule (empty keywords = matches everything)
+        if (rule.isFallback || (rule.keywords.length === 0 && rule.excludeKeywords.length === 0)) {
+            return {
+                matched: true,
+                matchedKeywords: [],
+                matchMethod: 'FALLBACK'
+            };
+        }
+        
+        const ruleKeywords = (rule.keywords || []).map(k => k.toLowerCase());
+        const excludeKeywords = (rule.excludeKeywords || []).map(k => k.toLowerCase());
+        
+        // Step 1: Check if ALL required keywords are present (in input OR LLM keywords)
+        const matchedKeywords = [];
+        
+        for (const keyword of ruleKeywords) {
+            const inInput = input.includes(keyword);
+            const inLLM = llmKeywords.some(lk => lk.includes(keyword) || keyword.includes(lk));
+            
+            if (inInput || inLLM) {
+                matchedKeywords.push(keyword);
+            } else {
+                // Required keyword missing - no match
+                return { matched: false, matchedKeywords: [], matchMethod: null };
+            }
+        }
+        
+        // Step 2: Check if any EXCLUDE keywords are present (in input OR LLM keywords)
+        for (const excludeKeyword of excludeKeywords) {
+            const inInput = input.includes(excludeKeyword);
+            const inLLM = llmKeywords.some(lk => lk.includes(excludeKeyword) || excludeKeyword.includes(lk));
+            
+            if (inInput || inLLM) {
+                // Exclude keyword found - no match
+                return { matched: false, matchedKeywords: [], matchMethod: null };
+            }
+        }
+        
+        // All required keywords present, no exclude keywords found
+        return {
+            matched: true,
+            matchedKeywords,
+            matchMethod: 'KEYWORD_MATCH'
+        };
     }
 }
 

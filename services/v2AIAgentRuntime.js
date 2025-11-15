@@ -381,6 +381,93 @@ class V2AIAgentRuntime {
                     cleaned: processedInput.substring(0, 100)
                 });
                 
+                // ═════════════════════════════════════════════════════════════════════
+                // 🧠 THE BRAIN: Execute Triage Action
+                // ═════════════════════════════════════════════════════════════════════
+                // THE BRAIN has made a decision (serviceType + action + categorySlug)
+                // Execute the action immediately before touching 3-Tier
+                // ═════════════════════════════════════════════════════════════════════
+                
+                if (frontlineIntelResult.triageDecision) {
+                    const triage = frontlineIntelResult.triageDecision;
+                    
+                    logger.info('[V2 AGENT] 🧠 THE BRAIN: Executing triage action', {
+                        action: triage.action,
+                        serviceType: triage.serviceType,
+                        categorySlug: triage.categorySlug,
+                        source: triage.source,
+                        priority: triage.priority
+                    });
+                    
+                    // Execute action based on THE BRAIN's decision
+                    switch (triage.action) {
+                        case 'ESCALATE_TO_HUMAN':
+                            logger.info('[V2 AGENT] 🧠 THE BRAIN → ESCALATE_TO_HUMAN');
+                            return {
+                                response: `I understand. Let me transfer you to someone who can assist with that right away. Please hold.`,
+                                action: 'transfer',
+                                callState: {
+                                    ...callState,
+                                    lastInput: userInput,
+                                    lastResponse: 'Transferring to human agent',
+                                    frontlineIntel: frontlineIntelResult,
+                                    triageDecision: triage,
+                                    stage: 'transfer'
+                                },
+                                triageDecision: triage
+                            };
+                        
+                        case 'TAKE_MESSAGE':
+                            logger.info('[V2 AGENT] 🧠 THE BRAIN → TAKE_MESSAGE');
+                            return {
+                                response: `I'd be happy to take a message. Could you please provide your name and phone number, and I'll make sure someone gets back to you?`,
+                                action: 'continue',
+                                callState: {
+                                    ...callState,
+                                    lastInput: userInput,
+                                    lastResponse: 'Taking message',
+                                    frontlineIntel: frontlineIntelResult,
+                                    triageDecision: triage,
+                                    stage: 'message'
+                                },
+                                triageDecision: triage
+                            };
+                        
+                        case 'END_CALL_POLITE':
+                            logger.info('[V2 AGENT] 🧠 THE BRAIN → END_CALL_POLITE');
+                            return {
+                                response: `Thank you for calling. Have a great day!`,
+                                action: 'hangup',
+                                callState: {
+                                    ...callState,
+                                    lastInput: userInput,
+                                    lastResponse: 'Ending call politely',
+                                    frontlineIntel: frontlineIntelResult,
+                                    triageDecision: triage,
+                                    stage: 'ended'
+                                },
+                                triageDecision: triage
+                            };
+                        
+                        case 'EXPLAIN_AND_PUSH':
+                            logger.info('[V2 AGENT] 🧠 THE BRAIN → EXPLAIN_AND_PUSH (explain first, then route to 3-Tier if agreed)');
+                            // Store triage decision in call state, continue to 3-Tier with explanation flag
+                            callState.triageDecision = triage;
+                            callState.triageAction = 'EXPLAIN_AND_PUSH';
+                            // Continue to 3-Tier below (will use categorySlug from triage)
+                            break;
+                        
+                        case 'DIRECT_TO_3TIER':
+                        default:
+                            logger.info('[V2 AGENT] 🧠 THE BRAIN → DIRECT_TO_3TIER (route to scenario matching)');
+                            // Store triage decision in call state, continue to 3-Tier below
+                            callState.triageDecision = triage;
+                            callState.triageAction = 'DIRECT_TO_3TIER';
+                            // Continue to 3-Tier below (will use categorySlug from triage)
+                            break;
+                    }
+                }
+                
             } catch (frontlineErr) {
                 logger.error('[V2 AGENT] ❌ Frontline-Intel failed, using raw input', {
                     companyId: companyID,
@@ -391,6 +478,8 @@ class V2AIAgentRuntime {
             }
 
             // V2 Response Generation - uses cleaned input from Frontline-Intel
+            // If THE BRAIN said DIRECT_TO_3TIER or EXPLAIN_AND_PUSH, we continue here
+            // with the triageDecision in callState for 3-Tier to use
             const baseResponse = await this.generateV2Response(processedInput, company, callState);
             
             logger.info(`✅ V2 AGENT: Generated base response: "${baseResponse.text}"`);
@@ -472,6 +561,7 @@ class V2AIAgentRuntime {
                     confidence: frontlineIntelResult.confidence,
                     customer: frontlineIntelResult.customer,
                     context: frontlineIntelResult.context,
+                    triageDecision: frontlineIntelResult.triageDecision,  // 🧠 THE BRAIN's decision
                     timeMs: frontlineIntelResult.timeMs,
                     cost: frontlineIntelResult.cost
                 } : null,
