@@ -2774,26 +2774,25 @@ class CheatSheetManager {
       const selectedTrade = tradeSelect ? tradeSelect.value : '';
       
       // Dynamically import the examples data
-      const { TRIAGE_EXAMPLES, getExamplesForIndustry } = await import('/js/aicore/triageExamples.js');
+      const { TRIAGE_EXAMPLES, getExamplesForIndustry, getAvailableIndustries } = await import('/js/aicore/triageExamples.js');
       
       // Get examples for the selected trade
       let examples = [];
-      let industryName = '';
+      let industryKey = '';
       
       if (selectedTrade) {
         examples = getExamplesForIndustry(selectedTrade);
-        industryName = selectedTrade;
+        industryKey = selectedTrade;
       }
       
-      // If no examples for selected trade, show all available
-      if (examples.length === 0) {
-        // Show HVAC as default example
-        examples = TRIAGE_EXAMPLES.HVAC || [];
-        industryName = 'HVAC (Example)';
+      // If no examples for selected trade, show HVAC as default
+      if (!examples || examples.length === 0) {
+        examples = TRIAGE_EXAMPLES.HVAC.categories;
+        industryKey = 'HVAC';
       }
       
       // Render the modal
-      this.renderTriageExamplesModal(examples, industryName, TRIAGE_EXAMPLES);
+      this.renderTriageExamplesModal(examples, industryKey, getAvailableIndustries());
       
     } catch (error) {
       console.error('[TRIAGE EXAMPLES] Error loading examples:', error);
@@ -2804,7 +2803,12 @@ class CheatSheetManager {
   /**
    * Render the triage examples modal
    */
-  renderTriageExamplesModal(examples, industryName, allExamples) {
+  renderTriageExamplesModal(examples, industryKey, availableIndustries) {
+    // Generate industry options
+    const industryOptions = availableIndustries.map(ind => 
+      `<option value="${ind.key}" ${ind.key === industryKey ? 'selected' : ''}>${ind.label} (${ind.count} examples)</option>`
+    ).join('');
+    
     // Create modal HTML
     const modalHTML = `
       <div id="triage-examples-modal" class="fixed inset-0 z-50 overflow-y-auto" style="background-color: rgba(0, 0, 0, 0.5);" onclick="if(event.target.id === 'triage-examples-modal') this.remove();">
@@ -2835,16 +2839,14 @@ class CheatSheetManager {
                   onchange="cheatSheetManager.switchExampleIndustry(this.value)"
                   class="px-4 py-2 bg-white text-gray-900 rounded-lg border-2 border-indigo-300 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                 >
-                  <option value="HVAC" ${industryName.includes('HVAC') ? 'selected' : ''}>HVAC (10 examples)</option>
-                  <option value="DENTAL" ${industryName.includes('DENTAL') ? 'selected' : ''}>Dental Office (10 examples)</option>
-                  <option value="ATTORNEY" ${industryName.includes('ATTORNEY') ? 'selected' : ''}>Attorney/Law Firm (10 examples)</option>
+                  ${industryOptions}
                 </select>
               </div>
             </div>
             
             <!-- Content -->
             <div id="examples-content-container" class="px-6 py-6 max-h-[70vh] overflow-y-auto">
-              ${this.renderExampleCards(examples, industryName)}
+              ${this.renderExampleCards(examples, industryKey)}
             </div>
             
             <!-- Footer -->
@@ -2870,14 +2872,14 @@ class CheatSheetManager {
     // Append to body
     document.body.insertAdjacentHTML('beforeend', modalHTML);
     
-    console.log('[TRIAGE EXAMPLES] Modal rendered with', examples.length, 'examples');
+    console.log('[TRIAGE EXAMPLES] Modal rendered');
   }
 
   /**
-   * Render example cards
+   * Render example cards (supports both categorized and flat structures)
    */
-  renderExampleCards(examples, industryName) {
-    if (examples.length === 0) {
+  renderExampleCards(examples, industryKey) {
+    if (!examples || examples.length === 0) {
       return `
         <div class="text-center py-12">
           <i class="fas fa-info-circle text-4xl text-gray-400 mb-4"></i>
@@ -2887,57 +2889,122 @@ class CheatSheetManager {
       `;
     }
     
-    const cleanIndustryName = industryName.replace(' (Example)', '');
+    // Check if this is categorized (HVAC) or flat (others)
+    const isCategorized = examples[0] && examples[0].hasOwnProperty('name') && examples[0].hasOwnProperty('examples');
     
-    return `
-      <div class="mb-6">
-        <h3 class="text-xl font-bold text-gray-900 mb-2">
-          ${cleanIndustryName} – ${examples.length} Triage Examples
-        </h3>
-        <p class="text-sm text-gray-600 mb-4">
-          These examples show how to describe scenarios where the AI needs to correctly classify service type and prevent misclassification.
-        </p>
-      </div>
+    if (isCategorized) {
+      // HVAC: Categorized accordion structure
+      const totalCount = examples.reduce((sum, cat) => sum + cat.examples.length, 0);
       
-      <div class="space-y-4">
-        ${examples.map((example, index) => `
-          <div class="bg-white border-2 border-gray-200 rounded-lg p-5 hover:border-indigo-300 transition-colors">
-            <!-- Header -->
-            <div class="flex items-start justify-between mb-3">
-              <div class="flex-1">
-                <div class="flex items-center gap-2 mb-2">
-                  <span class="inline-flex items-center justify-center w-8 h-8 bg-indigo-600 text-white rounded-full font-bold text-sm">
-                    ${index + 1}
-                  </span>
-                  <h4 class="text-lg font-bold text-gray-900">${example.title}</h4>
+      return `
+        <div class="mb-6">
+          <h3 class="text-xl font-bold text-gray-900 mb-2">
+            HVAC – ${totalCount} Triage Examples
+          </h3>
+          <p class="text-sm text-gray-600 mb-4">
+            Organized by scenario type. Click any category to expand and view examples.
+          </p>
+        </div>
+        
+        <div class="space-y-3">
+          ${examples.map((category, catIndex) => `
+            <div class="border-2 border-gray-200 rounded-lg overflow-hidden">
+              <!-- Category Header (Clickable) -->
+              <button 
+                onclick="this.nextElementSibling.classList.toggle('hidden'); this.querySelector('.accordion-icon').classList.toggle('rotate-180');"
+                class="w-full px-5 py-4 bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 transition-colors flex items-center justify-between text-left"
+              >
+                <div>
+                  <h4 class="text-lg font-bold text-indigo-900 mb-1">
+                    🔥 ${category.name}
+                  </h4>
+                  <p class="text-sm text-indigo-700">
+                    ${category.subtitle} — ${category.examples.length} scenarios
+                  </p>
+                </div>
+                <i class="fas fa-chevron-down accordion-icon text-indigo-600 transition-transform duration-200"></i>
+              </button>
+              
+              <!-- Category Content (Initially Hidden) -->
+              <div class="hidden bg-white">
+                <div class="p-4 space-y-3">
+                  ${category.examples.map((example, exIndex) => this.renderSingleExampleCard(example, exIndex + 1)).join('')}
                 </div>
               </div>
             </div>
-            
-            <!-- Content -->
-            <div class="bg-gray-50 rounded-lg p-4 mb-3 border border-gray-200">
-              <p class="text-sm text-gray-700 leading-relaxed">${example.text}</p>
-            </div>
-            
-            <!-- Actions -->
-            <div class="flex gap-2">
-              <button 
-                onclick="cheatSheetManager.copyTriageExample('${example.id}')"
-                class="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm"
-              >
-                <i class="fas fa-copy mr-2"></i>
-                Copy Text
-              </button>
-              <button 
-                onclick="cheatSheetManager.insertTriageExample('${example.id}')"
-                class="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-sm"
-              >
-                <i class="fas fa-arrow-right mr-2"></i>
-                Insert into Form
-              </button>
+          `).join('')}
+        </div>
+      `;
+    } else {
+      // DENTAL, ATTORNEY, APPOINTMENT_MANAGEMENT: Flat list
+      const industryLabels = {
+        'DENTAL': 'Dental Office',
+        'ATTORNEY': 'Attorney/Law Firm',
+        'APPOINTMENT_MANAGEMENT': 'Appointment Management'
+      };
+      
+      const displayName = industryLabels[industryKey] || industryKey;
+      
+      return `
+        <div class="mb-6">
+          <h3 class="text-xl font-bold text-gray-900 mb-2">
+            ${displayName} – ${examples.length} Triage Examples
+          </h3>
+          <p class="text-sm text-gray-600 mb-4">
+            ${industryKey === 'APPOINTMENT_MANAGEMENT' 
+              ? 'Universal scenarios for appointment logistics (applies to all industries).'
+              : 'These examples show how to describe scenarios where the AI needs to correctly classify service type and prevent misclassification.'
+            }
+          </p>
+        </div>
+        
+        <div class="space-y-4">
+          ${examples.map((example, index) => this.renderSingleExampleCard(example, index + 1)).join('')}
+        </div>
+      `;
+    }
+  }
+
+  /**
+   * Render a single example card
+   */
+  renderSingleExampleCard(example, number) {
+    return `
+      <div class="bg-white border-2 border-gray-200 rounded-lg p-5 hover:border-indigo-300 transition-colors">
+        <!-- Header -->
+        <div class="flex items-start justify-between mb-3">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="inline-flex items-center justify-center w-8 h-8 bg-indigo-600 text-white rounded-full font-bold text-sm">
+                ${number}
+              </span>
+              <h4 class="text-lg font-bold text-gray-900">${example.title}</h4>
             </div>
           </div>
-        `).join('')}
+        </div>
+        
+        <!-- Content -->
+        <div class="bg-gray-50 rounded-lg p-4 mb-3 border border-gray-200">
+          <p class="text-sm text-gray-700 leading-relaxed">${example.text}</p>
+        </div>
+        
+        <!-- Actions -->
+        <div class="flex gap-2">
+          <button 
+            onclick="cheatSheetManager.copyTriageExample('${example.id}')"
+            class="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm"
+          >
+            <i class="fas fa-copy mr-2"></i>
+            Copy Text
+          </button>
+          <button 
+            onclick="cheatSheetManager.insertTriageExample('${example.id}')"
+            class="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-sm"
+          >
+            <i class="fas fa-arrow-right mr-2"></i>
+            Insert into Form
+          </button>
+        </div>
       </div>
     `;
   }
@@ -2975,14 +3042,30 @@ class CheatSheetManager {
       // Import examples
       const { TRIAGE_EXAMPLES } = await import('/js/aicore/triageExamples.js');
       
-      // Find the example
+      // Find the example (search in both flat and categorized structures)
       let example = null;
       for (const industry in TRIAGE_EXAMPLES) {
-        const found = TRIAGE_EXAMPLES[industry].find(ex => ex.id === exampleId);
-        if (found) {
-          example = found;
-          break;
+        const data = TRIAGE_EXAMPLES[industry];
+        
+        // Check if categorized (HVAC)
+        if (data.categories) {
+          for (const category of data.categories) {
+            const found = category.examples.find(ex => ex.id === exampleId);
+            if (found) {
+              example = found;
+              break;
+            }
+          }
+        } else if (Array.isArray(data)) {
+          // Flat array (DENTAL, ATTORNEY, APPOINTMENT_MANAGEMENT)
+          const found = data.find(ex => ex.id === exampleId);
+          if (found) {
+            example = found;
+            break;
+          }
         }
+        
+        if (example) break;
       }
       
       if (!example) {
@@ -3012,14 +3095,30 @@ class CheatSheetManager {
       // Import examples
       const { TRIAGE_EXAMPLES } = await import('/js/aicore/triageExamples.js');
       
-      // Find the example
+      // Find the example (search in both flat and categorized structures)
       let example = null;
       for (const industry in TRIAGE_EXAMPLES) {
-        const found = TRIAGE_EXAMPLES[industry].find(ex => ex.id === exampleId);
-        if (found) {
-          example = found;
-          break;
+        const data = TRIAGE_EXAMPLES[industry];
+        
+        // Check if categorized (HVAC)
+        if (data.categories) {
+          for (const category of data.categories) {
+            const found = category.examples.find(ex => ex.id === exampleId);
+            if (found) {
+              example = found;
+              break;
+            }
+          }
+        } else if (Array.isArray(data)) {
+          // Flat array (DENTAL, ATTORNEY, APPOINTMENT_MANAGEMENT)
+          const found = data.find(ex => ex.id === exampleId);
+          if (found) {
+            example = found;
+            break;
+          }
         }
+        
+        if (example) break;
       }
       
       if (!example) {
