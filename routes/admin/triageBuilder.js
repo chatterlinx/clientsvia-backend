@@ -23,7 +23,7 @@
 const express = require('express');
 const logger = require('../../utils/logger');
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
-const { generateTriagePackage } = require('../../services/TriageBuilderService');
+const TriageBuilderService = require('../../services/TriageBuilderService');
 
 const router = express.Router();
 
@@ -108,28 +108,27 @@ router.post('/generate', async (req, res) => {
     }
 
     // ========================================================================
-    // GENERATE TRIAGE PACKAGE
+    // GENERATE TRIAGE CARD (4-PART STRUCTURE)
     // ========================================================================
 
     try {
-        const triagePackage = await generateTriagePackage(
+        const triageCard = await TriageBuilderService.generateTriageCard(
             trade.trim(),
             situation.trim(),
             validServiceTypes
         );
 
-        logger.info('[TRIAGE BUILDER API] Triage package generated successfully', {
+        logger.info('[TRIAGE BUILDER API] Triage card generated successfully', {
             trade: trade.trim(),
-            frontlineLength: triagePackage.frontlineIntelSection.length,
-            cheatSheetLength: triagePackage.cheatSheetTriageMap.length,
-            responseCount: triagePackage.responseLibrary.length
+            frontlineLength: triageCard.frontlineIntelBlock.length,
+            triageMapRules: triageCard.triageMap.length,
+            responseCount: triageCard.responses.length,
+            categorySlug: triageCard.category.slug
         });
 
         return res.json({
             success: true,
-            frontlineIntelSection: triagePackage.frontlineIntelSection,
-            cheatSheetTriageMap: triagePackage.cheatSheetTriageMap,
-            responseLibrary: triagePackage.responseLibrary
+            ...triageCard  // Returns: frontlineIntelBlock, triageMap, responses, category
         });
 
     } catch (error) {

@@ -87,6 +87,7 @@ class CheatSheetManager {
     this.renderStatus();
     this.renderCompanyInstructions();
     this.renderTriageBuilder(); // 🤖 AI Triage Builder (enterprise content generator)
+    this.renderTriageCardsList(); // 🎯 Triage Cards Management (atomic source of truth)
     this.renderBehaviorRules();
     this.renderEdgeCases();
     this.renderTransferRules();
@@ -1661,6 +1662,496 @@ class CheatSheetManager {
     });
     
     console.log('[CHEAT SHEET] Opened full screen editor');
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // TRIAGE CARDS LIST - MANAGEMENT UI
+  // ═══════════════════════════════════════════════════════════════════
+  // Purpose: Display and manage all Triage Cards for this company
+  // Features: List view, edit, activate/deactivate, test, delete
+  // ═══════════════════════════════════════════════════════════════════
+  
+  async renderTriageCardsList() {
+    const container = document.getElementById('triage-cards-list-section');
+    if (!container) return;
+    
+    console.log('[TRIAGE CARDS LIST] Rendering...');
+    
+    // Fetch all triage cards for this company
+    let cards = [];
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`/api/company/${this.companyId}/triage-cards`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        cards = data.cards || [];
+        console.log(`[TRIAGE CARDS LIST] Loaded ${cards.length} cards`);
+      }
+    } catch (error) {
+      console.error('[TRIAGE CARDS LIST] Load failed:', error);
+    }
+    
+    container.innerHTML = `
+      <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+        
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-gray-200 px-6 py-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <span class="mr-2">🎯</span>
+                Triage Cards
+                <span class="ml-3 px-2 py-1 text-xs font-semibold bg-indigo-100 text-indigo-700 rounded-full">
+                  ${cards.length} CARDS
+                </span>
+              </h3>
+              <p class="text-sm text-gray-600 mt-1">
+                Atomic source of truth for Frontline-Intel call distribution
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Cards List -->
+        <div id="triage-cards-container" class="p-6 space-y-4">
+          ${cards.length === 0 ? this.renderEmptyState() : cards.map(card => this.renderTriageCard(card)).join('')}
+        </div>
+        
+      </div>
+    `;
+  }
+  
+  renderEmptyState() {
+    return `
+      <div class="text-center py-12">
+        <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
+          <span class="text-3xl">📋</span>
+        </div>
+        <h4 class="text-lg font-semibold text-gray-900 mb-2">No Triage Cards Yet</h4>
+        <p class="text-sm text-gray-600 mb-4">
+          Use the AI Triage Builder above to generate your first card.
+        </p>
+      </div>
+    `;
+  }
+  
+  renderTriageCard(card) {
+    const statusColors = {
+      'ACTIVE': 'bg-green-100 text-green-800 border-green-200',
+      'DRAFT': 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      'ARCHIVED': 'bg-gray-100 text-gray-800 border-gray-200'
+    };
+    
+    const statusColor = statusColors[card.status] || statusColors['DRAFT'];
+    
+    return `
+      <div class="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow" data-card-id="${card._id}">
+        
+        <!-- Card Header -->
+        <div class="bg-gradient-to-r from-gray-50 to-indigo-50 px-4 py-3 border-b border-gray-200">
+          <div class="flex items-center justify-between">
+            <div class="flex-1">
+              <div class="flex items-center space-x-3">
+                <h4 class="text-base font-semibold text-gray-900">${this.escapeHtml(card.category?.name || 'Untitled')}</h4>
+                <span class="px-2 py-1 text-xs font-semibold ${statusColor} rounded-full border">
+                  ${card.status}
+                </span>
+                <span class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
+                  ${card.trade}
+                </span>
+              </div>
+              <p class="text-xs text-gray-600 mt-1">
+                ${card.serviceTypes.join(', ')} • ${card.triageMap.length} rules • ${card.responses.length} responses
+              </p>
+            </div>
+            <div class="flex items-center space-x-2">
+              ${card.status === 'ACTIVE' 
+                ? `<button onclick="cheatSheetManager.deactivateTriageCard('${card._id}')" class="px-3 py-1.5 text-xs bg-yellow-100 text-yellow-700 border border-yellow-300 rounded-md hover:bg-yellow-200 transition-colors font-medium">
+                     ⏸️ Deactivate
+                   </button>`
+                : `<button onclick="cheatSheetManager.activateTriageCard('${card._id}')" class="px-3 py-1.5 text-xs bg-green-100 text-green-700 border border-green-300 rounded-md hover:bg-green-200 transition-colors font-medium">
+                     ▶️ Activate
+                   </button>`
+              }
+              <button onclick="cheatSheetManager.deleteTriageCard('${card._id}')" class="px-3 py-1.5 text-xs bg-red-100 text-red-700 border border-red-300 rounded-md hover:bg-red-200 transition-colors font-medium">
+                🗑️ Delete
+              </button>
+              <button onclick="cheatSheetManager.toggleCardAccordion('${card._id}')" class="p-2 text-gray-600 hover:text-gray-900 transition-colors">
+                <i class="fas fa-chevron-down" id="accordion-icon-${card._id}"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Accordion Content (Collapsed by default) -->
+        <div id="accordion-content-${card._id}" class="hidden">
+          
+          <!-- Part 1: Frontline-Intel Block -->
+          <div class="border-b border-gray-200">
+            <div class="bg-blue-50 px-4 py-2 flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <i class="fas fa-brain text-blue-600"></i>
+                <span class="text-sm font-semibold text-gray-900">Frontline-Intel Block</span>
+                <span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">${card.frontlineIntelBlock.length} chars</span>
+              </div>
+              <button onclick="cheatSheetManager.copyToClipboard(\`${this.escapeForTemplate(card.frontlineIntelBlock)}\`, 'Frontline-Intel')" class="px-2 py-1 text-xs bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors">
+                <i class="fas fa-copy mr-1"></i> Copy
+              </button>
+            </div>
+            <div class="p-4 bg-gray-50">
+              <pre class="text-xs font-mono whitespace-pre-wrap break-words bg-white border border-gray-200 rounded p-3 max-h-64 overflow-y-auto">${this.escapeHtml(card.frontlineIntelBlock)}</pre>
+            </div>
+          </div>
+          
+          <!-- Part 2: Triage Map Table (THE BRAIN) -->
+          <div class="border-b border-gray-200">
+            <div class="bg-purple-50 px-4 py-2 flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <i class="fas fa-table text-purple-600"></i>
+                <span class="text-sm font-semibold text-gray-900">Triage Map (Decision Table)</span>
+                <span class="px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-full">${card.triageMap.length} rules</span>
+              </div>
+            </div>
+            <div class="p-4 bg-gray-50 overflow-x-auto">
+              ${this.renderTriageMapTable(card.triageMap)}
+            </div>
+          </div>
+          
+          <!-- Part 3: Response Library -->
+          <div class="border-b border-gray-200">
+            <div class="bg-green-50 px-4 py-2 flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <i class="fas fa-comments text-green-600"></i>
+                <span class="text-sm font-semibold text-gray-900">Response Library</span>
+                <span class="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">${card.responses.length} variations</span>
+              </div>
+              <button onclick="cheatSheetManager.copyToClipboard(\`${this.escapeForTemplate(card.responses.join('\\n'))}\`, 'Responses')" class="px-2 py-1 text-xs bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors">
+                <i class="fas fa-copy mr-1"></i> Copy All
+              </button>
+            </div>
+            <div class="p-4 bg-gray-50 space-y-2 max-h-96 overflow-y-auto">
+              ${card.responses.map((resp, idx) => `
+                <div class="flex items-start space-x-2 p-2 bg-white border border-gray-200 rounded">
+                  <span class="text-xs font-semibold text-gray-500 mt-0.5">${idx + 1}.</span>
+                  <span class="text-xs text-gray-800 flex-1">${this.escapeHtml(resp)}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          
+          <!-- Part 4: Category & Scenario Seeds -->
+          <div class="border-b border-gray-200">
+            <div class="bg-indigo-50 px-4 py-2 flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <i class="fas fa-sitemap text-indigo-600"></i>
+                <span class="text-sm font-semibold text-gray-900">Category & Scenario Seeds</span>
+                <span class="px-2 py-0.5 text-xs bg-indigo-100 text-indigo-700 rounded-full">${card.category?.scenarioSeeds?.length || 0} seeds</span>
+              </div>
+            </div>
+            <div class="p-4 bg-gray-50">
+              <div class="mb-3">
+                <span class="text-xs font-semibold text-gray-700">Category:</span>
+                <span class="ml-2 text-xs font-mono text-gray-900">${this.escapeHtml(card.category?.slug || '')}</span>
+              </div>
+              <div class="mb-3">
+                <span class="text-xs font-semibold text-gray-700">Description:</span>
+                <p class="text-xs text-gray-800 mt-1">${this.escapeHtml(card.category?.description || '')}</p>
+              </div>
+              <div>
+                <span class="text-xs font-semibold text-gray-700 mb-2 block">Scenario Seeds:</span>
+                <div class="space-y-1 max-h-48 overflow-y-auto">
+                  ${(card.category?.scenarioSeeds || []).map((seed, idx) => `
+                    <div class="text-xs text-gray-800 p-2 bg-white border border-gray-200 rounded">
+                      <span class="font-semibold text-gray-500">${idx + 1}.</span> ${this.escapeHtml(seed)}
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Test This Card Feature -->
+          <div class="bg-yellow-50 border-t border-yellow-200">
+            <div class="px-4 py-2 flex items-center space-x-2">
+              <i class="fas fa-vial text-yellow-600"></i>
+              <span class="text-sm font-semibold text-gray-900">Test This Card</span>
+            </div>
+            <div class="p-4">
+              <div class="mb-3">
+                <label class="block text-xs font-medium text-gray-700 mb-1">Type a sample sentence:</label>
+                <input 
+                  type="text" 
+                  id="test-input-${card._id}"
+                  class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+                  placeholder="e.g., My AC isn't cooling, can I get the maintenance special?"
+                />
+              </div>
+              <button 
+                onclick="cheatSheetManager.testTriageCard('${card._id}')"
+                class="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors text-sm font-medium"
+              >
+                🧪 Run Test
+              </button>
+              <div id="test-result-${card._id}" class="mt-3 hidden">
+                <!-- Test results will appear here -->
+              </div>
+            </div>
+          </div>
+          
+        </div>
+      </div>
+    `;
+  }
+  
+  renderTriageMapTable(triageMap) {
+    if (!triageMap || triageMap.length === 0) {
+      return '<p class="text-sm text-gray-500">No triage rules defined.</p>';
+    }
+    
+    return `
+      <table class="w-full text-xs border-collapse bg-white border border-gray-300 rounded">
+        <thead>
+          <tr class="bg-gray-100">
+            <th class="border border-gray-300 px-3 py-2 text-left font-semibold">Priority</th>
+            <th class="border border-gray-300 px-3 py-2 text-left font-semibold">Keywords (Must Have)</th>
+            <th class="border border-gray-300 px-3 py-2 text-left font-semibold">Exclude Keywords</th>
+            <th class="border border-gray-300 px-3 py-2 text-left font-semibold">Service Type</th>
+            <th class="border border-gray-300 px-3 py-2 text-left font-semibold">Action</th>
+            <th class="border border-gray-300 px-3 py-2 text-left font-semibold">Category Slug</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${triageMap.map(rule => `
+            <tr class="hover:bg-gray-50">
+              <td class="border border-gray-300 px-3 py-2">
+                <span class="px-2 py-1 bg-purple-100 text-purple-800 rounded font-semibold">${rule.priority}</span>
+              </td>
+              <td class="border border-gray-300 px-3 py-2">
+                <div class="flex flex-wrap gap-1">
+                  ${rule.keywords.map(kw => `<span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-mono">${this.escapeHtml(kw)}</span>`).join('')}
+                </div>
+              </td>
+              <td class="border border-gray-300 px-3 py-2">
+                ${rule.excludeKeywords && rule.excludeKeywords.length > 0 
+                  ? `<div class="flex flex-wrap gap-1">${rule.excludeKeywords.map(kw => `<span class="px-2 py-0.5 bg-red-100 text-red-800 rounded text-xs font-mono">${this.escapeHtml(kw)}</span>`).join('')}</div>`
+                  : '<span class="text-gray-400 italic">none</span>'
+                }
+              </td>
+              <td class="border border-gray-300 px-3 py-2">
+                <span class="px-2 py-1 bg-green-100 text-green-800 rounded font-semibold">${rule.serviceType}</span>
+              </td>
+              <td class="border border-gray-300 px-3 py-2">
+                <span class="px-2 py-1 ${this.getActionBadgeColor(rule.action)} rounded font-semibold">${rule.action}</span>
+              </td>
+              <td class="border border-gray-300 px-3 py-2 font-mono text-gray-700">${this.escapeHtml(rule.categorySlug || '')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+  
+  getActionBadgeColor(action) {
+    const colors = {
+      'DIRECT_TO_3TIER': 'bg-blue-100 text-blue-800',
+      'EXPLAIN_AND_PUSH': 'bg-yellow-100 text-yellow-800',
+      'ESCALATE_TO_HUMAN': 'bg-orange-100 text-orange-800',
+      'TAKE_MESSAGE': 'bg-purple-100 text-purple-800',
+      'END_CALL_POLITE': 'bg-gray-100 text-gray-800'
+    };
+    return colors[action] || 'bg-gray-100 text-gray-800';
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // TRIAGE CARD ACTIONS
+  // ═══════════════════════════════════════════════════════════════════
+  
+  toggleCardAccordion(cardId) {
+    const content = document.getElementById(`accordion-content-${cardId}`);
+    const icon = document.getElementById(`accordion-icon-${cardId}`);
+    
+    if (!content || !icon) return;
+    
+    if (content.classList.contains('hidden')) {
+      content.classList.remove('hidden');
+      icon.classList.remove('fa-chevron-down');
+      icon.classList.add('fa-chevron-up');
+    } else {
+      content.classList.add('hidden');
+      icon.classList.remove('fa-chevron-up');
+      icon.classList.add('fa-chevron-down');
+    }
+  }
+  
+  async activateTriageCard(cardId) {
+    console.log('[TRIAGE CARDS] Activating card:', cardId);
+    
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`/api/company/${this.companyId}/triage-cards/${cardId}/activate`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) throw new Error('Activation failed');
+      
+      this.showNotification('✅ Triage Card activated!', 'success');
+      this.renderTriageCardsList(); // Reload list
+      
+    } catch (error) {
+      console.error('[TRIAGE CARDS] Activation failed:', error);
+      this.showNotification('❌ Failed to activate card', 'error');
+    }
+  }
+  
+  async deactivateTriageCard(cardId) {
+    console.log('[TRIAGE CARDS] Deactivating card:', cardId);
+    
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`/api/company/${this.companyId}/triage-cards/${cardId}/deactivate`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) throw new Error('Deactivation failed');
+      
+      this.showNotification('✅ Triage Card deactivated', 'success');
+      this.renderTriageCardsList(); // Reload list
+      
+    } catch (error) {
+      console.error('[TRIAGE CARDS] Deactivation failed:', error);
+      this.showNotification('❌ Failed to deactivate card', 'error');
+    }
+  }
+  
+  async deleteTriageCard(cardId) {
+    const confirmed = confirm('🗑️ Delete this Triage Card?\n\nThis action cannot be undone.');
+    if (!confirmed) return;
+    
+    console.log('[TRIAGE CARDS] Deleting card:', cardId);
+    
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`/api/company/${this.companyId}/triage-cards/${cardId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) throw new Error('Deletion failed');
+      
+      this.showNotification('✅ Triage Card deleted', 'success');
+      this.renderTriageCardsList(); // Reload list
+      
+    } catch (error) {
+      console.error('[TRIAGE CARDS] Deletion failed:', error);
+      this.showNotification('❌ Failed to delete card', 'error');
+    }
+  }
+  
+  async testTriageCard(cardId) {
+    const input = document.getElementById(`test-input-${cardId}`);
+    const resultContainer = document.getElementById(`test-result-${cardId}`);
+    
+    if (!input || !resultContainer) return;
+    
+    const testText = input.value.trim();
+    if (!testText) {
+      alert('Please enter a test sentence first.');
+      return;
+    }
+    
+    console.log('[TRIAGE CARDS] Testing card:', cardId, 'with text:', testText);
+    
+    // Fetch the card data
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`/api/company/${this.companyId}/triage-cards/${cardId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch card');
+      
+      const { card } = await response.json();
+      
+      // Run local triage simulation
+      const result = this.simulateTriageMatching(testText, card.triageMap);
+      
+      // Display results
+      resultContainer.classList.remove('hidden');
+      
+      if (result.matched) {
+        resultContainer.innerHTML = `
+          <div class="p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div class="flex items-start space-x-3">
+              <i class="fas fa-check-circle text-green-600 text-xl mt-0.5"></i>
+              <div class="flex-1">
+                <h5 class="text-sm font-semibold text-green-900 mb-2">✅ Match Found (Priority: ${result.rule.priority})</h5>
+                <div class="space-y-1 text-xs">
+                  <div><strong class="text-green-800">Keywords Matched:</strong> <span class="text-green-700">${result.rule.keywords.join(', ')}</span></div>
+                  <div><strong class="text-green-800">Service Type:</strong> <span class="px-2 py-0.5 bg-green-100 text-green-800 rounded font-semibold">${result.rule.serviceType}</span></div>
+                  <div><strong class="text-green-800">Action:</strong> <span class="px-2 py-0.5 ${this.getActionBadgeColor(result.rule.action)} rounded font-semibold">${result.rule.action}</span></div>
+                  <div><strong class="text-green-800">Category Slug:</strong> <code class="text-green-700">${result.rule.categorySlug || 'N/A'}</code></div>
+                  ${result.rule.reason ? `<div class="mt-2 text-green-700"><strong>Reason:</strong> ${this.escapeHtml(result.rule.reason)}</div>` : ''}
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        resultContainer.innerHTML = `
+          <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div class="flex items-start space-x-3">
+              <i class="fas fa-times-circle text-red-600 text-xl mt-0.5"></i>
+              <div class="flex-1">
+                <h5 class="text-sm font-semibold text-red-900 mb-1">❌ No Match</h5>
+                <p class="text-xs text-red-700">
+                  None of the triage rules matched this input. In production, this would trigger:
+                  <br/>
+                  <strong>serviceType: UNKNOWN</strong> → <strong>action: ESCALATE_TO_HUMAN</strong>
+                </p>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      
+    } catch (error) {
+      console.error('[TRIAGE CARDS] Test failed:', error);
+      resultContainer.classList.remove('hidden');
+      resultContainer.innerHTML = `
+        <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p class="text-xs text-red-700">❌ Test failed: ${error.message}</p>
+        </div>
+      `;
+    }
+  }
+  
+  simulateTriageMatching(text, triageMap) {
+    const normalized = text.toLowerCase();
+    
+    // Loop through rules (already sorted by priority)
+    for (const rule of triageMap) {
+      // Check if ALL keywords are present
+      const allKeywordsPresent = rule.keywords.every(kw => normalized.includes(kw.toLowerCase()));
+      
+      // Check if NO excludeKeywords are present
+      const noExcludesPresent = !rule.excludeKeywords || rule.excludeKeywords.every(kw => !normalized.includes(kw.toLowerCase()));
+      
+      if (allKeywordsPresent && noExcludesPresent) {
+        return { matched: true, rule };
+      }
+    }
+    
+    return { matched: false };
+  }
+  
+  escapeForTemplate(str) {
+    if (!str) return '';
+    return str.replace(/`/g, '\\`').replace(/\$/g, '\\$').replace(/\\/g, '\\\\');
   }
   
   // ═══════════════════════════════════════════════════════════════════

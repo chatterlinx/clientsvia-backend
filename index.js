@@ -144,6 +144,7 @@ async function loadAllRoutes() {
         // 🗑️ DELETED: All AI Agent Logic routes (tab removed)
         // 🤖 COMPANY CONFIGURATION ROUTES - AI Agent Settings (Variables, Filler Words, Scenarios) - 100% ISOLATED
         routes.v2CompanyConfigurationRoutes = await loadRouteWithTimeout('./routes/company/v2companyConfiguration', 'v2CompanyConfigurationRoutes');
+        routes.triageCardsRoutes = await loadRouteWithTimeout('./routes/company/triageCards', 'triageCardsRoutes'); // 🎯 Triage Cards Management (atomic source of truth)
         // 🗑️ DELETED: v2InstantResponses - replaced by v2InstantResponseCategories system
         // V2 DELETED: Legacy v2 testing routes - using V2 AI Agent Logic system
         // routes.priorityFlowTestingRoutes = await loadRouteWithTimeout('./routes/company/priorityFlowTesting', 'priorityFlowTestingRoutes');
@@ -404,6 +405,7 @@ function registerRoutes(routes) {
     // V2 DELETED: Legacy backup routes - v2 backup system eliminated
     // 🗑️ DELETED: All AI Agent Logic route registrations (tab removed)
     app.use('/api/company', routes.v2CompanyConfigurationRoutes); // V2: AI Agent Settings (Variables, Filler Words, Scenarios) - 100% ISOLATED
+    app.use('/api/company/:companyId/triage-cards', routes.triageCardsRoutes); // V2: Triage Cards Management (atomic source of truth)
     app.use('/api/company', routes.v2TwilioControlRoutes); // V2: Twilio Control Center (AI Agent Settings - Dashboard tab)
     app.use('/api/company', routes.v2ConnectionMessagesRoutes); // V2: Connection Messages (AI Agent Settings - Messages & Greetings tab)
     app.use('/api/company', routes.v2TTSRoutes); // V2: Text-to-Speech for voice testing and preview (AI Voice Settings tab)
