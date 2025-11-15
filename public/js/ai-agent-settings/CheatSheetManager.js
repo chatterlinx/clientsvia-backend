@@ -477,6 +477,14 @@ class CheatSheetManager {
                 <label class="block text-sm font-medium text-gray-700 mb-2">
                   <i class="fas fa-file-alt mr-1 text-indigo-600"></i>
                   Triage Situation / Scenario
+                  <button 
+                    type="button"
+                    onclick="cheatSheetManager.openTriageExamplesModal()"
+                    class="ml-2 text-blue-600 hover:text-blue-800 transition-colors"
+                    title="See example triage scenarios"
+                  >
+                    <i class="fas fa-info-circle"></i>
+                  </button>
                 </label>
                 <textarea 
                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 font-mono text-sm" 
@@ -2747,6 +2755,302 @@ class CheatSheetManager {
       showNotification(message);
     } else {
       console.log(`[NOTIFICATION ${type.toUpperCase()}]`, message);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // TRIAGE EXAMPLES MODAL (Help System)
+  // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * Open modal showing triage scenario examples
+   */
+  async openTriageExamplesModal() {
+    console.log('[TRIAGE EXAMPLES] Opening examples modal...');
+    
+    try {
+      // Get current selected trade
+      const tradeSelect = document.getElementById('triage-trade-select');
+      const selectedTrade = tradeSelect ? tradeSelect.value : '';
+      
+      // Dynamically import the examples data
+      const { TRIAGE_EXAMPLES, getExamplesForIndustry } = await import('/js/aicore/triageExamples.js');
+      
+      // Get examples for the selected trade
+      let examples = [];
+      let industryName = '';
+      
+      if (selectedTrade) {
+        examples = getExamplesForIndustry(selectedTrade);
+        industryName = selectedTrade;
+      }
+      
+      // If no examples for selected trade, show all available
+      if (examples.length === 0) {
+        // Show HVAC as default example
+        examples = TRIAGE_EXAMPLES.HVAC || [];
+        industryName = 'HVAC (Example)';
+      }
+      
+      // Render the modal
+      this.renderTriageExamplesModal(examples, industryName, TRIAGE_EXAMPLES);
+      
+    } catch (error) {
+      console.error('[TRIAGE EXAMPLES] Error loading examples:', error);
+      alert('Failed to load triage examples. Please try again.');
+    }
+  }
+
+  /**
+   * Render the triage examples modal
+   */
+  renderTriageExamplesModal(examples, industryName, allExamples) {
+    // Create modal HTML
+    const modalHTML = `
+      <div id="triage-examples-modal" class="fixed inset-0 z-50 overflow-y-auto" style="background-color: rgba(0, 0, 0, 0.5);" onclick="if(event.target.id === 'triage-examples-modal') this.remove();">
+        <div class="flex items-start justify-center min-h-screen px-4 pt-4 pb-20">
+          <div onclick="event.stopPropagation();" class="relative bg-white rounded-lg shadow-xl max-w-6xl w-full my-8">
+            
+            <!-- Header -->
+            <div class="sticky top-0 z-10 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-5 rounded-t-lg">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h2 class="text-2xl font-bold">📚 How to Write a Good Triage Scenario</h2>
+                  <p class="text-indigo-100 mt-1">Pick an example close to your business, then adjust the details</p>
+                </div>
+                <button 
+                  onclick="document.getElementById('triage-examples-modal').remove()" 
+                  class="text-white hover:text-gray-200 transition-colors"
+                  title="Close"
+                >
+                  <i class="fas fa-times text-2xl"></i>
+                </button>
+              </div>
+              
+              <!-- Industry Selector -->
+              <div class="mt-4">
+                <label class="text-sm font-medium text-indigo-100 mb-2 block">View examples for:</label>
+                <select 
+                  id="examples-industry-selector" 
+                  onchange="cheatSheetManager.switchExampleIndustry(this.value)"
+                  class="px-4 py-2 bg-white text-gray-900 rounded-lg border-2 border-indigo-300 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                >
+                  <option value="HVAC" ${industryName.includes('HVAC') ? 'selected' : ''}>HVAC (10 examples)</option>
+                  <option value="DENTAL" ${industryName.includes('DENTAL') ? 'selected' : ''}>Dental Office (10 examples)</option>
+                  <option value="ATTORNEY" ${industryName.includes('ATTORNEY') ? 'selected' : ''}>Attorney/Law Firm (10 examples)</option>
+                </select>
+              </div>
+            </div>
+            
+            <!-- Content -->
+            <div id="examples-content-container" class="px-6 py-6 max-h-[70vh] overflow-y-auto">
+              ${this.renderExampleCards(examples, industryName)}
+            </div>
+            
+            <!-- Footer -->
+            <div class="sticky bottom-0 bg-gray-50 px-6 py-4 rounded-b-lg border-t border-gray-200">
+              <div class="flex items-center justify-between">
+                <p class="text-sm text-gray-600">
+                  <i class="fas fa-lightbulb mr-1 text-yellow-500"></i>
+                  <strong>Tip:</strong> Click <strong>"Insert"</strong> to paste an example directly into your scenario box
+                </p>
+                <button 
+                  onclick="document.getElementById('triage-examples-modal').remove()" 
+                  class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Append to body
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    console.log('[TRIAGE EXAMPLES] Modal rendered with', examples.length, 'examples');
+  }
+
+  /**
+   * Render example cards
+   */
+  renderExampleCards(examples, industryName) {
+    if (examples.length === 0) {
+      return `
+        <div class="text-center py-12">
+          <i class="fas fa-info-circle text-4xl text-gray-400 mb-4"></i>
+          <p class="text-gray-600">No examples available for this industry yet.</p>
+          <p class="text-sm text-gray-500 mt-2">Use HVAC examples as a pattern.</p>
+        </div>
+      `;
+    }
+    
+    const cleanIndustryName = industryName.replace(' (Example)', '');
+    
+    return `
+      <div class="mb-6">
+        <h3 class="text-xl font-bold text-gray-900 mb-2">
+          ${cleanIndustryName} – ${examples.length} Triage Examples
+        </h3>
+        <p class="text-sm text-gray-600 mb-4">
+          These examples show how to describe scenarios where the AI needs to correctly classify service type and prevent misclassification.
+        </p>
+      </div>
+      
+      <div class="space-y-4">
+        ${examples.map((example, index) => `
+          <div class="bg-white border-2 border-gray-200 rounded-lg p-5 hover:border-indigo-300 transition-colors">
+            <!-- Header -->
+            <div class="flex items-start justify-between mb-3">
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="inline-flex items-center justify-center w-8 h-8 bg-indigo-600 text-white rounded-full font-bold text-sm">
+                    ${index + 1}
+                  </span>
+                  <h4 class="text-lg font-bold text-gray-900">${example.title}</h4>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Content -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-3 border border-gray-200">
+              <p class="text-sm text-gray-700 leading-relaxed">${example.text}</p>
+            </div>
+            
+            <!-- Actions -->
+            <div class="flex gap-2">
+              <button 
+                onclick="cheatSheetManager.copyTriageExample('${example.id}')"
+                class="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm"
+              >
+                <i class="fas fa-copy mr-2"></i>
+                Copy Text
+              </button>
+              <button 
+                onclick="cheatSheetManager.insertTriageExample('${example.id}')"
+                class="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-sm"
+              >
+                <i class="fas fa-arrow-right mr-2"></i>
+                Insert into Form
+              </button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  /**
+   * Switch industry in examples modal
+   */
+  async switchExampleIndustry(industry) {
+    console.log('[TRIAGE EXAMPLES] Switching to:', industry);
+    
+    try {
+      // Import examples
+      const { TRIAGE_EXAMPLES, getExamplesForIndustry } = await import('/js/aicore/triageExamples.js');
+      
+      // Get examples
+      const examples = getExamplesForIndustry(industry);
+      const industryName = industry;
+      
+      // Update content
+      const container = document.getElementById('examples-content-container');
+      if (container) {
+        container.innerHTML = this.renderExampleCards(examples, industryName);
+      }
+      
+    } catch (error) {
+      console.error('[TRIAGE EXAMPLES] Error switching industry:', error);
+    }
+  }
+
+  /**
+   * Copy triage example to clipboard
+   */
+  async copyTriageExample(exampleId) {
+    try {
+      // Import examples
+      const { TRIAGE_EXAMPLES } = await import('/js/aicore/triageExamples.js');
+      
+      // Find the example
+      let example = null;
+      for (const industry in TRIAGE_EXAMPLES) {
+        const found = TRIAGE_EXAMPLES[industry].find(ex => ex.id === exampleId);
+        if (found) {
+          example = found;
+          break;
+        }
+      }
+      
+      if (!example) {
+        console.error('[TRIAGE EXAMPLES] Example not found:', exampleId);
+        return;
+      }
+      
+      // Copy to clipboard
+      await navigator.clipboard.writeText(example.text);
+      
+      // Show success feedback
+      this.showNotification('✅ Example copied to clipboard!', 'success');
+      
+      console.log('[TRIAGE EXAMPLES] Copied:', example.title);
+      
+    } catch (error) {
+      console.error('[TRIAGE EXAMPLES] Copy failed:', error);
+      this.showNotification('❌ Failed to copy to clipboard', 'error');
+    }
+  }
+
+  /**
+   * Insert triage example into textarea and close modal
+   */
+  async insertTriageExample(exampleId) {
+    try {
+      // Import examples
+      const { TRIAGE_EXAMPLES } = await import('/js/aicore/triageExamples.js');
+      
+      // Find the example
+      let example = null;
+      for (const industry in TRIAGE_EXAMPLES) {
+        const found = TRIAGE_EXAMPLES[industry].find(ex => ex.id === exampleId);
+        if (found) {
+          example = found;
+          break;
+        }
+      }
+      
+      if (!example) {
+        console.error('[TRIAGE EXAMPLES] Example not found:', exampleId);
+        return;
+      }
+      
+      // Insert into textarea
+      const textarea = document.getElementById('triage-situation-textarea');
+      if (textarea) {
+        textarea.value = example.text;
+        textarea.focus();
+        
+        // Scroll textarea into view
+        textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      
+      // Close modal
+      const modal = document.getElementById('triage-examples-modal');
+      if (modal) {
+        modal.remove();
+      }
+      
+      // Show success feedback
+      this.showNotification('✅ Example inserted into scenario box!', 'success');
+      
+      console.log('[TRIAGE EXAMPLES] Inserted:', example.title);
+      
+    } catch (error) {
+      console.error('[TRIAGE EXAMPLES] Insert failed:', error);
+      this.showNotification('❌ Failed to insert example', 'error');
     }
   }
 }
