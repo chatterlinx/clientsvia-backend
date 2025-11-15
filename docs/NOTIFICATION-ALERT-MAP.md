@@ -27,7 +27,6 @@
 7. [API Error Handling](#7-api-error-handling) (7 codes)
 8. [AI Learning & Optimization](#8-ai-learning--optimization) (4 codes)
 9. [Critical Data Health](#9-critical-data-health) (6 codes)
-10. [AI Gateway Health Monitoring](#10-ai-gateway-health-monitoring) (6 codes)
 
 ---
 

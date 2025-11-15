@@ -25,7 +25,7 @@
  */
 
 const LLMLearningTask = require('../models/LLMLearningTask');
-const AIGatewaySuggestion = require('../models/aiGateway/Suggestion');
+const AIGatewaySuggestion = require('../models/aiGateway/Suggestion');  // STUB: Returns no-op to prevent crashes
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const CallTrace = require('../models/CallTrace');
 const openaiClient = require('../config/openai');

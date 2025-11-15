@@ -1,22 +1,12 @@
 // ============================================================================
-// 📦 AI GATEWAY - MODELS INDEX
+// LEGACY STUB: AI Gateway Models Index
 // ============================================================================
-// PURPOSE: Central export point for all AI Gateway models
-// USAGE: const { AIGatewayCallLog, AIGatewaySuggestion } = require('./models/aiGateway');
-// CREATED: 2025-10-29
+// These are NO-OP stubs to prevent crashes in legacy code
+// The AI Gateway analytics system has been removed
 // ============================================================================
-
-const AIGatewayCallLog = require('./CallLog');
-const AIGatewaySuggestion = require('./Suggestion');
-const AIGatewayHealthLog = require('./HealthLog');
-const AIGatewayAlertRule = require('./AlertRule');
-const AIGatewayCostLog = require('./CostLog');
 
 module.exports = {
-    AIGatewayCallLog,
-    AIGatewaySuggestion,
-    AIGatewayHealthLog,
-    AIGatewayAlertRule,
-    AIGatewayCostLog
+  AIGatewaySuggestion: require('./Suggestion'),
+  CostLog: require('./CostLog')
 };
 

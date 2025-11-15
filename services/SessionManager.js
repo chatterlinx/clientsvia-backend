@@ -114,57 +114,13 @@ class SessionManager {
     }
     
     // ────────────────────────────────────────────────────────────────
-    // L2: MongoDB Read (COLD START ONLY)
+    // L2: MongoDB Read (COLD START) - AI Gateway CallLog REMOVED
     // ────────────────────────────────────────────────────────────────
     
-    try {
-      if (!this.CallLog) {
-        this.CallLog = require('../models/aiGateway/CallLog');
-      }
-      
-      const callLog = await this.CallLog.findOne({ callId }).lean();
-      
-      if (callLog) {
-        const session = {
-          callId: callLog.callId,
-          companyId: callLog.companyId,
-          templateId: callLog.templateId,
-          turnNumber: callLog.turnCount || 0,
-          capturedEntities: callLog.capturedEntities || {},
-          lastInput: callLog.transcript?.slice(-1)[0]?.caller || '',
-          lastResponse: callLog.transcript?.slice(-1)[0]?.ai || '',
-          startedAt: callLog.startedAt,
-          lastActivityAt: callLog.lastActivityAt || callLog.startedAt
-        };
-        
-        // Warm L0 and L1 caches
-        this.setLRU(callId, session);
-        
-        try {
-          const redisKey = `session:${callId}`;
-          await redis.setex(redisKey, 3600, JSON.stringify(session)); // 1 hour TTL
-        } catch (redisErr) {
-          logger.warn('[SESSION MANAGER] Redis write failed (L2 warming)', {
-            callId,
-            error: redisErr.message
-          });
-        }
-        
-        const elapsed = Date.now() - startTime;
-        
-        logger.info('[SESSION MANAGER] L2 cache hit (cold start)', {
-          callId,
-          timeMs: elapsed
-        });
-        
-        return { ...session, _cacheLayer: 'L2', _timeMs: elapsed };
-      }
-    } catch (err) {
-      logger.error('[SESSION MANAGER] MongoDB read error', {
-        callId,
-        error: err.message
-      });
-    }
+    // LEGACY: AI Gateway CallLog model was removed during analytics cleanup
+    // Session recovery now relies only on L0 (LRU) and L1 (Redis) caches
+    // If you need MongoDB persistence, integrate v2AIAgentCallLog or create a new SessionLog model
+    logger.debug(`[SESSION MANAGER] L2 (MongoDB CallLog) skipped - AI Gateway removed`);
     
     // ────────────────────────────────────────────────────────────────
     // CACHE MISS - Return null
@@ -349,10 +305,7 @@ class SessionManager {
       batchSize: entries.length
     });
     
-    // Lazy load CallLog model
-    if (!this.CallLog) {
-      this.CallLog = require('../models/aiGateway/CallLog');
-    }
+    // LEGACY: AI Gateway CallLog model removed - sessions only use L0/L1 cache
     
     let successCount = 0;
     let errorCount = 0;

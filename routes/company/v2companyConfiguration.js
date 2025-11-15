@@ -2475,16 +2475,24 @@ router.get('/:companyId/warmup-analytics', async (req, res) => {
     }
     
     try {
-        // Get analytics from CostLog model
-        const CostLog = require('../../models/aiGateway/CostLog');
-        const analytics = await CostLog.getWarmupAnalytics(companyId, parseInt(days));
+        // LEGACY: AI Gateway CostLog removed
+        // Warmup analytics are no longer tracked via AI Gateway
+        logger.info(`[WARMUP ANALYTICS] Legacy endpoint called - AI Gateway removed`);
         
-        logger.info(`✅ [WARMUP ANALYTICS] Retrieved for company: ${companyId}`, analytics);
-        
-        res.json(analytics);
+        res.json({
+            success: true,
+            message: 'AI Gateway analytics system has been removed',
+            analytics: {
+                totalCalls: 0,
+                totalCost: 0,
+                avgCostPerCall: 0,
+                costBreakdown: {},
+                dailyStats: []
+            }
+        });
         
     } catch (error) {
-        logger.error('[WARMUP ANALYTICS] Error getting analytics:', error);
+        logger.error('[WARMUP ANALYTICS] Error:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Failed to get warmup analytics',

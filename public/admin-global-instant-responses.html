@@ -55,11 +55,7 @@
     <!-- 🧠 V7: Scenario Architect Panel - Persistent AI Co-Pilot -->
     <script src="/js/managers/ScenarioArchitectPanel.js"></script>
     
-    <!-- 🚀 AI Gateway Manager - LLM Health Monitoring & Suggestion System -->
-    <script src="/js/ai-gateway/HealthModal.js"></script>
-    <script src="/js/ai-gateway/HealthReportModal.js"></script>
-    <script src="/js/ai-gateway/AIGatewayManager.js"></script>
-    <script src="/js/ai-gateway/index.js"></script>
+    <!-- REMOVED: AI Gateway Manager - Legacy analytics system deleted -->
     
     <!-- 📊 Chart.js - Data Visualization Library -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -603,11 +599,7 @@
                         LLM Learning Console
                         <span id="llm-suggestions-badge" class="ml-1.5 px-1.5 py-0.5 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs rounded-full font-bold animate-pulse">0</span>
                     </a>
-                    <button id="overview-subtab-ai-gateway" onclick="switchOverviewSubTab('ai-gateway')" class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 border-b-2 border-transparent rounded-t">
-                        <i class="fas fa-network-wired mr-1.5 text-xs"></i>
-                        AI Gateway
-                        <span class="ml-1.5 px-1.5 py-0.5 bg-purple-500 text-white text-xs rounded-full font-bold animate-pulse">LLM</span>
-                    </button>
+                    <!-- REMOVED: AI Gateway subtab - legacy analytics system deleted -->
                     <button id="overview-subtab-templates" onclick="switchOverviewSubTab('templates')" class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 border-b-2 border-transparent rounded-t">
                         <i class="fas fa-copy mr-1.5 text-xs"></i>
                         Templates
@@ -3509,7 +3501,8 @@
                  ======================================================================== -->
 
             <!-- AI Gateway Sub-Tab Content -->
-            <div id="overview-ai-gateway-content" class="overview-subtab-content hidden">
+            <!-- REMOVED: AI Gateway content section - legacy analytics system deleted -->
+            <!-- <div id="overview-ai-gateway-content" class="overview-subtab-content hidden"> -->
                 
                 <!-- ========================================================================
                      AI GATEWAY - LLM HEALTH MONITORING & SUGGESTION QUEUE
@@ -3711,7 +3704,7 @@
                     </div>
                 </div>
 
-            </div>
+            <!-- </div> END AI Gateway (removed) -->
 
             <!-- Templates Sub-Tab Content -->
             <div id="overview-templates-content" class="overview-subtab-content hidden">
@@ -14805,7 +14798,10 @@ Continue?`;
                 // V1 console removed - redirect to V2 standalone page
                 console.log('🧠 [LLM LEARNING] Redirecting to V2 Console...');
                 window.location.href = '/admin/llm-learning-v2';
-            } else if (subTabName === 'ai-gateway') {
+            } 
+            // REMOVED: AI Gateway initialization - legacy analytics system deleted
+            /*
+            else if (subTabName === 'ai-gateway') {
                 // Initialize AI Gateway Manager
                 if (window.aiGatewayManager && typeof window.aiGatewayManager.initialize === 'function') {
                     console.log('🚀 [AI GATEWAY] Initializing AI Gateway Manager...');
@@ -14815,6 +14811,7 @@ Continue?`;
                     console.warn('⚠️ [AI GATEWAY] AIGatewayManager not found');
                 }
             }
+            */
         }
 
         // ============================================================================

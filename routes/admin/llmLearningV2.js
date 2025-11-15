@@ -21,7 +21,7 @@ const express = require('express');
 const router = express.Router();
 
 const ProductionLLMSuggestion = require('../../models/ProductionLLMSuggestion');
-const AIGatewaySuggestion = require('../../models/aiGateway/Suggestion');  // 📋 Phase C.0: Tier-3 suggestions
+const AIGatewaySuggestion = require('../../models/aiGateway/Suggestion');  // STUB: Returns no-op to prevent crashes
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');  // For Apply handlers
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const logger = require('../../utils/logger');

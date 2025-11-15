@@ -21,7 +21,7 @@
 
 const { OpenAI } = require('openai');
 const Company = require('../models/v2Company');
-const CostLog = require('../models/aiGateway/CostLog');
+const CostLog = require('../models/aiGateway/CostLog');  // STUB: Returns no-op to prevent crashes
 const redisClient = require('../db').redisClient;
 
 // Initialize OpenAI client
