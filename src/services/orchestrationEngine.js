@@ -1,0 +1,638 @@
+/**
+ * ============================================================================
+ * ORCHESTRATION ENGINE - LLM-0 MASTER ORCHESTRATOR
+ * ============================================================================
+ * 
+ * PURPOSE: Main entry point for processing every caller utterance
+ * ARCHITECTURE: Wires together Frontline-Intel, LLM-0, BookingHandler
+ * USED BY: Twilio voice routes (real-time call processing)
+ * 
+ * FLOW:
+ * 1. Load FrontlineContext from Redis
+ * 2. Load runtime config from CompanyConfigLoader
+ * 3. Strip filler words
+ * 4. Run Frontline-Intel (cheap classifier)
+ * 5. Build LLM-0 prompt
+ * 6. Call LLM for orchestrator decision
+ * 7. Apply decision to context
+ * 8. Trigger booking if ready
+ * 9. Return nextPrompt for TTS
+ * 
+ * ============================================================================
+ */
+
+const openaiClient = require('../../config/openai');
+const logger = require('../../utils/logger');
+const { loadCompanyRuntimeConfig } = require('./companyConfigLoader');
+const { classifyFrontlineIntent } = require('./frontlineIntelService');
+const frontlineContextService = require('./frontlineContextService');
+const bookingHandler = require('./bookingHandler');
+
+/**
+ * Process a single caller turn and return what to say next
+ * @param {Object} params
+ * @param {string} params.companyId - Company ID
+ * @param {string} params.callId - Twilio Call SID
+ * @param {'caller'|'agent'} params.speaker - Who is speaking
+ * @param {string} params.text - Original STT output
+ * @param {Object} [params.rawSttMetadata] - Optional STT metadata
+ * @returns {Promise<import('../core/orchestrationTypes').OrchestrationResult>}
+ */
+async function processCallerTurn({ companyId, callId, speaker, text, rawSttMetadata = {} }) {
+  const startTime = Date.now();
+  
+  try {
+    logger.info('[ORCHESTRATOR] Processing caller turn', {
+      companyId,
+      callId,
+      speaker,
+      textLength: text.length,
+      startTime
+    });
+    
+    // ========================================================================
+    // STEP 1: Load current context from Redis
+    // ========================================================================
+    let ctx = await frontlineContextService.loadContext(callId);
+    
+    if (!ctx) {
+      logger.info('[ORCHESTRATOR] No context found, initializing new context', { callId, companyId });
+      
+      // Initialize new context if missing
+      ctx = await frontlineContextService.initContext({
+        callId,
+        companyId,
+        trade: undefined, // Will be populated from config
+        configVersion: 1
+      });
+    }
+    
+    // ========================================================================
+    // STEP 2: Load runtime config from CompanyConfigLoader
+    // ========================================================================
+    const config = await loadCompanyRuntimeConfig({ companyId });
+    
+    // Update trade in context if not set
+    if (!ctx.trade && config.trade) {
+      ctx.trade = config.trade;
+    }
+    
+    logger.debug('[ORCHESTRATOR] Config loaded', {
+      companyName: config.name,
+      trade: config.trade,
+      scenariosTotal: config.scenarios.length,
+      variablesCount: config.variables.definitions.length
+    });
+    
+    // ========================================================================
+    // STEP 3: Strip filler words
+    // ========================================================================
+    const rawText = text;
+    const cleanedText = stripFillerWords(text, config.fillerWords.active);
+    
+    logger.debug('[ORCHESTRATOR] Filler words stripped', {
+      originalLength: rawText.length,
+      cleanedLength: cleanedText.length,
+      fillerWordsCount: config.fillerWords.active.length
+    });
+    
+    // Append to transcript
+    ctx.transcript.push({
+      role: speaker,
+      text: rawText,
+      timestamp: Date.now()
+    });
+    
+    // ========================================================================
+    // STEP 4: Run Frontline-Intel (cheap classifier)
+    // ========================================================================
+    const intel = classifyFrontlineIntent({
+      text: cleanedText,
+      config,
+      context: ctx
+    });
+    
+    logger.info('[ORCHESTRATOR] Frontline-Intel classification', {
+      intent: intel.intent,
+      confidence: intel.confidence,
+      signals: intel.signals
+    });
+    
+    // Update intent if confidence is high and not spam/wrong_number
+    if (intel.confidence > 0.7 && !['spam', 'wrong_number'].includes(intel.intent)) {
+      ctx.currentIntent = intel.intent;
+    }
+    
+    // ========================================================================
+    // STEP 5: Build LLM-0 prompt
+    // ========================================================================
+    const llmPrompt = buildOrchestratorPrompt({
+      cleanedText,
+      context: ctx,
+      config,
+      intel
+    });
+    
+    // ========================================================================
+    // STEP 6: Call LLM for orchestrator decision
+    // ========================================================================
+    let decision;
+    
+    try {
+      decision = await callLLM0(llmPrompt, { companyId, callId });
+    } catch (llmError) {
+      logger.error('[ORCHESTRATOR] LLM call failed, using fallback', {
+        error: llmError.message,
+        companyId,
+        callId
+      });
+      
+      // Fallback decision
+      decision = buildFallbackDecision(intel, ctx);
+    }
+    
+    logger.info('[ORCHESTRATOR] LLM-0 decision', {
+      action: decision.action,
+      updatedIntent: decision.updatedIntent,
+      readyToBook: decision.updates?.flags?.readyToBook,
+      debugNotes: decision.debugNotes
+    });
+    
+    // ========================================================================
+    // STEP 7: Apply decision to context
+    // ========================================================================
+    
+    // Update intent if LLM suggests new one
+    if (decision.updatedIntent) {
+      ctx.currentIntent = decision.updatedIntent;
+    }
+    
+    // Merge extracted context updates
+    if (decision.updates?.extracted) {
+      ctx.extracted = mergeExtractedContext(ctx.extracted, decision.updates.extracted);
+    }
+    
+    // Update flags
+    if (decision.updates?.flags) {
+      if (typeof decision.updates.flags.readyToBook === 'boolean') {
+        ctx.readyToBook = decision.updates.flags.readyToBook;
+      }
+    }
+    
+    // Add to tier trace
+    ctx.tierTrace.push({
+      tier: 0, // LLM-0 orchestrator
+      timestamp: Date.now(),
+      action: decision.action,
+      intent: ctx.currentIntent,
+      confidence: intel.confidence,
+      sourceId: 'orchestrator',
+      reasoning: decision.debugNotes || ''
+    });
+    
+    // Save context back to Redis
+    await frontlineContextService.saveContext(ctx);
+    
+    logger.debug('[ORCHESTRATOR] Context updated and saved', {
+      callId,
+      currentIntent: ctx.currentIntent,
+      readyToBook: ctx.readyToBook,
+      transcriptLength: ctx.transcript.length,
+      tierTraceLength: ctx.tierTrace.length
+    });
+    
+    // ========================================================================
+    // STEP 8: Handle booking if ready
+    // ========================================================================
+    let finalPrompt = decision.nextPrompt;
+    
+    if (decision.action === 'initiate_booking' && ctx.readyToBook) {
+      try {
+        logger.info('[ORCHESTRATOR] Initiating booking', {
+          callId,
+          companyId,
+          extracted: ctx.extracted
+        });
+        
+        const appointment = await bookingHandler.handleBookingFromContext(ctx);
+        
+        // Update context with appointment info
+        ctx.appointmentId = appointment._id.toString();
+        await frontlineContextService.saveContext(ctx);
+        
+        // Enhance confirmation prompt
+        finalPrompt = buildBookingConfirmationPrompt(appointment, ctx.extracted, config);
+        
+        logger.info('[ORCHESTRATOR] Booking successful', {
+          callId,
+          appointmentId: ctx.appointmentId,
+          scheduledDate: appointment.scheduledDate,
+          timeWindow: appointment.timeWindow
+        });
+        
+      } catch (bookingError) {
+        logger.error('[ORCHESTRATOR] Booking failed', {
+          error: bookingError.message,
+          stack: bookingError.stack,
+          callId,
+          companyId
+        });
+        
+        // Override decision to escalate
+        decision.action = 'escalate_to_human';
+        finalPrompt = "I'm having trouble completing your booking right now. Let me connect you with someone who can help you directly.";
+        
+        // Save error in context
+        ctx.tierTrace.push({
+          tier: 0,
+          timestamp: Date.now(),
+          action: 'booking_failed',
+          intent: ctx.currentIntent,
+          confidence: 0,
+          sourceId: 'booking_error',
+          reasoning: bookingError.message
+        });
+        
+        await frontlineContextService.saveContext(ctx);
+      }
+    }
+    
+    // ========================================================================
+    // STEP 9: Return orchestration result
+    // ========================================================================
+    const duration = Date.now() - startTime;
+    
+    logger.info('[ORCHESTRATOR] Turn complete', {
+      callId,
+      companyId,
+      action: decision.action,
+      intent: ctx.currentIntent,
+      durationMs: duration,
+      finalPromptLength: finalPrompt.length
+    });
+    
+    return {
+      nextPrompt: finalPrompt,
+      decision: {
+        ...decision,
+        nextPrompt: finalPrompt // Use enhanced prompt if booking modified it
+      }
+    };
+    
+  } catch (error) {
+    logger.error('[ORCHESTRATOR] Fatal error processing caller turn', {
+      error: error.message,
+      stack: error.stack,
+      companyId,
+      callId,
+      speaker,
+      text: text?.substring(0, 100)
+    });
+    
+    // Emergency fallback
+    return {
+      nextPrompt: "I'm here to help. Could you please tell me your name and what you need assistance with?",
+      decision: {
+        action: 'ask_question',
+        nextPrompt: "I'm here to help. Could you please tell me your name and what you need assistance with?",
+        updatedIntent: null,
+        updates: {
+          extracted: {},
+          flags: {
+            readyToBook: false,
+            needsKnowledgeSearch: false,
+            wantsHuman: false
+          }
+        },
+        knowledgeQuery: null,
+        debugNotes: `orchestrator_fatal_error: ${error.message}`
+      }
+    };
+  }
+}
+
+/**
+ * Strip filler words from text
+ * @param {string} text - Original text
+ * @param {string[]} fillerWords - Array of filler words to remove
+ * @returns {string} Cleaned text
+ */
+function stripFillerWords(text, fillerWords = []) {
+  if (!fillerWords || fillerWords.length === 0) {
+    return text;
+  }
+  
+  let cleaned = text.toLowerCase();
+  
+  // Remove each filler word (case-insensitive, word boundaries)
+  for (const filler of fillerWords) {
+    const regex = new RegExp(`\\b${filler}\\b`, 'gi');
+    cleaned = cleaned.replace(regex, ' ');
+  }
+  
+  // Collapse multiple spaces
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  
+  return cleaned;
+}
+
+/**
+ * Build LLM-0 orchestrator prompt
+ * @param {Object} params
+ * @returns {{system: string, user: string}}
+ */
+function buildOrchestratorPrompt({ cleanedText, context, config, intel }) {
+  const systemPrompt = `You are LLM-0, the master orchestrator for ${config.name || 'the company'}, a ${config.trade || 'service'} company's AI receptionist.
+
+YOUR ROLE:
+- You are NOT a content/knowledge bot
+- You decide ACTIONS and extract STRUCTURED DATA
+- You return ONLY valid JSON (no extra text)
+- You are the "traffic cop" - decide what to do next, not what to say (except for nextPrompt)
+
+CURRENT CALL STATE:
+- Intent: ${context.currentIntent || 'unknown'}
+- Ready to Book: ${context.readyToBook ? 'YES' : 'NO'}
+- Extracted Contact: ${JSON.stringify(context.extracted?.contact || {})}
+- Extracted Location: ${JSON.stringify(context.extracted?.location || {})}
+- Extracted Problem: ${JSON.stringify(context.extracted?.problem || {})}
+- Extracted Scheduling: ${JSON.stringify(context.extracted?.scheduling || {})}
+
+FRONTLINE-INTEL SIGNALS:
+- Classified Intent: ${intel.intent} (confidence: ${intel.confidence})
+- Emergency: ${intel.signals.maybeEmergency ? 'YES' : 'NO'}
+- Wrong Number: ${intel.signals.maybeWrongNumber ? 'YES' : 'NO'}
+- Spam: ${intel.signals.maybeSpam ? 'YES' : 'NO'}
+
+AVAILABLE ACTIONS:
+- ask_question: Need more info from caller
+- confirm_info: Verify what we have so far
+- answer_with_knowledge: Simple factual answer (hours, location, etc)
+- initiate_booking: We have enough info to book
+- update_booking: Caller wants to change existing appointment
+- escalate_to_human: Beyond our capability
+- small_talk: Acknowledge greeting/pleasantry
+- close_call: End call (wrong number, spam, resolved)
+- clarify_intent: Unclear what caller wants
+- no_op: Nothing to do (system message, etc)
+
+BOOKING REQUIREMENTS (all must be present to set readyToBook = true):
+1. Contact name
+2. Contact phone (or extracted from caller ID)
+3. Service address (at least addressLine1 and city/state or zip)
+4. Problem summary (what's wrong / what service needed)
+5. Time preference (even if vague like "tomorrow" or "asap")
+
+INSTRUCTIONS:
+- If intel shows wrong_number or spam → action: "close_call" with polite exit
+- If emergency signals → extract urgency, prioritize ASAP scheduling
+- If missing booking requirements → action: "ask_question" for what's needed
+- If all requirements met → set readyToBook: true, action: "initiate_booking"
+- Keep nextPrompt natural, helpful, brief (1-2 sentences max)
+- Extract data from what caller said into updates.extracted structure
+- Use variables from company config when mentioning company info
+
+COMPANY VARIABLES (use these in responses):
+${Object.entries(config.variables.values || {}).slice(0, 10).map(([k, v]) => `- ${k}: ${v}`).join('\n')}
+
+RESPONSE JSON SCHEMA (respond ONLY with this JSON, nothing else):
+{
+  "action": "ask_question|confirm_info|answer_with_knowledge|initiate_booking|update_booking|escalate_to_human|small_talk|close_call|clarify_intent|no_op",
+  "nextPrompt": "what to say back to caller",
+  "updatedIntent": "booking|troubleshooting|info|billing|emergency|update_appointment|wrong_number|spam|other" or null,
+  "updates": {
+    "extracted": {
+      "contact": { "name": "...", "phone": "...", "email": "..." },
+      "location": { "addressLine1": "...", "city": "...", "state": "...", "zip": "..." },
+      "problem": { "summary": "...", "category": "...", "urgency": "normal|high|emergency" },
+      "scheduling": { "preferredDate": "...", "preferredWindow": "..." },
+      "access": { "gateCode": "...", "notes": "..." }
+    },
+    "flags": {
+      "readyToBook": false,
+      "needsKnowledgeSearch": false,
+      "wantsHuman": false
+    }
+  },
+  "knowledgeQuery": null,
+  "debugNotes": "brief internal reasoning"
+}`;
+
+  // Build user message with recent transcript
+  const recentTurns = context.transcript.slice(-3);
+  const transcriptSummary = recentTurns
+    .map(t => `${t.role}: ${t.text}`)
+    .join('\n');
+  
+  const userPrompt = `CALLER JUST SAID: "${cleanedText}"
+
+RECENT CONVERSATION:
+${transcriptSummary}
+
+Based on this, decide the next action and extract any new information. Return ONLY valid JSON.`;
+
+  return {
+    system: systemPrompt,
+    user: userPrompt
+  };
+}
+
+/**
+ * Call LLM-0 for orchestrator decision
+ * @param {{system: string, user: string}} prompt
+ * @param {{companyId: string, callId: string}} metadata
+ * @returns {Promise<import('../core/orchestrationTypes').OrchestratorDecision>}
+ */
+async function callLLM0(prompt, metadata) {
+  if (!openaiClient) {
+    throw new Error('OpenAI client not initialized - check OPENAI_API_KEY');
+  }
+  
+  const startTime = Date.now();
+  
+  try {
+    const response = await openaiClient.chat.completions.create({
+      model: process.env.LLM_MODEL || 'gpt-4o-mini',
+      temperature: 0.2, // Low temp for consistency
+      max_tokens: 800,
+      messages: [
+        { role: 'system', content: prompt.system },
+        { role: 'user', content: prompt.user }
+      ]
+    });
+    
+    const duration = Date.now() - startTime;
+    const rawResponse = response.choices[0].message.content;
+    
+    logger.debug('[ORCHESTRATOR] LLM-0 raw response', {
+      durationMs: duration,
+      tokensUsed: response.usage?.total_tokens,
+      responseLength: rawResponse.length
+    });
+    
+    // Parse JSON response
+    let decision;
+    
+    try {
+      // Try to extract JSON from response (might have markdown formatting)
+      const jsonMatch = rawResponse.match(/```json\s*([\s\S]*?)\s*```/) || 
+                       rawResponse.match(/\{[\s\S]*\}/);
+      
+      const jsonString = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : rawResponse;
+      decision = JSON.parse(jsonString);
+      
+    } catch (parseError) {
+      logger.error('[ORCHESTRATOR] Failed to parse LLM-0 response as JSON', {
+        error: parseError.message,
+        rawResponse: rawResponse.substring(0, 500)
+      });
+      
+      throw new Error('LLM response not valid JSON');
+    }
+    
+    // Validate decision structure
+    if (!decision.action || !decision.nextPrompt) {
+      logger.error('[ORCHESTRATOR] LLM-0 response missing required fields', {
+        hasAction: !!decision.action,
+        hasNextPrompt: !!decision.nextPrompt,
+        decision
+      });
+      
+      throw new Error('LLM response missing required fields');
+    }
+    
+    return decision;
+    
+  } catch (error) {
+    logger.error('[ORCHESTRATOR] LLM-0 call failed', {
+      error: error.message,
+      companyId: metadata.companyId,
+      callId: metadata.callId,
+      durationMs: Date.now() - startTime
+    });
+    
+    throw error;
+  }
+}
+
+/**
+ * Build fallback decision when LLM fails
+ * @param {Object} intel - Frontline-Intel result
+ * @param {Object} ctx - Current context
+ * @returns {import('../core/orchestrationTypes').OrchestratorDecision}
+ */
+function buildFallbackDecision(intel, ctx) {
+  // Handle special cases first
+  if (intel.intent === 'wrong_number' || intel.intent === 'spam') {
+    return {
+      action: 'close_call',
+      nextPrompt: "Thank you for your call. Have a great day!",
+      updatedIntent: intel.intent,
+      updates: {
+        extracted: {},
+        flags: {
+          readyToBook: false,
+          needsKnowledgeSearch: false,
+          wantsHuman: false
+        }
+      },
+      knowledgeQuery: null,
+      debugNotes: 'fallback_decision_wrong_number_or_spam'
+    };
+  }
+  
+  if (intel.intent === 'emergency') {
+    return {
+      action: 'ask_question',
+      nextPrompt: "I understand this is urgent. I need your name, address, and a brief description of the emergency so I can get someone to you right away.",
+      updatedIntent: 'emergency',
+      updates: {
+        extracted: {
+          problem: {
+            urgency: 'emergency'
+          }
+        },
+        flags: {
+          readyToBook: false,
+          needsKnowledgeSearch: false,
+          wantsHuman: false
+        }
+      },
+      knowledgeQuery: null,
+      debugNotes: 'fallback_decision_emergency'
+    };
+  }
+  
+  // Default fallback - ask for basic info
+  return {
+    action: 'ask_question',
+    nextPrompt: "I'm here to help. Can you please tell me your name and what you need assistance with?",
+    updatedIntent: intel.intent || ctx.currentIntent || 'other',
+    updates: {
+      extracted: {},
+      flags: {
+        readyToBook: false,
+        needsKnowledgeSearch: false,
+        wantsHuman: false
+      }
+    },
+    knowledgeQuery: null,
+    debugNotes: 'fallback_decision_generic'
+  };
+}
+
+/**
+ * Merge extracted context (deep merge with preference to new data)
+ * @param {Object} existing - Existing extracted context
+ * @param {Object} updates - New extracted context
+ * @returns {Object} Merged context
+ */
+function mergeExtractedContext(existing = {}, updates = {}) {
+  return {
+    contact: {
+      ...(existing.contact || {}),
+      ...(updates.contact || {})
+    },
+    location: {
+      ...(existing.location || {}),
+      ...(updates.location || {})
+    },
+    problem: {
+      ...(existing.problem || {}),
+      ...(updates.problem || {})
+    },
+    scheduling: {
+      ...(existing.scheduling || {}),
+      ...(updates.scheduling || {})
+    },
+    access: {
+      ...(existing.access || {}),
+      ...(updates.access || {})
+    },
+    meta: {
+      ...(existing.meta || {}),
+      ...(updates.meta || {})
+    }
+  };
+}
+
+/**
+ * Build booking confirmation prompt
+ * @param {Object} appointment - Created appointment
+ * @param {Object} extracted - Extracted context
+ * @param {Object} config - Company config
+ * @returns {string} Confirmation message
+ */
+function buildBookingConfirmationPrompt(appointment, extracted, config) {
+  const companyName = config.name || 'we';
+  const date = appointment.scheduledDate || 'soon';
+  const window = appointment.timeWindow || 'during your preferred time';
+  const address = extracted.location?.addressLine1 || 'your location';
+  
+  return `Perfect! ${companyName} has you scheduled for ${date} ${window}. A technician will come to ${address}. You'll receive a confirmation shortly. Is there anything else I can help you with?`;
+}
+
+module.exports = {
+  processCallerTurn
+};
+

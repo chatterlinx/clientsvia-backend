@@ -210,8 +210,43 @@ async function resolveLocation(companyId, extracted, contactId) {
 }
 
 /**
+ * Normalize extracted context from orchestrator format to legacy format
+ * Supports both Phase 1 (flat) and Phase 3 (nested) formats
+ * @param {Object} extracted - Extracted context (either format)
+ * @returns {Object} Normalized extracted context
+ */
+function normalizeExtractedContext(extracted) {
+  // If already in flat format (Phase 1), return as-is
+  if (extracted.callerName || extracted.callerPhone || extracted.addressLine1) {
+    return extracted;
+  }
+  
+  // Convert from nested orchestrator format (Phase 3) to flat format
+  return {
+    callerName: extracted.contact?.name || extracted.callerName,
+    callerPhone: extracted.contact?.phone || extracted.callerPhone,
+    email: extracted.contact?.email || extracted.email,
+    addressLine1: extracted.location?.addressLine1 || extracted.addressLine1,
+    addressLine2: extracted.location?.addressLine2 || extracted.addressLine2,
+    city: extracted.location?.city || extracted.city,
+    state: extracted.location?.state || extracted.state,
+    postalCode: extracted.location?.zip || extracted.location?.postalCode || extracted.postalCode,
+    issueSummary: extracted.problem?.summary || extracted.issueSummary,
+    symptoms: extracted.symptoms || [],
+    serviceType: extracted.problem?.category || extracted.serviceType,
+    requestedDate: extracted.scheduling?.preferredDate || extracted.requestedDate,
+    requestedWindow: extracted.scheduling?.preferredWindow || extracted.requestedWindow,
+    accessNotes: extracted.access?.notes || extracted.accessNotes,
+    isReturningCustomer: extracted.isReturningCustomer,
+    contactId: extracted.contactId,
+    locationId: extracted.locationId
+  };
+}
+
+/**
  * Book an appointment from the current context
  * Phase 1: Basic booking without advanced business rules
+ * Phase 3: Enhanced to support orchestrator nested format
  * Future phases will add:
  * - Calendar integration
  * - Technician availability
@@ -225,19 +260,37 @@ async function resolveLocation(companyId, extracted, contactId) {
 async function handleBookingFromContext(ctx) {
   try {
     const companyId = ctx.companyId;
-    const extracted = ctx.extracted;
+    
+    // Normalize extracted context (supports both Phase 1 flat and Phase 3 nested formats)
+    const extracted = normalizeExtractedContext(ctx.extracted);
     
     logger.info(`[BOOKING HANDLER] Starting booking from context`, {
       callId: ctx.callId,
       companyId,
-      readyToBook: ctx.readyToBook
+      readyToBook: ctx.readyToBook,
+      hasContact: !!(extracted.callerName || extracted.callerPhone),
+      hasLocation: !!extracted.addressLine1,
+      hasServiceInfo: !!extracted.issueSummary
     });
+    
+    // Validate minimum required data
+    if (!extracted.callerName && !extracted.callerPhone) {
+      logger.warn(`[BOOKING HANDLER] Missing contact info`, { callId: ctx.callId });
+    }
+    
+    if (!extracted.addressLine1) {
+      logger.warn(`[BOOKING HANDLER] Missing address info`, { callId: ctx.callId });
+    }
     
     // Resolve contact
     const contact = await resolveContact(companyId, extracted);
     
     // Resolve location
     const location = await resolveLocation(companyId, extracted, contact._id);
+    
+    // Determine urgency from extracted problem data
+    const urgency = extracted.problem?.urgency || 'normal';
+    const isEmergency = urgency === 'emergency';
     
     // Create appointment
     const appointment = await Appointment.create({
@@ -246,14 +299,14 @@ async function handleBookingFromContext(ctx) {
       locationId: location._id,
       callId: ctx.callId,
       trade: ctx.trade || "",
-      serviceType: extracted.serviceType || "repair",
+      serviceType: extracted.serviceType || (isEmergency ? "emergency" : "repair"),
       status: "scheduled",
       scheduledDate: extracted.requestedDate || new Date().toISOString().split('T')[0],
       timeWindow: extracted.requestedWindow || "TBD",
       notesForTech: extracted.issueSummary || "",
       accessNotes: extracted.accessNotes || "",
-      priority: determinePriority(extracted),
-      urgencyScore: calculateUrgencyScore(extracted)
+      priority: isEmergency ? 'emergency' : determinePriority(extracted),
+      urgencyScore: isEmergency ? 100 : calculateUrgencyScore(extracted)
     });
     
     logger.info(`[BOOKING HANDLER] Created appointment: ${appointment._id}`, {
@@ -261,15 +314,17 @@ async function handleBookingFromContext(ctx) {
       contactId: contact._id,
       locationId: location._id,
       scheduledDate: appointment.scheduledDate,
-      serviceType: appointment.serviceType
+      serviceType: appointment.serviceType,
+      priority: appointment.priority,
+      urgencyScore: appointment.urgencyScore
     });
     
     // Update context with appointment ID
     ctx.appointmentId = appointment._id.toString();
     
-    // TODO Phase 2: Send SMS confirmation
-    // TODO Phase 2: Add to calendar
-    // TODO Phase 2: Notify dispatch/technician
+    // TODO Phase 4: Send SMS confirmation
+    // TODO Phase 4: Add to calendar
+    // TODO Phase 4: Notify dispatch/technician
     
     return appointment;
   } catch (error) {
