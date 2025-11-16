@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ClientsVia Control Plane</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f3f4f6; color: #111827; }
+    .top-nav { display: flex; align-items: center; padding: 10px 18px; background: #111827; color: #e5e7eb; }
+    .top-nav-title { font-weight: 700; margin-right: 24px; }
+    .top-nav-tabs { display: flex; gap: 10px; flex-wrap: wrap; }
+    .tab-btn { padding: 6px 12px; border-radius: 999px; border: none; cursor: pointer; font-size: 13px; line-height: 1; background: transparent; color: #9ca3af; }
+    .tab-btn.active { background: #f97316; color: #111827; font-weight: 600; }
+    .subnav { display: flex; gap: 8px; padding: 10px 18px; border-bottom: 1px solid #e5e7eb; background: #f9fafb; flex-wrap: wrap;}
+    .subnav button { padding: 6px 10px; border-radius: 999px; border: none; background: #e5e7eb; color: #374151; font-size: 12px; cursor: pointer; }
+    .subnav button.active { background: #4f46e5; color: #f9fafb; font-weight: 600; }
+    .page { padding: 18px; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .card { background: #ffffff; border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(15,23,42,0.06); margin-bottom: 16px; }
+    .card h2 { margin: 0 0 6px; font-size: 18px; }
+    .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; background: #eff6ff; color: #1d4ed8; margin-left: 8px;}
+    .muted { font-size: 13px; color: #6b7280; }
+    .pill-label { display:inline-flex; align-items:center; font-size:11px; padding:2px 8px; border-radius:999px; background:#f3f4f6; color:#4b5563; margin-right:4px;}
+  </style>
+</head>
+<body>
+  <!-- MAIN NAV: CONTROL PLANE SECTIONS -->
+  <header class="top-nav">
+    <div class="top-nav-title">ClientsVia Control Plane</div>
+    <nav class="top-nav-tabs">
+      <!-- MAIN TABS -->
+      <button class="tab-btn active js-main-tab" data-main-target="aicore">AiCore Control Center</button>
+      <button class="tab-btn js-main-tab" data-main-target="companyops">CompanyOps Console</button>
+      <button class="tab-btn js-main-tab" data-main-target="billing">Billing & Usage</button>
+      <button class="tab-btn js-main-tab" data-main-target="intelligence">Intelligence / Observability</button>
+    </nav>
+  </header>
+
+  <!-- SECONDARY NAV (ONLY WHEN AICORE ACTIVE) -->
+  <nav id="aicore-subnav" class="subnav">
+    <!-- AICORE TOP-LEVEL TABS -->
+    <button class="active js-aicore-tab" data-aicore-target="variables">Variables</button>
+    <button class="js-aicore-tab" data-aicore-target="templates">AiCore Templates</button>
+    <button class="js-aicore-tab" data-aicore-target="live-scenarios">AiCore Live Scenarios</button>
+    <button class="js-aicore-tab" data-aicore-target="cheat-sheet">Cheat Sheet</button>
+    <button class="js-aicore-tab" data-aicore-target="call-flow">Call Flow</button>
+    <button class="js-aicore-tab" data-aicore-target="knowledgebase">AiCore Knowledgebase</button>
+    <button class="js-aicore-tab" data-aicore-target="simulator">Simulator</button>
+    <button class="js-aicore-tab" data-aicore-target="knowledge-ingestion">Knowledge Ingestion</button>
+    <button class="js-aicore-tab" data-aicore-target="versioning">Versioning / Releases</button>
+    <button class="js-aicore-tab" data-aicore-target="observability">Observability (AI Metrics)</button>
+    <button class="js-aicore-tab" data-aicore-target="llm-learning">LLM Learning Console</button>
+    <button class="js-aicore-tab" data-aicore-target="active-instructions">Active Instructions X-Ray</button>
+  </nav>
+
+  <!-- TERTIARY NAV (ONLY WHEN CHEAT SHEET ACTIVE) -->
+  <nav id="cheat-subnav" class="subnav" style="display:none;">
+    <!-- CHEAT SHEET SUB-TABS -->
+    <button class="active js-cheat-tab" data-cheat-target="triage">Triage</button>
+    <button class="js-cheat-tab" data-cheat-target="frontline-intel">Frontline-Intel</button>
+    <button class="js-cheat-tab" data-cheat-target="transfer-calls">Transfer Calls</button>
+    <button class="js-cheat-tab" data-cheat-target="edge-cases">Edge Cases</button>
+    <button class="js-cheat-tab" data-cheat-target="behavior">Behavior</button>
+    <button class="js-cheat-tab" data-cheat-target="guardrails">Guardrails</button>
+    <button class="js-cheat-tab" data-cheat-target="booking">Booking Rules</button>
+    <button class="js-cheat-tab" data-cheat-target="company-contacts">Company Contacts</button>
+    <button class="js-cheat-tab" data-cheat-target="links">Links</button>
+    <button class="js-cheat-tab" data-cheat-target="calculator">Calculator</button>
+    <button class="js-cheat-tab" data-cheat-target="cheat-active-instructions">Active Instructions Preview</button>
+  </nav>
+
+  <main class="page">
+    <!-- ================= MAIN PANEL: AICORE ================= -->
+    <section class="panel active" data-main-panel="aicore">
+      <!-- AICORE: VARIABLES -->
+      <div class="panel active" data-aicore-panel="variables">
+        <div class="card">
+          <h2>Variables <span class="badge">AiCore Config</span></h2>
+          <p class="muted">Company-level and trade-level variables used inside templates, scenarios, and orchestrator prompts.</p>
+        </div>
+        <!-- hook your existing variables table / editor here -->
+      </div>
+
+      <!-- AICORE: TEMPLATES -->
+      <div class="panel" data-aicore-panel="templates">
+        <div class="card">
+          <h2>AiCore Templates</h2>
+          <p class="muted">Global and per-trade templates that define scripts, flows, and 3-Tier routing.</p>
+        </div>
+      </div>
+
+      <!-- AICORE: LIVE SCENARIOS -->
+      <div class="panel" data-aicore-panel="live-scenarios">
+        <div class="card">
+          <h2>AiCore Live Scenarios</h2>
+          <p class="muted">Active scenario cards used by the 3-Tier knowledge engine and Frontline-Intel.</p>
+        </div>
+      </div>
+
+      <!-- AICORE: CHEAT SHEET (with sub-tabs) -->
+      <div class="panel" data-aicore-panel="cheat-sheet">
+        <!-- TRIAGE SUBPANEL -->
+        <div class="panel active" data-cheat-panel="triage">
+          <div class="card">
+            <h2>Triage – THE BRAIN Config</h2>
+            <p class="muted">Configure the Triage Engine that powers Frontline-Intel and Tier-1 / Tier-2 routing.</p>
+          </div>
+        </div>
+
+        <!-- FRONTLINE-INTEL SUBPANEL -->
+        <div class="panel" data-cheat-panel="frontline-intel">
+          <div class="card">
+            <h2>Frontline-Intel Rules</h2>
+            <p class="muted">Cheap classifier rules: emergency, wrong number, spam, booking, troubleshooting, billing, info.</p>
+          </div>
+        </div>
+
+        <!-- TRANSFER CALLS SUBPANEL -->
+        <div class="panel" data-cheat-panel="transfer-calls">
+          <div class="card">
+            <h2>Transfer Calls</h2>
+            <p class="muted">Configure when and where calls are transferred to humans, departments, or external numbers.</p>
+          </div>
+        </div>
+
+        <!-- EDGE CASES SUBPANEL -->
+        <div class="panel" data-cheat-panel="edge-cases">
+          <div class="card">
+            <h2>Edge Cases</h2>
+            <p class="muted">Define special situations: after-hours, no-match intents, repeat offenders, blocked callers.</p>
+          </div>
+        </div>
+
+        <!-- BEHAVIOR SUBPANEL -->
+        <div class="panel" data-cheat-panel="behavior">
+          <div class="card">
+            <h2>Behavior & Tone</h2>
+            <p class="muted">Persona, politeness rules, frustration detection responses, silence handling.</p>
+          </div>
+        </div>
+
+        <!-- GUARDRAILS SUBPANEL -->
+        <div class="panel" data-cheat-panel="guardrails">
+          <div class="card">
+            <h2>Guardrails</h2>
+            <p class="muted">Hard "DO / DO NOT" rules: pricing, legal/medical topics, promises, compliance regions.</p>
+          </div>
+        </div>
+
+        <!-- BOOKING RULES SUBPANEL -->
+        <div class="panel" data-cheat-panel="booking">
+          <div class="card">
+            <h2>Booking Rules</h2>
+            <p class="muted">
+              Required fields for <span class="pill-label">readyToBook</span> and per-trade/service booking behavior.
+            </p>
+          </div>
+        </div>
+
+        <!-- COMPANY CONTACTS SUBPANEL -->
+        <div class="panel" data-cheat-panel="company-contacts">
+          <div class="card">
+            <h2>Company Contacts</h2>
+            <p class="muted">Who receives SMS, email, or escalation notifications per company and scenario.</p>
+          </div>
+        </div>
+
+        <!-- LINKS SUBPANEL -->
+        <div class="panel" data-cheat-panel="links">
+          <div class="card">
+            <h2>Links</h2>
+            <p class="muted">Payment links, self-booking URLs, docs, and external resources used by the agent.</p>
+          </div>
+        </div>
+
+        <!-- CALCULATOR SUBPANEL -->
+        <div class="panel" data-cheat-panel="calculator">
+          <div class="card">
+            <h2>Calculator</h2>
+            <p class="muted">Per-company usage, estimated AI cost, and minutes for quick plan checks.</p>
+          </div>
+        </div>
+
+        <!-- ACTIVE INSTRUCTIONS PREVIEW SUBPANEL -->
+        <div class="panel" data-cheat-panel="cheat-active-instructions">
+          <div class="card">
+            <h2>Active Instructions Preview</h2>
+            <p class="muted">Inline view of the same data served by <span class="pill-label">/api/active-instructions</span>.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- AICORE: CALL FLOW -->
+      <div class="panel" data-aicore-panel="call-flow">
+        <div class="card">
+          <h2>Call Flow Designer</h2>
+          <p class="muted">Visual overview of Twilio → Frontline-Intel → LLM-0 → 3-Tier → Booking pipeline.</p>
+        </div>
+      </div>
+
+      <!-- AICORE: KNOWLEDGEBASE -->
+      <div class="panel" data-aicore-panel="knowledgebase">
+        <div class="card">
+          <h2>AiCore Knowledgebase</h2>
+          <p class="muted">Company Q&A, Trade Q&A, scenario content backing Tier-1/Tier-2 answers.</p>
+        </div>
+      </div>
+
+      <!-- AICORE: SIMULATOR -->
+      <div class="panel" data-aicore-panel="simulator">
+        <div class="card">
+          <h2>Simulator</h2>
+          <p class="muted">Test calls virtually: run utterances through Frontline-Intel, LLM-0, and 3-Tier without Twilio.</p>
+        </div>
+      </div>
+
+      <!-- AICORE: KNOWLEDGE INGESTION -->
+      <div class="panel" data-aicore-panel="knowledge-ingestion">
+        <div class="card">
+          <h2>Knowledge Ingestion</h2>
+          <p class="muted">Upload docs, paste FAQs, and approve generated Q&A + triage cards.</p>
+        </div>
+      </div>
+
+      <!-- AICORE: VERSIONING -->
+      <div class="panel" data-aicore-panel="versioning">
+        <div class="card">
+          <h2>Versioning / Releases</h2>
+          <p class="muted">Draft vs production configs, release notes, and rollback history per company.</p>
+        </div>
+      </div>
+
+      <!-- AICORE: OBSERVABILITY -->
+      <div class="panel" data-aicore-panel="observability">
+        <div class="card">
+          <h2>Observability (AI Metrics)</h2>
+          <p class="muted">Latency, tier usage %, failure rates, and alert thresholds for the AI brain.</p>
+        </div>
+      </div>
+
+      <!-- AICORE: LLM LEARNING CONSOLE -->
+      <div class="panel" data-aicore-panel="llm-learning">
+        <div class="card">
+          <h2>LLM Learning Console</h2>
+          <p class="muted">Suggestions from Tier-3 calls to upgrade into Tier-1 rules or KB entries.</p>
+        </div>
+      </div>
+
+      <!-- AICORE: ACTIVE INSTRUCTIONS X-RAY -->
+      <div class="panel" data-aicore-panel="active-instructions">
+        <div class="card">
+          <h2>Active Instructions X-Ray</h2>
+          <p class="muted">
+            Full JSON view of what LLM-0 sees for a given <span class="pill-label">companyId</span> and optional
+            <span class="pill-label">callId</span>.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= MAIN PANEL: COMPANYOPS ================= -->
+    <section class="panel" data-main-panel="companyops">
+      <div class="card">
+        <h2>CompanyOps Console</h2>
+        <p class="muted">Internal CRM: contacts, locations, appointments, call history, usage per company.</p>
+      </div>
+      <!-- You'll likely add a second-level nav here:
+           Contacts | Locations | Appointments | Call Logs | Usage / Billing | Company Notifications | Settings -->
+    </section>
+
+    <!-- ================= MAIN PANEL: BILLING ================= -->
+    <section class="panel" data-main-panel="billing">
+      <div class="card">
+        <h2>Billing & Usage</h2>
+        <p class="muted">Plan, minutes, AI cost per company, and invoice exports.</p>
+      </div>
+    </section>
+
+    <!-- ================= MAIN PANEL: INTELLIGENCE / OBS ================= -->
+    <section class="panel" data-main-panel="intelligence">
+      <div class="card">
+        <h2>Intelligence / Observability</h2>
+        <p class="muted">Cross-company metrics: tier usage mix, error trends, latency, success rates.</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // MAIN TABS (CONTROL PLANE SECTIONS)
+    const mainTabButtons = document.querySelectorAll('.js-main-tab');
+    const mainPanels = document.querySelectorAll('[data-main-panel]');
+    const aicoreSubnav = document.getElementById('aicore-subnav');
+
+    mainTabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        mainTabButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        const target = btn.getAttribute('data-main-target');
+        mainPanels.forEach(panel => {
+          panel.classList.toggle('active', panel.getAttribute('data-main-panel') === target);
+        });
+
+        // Show/hide AiCore subnav based on active main panel
+        if (target === 'aicore') {
+          aicoreSubnav.style.display = 'flex';
+          // also show cheat subnav if cheat-sheet + AiCore active
+          toggleCheatSubnav();
+        } else {
+          aicoreSubnav.style.display = 'none';
+          document.getElementById('cheat-subnav').style.display = 'none';
+        }
+      });
+    });
+
+    // AICORE TABS
+    const aicoreTabButtons = document.querySelectorAll('.js-aicore-tab');
+    const aicorePanels = document.querySelectorAll('[data-aicore-panel]');
+    const cheatSubnav = document.getElementById('cheat-subnav');
+
+    function toggleCheatSubnav() {
+      const activeAicoreTab = document.querySelector('.js-aicore-tab.active');
+      const isCheat = activeAicoreTab && activeAicoreTab.getAttribute('data-aicore-target') === 'cheat-sheet';
+      cheatSubnav.style.display = isCheat ? 'flex' : 'none';
+    }
+
+    aicoreTabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        aicoreTabButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        const target = btn.getAttribute('data-aicore-target');
+        aicorePanels.forEach(panel => {
+          panel.classList.toggle('active', panel.getAttribute('data-aicore-panel') === target);
+        });
+
+        toggleCheatSubnav();
+      });
+    });
+
+    // CHEAT SHEET SUB-TABS
+    const cheatTabButtons = document.querySelectorAll('.js-cheat-tab');
+    const cheatPanels = document.querySelectorAll('[data-cheat-panel]');
+
+    cheatTabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        cheatTabButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        const target = btn.getAttribute('data-cheat-target');
+        cheatPanels.forEach(panel => {
+          panel.classList.toggle('active', panel.getAttribute('data-cheat-panel') === target);
+        });
+      });
+    });
+  </script>
+</body>
+</html>
+
