@@ -4,9 +4,13 @@
   <meta charset="UTF-8" />
   <title>ClientsVia Control Plane</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <style>
     body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f3f4f6; color: #111827; }
     .top-nav { display: flex; align-items: center; padding: 10px 18px; background: #111827; color: #e5e7eb; }
+    .btn-back { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid #374151; border-radius: 6px; background: transparent; color: #e5e7eb; font-size: 13px; cursor: pointer; margin-right: 16px; transition: all 0.2s; }
+    .btn-back:hover { background: #374151; border-color: #4b5563; color: #fff; }
+    .btn-back i { font-size: 12px; }
     .top-nav-title { font-weight: 700; margin-right: 24px; }
     .top-nav-tabs { display: flex; gap: 10px; flex-wrap: wrap; }
     .tab-btn { padding: 6px 12px; border-radius: 999px; border: none; cursor: pointer; font-size: 13px; line-height: 1; background: transparent; color: #9ca3af; }
@@ -56,6 +60,10 @@
 <body>
   <!-- MAIN NAV: CONTROL PLANE SECTIONS -->
   <header class="top-nav">
+    <button id="back-to-profile-btn" class="btn-back" onclick="goBackToProfile()" title="Back to Company Profile">
+      <i class="fas fa-arrow-left"></i>
+      <span>Back to Profile</span>
+    </button>
     <div class="top-nav-title">ClientsVia Control Plane</div>
     <nav class="top-nav-tabs">
       <!-- MAIN TABS -->
@@ -581,6 +589,18 @@
     let currentCompanyId = new URLSearchParams(window.location.search).get('companyId') || null;
     const API_BASE = '';
     let authToken = localStorage.getItem('adminToken');
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // NAVIGATION: BACK TO COMPANY PROFILE
+    // ═══════════════════════════════════════════════════════════════════════
+    function goBackToProfile() {
+      if (currentCompanyId) {
+        window.location.href = `/company-profile.html?id=${currentCompanyId}`;
+      } else {
+        alert('No company ID found. Navigating to directory.');
+        window.location.href = '/admin-directory.html';
+      }
+    }
 
     async function apiCall(endpoint, method = 'GET', body = null) {
       const options = {
