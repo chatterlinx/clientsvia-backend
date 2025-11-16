@@ -263,12 +263,89 @@
 
     <!-- ================= MAIN PANEL: COMPANYOPS ================= -->
     <section class="panel" data-main-panel="companyops">
-      <div class="card">
-        <h2>CompanyOps Console</h2>
-        <p class="muted">Internal CRM: contacts, locations, appointments, call history, usage per company.</p>
+      <!-- COMPANYOPS SECOND-LEVEL NAV -->
+      <nav class="subnav" id="companyops-subnav" style="display:none;">
+        <button class="active js-companyops-tab" data-companyops-target="contacts">Contacts</button>
+        <button class="js-companyops-tab" data-companyops-target="locations">Locations</button>
+        <button class="js-companyops-tab" data-companyops-target="appointments">Appointments</button>
+        <button class="js-companyops-tab" data-companyops-target="call-logs">Call Logs / History</button>
+        <button class="js-companyops-tab" data-companyops-target="usage-billing">Usage / Billing</button>
+        <button class="js-companyops-tab" data-companyops-target="customer-db">Customer DB</button>
+        <button class="js-companyops-tab" data-companyops-target="notifications">Notifications</button>
+        <button class="js-companyops-tab" data-companyops-target="settings">Settings</button>
+      </nav>
+
+      <!-- COMPANYOPS: CONTACTS -->
+      <div class="panel active" data-companyops-panel="contacts">
+        <div class="card">
+          <h2>Contacts <span class="badge">CompanyOps</span></h2>
+          <p class="muted">Manage customer and company contacts with roles, tags, and communication history.</p>
+          <div id="contacts-content">Loading contacts...</div>
+        </div>
       </div>
-      <!-- Second-level nav to be implemented:
-           Contacts | Locations | Appointments | Call Logs | Usage / Billing | Customer DB | Notifications | Settings -->
+
+      <!-- COMPANYOPS: LOCATIONS -->
+      <div class="panel" data-companyops-panel="locations">
+        <div class="card">
+          <h2>Locations <span class="badge">CompanyOps</span></h2>
+          <p class="muted">Service addresses with access profiles (gate codes, parking, pets, etc.).</p>
+          <div id="locations-content">Loading locations...</div>
+        </div>
+      </div>
+
+      <!-- COMPANYOPS: APPOINTMENTS -->
+      <div class="panel" data-companyops-panel="appointments">
+        <div class="card">
+          <h2>Appointments <span class="badge">CompanyOps</span></h2>
+          <p class="muted">Schedule, confirm, and manage service appointments.</p>
+          <div id="appointments-content">Loading appointments...</div>
+        </div>
+      </div>
+
+      <!-- COMPANYOPS: CALL LOGS / HISTORY -->
+      <div class="panel" data-companyops-panel="call-logs">
+        <div class="card">
+          <h2>Call Logs / History <span class="badge">CompanyOps</span></h2>
+          <p class="muted">Full call transcripts, tier usage, and outcome tracking.</p>
+          <div id="call-logs-content">Loading call history...</div>
+        </div>
+      </div>
+
+      <!-- COMPANYOPS: USAGE / BILLING -->
+      <div class="panel" data-companyops-panel="usage-billing">
+        <div class="card">
+          <h2>Usage / Billing <span class="badge">CompanyOps</span></h2>
+          <p class="muted">Minutes, AI costs, tier distribution, and billing cycle tracking.</p>
+          <div id="usage-billing-content">Loading usage data...</div>
+        </div>
+      </div>
+
+      <!-- COMPANYOPS: CUSTOMER DB -->
+      <div class="panel" data-companyops-panel="customer-db">
+        <div class="card">
+          <h2>Customer DB <span class="badge">CompanyOps</span></h2>
+          <p class="muted">360° view of customers with aggregated contacts, locations, appointments, and calls.</p>
+          <div id="customer-db-content">Loading customer database...</div>
+        </div>
+      </div>
+
+      <!-- COMPANYOPS: NOTIFICATIONS -->
+      <div class="panel" data-companyops-panel="notifications">
+        <div class="card">
+          <h2>Notifications <span class="badge">CompanyOps</span></h2>
+          <p class="muted">Configure who receives SMS/email alerts for appointments, emergencies, and after-hours calls.</p>
+          <div id="notifications-content">Loading notification settings...</div>
+        </div>
+      </div>
+
+      <!-- COMPANYOPS: SETTINGS -->
+      <div class="panel" data-companyops-panel="settings">
+        <div class="card">
+          <h2>Settings <span class="badge">CompanyOps</span></h2>
+          <p class="muted">AI agent configuration, operating hours, telephony, and risk & safety settings.</p>
+          <div id="settings-content">Loading settings...</div>
+        </div>
+      </div>
     </section>
 
     <!-- ================= MAIN PANEL: BILLING ================= -->
@@ -304,12 +381,19 @@
           panel.classList.toggle('active', panel.getAttribute('data-main-panel') === target);
         });
 
+        const companyopsSubnav = document.getElementById('companyops-subnav');
         if (target === 'aicore') {
           aicoreSubnav.style.display = 'flex';
           toggleCheatSubnav();
+          if (companyopsSubnav) companyopsSubnav.style.display = 'none';
+        } else if (target === 'companyops') {
+          aicoreSubnav.style.display = 'none';
+          document.getElementById('cheat-subnav').style.display = 'none';
+          if (companyopsSubnav) companyopsSubnav.style.display = 'flex';
         } else {
           aicoreSubnav.style.display = 'none';
           document.getElementById('cheat-subnav').style.display = 'none';
+          if (companyopsSubnav) companyopsSubnav.style.display = 'none';
         }
       });
     });
@@ -351,6 +435,22 @@
         const target = btn.getAttribute('data-cheat-target');
         cheatPanels.forEach(panel => {
           panel.classList.toggle('active', panel.getAttribute('data-cheat-panel') === target);
+        });
+      });
+    });
+
+    // COMPANYOPS TABS
+    const companyopsTabButtons = document.querySelectorAll('.js-companyops-tab');
+    const companyopsPanels = document.querySelectorAll('[data-companyops-panel]');
+
+    companyopsTabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        companyopsTabButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        const target = btn.getAttribute('data-companyops-target');
+        companyopsPanels.forEach(panel => {
+          panel.classList.toggle('active', panel.getAttribute('data-companyops-panel') === target);
         });
       });
     });
