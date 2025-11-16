@@ -18,7 +18,7 @@
 8. Knowledge Ingestion
 9. Versioning / Releases
 10. Observability (AI Metrics)
-11. LLM Learning Console
+11. **LLM-0 Cortex-Intel** ⚠️ (NOT "LLM Learning Console" - that's for 3-Tier)
 12. Active Instructions X-Ray
 
 ### **🧾 Cheat Sheet – 11 SUB-TABS**
@@ -642,6 +642,76 @@ GET /api/company/:id/calculator-stats
 - Guardrails excerpt
 
 **Each block has "Open in editor" link to correct AiCore tab.**
+
+---
+
+## 14) LLM-0 CORTEX-INTEL (AiCore Tab)
+
+⚠️ **CRITICAL: NOT to be confused with "LLM Learning Console" (3-Tier system)**
+
+**Purpose:** LLM-0 Orchestrator intelligence and performance insights
+
+**What it shows:**
+- LLM-0 decision patterns per company
+- Conversation quality metrics
+- Guardrail trigger frequency
+- Common intent flows
+- Optimization recommendations
+- Cost per LLM-0 call
+- Average response latency
+- Booking conversion rates
+
+**Data Sources:**
+- `CallTrace` (LLM-0 decisions logged in context)
+- `UsageRecord` (LLM turns and costs)
+- `orchestrationEngine.js` logs
+
+**Key Metrics:**
+1. **Decision Distribution:**
+   - ask_question: 45%
+   - answer_with_knowledge: 30%
+   - collect_booking_info: 15%
+   - escalate_to_human: 8%
+   - no_match: 2%
+
+2. **Guardrail Triggers:**
+   - Price language detected: 12 times
+   - Unverified capability claim: 3 times
+   - Medical/legal topic: 0 times
+
+3. **Booking Performance:**
+   - Calls reaching readyToBook: 78%
+   - Average turns to booking: 4.2
+   - Booking abandonment rate: 12%
+
+4. **Knowledge Search Usage:**
+   - Calls triggering 3-Tier search: 42%
+   - Average confidence score: 0.82
+   - Tier distribution in knowledge searches
+
+5. **Optimization Suggestions:**
+   - "32% of 'ask_question' actions repeat similar questions → Add FAQ to KB"
+   - "18% of escalations happen after guardrail trigger → Review guardrail rules"
+   - "Booking abandonment spike at 'time window' step → Simplify time selection"
+
+**UI Components:**
+- Time range selector (24h, 7d, 30d)
+- Company selector
+- Decision flow sankey diagram
+- Guardrail events timeline
+- Booking funnel chart
+- Top optimization cards
+
+**Backend APIs:**
+```
+GET /api/company/:id/llm0-cortex/overview
+GET /api/company/:id/llm0-cortex/decision-patterns
+GET /api/company/:id/llm0-cortex/guardrail-events
+GET /api/company/:id/llm0-cortex/booking-funnel
+GET /api/company/:id/llm0-cortex/optimization-suggestions
+```
+
+**This tab is for ADMIN/DEVELOPER to optimize LLM-0 performance, NOT for learning from Tier-3 calls (that's the other LLM Learning Console).**
 
 ---
 
