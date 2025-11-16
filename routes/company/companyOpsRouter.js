@@ -21,7 +21,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 
-// Import sub-routers
+// Import sub-routers - CompanyOps Console
 const contactsRouter = require('./companyOpsContacts');
 const locationsRouter = require('./companyOpsLocations');
 const appointmentsRouter = require('./companyOpsAppointments');
@@ -31,7 +31,13 @@ const customersRouter = require('./companyOpsCustomers');
 const notificationSettingsRouter = require('./companyOpsNotificationSettings');
 const settingsRouter = require('./companyOpsSettings');
 
-// Mount sub-routers
+// Import sub-routers - Cheat Sheet Config
+const bookingRulesRouter = require('./cheatSheetBookingRules');
+const roleContactsRouter = require('./cheatSheetRoleContacts');
+const linksRouter = require('./cheatSheetLinks');
+const calculatorRouter = require('./cheatSheetCalculator');
+
+// Mount CompanyOps Console sub-routers
 router.use('/contacts', contactsRouter);
 router.use('/locations', locationsRouter);
 router.use('/appointments', appointmentsRouter);
@@ -40,6 +46,12 @@ router.use('/usage', usageRouter);
 router.use('/customers', customersRouter);
 router.use('/notification-settings', notificationSettingsRouter);
 router.use('/settings', settingsRouter);
+
+// Mount Cheat Sheet Config sub-routers
+router.use('/booking-rules', bookingRulesRouter);
+router.use('/role-contacts', roleContactsRouter);
+router.use('/links', linksRouter);
+router.use('/calculator-stats', calculatorRouter);
 
 module.exports = router;
 
