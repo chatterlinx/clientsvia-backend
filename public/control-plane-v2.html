@@ -50,7 +50,7 @@
     <button class="js-aicore-tab" data-aicore-target="knowledge-ingestion">Knowledge Ingestion</button>
     <button class="js-aicore-tab" data-aicore-target="versioning">Versioning / Releases</button>
     <button class="js-aicore-tab" data-aicore-target="observability">Observability (AI Metrics)</button>
-    <button class="js-aicore-tab" data-aicore-target="llm0-cortex">LLM-0 Cortex-Intel</button>
+    <button class="js-aicore-tab" data-aicore-target="llm-cortex-intel">LLM-0 Cortex-Intel</button>
     <button class="js-aicore-tab" data-aicore-target="active-instructions">Active Instructions X-Ray</button>
   </nav>
 
@@ -79,7 +79,6 @@
           <h2>Variables <span class="badge">AiCore Config</span></h2>
           <p class="muted">Company-level and trade-level variables used inside templates, scenarios, and orchestrator prompts.</p>
         </div>
-        <!-- hook your existing variables table / editor here -->
       </div>
 
       <!-- AICORE: TEMPLATES -->
@@ -240,10 +239,13 @@
       </div>
 
       <!-- AICORE: LLM-0 CORTEX-INTEL -->
-      <div class="panel" data-aicore-panel="llm0-cortex">
+      <div class="panel" data-aicore-panel="llm-cortex-intel">
         <div class="card">
           <h2>LLM-0 Cortex-Intel</h2>
-          <p class="muted">LLM-0 Orchestrator insights: decision patterns, conversation quality, guardrail triggers, and optimization recommendations.</p>
+          <p class="muted">
+            Intelligence tuning console for the orchestrator model. Shows misroutes, misclassifications, Tier-3 overuse,
+            and proposed corrections. Admin-approved changes only – no auto-training.
+          </p>
         </div>
       </div>
 
@@ -265,8 +267,8 @@
         <h2>CompanyOps Console</h2>
         <p class="muted">Internal CRM: contacts, locations, appointments, call history, usage per company.</p>
       </div>
-      <!-- You'll likely add a second-level nav here:
-           Contacts | Locations | Appointments | Call Logs | Usage / Billing | Company Notifications | Settings -->
+      <!-- Second-level nav to be implemented:
+           Contacts | Locations | Appointments | Call Logs | Usage / Billing | Customer DB | Notifications | Settings -->
     </section>
 
     <!-- ================= MAIN PANEL: BILLING ================= -->
@@ -302,10 +304,8 @@
           panel.classList.toggle('active', panel.getAttribute('data-main-panel') === target);
         });
 
-        // Show/hide AiCore subnav based on active main panel
         if (target === 'aicore') {
           aicoreSubnav.style.display = 'flex';
-          // also show cheat subnav if cheat-sheet + AiCore active
           toggleCheatSubnav();
         } else {
           aicoreSubnav.style.display = 'none';
@@ -357,4 +357,3 @@
   </script>
 </body>
 </html>
-
