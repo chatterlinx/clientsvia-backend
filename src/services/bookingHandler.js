@@ -273,6 +273,37 @@ async function handleBookingFromContext(ctx) {
       hasServiceInfo: !!extracted.issueSummary
     });
     
+    // PRODUCTION HARDENING: Check for existing appointment (idempotency)
+    // If this call already has an appointment, return it instead of creating duplicate
+    if (ctx.appointmentId) {
+      logger.info(`[BOOKING HANDLER] Appointment already exists for this call`, {
+        callId: ctx.callId,
+        appointmentId: ctx.appointmentId
+      });
+      
+      const existingAppointment = await Appointment.findById(ctx.appointmentId);
+      if (existingAppointment) {
+        logger.info(`[BOOKING HANDLER] Returning existing appointment`, {
+          appointmentId: existingAppointment._id,
+          scheduledDate: existingAppointment.scheduledDate
+        });
+        return existingAppointment;
+      }
+    }
+    
+    // Also check by callId (in case context is out of sync)
+    const existingByCallId = await Appointment.findOne({ companyId, callId: ctx.callId });
+    if (existingByCallId) {
+      logger.info(`[BOOKING HANDLER] Found existing appointment by callId`, {
+        callId: ctx.callId,
+        appointmentId: existingByCallId._id
+      });
+      
+      // Update context with appointment ID
+      ctx.appointmentId = existingByCallId._id.toString();
+      return existingByCallId;
+    }
+    
     // Validate minimum required data
     if (!extracted.callerName && !extracted.callerPhone) {
       logger.warn(`[BOOKING HANDLER] Missing contact info`, { callId: ctx.callId });

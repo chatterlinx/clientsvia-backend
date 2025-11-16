@@ -83,6 +83,33 @@ async function initializeCall({ callId, companyId, callerPhone, trade, configVer
 }
 
 /**
+ * Check if utterance is a micro-confirmation that doesn't need LLM processing
+ * @param {string} text - Caller's text
+ * @returns {boolean} True if micro-utterance
+ */
+function isMicroUtterance(text) {
+  const trimmed = text.trim().toLowerCase();
+  
+  // Short length check
+  if (trimmed.length >= 8) {
+    return false;
+  }
+  
+  // Whitelist of simple confirmations/acknowledgments
+  const microUtterances = [
+    'yes', 'yeah', 'yep', 'yup', 'yea',
+    'no', 'nope', 'nah',
+    'ok', 'okay', 'k',
+    'sure', 'fine',
+    'right', 'correct',
+    'uh huh', 'mm hmm', 'mhmm',
+    'that works', 'sounds good'
+  ];
+  
+  return microUtterances.includes(trimmed);
+}
+
+/**
  * Handle a caller utterance and get response to speak back
  * @param {Object} params
  * @param {string} params.callId - Twilio Call SID
@@ -98,6 +125,30 @@ async function handleCallerUtterance({ callId, companyId, text, sttMetadata = {}
       companyId,
       textLength: text.length
     });
+    
+    // PRODUCTION HARDENING: Filter micro-utterances to save LLM cost/latency
+    if (isMicroUtterance(text)) {
+      logger.debug('[TWILIO INTEGRATION] Micro-utterance detected, skipping LLM', {
+        callId,
+        text
+      });
+      
+      // Load context to see current state
+      const ctx = await loadContext(callId);
+      
+      // Simple acknowledgment without LLM call
+      return {
+        nextPrompt: "Got it. What else can I help you with?",
+        decision: {
+          action: 'no_op',
+          nextPrompt: "Got it. What else can I help you with?",
+          updatedIntent: null,
+          updates: { extracted: {}, flags: {} },
+          knowledgeQuery: null,
+          debugNotes: 'micro_utterance_filtered'
+        }
+      };
+    }
     
     // Process through orchestration engine
     const result = await processCallerTurn({

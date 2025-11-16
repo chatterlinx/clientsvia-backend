@@ -72,17 +72,57 @@ async function processCallerTurn({ companyId, callId, speaker, text, rawSttMetad
     // ========================================================================
     const config = await loadCompanyRuntimeConfig({ companyId });
     
+    // PRODUCTION HARDENING: Check feature flag
+    // If orchestrator is not enabled for this company, return no-op
+    const orchestratorEnabled = config.intelligence?.orchestratorEnabled !== false; // Default true
+    
+    if (!orchestratorEnabled) {
+      logger.info('[ORCHESTRATOR] Orchestrator disabled for company, returning no-op', {
+        companyId,
+        callId
+      });
+      
+      return {
+        nextPrompt: null, // Signal to caller to use legacy system
+        decision: {
+          action: 'no_op',
+          nextPrompt: null,
+          updatedIntent: null,
+          updates: { extracted: {}, flags: {} },
+          knowledgeQuery: null,
+          debugNotes: 'orchestrator_disabled_for_company'
+        }
+      };
+    }
+    
     // Update trade in context if not set
     if (!ctx.trade && config.trade) {
       ctx.trade = config.trade;
     }
     
-    logger.debug('[ORCHESTRATOR] Config loaded', {
-      companyName: config.name,
-      trade: config.trade,
-      scenariosTotal: config.scenarios.length,
-      variablesCount: config.variables.definitions.length
-    });
+    // PRODUCTION HARDENING: Check debug flag for detailed logging
+    const debugOrchestrator = config.intelligence?.debugOrchestrator === true; // Default false
+    
+    if (debugOrchestrator) {
+      logger.debug('[ORCHESTRATOR] Config loaded (DEBUG MODE)', {
+        companyName: config.name,
+        trade: config.trade,
+        scenariosTotal: config.scenarios.length,
+        variablesCount: config.variables.definitions.length,
+        orchestratorEnabled,
+        configSample: {
+          variables: Object.keys(config.variables?.values || {}).slice(0, 5),
+          fillerWordsCount: config.fillerWords?.active?.length || 0,
+          scenarioCategories: Object.keys(config.scenarios?.byCategory || {})
+        }
+      });
+    } else {
+      logger.info('[ORCHESTRATOR] Config loaded', {
+        companyId,
+        companyName: config.name,
+        orchestratorEnabled
+      });
+    }
     
     // ========================================================================
     // STEP 3: Strip filler words
@@ -90,11 +130,15 @@ async function processCallerTurn({ companyId, callId, speaker, text, rawSttMetad
     const rawText = text;
     const cleanedText = stripFillerWords(text, config.fillerWords.active);
     
-    logger.debug('[ORCHESTRATOR] Filler words stripped', {
-      originalLength: rawText.length,
-      cleanedLength: cleanedText.length,
-      fillerWordsCount: config.fillerWords.active.length
-    });
+    if (debugOrchestrator) {
+      logger.debug('[ORCHESTRATOR] Filler words stripped (DEBUG)', {
+        originalLength: rawText.length,
+        cleanedLength: cleanedText.length,
+        fillerWordsCount: config.fillerWords.active.length,
+        rawText: rawText.substring(0, 100),
+        cleanedText: cleanedText.substring(0, 100)
+      });
+    }
     
     // Append to transcript
     ctx.transcript.push({
@@ -140,6 +184,10 @@ async function processCallerTurn({ companyId, callId, speaker, text, rawSttMetad
     
     try {
       decision = await callLLM0(llmPrompt, { companyId, callId });
+      
+      // PRODUCTION HARDENING: Post-filter for guardrail violations
+      decision = enforceGuardrails(decision, config);
+      
     } catch (llmError) {
       logger.error('[ORCHESTRATOR] LLM call failed, using fallback', {
         error: llmError.message,
@@ -262,14 +310,34 @@ async function processCallerTurn({ companyId, callId, speaker, text, rawSttMetad
     // ========================================================================
     const duration = Date.now() - startTime;
     
-    logger.info('[ORCHESTRATOR] Turn complete', {
-      callId,
-      companyId,
-      action: decision.action,
-      intent: ctx.currentIntent,
-      durationMs: duration,
-      finalPromptLength: finalPrompt.length
-    });
+    if (debugOrchestrator) {
+      logger.info('[ORCHESTRATOR] Turn complete (DEBUG)', {
+        callId,
+        companyId,
+        action: decision.action,
+        intent: ctx.currentIntent,
+        readyToBook: ctx.readyToBook,
+        appointmentId: ctx.appointmentId || null,
+        durationMs: duration,
+        finalPromptLength: finalPrompt.length,
+        extractedSample: {
+          hasContact: !!(ctx.extracted?.contact?.name || ctx.extracted?.contact?.phone),
+          hasLocation: !!ctx.extracted?.location?.addressLine1,
+          hasProblem: !!ctx.extracted?.problem?.summary
+        },
+        tierTraceLength: ctx.tierTrace.length
+      });
+    } else {
+      // Compact logging for production
+      logger.info('[ORCHESTRATOR] Turn complete', {
+        callId,
+        companyId,
+        action: decision.action,
+        intent: ctx.currentIntent,
+        readyToBook: ctx.readyToBook,
+        appointmentId: ctx.appointmentId || null
+      });
+    }
     
     return {
       nextPrompt: finalPrompt,
@@ -392,6 +460,15 @@ INSTRUCTIONS:
 - Extract data from what caller said into updates.extracted structure
 - Use variables from company config when mentioning company info
 
+⚠️ CRITICAL GUARDRAILS - YOU MUST NOT:
+- Invent or quote prices, fees, or costs unless explicitly provided in company variables
+- Promise specific arrival times or dispatch windows not in config
+- Claim 24/7 service, emergency response, or capabilities not in config
+- Answer legal, medical, or financial questions (use escalate_to_human instead)
+- Make up company policies, warranties, or guarantees
+- If caller asks about pricing and no price variables exist → action: "escalate_to_human"
+- If caller asks about availability/hours and not in config → action: "escalate_to_human"
+
 COMPANY VARIABLES (use these in responses):
 ${Object.entries(config.variables.values || {}).slice(0, 10).map(([k, v]) => `- ${k}: ${v}`).join('\n')}
 
@@ -482,23 +559,47 @@ async function callLLM0(prompt, metadata) {
       decision = JSON.parse(jsonString);
       
     } catch (parseError) {
+      // PRODUCTION HARDENING: Secure logging of parse errors
       logger.error('[ORCHESTRATOR] Failed to parse LLM-0 response as JSON', {
         error: parseError.message,
-        rawResponse: rawResponse.substring(0, 500)
+        rawResponse: rawResponse.substring(0, 500),
+        companyId: metadata.companyId,
+        callId: metadata.callId
+      });
+      
+      // Log full response to secure channel for debugging (truncated to avoid massive logs)
+      logger.error('[ORCHESTRATOR] Full LLM response (parse failure)', {
+        companyId: metadata.companyId,
+        callId: metadata.callId,
+        fullResponse: rawResponse.substring(0, 2000), // Max 2000 chars
+        responseLength: rawResponse.length
       });
       
       throw new Error('LLM response not valid JSON');
     }
     
-    // Validate decision structure
+    // Validate decision structure - required fields
     if (!decision.action || !decision.nextPrompt) {
       logger.error('[ORCHESTRATOR] LLM-0 response missing required fields', {
         hasAction: !!decision.action,
         hasNextPrompt: !!decision.nextPrompt,
-        decision
+        companyId: metadata.companyId,
+        callId: metadata.callId,
+        decision: JSON.stringify(decision).substring(0, 500)
       });
       
       throw new Error('LLM response missing required fields');
+    }
+    
+    // PRODUCTION HARDENING: Normalize missing optional fields to prevent undefined errors
+    if (!decision.updates) {
+      decision.updates = { extracted: {}, flags: {} };
+    }
+    if (!decision.updates.extracted) {
+      decision.updates.extracted = {};
+    }
+    if (!decision.updates.flags) {
+      decision.updates.flags = { readyToBook: false, needsKnowledgeSearch: false, wantsHuman: false };
     }
     
     return decision;
@@ -513,6 +614,95 @@ async function callLLM0(prompt, metadata) {
     
     throw error;
   }
+}
+
+/**
+ * Enforce guardrails on LLM decision to prevent price/promise violations
+ * PRODUCTION HARDENING: Prevent LLM from making up prices, promises, or capabilities
+ * @param {import('../core/orchestrationTypes').OrchestratorDecision} decision
+ * @param {Object} config - Company runtime config
+ * @returns {import('../core/orchestrationTypes').OrchestratorDecision}
+ */
+function enforceGuardrails(decision, config) {
+  // Skip guardrails for safe actions
+  const safeActions = ['close_call', 'escalate_to_human', 'no_op', 'small_talk', 'clarify_intent'];
+  if (safeActions.includes(decision.action)) {
+    return decision;
+  }
+  
+  const prompt = decision.nextPrompt || '';
+  const promptLower = prompt.toLowerCase();
+  
+  // Check for price/cost language
+  const priceKeywords = ['$', 'dollar', 'cost', 'price', 'fee', 'charge', 'estimate', 'quote'];
+  const hasPriceLanguage = priceKeywords.some(keyword => promptLower.includes(keyword));
+  
+  // Check if company has price-related variables
+  const hasPriceVariables = config.variables && config.variables.values && 
+    Object.keys(config.variables.values).some(key => 
+      key.toLowerCase().includes('price') || 
+      key.toLowerCase().includes('cost') || 
+      key.toLowerCase().includes('fee') ||
+      key.toLowerCase().includes('rate')
+    );
+  
+  // GUARDRAIL: If LLM used price language without price variables → escalate
+  if (hasPriceLanguage && !hasPriceVariables && decision.action === 'answer_with_knowledge') {
+    logger.warn('[ORCHESTRATOR] Guardrail triggered: price language without config', {
+      originalAction: decision.action,
+      originalPrompt: prompt.substring(0, 100)
+    });
+    
+    return {
+      action: 'escalate_to_human',
+      nextPrompt: "For exact pricing and service details, let me connect you with someone from the office who can go over all the options with you.",
+      updatedIntent: decision.updatedIntent,
+      updates: decision.updates || { extracted: {}, flags: { readyToBook: false, needsKnowledgeSearch: false, wantsHuman: true } },
+      knowledgeQuery: null,
+      debugNotes: `guardrail_price_violation: ${decision.debugNotes || ''}`
+    };
+  }
+  
+  // Check for time/availability promises
+  const timePromiseKeywords = ['we\'ll be there', 'arrive', 'technician will come', 'dispatch', 'on our way'];
+  const hasTimePromise = timePromiseKeywords.some(keyword => promptLower.includes(keyword));
+  
+  // GUARDRAIL: Don't let LLM promise specific times without booking
+  if (hasTimePromise && decision.action !== 'initiate_booking') {
+    logger.warn('[ORCHESTRATOR] Guardrail triggered: time promise without booking', {
+      originalAction: decision.action,
+      originalPrompt: prompt.substring(0, 100)
+    });
+    
+    // Soften the language
+    decision.nextPrompt = decision.nextPrompt.replace(/we'?ll be there/gi, 'we can schedule')
+      .replace(/technician will come/gi, 'technician can come')
+      .replace(/arrive/gi, 'schedule');
+  }
+  
+  // Check for capability claims (24/7, emergency, etc.)
+  const capabilityKeywords = ['24/7', 'twenty four seven', 'always available', 'emergency service'];
+  const hasCapabilityClaim = capabilityKeywords.some(keyword => promptLower.includes(keyword));
+  
+  // GUARDRAIL: Don't claim capabilities not in config
+  if (hasCapabilityClaim) {
+    const hasEmergencyConfig = config.intelligence?.enabled && 
+                               config.readiness?.canGoLive;
+    
+    if (!hasEmergencyConfig) {
+      logger.warn('[ORCHESTRATOR] Guardrail triggered: capability claim without config', {
+        originalAction: decision.action,
+        originalPrompt: prompt.substring(0, 100)
+      });
+      
+      // Remove capability claims
+      decision.nextPrompt = decision.nextPrompt
+        .replace(/24\/7|twenty four seven|always available/gi, 'during business hours')
+        .replace(/emergency service/gi, 'service');
+    }
+  }
+  
+  return decision;
 }
 
 /**
