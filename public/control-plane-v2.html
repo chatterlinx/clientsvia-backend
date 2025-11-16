@@ -5,6 +5,7 @@
   <title>ClientsVia Control Plane</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f3f4f6; color: #111827; }
     .top-nav { display: flex; align-items: center; padding: 10px 18px; background: #111827; color: #e5e7eb; }
@@ -115,6 +116,14 @@
         <div class="card">
           <h2>Variables <span class="badge">AiCore Config</span></h2>
           <p class="muted">Company-level and trade-level variables used inside templates, scenarios, and orchestrator prompts.</p>
+          
+          <!-- Variables Manager Container (uses same API as company-profile.html) -->
+          <div id="variables-container" style="margin-top: 20px;">
+            <div style="text-align: center; padding: 40px; color: #6b7280;">
+              <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
+              <p>Loading variables...</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -602,6 +611,42 @@
       }
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // VARIABLES MANAGER INITIALIZATION
+    // ═══════════════════════════════════════════════════════════════════════
+    let variablesManager = null;
+
+    // Mock parent object for VariablesManager (matches company-profile.html interface)
+    const variablesParent = {
+      companyId: currentCompanyId,
+      showSuccess: (message) => {
+        console.log('✅ SUCCESS:', message);
+        alert('✅ ' + message);
+      },
+      showError: (message) => {
+        console.error('❌ ERROR:', message);
+        alert('❌ ' + message);
+      },
+      showInfo: (message, duration) => {
+        console.log('ℹ️ INFO:', message);
+        alert('ℹ️ ' + message);
+      }
+    };
+
+    // Initialize VariablesManager when Variables tab is clicked
+    function initVariablesManager() {
+      if (!currentCompanyId) {
+        alert('No companyId provided in URL. Add ?companyId=... to the URL.');
+        return;
+      }
+
+      if (!variablesManager) {
+        console.log('🎯 [CONTROL PLANE] Initializing VariablesManager for companyId:', currentCompanyId);
+        variablesManager = new window.VariablesManager(variablesParent);
+        variablesManager.load();
+      }
+    }
+
     async function apiCall(endpoint, method = 'GET', body = null) {
       const options = {
         method,
@@ -679,6 +724,12 @@
         });
 
         toggleCheatSubnav();
+
+        // Initialize VariablesManager when Variables tab is clicked
+        if (target === 'variables' && !window.variablesManagerLoaded) {
+          initVariablesManager();
+          window.variablesManagerLoaded = true;
+        }
       });
     });
 
@@ -1259,6 +1310,33 @@
         }
       });
     });
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // AUTO-INITIALIZE VARIABLES ON PAGE LOAD (IT'S THE DEFAULT TAB)
+    // ═══════════════════════════════════════════════════════════════════════
+    window.addEventListener('DOMContentLoaded', () => {
+      // Check if Variables tab is active on page load
+      const activeMainTab = document.querySelector('.js-main-tab.active');
+      const activeAicoreTab = document.querySelector('.js-aicore-tab.active');
+      
+      if (activeMainTab && activeMainTab.getAttribute('data-main-target') === 'aicore' &&
+          activeAicoreTab && activeAicoreTab.getAttribute('data-aicore-target') === 'variables') {
+        console.log('🎯 [CONTROL PLANE] Variables tab is active on page load - auto-initializing');
+        
+        // Wait for VariablesManager to be loaded
+        setTimeout(() => {
+          if (window.VariablesManager && !window.variablesManagerLoaded) {
+            initVariablesManager();
+            window.variablesManagerLoaded = true;
+          }
+        }, 100);
+      }
+    });
   </script>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- VARIABLES MANAGER (SAME AS COMPANY-PROFILE.HTML) -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <script src="/js/ai-agent-settings/VariablesManager.js"></script>
 </body>
 </html>
