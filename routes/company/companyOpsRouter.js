@@ -25,24 +25,21 @@ const router = express.Router({ mergeParams: true });
 const contactsRouter = require('./companyOpsContacts');
 const locationsRouter = require('./companyOpsLocations');
 const appointmentsRouter = require('./companyOpsAppointments');
-// TODO: Add these routers as they're built:
-// const callTracesRouter = require('./companyOpsCallTraces');
-// const usageRouter = require('./companyOpsUsage');
-// const customersRouter = require('./companyOpsCustomers');
-// const notificationSettingsRouter = require('./companyOpsNotificationSettings');
-// const settingsRouter = require('./companyOpsSettings');
+const callTracesRouter = require('./companyOpsCallTraces');
+const usageRouter = require('./companyOpsUsage');
+const customersRouter = require('./companyOpsCustomers');
+const notificationSettingsRouter = require('./companyOpsNotificationSettings');
+const settingsRouter = require('./companyOpsSettings');
 
 // Mount sub-routers
 router.use('/contacts', contactsRouter);
 router.use('/locations', locationsRouter);
 router.use('/appointments', appointmentsRouter);
-
-// TODO: Mount these as they're built:
-// router.use('/call-traces', callTracesRouter);
-// router.use('/usage', usageRouter);
-// router.use('/customers', customersRouter);
-// router.use('/notification-settings', notificationSettingsRouter);
-// router.use('/settings', settingsRouter);
+router.use('/call-traces', callTracesRouter);
+router.use('/usage', usageRouter);
+router.use('/customers', customersRouter);
+router.use('/notification-settings', notificationSettingsRouter);
+router.use('/settings', settingsRouter);
 
 module.exports = router;
 
