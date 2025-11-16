@@ -5,6 +5,47 @@
 
 ---
 
+## 📑 **OFFICIAL TAB MAP**
+
+### **🧠 AiCore Control Center – 12 TOP-LEVEL TABS**
+1. Variables
+2. AiCore Templates
+3. AiCore Live Scenarios
+4. Cheat Sheet (with 11 sub-tabs)
+5. Call Flow
+6. AiCore Knowledgebase
+7. Simulator
+8. Knowledge Ingestion
+9. Versioning / Releases
+10. Observability (AI Metrics)
+11. LLM Learning Console
+12. Active Instructions X-Ray
+
+### **🧾 Cheat Sheet – 11 SUB-TABS**
+1. Triage
+2. Frontline-Intel
+3. Transfer Calls
+4. Edge Cases
+5. Behavior
+6. Guardrails
+7. Booking Rules
+8. Company Contacts
+9. Links
+10. Calculator
+11. Active Instructions Preview
+
+### **🏢 CompanyOps Console – 8 TABS**
+1. Contacts
+2. Locations
+3. Appointments
+4. Call Logs / History
+5. Usage / Billing
+6. Customer DB
+7. Notifications
+8. Settings
+
+---
+
 ## 🎯 **CORE PRINCIPLES**
 
 ### **CRITICAL: Everything UI-Editable**
