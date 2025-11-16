@@ -773,15 +773,472 @@
       }
     }
 
+    async function editContact(id) {
+      // TODO: Fetch contact by ID and populate modal
+      openContactModal(id);
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
-    // STUBS FOR OTHER TABS (To be implemented)
+    // COMPANYOPS: LOCATIONS
     // ═══════════════════════════════════════════════════════════════════════
-    function openLocationModal() { alert('Location modal - to be implemented'); }
-    function openAppointmentModal() { alert('Appointment modal - to be implemented'); }
-    function exportUsage() { alert('Export usage - to be implemented'); }
-    function searchCustomers() { alert('Search customers - to be implemented'); }
+    async function loadLocations() {
+      if (!currentCompanyId) return;
+      const tbody = document.getElementById('locations-table-body');
+      tbody.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;">Loading...</td></tr>';
+      
+      try {
+        const data = await apiCall(`/api/company/${currentCompanyId}/locations`);
+        if (!data.data || data.data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;">No locations found.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.data.map(l => `
+          <tr>
+            <td>${l.addressLine1}</td>
+            <td>${l.city}, ${l.state}</td>
+            <td>${l.contactName || 'N/A'}</td>
+            <td>${l.hasAccessProfile ? '<span class="pill-label">✓ Has Profile</span>' : '<span class="muted">None</span>'}</td>
+            <td>
+              <button class="btn btn-secondary" style="font-size:11px;padding:4px 8px;" onclick="viewLocation('${l._id}')">View</button>
+              <button class="btn btn-danger" style="font-size:11px;padding:4px 8px;" onclick="deleteLocation('${l._id}')">Delete</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error('Failed to load locations:', err);
+        tbody.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;color:#dc2626;">Error loading locations.</td></tr>';
+      }
+    }
+
+    function openLocationModal() { alert('Location CRUD modal - will be implemented next'); }
+    function viewLocation(id) { alert('View location detail: ' + id); }
+    async function deleteLocation(id) {
+      if (!confirm('Delete this location?')) return;
+      try {
+        await apiCall(`/api/company/${currentCompanyId}/locations/${id}`, 'DELETE');
+        loadLocations();
+      } catch (err) {
+        alert('Failed to delete location: ' + err.message);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // COMPANYOPS: APPOINTMENTS
+    // ═══════════════════════════════════════════════════════════════════════
+    async function loadAppointments() {
+      if (!currentCompanyId) return;
+      const tbody = document.getElementById('appointments-table-body');
+      tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;">Loading...</td></tr>';
+      
+      try {
+        const data = await apiCall(`/api/company/${currentCompanyId}/appointments`);
+        if (!data.data || data.data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;">No appointments found.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.data.map(a => `
+          <tr>
+            <td>${a.scheduledDate}</td>
+            <td>${a.timeWindow}</td>
+            <td>${a.serviceType}</td>
+            <td>${a.contactName || 'N/A'}</td>
+            <td>${a.locationLabel || 'N/A'}</td>
+            <td><span class="status-badge status-${a.status}">${a.status}</span></td>
+            <td>
+              <button class="btn btn-secondary" style="font-size:11px;padding:4px 8px;" onclick="changeAppointmentStatus('${a._id}')">Change Status</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error('Failed to load appointments:', err);
+        tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;color:#dc2626;">Error loading appointments.</td></tr>';
+      }
+    }
+
+    function openAppointmentModal() { alert('Appointment CRUD modal - will be implemented next'); }
+    function changeAppointmentStatus(id) { alert('Change status for: ' + id); }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // COMPANYOPS: CALL LOGS
+    // ═══════════════════════════════════════════════════════════════════════
+    async function loadCallLogs() {
+      if (!currentCompanyId) return;
+      const tbody = document.getElementById('call-logs-table-body');
+      tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;">Loading...</td></tr>';
+      
+      try {
+        const data = await apiCall(`/api/company/${currentCompanyId}/call-traces`);
+        if (!data.data || data.data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;">No call history found.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.data.map(c => `
+          <tr>
+            <td>${new Date(c.startedAt).toLocaleString()}</td>
+            <td>${c.phoneNumber}</td>
+            <td>${c.intentSummary || 'Unknown'}</td>
+            <td>${c.durationSeconds}s</td>
+            <td><span class="pill-label">T1: ${c.tierUsage.tier1}</span> <span class="pill-label">T2: ${c.tierUsage.tier2}</span> <span class="pill-label">T3: ${c.tierUsage.tier3}</span></td>
+            <td>${c.finalOutcome}</td>
+            <td>
+              <button class="btn btn-secondary" style="font-size:11px;padding:4px 8px;" onclick="viewCallDetail('${c.callId}')">View</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error('Failed to load call logs:', err);
+        tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;color:#dc2626;">Error loading call history.</td></tr>';
+      }
+    }
+
+    function viewCallDetail(callId) { alert('View call detail: ' + callId + ' (transcript, context, etc.)'); }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // COMPANYOPS: USAGE / BILLING
+    // ═══════════════════════════════════════════════════════════════════════
+    async function loadUsageBilling() {
+      if (!currentCompanyId) return;
+      const container = document.getElementById('usage-billing-content');
+      container.innerHTML = '<p class="muted">Loading...</p>';
+      
+      try {
+        const usage = await apiCall(`/api/company/${currentCompanyId}/usage`);
+        const billing = await apiCall(`/api/company/${currentCompanyId}/billing-state`);
+        
+        container.innerHTML = `
+          <h3 style="margin-top:16px;">Usage Summary</h3>
+          <table style="margin-top:8px;">
+            <tr><th>Total Calls</th><td>${usage.data.totalCalls}</td></tr>
+            <tr><th>Billed Minutes</th><td>${usage.data.totalBilledMinutes}</td></tr>
+            <tr><th>LLM Turns</th><td>${usage.data.totalLlmTurns}</td></tr>
+            <tr><th>Estimated AI Cost</th><td>$${usage.data.totalEstimatedAiCost.toFixed(2)}</td></tr>
+            <tr><th>Avg Cost/Call</th><td>$${usage.data.avgCostPerCall.toFixed(2)}</td></tr>
+          </table>
+          
+          <h3 style="margin-top:24px;">Tier Distribution</h3>
+          <p class="muted">Tier 1: ${usage.data.tierDistribution.tier1.toFixed(1)}% | Tier 2: ${usage.data.tierDistribution.tier2.toFixed(1)}% | Tier 3: ${usage.data.tierDistribution.tier3.toFixed(1)}%</p>
+          
+          <h3 style="margin-top:24px;">Billing State</h3>
+          ${billing.data ? `
+            <table style="margin-top:8px;">
+              <tr><th>Billing Cycle</th><td>${new Date(billing.data.billingCycleStart).toLocaleDateString()} - ${new Date(billing.data.billingCycleEnd).toLocaleDateString()}</td></tr>
+              <tr><th>Minutes Included</th><td>${billing.data.minutesIncluded}</td></tr>
+              <tr><th>Minutes Used</th><td>${billing.data.minutesUsed}</td></tr>
+              <tr><th>Overage Minutes</th><td>${billing.data.overageMinutes}</td></tr>
+              <tr><th>Estimated AI Cost</th><td>$${billing.data.estimatedAiCost.toFixed(2)}</td></tr>
+            </table>
+          ` : '<p class="muted">No billing state found.</p>'}
+        `;
+      } catch (err) {
+        console.error('Failed to load usage/billing:', err);
+        container.innerHTML = '<p class="muted" style="color:#dc2626;">Error loading usage data.</p>';
+      }
+    }
+
+    async function exportUsage() {
+      if (!currentCompanyId) return;
+      try {
+        window.open(`/api/company/${currentCompanyId}/usage/export`, '_blank');
+      } catch (err) {
+        alert('Failed to export usage: ' + err.message);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // COMPANYOPS: CUSTOMER DB
+    // ═══════════════════════════════════════════════════════════════════════
+    async function searchCustomers() {
+      if (!currentCompanyId) return;
+      const search = document.getElementById('customer-search')?.value || '';
+      const tbody = document.getElementById('customer-db-table-body');
+      tbody.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center;">Loading...</td></tr>';
+      
+      try {
+        const data = await apiCall(`/api/company/${currentCompanyId}/customers?search=${encodeURIComponent(search)}`);
+        if (!data.data || data.data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center;">No customers found.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.data.map(c => `
+          <tr>
+            <td>${c.customerName || 'N/A'}</td>
+            <td>${c.primaryPhone || 'N/A'}</td>
+            <td>${c.totalLocations || 0}</td>
+            <td>${c.totalAppointments || 0}</td>
+            <td>${c.lastCallAt ? new Date(c.lastCallAt).toLocaleDateString() : 'Never'}</td>
+            <td>
+              <button class="btn btn-secondary" style="font-size:11px;padding:4px 8px;" onclick="viewCustomerProfile('${c._id}')">Profile</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error('Failed to search customers:', err);
+        tbody.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center;color:#dc2626;">Error loading customers.</td></tr>';
+      }
+    }
+
+    function viewCustomerProfile(contactId) { alert('View customer profile: ' + contactId); }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // COMPANYOPS: NOTIFICATIONS
+    // ═══════════════════════════════════════════════════════════════════════
+    async function loadNotifications() {
+      if (!currentCompanyId) return;
+      const container = document.getElementById('notifications-content');
+      container.innerHTML = '<p class="muted">Loading...</p>';
+      
+      try {
+        const data = await apiCall(`/api/company/${currentCompanyId}/notification-settings`);
+        container.innerHTML = `
+          <p class="muted">Notification settings loaded. UI for event matrix to be implemented.</p>
+          <pre style="background:#f3f4f6;padding:12px;border-radius:6px;font-size:12px;overflow:auto;">${JSON.stringify(data.data, null, 2)}</pre>
+        `;
+      } catch (err) {
+        console.error('Failed to load notifications:', err);
+        container.innerHTML = '<p class="muted" style="color:#dc2626;">Error loading notification settings.</p>';
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // COMPANYOPS: SETTINGS
+    // ═══════════════════════════════════════════════════════════════════════
+    async function loadSettings() {
+      if (!currentCompanyId) return;
+      const container = document.getElementById('settings-content');
+      container.innerHTML = '<p class="muted">Loading...</p>';
+      
+      try {
+        const data = await apiCall(`/api/company/${currentCompanyId}/settings`);
+        container.innerHTML = `
+          <h3>AI Agent Logic</h3>
+          <pre style="background:#f3f4f6;padding:12px;border-radius:6px;font-size:12px;overflow:auto;">${JSON.stringify(data.data.aiAgentLogic, null, 2)}</pre>
+          
+          <h3 style="margin-top:24px;">Operating Hours</h3>
+          <pre style="background:#f3f4f6;padding:12px;border-radius:6px;font-size:12px;overflow:auto;">${JSON.stringify(data.data.operatingHours, null, 2)}</pre>
+          
+          <p class="muted" style="margin-top:16px;">Full settings UI (4 sections with forms) to be implemented.</p>
+        `;
+      } catch (err) {
+        console.error('Failed to load settings:', err);
+        container.innerHTML = '<p class="muted" style="color:#dc2626;">Error loading settings.</p>';
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CHEAT SHEET: BOOKING RULES
+    // ═══════════════════════════════════════════════════════════════════════
+    async function loadBookingRules() {
+      if (!currentCompanyId) return;
+      const container = document.getElementById('booking-rules-content');
+      container.innerHTML = '<p class="muted">Loading...</p>';
+      
+      try {
+        const data = await apiCall(`/api/company/${currentCompanyId}/booking-rules`);
+        container.innerHTML = `
+          <p class="muted">Booking rules loaded. Trade/service selector UI to be implemented.</p>
+          <pre style="background:#f3f4f6;padding:12px;border-radius:6px;font-size:12px;overflow:auto;max-height:400px;">${JSON.stringify(data.data, null, 2)}</pre>
+        `;
+      } catch (err) {
+        console.error('Failed to load booking rules:', err);
+        container.innerHTML = '<p class="muted" style="color:#dc2626;">Error loading booking rules.</p>';
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CHEAT SHEET: COMPANY CONTACTS (ROLE MAPPING)
+    // ═══════════════════════════════════════════════════════════════════════
+    async function loadRoleContacts() {
+      if (!currentCompanyId) return;
+      const tbody = document.getElementById('role-contacts-table-body');
+      tbody.innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center;">Loading...</td></tr>';
+      
+      try {
+        const data = await apiCall(`/api/company/${currentCompanyId}/role-contacts`);
+        const roles = Object.keys(data.data || {});
+        
+        if (roles.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center;">No role mappings configured.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = roles.map(role => `
+          <tr>
+            <td>${role}</td>
+            <td>Contact for ${role} role</td>
+            <td>${data.data[role] || '<span class="muted">Not assigned</span>'}</td>
+            <td>
+              <button class="btn btn-secondary" style="font-size:11px;padding:4px 8px;" onclick="assignRoleContact('${role}')">Assign</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error('Failed to load role contacts:', err);
+        tbody.innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center;color:#dc2626;">Error loading role contacts.</td></tr>';
+      }
+    }
+
+    function assignRoleContact(role) { alert('Assign contact to role: ' + role); }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CHEAT SHEET: LINKS
+    // ═══════════════════════════════════════════════════════════════════════
+    async function loadLinks() {
+      if (!currentCompanyId) return;
+      const tbody = document.getElementById('links-table-body');
+      tbody.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;">Loading...</td></tr>';
+      
+      try {
+        const data = await apiCall(`/api/company/${currentCompanyId}/links`);
+        if (!data.data || data.data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;">No links configured.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.data.map(link => `
+          <tr>
+            <td>${link.label}</td>
+            <td>${link.type}</td>
+            <td><a href="${link.url}" target="_blank" style="color:#4f46e5;">${link.url}</a></td>
+            <td>${link.visibleToAgent ? '✓' : '✗'}</td>
+            <td>
+              <button class="btn btn-secondary" style="font-size:11px;padding:4px 8px;" onclick="editLink('${link._id}')">Edit</button>
+              <button class="btn btn-danger" style="font-size:11px;padding:4px 8px;" onclick="deleteLink('${link._id}')">Delete</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error('Failed to load links:', err);
+        tbody.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;color:#dc2626;">Error loading links.</td></tr>';
+      }
+    }
+
     function openAddLinkModal() { alert('Add link modal - to be implemented'); }
-    function editContact(id) { alert('Edit contact - to be implemented'); }
+    function editLink(id) { alert('Edit link: ' + id); }
+    async function deleteLink(id) {
+      if (!confirm('Delete this link?')) return;
+      try {
+        await apiCall(`/api/company/${currentCompanyId}/links/${id}`, 'DELETE');
+        loadLinks();
+      } catch (err) {
+        alert('Failed to delete link: ' + err.message);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CHEAT SHEET: CALCULATOR
+    // ═══════════════════════════════════════════════════════════════════════
+    async function loadCalculator() {
+      if (!currentCompanyId) return;
+      const container = document.getElementById('calculator-content');
+      container.innerHTML = '<p class="muted">Loading...</p>';
+      
+      try {
+        const data = await apiCall(`/api/company/${currentCompanyId}/calculator-stats`);
+        const d = data.data;
+        
+        container.innerHTML = `
+          <h3>Usage Statistics (Last ${d.lastDays} Days)</h3>
+          <table style="margin-top:8px;">
+            <tr><th>Total Calls</th><td>${d.totalCalls}</td></tr>
+            <tr><th>Total LLM Turns</th><td>${d.totalLlmTurns}</td></tr>
+            <tr><th>Estimated AI Cost</th><td>$${d.totalEstimatedAiCost.toFixed(2)}</td></tr>
+            <tr><th>Avg Cost/Call</th><td>$${d.avgCostPerCall.toFixed(2)}</td></tr>
+          </table>
+          
+          <h3 style="margin-top:24px;">Tier Distribution</h3>
+          <p class="muted">Tier 1: ${d.tierDistribution.tier1.toFixed(1)}% | Tier 2: ${d.tierDistribution.tier2.toFixed(1)}% | Tier 3: ${d.tierDistribution.tier3.toFixed(1)}%</p>
+          
+          ${d.warnings && d.warnings.length > 0 ? `
+            <h3 style="margin-top:24px;color:#dc2626;">⚠️ Warnings</h3>
+            <ul>${d.warnings.map(w => `<li class="muted" style="color:#dc2626;">${w}</li>`).join('')}</ul>
+          ` : ''}
+        `;
+      } catch (err) {
+        console.error('Failed to load calculator:', err);
+        container.innerHTML = '<p class="muted" style="color:#dc2626;">Error loading calculator stats.</p>';
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CHEAT SHEET: ACTIVE INSTRUCTIONS PREVIEW
+    // ═══════════════════════════════════════════════════════════════════════
+    async function loadActiveInstructions() {
+      if (!currentCompanyId) return;
+      const container = document.getElementById('active-instructions-preview-content');
+      container.innerHTML = '<p class="muted">Loading...</p>';
+      
+      try {
+        const data = await apiCall(`/api/active-instructions?companyId=${currentCompanyId}`);
+        container.innerHTML = `
+          <button class="btn btn-secondary" onclick="copyToClipboard(JSON.stringify(${JSON.stringify(data)}, null, 2))" style="margin-bottom:12px;">Copy JSON</button>
+          <pre style="background:#111827;color:#e5e7eb;padding:16px;border-radius:8px;font-size:11px;overflow:auto;max-height:600px;">${JSON.stringify(data, null, 2)}</pre>
+        `;
+      } catch (err) {
+        console.error('Failed to load active instructions:', err);
+        container.innerHTML = '<p class="muted" style="color:#dc2626;">Error loading active instructions.</p>';
+      }
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => alert('Copied to clipboard!'));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // AUTO-LOAD DATA WHEN TABS ARE CLICKED
+    // ═══════════════════════════════════════════════════════════════════════
+    companyopsTabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.getAttribute('data-companyops-target');
+        if (target === 'locations' && !window.locationsLoaded) {
+          loadLocations();
+          window.locationsLoaded = true;
+        } else if (target === 'appointments' && !window.appointmentsLoaded) {
+          loadAppointments();
+          window.appointmentsLoaded = true;
+        } else if (target === 'call-logs' && !window.callLogsLoaded) {
+          loadCallLogs();
+          window.callLogsLoaded = true;
+        } else if (target === 'usage-billing' && !window.usageBillingLoaded) {
+          loadUsageBilling();
+          window.usageBillingLoaded = true;
+        } else if (target === 'customer-db' && !window.customerDbLoaded) {
+          searchCustomers();
+          window.customerDbLoaded = true;
+        } else if (target === 'notifications' && !window.notificationsLoaded) {
+          loadNotifications();
+          window.notificationsLoaded = true;
+        } else if (target === 'settings' && !window.settingsLoaded) {
+          loadSettings();
+          window.settingsLoaded = true;
+        }
+      });
+    });
+
+    cheatTabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.getAttribute('data-cheat-target');
+        if (target === 'booking' && !window.bookingRulesLoaded) {
+          loadBookingRules();
+          window.bookingRulesLoaded = true;
+        } else if (target === 'company-contacts' && !window.roleContactsLoaded) {
+          loadRoleContacts();
+          window.roleContactsLoaded = true;
+        } else if (target === 'links' && !window.linksLoaded) {
+          loadLinks();
+          window.linksLoaded = true;
+        } else if (target === 'calculator' && !window.calculatorLoaded) {
+          loadCalculator();
+          window.calculatorLoaded = true;
+        } else if (target === 'cheat-active-instructions' && !window.activeInstructionsLoaded) {
+          loadActiveInstructions();
+          window.activeInstructionsLoaded = true;
+        }
+      });
+    });
   </script>
 </body>
 </html>
