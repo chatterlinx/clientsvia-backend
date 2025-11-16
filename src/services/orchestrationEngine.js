@@ -1,22 +1,37 @@
 /**
  * ============================================================================
- * ORCHESTRATION ENGINE - LLM-0 MASTER ORCHESTRATOR
+ * ORCHESTRATION ENGINE - LLM-0 MASTER ORCHESTRATOR + 3-TIER BRIDGE
  * ============================================================================
  * 
  * PURPOSE: Main entry point for processing every caller utterance
- * ARCHITECTURE: Wires together Frontline-Intel, LLM-0, BookingHandler
+ * ARCHITECTURE: Wires together Frontline-Intel, LLM-0, 3-Tier KB, BookingHandler
  * USED BY: Twilio voice routes (real-time call processing)
  * 
  * FLOW:
  * 1. Load FrontlineContext from Redis
  * 2. Load runtime config from CompanyConfigLoader
  * 3. Strip filler words
- * 4. Run Frontline-Intel (cheap classifier)
+ * 4. Run Frontline-Intel (cheap intent classifier)
  * 5. Build LLM-0 prompt
  * 6. Call LLM for orchestrator decision
+ * 6.5. [THE BRIDGE] If knowledge needed → IntelligentRouter (3-Tier) → Reshape naturally
  * 7. Apply decision to context
  * 8. Trigger booking if ready
  * 9. Return nextPrompt for TTS
+ * 
+ * PHASE 4 ADDITION (Nov 16, 2025):
+ * STEP 6.5 connects LLM-0 to the existing 3-Tier knowledge engine:
+ * - Detects when factual knowledge is needed
+ * - Routes query through IntelligentRouter (Tier 1 → Tier 2 → Tier 3)
+ * - Receives accurate facts from company knowledge base
+ * - Reshapes facts into natural conversational response
+ * - Logs tier usage for cost tracking and self-improvement
+ * 
+ * This makes the agent:
+ * ✅ Naturally conversational (LLM-0 personality)
+ * ✅ Factually accurate (3-Tier verified knowledge)
+ * ✅ Cost efficient (95%+ answered FREE via Tier 1/2)
+ * ✅ Self-improving (Tier 3 → Learning Console → Admin → Tier 1)
  * 
  * ============================================================================
  */
@@ -27,6 +42,9 @@ const { loadCompanyRuntimeConfig } = require('./companyConfigLoader');
 const { classifyFrontlineIntent } = require('./frontlineIntelService');
 const frontlineContextService = require('./frontlineContextService');
 const bookingHandler = require('./bookingHandler');
+const IntelligentRouter = require('../../services/IntelligentRouter');
+const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+const V2Company = require('../../models/v2Company');
 
 /**
  * Process a single caller turn and return what to say next
@@ -203,8 +221,218 @@ async function processCallerTurn({ companyId, callId, speaker, text, rawSttMetad
       action: decision.action,
       updatedIntent: decision.updatedIntent,
       readyToBook: decision.updates?.flags?.readyToBook,
+      needsKnowledgeSearch: decision.updates?.flags?.needsKnowledgeSearch,
       debugNotes: decision.debugNotes
     });
+    
+    // ========================================================================
+    // STEP 6.5: 3-TIER KNOWLEDGE INTEGRATION (THE BRIDGE)
+    // ========================================================================
+    // If LLM-0 determined that factual knowledge is needed, route through
+    // the existing 3-Tier system (IntelligentRouter) to get accurate facts
+    // from company knowledge base, then have LLM-0 deliver them naturally.
+    // 
+    // This is the critical bridge that connects:
+    // - Frontline-Intel (intent classification)
+    // - LLM-0 (orchestration + natural delivery)
+    // - 3-Tier (accurate knowledge: Tier 1 FREE → Tier 2 CHEAP → Tier 3 LLM)
+    // ========================================================================
+    
+    const needsKnowledge = decision.updates?.flags?.needsKnowledgeSearch === true ||
+                           decision.action === 'answer_with_knowledge';
+    
+    if (needsKnowledge && decision.knowledgeQuery) {
+      try {
+        logger.info('[ORCHESTRATOR] Knowledge search requested via 3-Tier', {
+          callId,
+          companyId,
+          queryType: decision.knowledgeQuery.type,
+          queryText: decision.knowledgeQuery.queryText?.substring(0, 100)
+        });
+        
+        // Load full company document (needed for IntelligentRouter)
+        const company = await V2Company.findById(companyId).lean();
+        
+        if (!company) {
+          throw new Error('Company not found');
+        }
+        
+        // Get template reference from company configuration
+        const templateId = company.configuration?.clonedFrom || 
+                          company.aiAgentSettings?.templateId;
+        
+        if (!templateId) {
+          logger.warn('[ORCHESTRATOR] No template found for company, skipping 3-Tier', {
+            companyId,
+            callId
+          });
+        } else {
+          // Load template (contains scenarios for matching)
+          const template = await GlobalInstantResponseTemplate.findById(templateId).lean();
+          
+          if (!template) {
+            logger.warn('[ORCHESTRATOR] Template not found, skipping 3-Tier', {
+              companyId,
+              templateId,
+              callId
+            });
+          } else {
+            // Initialize 3-Tier IntelligentRouter
+            const router = new IntelligentRouter();
+            
+            // Route through 3-Tier system (Tier 1 → Tier 2 → Tier 3)
+            const knowledgeResult = await router.route({
+              callerInput: decision.knowledgeQuery.queryText || cleanedText,
+              template,
+              company,
+              callId,
+              context: {
+                intent: decision.updatedIntent || ctx.currentIntent,
+                frontlineIntel: intel,
+                extractedContext: ctx.extracted,
+                conversationHistory: ctx.transcript.slice(-3) // Last 3 turns for context
+              }
+            });
+            
+            logger.info('[ORCHESTRATOR] 3-Tier knowledge result', {
+              callId,
+              tier: knowledgeResult.tier,
+              confidence: knowledgeResult.confidence?.toFixed(3),
+              hasScenario: !!knowledgeResult.scenario,
+              cost: knowledgeResult.cost?.total || 0
+            });
+            
+            // Log tier usage in context trace
+            ctx.tierTrace.push({
+              tier: knowledgeResult.tier || 0,
+              timestamp: Date.now(),
+              action: 'knowledge_search',
+              intent: ctx.currentIntent,
+              confidence: knowledgeResult.confidence || 0,
+              sourceId: knowledgeResult.scenario?.scenarioId || 'unknown',
+              reasoning: JSON.stringify({
+                tier: knowledgeResult.tier,
+                confidence: knowledgeResult.confidence,
+                matched: knowledgeResult.scenario?.name || 'no_match',
+                cost: knowledgeResult.cost?.total || 0
+              }).slice(0, 500)
+            });
+            
+            // If 3-Tier found solid factual knowledge, use it
+            if (knowledgeResult.scenario && knowledgeResult.confidence >= 0.5) {
+              // Extract factual content from scenario
+              const factualKnowledge = knowledgeResult.scenario.responseText || 
+                                      knowledgeResult.responseText || 
+                                      '';
+              
+              // CRITICAL: Have LLM-0 reshape facts into natural conversational response
+              // This maintains the "lively" personality while ensuring accuracy
+              if (factualKnowledge) {
+                logger.info('[ORCHESTRATOR] Reshaping 3-Tier facts into natural response', {
+                  callId,
+                  tier: knowledgeResult.tier,
+                  factLength: factualKnowledge.length
+                });
+                
+                // Build enhanced prompt for LLM-0 to reshape facts naturally
+                const reshapeSystemPrompt = `You are reshaping factual knowledge into a natural, conversational response.
+
+CRITICAL RULES:
+- Use the EXACT facts provided (do not change technical details)
+- Deliver them in a warm, natural, human tone
+- Keep the caller's emotional context in mind
+- Move towards the appropriate next action (booking, clarification, etc.)
+- NEVER add facts not in the source material
+
+FACTUAL KNOWLEDGE FROM KB (Tier ${knowledgeResult.tier}):
+${factualKnowledge}
+
+CALLER CONTEXT:
+- Intent: ${ctx.currentIntent}
+- Recent transcript: ${ctx.transcript.slice(-2).map(t => `${t.role}: ${t.text}`).join('\n')}
+
+YOUR TASK:
+Reshape these facts into a natural response that:
+1. Acknowledges the caller's concern
+2. Delivers the factual knowledge conversationally
+3. Offers appropriate next action
+
+Respond ONLY with the natural dialogue (no JSON, no meta-commentary).`;
+
+                try {
+                  const reshapeResponse = await openaiClient.chat.completions.create({
+                    model: 'gpt-4o-mini',
+                    temperature: 0.7, // Slightly higher for natural delivery
+                    max_tokens: 300,
+                    messages: [
+                      { role: 'system', content: reshapeSystemPrompt },
+                      { role: 'user', content: decision.knowledgeQuery.queryText || cleanedText }
+                    ]
+                  });
+                  
+                  const naturalResponse = reshapeResponse.choices?.[0]?.message?.content?.trim();
+                  
+                  if (naturalResponse) {
+                    // Use the naturally reshaped response
+                    decision.nextPrompt = naturalResponse;
+                    decision.action = 'answer_with_knowledge';
+                    decision.knowledgeTier = knowledgeResult.tier;
+                    decision.knowledgeConfidence = knowledgeResult.confidence;
+                    
+                    logger.info('[ORCHESTRATOR] Natural response created from 3-Tier facts', {
+                      callId,
+                      tier: knowledgeResult.tier,
+                      responseLength: naturalResponse.length
+                    });
+                  }
+                  
+                } catch (reshapeError) {
+                  logger.error('[ORCHESTRATOR] Failed to reshape facts naturally, using direct response', {
+                    error: reshapeError.message,
+                    callId
+                  });
+                  
+                  // Fallback: use scenario response directly (less natural but still accurate)
+                  decision.nextPrompt = factualKnowledge;
+                  decision.action = 'answer_with_knowledge';
+                  decision.knowledgeTier = knowledgeResult.tier;
+                  decision.knowledgeConfidence = knowledgeResult.confidence;
+                }
+              }
+            } else {
+              // No solid knowledge found in 3-Tier
+              logger.warn('[ORCHESTRATOR] 3-Tier found no confident answer', {
+                callId,
+                companyId,
+                highestConfidence: knowledgeResult.confidence?.toFixed(3) || 0
+              });
+              
+              // Keep original LLM-0 decision (might escalate to human or clarify)
+              if (decision.action === 'answer_with_knowledge') {
+                // Change to clarify since we don't have solid knowledge
+                decision.action = 'clarify_intent';
+                decision.nextPrompt = decision.nextPrompt || 
+                  "I want to make sure I give you accurate information. Could you tell me a bit more about what's happening?";
+              }
+            }
+          }
+        }
+        
+      } catch (knowledgeError) {
+        logger.error('[ORCHESTRATOR] 3-Tier knowledge search failed', {
+          error: knowledgeError.message,
+          stack: knowledgeError.stack,
+          callId,
+          companyId
+        });
+        
+        // Graceful fallback: escalate to human or use original LLM-0 response
+        if (decision.action === 'answer_with_knowledge') {
+          decision.action = 'escalate_to_human';
+          decision.nextPrompt = "Let me connect you with someone from the office who can help you with that right away.";
+        }
+      }
+    }
     
     // ========================================================================
     // STEP 7: Apply decision to context
