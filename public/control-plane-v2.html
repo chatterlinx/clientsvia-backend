@@ -132,6 +132,14 @@
         <div class="card">
           <h2>AiCore Templates</h2>
           <p class="muted">Global and per-trade templates that define scripts, flows, and 3-Tier routing.</p>
+          
+          <!-- Templates Manager Container -->
+          <div id="aicore-templates-container" style="margin-top: 20px;">
+            <div style="text-align: center; padding: 40px; color: #6b7280;">
+              <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
+              <p>Loading templates...</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -140,13 +148,30 @@
         <div class="card">
           <h2>AiCore Live Scenarios</h2>
           <p class="muted">Active scenario cards used by the 3-Tier knowledge engine and Frontline-Intel.</p>
+          
+          <!-- Live Scenarios Manager Container -->
+          <div id="aicore-live-scenarios-container" style="margin-top: 20px;">
+            <div style="text-align: center; padding: 40px; color: #6b7280;">
+              <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
+              <p>Loading scenarios...</p>
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- AICORE: CHEAT SHEET (with sub-tabs) -->
       <div class="panel" data-aicore-panel="cheat-sheet">
+        <!-- Cheat Sheet Manager Container (handles ALL 11 sub-tabs) -->
+        <div id="cheat-sheet-container" style="margin-top: 20px;">
+          <div style="text-align: center; padding: 40px; color: #6b7280;">
+            <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
+            <p>Loading Cheat Sheet...</p>
+          </div>
+        </div>
+        
+        <!-- LEGACY SUB-PANELS (will be replaced by CheatSheetManager) -->
         <!-- TRIAGE SUBPANEL -->
-        <div class="panel active" data-cheat-panel="triage">
+        <div class="panel active" data-cheat-panel="triage" style="display:none;">
           <div class="card">
             <h2>Triage – THE BRAIN Config</h2>
             <p class="muted">Configure the Triage Engine that powers Frontline-Intel and Tier-1 / Tier-2 routing.</p>
@@ -282,6 +307,14 @@
         <div class="card">
           <h2>Call Flow Designer</h2>
           <p class="muted">Visual overview of Twilio → Frontline-Intel → LLM-0 → 3-Tier → Booking pipeline.</p>
+          
+          <!-- Call Flow Manager Container -->
+          <div id="call-flow-container" style="margin-top: 20px;">
+            <div style="text-align: center; padding: 40px; color: #6b7280;">
+              <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
+              <p>Loading call flow...</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -290,6 +323,14 @@
         <div class="card">
           <h2>AiCore Knowledgebase</h2>
           <p class="muted">Company Q&A, Trade Q&A, scenario content backing Tier-1/Tier-2 answers.</p>
+          
+          <!-- Knowledgebase Manager Container -->
+          <div id="aicore-knowledgebase-container" style="margin-top: 20px;">
+            <div style="text-align: center; padding: 40px; color: #6b7280;">
+              <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
+              <p>Loading knowledgebase...</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -322,6 +363,14 @@
         <div class="card">
           <h2>Observability (AI Metrics)</h2>
           <p class="muted">Latency, tier usage %, failure rates, and alert thresholds for the AI brain.</p>
+          
+          <!-- Analytics Manager Container (handles observability metrics) -->
+          <div id="analytics-container" style="margin-top: 20px;">
+            <div style="text-align: center; padding: 40px; color: #6b7280;">
+              <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
+              <p>Loading metrics...</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -612,12 +661,18 @@
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // VARIABLES MANAGER INITIALIZATION
+    // AICORE MANAGERS INITIALIZATION
     // ═══════════════════════════════════════════════════════════════════════
     let variablesManager = null;
+    let templatesManager = null;
+    let liveScenariosManager = null;
+    let cheatSheetManager = null;
+    let callFlowManager = null;
+    let knowledgebaseManager = null;
+    let analyticsManager = null;
 
-    // Mock parent object for VariablesManager (matches company-profile.html interface)
-    const variablesParent = {
+    // Mock parent object for all managers (matches company-profile.html interface)
+    const mockParent = {
       companyId: currentCompanyId,
       showSuccess: (message) => {
         console.log('✅ SUCCESS:', message);
@@ -633,17 +688,76 @@
       }
     };
 
-    // Initialize VariablesManager when Variables tab is clicked
+    // Initialize VariablesManager
     function initVariablesManager() {
       if (!currentCompanyId) {
         alert('No companyId provided in URL. Add ?companyId=... to the URL.');
         return;
       }
-
       if (!variablesManager) {
-        console.log('🎯 [CONTROL PLANE] Initializing VariablesManager for companyId:', currentCompanyId);
-        variablesManager = new window.VariablesManager(variablesParent);
+        console.log('🎯 [CONTROL PLANE] Initializing VariablesManager');
+        variablesManager = new window.VariablesManager(mockParent);
         variablesManager.load();
+      }
+    }
+
+    // Initialize AiCoreTemplatesManager
+    function initTemplatesManager() {
+      if (!currentCompanyId) return;
+      if (!templatesManager) {
+        console.log('🎯 [CONTROL PLANE] Initializing AiCoreTemplatesManager');
+        templatesManager = new window.AiCoreTemplatesManager(mockParent);
+        templatesManager.load();
+      }
+    }
+
+    // Initialize AiCoreLiveScenariosManager
+    function initLiveScenariosManager() {
+      if (!currentCompanyId) return;
+      if (!liveScenariosManager) {
+        console.log('🎯 [CONTROL PLANE] Initializing AiCoreLiveScenariosManager');
+        liveScenariosManager = new window.AiCoreLiveScenariosManager(mockParent);
+        liveScenariosManager.load();
+      }
+    }
+
+    // Initialize CheatSheetManager
+    function initCheatSheetManager() {
+      if (!currentCompanyId) return;
+      if (!cheatSheetManager) {
+        console.log('🎯 [CONTROL PLANE] Initializing CheatSheetManager');
+        cheatSheetManager = new window.CheatSheetManager(mockParent);
+        cheatSheetManager.load();
+      }
+    }
+
+    // Initialize CallFlowManager
+    function initCallFlowManager() {
+      if (!currentCompanyId) return;
+      if (!callFlowManager) {
+        console.log('🎯 [CONTROL PLANE] Initializing CallFlowManager');
+        callFlowManager = new window.CallFlowManager(mockParent);
+        callFlowManager.load();
+      }
+    }
+
+    // Initialize AiCoreKnowledgebaseManager
+    function initKnowledgebaseManager() {
+      if (!currentCompanyId) return;
+      if (!knowledgebaseManager) {
+        console.log('🎯 [CONTROL PLANE] Initializing AiCoreKnowledgebaseManager');
+        knowledgebaseManager = new window.AiCoreKnowledgebaseManager(mockParent);
+        knowledgebaseManager.load();
+      }
+    }
+
+    // Initialize AnalyticsManager (for Observability tab)
+    function initAnalyticsManager() {
+      if (!currentCompanyId) return;
+      if (!analyticsManager) {
+        console.log('🎯 [CONTROL PLANE] Initializing AnalyticsManager');
+        analyticsManager = new window.AnalyticsManager(mockParent);
+        analyticsManager.load();
       }
     }
 
@@ -725,10 +839,28 @@
 
         toggleCheatSubnav();
 
-        // Initialize VariablesManager when Variables tab is clicked
+        // Initialize managers based on which tab is clicked
         if (target === 'variables' && !window.variablesManagerLoaded) {
           initVariablesManager();
           window.variablesManagerLoaded = true;
+        } else if (target === 'templates' && !window.templatesManagerLoaded) {
+          initTemplatesManager();
+          window.templatesManagerLoaded = true;
+        } else if (target === 'live-scenarios' && !window.liveScenariosManagerLoaded) {
+          initLiveScenariosManager();
+          window.liveScenariosManagerLoaded = true;
+        } else if (target === 'cheat-sheet' && !window.cheatSheetManagerLoaded) {
+          initCheatSheetManager();
+          window.cheatSheetManagerLoaded = true;
+        } else if (target === 'call-flow' && !window.callFlowManagerLoaded) {
+          initCallFlowManager();
+          window.callFlowManagerLoaded = true;
+        } else if (target === 'knowledgebase' && !window.knowledgebaseManagerLoaded) {
+          initKnowledgebaseManager();
+          window.knowledgebaseManagerLoaded = true;
+        } else if (target === 'observability' && !window.analyticsManagerLoaded) {
+          initAnalyticsManager();
+          window.analyticsManagerLoaded = true;
         }
       });
     });
@@ -1335,8 +1467,14 @@
   </script>
 
   <!-- ═══════════════════════════════════════════════════════════════════════ -->
-  <!-- VARIABLES MANAGER (SAME AS COMPANY-PROFILE.HTML) -->
+  <!-- AICORE MANAGERS (SAME AS COMPANY-PROFILE.HTML) -->
   <!-- ═══════════════════════════════════════════════════════════════════════ -->
   <script src="/js/ai-agent-settings/VariablesManager.js"></script>
+  <script src="/js/ai-agent-settings/AiCoreTemplatesManager.js"></script>
+  <script src="/js/ai-agent-settings/AiCoreLiveScenariosManager.js"></script>
+  <script src="/js/ai-agent-settings/CheatSheetManager.js"></script>
+  <script src="/js/ai-agent-settings/CallFlowManager.js"></script>
+  <script src="/js/ai-agent-settings/AiCoreKnowledgebaseManager.js"></script>
+  <script src="/js/ai-agent-settings/AnalyticsManager.js"></script>
 </body>
 </html>
