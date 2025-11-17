@@ -13,10 +13,7 @@
 const CHEATSHEET_COMING_SOON_TABS = {
   // 'booking' removed - now fully implemented
   // 'company-contacts' removed - now fully implemented
-  'links': {
-    title: 'Links – Coming Soon',
-    description: 'This section will store company-specific URLs like financing pages, membership portals, policy documents, and service catalogs that the AI can reference during calls.'
-  },
+  // 'links' removed - now fully implemented
   'calculator': {
     title: 'Calculator – Coming Soon',
     description: 'This section will provide quick calculators (diagnostic fees, discounts, membership pricing, etc.) that the AI can use to give consistent, pre-approved numbers to customers.'
@@ -76,6 +73,14 @@ class CheatSheetManager {
       console.log('[CHEAT SHEET] 📞 Routing to Company Contacts renderer');
       this.renderCompanyContacts();
       console.log(`[CHEAT SHEET] ✅ Switched to Company Contacts tab`);
+      return;
+    }
+    
+    // Check if this is Links tab (V2-only, fully implemented)
+    if (subTab === 'links') {
+      console.log('[CHEAT SHEET] 🔗 Routing to Links renderer');
+      this.renderLinks();
+      console.log(`[CHEAT SHEET] ✅ Switched to Links tab`);
       return;
     }
     
@@ -2100,6 +2105,246 @@ class CheatSheetManager {
   }
   
   // ═══════════════════════════════════════════════════════════════════
+  // LINKS RENDERER & HANDLERS
+  // ═══════════════════════════════════════════════════════════════════
+  
+  renderLinks() {
+    console.log('[CHEAT SHEET] 🎨 renderLinks called');
+    
+    if (!this.cheatSheet) {
+      console.warn('[CHEAT SHEET] ⚠️ No cheatSheet loaded yet for Links');
+      return;
+    }
+    
+    if (!Array.isArray(this.cheatSheet.links)) {
+      this.cheatSheet.links = [];
+    }
+    
+    const container = 
+      this.rootElement || 
+      document.getElementById('cheatsheet-container') ||
+      document.getElementById('cheat-sheet-main-section') ||
+      document.getElementById('cheat-sheet-content');
+    
+    if (!container) {
+      console.warn('[CHEAT SHEET] ⚠️ Links container not found');
+      return;
+    }
+    
+    const links = this.cheatSheet.links;
+    
+    container.innerHTML = `
+      <div style="padding: 24px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+          <div>
+            <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
+              🔗 Links
+            </h3>
+            <p style="font-size: 13px; color: #6b7280; margin: 0;">
+              Financing, portals, policies, catalogs the AI can reference.
+            </p>
+          </div>
+          <button
+            id="btn-add-link"
+            style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 14px; font-weight: 600; border-radius: 8px; border: none; background: #4f46e5; color: #ffffff; cursor: pointer; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3); transition: all 0.2s;"
+            onmouseover="this.style.background='#4338ca'"
+            onmouseout="this.style.background='#4f46e5'"
+          >
+            <span style="font-size: 16px;">＋</span>
+            <span>Add Link</span>
+          </button>
+        </div>
+        
+        <div id="links-list" style="display: flex; flex-direction: column; gap: 12px;">
+          ${links.length === 0 ? `
+            <div style="border: 2px dashed #d1d5db; border-radius: 12px; padding: 32px; background: #f9fafb; text-align: center;">
+              <div style="font-size: 48px; margin-bottom: 12px;">🌐</div>
+              <p style="font-size: 14px; color: #6b7280; margin: 0;">
+                No links configured yet. Click <span style="font-weight: 600; color: #111827;">"Add Link"</span> to create your first link. These URLs can be referenced by the AI during calls.
+              </p>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+    
+    const listEl = container.querySelector('#links-list');
+    if (!listEl) {
+      console.warn('[CHEAT SHEET] ⚠️ links-list not found');
+      return;
+    }
+    
+    links.forEach((link, index) => {
+      const card = document.createElement('div');
+      card.style.cssText = 'border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.1);';
+      card.setAttribute('data-link-id', link.id || `idx-${index}`);
+      
+      const categoryColors = {
+        'financing': '#10b981',
+        'portal': '#3b82f6',
+        'policy': '#8b5cf6',
+        'catalog': '#f59e0b',
+        'other': '#6b7280'
+      };
+      const categoryColor = categoryColors[link.category] || categoryColors['other'];
+      
+      card.innerHTML = `
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+              <span style="font-size: 16px; font-weight: 600; color: #111827;">
+                ${link.label || 'Unnamed Link'}
+              </span>
+              ${link.category ? `
+                <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 999px; background: ${categoryColor}; color: #ffffff; font-weight: 600;">
+                  ${link.category}
+                </span>
+              ` : ''}
+            </div>
+            <div style="font-size: 12px; color: #6b7280; line-height: 1.6; margin-bottom: 6px;">
+              <a href="${link.url || '#'}" target="_blank" rel="noopener noreferrer" style="color: #4f46e5; text-decoration: none; word-break: break-all;">
+                ${link.url || 'No URL set'}
+              </a>
+            </div>
+            ${link.shortDescription ? `
+              <div style="font-size: 13px; color: #374151; margin-bottom: 8px;">
+                ${link.shortDescription}
+              </div>
+            ` : ''}
+            ${link.notes ? `
+              <div style="margin-top: 12px; padding: 12px; background: #f9fafb; border-left: 3px solid #4f46e5; border-radius: 4px; font-size: 12px; color: #374151; line-height: 1.5;">
+                ${link.notes}
+              </div>
+            ` : ''}
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button
+              class="btn-edit-link"
+              style="padding: 8px 14px; font-size: 13px; font-weight: 500; border-radius: 6px; border: 1px solid #d1d5db; background: #ffffff; color: #374151; cursor: pointer; transition: all 0.2s;"
+              onmouseover="this.style.background='#f3f4f6'"
+              onmouseout="this.style.background='#ffffff'"
+            >
+              Edit
+            </button>
+            <button
+              class="btn-delete-link"
+              style="padding: 8px 14px; font-size: 13px; font-weight: 500; border-radius: 6px; border: 1px solid #fecaca; background: #ffffff; color: #dc2626; cursor: pointer; transition: all 0.2s;"
+              onmouseover="this.style.background='#fef2f2'"
+              onmouseout="this.style.background='#ffffff'"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      `;
+      
+      listEl.appendChild(card);
+    });
+    
+    const addBtn = container.querySelector('#btn-add-link');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        console.log('[CHEAT SHEET] 🔘 Add Link clicked');
+        this.handleAddLink();
+      });
+    }
+    
+    listEl.querySelectorAll('.btn-edit-link').forEach((btn, index) => {
+      btn.addEventListener('click', () => {
+        const link = this.cheatSheet.links[index];
+        if (!link) return;
+        console.log('[CHEAT SHEET] 🔘 Edit Link clicked:', link);
+        this.handleEditLink(index);
+      });
+    });
+    
+    listEl.querySelectorAll('.btn-delete-link').forEach((btn, index) => {
+      btn.addEventListener('click', () => {
+        const link = this.cheatSheet.links[index];
+        if (!link) return;
+        console.log('[CHEAT SHEET] 🗑️ Delete Link clicked:', link);
+        this.handleDeleteLink(index);
+      });
+    });
+    
+    console.log('[CHEAT SHEET] ✅ Links rendered. Count:', this.cheatSheet.links.length);
+  }
+  
+  handleAddLink() {
+    if (!this.cheatSheet) return;
+    
+    if (!Array.isArray(this.cheatSheet.links)) {
+      this.cheatSheet.links = [];
+    }
+    
+    const newLink = {
+      id: `link-${Date.now()}`,
+      label: 'New Link',
+      category: 'other',
+      url: '',
+      shortDescription: '',
+      notes: ''
+    };
+    
+    this.cheatSheet.links.push(newLink);
+    
+    console.log('[CHEAT SHEET] ✅ New link added (local only)', newLink);
+    
+    this.renderLinks();
+    
+    if (typeof this.markDirty === 'function') {
+      this.markDirty();
+    }
+    this.isDirty = true;
+  }
+  
+  handleEditLink(index) {
+    if (!this.cheatSheet || !Array.isArray(this.cheatSheet.links)) return;
+    const link = this.cheatSheet.links[index];
+    if (!link) return;
+    
+    const label = window.prompt('Link title / label:', link.label || '') ?? link.label;
+    const category = window.prompt('Category (financing, portal, policy, catalog, other):', link.category || 'other') ?? link.category;
+    const url = window.prompt('URL:', link.url || '') ?? link.url;
+    const shortDescription = window.prompt('Short description:', link.shortDescription || '') ?? link.shortDescription;
+    const notes = window.prompt('Notes (when/how AI should use this link):', link.notes || '') ?? link.notes;
+    
+    link.label = label;
+    link.category = category;
+    link.url = url;
+    link.shortDescription = shortDescription;
+    link.notes = notes;
+    
+    console.log('[CHEAT SHEET] ✅ Link updated (local only)', link);
+    
+    this.renderLinks();
+    
+    if (typeof this.markDirty === 'function') {
+      this.markDirty();
+    }
+    this.isDirty = true;
+  }
+  
+  handleDeleteLink(index) {
+    if (!this.cheatSheet || !Array.isArray(this.cheatSheet.links)) return;
+    const link = this.cheatSheet.links[index];
+    if (!link) return;
+    
+    if (!window.confirm(`Delete link "${link.label}"?`)) return;
+    
+    this.cheatSheet.links.splice(index, 1);
+    
+    console.log('[CHEAT SHEET] 🗑️ Link deleted (local only)', link);
+    
+    this.renderLinks();
+    
+    if (typeof this.markDirty === 'function') {
+      this.markDirty();
+    }
+    this.isDirty = true;
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
   // COMING SOON RENDERER (V2-ONLY PLACEHOLDERS)
   // ═══════════════════════════════════════════════════════════════════
   
@@ -2317,6 +2562,9 @@ class CheatSheetManager {
     );
     console.log('[CHEAT SHEET] 💾 Company contacts count:', 
       Array.isArray(this.cheatSheet.companyContacts) ? this.cheatSheet.companyContacts.length : 0
+    );
+    console.log('[CHEAT SHEET] 💾 Links count:', 
+      Array.isArray(this.cheatSheet.links) ? this.cheatSheet.links.length : 0
     );
     
     try {
