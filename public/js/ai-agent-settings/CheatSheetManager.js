@@ -74,6 +74,7 @@ class CheatSheetManager {
     }
 
     this.attachQuickSetupToggle();
+    this.attachLayoutActionHandlers();
   }
 
   getDefaultLayoutMarkup() {
@@ -139,7 +140,7 @@ class CheatSheetManager {
                   Transfer rules route calls to specific departments or people based on intent.
                 </p>
               </div>
-              <button onclick="cheatSheetManager?.addTransferRule()" style="padding:8px 14px; border-radius:8px; border:none; background:#2563eb; color:#fff; font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">
+              <button type="button" data-cheatsheet-action="add-transfer-rule" style="padding:8px 14px; border-radius:8px; border:none; background:#2563eb; color:#fff; font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">
                 <i class="fas fa-plus"></i>Add Transfer Rule
               </button>
             </div>
@@ -170,7 +171,7 @@ class CheatSheetManager {
                   Edge cases short-circuit everything else. Use for spam, IVR detection, wrong number, etc.
                 </p>
               </div>
-              <button onclick="cheatSheetManager?.addEdgeCase()" style="padding:8px 14px; border-radius:8px; border:none; background:#f59e0b; color:#fff; font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">
+              <button type="button" data-cheatsheet-action="add-edge-case" style="padding:8px 14px; border-radius:8px; border:none; background:#f59e0b; color:#fff; font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">
                 <i class="fas fa-plus"></i>Add Edge Case
               </button>
             </div>
@@ -223,6 +224,27 @@ class CheatSheetManager {
     toggle.addEventListener('click', () => {
       open = !open;
       setState();
+    });
+  }
+
+  attachLayoutActionHandlers() {
+    if (!this.rootElement) return;
+    if (this.rootElement.dataset.actionsBound === 'true') return;
+
+    this.rootElement.dataset.actionsBound = 'true';
+
+    this.rootElement.addEventListener('click', (event) => {
+      const actionBtn = event.target.closest('[data-cheatsheet-action]');
+      if (!actionBtn) return;
+
+      const action = actionBtn.getAttribute('data-cheatsheet-action');
+      event.preventDefault();
+
+      if (action === 'add-transfer-rule') {
+        this.addTransferRule();
+      } else if (action === 'add-edge-case') {
+        this.addEdgeCase();
+      }
     });
   }
   
