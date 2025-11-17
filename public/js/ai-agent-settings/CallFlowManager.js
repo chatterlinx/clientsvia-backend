@@ -612,8 +612,14 @@ class CallFlowManager {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// GLOBAL INSTANCE
+// EXPOSE CLASS AND CREATE GLOBAL INSTANCE
 // ═══════════════════════════════════════════════════════════════════════════
+// Export class for Control Plane to create its own instance
+if (typeof window !== 'undefined') {
+    window.CallFlowManager = CallFlowManager;
+}
+
+// Create global instance for company-profile.html
 const callFlowManager = new CallFlowManager();
 console.log('[CALL FLOW] ✅ Global instance created: window.callFlowManager');
 

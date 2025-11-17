@@ -723,23 +723,23 @@
       }
     }
 
-    // Initialize CheatSheetManager
+    // Initialize CheatSheetManager (no constructor params, load() takes companyId)
     function initCheatSheetManager() {
       if (!currentCompanyId) return;
-      if (!window.cheatSheetManager) {
+      if (!window.cheatSheetManager || window.cheatSheetManager.companyId !== currentCompanyId) {
         console.log('🎯 [CONTROL PLANE] Initializing CheatSheetManager');
-        window.cheatSheetManager = new window.CheatSheetManager(mockParent);
-        window.cheatSheetManager.load();
+        window.cheatSheetManager = new window.CheatSheetManager();
+        window.cheatSheetManager.load(currentCompanyId);
       }
     }
 
-    // Initialize CallFlowManager
+    // Initialize CallFlowManager (no constructor params, load() takes companyId)
     function initCallFlowManager() {
       if (!currentCompanyId) return;
-      if (!window.callFlowManager) {
+      if (!window.callFlowManager || window.callFlowManager.companyId !== currentCompanyId) {
         console.log('🎯 [CONTROL PLANE] Initializing CallFlowManager');
-        window.callFlowManager = new window.CallFlowManager(mockParent);
-        window.callFlowManager.load();
+        window.callFlowManager = new window.CallFlowManager();
+        window.callFlowManager.load(currentCompanyId);
       }
     }
 

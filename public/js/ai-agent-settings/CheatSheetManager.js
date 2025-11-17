@@ -3155,8 +3155,14 @@ class CheatSheetManager {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// GLOBAL INSTANCE
+// EXPOSE CLASS AND CREATE GLOBAL INSTANCE
 // ═══════════════════════════════════════════════════════════════════
+// Export class for Control Plane to create its own instance
+if (typeof window !== 'undefined') {
+    window.CheatSheetManager = CheatSheetManager;
+}
+
+// Create global instance for company-profile.html
 window.cheatSheetManager = new CheatSheetManager();
 console.log('✅ CheatSheetManager loaded and available globally');
 
