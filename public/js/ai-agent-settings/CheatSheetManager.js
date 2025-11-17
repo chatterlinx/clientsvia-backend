@@ -11,10 +11,7 @@
 // COMING SOON TABS (V2-ONLY PLACEHOLDERS)
 // ---------------------------------------------
 const CHEATSHEET_COMING_SOON_TABS = {
-  'booking': {
-    title: 'Booking Rules – Coming Soon',
-    description: 'This section will let you define advanced booking logic per trade, service type, and priority. It will connect directly to BookingHandler.js so the AI can follow your exact booking rules in real time.'
-  },
+  // 'booking' removed - now fully implemented below
   'company-contacts': {
     title: 'Company Contacts – Coming Soon',
     description: 'This section will let you manage transfer targets, notification contacts, and escalation chains for this company. It will be used by Transfer Rules, emergency routing, and SMS alerts.'
@@ -66,6 +63,14 @@ class CheatSheetManager {
       console.log('[CHEAT SHEET] 📋 Routing to Coming Soon renderer for:', subTab);
       this.renderComingSoon(subTab);
       console.log(`[CHEAT SHEET] ✅ Switched to Coming Soon tab: ${subTab}`);
+      return;
+    }
+    
+    // Check if this is Booking Rules tab (V2-only, fully implemented)
+    if (subTab === 'booking') {
+      console.log('[CHEAT SHEET] 📅 Routing to Booking Rules renderer');
+      this.renderBookingRules();
+      console.log(`[CHEAT SHEET] ✅ Switched to Booking Rules tab`);
       return;
     }
     
@@ -1561,6 +1566,258 @@ class CheatSheetManager {
   }
   
   // ═══════════════════════════════════════════════════════════════════
+  // BOOKING RULES RENDERER & HANDLERS
+  // ═══════════════════════════════════════════════════════════════════
+  
+  renderBookingRules() {
+    console.log('[CHEAT SHEET] 🎨 renderBookingRules called');
+    
+    if (!this.cheatSheet) {
+      console.warn('[CHEAT SHEET] ⚠️ No cheatSheet loaded yet for Booking Rules');
+      return;
+    }
+    
+    // Ensure array exists
+    if (!Array.isArray(this.cheatSheet.bookingRules)) {
+      this.cheatSheet.bookingRules = [];
+    }
+    
+    // Find the root container
+    const container = 
+      this.rootElement || 
+      document.getElementById('cheatsheet-container') ||
+      document.getElementById('cheat-sheet-main-section') ||
+      document.getElementById('cheat-sheet-content');
+    
+    if (!container) {
+      console.warn('[CHEAT SHEET] ⚠️ Booking Rules container not found');
+      return;
+    }
+    
+    const rules = this.cheatSheet.bookingRules;
+    
+    container.innerHTML = `
+      <div style="padding: 24px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+          <div>
+            <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
+              📅 Booking Rules
+            </h3>
+            <p style="font-size: 13px; color: #6b7280; margin: 0;">
+              Define how this company books appointments by trade, service type, and priority.
+            </p>
+          </div>
+          <button
+            id="btn-add-booking-rule"
+            style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 14px; font-weight: 600; border-radius: 8px; border: none; background: #4f46e5; color: #ffffff; cursor: pointer; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3); transition: all 0.2s;"
+            onmouseover="this.style.background='#4338ca'"
+            onmouseout="this.style.background='#4f46e5'"
+          >
+            <span style="font-size: 16px;">＋</span>
+            <span>Add Booking Rule</span>
+          </button>
+        </div>
+        
+        <div id="booking-rules-list" style="display: flex; flex-direction: column; gap: 12px;">
+          ${rules.length === 0 ? `
+            <div style="border: 2px dashed #d1d5db; border-radius: 12px; padding: 32px; background: #f9fafb; text-align: center;">
+              <div style="font-size: 48px; margin-bottom: 12px;">📋</div>
+              <p style="font-size: 14px; color: #6b7280; margin: 0;">
+                No booking rules yet. Click <span style="font-weight: 600; color: #111827;">"Add Booking Rule"</span> to create your first rule.
+              </p>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+    
+    const listEl = container.querySelector('#booking-rules-list');
+    if (!listEl) {
+      console.warn('[CHEAT SHEET] ⚠️ booking-rules-list not found');
+      return;
+    }
+    
+    // Render each rule as a card
+    rules.forEach((rule, index) => {
+      const card = document.createElement('div');
+      card.style.cssText = 'border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.1);';
+      card.setAttribute('data-booking-rule-id', rule.id || `idx-${index}`);
+      
+      card.innerHTML = `
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+              <span style="font-size: 16px; font-weight: 600; color: #111827;">
+                ${rule.label || 'Untitled Booking Rule'}
+              </span>
+              <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 999px; background: #eff6ff; color: #1e40af; font-weight: 600;">
+                ${rule.trade || 'All Trades'} · ${rule.serviceType || 'All Services'}
+              </span>
+            </div>
+            <div style="font-size: 12px; color: #6b7280; line-height: 1.6;">
+              <span>Priority: <strong style="color: #111827;">${rule.priority || 'normal'}</strong></span>
+              <span style="margin: 0 8px;">•</span>
+              <span>Days: <strong style="color: #111827;">${(rule.daysOfWeek || []).join(', ') || 'All'}</strong></span>
+              <span style="margin: 0 8px;">•</span>
+              <span>Window: <strong style="color: #111827;">
+                ${(rule.timeWindow && rule.timeWindow.start) || '--:--'} - ${(rule.timeWindow && rule.timeWindow.end) || '--:--'}
+              </strong></span>
+            </div>
+            ${rule.notes ? `
+              <div style="margin-top: 12px; padding: 12px; background: #f9fafb; border-left: 3px solid #4f46e5; border-radius: 4px; font-size: 12px; color: #374151; line-height: 1.5;">
+                ${rule.notes}
+              </div>
+            ` : ''}
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button
+              class="btn-edit-booking-rule"
+              style="padding: 8px 14px; font-size: 13px; font-weight: 500; border-radius: 6px; border: 1px solid #d1d5db; background: #ffffff; color: #374151; cursor: pointer; transition: all 0.2s;"
+              onmouseover="this.style.background='#f3f4f6'"
+              onmouseout="this.style.background='#ffffff'"
+            >
+              Edit
+            </button>
+            <button
+              class="btn-delete-booking-rule"
+              style="padding: 8px 14px; font-size: 13px; font-weight: 500; border-radius: 6px; border: 1px solid #fecaca; background: #ffffff; color: #dc2626; cursor: pointer; transition: all 0.2s;"
+              onmouseover="this.style.background='#fef2f2'"
+              onmouseout="this.style.background='#ffffff'"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      `;
+      
+      listEl.appendChild(card);
+    });
+    
+    // Hook Add button
+    const addBtn = container.querySelector('#btn-add-booking-rule');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        console.log('[CHEAT SHEET] 🔘 Add Booking Rule clicked');
+        this.handleAddBookingRule();
+      });
+    }
+    
+    // Hook Edit/Delete buttons
+    listEl.querySelectorAll('.btn-edit-booking-rule').forEach((btn, index) => {
+      btn.addEventListener('click', () => {
+        const rule = this.cheatSheet.bookingRules[index];
+        if (!rule) return;
+        console.log('[CHEAT SHEET] 🔘 Edit Booking Rule clicked:', rule);
+        this.handleEditBookingRule(index);
+      });
+    });
+    
+    listEl.querySelectorAll('.btn-delete-booking-rule').forEach((btn, index) => {
+      btn.addEventListener('click', () => {
+        const rule = this.cheatSheet.bookingRules[index];
+        if (!rule) return;
+        console.log('[CHEAT SHEET] 🔘 Delete Booking Rule clicked:', rule);
+        this.handleDeleteBookingRule(index);
+      });
+    });
+    
+    console.log('[CHEAT SHEET] ✅ Booking Rules rendered. Count:', this.cheatSheet.bookingRules.length);
+  }
+  
+  handleAddBookingRule() {
+    if (!this.cheatSheet) return;
+    
+    if (!Array.isArray(this.cheatSheet.bookingRules)) {
+      this.cheatSheet.bookingRules = [];
+    }
+    
+    const newRule = {
+      id: `br-${Date.now()}`,
+      label: 'New Booking Rule',
+      trade: '',
+      serviceType: '',
+      priority: 'normal',
+      daysOfWeek: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+      timeWindow: { start: '08:00', end: '17:00' },
+      sameDayAllowed: true,
+      weekendAllowed: false,
+      notes: ''
+    };
+    
+    this.cheatSheet.bookingRules.push(newRule);
+    
+    console.log('[CHEAT SHEET] ✅ New booking rule added (local only)', newRule);
+    
+    // Re-render list
+    this.renderBookingRules();
+    
+    // Mark as dirty for save
+    if (typeof this.markDirty === 'function') {
+      this.markDirty();
+    }
+    this.isDirty = true;
+  }
+  
+  handleEditBookingRule(index) {
+    if (!this.cheatSheet || !Array.isArray(this.cheatSheet.bookingRules)) return;
+    const rule = this.cheatSheet.bookingRules[index];
+    if (!rule) return;
+    
+    // Simple prompt-based editor (can upgrade to modal later)
+    const label = window.prompt('Rule name/label:', rule.label || '') ?? rule.label;
+    const trade = window.prompt('Trade (e.g. HVAC Residential):', rule.trade || '') ?? rule.trade;
+    const serviceType = window.prompt('Service type (e.g. Repair, Maintenance):', rule.serviceType || '') ?? rule.serviceType;
+    const priority = window.prompt('Priority (normal | high | emergency):', rule.priority || 'normal') ?? rule.priority;
+    const days = window.prompt('Days of week (comma-separated, e.g. Mon,Tue,Wed,Thu,Fri):', (rule.daysOfWeek || []).join(',')) ?? (rule.daysOfWeek || []).join(',');
+    
+    const start = window.prompt('Time window start (HH:MM):', (rule.timeWindow && rule.timeWindow.start) || '08:00') ?? (rule.timeWindow && rule.timeWindow.start) || '08:00';
+    const end = window.prompt('Time window end (HH:MM):', (rule.timeWindow && rule.timeWindow.end) || '17:00') ?? (rule.timeWindow && rule.timeWindow.end) || '17:00';
+    
+    const sameDayAllowed = window.prompt('Allow same-day booking? (yes/no):', rule.sameDayAllowed === false ? 'no' : 'yes')?.toLowerCase() === 'no' ? false : true;
+    const weekendAllowed = window.prompt('Allow weekend booking? (yes/no):', rule.weekendAllowed ? 'yes' : 'no')?.toLowerCase() === 'yes';
+    
+    const notes = window.prompt('Notes / instructions for this rule:', rule.notes || '') ?? rule.notes;
+    
+    rule.label = label;
+    rule.trade = trade;
+    rule.serviceType = serviceType;
+    rule.priority = priority;
+    rule.daysOfWeek = days.split(',').map((d) => d.trim()).filter(Boolean);
+    rule.timeWindow = { start, end };
+    rule.sameDayAllowed = sameDayAllowed;
+    rule.weekendAllowed = weekendAllowed;
+    rule.notes = notes;
+    
+    console.log('[CHEAT SHEET] ✅ Booking rule updated (local only)', rule);
+    
+    this.renderBookingRules();
+    
+    if (typeof this.markDirty === 'function') {
+      this.markDirty();
+    }
+    this.isDirty = true;
+  }
+  
+  handleDeleteBookingRule(index) {
+    if (!this.cheatSheet || !Array.isArray(this.cheatSheet.bookingRules)) return;
+    const rule = this.cheatSheet.bookingRules[index];
+    if (!rule) return;
+    
+    if (!window.confirm(`Delete booking rule "${rule.label}"?`)) return;
+    
+    this.cheatSheet.bookingRules.splice(index, 1);
+    
+    console.log('[CHEAT SHEET] 🗑️ Booking rule deleted (local only)', rule);
+    
+    this.renderBookingRules();
+    
+    if (typeof this.markDirty === 'function') {
+      this.markDirty();
+    }
+    this.isDirty = true;
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
   // COMING SOON RENDERER (V2-ONLY PLACEHOLDERS)
   // ═══════════════════════════════════════════════════════════════════
   
@@ -1772,7 +2029,10 @@ class CheatSheetManager {
       return;
     }
     
-    console.log('[CHEAT SHEET] Saving...');
+    console.log('[CHEAT SHEET] 💾 Saving cheat sheet...');
+    console.log('[CHEAT SHEET] 💾 Booking rules count:', 
+      Array.isArray(this.cheatSheet.bookingRules) ? this.cheatSheet.bookingRules.length : 0
+    );
     
     try {
       const token = localStorage.getItem('adminToken');
