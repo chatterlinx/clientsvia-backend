@@ -787,21 +787,7 @@
       });
     });
 
-    // CHEAT SHEET SUB-TABS
-    const cheatTabButtons = document.querySelectorAll('.js-cheat-tab');
-    const cheatPanels = document.querySelectorAll('[data-cheat-panel]');
-
-    cheatTabButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        cheatTabButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-
-        const target = btn.getAttribute('data-cheat-target');
-        cheatPanels.forEach(panel => {
-          panel.classList.toggle('active', panel.getAttribute('data-cheat-panel') === target);
-        });
-      });
-    });
+    // CHEAT SHEET SUB-TABS: Now handled by CheatSheetManager.js (no legacy tabs)
 
     // COMPANYOPS TABS
     const companyopsTabButtons = document.querySelectorAll('.js-companyops-tab');
@@ -1154,166 +1140,12 @@
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // CHEAT SHEET: BOOKING RULES
+    // CHEAT SHEET SUB-TABS: NOW HANDLED BY CheatSheetManager.js
+    // (Legacy functions removed - CheatSheetManager renders all 6 sub-tabs)
     // ═══════════════════════════════════════════════════════════════════════
-    async function loadBookingRules() {
-      if (!currentCompanyId) return;
-      const container = document.getElementById('booking-rules-content');
-      container.innerHTML = '<p class="muted">Loading...</p>';
-      
-      try {
-        const data = await apiCall(`/api/company/${currentCompanyId}/booking-rules`);
-        container.innerHTML = `
-          <p class="muted">Booking rules loaded. Trade/service selector UI to be implemented.</p>
-          <pre style="background:#f3f4f6;padding:12px;border-radius:6px;font-size:12px;overflow:auto;max-height:400px;">${JSON.stringify(data.data, null, 2)}</pre>
-        `;
-      } catch (err) {
-        console.error('Failed to load booking rules:', err);
-        container.innerHTML = '<p class="muted" style="color:#dc2626;">Error loading booking rules.</p>';
-      }
-    }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // CHEAT SHEET: COMPANY CONTACTS (ROLE MAPPING)
-    // ═══════════════════════════════════════════════════════════════════════
-    async function loadRoleContacts() {
-      if (!currentCompanyId) return;
-      const tbody = document.getElementById('role-contacts-table-body');
-      tbody.innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center;">Loading...</td></tr>';
-      
-      try {
-        const data = await apiCall(`/api/company/${currentCompanyId}/role-contacts`);
-        const roles = Object.keys(data.data || {});
-        
-        if (roles.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center;">No role mappings configured.</td></tr>';
-          return;
-        }
-
-        tbody.innerHTML = roles.map(role => `
-          <tr>
-            <td>${role}</td>
-            <td>Contact for ${role} role</td>
-            <td>${data.data[role] || '<span class="muted">Not assigned</span>'}</td>
-            <td>
-              <button class="btn btn-secondary" style="font-size:11px;padding:4px 8px;" onclick="assignRoleContact('${role}')">Assign</button>
-            </td>
-          </tr>
-        `).join('');
-      } catch (err) {
-        console.error('Failed to load role contacts:', err);
-        tbody.innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center;color:#dc2626;">Error loading role contacts.</td></tr>';
-      }
-    }
-
-    function assignRoleContact(role) { alert('Assign contact to role: ' + role); }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // CHEAT SHEET: LINKS
-    // ═══════════════════════════════════════════════════════════════════════
-    async function loadLinks() {
-      if (!currentCompanyId) return;
-      const tbody = document.getElementById('links-table-body');
-      tbody.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;">Loading...</td></tr>';
-      
-      try {
-        const data = await apiCall(`/api/company/${currentCompanyId}/links`);
-        if (!data.data || data.data.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;">No links configured.</td></tr>';
-          return;
-        }
-
-        tbody.innerHTML = data.data.map(link => `
-          <tr>
-            <td>${link.label}</td>
-            <td>${link.type}</td>
-            <td><a href="${link.url}" target="_blank" style="color:#4f46e5;">${link.url}</a></td>
-            <td>${link.visibleToAgent ? '✓' : '✗'}</td>
-            <td>
-              <button class="btn btn-secondary" style="font-size:11px;padding:4px 8px;" onclick="editLink('${link._id}')">Edit</button>
-              <button class="btn btn-danger" style="font-size:11px;padding:4px 8px;" onclick="deleteLink('${link._id}')">Delete</button>
-            </td>
-          </tr>
-        `).join('');
-      } catch (err) {
-        console.error('Failed to load links:', err);
-        tbody.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;color:#dc2626;">Error loading links.</td></tr>';
-      }
-    }
-
-    function openAddLinkModal() { alert('Add link modal - to be implemented'); }
-    function editLink(id) { alert('Edit link: ' + id); }
-    async function deleteLink(id) {
-      if (!confirm('Delete this link?')) return;
-      try {
-        await apiCall(`/api/company/${currentCompanyId}/links/${id}`, 'DELETE');
-        loadLinks();
-      } catch (err) {
-        alert('Failed to delete link: ' + err.message);
-      }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // CHEAT SHEET: CALCULATOR
-    // ═══════════════════════════════════════════════════════════════════════
-    async function loadCalculator() {
-      if (!currentCompanyId) return;
-      const container = document.getElementById('calculator-content');
-      container.innerHTML = '<p class="muted">Loading...</p>';
-      
-      try {
-        const data = await apiCall(`/api/company/${currentCompanyId}/calculator-stats`);
-        const d = data.data;
-        
-        container.innerHTML = `
-          <h3>Usage Statistics (Last ${d.lastDays} Days)</h3>
-          <table style="margin-top:8px;">
-            <tr><th>Total Calls</th><td>${d.totalCalls}</td></tr>
-            <tr><th>Total LLM Turns</th><td>${d.totalLlmTurns}</td></tr>
-            <tr><th>Estimated AI Cost</th><td>$${d.totalEstimatedAiCost.toFixed(2)}</td></tr>
-            <tr><th>Avg Cost/Call</th><td>$${d.avgCostPerCall.toFixed(2)}</td></tr>
-          </table>
-          
-          <h3 style="margin-top:24px;">Tier Distribution</h3>
-          <p class="muted">Tier 1: ${d.tierDistribution.tier1.toFixed(1)}% | Tier 2: ${d.tierDistribution.tier2.toFixed(1)}% | Tier 3: ${d.tierDistribution.tier3.toFixed(1)}%</p>
-          
-          ${d.warnings && d.warnings.length > 0 ? `
-            <h3 style="margin-top:24px;color:#dc2626;">⚠️ Warnings</h3>
-            <ul>${d.warnings.map(w => `<li class="muted" style="color:#dc2626;">${w}</li>`).join('')}</ul>
-          ` : ''}
-        `;
-      } catch (err) {
-        console.error('Failed to load calculator:', err);
-        container.innerHTML = '<p class="muted" style="color:#dc2626;">Error loading calculator stats.</p>';
-      }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // CHEAT SHEET: ACTIVE INSTRUCTIONS PREVIEW
-    // ═══════════════════════════════════════════════════════════════════════
-    async function loadActiveInstructions() {
-      if (!currentCompanyId) return;
-      const container = document.getElementById('active-instructions-preview-content');
-      container.innerHTML = '<p class="muted">Loading...</p>';
-      
-      try {
-        const data = await apiCall(`/api/active-instructions?companyId=${currentCompanyId}`);
-        container.innerHTML = `
-          <button class="btn btn-secondary" onclick="copyToClipboard(JSON.stringify(${JSON.stringify(data)}, null, 2))" style="margin-bottom:12px;">Copy JSON</button>
-          <pre style="background:#111827;color:#e5e7eb;padding:16px;border-radius:8px;font-size:11px;overflow:auto;max-height:600px;">${JSON.stringify(data, null, 2)}</pre>
-        `;
-      } catch (err) {
-        console.error('Failed to load active instructions:', err);
-        container.innerHTML = '<p class="muted" style="color:#dc2626;">Error loading active instructions.</p>';
-      }
-    }
-
-    function copyToClipboard(text) {
-      navigator.clipboard.writeText(text).then(() => alert('Copied to clipboard!'));
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // AUTO-LOAD DATA WHEN TABS ARE CLICKED
+    // AUTO-LOAD DATA WHEN COMPANYOPS TABS ARE CLICKED
     // ═══════════════════════════════════════════════════════════════════════
     companyopsTabButtons.forEach(btn => {
       btn.addEventListener('click', () => {
@@ -1339,28 +1171,6 @@
         } else if (target === 'settings' && !window.settingsLoaded) {
           loadSettings();
           window.settingsLoaded = true;
-        }
-      });
-    });
-
-    cheatTabButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const target = btn.getAttribute('data-cheat-target');
-        if (target === 'booking' && !window.bookingRulesLoaded) {
-          loadBookingRules();
-          window.bookingRulesLoaded = true;
-        } else if (target === 'company-contacts' && !window.roleContactsLoaded) {
-          loadRoleContacts();
-          window.roleContactsLoaded = true;
-        } else if (target === 'links' && !window.linksLoaded) {
-          loadLinks();
-          window.linksLoaded = true;
-        } else if (target === 'calculator' && !window.calculatorLoaded) {
-          loadCalculator();
-          window.calculatorLoaded = true;
-        } else if (target === 'cheat-active-instructions' && !window.activeInstructionsLoaded) {
-          loadActiveInstructions();
-          window.activeInstructionsLoaded = true;
         }
       });
     });
