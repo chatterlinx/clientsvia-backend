@@ -1592,6 +1592,10 @@ class CheatSheetManager {
   // ═══════════════════════════════════════════════════════════════════
   
   addTransferRule() {
+    if (!this.cheatSheet) {
+      console.warn('[CHEAT SHEET] addTransferRule called before cheat sheet loaded');
+      return;
+    }
     if (!this.cheatSheet.transferRules) {
       this.cheatSheet.transferRules = [];
     }
@@ -1615,12 +1619,14 @@ class CheatSheetManager {
   }
 
   updateTransferRule(index, field, value) {
+    if (!this.cheatSheet || !this.cheatSheet.transferRules) return;
     if (!this.cheatSheet.transferRules || !this.cheatSheet.transferRules[index]) return;
     this.cheatSheet.transferRules[index][field] = value;
     this.markDirty();
   }
 
   removeTransferRule(index) {
+    if (!this.cheatSheet || !this.cheatSheet.transferRules) return;
     if (!this.cheatSheet.transferRules || !this.cheatSheet.transferRules[index]) return;
     if (!confirm('Remove this transfer rule?')) return;
     this.cheatSheet.transferRules.splice(index, 1);
