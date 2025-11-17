@@ -106,17 +106,17 @@
   <!-- TERTIARY NAV (ONLY WHEN CHEAT SHEET ACTIVE) -->
   <nav id="cheat-subnav" class="subnav" style="display:none;">
     <!-- CHEAT SHEET SUB-TABS -->
-    <button class="active js-cheat-tab" data-cheat-target="triage">Triage</button>
-    <button class="js-cheat-tab" data-cheat-target="frontline-intel">Frontline-Intel</button>
-    <button class="js-cheat-tab" data-cheat-target="transfer-calls">Transfer Calls</button>
-    <button class="js-cheat-tab" data-cheat-target="edge-cases">Edge Cases</button>
-    <button class="js-cheat-tab" data-cheat-target="behavior">Behavior</button>
-    <button class="js-cheat-tab" data-cheat-target="guardrails">Guardrails</button>
-    <button class="js-cheat-tab" data-cheat-target="booking">Booking Rules</button>
-    <button class="js-cheat-tab" data-cheat-target="company-contacts">Company Contacts</button>
-    <button class="js-cheat-tab" data-cheat-target="links">Links</button>
-    <button class="js-cheat-tab" data-cheat-target="calculator">Calculator</button>
-    <button class="js-cheat-tab" data-cheat-target="cheat-active-instructions">Active Instructions Preview</button>
+    <button class="active js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="triage">Triage</button>
+    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="frontline-intel">Frontline-Intel</button>
+    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="transfer-calls">Transfer Calls</button>
+    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="edge-cases">Edge Cases</button>
+    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="behavior">Behavior</button>
+    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="guardrails">Guardrails</button>
+    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="booking">Booking Rules</button>
+    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="company-contacts">Company Contacts</button>
+    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="links">Links</button>
+    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="calculator">Calculator</button>
+    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="cheat-active-instructions">Active Instructions Preview</button>
   </nav>
 
   <main class="page">
@@ -751,7 +751,63 @@
       });
     });
 
-    // CHEAT SHEET SUB-TABS: Now handled by CheatSheetManager.js (no legacy tabs)
+    // CHEAT SHEET SUB-TABS (CONTROL PLANE NAV → CheatSheetManager)
+    const cheatTabButtons = document.querySelectorAll('.js-cheat-tab');
+    const cheatTabsHandledByManager = new Set(['triage','frontline-intel','transfer-calls','edge-cases','behavior','guardrails']);
+    const cheatTabLabels = {
+      'triage': 'Triage',
+      'frontline-intel': 'Frontline-Intel',
+      'transfer-calls': 'Transfer Calls',
+      'edge-cases': 'Edge Cases',
+      'behavior': 'Behavior',
+      'guardrails': 'Guardrails',
+      'booking': 'Booking Rules',
+      'company-contacts': 'Company Contacts',
+      'links': 'Links',
+      'calculator': 'Calculator',
+      'cheat-active-instructions': 'Active Instructions Preview'
+    };
+
+    let activeCheatTab = 'triage';
+
+    function setCheatTabActive(target) {
+      activeCheatTab = target;
+      cheatTabButtons.forEach(btn => {
+        const btnTarget = btn.getAttribute('data-cheat-target');
+        const isActive = btnTarget === target;
+        btn.classList.toggle('active', isActive);
+      });
+    }
+
+    function showCheatTabPlaceholder(target) {
+      const label = cheatTabLabels[target] || target;
+      console.warn(`[CONTROL PLANE] Cheat Sheet sub-tab "${label}" is not wired yet.`);
+      alert(`${label} UI is coming soon. For now, manage it inside company-profile AiCore.`);
+    }
+
+    cheatTabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.getAttribute('data-cheat-target');
+
+        if (!cheatTabsHandledByManager.has(target)) {
+          showCheatTabPlaceholder(target);
+          setCheatTabActive(activeCheatTab);
+          return;
+        }
+
+        setCheatTabActive(target);
+        initCheatSheetManager();
+
+        if (window.cheatSheetManager && typeof window.cheatSheetManager.switchSubTab === 'function') {
+          window.cheatSheetManager.switchSubTab(target);
+        } else {
+          console.warn('[CONTROL PLANE] CheatSheetManager not ready yet.');
+        }
+      });
+    });
+
+    // Ensure default tab looks active
+    setCheatTabActive('triage');
 
     // COMPANYOPS TABS
     const companyopsTabButtons = document.querySelectorAll('.js-companyops-tab');

@@ -59,6 +59,10 @@ class CheatSheetManager {
   }
 
   ensureBaseLayout() {
+    if (!this.rootElement && typeof document !== 'undefined') {
+      this.rootElement = document.querySelector(this.rootSelector);
+    }
+
     if (!this.rootElement) {
       console.warn('[CHEAT SHEET] Root container not found - expected selector:', this.rootSelector);
       return;
@@ -100,27 +104,6 @@ class CheatSheetManager {
               Reset Defaults
             </button>
           </div>
-        </div>
-
-        <div class="cheatsheet-subnav" style="display:flex; flex-wrap:wrap; gap:8px; border-bottom:1px solid #e5e7eb; padding-bottom:8px;">
-          <button class="cheatsheet-subtab-btn" data-subtab="triage" onclick="cheatSheetManager?.switchSubTab('triage')" style="padding:12px 16px; font-size:14px; font-weight:600; border:none; border-bottom:2px solid transparent; background:none; color:#6b7280; cursor:pointer;">
-            <i class="fas fa-brain"></i>🧠 Triage
-          </button>
-          <button class="cheatsheet-subtab-btn" data-subtab="frontline-intel" onclick="cheatSheetManager?.switchSubTab('frontline-intel')" style="padding:12px 16px; font-size:14px; font-weight:600; border:none; border-bottom:2px solid transparent; background:none; color:#6b7280; cursor:pointer;">
-            <i class="fas fa-robot"></i>Frontline-Intel
-          </button>
-          <button class="cheatsheet-subtab-btn" data-subtab="transfer-calls" onclick="cheatSheetManager?.switchSubTab('transfer-calls')" style="padding:12px 16px; font-size:14px; font-weight:600; border:none; border-bottom:2px solid transparent; background:none; color:#6b7280; cursor:pointer;">
-            <i class="fas fa-phone-square"></i>Transfer Calls
-          </button>
-          <button class="cheatsheet-subtab-btn" data-subtab="edge-cases" onclick="cheatSheetManager?.switchSubTab('edge-cases')" style="padding:12px 16px; font-size:14px; font-weight:600; border:none; border-bottom:2px solid transparent; background:none; color:#6b7280; cursor:pointer;">
-            <i class="fas fa-exclamation-triangle"></i>Edge Cases
-          </button>
-          <button class="cheatsheet-subtab-btn" data-subtab="behavior" onclick="cheatSheetManager?.switchSubTab('behavior')" style="padding:12px 16px; font-size:14px; font-weight:600; border:none; border-bottom:2px solid transparent; background:none; color:#6b7280; cursor:pointer;">
-            <i class="fas fa-sliders-h"></i>Behavior
-          </button>
-          <button class="cheatsheet-subtab-btn" data-subtab="guardrails" onclick="cheatSheetManager?.switchSubTab('guardrails')" style="padding:12px 16px; font-size:14px; font-weight:600; border:none; border-bottom:2px solid transparent; background:none; color:#6b7280; cursor:pointer;">
-            <i class="fas fa-shield-alt"></i>Guardrails
-          </button>
         </div>
 
         <div id="cheatsheet-subtab-triage" class="cheatsheet-subtab-content">
