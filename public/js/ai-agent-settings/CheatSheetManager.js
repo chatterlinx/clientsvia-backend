@@ -11,11 +11,8 @@
 // COMING SOON TABS (V2-ONLY PLACEHOLDERS)
 // ---------------------------------------------
 const CHEATSHEET_COMING_SOON_TABS = {
-  // 'booking' removed - now fully implemented below
-  'company-contacts': {
-    title: 'Company Contacts – Coming Soon',
-    description: 'This section will let you manage transfer targets, notification contacts, and escalation chains for this company. It will be used by Transfer Rules, emergency routing, and SMS alerts.'
-  },
+  // 'booking' removed - now fully implemented
+  // 'company-contacts' removed - now fully implemented
   'links': {
     title: 'Links – Coming Soon',
     description: 'This section will store company-specific URLs like financing pages, membership portals, policy documents, and service catalogs that the AI can reference during calls.'
@@ -71,6 +68,14 @@ class CheatSheetManager {
       console.log('[CHEAT SHEET] 📅 Routing to Booking Rules renderer');
       this.renderBookingRules();
       console.log(`[CHEAT SHEET] ✅ Switched to Booking Rules tab`);
+      return;
+    }
+    
+    // Check if this is Company Contacts tab (V2-only, fully implemented)
+    if (subTab === 'company-contacts') {
+      console.log('[CHEAT SHEET] 📞 Routing to Company Contacts renderer');
+      this.renderCompanyContacts();
+      console.log(`[CHEAT SHEET] ✅ Switched to Company Contacts tab`);
       return;
     }
     
@@ -1818,6 +1823,283 @@ class CheatSheetManager {
   }
   
   // ═══════════════════════════════════════════════════════════════════
+  // COMPANY CONTACTS RENDERER & HANDLERS
+  // ═══════════════════════════════════════════════════════════════════
+  
+  renderCompanyContacts() {
+    console.log('[CHEAT SHEET] 🎨 renderCompanyContacts called');
+    
+    if (!this.cheatSheet) {
+      console.warn('[CHEAT SHEET] ⚠️ No cheatSheet loaded yet for Company Contacts');
+      return;
+    }
+    
+    if (!Array.isArray(this.cheatSheet.companyContacts)) {
+      this.cheatSheet.companyContacts = [];
+    }
+    
+    const container = 
+      this.rootElement || 
+      document.getElementById('cheatsheet-container') ||
+      document.getElementById('cheat-sheet-main-section') ||
+      document.getElementById('cheat-sheet-content');
+    
+    if (!container) {
+      console.warn('[CHEAT SHEET] ⚠️ Company Contacts container not found');
+      return;
+    }
+    
+    const contacts = this.cheatSheet.companyContacts;
+    
+    container.innerHTML = `
+      <div style="padding: 24px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+          <div>
+            <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
+              📞 Company Contacts
+            </h3>
+            <p style="font-size: 13px; color: #6b7280; margin: 0;">
+              Define who the AI can transfer to, notify, or escalate to during calls.
+            </p>
+          </div>
+          <button
+            id="btn-add-company-contact"
+            style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 14px; font-weight: 600; border-radius: 8px; border: none; background: #4f46e5; color: #ffffff; cursor: pointer; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3); transition: all 0.2s;"
+            onmouseover="this.style.background='#4338ca'"
+            onmouseout="this.style.background='#4f46e5'"
+          >
+            <span style="font-size: 16px;">＋</span>
+            <span>Add Contact</span>
+          </button>
+        </div>
+        
+        <div id="company-contacts-list" style="display: flex; flex-direction: column; gap: 12px;">
+          ${contacts.length === 0 ? `
+            <div style="border: 2px dashed #d1d5db; border-radius: 12px; padding: 32px; background: #f9fafb; text-align: center;">
+              <div style="font-size: 48px; margin-bottom: 12px;">👥</div>
+              <p style="font-size: 14px; color: #6b7280; margin: 0;">
+                No contacts configured yet. Click <span style="font-weight: 600; color: #111827;">"Add Contact"</span> to create your first contact. These entries will be used by transfer rules and after-hours routing.
+              </p>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+    
+    const listEl = container.querySelector('#company-contacts-list');
+    if (!listEl) {
+      console.warn('[CHEAT SHEET] ⚠️ company-contacts-list not found');
+      return;
+    }
+    
+    contacts.forEach((contact, index) => {
+      const card = document.createElement('div');
+      card.style.cssText = 'border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.1);';
+      card.setAttribute('data-company-contact-id', contact.id || `idx-${index}`);
+      
+      const badges = [];
+      
+      if (contact.role) {
+        badges.push(
+          `<span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 999px; background: #f3f4f6; color: #374151; font-weight: 600;">
+            ${contact.role}
+          </span>`
+        );
+      }
+      
+      if (contact.type) {
+        badges.push(
+          `<span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 999px; background: #f3f4f6; color: #374151; font-weight: 600;">
+            ${contact.type}
+          </span>`
+        );
+      }
+      
+      if (contact.isPrimary) {
+        badges.push(
+          `<span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 999px; background: #10b981; color: #ffffff; font-weight: 600;">
+            Primary
+          </span>`
+        );
+      }
+      
+      if (contact.isAfterHours) {
+        badges.push(
+          `<span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 999px; background: #f59e0b; color: #ffffff; font-weight: 600;">
+            After Hours
+          </span>`
+        );
+      }
+      
+      if (contact.smsEnabled) {
+        badges.push(
+          `<span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 999px; background: #3b82f6; color: #ffffff; font-weight: 600;">
+            SMS
+          </span>`
+        );
+      }
+      
+      card.innerHTML = `
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+              <span style="font-size: 16px; font-weight: 600; color: #111827;">
+                ${contact.label || 'Unnamed Contact'}
+              </span>
+              ${badges.join('')}
+            </div>
+            <div style="font-size: 12px; color: #6b7280; line-height: 1.6;">
+              ${contact.phoneNumber ? `Phone: <strong style="color: #111827;">${contact.phoneNumber}</strong>` : 'No phone number set'}
+              ${typeof contact.priority === 'number' ? ` · Priority: <strong style="color: #111827;">${contact.priority}</strong>` : ''}
+            </div>
+            ${contact.notes ? `
+              <div style="margin-top: 12px; padding: 12px; background: #f9fafb; border-left: 3px solid #4f46e5; border-radius: 4px; font-size: 12px; color: #374151; line-height: 1.5;">
+                ${contact.notes}
+              </div>
+            ` : ''}
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button
+              class="btn-edit-company-contact"
+              style="padding: 8px 14px; font-size: 13px; font-weight: 500; border-radius: 6px; border: 1px solid #d1d5db; background: #ffffff; color: #374151; cursor: pointer; transition: all 0.2s;"
+              onmouseover="this.style.background='#f3f4f6'"
+              onmouseout="this.style.background='#ffffff'"
+            >
+              Edit
+            </button>
+            <button
+              class="btn-delete-company-contact"
+              style="padding: 8px 14px; font-size: 13px; font-weight: 500; border-radius: 6px; border: 1px solid #fecaca; background: #ffffff; color: #dc2626; cursor: pointer; transition: all 0.2s;"
+              onmouseover="this.style.background='#fef2f2'"
+              onmouseout="this.style.background='#ffffff'"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      `;
+      
+      listEl.appendChild(card);
+    });
+    
+    const addBtn = container.querySelector('#btn-add-company-contact');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        console.log('[CHEAT SHEET] 🔘 Add Company Contact clicked');
+        this.handleAddCompanyContact();
+      });
+    }
+    
+    listEl.querySelectorAll('.btn-edit-company-contact').forEach((btn, index) => {
+      btn.addEventListener('click', () => {
+        const contact = this.cheatSheet.companyContacts[index];
+        if (!contact) return;
+        console.log('[CHEAT SHEET] 🔘 Edit Company Contact clicked:', contact);
+        this.handleEditCompanyContact(index);
+      });
+    });
+    
+    listEl.querySelectorAll('.btn-delete-company-contact').forEach((btn, index) => {
+      btn.addEventListener('click', () => {
+        const contact = this.cheatSheet.companyContacts[index];
+        if (!contact) return;
+        console.log('[CHEAT SHEET] 🔘 Delete Company Contact clicked:', contact);
+        this.handleDeleteCompanyContact(index);
+      });
+    });
+    
+    console.log('[CHEAT SHEET] ✅ Company Contacts rendered. Count:', this.cheatSheet.companyContacts.length);
+  }
+  
+  handleAddCompanyContact() {
+    if (!this.cheatSheet) return;
+    
+    if (!Array.isArray(this.cheatSheet.companyContacts)) {
+      this.cheatSheet.companyContacts = [];
+    }
+    
+    const newContact = {
+      id: `cc-${Date.now()}`,
+      label: 'New Contact',
+      role: 'manager',
+      type: 'phone',
+      phoneNumber: '',
+      smsEnabled: true,
+      isPrimary: false,
+      isAfterHours: false,
+      priority: this.cheatSheet.companyContacts.length + 1,
+      notes: ''
+    };
+    
+    this.cheatSheet.companyContacts.push(newContact);
+    
+    console.log('[CHEAT SHEET] ✅ New company contact added (local only)', newContact);
+    
+    this.renderCompanyContacts();
+    
+    if (typeof this.markDirty === 'function') {
+      this.markDirty();
+    }
+    this.isDirty = true;
+  }
+  
+  handleEditCompanyContact(index) {
+    if (!this.cheatSheet || !Array.isArray(this.cheatSheet.companyContacts)) return;
+    const contact = this.cheatSheet.companyContacts[index];
+    if (!contact) return;
+    
+    const label = window.prompt('Contact name / label:', contact.label || '') ?? contact.label;
+    const role = window.prompt('Role (owner, manager, dispatcher, tech, front-desk, etc.):', contact.role || 'manager') ?? contact.role;
+    const type = window.prompt('Type (phone, mobile, sms-only, email):', contact.type || 'phone') ?? contact.type;
+    const phoneNumber = window.prompt('Phone number (for transfer/SMS):', contact.phoneNumber || '') ?? contact.phoneNumber;
+    const smsEnabledPrompt = window.prompt('Enable SMS notifications to this contact? (yes/no):', contact.smsEnabled === false ? 'no' : 'yes')?.toLowerCase() === 'no' ? false : true;
+    const isPrimaryPrompt = window.prompt('Is this a PRIMARY contact? (yes/no):', contact.isPrimary ? 'yes' : 'no')?.toLowerCase() === 'yes';
+    const isAfterHoursPrompt = window.prompt('Use for AFTER HOURS routing? (yes/no):', contact.isAfterHours ? 'yes' : 'no')?.toLowerCase() === 'yes';
+    
+    const priorityInput = window.prompt('Priority (1 = highest, 99 = lowest):', typeof contact.priority === 'number' ? String(contact.priority) : '1') ?? String(contact.priority ?? '1');
+    const priority = parseInt(priorityInput, 10);
+    const notes = window.prompt('Notes / routing instructions for this contact:', contact.notes || '') ?? contact.notes;
+    
+    contact.label = label;
+    contact.role = role;
+    contact.type = type;
+    contact.phoneNumber = phoneNumber;
+    contact.smsEnabled = smsEnabledPrompt;
+    contact.isPrimary = isPrimaryPrompt;
+    contact.isAfterHours = isAfterHoursPrompt;
+    contact.priority = isNaN(priority) ? contact.priority || 1 : priority;
+    contact.notes = notes;
+    
+    console.log('[CHEAT SHEET] ✅ Company contact updated (local only)', contact);
+    
+    this.renderCompanyContacts();
+    
+    if (typeof this.markDirty === 'function') {
+      this.markDirty();
+    }
+    this.isDirty = true;
+  }
+  
+  handleDeleteCompanyContact(index) {
+    if (!this.cheatSheet || !Array.isArray(this.cheatSheet.companyContacts)) return;
+    const contact = this.cheatSheet.companyContacts[index];
+    if (!contact) return;
+    
+    if (!window.confirm(`Delete contact "${contact.label}"?`)) return;
+    
+    this.cheatSheet.companyContacts.splice(index, 1);
+    
+    console.log('[CHEAT SHEET] 🗑️ Company contact deleted (local only)', contact);
+    
+    this.renderCompanyContacts();
+    
+    if (typeof this.markDirty === 'function') {
+      this.markDirty();
+    }
+    this.isDirty = true;
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
   // COMING SOON RENDERER (V2-ONLY PLACEHOLDERS)
   // ═══════════════════════════════════════════════════════════════════
   
@@ -2032,6 +2314,9 @@ class CheatSheetManager {
     console.log('[CHEAT SHEET] 💾 Saving cheat sheet...');
     console.log('[CHEAT SHEET] 💾 Booking rules count:', 
       Array.isArray(this.cheatSheet.bookingRules) ? this.cheatSheet.bookingRules.length : 0
+    );
+    console.log('[CHEAT SHEET] 💾 Company contacts count:', 
+      Array.isArray(this.cheatSheet.companyContacts) ? this.cheatSheet.companyContacts.length : 0
     );
     
     try {
