@@ -1555,6 +1555,7 @@ class CheatSheetManager {
   // ═══════════════════════════════════════════════════════════════════
   
   addEdgeCase() {
+    console.log('🔘 [CHEAT SHEET] Add Edge Case method called');
     if (!this.cheatSheet) {
       console.warn('[CHEAT SHEET] addEdgeCase called before cheat sheet loaded');
       return;
@@ -1598,6 +1599,7 @@ class CheatSheetManager {
   // ═══════════════════════════════════════════════════════════════════
   
   addTransferRule() {
+    console.log('🔘 [CHEAT SHEET] Add Transfer Rule method called');
     if (!this.cheatSheet) {
       console.warn('[CHEAT SHEET] addTransferRule called before cheat sheet loaded');
       return;
