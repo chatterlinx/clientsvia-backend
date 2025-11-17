@@ -1827,6 +1827,7 @@ class CheatSheetManager {
       this.markDirty();
     }
     this.isDirty = true;
+    this.renderStatus(); // Update UI to enable save button
   }
   
   handleEditBookingRule(index) {
@@ -1867,6 +1868,7 @@ class CheatSheetManager {
       this.markDirty();
     }
     this.isDirty = true;
+    this.renderStatus(); // Update UI to enable save button
   }
   
   handleDeleteBookingRule(index) {
@@ -1886,6 +1888,7 @@ class CheatSheetManager {
       this.markDirty();
     }
     this.isDirty = true;
+    this.renderStatus(); // Update UI to enable save button
   }
   
   // ═══════════════════════════════════════════════════════════════════
@@ -2103,6 +2106,7 @@ class CheatSheetManager {
       this.markDirty();
     }
     this.isDirty = true;
+    this.renderStatus(); // Update UI to enable save button
   }
   
   handleEditCompanyContact(index) {
@@ -2140,6 +2144,7 @@ class CheatSheetManager {
       this.markDirty();
     }
     this.isDirty = true;
+    this.renderStatus(); // Update UI to enable save button
   }
   
   handleDeleteCompanyContact(index) {
@@ -2159,6 +2164,7 @@ class CheatSheetManager {
       this.markDirty();
     }
     this.isDirty = true;
+    this.renderStatus(); // Update UI to enable save button
   }
   
   // ═══════════════════════════════════════════════════════════════════
@@ -2349,6 +2355,7 @@ class CheatSheetManager {
       this.markDirty();
     }
     this.isDirty = true;
+    this.renderStatus(); // Update UI to enable save button
   }
   
   handleEditLink(index) {
@@ -2376,6 +2383,7 @@ class CheatSheetManager {
       this.markDirty();
     }
     this.isDirty = true;
+    this.renderStatus(); // Update UI to enable save button
   }
   
   handleDeleteLink(index) {
@@ -2395,6 +2403,7 @@ class CheatSheetManager {
       this.markDirty();
     }
     this.isDirty = true;
+    this.renderStatus(); // Update UI to enable save button
   }
   
   // ═══════════════════════════════════════════════════════════════════
@@ -2566,6 +2575,7 @@ class CheatSheetManager {
       this.markDirty();
     }
     this.isDirty = true;
+    this.renderStatus(); // Update UI to enable save button
   }
   
   handleEditCalculator(index) {
@@ -2592,6 +2602,7 @@ class CheatSheetManager {
       this.markDirty();
     }
     this.isDirty = true;
+    this.renderStatus(); // Update UI to enable save button
   }
   
   handleDeleteCalculator(index) {
@@ -2611,6 +2622,7 @@ class CheatSheetManager {
       this.markDirty();
     }
     this.isDirty = true;
+    this.renderStatus(); // Update UI to enable save button
   }
   
   // ═══════════════════════════════════════════════════════════════════
