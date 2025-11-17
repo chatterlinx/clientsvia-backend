@@ -2076,6 +2076,18 @@
                 controlPlaneBtn.addEventListener('click', openControlPlane);
             }
             
+            // Hash-based navigation support (for back button from Control Plane)
+            const hash = window.location.hash.replace('#', '');
+            if (hash) {
+                setTimeout(() => {
+                    const tabButton = document.getElementById(`tab-${hash}`);
+                    if (tabButton) {
+                        console.log(`🔗 [COMPANY PROFILE] Hash navigation: activating tab "${hash}"`);
+                        tabButton.click();
+                    }
+                }, 500); // Give time for page to fully initialize
+            }
+            
             // Get company ID from URL
             const urlParams = new URLSearchParams(window.location.search);
             const companyId = urlParams.get('id');
