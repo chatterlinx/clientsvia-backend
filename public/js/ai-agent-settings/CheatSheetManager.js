@@ -49,9 +49,17 @@ class CheatSheetManager {
     
     this.currentSubTab = subTab;
     
+    // Define which tabs are dynamically rendered (V2-only)
+    const dynamicTabs = ['booking', 'company-contacts', 'links', 'calculator'];
+    const isDynamicTab = dynamicTabs.includes(subTab) || CHEATSHEET_COMING_SOON_TABS[subTab];
+    
     // Check if this is a Coming Soon tab (V2-only placeholders)
     if (CHEATSHEET_COMING_SOON_TABS[subTab]) {
       console.log('[CHEAT SHEET] 📋 Routing to Coming Soon renderer for:', subTab);
+      // Hide all old V1 sub-tab contents
+      document.querySelectorAll('.cheatsheet-subtab-content').forEach(el => {
+        el.classList.add('hidden');
+      });
       this.renderComingSoon(subTab);
       console.log(`[CHEAT SHEET] ✅ Switched to Coming Soon tab: ${subTab}`);
       return;
@@ -60,6 +68,10 @@ class CheatSheetManager {
     // Check if this is Booking Rules tab (V2-only, fully implemented)
     if (subTab === 'booking') {
       console.log('[CHEAT SHEET] 📅 Routing to Booking Rules renderer');
+      // Hide all old V1 sub-tab contents
+      document.querySelectorAll('.cheatsheet-subtab-content').forEach(el => {
+        el.classList.add('hidden');
+      });
       this.renderBookingRules();
       console.log(`[CHEAT SHEET] ✅ Switched to Booking Rules tab`);
       return;
@@ -68,6 +80,10 @@ class CheatSheetManager {
     // Check if this is Company Contacts tab (V2-only, fully implemented)
     if (subTab === 'company-contacts') {
       console.log('[CHEAT SHEET] 📞 Routing to Company Contacts renderer');
+      // Hide all old V1 sub-tab contents
+      document.querySelectorAll('.cheatsheet-subtab-content').forEach(el => {
+        el.classList.add('hidden');
+      });
       this.renderCompanyContacts();
       console.log(`[CHEAT SHEET] ✅ Switched to Company Contacts tab`);
       return;
@@ -76,6 +92,10 @@ class CheatSheetManager {
     // Check if this is Links tab (V2-only, fully implemented)
     if (subTab === 'links') {
       console.log('[CHEAT SHEET] 🔗 Routing to Links renderer');
+      // Hide all old V1 sub-tab contents
+      document.querySelectorAll('.cheatsheet-subtab-content').forEach(el => {
+        el.classList.add('hidden');
+      });
       this.renderLinks();
       console.log(`[CHEAT SHEET] ✅ Switched to Links tab`);
       return;
@@ -84,9 +104,28 @@ class CheatSheetManager {
     // Check if this is Calculator tab (V2-only, fully implemented)
     if (subTab === 'calculator') {
       console.log('[CHEAT SHEET] 🧮 Routing to Calculator renderer');
+      // Hide all old V1 sub-tab contents
+      document.querySelectorAll('.cheatsheet-subtab-content').forEach(el => {
+        el.classList.add('hidden');
+      });
       this.renderCalculator();
       console.log(`[CHEAT SHEET] ✅ Switched to Calculator tab`);
       return;
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // OLD V1 TABS (triage, transfer-calls, edge-cases, behavior, guardrails, frontline-intel)
+    // ═══════════════════════════════════════════════════════════════════
+    
+    // Clear any dynamically rendered V2 content from the main container
+    const mainContainer = this.rootElement || document.getElementById('cheatsheet-container');
+    if (mainContainer) {
+      // Find the dynamically rendered content wrapper (if it exists) and remove it
+      const dynamicContent = mainContainer.querySelector('[data-dynamic-cheat-content]');
+      if (dynamicContent) {
+        dynamicContent.remove();
+        console.log('[CHEAT SHEET] 🧹 Cleared dynamic V2 content to show V1 tab');
+      }
     }
     
     // Hide all sub-tab contents
@@ -1612,7 +1651,7 @@ class CheatSheetManager {
     const rules = this.cheatSheet.bookingRules;
     
     container.innerHTML = `
-      <div style="padding: 24px;">
+      <div data-dynamic-cheat-content style="padding: 24px;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
           <div>
             <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
@@ -1862,7 +1901,7 @@ class CheatSheetManager {
     const contacts = this.cheatSheet.companyContacts;
     
     container.innerHTML = `
-      <div style="padding: 24px;">
+      <div data-dynamic-cheat-content style="padding: 24px;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
           <div>
             <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
@@ -2139,7 +2178,7 @@ class CheatSheetManager {
     const links = this.cheatSheet.links;
     
     container.innerHTML = `
-      <div style="padding: 24px;">
+      <div data-dynamic-cheat-content style="padding: 24px;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
           <div>
             <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
@@ -2379,7 +2418,7 @@ class CheatSheetManager {
     const calculators = this.cheatSheet.calculators;
     
     container.innerHTML = `
-      <div style="padding: 24px;">
+      <div data-dynamic-cheat-content style="padding: 24px;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
           <div>
             <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
@@ -2594,7 +2633,7 @@ class CheatSheetManager {
     }
     
     container.innerHTML = `
-      <div style="padding: 24px;">
+      <div data-dynamic-cheat-content style="padding: 24px;">
         <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 2px solid #334155; border-radius: 16px; padding: 32px; margin-top: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
           <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px;">
             <div style="display: inline-flex; height: 48px; width: 48px; align-items: center; justify-content: center; border-radius: 50%; background: rgba(99, 102, 241, 0.2); border: 2px solid rgba(99, 102, 241, 0.4);">
