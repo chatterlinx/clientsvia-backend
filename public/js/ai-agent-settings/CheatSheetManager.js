@@ -10,15 +10,19 @@
 class CheatSheetManager {
   
   constructor(options = {}) {
+    console.log('[CHEAT SHEET MANAGER] 🏗️ Constructor called');
     this.companyId = null;
     this.cheatSheet = null;
     this.compilationStatus = null;
     this.isDirty = false;
+    this.isReady = false; // NEW: Ready flag to prevent premature actions
     this.currentSubTab = 'triage'; // Default sub-tab
     this.rootSelector = options.rootSelector || '#cheatsheet-container';
     this.rootElement = (typeof document !== 'undefined') ? document.querySelector(this.rootSelector) : null;
     
+    console.log('[CHEAT SHEET MANAGER] 🏗️ About to ensureBaseLayout');
     this.ensureBaseLayout();
+    console.log('[CHEAT SHEET MANAGER] 🏗️ Base layout ensured');
     console.log('✅ [CHEAT SHEET MANAGER] Initialized');
   }
   
@@ -256,6 +260,7 @@ class CheatSheetManager {
   
   async load(companyId) {
     this.companyId = companyId;
+    this.isReady = false; // Reset ready flag during load
     
     console.log('[CHEAT SHEET] Loading for company:', companyId);
     
@@ -281,6 +286,8 @@ class CheatSheetManager {
       this.render();
       this.switchSubTab('triage'); // Initialize to Triage sub-tab
       this.isDirty = false;
+      this.isReady = true; // Mark as ready after successful load
+      console.log('[CHEAT SHEET] ✅ Manager is now ready for user actions');
       
     } catch (error) {
       console.error('[CHEAT SHEET] Load failed:', error);
@@ -289,6 +296,8 @@ class CheatSheetManager {
       // Load defaults
       this.cheatSheet = this.getDefaultCheatSheet();
       this.render();
+      this.isReady = true; // Still mark as ready even with defaults
+      console.log('[CHEAT SHEET] ✅ Manager is now ready (loaded with defaults)');
     }
   }
   
@@ -317,16 +326,20 @@ class CheatSheetManager {
   // ═══════════════════════════════════════════════════════════════════
   
   render() {
+    console.log('[CHEAT SHEET] 🎨 render() called - cheatSheet exists?', !!this.cheatSheet);
     this.renderStatus();
     this.renderCompanyInstructions();
     this.renderTriageCardsList(); // 🎯 Triage Cards Management (atomic source of truth) - FIRST
     this.renderManualTriageTable(); // 📋 Manual Triage Rules Editor (quick add/edit) - SECOND
     this.renderTriageBuilder(); // 🤖 AI Triage Builder (enterprise content generator) - THIRD
     this.renderBehaviorRules();
+    console.log('[CHEAT SHEET] 🎨 About to renderEdgeCases - cheatSheet exists?', !!this.cheatSheet);
     this.renderEdgeCases();
+    console.log('[CHEAT SHEET] 🎨 About to renderTransferRules - cheatSheet exists?', !!this.cheatSheet);
     this.renderTransferRules();
     this.renderGuardrails();
     this.renderActionAllowlist();
+    console.log('[CHEAT SHEET] 🎨 render() complete');
   }
   
   renderStatus() {
@@ -1555,15 +1568,23 @@ class CheatSheetManager {
   // ═══════════════════════════════════════════════════════════════════
   
   addEdgeCase() {
-    console.log('🔘 [CHEAT SHEET] Add Edge Case method called');
-    if (!this.cheatSheet) {
-      console.warn('[CHEAT SHEET] addEdgeCase called before cheat sheet loaded');
+    console.log('🔘 [CHEAT SHEET] Add Edge Case method called - isReady:', this.isReady, 'cheatSheet exists:', !!this.cheatSheet);
+    
+    if (!this.isReady) {
+      console.warn('[CHEAT SHEET] ⚠️ addEdgeCase called before manager is ready - ignoring');
       return;
     }
+    
+    if (!this.cheatSheet) {
+      console.warn('[CHEAT SHEET] ⚠️ addEdgeCase called but cheatSheet is null - ignoring');
+      return;
+    }
+    
     if (!this.cheatSheet.edgeCases) {
       this.cheatSheet.edgeCases = [];
     }
     
+    console.log('[CHEAT SHEET] ✅ Adding new edge case');
     this.cheatSheet.edgeCases.push({
       id: `ec-${Date.now()}`,
       name: 'New Edge Case',
@@ -1599,15 +1620,23 @@ class CheatSheetManager {
   // ═══════════════════════════════════════════════════════════════════
   
   addTransferRule() {
-    console.log('🔘 [CHEAT SHEET] Add Transfer Rule method called');
-    if (!this.cheatSheet) {
-      console.warn('[CHEAT SHEET] addTransferRule called before cheat sheet loaded');
+    console.log('🔘 [CHEAT SHEET] Add Transfer Rule method called - isReady:', this.isReady, 'cheatSheet exists:', !!this.cheatSheet);
+    
+    if (!this.isReady) {
+      console.warn('[CHEAT SHEET] ⚠️ addTransferRule called before manager is ready - ignoring');
       return;
     }
+    
+    if (!this.cheatSheet) {
+      console.warn('[CHEAT SHEET] ⚠️ addTransferRule called but cheatSheet is null - ignoring');
+      return;
+    }
+    
     if (!this.cheatSheet.transferRules) {
       this.cheatSheet.transferRules = [];
     }
     
+    console.log('[CHEAT SHEET] ✅ Adding new transfer rule');
     this.cheatSheet.transferRules.push({
       id: `tr-${Date.now()}`,
       intentTag: 'general',
