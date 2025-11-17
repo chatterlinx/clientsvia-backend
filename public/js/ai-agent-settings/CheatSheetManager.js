@@ -14,10 +14,7 @@ const CHEATSHEET_COMING_SOON_TABS = {
   // 'booking' removed - now fully implemented
   // 'company-contacts' removed - now fully implemented
   // 'links' removed - now fully implemented
-  'calculator': {
-    title: 'Calculator – Coming Soon',
-    description: 'This section will provide quick calculators (diagnostic fees, discounts, membership pricing, etc.) that the AI can use to give consistent, pre-approved numbers to customers.'
-  },
+  // 'calculator' removed - now fully implemented
   'cheat-active-instructions': {
     title: 'Active Instructions Preview – Coming Soon',
     description: 'This section will show a live preview of the final playbook the AI is running: triage rules, edge cases, behavior rules, and booking logic compiled into one instruction set.'
@@ -81,6 +78,14 @@ class CheatSheetManager {
       console.log('[CHEAT SHEET] 🔗 Routing to Links renderer');
       this.renderLinks();
       console.log(`[CHEAT SHEET] ✅ Switched to Links tab`);
+      return;
+    }
+    
+    // Check if this is Calculator tab (V2-only, fully implemented)
+    if (subTab === 'calculator') {
+      console.log('[CHEAT SHEET] 🧮 Routing to Calculator renderer');
+      this.renderCalculator();
+      console.log(`[CHEAT SHEET] ✅ Switched to Calculator tab`);
       return;
     }
     
@@ -2345,6 +2350,226 @@ class CheatSheetManager {
   }
   
   // ═══════════════════════════════════════════════════════════════════
+  // CALCULATOR RENDERER & HANDLERS
+  // ═══════════════════════════════════════════════════════════════════
+  
+  renderCalculator() {
+    console.log('[CHEAT SHEET] 🎨 renderCalculator called');
+    
+    if (!this.cheatSheet) {
+      console.warn('[CHEAT SHEET] ⚠️ No cheatSheet loaded yet for Calculator');
+      return;
+    }
+    
+    if (!Array.isArray(this.cheatSheet.calculators)) {
+      this.cheatSheet.calculators = [];
+    }
+    
+    const container = 
+      this.rootElement || 
+      document.getElementById('cheatsheet-container') ||
+      document.getElementById('cheat-sheet-main-section') ||
+      document.getElementById('cheat-sheet-content');
+    
+    if (!container) {
+      console.warn('[CHEAT SHEET] ⚠️ Calculator container not found');
+      return;
+    }
+    
+    const calculators = this.cheatSheet.calculators;
+    
+    container.innerHTML = `
+      <div style="padding: 24px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+          <div>
+            <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
+              🧮 Calculator
+            </h3>
+            <p style="font-size: 13px; color: #6b7280; margin: 0;">
+              Diagnostic fees, discounts, membership pricing the AI can use for consistent quotes.
+            </p>
+          </div>
+          <button
+            id="btn-add-calculator"
+            style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 14px; font-weight: 600; border-radius: 8px; border: none; background: #4f46e5; color: #ffffff; cursor: pointer; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3); transition: all 0.2s;"
+            onmouseover="this.style.background='#4338ca'"
+            onmouseout="this.style.background='#4f46e5'"
+          >
+            <span style="font-size: 16px;">＋</span>
+            <span>Add Calculator</span>
+          </button>
+        </div>
+        
+        <div id="calculators-list" style="display: flex; flex-direction: column; gap: 12px;">
+          ${calculators.length === 0 ? `
+            <div style="border: 2px dashed #d1d5db; border-radius: 12px; padding: 32px; background: #f9fafb; text-align: center;">
+              <div style="font-size: 48px; margin-bottom: 12px;">💰</div>
+              <p style="font-size: 14px; color: #6b7280; margin: 0;">
+                No calculators configured yet. Click <span style="font-weight: 600; color: #111827;">"Add Calculator"</span> to create your first calculator. These pre-approved amounts ensure the AI gives consistent pricing.
+              </p>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+    
+    const listEl = container.querySelector('#calculators-list');
+    if (!listEl) {
+      console.warn('[CHEAT SHEET] ⚠️ calculators-list not found');
+      return;
+    }
+    
+    calculators.forEach((calc, index) => {
+      const card = document.createElement('div');
+      card.style.cssText = 'border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.1);';
+      card.setAttribute('data-calculator-id', calc.id || `idx-${index}`);
+      
+      card.innerHTML = `
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+              <span style="font-size: 16px; font-weight: 600; color: #111827;">
+                ${calc.label || 'Unnamed Calculator'}
+              </span>
+              <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 999px; background: #10b981; color: #ffffff; font-weight: 600;">
+                ${calc.type || 'flat-fee'}
+              </span>
+            </div>
+            <div style="font-size: 18px; font-weight: 700; color: #10b981; margin-bottom: 6px;">
+              $${typeof calc.baseAmount === 'number' ? calc.baseAmount.toFixed(2) : '0.00'}
+            </div>
+            ${calc.notes ? `
+              <div style="margin-top: 12px; padding: 12px; background: #f9fafb; border-left: 3px solid #4f46e5; border-radius: 4px; font-size: 12px; color: #374151; line-height: 1.5;">
+                ${calc.notes}
+              </div>
+            ` : ''}
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button
+              class="btn-edit-calculator"
+              style="padding: 8px 14px; font-size: 13px; font-weight: 500; border-radius: 6px; border: 1px solid #d1d5db; background: #ffffff; color: #374151; cursor: pointer; transition: all 0.2s;"
+              onmouseover="this.style.background='#f3f4f6'"
+              onmouseout="this.style.background='#ffffff'"
+            >
+              Edit
+            </button>
+            <button
+              class="btn-delete-calculator"
+              style="padding: 8px 14px; font-size: 13px; font-weight: 500; border-radius: 6px; border: 1px solid #fecaca; background: #ffffff; color: #dc2626; cursor: pointer; transition: all 0.2s;"
+              onmouseover="this.style.background='#fef2f2'"
+              onmouseout="this.style.background='#ffffff'"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      `;
+      
+      listEl.appendChild(card);
+    });
+    
+    const addBtn = container.querySelector('#btn-add-calculator');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        console.log('[CHEAT SHEET] 🔘 Add Calculator clicked');
+        this.handleAddCalculator();
+      });
+    }
+    
+    listEl.querySelectorAll('.btn-edit-calculator').forEach((btn, index) => {
+      btn.addEventListener('click', () => {
+        const calc = this.cheatSheet.calculators[index];
+        if (!calc) return;
+        console.log('[CHEAT SHEET] 🔘 Edit Calculator clicked:', calc);
+        this.handleEditCalculator(index);
+      });
+    });
+    
+    listEl.querySelectorAll('.btn-delete-calculator').forEach((btn, index) => {
+      btn.addEventListener('click', () => {
+        const calc = this.cheatSheet.calculators[index];
+        if (!calc) return;
+        console.log('[CHEAT SHEET] 🗑️ Delete Calculator clicked:', calc);
+        this.handleDeleteCalculator(index);
+      });
+    });
+    
+    console.log('[CHEAT SHEET] ✅ Calculator rendered. Count:', this.cheatSheet.calculators.length);
+  }
+  
+  handleAddCalculator() {
+    if (!this.cheatSheet) return;
+    
+    if (!Array.isArray(this.cheatSheet.calculators)) {
+      this.cheatSheet.calculators = [];
+    }
+    
+    const newCalculator = {
+      id: `calc-${Date.now()}`,
+      label: 'New Calculator',
+      type: 'flat-fee',
+      baseAmount: 0,
+      notes: ''
+    };
+    
+    this.cheatSheet.calculators.push(newCalculator);
+    
+    console.log('[CHEAT SHEET] ✅ New calculator added (local only)', newCalculator);
+    
+    this.renderCalculator();
+    
+    if (typeof this.markDirty === 'function') {
+      this.markDirty();
+    }
+    this.isDirty = true;
+  }
+  
+  handleEditCalculator(index) {
+    if (!this.cheatSheet || !Array.isArray(this.cheatSheet.calculators)) return;
+    const calc = this.cheatSheet.calculators[index];
+    if (!calc) return;
+    
+    const label = window.prompt('Calculator name / label:', calc.label || '') ?? calc.label;
+    const type = window.prompt('Type (flat-fee for now):', calc.type || 'flat-fee') ?? calc.type;
+    const baseAmountInput = window.prompt('Base amount ($):', typeof calc.baseAmount === 'number' ? String(calc.baseAmount) : '0') ?? String(calc.baseAmount ?? '0');
+    const baseAmount = parseFloat(baseAmountInput);
+    const notes = window.prompt('Notes (when to use this calculator):', calc.notes || '') ?? calc.notes;
+    
+    calc.label = label;
+    calc.type = type;
+    calc.baseAmount = isNaN(baseAmount) ? calc.baseAmount || 0 : baseAmount;
+    calc.notes = notes;
+    
+    console.log('[CHEAT SHEET] ✅ Calculator updated (local only)', calc);
+    
+    this.renderCalculator();
+    
+    if (typeof this.markDirty === 'function') {
+      this.markDirty();
+    }
+    this.isDirty = true;
+  }
+  
+  handleDeleteCalculator(index) {
+    if (!this.cheatSheet || !Array.isArray(this.cheatSheet.calculators)) return;
+    const calc = this.cheatSheet.calculators[index];
+    if (!calc) return;
+    
+    if (!window.confirm(`Delete calculator "${calc.label}"?`)) return;
+    
+    this.cheatSheet.calculators.splice(index, 1);
+    
+    console.log('[CHEAT SHEET] 🗑️ Calculator deleted (local only)', calc);
+    
+    this.renderCalculator();
+    
+    if (typeof this.markDirty === 'function') {
+      this.markDirty();
+    }
+    this.isDirty = true;
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
   // COMING SOON RENDERER (V2-ONLY PLACEHOLDERS)
   // ═══════════════════════════════════════════════════════════════════
   
@@ -2565,6 +2790,9 @@ class CheatSheetManager {
     );
     console.log('[CHEAT SHEET] 💾 Links count:', 
       Array.isArray(this.cheatSheet.links) ? this.cheatSheet.links.length : 0
+    );
+    console.log('[CHEAT SHEET] 💾 Calculators count:', 
+      Array.isArray(this.cheatSheet.calculators) ? this.cheatSheet.calculators.length : 0
     );
     
     try {
