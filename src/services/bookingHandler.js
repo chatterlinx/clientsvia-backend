@@ -13,6 +13,7 @@
 const Contact = require('../../models/v2Contact'); // Use existing v2Contact model
 const Location = require('../../models/Location');
 const Appointment = require('../../models/Appointment');
+const Company = require('../../models/Company');
 const logger = require('../../utils/logger');
 
 /**
@@ -210,6 +211,191 @@ async function resolveLocation(companyId, extracted, contactId) {
 }
 
 /**
+ * ============================================================================
+ * BOOKING RULES INTEGRATION - V2 CHEAT SHEET
+ * ============================================================================
+ */
+
+/**
+ * Select applicable booking rule based on trade, service type, and scheduling context
+ * @param {Array} bookingRules - Array of booking rules from cheatSheet.bookingRules
+ * @param {Object} context - Booking context
+ * @param {string} context.trade - Trade category (e.g., "HVAC Residential")
+ * @param {string} context.serviceType - Service type (e.g., "Repair", "Maintenance")
+ * @param {string} context.priority - Priority level ("normal", "high", "emergency")
+ * @param {Date} context.requestedDate - Requested appointment date
+ * @param {boolean} context.isEmergency - Whether this is an emergency request
+ * @returns {Object|null} Selected booking rule or null
+ */
+function selectBookingRule(bookingRules, context) {
+  if (!Array.isArray(bookingRules) || bookingRules.length === 0) {
+    logger.info('[BOOKING] No booking rules configured');
+    return null;
+  }
+  
+  logger.info(`[BOOKING] Rules available: ${bookingRules.length}`);
+  logger.info(`[BOOKING] Matching context:`, {
+    trade: context.trade,
+    serviceType: context.serviceType,
+    priority: context.priority,
+    requestedDate: context.requestedDate,
+    isEmergency: context.isEmergency
+  });
+  
+  // Filter rules by trade and serviceType
+  const candidateRules = bookingRules.filter(rule => {
+    // Match trade (empty/null means "any trade")
+    const tradeMatches = !rule.trade || rule.trade === '' || rule.trade === context.trade;
+    
+    // Match serviceType (empty/null means "any serviceType")
+    const serviceTypeMatches = !rule.serviceType || rule.serviceType === '' || rule.serviceType === context.serviceType;
+    
+    return tradeMatches && serviceTypeMatches;
+  });
+  
+  logger.info(`[BOOKING] Candidate rules after trade/service filter: ${candidateRules.length}`);
+  
+  if (candidateRules.length === 0) {
+    logger.info('[BOOKING] No matching rules found, using default behavior');
+    return null;
+  }
+  
+  // Sort by priority: emergency > high > normal
+  const priorityOrder = { 'emergency': 0, 'high': 1, 'normal': 2 };
+  const sortedRules = candidateRules.sort((a, b) => {
+    const aPriority = priorityOrder[a.priority || 'normal'];
+    const bPriority = priorityOrder[b.priority || 'normal'];
+    return aPriority - bPriority;
+  });
+  
+  // Find first rule that passes all checks
+  for (const rule of sortedRules) {
+    const checks = validateBookingRule(rule, context);
+    
+    if (checks.isValid) {
+      logger.info(`[BOOKING] Selected rule: "${rule.label}" (priority=${rule.priority || 'normal'}, days=${(rule.daysOfWeek || []).join(',')}, time=${rule.timeWindow?.start || '--'}–${rule.timeWindow?.end || '--'})`, {
+        ruleId: rule.id,
+        trade: rule.trade || 'any',
+        serviceType: rule.serviceType || 'any'
+      });
+      
+      return rule;
+    } else {
+      logger.info(`[BOOKING] Rule "${rule.label}" failed validation:`, checks.reasons);
+    }
+  }
+  
+  logger.info('[BOOKING] No rules passed validation, using default behavior');
+  return null;
+}
+
+/**
+ * Validate if a booking rule is applicable for the given context
+ * @param {Object} rule - Booking rule to validate
+ * @param {Object} context - Booking context
+ * @returns {Object} Validation result with isValid flag and reasons
+ */
+function validateBookingRule(rule, context) {
+  const reasons = [];
+  
+  // Check days of week
+  if (context.requestedDate && Array.isArray(rule.daysOfWeek) && rule.daysOfWeek.length > 0) {
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const requestedDay = dayNames[new Date(context.requestedDate).getDay()];
+    
+    if (!rule.daysOfWeek.includes(requestedDay)) {
+      reasons.push(`Requested day ${requestedDay} not in allowed days: ${rule.daysOfWeek.join(',')}`);
+    }
+  }
+  
+  // Check weekend allowed
+  if (context.requestedDate && rule.weekendAllowed === false) {
+    const dayOfWeek = new Date(context.requestedDate).getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      reasons.push('Weekend booking not allowed by this rule');
+    }
+  }
+  
+  // Check same-day allowed
+  if (rule.sameDayAllowed === false) {
+    const today = new Date().toISOString().split('T')[0];
+    const requestedDay = new Date(context.requestedDate).toISOString().split('T')[0];
+    
+    if (requestedDay === today) {
+      reasons.push('Same-day booking not allowed by this rule');
+    }
+  }
+  
+  // Time window check is less strict (we don't have exact time, just date)
+  // This can be enhanced later when we have specific time requests
+  
+  return {
+    isValid: reasons.length === 0,
+    reasons
+  };
+}
+
+/**
+ * ============================================================================
+ * COMPANY CONTACTS INTEGRATION - V2 CHEAT SHEET
+ * ============================================================================
+ */
+
+/**
+ * Get primary contacts for transfer/notification based on criteria
+ * @param {Array} companyContacts - Array of contacts from cheatSheet.companyContacts
+ * @param {Object} options - Selection criteria
+ * @param {boolean} options.afterHours - Filter for after-hours contacts
+ * @param {boolean} options.smsOnly - Filter for SMS-enabled contacts
+ * @param {string} options.role - Filter by role (e.g., 'dispatcher', 'tech')
+ * @returns {Array} Sorted array of matching contacts (by priority)
+ */
+function getPrimaryContacts(companyContacts, options = {}) {
+  if (!Array.isArray(companyContacts) || companyContacts.length === 0) {
+    logger.warn('[CONTACTS] No company contacts configured');
+    return [];
+  }
+  
+  logger.info(`[CONTACTS] Total company contacts: ${companyContacts.length}`);
+  
+  let filtered = companyContacts;
+  
+  // Filter by contact type
+  if (!options.smsOnly) {
+    filtered = filtered.filter(c => 
+      c.type === 'phone' || c.type === 'mobile' || c.type === 'sms-only'
+    );
+  } else {
+    filtered = filtered.filter(c => c.smsEnabled === true);
+  }
+  
+  // Filter by after-hours if specified
+  if (options.afterHours) {
+    filtered = filtered.filter(c => c.isAfterHours === true);
+    logger.info(`[CONTACTS] After-hours contacts available: ${filtered.length}`);
+  }
+  
+  // Filter by role if specified
+  if (options.role) {
+    filtered = filtered.filter(c => c.role === options.role);
+    logger.info(`[CONTACTS] Contacts with role "${options.role}": ${filtered.length}`);
+  }
+  
+  // Sort by priority (lower number = higher priority)
+  const sorted = filtered.sort((a, b) => (a.priority || 99) - (b.priority || 99));
+  
+  if (sorted.length > 0) {
+    logger.info(`[CONTACTS] Selected contact for ${options.afterHours ? 'after-hours' : 'normal'} ${options.smsOnly ? 'SMS' : 'transfer'}: "${sorted[0].label}" ${sorted[0].phoneNumber}`, {
+      role: sorted[0].role,
+      isPrimary: sorted[0].isPrimary,
+      priority: sorted[0].priority || 99
+    });
+  }
+  
+  return sorted;
+}
+
+/**
  * Normalize extracted context from orchestrator format to legacy format
  * Supports both Phase 1 (flat) and Phase 3 (nested) formats
  * @param {Object} extracted - Extracted context (either format)
@@ -273,6 +459,55 @@ async function handleBookingFromContext(ctx) {
       hasServiceInfo: !!extracted.issueSummary
     });
     
+    // ═══════════════════════════════════════════════════════════════════
+    // LOAD CHEAT SHEET (BOOKING RULES + COMPANY CONTACTS)
+    // ═══════════════════════════════════════════════════════════════════
+    
+    let cheatSheet = {};
+    let bookingRules = [];
+    let companyContacts = [];
+    let selectedBookingRule = null;
+    
+    try {
+      const company = await Company.findById(companyId);
+      if (company && company.aiAgentSettings && company.aiAgentSettings.cheatSheet) {
+        cheatSheet = company.aiAgentSettings.cheatSheet;
+        bookingRules = Array.isArray(cheatSheet.bookingRules) ? cheatSheet.bookingRules : [];
+        companyContacts = Array.isArray(cheatSheet.companyContacts) ? cheatSheet.companyContacts : [];
+        
+        logger.info('[BOOKING HANDLER] Cheat sheet loaded', {
+          bookingRules: bookingRules.length,
+          companyContacts: companyContacts.length
+        });
+      } else {
+        logger.info('[BOOKING HANDLER] No cheat sheet configured, using default behavior');
+      }
+    } catch (cheatSheetError) {
+      logger.error('[BOOKING HANDLER] Failed to load cheat sheet, falling back to default behavior', {
+        error: cheatSheetError.message
+      });
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // SELECT BOOKING RULE (IF CONFIGURED)
+    // ═══════════════════════════════════════════════════════════════════
+    
+    const urgency = extracted.problem?.urgency || 'normal';
+    const isEmergency = urgency === 'emergency';
+    const requestedDate = extracted.requestedDate || new Date().toISOString().split('T')[0];
+    
+    if (bookingRules.length > 0) {
+      const bookingContext = {
+        trade: ctx.trade || "",
+        serviceType: extracted.serviceType || (isEmergency ? "emergency" : "repair"),
+        priority: isEmergency ? 'emergency' : 'normal',
+        requestedDate: requestedDate,
+        isEmergency: isEmergency
+      };
+      
+      selectedBookingRule = selectBookingRule(bookingRules, bookingContext);
+    }
+    
     // PRODUCTION HARDENING: Check for existing appointment (idempotency)
     // If this call already has an appointment, return it instead of creating duplicate
     if (ctx.appointmentId) {
@@ -319,12 +554,8 @@ async function handleBookingFromContext(ctx) {
     // Resolve location
     const location = await resolveLocation(companyId, extracted, contact._id);
     
-    // Determine urgency from extracted problem data
-    const urgency = extracted.problem?.urgency || 'normal';
-    const isEmergency = urgency === 'emergency';
-    
-    // Create appointment
-    const appointment = await Appointment.create({
+    // Create appointment with booking rule metadata
+    const appointmentData = {
       companyId,
       contactId: contact._id,
       locationId: location._id,
@@ -332,13 +563,32 @@ async function handleBookingFromContext(ctx) {
       trade: ctx.trade || "",
       serviceType: extracted.serviceType || (isEmergency ? "emergency" : "repair"),
       status: "scheduled",
-      scheduledDate: extracted.requestedDate || new Date().toISOString().split('T')[0],
+      scheduledDate: requestedDate,
       timeWindow: extracted.requestedWindow || "TBD",
       notesForTech: extracted.issueSummary || "",
       accessNotes: extracted.accessNotes || "",
       priority: isEmergency ? 'emergency' : determinePriority(extracted),
       urgencyScore: isEmergency ? 100 : calculateUrgencyScore(extracted)
-    });
+    };
+    
+    // Add booking rule metadata if rule was selected
+    if (selectedBookingRule) {
+      appointmentData.bookingRuleApplied = {
+        ruleId: selectedBookingRule.id,
+        label: selectedBookingRule.label,
+        trade: selectedBookingRule.trade || 'any',
+        serviceType: selectedBookingRule.serviceType || 'any',
+        priority: selectedBookingRule.priority || 'normal',
+        notes: selectedBookingRule.notes || ''
+      };
+      
+      logger.info('[BOOKING HANDLER] Applied booking rule to appointment', {
+        ruleId: selectedBookingRule.id,
+        ruleLabel: selectedBookingRule.label
+      });
+    }
+    
+    const appointment = await Appointment.create(appointmentData);
     
     logger.info(`[BOOKING HANDLER] Created appointment: ${appointment._id}`, {
       companyId,
@@ -446,6 +696,9 @@ module.exports = {
   resolveContact,
   resolveLocation,
   determinePriority,
-  calculateUrgencyScore
+  calculateUrgencyScore,
+  selectBookingRule,
+  validateBookingRule,
+  getPrimaryContacts
 };
 
