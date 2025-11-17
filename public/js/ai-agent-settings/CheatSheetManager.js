@@ -395,7 +395,31 @@ class CheatSheetManager {
       
       this.cheatSheet = company.aiAgentSettings?.cheatSheet || this.getDefaultCheatSheet();
       
-      console.log('[CHEAT SHEET] Loaded successfully:', this.cheatSheet);
+      // ✅ CHECKPOINT: Initialize V2 fields if they don't exist (for existing cheatSheets from MongoDB)
+      console.log('[CHEAT SHEET] 📊 CHECKPOINT: Raw loaded data:', this.cheatSheet);
+      
+      if (!Array.isArray(this.cheatSheet.bookingRules)) {
+        console.log('[CHEAT SHEET] 🔧 Initializing bookingRules array (was missing)');
+        this.cheatSheet.bookingRules = [];
+      }
+      if (!Array.isArray(this.cheatSheet.companyContacts)) {
+        console.log('[CHEAT SHEET] 🔧 Initializing companyContacts array (was missing)');
+        this.cheatSheet.companyContacts = [];
+      }
+      if (!Array.isArray(this.cheatSheet.links)) {
+        console.log('[CHEAT SHEET] 🔧 Initializing links array (was missing)');
+        this.cheatSheet.links = [];
+      }
+      if (!Array.isArray(this.cheatSheet.calculators)) {
+        console.log('[CHEAT SHEET] 🔧 Initializing calculators array (was missing)');
+        this.cheatSheet.calculators = [];
+      }
+      
+      console.log('[CHEAT SHEET] ✅ Loaded successfully with V2 fields initialized');
+      console.log('[CHEAT SHEET] 📊 bookingRules:', this.cheatSheet.bookingRules?.length || 0);
+      console.log('[CHEAT SHEET] 📊 companyContacts:', this.cheatSheet.companyContacts?.length || 0);
+      console.log('[CHEAT SHEET] 📊 links:', this.cheatSheet.links?.length || 0);
+      console.log('[CHEAT SHEET] 📊 calculators:', this.cheatSheet.calculators?.length || 0);
       console.log('[CHEAT SHEET] 📊 About to render() - cheatSheet exists:', !!this.cheatSheet);
       
       this.render();
@@ -434,7 +458,13 @@ class CheatSheetManager {
       edgeCases: [],
       transferRules: [],
       guardrails: [],
-      allowedActions: []
+      allowedActions: [],
+      
+      // V2-only fields
+      bookingRules: [],
+      companyContacts: [],
+      links: [],
+      calculators: []
     };
   }
   
@@ -2828,53 +2858,79 @@ class CheatSheetManager {
   // ═══════════════════════════════════════════════════════════════════
   
   async save() {
+    console.log('[CHEAT SHEET] 💾 CHECKPOINT 1: save() called');
+    
     if (!this.companyId) {
+      console.error('[CHEAT SHEET] ❌ CHECKPOINT 2: No company ID - aborting save');
       this.showNotification('No company selected', 'error');
       return;
     }
     
-    console.log('[CHEAT SHEET] 💾 Saving cheat sheet...');
-    console.log('[CHEAT SHEET] 💾 Booking rules count:', 
+    console.log('[CHEAT SHEET] ✅ CHECKPOINT 2: Company ID verified:', this.companyId);
+    console.log('[CHEAT SHEET] 📊 CHECKPOINT 3: isDirty flag:', this.isDirty);
+    console.log('[CHEAT SHEET] 💾 CHECKPOINT 4: Preparing to save cheat sheet...');
+    console.log('[CHEAT SHEET] 📊 Booking rules count:', 
       Array.isArray(this.cheatSheet.bookingRules) ? this.cheatSheet.bookingRules.length : 0
     );
-    console.log('[CHEAT SHEET] 💾 Company contacts count:', 
+    console.log('[CHEAT SHEET] 📊 Company contacts count:', 
       Array.isArray(this.cheatSheet.companyContacts) ? this.cheatSheet.companyContacts.length : 0
     );
-    console.log('[CHEAT SHEET] 💾 Links count:', 
+    console.log('[CHEAT SHEET] 📊 Links count:', 
       Array.isArray(this.cheatSheet.links) ? this.cheatSheet.links.length : 0
     );
-    console.log('[CHEAT SHEET] 💾 Calculators count:', 
+    console.log('[CHEAT SHEET] 📊 Calculators count:', 
       Array.isArray(this.cheatSheet.calculators) ? this.cheatSheet.calculators.length : 0
     );
     
     try {
+      console.log('[CHEAT SHEET] 🔑 CHECKPOINT 5: Getting auth token...');
       const token = localStorage.getItem('adminToken');
+      console.log('[CHEAT SHEET] ✅ CHECKPOINT 6: Auth token exists?', !!token);
+      
+      const payload = {
+        'aiAgentSettings.cheatSheet': {
+          ...this.cheatSheet,
+          updatedAt: new Date().toISOString(),
+          updatedBy: 'admin'
+        }
+      };
+      
+      console.log('[CHEAT SHEET] 📦 CHECKPOINT 7: Payload prepared:', JSON.stringify(payload, null, 2));
+      console.log('[CHEAT SHEET] 🌐 CHECKPOINT 8: Sending PATCH request to:', `/api/company/${this.companyId}`);
+      
       const response = await fetch(`/api/company/${this.companyId}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          'aiAgentSettings.cheatSheet': {
-            ...this.cheatSheet,
-            updatedAt: new Date().toISOString(),
-            updatedBy: 'admin'
-          }
-        })
+        body: JSON.stringify(payload)
       });
       
+      console.log('[CHEAT SHEET] 📥 CHECKPOINT 9: Response received. Status:', response.status);
+      
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const errorText = await response.text();
+        console.error('[CHEAT SHEET] ❌ CHECKPOINT 10: Response NOT OK. Status:', response.status, 'Body:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
       
-      console.log('[CHEAT SHEET] Saved successfully');
+      const responseData = await response.json();
+      console.log('[CHEAT SHEET] ✅ CHECKPOINT 10: Response OK. Data:', responseData);
+      console.log('[CHEAT SHEET] ✅ CHECKPOINT 11: Saved successfully to MongoDB');
+      
       this.showNotification('Cheat sheet saved successfully', 'success');
       this.isDirty = false;
       this.renderStatus();
       
+      console.log('[CHEAT SHEET] ✅ CHECKPOINT 12: Save complete. isDirty now:', this.isDirty);
+      
     } catch (error) {
-      console.error('[CHEAT SHEET] Save failed:', error);
+      console.error('[CHEAT SHEET] ❌ CHECKPOINT ERROR: Save failed:', error);
+      console.error('[CHEAT SHEET] ❌ Error details:', {
+        message: error.message,
+        stack: error.stack
+      });
       this.showNotification('Failed to save cheat sheet', 'error');
     }
   }
