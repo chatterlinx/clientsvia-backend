@@ -12,13 +12,24 @@
     .btn-back { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border: 2px solid #3b82f6; border-radius: 8px; background: #3b82f6; color: #ffffff; font-size: 14px; font-weight: 600; cursor: pointer; margin-right: 16px; transition: all 0.2s; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); }
     .btn-back:hover { background: #2563eb; border-color: #2563eb; transform: translateY(-1px); box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4); }
     .btn-back i { font-size: 12px; }
-    .top-nav-title { font-weight: 700; margin-right: 24px; }
+    .top-nav-title { font-weight: 700; margin-right: 24px; font-size: 18px; }
     .top-nav-tabs { display: flex; gap: 10px; flex-wrap: wrap; }
-    .tab-btn { padding: 6px 12px; border-radius: 999px; border: none; cursor: pointer; font-size: 13px; line-height: 1; background: transparent; color: #9ca3af; }
-    .tab-btn.active { background: #f97316; color: #111827; font-weight: 600; }
-    .subnav { display: flex; gap: 8px; padding: 10px 18px; border-bottom: 1px solid #e5e7eb; background: #f9fafb; flex-wrap: wrap;}
-    .subnav button { padding: 6px 10px; border-radius: 999px; border: none; background: #e5e7eb; color: #374151; font-size: 12px; cursor: pointer; }
-    .subnav button.active { background: #4f46e5; color: #f9fafb; font-weight: 600; }
+    /* LEVEL 1: Main Tabs - Bold & Prominent */
+    .tab-btn { padding: 10px 20px; border-radius: 999px; border: none; cursor: pointer; font-size: 15px; line-height: 1; background: transparent; color: #9ca3af; font-weight: 500; transition: all 0.2s; }
+    .tab-btn.active { background: #f97316; color: #111827; font-weight: 700; box-shadow: 0 2px 4px rgba(249, 115, 22, 0.3); }
+    .tab-btn:hover { background: rgba(249, 115, 22, 0.1); color: #f97316; }
+    /* LEVEL 2: AiCore Sub-nav - Medium & Clear */
+    .subnav { display: flex; gap: 6px; padding: 8px 18px; border-bottom: 2px solid #e5e7eb; background: #ffffff; flex-wrap: wrap;}
+    .subnav button { padding: 8px 14px; border-radius: 6px; border: none; background: transparent; color: #6b7280; font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.2s; }
+    .subnav button.active { background: #eef2ff; color: #4f46e5; font-weight: 600; border-bottom: 2px solid #4f46e5; }
+    .subnav button:hover { background: #f9fafb; color: #111827; }
+    /* LEVEL 3: Cheat Sheet Sub-tabs - Minimal & Subtle */
+    .cheatsheet-subtab-btn { padding: 10px 14px !important; font-size: 13px !important; font-weight: 500 !important; border-bottom: 2px solid transparent !important; color: #6b7280 !important; cursor: pointer !important; background: transparent !important; transition: all 0.2s !important; }
+    .cheatsheet-subtab-btn:hover { color: #111827 !important; border-bottom-color: #d1d5db !important; }
+    .cheatsheet-subtab-btn.active { color: #111827 !important; font-weight: 600 !important; border-bottom-color: #6366f1 !important; }
+    /* Cheat Sheet Content Areas */
+    .cheatsheet-subtab-content { padding: 20px 0; min-height: 300px; }
+    .cheatsheet-subtab-content.hidden { display: none !important; }
     .page { padding: 18px; }
     .panel { display: none; }
     .panel.active { display: block; }
@@ -208,98 +219,8 @@
             <!-- Guardrails content rendered by CheatSheetManager -->
           </div>
         </div>
-
-        <!-- GUARDRAILS SUBPANEL -->
-        <div class="panel" data-cheat-panel="guardrails">
-          <div class="card">
-            <h2>Guardrails</h2>
-            <p class="muted">Hard "DO / DO NOT" rules: pricing, legal/medical topics, promises, compliance regions.</p>
-          </div>
-        </div>
-
-        <!-- BOOKING RULES SUBPANEL -->
-        <div class="panel" data-cheat-panel="booking">
-          <div class="card">
-            <h2>Booking Rules</h2>
-            <p class="muted">
-              Required fields for <span class="pill-label">readyToBook</span> and per-trade/service booking behavior.
-            </p>
-            <div id="booking-rules-content">
-              <p class="muted">Select a trade/service type to configure booking rules...</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- COMPANY CONTACTS SUBPANEL -->
-        <div class="panel" data-cheat-panel="company-contacts">
-          <div class="card">
-            <h2>Company Contacts</h2>
-            <p class="muted">Who receives SMS, email, or escalation notifications per company and scenario.</p>
-            <div id="company-contacts-content">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Role</th>
-                    <th>Description</th>
-                    <th>Assigned Contact</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="role-contacts-table-body">
-                  <tr><td colspan="4" class="muted" style="text-align:center;">Loading...</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <!-- LINKS SUBPANEL -->
-        <div class="panel" data-cheat-panel="links">
-          <div class="card">
-            <h2>Links</h2>
-            <p class="muted">Payment links, self-booking URLs, docs, and external resources used by the agent.</p>
-            <button class="btn btn-primary" onclick="openAddLinkModal()">+ Add Link</button>
-            <div id="links-content">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Label</th>
-                    <th>Type</th>
-                    <th>URL</th>
-                    <th>Visible to Agent</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="links-table-body">
-                  <tr><td colspan="5" class="muted" style="text-align:center;">Loading...</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <!-- CALCULATOR SUBPANEL -->
-        <div class="panel" data-cheat-panel="calculator">
-          <div class="card">
-            <h2>Calculator</h2>
-            <p class="muted">Per-company usage, estimated AI cost, and minutes for quick plan checks.</p>
-            <div id="calculator-content">
-              <p class="muted">Loading usage statistics...</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- ACTIVE INSTRUCTIONS PREVIEW SUBPANEL -->
-        <div class="panel" data-cheat-panel="cheat-active-instructions">
-          <div class="card">
-            <h2>Active Instructions Preview</h2>
-            <p class="muted">Inline view of the same data served by <span class="pill-label">/api/active-instructions</span>.</p>
-            <div id="active-instructions-preview-content">
-              <p class="muted">Loading active instructions...</p>
-            </div>
-          </div>
-        </div>
       </div>
+      <!-- END CHEAT SHEET -->
 
       <!-- AICORE: CALL FLOW -->
       <div class="panel" data-aicore-panel="call-flow">
