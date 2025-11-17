@@ -1338,17 +1338,85 @@ class CheatSheetManager {
     
     if (transferRules.length === 0) {
       container.innerHTML = `
-        <div class="text-center py-12 text-gray-500">
+        <div class="text-center py-10 text-gray-500">
           <i class="fas fa-phone-square text-4xl mb-3 opacity-50"></i>
-          <p class="text-sm">No transfer rules defined yet</p>
-          <p class="text-xs mt-1">Transfer rules route calls to specific departments or people</p>
+          <p class="text-sm font-medium">No transfer rules defined yet</p>
+          <p class="text-xs mt-1">Transfer rules route calls to specific departments or people based on intent.</p>
         </div>
       `;
       return;
     }
     
-    // Render transfer rules (implementation similar to edge cases)
-    container.innerHTML = '<p class="text-sm text-gray-600 italic">Transfer rules UI coming next...</p>';
+    container.innerHTML = transferRules.map((rule, index) => `
+      <div class="border border-blue-100 rounded-lg p-4 bg-blue-50/40">
+        <div class="flex flex-wrap gap-4 items-center justify-between border-b border-blue-100 pb-3 mb-3">
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <label style="font-size:11px; text-transform:uppercase; color:#6b7280; font-weight:600;">
+              Priority
+              <input type="number" min="1" max="100" value="${rule.priority ?? 10}"
+                onchange="cheatSheetManager.updateTransferRule(${index}, 'priority', Number(this.value))"
+                style="display:block; margin-top:4px; width:70px; padding:6px 8px; border:1px solid #c7d2fe; border-radius:8px; font-size:14px;">
+            </label>
+            <label style="font-size:11px; text-transform:uppercase; color:#6b7280; font-weight:600;">
+              Intent Tag
+              <input type="text" value="${this.escapeHtml(rule.intentTag || '')}"
+                onchange="cheatSheetManager.updateTransferRule(${index}, 'intentTag', this.value)"
+                placeholder="booking.readyToBook"
+                style="display:block; margin-top:4px; min-width:180px; padding:6px 10px; border:1px solid #c7d2fe; border-radius:8px; font-size:14px;">
+            </label>
+          </div>
+          <div style="display:flex; gap:16px; align-items:center;">
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#1d4ed8;">
+              <input type="checkbox" ${rule.enabled !== false ? 'checked' : ''} onchange="cheatSheetManager.updateTransferRule(${index}, 'enabled', this.checked)">
+              Enabled
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#7c3aed;">
+              <input type="checkbox" ${rule.afterHoursOnly ? 'checked' : ''} onchange="cheatSheetManager.updateTransferRule(${index}, 'afterHoursOnly', this.checked)">
+              After-hours only
+            </label>
+            <button onclick="cheatSheetManager.removeTransferRule(${index})" title="Delete rule"
+              style="background:none; border:none; color:#dc2626; font-size:18px;">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px;">
+            <label style="font-size:12px; font-weight:600; color:#374151;">
+            Target Contact / Queue
+            <input type="text" value="${this.escapeHtml(rule.contactNameOrQueue || '')}"
+              onchange="cheatSheetManager.updateTransferRule(${index}, 'contactNameOrQueue', this.value)"
+              placeholder="Office Manager Desk / Queue ID"
+              style="display:block; margin-top:4px; width:100%; padding:8px 10px; border:1px solid #c7d2fe; border-radius:8px;">
+          </label>
+
+          <label style="font-size:12px; font-weight:600; color:#374151;">
+            Phone Number / Extension
+            <input type="text" value="${this.escapeHtml(rule.phoneNumber || '')}"
+              onchange="cheatSheetManager.updateTransferRule(${index}, 'phoneNumber', this.value)"
+              placeholder="+1 (222) 555-1212"
+              style="display:block; margin-top:4px; width:100%; padding:8px 10px; border:1px solid #c7d2fe; border-radius:8px;">
+          </label>
+
+          <label style="font-size:12px; font-weight:600; color:#374151;">
+            Entities to Collect (comma separated)
+            <input type="text" value="${this.escapeHtml((rule.collectEntities || []).join(', '))}"
+              onchange="cheatSheetManager.updateTransferRule(${index}, 'collectEntities', this.value.split(',').map(v => v.trim()).filter(Boolean))"
+              placeholder="name, phone, appointmentDate"
+              style="display:block; margin-top:4px; width:100%; padding:8px 10px; border:1px solid #c7d2fe; border-radius:8px;">
+          </label>
+        </div>
+
+        <div style="margin-top:16px;">
+          <label style="font-size:12px; font-weight:600; color:#374151; display:block; margin-bottom:6px;">
+            Transfer Script (what the AI says before transferring)
+          </label>
+          <textarea rows="2"
+            onchange="cheatSheetManager.updateTransferRule(${index}, 'script', this.value)"
+            style="width:100%; padding:10px 12px; border:1px solid #c7d2fe; border-radius:8px; font-size:13px;">${this.escapeHtml(rule.script || '')}</textarea>
+        </div>
+      </div>
+    `).join('');
   }
   
   renderGuardrails() {
@@ -1520,6 +1588,20 @@ class CheatSheetManager {
       createdBy: 'admin'
     });
     
+    this.markDirty();
+    this.renderTransferRules();
+  }
+
+  updateTransferRule(index, field, value) {
+    if (!this.cheatSheet.transferRules || !this.cheatSheet.transferRules[index]) return;
+    this.cheatSheet.transferRules[index][field] = value;
+    this.markDirty();
+  }
+
+  removeTransferRule(index) {
+    if (!this.cheatSheet.transferRules || !this.cheatSheet.transferRules[index]) return;
+    if (!confirm('Remove this transfer rule?')) return;
+    this.cheatSheet.transferRules.splice(index, 1);
     this.markDirty();
     this.renderTransferRules();
   }
