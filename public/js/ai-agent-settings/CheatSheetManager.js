@@ -68,12 +68,12 @@ class CheatSheetManager {
       return;
     }
 
-    if (this.rootElement.querySelector('#triage-cards-list-section')) {
-      return;
+    if (!this.rootElement.querySelector('#triage-cards-list-section')) {
+      console.log('[CHEAT SHEET] Injecting default layout into', this.rootSelector);
+      this.rootElement.innerHTML = this.getDefaultLayoutMarkup();
     }
 
-    console.log('[CHEAT SHEET] Injecting default layout into', this.rootSelector);
-    this.rootElement.innerHTML = this.getDefaultLayoutMarkup();
+    this.attachQuickSetupToggle();
   }
 
   getDefaultLayoutMarkup() {
@@ -81,12 +81,15 @@ class CheatSheetManager {
       <div data-cheatsheet-layout="control-plane-v2" style="display:flex; flex-direction:column; gap:24px;">
         <div id="cheatsheet-status"></div>
 
-        <div style="padding:16px; border:1px solid #e0e7ff; border-radius:12px; background:linear-gradient(90deg,#eef2ff,#f5f3ff); display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between;">
-          <div style="display:flex; align-items:center; gap:8px; color:#4338ca; font-weight:600; font-size:14px;">
-            <i class="fas fa-magic"></i>
-            Quick Setup
-          </div>
-          <div style="display:flex; flex-wrap:wrap; gap:8px;">
+        <div data-cheatsheet-quicksetup style="border:1px solid #e0e7ff; border-radius:12px; background:linear-gradient(90deg,#eef2ff,#f5f3ff); padding:12px 16px;">
+          <button id="cheatsheet-quicksetup-toggle" type="button" style="width:100%; display:flex; align-items:center; justify-content:space-between; background:none; border:none; color:#4338ca; font-weight:600; font-size:14px; cursor:pointer;">
+            <span style="display:flex; align-items:center; gap:8px;">
+              <i class="fas fa-magic"></i>
+              Quick Setup Shortcuts
+            </span>
+            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+          </button>
+          <div id="cheatsheet-quicksetup-content" style="margin-top:12px; display:none; flex-wrap:wrap; gap:8px;">
             <button onclick="cheatSheetManager?.showImportFromTemplateModal()" style="padding:10px 14px; border-radius:999px; border:none; background:#4f46e5; color:#fff; font-weight:600; display:flex; align-items:center; gap:6px;">
               <i class="fas fa-download"></i>
               Import from Template
@@ -142,6 +145,35 @@ class CheatSheetManager {
         </div>
       </div>
     `;
+  }
+
+  attachQuickSetupToggle() {
+    if (!this.rootElement) return;
+    const toggle = this.rootElement.querySelector('#cheatsheet-quicksetup-toggle');
+    const content = this.rootElement.querySelector('#cheatsheet-quicksetup-content');
+    if (!toggle || !content || toggle.dataset.initialized) {
+      return;
+    }
+
+    toggle.dataset.initialized = 'true';
+    let open = false;
+    const icon = toggle.querySelector('i[aria-hidden="true"]');
+
+    const setState = () => {
+      content.style.display = open ? 'flex' : 'none';
+      if (icon) {
+        icon.classList.toggle('fa-chevron-up', open);
+        icon.classList.toggle('fa-chevron-down', !open);
+      }
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+
+    setState();
+
+    toggle.addEventListener('click', () => {
+      open = !open;
+      setState();
+    });
   }
   
   // ═══════════════════════════════════════════════════════════════════
