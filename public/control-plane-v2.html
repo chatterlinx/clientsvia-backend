@@ -663,14 +663,15 @@
 
     // ═══════════════════════════════════════════════════════════════════════
     // AICORE MANAGERS INITIALIZATION (GLOBALLY ACCESSIBLE FOR ONCLICK HANDLERS)
+    // Each manager expects a specific global variable name (checked their onclick handlers)
     // ═══════════════════════════════════════════════════════════════════════
     window.variablesManager = null;
-    window.templatesManager = null;
-    window.liveScenariosManager = null;
-    window.cheatSheetManager = null;
-    window.callFlowManagerInstance = null; // Renamed to avoid conflict
-    window.knowledgebaseManager = null;
-    window.analyticsManager = null;
+    window.aiCoreTemplatesManager = null;  // Uses window.aiCoreTemplatesManager in onclick
+    window.aiCoreLiveScenariosManager = null;  // Uses aiCoreLiveScenariosManager in onclick
+    window.cheatSheetManager = null;  // Uses cheatSheetManager in onclick
+    window.callFlowManager = null;  // Uses callFlowManager in onclick
+    window.aiCoreKnowledgebaseManager = null;  // Uses aiCoreKnowledgebaseManager in onclick
+    window.analyticsManager = null;  // Uses window.analyticsManager in onclick
 
     // Mock parent object for all managers (matches company-profile.html interface)
     const mockParent = {
@@ -705,20 +706,20 @@
     // Initialize AiCoreTemplatesManager
     function initTemplatesManager() {
       if (!currentCompanyId) return;
-      if (!window.templatesManager) {
+      if (!window.aiCoreTemplatesManager) {
         console.log('🎯 [CONTROL PLANE] Initializing AiCoreTemplatesManager');
-        window.templatesManager = new window.AiCoreTemplatesManager(mockParent);
-        window.templatesManager.load();
+        window.aiCoreTemplatesManager = new window.AiCoreTemplatesManager(mockParent);
+        window.aiCoreTemplatesManager.load();
       }
     }
 
     // Initialize AiCoreLiveScenariosManager
     function initLiveScenariosManager() {
       if (!currentCompanyId) return;
-      if (!window.liveScenariosManager) {
+      if (!window.aiCoreLiveScenariosManager) {
         console.log('🎯 [CONTROL PLANE] Initializing AiCoreLiveScenariosManager');
-        window.liveScenariosManager = new window.AiCoreLiveScenariosManager(mockParent);
-        window.liveScenariosManager.load();
+        window.aiCoreLiveScenariosManager = new window.AiCoreLiveScenariosManager(mockParent);
+        window.aiCoreLiveScenariosManager.load();
       }
     }
 
@@ -735,20 +736,20 @@
     // Initialize CallFlowManager
     function initCallFlowManager() {
       if (!currentCompanyId) return;
-      if (!window.callFlowManagerInstance) {
+      if (!window.callFlowManager) {
         console.log('🎯 [CONTROL PLANE] Initializing CallFlowManager');
-        window.callFlowManagerInstance = new window.CallFlowManager(mockParent);
-        window.callFlowManagerInstance.load();
+        window.callFlowManager = new window.CallFlowManager(mockParent);
+        window.callFlowManager.load();
       }
     }
 
     // Initialize AiCoreKnowledgebaseManager
     function initKnowledgebaseManager() {
       if (!currentCompanyId) return;
-      if (!window.knowledgebaseManager) {
+      if (!window.aiCoreKnowledgebaseManager) {
         console.log('🎯 [CONTROL PLANE] Initializing AiCoreKnowledgebaseManager');
-        window.knowledgebaseManager = new window.AiCoreKnowledgebaseManager(mockParent);
-        window.knowledgebaseManager.load();
+        window.aiCoreKnowledgebaseManager = new window.AiCoreKnowledgebaseManager(mockParent);
+        window.aiCoreKnowledgebaseManager.load();
       }
     }
 
