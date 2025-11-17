@@ -1785,8 +1785,8 @@ class CheatSheetManager {
     const priority = window.prompt('Priority (normal | high | emergency):', rule.priority || 'normal') ?? rule.priority;
     const days = window.prompt('Days of week (comma-separated, e.g. Mon,Tue,Wed,Thu,Fri):', (rule.daysOfWeek || []).join(',')) ?? (rule.daysOfWeek || []).join(',');
     
-    const start = window.prompt('Time window start (HH:MM):', (rule.timeWindow && rule.timeWindow.start) || '08:00') ?? (rule.timeWindow && rule.timeWindow.start) || '08:00';
-    const end = window.prompt('Time window end (HH:MM):', (rule.timeWindow && rule.timeWindow.end) || '17:00') ?? (rule.timeWindow && rule.timeWindow.end) || '17:00';
+    const start = window.prompt('Time window start (HH:MM):', (rule.timeWindow && rule.timeWindow.start) || '08:00') ?? ((rule.timeWindow && rule.timeWindow.start) || '08:00');
+    const end = window.prompt('Time window end (HH:MM):', (rule.timeWindow && rule.timeWindow.end) || '17:00') ?? ((rule.timeWindow && rule.timeWindow.end) || '17:00');
     
     const sameDayAllowed = window.prompt('Allow same-day booking? (yes/no):', rule.sameDayAllowed === false ? 'no' : 'yes')?.toLowerCase() === 'no' ? false : true;
     const weekendAllowed = window.prompt('Allow weekend booking? (yes/no):', rule.weekendAllowed ? 'yes' : 'no')?.toLowerCase() === 'yes';
