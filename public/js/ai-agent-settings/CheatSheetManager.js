@@ -282,9 +282,12 @@ class CheatSheetManager {
       this.cheatSheet = company.aiAgentSettings?.cheatSheet || this.getDefaultCheatSheet();
       
       console.log('[CHEAT SHEET] Loaded successfully:', this.cheatSheet);
+      console.log('[CHEAT SHEET] 📊 About to render() - cheatSheet exists:', !!this.cheatSheet);
       
       this.render();
+      console.log('[CHEAT SHEET] 📊 render() completed, about to switchSubTab');
       this.switchSubTab('triage'); // Initialize to Triage sub-tab
+      console.log('[CHEAT SHEET] 📊 switchSubTab completed, marking as ready');
       this.isDirty = false;
       this.isReady = true; // Mark as ready after successful load
       console.log('[CHEAT SHEET] ✅ Manager is now ready for user actions');
