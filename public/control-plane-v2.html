@@ -200,23 +200,129 @@
           </div>
 
           <!-- SUB-TAB CONTENT CONTAINERS (CheatSheetManager will render content here) -->
-          <div id="cheatsheet-subtab-triage" class="cheatsheet-subtab-content">
-            <!-- Triage content rendered by CheatSheetManager -->
+          
+          <!-- SUB-TAB: TRIAGE (THE BRAIN CONFIG) -->
+          <div id="cheatsheet-subtab-triage" class="cheatsheet-subtab-content" style="padding: 24px 0;">
+            
+            <div style="margin-bottom: 24px;">
+              <h3 style="font-size: 24px; font-weight: 700; color: #111827; margin-bottom: 8px;">
+                <i class="fas fa-brain" style="margin-right: 8px; color: #9333ea;"></i>🧠 Triage - THE BRAIN Config
+              </h3>
+              <p style="font-size: 14px; color: #6b7280;">
+                Configure THE BRAIN (Triage Engine) that lives inside Frontline-Intel. All triage rules (manual + AI cards) are compiled into a unified decision tree.
+              </p>
+            </div>
+            
+            <!-- Triage Cards List Section -->
+            <div id="triage-cards-list-section" style="margin-bottom: 32px;">
+              <!-- Triage Cards List will be rendered by CheatSheetManager.js -->
+            </div>
+
+            <!-- Manual Triage Table Section -->
+            <div id="manual-triage-table-section" style="margin-bottom: 32px;">
+              <!-- Manual Triage Table will be rendered by CheatSheetManager.js -->
+            </div>
+
+            <!-- AI Triage Builder Section -->
+            <div id="triage-builder-section" style="margin-bottom: 32px;">
+              <!-- Triage Builder will be rendered by CheatSheetManager.js -->
+            </div>
+            
           </div>
-          <div id="cheatsheet-subtab-frontline-intel" class="cheatsheet-subtab-content hidden" style="display:none;">
-            <!-- Frontline-Intel content rendered by CheatSheetManager -->
+          
+          <!-- SUB-TAB: FRONTLINE-INTEL (THE BODY PROTOCOL) -->
+          <div id="cheatsheet-subtab-frontline-intel" class="cheatsheet-subtab-content hidden" style="display:none; padding: 24px 0;">
+            
+            <div style="margin-bottom: 24px;">
+              <h3 style="font-size: 24px; font-weight: 700; color: #111827; margin-bottom: 8px;">
+                <i class="fas fa-robot" style="margin-right: 8px; color: #2563eb;"></i>Frontline-Intel - THE BODY Protocol
+              </h3>
+              <p style="font-size: 14px; color: #6b7280;">
+                Configure how Frontline-Intel (the body that contains THE BRAIN) speaks and behaves. This is the protocol text for the LLM.
+              </p>
+            </div>
+            
+            <!-- Company Instructions Section -->
+            <div id="company-instructions-section" style="margin-bottom: 32px;">
+              <!-- Company Instructions will be rendered by CheatSheetManager.js -->
+            </div>
+            
           </div>
-          <div id="cheatsheet-subtab-transfer-calls" class="cheatsheet-subtab-content hidden" style="display:none;">
-            <!-- Transfer Calls content rendered by CheatSheetManager -->
+          
+          <!-- SUB-TAB: TRANSFER CALLS (ROUTING DEPARTMENT) -->
+          <div id="cheatsheet-subtab-transfer-calls" class="cheatsheet-subtab-content hidden" style="display:none; padding: 24px 0;">
+            
+            <div style="margin-bottom: 24px;">
+              <h3 style="font-size: 24px; font-weight: 700; color: #111827; margin-bottom: 8px;">
+                <i class="fas fa-phone-square" style="margin-right: 8px; color: #2563eb;"></i>Transfer Calls - Routing Department
+              </h3>
+              <p style="font-size: 14px; color: #6b7280;">
+                Define when and how to transfer calls to office staff or departments. Configure transfer numbers, schedules, and routing logic.
+              </p>
+            </div>
+            
+            <!-- Transfer Rules Section -->
+            <div id="transfer-rules-section" style="margin-bottom: 32px;">
+              <!-- Transfer Rules will be rendered by CheatSheetManager.js -->
+            </div>
+            
           </div>
-          <div id="cheatsheet-subtab-edge-cases" class="cheatsheet-subtab-content hidden" style="display:none;">
-            <!-- Edge Cases content rendered by CheatSheetManager -->
+          
+          <!-- SUB-TAB: EDGE CASES (CRISIS RESPONSE UNIT) -->
+          <div id="cheatsheet-subtab-edge-cases" class="cheatsheet-subtab-content hidden" style="display:none; padding: 24px 0;">
+            
+            <div style="margin-bottom: 24px;">
+              <h3 style="font-size: 24px; font-weight: 700; color: #111827; margin-bottom: 8px;">
+                <i class="fas fa-exclamation-triangle" style="margin-right: 8px; color: #ef4444;"></i>Edge Cases - Crisis Response Unit
+              </h3>
+              <p style="font-size: 14px; color: #6b7280;">
+                Configure how the AI handles unusual, ambiguous, or potentially problematic call scenarios. Define fallback behaviors.
+              </p>
+            </div>
+            
+            <!-- Edge Cases Section -->
+            <div id="edge-cases-section" style="margin-bottom: 32px;">
+              <!-- Edge Cases will be rendered by CheatSheetManager.js -->
+            </div>
+            
           </div>
-          <div id="cheatsheet-subtab-behavior" class="cheatsheet-subtab-content hidden" style="display:none;">
-            <!-- Behavior content rendered by CheatSheetManager -->
+          
+          <!-- SUB-TAB: BEHAVIOR (PERSONALITY LAB) -->
+          <div id="cheatsheet-subtab-behavior" class="cheatsheet-subtab-content hidden" style="display:none; padding: 24px 0;">
+            
+            <div style="margin-bottom: 24px;">
+              <h3 style="font-size: 24px; font-weight: 700; color: #111827; margin-bottom: 8px;">
+                <i class="fas fa-sliders-h" style="margin-right: 8px; color: #10b981;"></i>Behavior - Personality Lab
+              </h3>
+              <p style="font-size: 14px; color: #6b7280;">
+                Configure the AI's personality, tone, formality, empathy level, and conversation style. Define how it should sound.
+              </p>
+            </div>
+            
+            <!-- Behavior Rules Section -->
+            <div id="behavior-rules-section" style="margin-bottom: 32px;">
+              <!-- Behavior Rules will be rendered by CheatSheetManager.js -->
+            </div>
+            
           </div>
-          <div id="cheatsheet-subtab-guardrails" class="cheatsheet-subtab-content hidden" style="display:none;">
-            <!-- Guardrails content rendered by CheatSheetManager -->
+          
+          <!-- SUB-TAB: GUARDRAILS (SAFETY HEADQUARTERS) -->
+          <div id="cheatsheet-subtab-guardrails" class="cheatsheet-subtab-content hidden" style="display:none; padding: 24px 0;">
+            
+            <div style="margin-bottom: 24px;">
+              <h3 style="font-size: 24px; font-weight: 700; color: #111827; margin-bottom: 8px;">
+                <i class="fas fa-shield-alt" style="margin-right: 8px; color: #dc2626;"></i>Guardrails - Safety Headquarters
+              </h3>
+              <p style="font-size: 14px; color: #6b7280;">
+                Define hard rules the AI must never violate: topics to avoid, words to never say, actions to never take. These are safety limits.
+              </p>
+            </div>
+            
+            <!-- Guardrails Section -->
+            <div id="guardrails-section" style="margin-bottom: 32px;">
+              <!-- Guardrails will be rendered by CheatSheetManager.js -->
+            </div>
+            
           </div>
         </div>
       </div>
