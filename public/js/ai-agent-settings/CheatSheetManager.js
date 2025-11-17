@@ -241,8 +241,10 @@ class CheatSheetManager {
       event.preventDefault();
 
       if (action === 'add-transfer-rule') {
+        console.log('🔘 [CHEAT SHEET BUTTON] Add Transfer Rule clicked');
         this.addTransferRule();
       } else if (action === 'add-edge-case') {
+        console.log('🔘 [CHEAT SHEET BUTTON] Add Edge Case clicked');
         this.addEdgeCase();
       }
     });
@@ -1553,6 +1555,10 @@ class CheatSheetManager {
   // ═══════════════════════════════════════════════════════════════════
   
   addEdgeCase() {
+    if (!this.cheatSheet) {
+      console.warn('[CHEAT SHEET] addEdgeCase called before cheat sheet loaded');
+      return;
+    }
     if (!this.cheatSheet.edgeCases) {
       this.cheatSheet.edgeCases = [];
     }
