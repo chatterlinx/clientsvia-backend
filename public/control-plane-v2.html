@@ -661,15 +661,15 @@
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // AICORE MANAGERS INITIALIZATION
+    // AICORE MANAGERS INITIALIZATION (GLOBALLY ACCESSIBLE FOR ONCLICK HANDLERS)
     // ═══════════════════════════════════════════════════════════════════════
-    let variablesManager = null;
-    let templatesManager = null;
-    let liveScenariosManager = null;
-    let cheatSheetManager = null;
-    let callFlowManager = null;
-    let knowledgebaseManager = null;
-    let analyticsManager = null;
+    window.variablesManager = null;
+    window.templatesManager = null;
+    window.liveScenariosManager = null;
+    window.cheatSheetManager = null;
+    window.callFlowManagerInstance = null; // Renamed to avoid conflict
+    window.knowledgebaseManager = null;
+    window.analyticsManager = null;
 
     // Mock parent object for all managers (matches company-profile.html interface)
     const mockParent = {
@@ -694,70 +694,70 @@
         alert('No companyId provided in URL. Add ?companyId=... to the URL.');
         return;
       }
-      if (!variablesManager) {
+      if (!window.variablesManager) {
         console.log('🎯 [CONTROL PLANE] Initializing VariablesManager');
-        variablesManager = new window.VariablesManager(mockParent);
-        variablesManager.load();
+        window.variablesManager = new window.VariablesManager(mockParent);
+        window.variablesManager.load();
       }
     }
 
     // Initialize AiCoreTemplatesManager
     function initTemplatesManager() {
       if (!currentCompanyId) return;
-      if (!templatesManager) {
+      if (!window.templatesManager) {
         console.log('🎯 [CONTROL PLANE] Initializing AiCoreTemplatesManager');
-        templatesManager = new window.AiCoreTemplatesManager(mockParent);
-        templatesManager.load();
+        window.templatesManager = new window.AiCoreTemplatesManager(mockParent);
+        window.templatesManager.load();
       }
     }
 
     // Initialize AiCoreLiveScenariosManager
     function initLiveScenariosManager() {
       if (!currentCompanyId) return;
-      if (!liveScenariosManager) {
+      if (!window.liveScenariosManager) {
         console.log('🎯 [CONTROL PLANE] Initializing AiCoreLiveScenariosManager');
-        liveScenariosManager = new window.AiCoreLiveScenariosManager(mockParent);
-        liveScenariosManager.load();
+        window.liveScenariosManager = new window.AiCoreLiveScenariosManager(mockParent);
+        window.liveScenariosManager.load();
       }
     }
 
     // Initialize CheatSheetManager
     function initCheatSheetManager() {
       if (!currentCompanyId) return;
-      if (!cheatSheetManager) {
+      if (!window.cheatSheetManager) {
         console.log('🎯 [CONTROL PLANE] Initializing CheatSheetManager');
-        cheatSheetManager = new window.CheatSheetManager(mockParent);
-        cheatSheetManager.load();
+        window.cheatSheetManager = new window.CheatSheetManager(mockParent);
+        window.cheatSheetManager.load();
       }
     }
 
     // Initialize CallFlowManager
     function initCallFlowManager() {
       if (!currentCompanyId) return;
-      if (!callFlowManager) {
+      if (!window.callFlowManagerInstance) {
         console.log('🎯 [CONTROL PLANE] Initializing CallFlowManager');
-        callFlowManager = new window.CallFlowManager(mockParent);
-        callFlowManager.load();
+        window.callFlowManagerInstance = new window.CallFlowManager(mockParent);
+        window.callFlowManagerInstance.load();
       }
     }
 
     // Initialize AiCoreKnowledgebaseManager
     function initKnowledgebaseManager() {
       if (!currentCompanyId) return;
-      if (!knowledgebaseManager) {
+      if (!window.knowledgebaseManager) {
         console.log('🎯 [CONTROL PLANE] Initializing AiCoreKnowledgebaseManager');
-        knowledgebaseManager = new window.AiCoreKnowledgebaseManager(mockParent);
-        knowledgebaseManager.load();
+        window.knowledgebaseManager = new window.AiCoreKnowledgebaseManager(mockParent);
+        window.knowledgebaseManager.load();
       }
     }
 
     // Initialize AnalyticsManager (for Observability tab)
     function initAnalyticsManager() {
       if (!currentCompanyId) return;
-      if (!analyticsManager) {
+      if (!window.analyticsManager) {
         console.log('🎯 [CONTROL PLANE] Initializing AnalyticsManager');
-        analyticsManager = new window.AnalyticsManager(mockParent);
-        analyticsManager.load();
+        window.analyticsManager = new window.AnalyticsManager(mockParent);
+        window.analyticsManager.load();
       }
     }
 
