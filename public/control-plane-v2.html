@@ -175,34 +175,44 @@
         <!-- Cheat Sheet Manager Container (ID must match CheatSheetManager.js: no hyphen!) -->
         <div id="cheatsheet-container">
           
-          <!-- SUB-TAB NAVIGATION -->
-          <div class="mb-6 border-b border-gray-200" style="margin-bottom: 24px; border-bottom: 1px solid #e5e7eb;">
-            <nav class="flex flex-wrap -mb-px space-x-2" role="tablist" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: -1px;">
-              <button class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" data-subtab="triage" onclick="window.cheatSheetManager.switchSubTab('triage')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap;">
-                <i class="fas fa-brain mr-2"></i>🧠 Triage
+          <!-- Header -->
+          <div style="margin-bottom: 24px;">
+            <h2 style="font-size: 30px; font-weight: 700; color: #111827; margin-bottom: 8px;">
+              <i class="fas fa-brain" style="margin-right: 12px; color: #4f46e5;"></i>Cheat Sheet – The Config Place
+            </h2>
+            <p style="font-size: 14px; color: #6b7280;">
+              Configure THE BRAIN (Triage Engine), Frontline-Intel protocol, transfer routing, edge cases, behavior, and guardrails.
+            </p>
+          </div>
+
+          <!-- SUB-TAB NAVIGATION (CheatSheetManager's navigation row) -->
+          <div style="margin-bottom: 24px; border-bottom: 1px solid #e5e7eb;">
+            <nav style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: -1px;">
+              <button class="cheatsheet-subtab-btn" data-subtab="triage" onclick="window.cheatSheetManager.switchSubTab('triage')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap; background: none; border-top: none; border-left: none; border-right: none;">
+                <i class="fas fa-brain" style="margin-right: 8px;"></i>🧠 Triage
               </button>
-              <button class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" data-subtab="frontline-intel" onclick="window.cheatSheetManager.switchSubTab('frontline-intel')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap;">
-                <i class="fas fa-robot mr-2"></i>Frontline-Intel
+              <button class="cheatsheet-subtab-btn" data-subtab="frontline-intel" onclick="window.cheatSheetManager.switchSubTab('frontline-intel')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap; background: none; border-top: none; border-left: none; border-right: none;">
+                <i class="fas fa-robot" style="margin-right: 8px;"></i>Frontline-Intel
               </button>
-              <button class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" data-subtab="transfer-calls" onclick="window.cheatSheetManager.switchSubTab('transfer-calls')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap;">
-                <i class="fas fa-phone-square mr-2"></i>Transfer Calls
+              <button class="cheatsheet-subtab-btn" data-subtab="transfer-calls" onclick="window.cheatSheetManager.switchSubTab('transfer-calls')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap; background: none; border-top: none; border-left: none; border-right: none;">
+                <i class="fas fa-phone-square" style="margin-right: 8px;"></i>Transfer Calls
               </button>
-              <button class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" data-subtab="edge-cases" onclick="window.cheatSheetManager.switchSubTab('edge-cases')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap;">
-                <i class="fas fa-exclamation-triangle mr-2"></i>Edge Cases
+              <button class="cheatsheet-subtab-btn" data-subtab="edge-cases" onclick="window.cheatSheetManager.switchSubTab('edge-cases')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap; background: none; border-top: none; border-left: none; border-right: none;">
+                <i class="fas fa-exclamation-triangle" style="margin-right: 8px;"></i>Edge Cases
               </button>
-              <button class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" data-subtab="behavior" onclick="window.cheatSheetManager.switchSubTab('behavior')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap;">
-                <i class="fas fa-sliders-h mr-2"></i>Behavior
+              <button class="cheatsheet-subtab-btn" data-subtab="behavior" onclick="window.cheatSheetManager.switchSubTab('behavior')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap; background: none; border-top: none; border-left: none; border-right: none;">
+                <i class="fas fa-sliders-h" style="margin-right: 8px;"></i>Behavior
               </button>
-              <button class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" data-subtab="guardrails" onclick="window.cheatSheetManager.switchSubTab('guardrails')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap;">
-                <i class="fas fa-shield-alt mr-2"></i>Guardrails
+              <button class="cheatsheet-subtab-btn" data-subtab="guardrails" onclick="window.cheatSheetManager.switchSubTab('guardrails')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap; background: none; border-top: none; border-left: none; border-right: none;">
+                <i class="fas fa-shield-alt" style="margin-right: 8px;"></i>Guardrails
               </button>
             </nav>
           </div>
 
-          <!-- SUB-TAB CONTENT CONTAINERS (CheatSheetManager will render content here) -->
+          <!-- SUB-TAB CONTENT CONTAINERS (CheatSheetManager renders content into these) -->
           
           <!-- SUB-TAB: TRIAGE (THE BRAIN CONFIG) -->
-          <div id="cheatsheet-subtab-triage" class="cheatsheet-subtab-content" style="padding: 24px 0;">
+          <div id="cheatsheet-subtab-triage" class="cheatsheet-subtab-content">
             
             <div style="margin-bottom: 24px;">
               <h3 style="font-size: 24px; font-weight: 700; color: #111827; margin-bottom: 8px;">
