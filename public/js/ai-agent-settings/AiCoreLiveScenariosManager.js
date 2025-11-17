@@ -689,3 +689,9 @@ class AiCoreLiveScenariosManager {
     }
 }
 
+// Expose globally for Control Plane onclick handlers
+if (typeof window !== 'undefined') {
+    window.AiCoreLiveScenariosManager = AiCoreLiveScenariosManager;
+    console.log('✅ [AICORE LIVE SCENARIOS] Class exported to window.AiCoreLiveScenariosManager');
+}
+

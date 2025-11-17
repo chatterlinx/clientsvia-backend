@@ -1177,3 +1177,9 @@ class SpamFilterManager {
     }
 }
 
+// Expose globally for onclick handlers
+if (typeof window !== 'undefined') {
+    window.SpamFilterManager = SpamFilterManager;
+    console.log('✅ [SPAM FILTER] Class exported to window.SpamFilterManager');
+}
+

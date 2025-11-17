@@ -567,3 +567,9 @@ class AiCoreKnowledgebaseManager {
     }
 }
 
+// Expose globally for Control Plane onclick handlers
+if (typeof window !== 'undefined') {
+    window.AiCoreKnowledgebaseManager = AiCoreKnowledgebaseManager;
+    console.log('✅ [AICORE KNOWLEDGEBASE] Class exported to window.AiCoreKnowledgebaseManager');
+}
+
