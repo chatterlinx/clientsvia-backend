@@ -9,13 +9,16 @@
 
 class CheatSheetManager {
   
-  constructor() {
+  constructor(options = {}) {
     this.companyId = null;
     this.cheatSheet = null;
     this.compilationStatus = null;
     this.isDirty = false;
     this.currentSubTab = 'triage'; // Default sub-tab
+    this.rootSelector = options.rootSelector || '#cheatsheet-container';
+    this.rootElement = (typeof document !== 'undefined') ? document.querySelector(this.rootSelector) : null;
     
+    this.ensureBaseLayout();
     console.log('✅ [CHEAT SHEET MANAGER] Initialized');
   }
   
@@ -53,6 +56,109 @@ class CheatSheetManager {
     }
     
     console.log(`[CHEAT SHEET] ✅ Switched to: ${subTab}`);
+  }
+
+  ensureBaseLayout() {
+    if (!this.rootElement) {
+      console.warn('[CHEAT SHEET] Root container not found - expected selector:', this.rootSelector);
+      return;
+    }
+
+    if (this.rootElement.querySelector('#triage-cards-list-section')) {
+      return;
+    }
+
+    console.log('[CHEAT SHEET] Injecting default layout into', this.rootSelector);
+    this.rootElement.innerHTML = this.getDefaultLayoutMarkup();
+  }
+
+  getDefaultLayoutMarkup() {
+    return `
+      <div data-cheatsheet-layout="control-plane-v2" style="display:flex; flex-direction:column; gap:24px;">
+        <div id="cheatsheet-status"></div>
+
+        <div style="padding:16px; border:1px solid #e0e7ff; border-radius:12px; background:linear-gradient(90deg,#eef2ff,#f5f3ff); display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between;">
+          <div style="display:flex; align-items:center; gap:8px; color:#4338ca; font-weight:600; font-size:14px;">
+            <i class="fas fa-magic"></i>
+            Quick Setup
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            <button onclick="cheatSheetManager?.showImportFromTemplateModal()" style="padding:10px 14px; border-radius:999px; border:none; background:#4f46e5; color:#fff; font-weight:600; display:flex; align-items:center; gap:6px;">
+              <i class="fas fa-download"></i>
+              Import from Template
+            </button>
+            <button onclick="cheatSheetManager?.showImportFromCompanyModal()" style="padding:10px 14px; border-radius:999px; border:none; background:#7c3aed; color:#fff; font-weight:600; display:flex; align-items:center; gap:6px;">
+              <i class="fas fa-copy"></i>
+              Copy from Company
+            </button>
+            <button onclick="cheatSheetManager?.exportAsJSON()" style="padding:10px 14px; border-radius:999px; border:none; background:#475569; color:#fff; font-weight:600; display:flex; align-items:center; gap:6px;">
+              <i class="fas fa-file-export"></i>
+              Export JSON
+            </button>
+            <button onclick="cheatSheetManager?.resetToDefaults()" style="padding:10px 14px; border-radius:999px; border:none; background:#d97706; color:#fff; font-weight:600; display:flex; align-items:center; gap:6px;">
+              <i class="fas fa-undo"></i>
+              Reset Defaults
+            </button>
+          </div>
+        </div>
+
+        <div class="cheatsheet-subnav" style="display:flex; flex-wrap:wrap; gap:8px; border-bottom:1px solid #e5e7eb; padding-bottom:8px;">
+          <button class="cheatsheet-subtab-btn" data-subtab="triage" onclick="cheatSheetManager?.switchSubTab('triage')" style="padding:12px 16px; font-size:14px; font-weight:600; border:none; border-bottom:2px solid transparent; background:none; color:#6b7280; cursor:pointer;">
+            <i class="fas fa-brain"></i>🧠 Triage
+          </button>
+          <button class="cheatsheet-subtab-btn" data-subtab="frontline-intel" onclick="cheatSheetManager?.switchSubTab('frontline-intel')" style="padding:12px 16px; font-size:14px; font-weight:600; border:none; border-bottom:2px solid transparent; background:none; color:#6b7280; cursor:pointer;">
+            <i class="fas fa-robot"></i>Frontline-Intel
+          </button>
+          <button class="cheatsheet-subtab-btn" data-subtab="transfer-calls" onclick="cheatSheetManager?.switchSubTab('transfer-calls')" style="padding:12px 16px; font-size:14px; font-weight:600; border:none; border-bottom:2px solid transparent; background:none; color:#6b7280; cursor:pointer;">
+            <i class="fas fa-phone-square"></i>Transfer Calls
+          </button>
+          <button class="cheatsheet-subtab-btn" data-subtab="edge-cases" onclick="cheatSheetManager?.switchSubTab('edge-cases')" style="padding:12px 16px; font-size:14px; font-weight:600; border:none; border-bottom:2px solid transparent; background:none; color:#6b7280; cursor:pointer;">
+            <i class="fas fa-exclamation-triangle"></i>Edge Cases
+          </button>
+          <button class="cheatsheet-subtab-btn" data-subtab="behavior" onclick="cheatSheetManager?.switchSubTab('behavior')" style="padding:12px 16px; font-size:14px; font-weight:600; border:none; border-bottom:2px solid transparent; background:none; color:#6b7280; cursor:pointer;">
+            <i class="fas fa-sliders-h"></i>Behavior
+          </button>
+          <button class="cheatsheet-subtab-btn" data-subtab="guardrails" onclick="cheatSheetManager?.switchSubTab('guardrails')" style="padding:12px 16px; font-size:14px; font-weight:600; border:none; border-bottom:2px solid transparent; background:none; color:#6b7280; cursor:pointer;">
+            <i class="fas fa-shield-alt"></i>Guardrails
+          </button>
+        </div>
+
+        <div id="cheatsheet-subtab-triage" class="cheatsheet-subtab-content">
+          <div id="triage-cards-list-section"></div>
+          <div id="manual-triage-table-section"></div>
+          <div id="triage-builder-section"></div>
+        </div>
+
+        <div id="cheatsheet-subtab-frontline-intel" class="cheatsheet-subtab-content hidden">
+          <div id="company-instructions-section"></div>
+        </div>
+
+        <div id="cheatsheet-subtab-transfer-calls" class="cheatsheet-subtab-content hidden">
+          <div id="transfer-rules-section">
+            <div id="transfer-rules-list"></div>
+          </div>
+        </div>
+
+        <div id="cheatsheet-subtab-edge-cases" class="cheatsheet-subtab-content hidden">
+          <div id="edge-cases-section">
+            <div id="edge-cases-list"></div>
+          </div>
+        </div>
+
+        <div id="cheatsheet-subtab-behavior" class="cheatsheet-subtab-content hidden">
+          <div id="behavior-rules-section">
+            <div id="behavior-rules-list"></div>
+          </div>
+        </div>
+
+        <div id="cheatsheet-subtab-guardrails" class="cheatsheet-subtab-content hidden">
+          <div id="guardrails-section">
+            <div id="guardrails-list"></div>
+          </div>
+          <div id="action-allowlist"></div>
+        </div>
+      </div>
+    `;
   }
   
   // ═══════════════════════════════════════════════════════════════════
