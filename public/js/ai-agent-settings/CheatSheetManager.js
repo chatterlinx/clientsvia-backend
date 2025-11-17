@@ -7,6 +7,32 @@
 // ARCHITECTURE: Load → Edit → Compile → Test → Deploy
 // ============================================================================
 
+// ---------------------------------------------
+// COMING SOON TABS (V2-ONLY PLACEHOLDERS)
+// ---------------------------------------------
+const CHEATSHEET_COMING_SOON_TABS = {
+  'booking': {
+    title: 'Booking Rules – Coming Soon',
+    description: 'This section will let you define advanced booking logic per trade, service type, and priority. It will connect directly to BookingHandler.js so the AI can follow your exact booking rules in real time.'
+  },
+  'company-contacts': {
+    title: 'Company Contacts – Coming Soon',
+    description: 'This section will let you manage transfer targets, notification contacts, and escalation chains for this company. It will be used by Transfer Rules, emergency routing, and SMS alerts.'
+  },
+  'links': {
+    title: 'Links – Coming Soon',
+    description: 'This section will store company-specific URLs like financing pages, membership portals, policy documents, and service catalogs that the AI can reference during calls.'
+  },
+  'calculator': {
+    title: 'Calculator – Coming Soon',
+    description: 'This section will provide quick calculators (diagnostic fees, discounts, membership pricing, etc.) that the AI can use to give consistent, pre-approved numbers to customers.'
+  },
+  'cheat-active-instructions': {
+    title: 'Active Instructions Preview – Coming Soon',
+    description: 'This section will show a live preview of the final playbook the AI is running: triage rules, edge cases, behavior rules, and booking logic compiled into one instruction set.'
+  }
+};
+
 class CheatSheetManager {
   
   constructor(options = {}) {
@@ -34,6 +60,14 @@ class CheatSheetManager {
     console.log(`[CHEAT SHEET] Switching to sub-tab: ${subTab}`);
     
     this.currentSubTab = subTab;
+    
+    // Check if this is a Coming Soon tab (V2-only placeholders)
+    if (CHEATSHEET_COMING_SOON_TABS[subTab]) {
+      console.log('[CHEAT SHEET] 📋 Routing to Coming Soon renderer for:', subTab);
+      this.renderComingSoon(subTab);
+      console.log(`[CHEAT SHEET] ✅ Switched to Coming Soon tab: ${subTab}`);
+      return;
+    }
     
     // Hide all sub-tab contents
     document.querySelectorAll('.cheatsheet-subtab-content').forEach(el => {
@@ -1524,6 +1558,60 @@ class CheatSheetManager {
         </label>
       </div>
     `).join('');
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // COMING SOON RENDERER (V2-ONLY PLACEHOLDERS)
+  // ═══════════════════════════════════════════════════════════════════
+  
+  renderComingSoon(tabId) {
+    console.log('[CHEAT SHEET] 🎨 renderComingSoon called for tab:', tabId);
+    
+    const config = CHEATSHEET_COMING_SOON_TABS[tabId] || {
+      title: 'Coming Soon',
+      description: 'This section is under construction.'
+    };
+    
+    // Find the root container - try multiple selectors
+    const container = 
+      this.rootElement || 
+      document.getElementById('cheatsheet-container') ||
+      document.getElementById('cheat-sheet-main-section') ||
+      document.getElementById('cheat-sheet-content');
+    
+    if (!container) {
+      console.warn('[CHEAT SHEET] ⚠️ No container found for Coming Soon content');
+      return;
+    }
+    
+    container.innerHTML = `
+      <div style="padding: 24px;">
+        <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 2px solid #334155; border-radius: 16px; padding: 32px; margin-top: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+          <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px;">
+            <div style="display: inline-flex; height: 48px; width: 48px; align-items: center; justify-content: center; border-radius: 50%; background: rgba(99, 102, 241, 0.2); border: 2px solid rgba(99, 102, 241, 0.4);">
+              <span style="font-size: 24px;">🚧</span>
+            </div>
+            <div>
+              <h3 style="font-weight: 700; font-size: 22px; color: #f1f5f9; margin: 0;">${config.title}</h3>
+              <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin: 4px 0 0 0;">
+                Feature in development
+              </p>
+            </div>
+          </div>
+          <p style="font-size: 15px; color: #cbd5e1; line-height: 1.6; margin-bottom: 20px;">
+            ${config.description}
+          </p>
+          <div style="display: inline-flex; align-items: center; gap: 12px; font-size: 12px; color: #94a3b8;">
+            <span style="padding: 6px 12px; border-radius: 999px; background: #1e293b; border: 1px solid #334155; font-weight: 600;">
+              ClientsVia Control Plane · V2
+            </span>
+            <span>Roadmap: this tab will become fully configurable inside AiCore Control Center.</span>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    console.log('[CHEAT SHEET] ✅ Coming Soon content rendered for tab:', tabId);
   }
   
   // ═══════════════════════════════════════════════════════════════════

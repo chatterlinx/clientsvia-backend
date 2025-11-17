@@ -761,7 +761,8 @@
 
     // CHEAT SHEET SUB-TABS (CONTROL PLANE NAV → CheatSheetManager)
     const cheatTabButtons = document.querySelectorAll('.js-cheat-tab');
-    const cheatTabsHandledByManager = new Set(['triage','frontline-intel','transfer-calls','edge-cases','behavior','guardrails']);
+    // All tabs now handled by CheatSheetManager - working tabs render normally, Coming Soon tabs show placeholder
+    const cheatTabsHandledByManager = new Set(['triage','frontline-intel','transfer-calls','edge-cases','behavior','guardrails','booking','company-contacts','links','calculator','cheat-active-instructions']);
     const cheatTabLabels = {
       'triage': 'Triage',
       'frontline-intel': 'Frontline-Intel',
