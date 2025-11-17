@@ -607,13 +607,21 @@
       }
     }
 
-    // Initialize CheatSheetManager (no constructor params, load() takes companyId)
+    // Initialize CheatSheetManager (use existing global instance from CheatSheetManager.js)
     function initCheatSheetManager() {
       if (!currentCompanyId) return;
-      if (!window.cheatSheetManager || window.cheatSheetManager.companyId !== currentCompanyId) {
-        console.log('🎯 [CONTROL PLANE] Initializing CheatSheetManager');
-        window.cheatSheetManager = new window.CheatSheetManager();
-        window.cheatSheetManager.load(currentCompanyId);
+      
+      // Use the global instance that was auto-created when CheatSheetManager.js loaded
+      if (window.cheatSheetManager) {
+        // Only load if not already loaded for this company
+        if (window.cheatSheetManager.companyId !== currentCompanyId) {
+          console.log('🎯 [CONTROL PLANE] Loading CheatSheetManager for company:', currentCompanyId);
+          window.cheatSheetManager.load(currentCompanyId);
+        } else {
+          console.log('🎯 [CONTROL PLANE] CheatSheetManager already loaded for this company');
+        }
+      } else {
+        console.error('🎯 [CONTROL PLANE] CheatSheetManager global instance not found!');
       }
     }
 
