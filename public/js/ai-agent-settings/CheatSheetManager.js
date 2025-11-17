@@ -120,14 +120,64 @@ class CheatSheetManager {
         </div>
 
         <div id="cheatsheet-subtab-transfer-calls" class="cheatsheet-subtab-content hidden">
-          <div id="transfer-rules-section">
-            <div id="transfer-rules-list"></div>
+          <div class="mb-6">
+            <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 6px;">
+              <i class="fas fa-phone-square" style="margin-right: 8px; color: #2563eb;"></i>Transfer Calls - Routing Department
+            </h3>
+            <p style="font-size: 13px; color: #6b7280;">
+              Configure transfer routing rules. Route calls to specific departments or people based on intent. Second priority after edge cases.
+            </p>
+          </div>
+
+          <div id="transfer-rules-section" class="bg-white rounded-lg shadow-sm border border-blue-200 p-6">
+            <div class="flex" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+              <div>
+                <h4 style="font-size: 16px; font-weight: 600; color: #111827; margin:0;">
+                  <i class="fas fa-phone" style="margin-right:6px; color:#2563eb;"></i>Transfer Rules
+                </h4>
+                <p style="font-size: 12px; color:#6b7280; margin-top:4px;">
+                  Transfer rules route calls to specific departments or people based on intent.
+                </p>
+              </div>
+              <button onclick="cheatSheetManager?.addTransferRule()" style="padding:8px 14px; border-radius:8px; border:none; background:#2563eb; color:#fff; font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">
+                <i class="fas fa-plus"></i>Add Transfer Rule
+              </button>
+            </div>
+
+            <div id="transfer-rules-list" class="space-y-3" style="display:flex; flex-direction:column; gap:12px;">
+              <!-- Transfer rules render here -->
+            </div>
           </div>
         </div>
 
         <div id="cheatsheet-subtab-edge-cases" class="cheatsheet-subtab-content hidden">
-          <div id="edge-cases-section">
-            <div id="edge-cases-list"></div>
+          <div class="mb-6">
+            <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 6px;">
+              <i class="fas fa-exclamation-triangle" style="margin-right: 8px; color: #f59e0b;"></i>Edge Cases - Spam + Abnormal Handling
+            </h3>
+            <p style="font-size: 13px; color: #6b7280;">
+              Handle unusual caller inputs (machine detection, delays, wrong numbers, spam, etc.). Highest priority - short-circuits all other rules when matched.
+            </p>
+          </div>
+
+          <div id="edge-cases-section" class="bg-white rounded-lg shadow-sm border border-yellow-200 p-6">
+            <div class="flex" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+              <div>
+                <h4 style="font-size: 16px; font-weight: 600; color: #111827; margin:0;">
+                  <i class="fas fa-exclamation-triangle" style="margin-right:6px; color:#f59e0b;"></i>Edge Cases
+                </h4>
+                <p style="font-size: 12px; color:#6b7280; margin-top:4px;">
+                  Edge cases short-circuit everything else. Use for spam, IVR detection, wrong number, etc.
+                </p>
+              </div>
+              <button onclick="cheatSheetManager?.addEdgeCase()" style="padding:8px 14px; border-radius:8px; border:none; background:#f59e0b; color:#fff; font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">
+                <i class="fas fa-plus"></i>Add Edge Case
+              </button>
+            </div>
+
+            <div id="edge-cases-list" class="space-y-3" style="display:flex; flex-direction:column; gap:12px;">
+              <!-- Edge cases render here -->
+            </div>
           </div>
         </div>
 
