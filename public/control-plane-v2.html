@@ -161,52 +161,51 @@
 
       <!-- AICORE: CHEAT SHEET (with sub-tabs) -->
       <div class="panel" data-aicore-panel="cheat-sheet">
-        <!-- Cheat Sheet Manager Container (handles ALL 11 sub-tabs) -->
-        <div id="cheat-sheet-container" style="margin-top: 20px;">
-          <div style="text-align: center; padding: 40px; color: #6b7280;">
-            <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
-            <p>Loading Cheat Sheet...</p>
+        <!-- Cheat Sheet Manager Container (ID must match CheatSheetManager.js: no hyphen!) -->
+        <div id="cheatsheet-container">
+          
+          <!-- SUB-TAB NAVIGATION -->
+          <div class="mb-6 border-b border-gray-200" style="margin-bottom: 24px; border-bottom: 1px solid #e5e7eb;">
+            <nav class="flex flex-wrap -mb-px space-x-2" role="tablist" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: -1px;">
+              <button class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" data-subtab="triage" onclick="window.cheatSheetManager.switchSubTab('triage')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap;">
+                <i class="fas fa-brain mr-2"></i>🧠 Triage
+              </button>
+              <button class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" data-subtab="frontline-intel" onclick="window.cheatSheetManager.switchSubTab('frontline-intel')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap;">
+                <i class="fas fa-robot mr-2"></i>Frontline-Intel
+              </button>
+              <button class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" data-subtab="transfer-calls" onclick="window.cheatSheetManager.switchSubTab('transfer-calls')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap;">
+                <i class="fas fa-phone-square mr-2"></i>Transfer Calls
+              </button>
+              <button class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" data-subtab="edge-cases" onclick="window.cheatSheetManager.switchSubTab('edge-cases')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap;">
+                <i class="fas fa-exclamation-triangle mr-2"></i>Edge Cases
+              </button>
+              <button class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" data-subtab="behavior" onclick="window.cheatSheetManager.switchSubTab('behavior')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap;">
+                <i class="fas fa-sliders-h mr-2"></i>Behavior
+              </button>
+              <button class="cheatsheet-subtab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors whitespace-nowrap" data-subtab="guardrails" onclick="window.cheatSheetManager.switchSubTab('guardrails')" style="padding: 12px 16px; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; color: #6b7280; cursor: pointer; white-space: nowrap;">
+                <i class="fas fa-shield-alt mr-2"></i>Guardrails
+              </button>
+            </nav>
           </div>
-        </div>
-        
-        <!-- LEGACY SUB-PANELS (will be replaced by CheatSheetManager) -->
-        <!-- TRIAGE SUBPANEL -->
-        <div class="panel active" data-cheat-panel="triage" style="display:none;">
-          <div class="card">
-            <h2>Triage – THE BRAIN Config</h2>
-            <p class="muted">Configure the Triage Engine that powers Frontline-Intel and Tier-1 / Tier-2 routing.</p>
-          </div>
-        </div>
 
-        <!-- FRONTLINE-INTEL SUBPANEL -->
-        <div class="panel" data-cheat-panel="frontline-intel">
-          <div class="card">
-            <h2>Frontline-Intel Rules</h2>
-            <p class="muted">Cheap classifier rules: emergency, wrong number, spam, booking, troubleshooting, billing, info.</p>
+          <!-- SUB-TAB CONTENT CONTAINERS (CheatSheetManager will render content here) -->
+          <div id="cheatsheet-subtab-triage" class="cheatsheet-subtab-content">
+            <!-- Triage content rendered by CheatSheetManager -->
           </div>
-        </div>
-
-        <!-- TRANSFER CALLS SUBPANEL -->
-        <div class="panel" data-cheat-panel="transfer-calls">
-          <div class="card">
-            <h2>Transfer Calls</h2>
-            <p class="muted">Configure when and where calls are transferred to humans, departments, or external numbers.</p>
+          <div id="cheatsheet-subtab-frontline-intel" class="cheatsheet-subtab-content hidden" style="display:none;">
+            <!-- Frontline-Intel content rendered by CheatSheetManager -->
           </div>
-        </div>
-
-        <!-- EDGE CASES SUBPANEL -->
-        <div class="panel" data-cheat-panel="edge-cases">
-          <div class="card">
-            <h2>Edge Cases</h2>
-            <p class="muted">Define special situations: after-hours, no-match intents, repeat offenders, blocked callers.</p>
+          <div id="cheatsheet-subtab-transfer-calls" class="cheatsheet-subtab-content hidden" style="display:none;">
+            <!-- Transfer Calls content rendered by CheatSheetManager -->
           </div>
-        </div>
-
-        <!-- BEHAVIOR SUBPANEL -->
-        <div class="panel" data-cheat-panel="behavior">
-          <div class="card">
-            <h2>Behavior & Tone</h2>
-            <p class="muted">Persona, politeness rules, frustration detection responses, silence handling.</p>
+          <div id="cheatsheet-subtab-edge-cases" class="cheatsheet-subtab-content hidden" style="display:none;">
+            <!-- Edge Cases content rendered by CheatSheetManager -->
+          </div>
+          <div id="cheatsheet-subtab-behavior" class="cheatsheet-subtab-content hidden" style="display:none;">
+            <!-- Behavior content rendered by CheatSheetManager -->
+          </div>
+          <div id="cheatsheet-subtab-guardrails" class="cheatsheet-subtab-content hidden" style="display:none;">
+            <!-- Guardrails content rendered by CheatSheetManager -->
           </div>
         </div>
 
