@@ -604,6 +604,16 @@ router.patch('/company/:id', async (req, res) => {
         const updates = req.body;
         delete updates._id;
 
+        // Dedicated handling for cheatSheet payload (contains nested arrays that dot-notation keeps dropping)
+        const cheatSheetPayload = updates['aiAgentSettings.cheatSheet'];
+        if (cheatSheetPayload) {
+            logger.info('📊 [CHEAT SHEET DEBUG] Dedicated payload detected - will apply via document.save()', {
+                hasBookingRules: Array.isArray(cheatSheetPayload.bookingRules),
+                bookingRulesCount: cheatSheetPayload.bookingRules?.length || 0
+            });
+            delete updates['aiAgentSettings.cheatSheet'];
+        }
+
         const updateOperation = {};
         
         // Handle address updates with dot notation
@@ -660,6 +670,7 @@ router.patch('/company/:id', async (req, res) => {
                 }
             }
         }
+        const hasStandardUpdates = Object.keys(updateOperation).length > 0;
         updateOperation.updatedAt = new Date();
 
         // Auto-set profileComplete when business details are provided
@@ -681,13 +692,40 @@ router.patch('/company/:id', async (req, res) => {
         // 🔧 FIX: Use $set for dot-notation fields to work properly
         // ⚠️ CRITICAL: runValidators might fail on nested arrays with dot notation
         // Try WITHOUT runValidators first to see if that's the issue
-        logger.info('📊 [CHEAT SHEET DEBUG] Calling findByIdAndUpdate with $set...');
-        const updatedCompany = await Company.findByIdAndUpdate(
-            companyId,
-            { $set: updateOperation },
-            { new: true, runValidators: false } // ← DISABLED validators to test
-        );
-        logger.info('📊 [CHEAT SHEET DEBUG] findByIdAndUpdate completed');
+        let updatedCompany = null;
+
+        if (hasStandardUpdates) {
+            logger.info('📊 [CHEAT SHEET DEBUG] Calling findByIdAndUpdate with $set...');
+            updatedCompany = await Company.findByIdAndUpdate(
+                companyId,
+                { $set: updateOperation },
+                { new: true, runValidators: false } // ← DISABLED validators to test
+            );
+            logger.info('📊 [CHEAT SHEET DEBUG] findByIdAndUpdate completed');
+        }
+
+        if (cheatSheetPayload) {
+            logger.info('📊 [CHEAT SHEET DEBUG] Applying markModified fallback save for cheatSheet payload');
+            if (!updatedCompany) {
+                updatedCompany = await Company.findById(companyId);
+            }
+
+            if (!updatedCompany) {
+                return res.status(404).json({ message: 'Company not found.' });
+            }
+
+            updatedCompany.set('aiAgentSettings.cheatSheet', cheatSheetPayload);
+            updatedCompany.markModified('aiAgentSettings.cheatSheet');
+            updatedCompany.updatedAt = new Date();
+            await updatedCompany.save({ validateBeforeSave: false });
+            logger.info('📊 [CHEAT SHEET DEBUG] Document save complete', {
+                bookingRulesAfterSave: updatedCompany.aiAgentSettings?.cheatSheet?.bookingRules?.length || 0
+            });
+        }
+
+        if (!updatedCompany) {
+            updatedCompany = await Company.findById(companyId);
+        }
 
         if (!updatedCompany) {return res.status(404).json({ message: 'Company not found.' });}
 
