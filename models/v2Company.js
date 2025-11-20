@@ -638,6 +638,89 @@ const companySchema = new mongoose.Schema({
                     'TRANSFER_EMERGENCY', 'TRANSFER_GENERAL', 'COLLECT_INFO',
                     'PROVIDE_HOURS', 'PROVIDE_PRICING'
                 ]
+            }],
+            
+            // -------------------------------------------------------------------
+            // V2-ONLY FIELDS - Control Plane V2 Cheat Sheet Features
+            // -------------------------------------------------------------------
+            
+            // Booking Rules - Advanced appointment booking logic per trade/service
+            bookingRules: [{
+                id: { type: String, required: true },
+                label: { type: String, required: true },
+                trade: { type: String, default: '' },
+                serviceType: { type: String, default: '' },
+                priority: { 
+                    type: String, 
+                    enum: ['normal', 'high', 'emergency'], 
+                    default: 'normal' 
+                },
+                daysOfWeek: [{ type: String }],
+                timeWindow: {
+                    start: { type: String, default: '08:00' },
+                    end: { type: String, default: '17:00' }
+                },
+                sameDayAllowed: { type: Boolean, default: true },
+                weekendAllowed: { type: Boolean, default: false },
+                notes: { type: String, default: '' },
+                createdAt: { type: Date, default: Date.now },
+                createdBy: { type: String, default: 'System' }
+            }],
+            
+            // Company Contacts - Transfer targets, emergency contacts, escalation chains
+            companyContacts: [{
+                id: { type: String, required: true },
+                name: { type: String, required: true },
+                role: { type: String, default: 'General Contact' },
+                phone: { type: String, default: null },
+                email: { type: String, default: null },
+                isPrimary: { type: Boolean, default: false },
+                availableHours: { type: String, default: '24/7' },
+                notes: { type: String, default: '' },
+                createdAt: { type: Date, default: Date.now },
+                createdBy: { type: String, default: 'System' }
+            }],
+            
+            // Links - Company resources (financing, portals, policies, catalogs)
+            links: [{
+                id: { type: String, required: true },
+                label: { type: String, required: true },
+                category: { 
+                    type: String, 
+                    enum: ['financing', 'portal', 'policy', 'catalog', 'other'], 
+                    default: 'other' 
+                },
+                url: { type: String, required: true },
+                shortDescription: { type: String, default: '' },
+                notes: { type: String, default: '' },
+                createdAt: { type: Date, default: Date.now },
+                createdBy: { type: String, default: 'System' }
+            }],
+            
+            // Calculators - Quick calculators for pricing, fees, discounts
+            calculators: [{
+                id: { type: String, required: true },
+                label: { type: String, required: true },
+                type: { 
+                    type: String, 
+                    enum: ['flat-fee', 'percentage', 'formula'], 
+                    default: 'flat-fee' 
+                },
+                baseAmount: { type: Number, default: 0 },
+                notes: { type: String, default: '' },
+                createdAt: { type: Date, default: Date.now },
+                createdBy: { type: String, default: 'System' }
+            }],
+            
+            // Version History - Snapshot history for Draft/Active workflow
+            versionHistory: [{
+                id: { type: String, required: true },
+                label: { type: String, required: true },
+                snapshot: { type: mongoose.Schema.Types.Mixed, required: true },
+                checksum: { type: String, required: true },
+                createdAt: { type: Date, default: Date.now },
+                createdBy: { type: String, default: 'System' },
+                notes: { type: String, default: '' }
             }]
         },
         
@@ -1463,142 +1546,6 @@ const companySchema = new mongoose.Schema({
                 }
             },
             
-            // -------------------------------------------------------------------
-            // V2-ONLY FIELDS - Control Plane V2 Features
-            // -------------------------------------------------------------------
-            
-            // Booking Rules - Advanced appointment booking logic
-            bookingRules: [{
-                id: { type: String, required: true },
-                label: { type: String, required: true },
-                trade: { type: String, default: '' },
-                serviceType: { type: String, default: '' },
-                priority: { 
-                    type: String, 
-                    enum: ['normal', 'high', 'emergency'], 
-                    default: 'normal' 
-                },
-                daysOfWeek: [{ type: String }],
-                timeWindow: {
-                    start: { type: String, default: '08:00' },
-                    end: { type: String, default: '17:00' }
-                },
-                sameDayAllowed: { type: Boolean, default: true },
-                weekendAllowed: { type: Boolean, default: false },
-                notes: { type: String, default: '' },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'admin' }
-            }],
-            
-            // Company Contacts - Transfer targets and notification contacts
-            companyContacts: [{
-                id: { type: String, required: true },
-                name: { type: String, required: true },
-                role: { type: String, default: '' },
-                phone: { type: String, default: '' },
-                email: { type: String, default: '' },
-                isPrimary: { type: Boolean, default: false },
-                availableHours: { type: String, default: '' },
-                notes: { type: String, default: '' },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'admin' }
-            }],
-            
-            // Links - Company-specific URLs (financing, portals, policies, etc.)
-            links: [{
-                id: { type: String, required: true },
-                label: { type: String, required: true },
-                category: { 
-                    type: String, 
-                    enum: ['financing', 'portal', 'policy', 'catalog', 'other'], 
-                    default: 'other' 
-                },
-                url: { type: String, required: true },
-                shortDescription: { type: String, default: '' },
-                notes: { type: String, default: '' },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'admin' }
-            }],
-            
-            // Calculators - Quick calculation tools (diagnostic fees, discounts, etc.)
-            calculators: [{
-                id: { type: String, required: true },
-                label: { type: String, required: true },
-                type: { 
-                    type: String, 
-                    enum: ['flat-fee', 'percentage', 'tiered', 'custom'], 
-                    default: 'flat-fee' 
-                },
-                baseAmount: { type: Number, default: 0 },
-                notes: { type: String, default: '' },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'admin' }
-            }],
-            
-            // Version History - Snapshots of cheat sheet configurations
-            versionHistory: [{
-                id: { type: String, required: true },
-                label: { type: String, required: true },
-                snapshot: { type: Object, default: {} }, // Full cheat sheet snapshot
-                checksum: { type: String, default: '' },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'admin' },
-                notes: { type: String, default: '' }
-            }]
-        },
-        
-        // 🗑️ DELETED: quickVariables field - Replaced by aiAgentSettings.placeholders
-        
-        // 📞 Call Transfer & Escalation Configuration
-        callTransferConfig: {
-            dialOutEnabled: { type: Boolean, default: false },
-            dialOutNumber: {
-                type: String,
-                trim: true,
-                default: null,
-                validate: {
-                    validator: function(v) {
-                        // Allow null/empty or valid phone number format
-                        return !v || /^\+?[1-9]\d{1,14}$/.test(v.replace(/[\s\-\(\)]/g, ''));
-                    },
-                    message: 'Please enter a valid phone number (e.g., +1234567890)'
-                }
-            },
-            transferMessage: {
-                type: String,
-                trim: true,
-                default: 'One moment while I transfer you to our team.'
-            }
-        },
-
-        // 🔑 Configurable Keywords for Intent Detection (Multi-Tenant)
-        keywordConfiguration: {
-            serviceKeywords: {
-                type: [String],
-                default: ['service', 'repair', 'fix', 'broken', 'problem', 'issue', 'help']
-            },
-            bookingKeywords: {
-                type: [String], 
-                default: ['appointment', 'schedule', 'book', 'visit', 'come out', 'when can you']
-            },
-            emergencyKeywords: {
-                type: [String],
-                default: ['emergency', 'urgent', 'asap', 'right now', 'immediately']
-            },
-            hoursKeywords: {
-                type: [String],
-                default: ['hours', 'open', 'closed', 'when do you', 'what time']
-            },
-            tradeSpecificKeywords: {
-                type: [String],
-                default: [] // Will be populated based on selected trade categories
-            }
-        },
-
-        // 🚀 V2 AI AGENT MANAGEMENT SYSTEM - UNIFIED ARCHITECTURE
-        // ================================================================
-        // Complete Knowledge Management + Personality + Priorities System
-        // Multi-tenant, Redis-cached, sub-50ms performance
         // ================================================================
         
         // 🎯 KNOWLEDGE SOURCE PRIORITIES - THE BRAIN
