@@ -3598,15 +3598,44 @@ class CheatSheetManager {
     }
     
     try {
-      // Use the regular save method but force legacy mode temporarily
-      const originalVersioningFlag = this.useVersioning;
-      this.useVersioning = false; // Temporarily disable versioning
+      // Save directly without changing versioning flag
+      // This prevents the status banner from switching during save
       
-      await this.save();
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        throw new Error('No auth token found');
+      }
       
-      this.useVersioning = originalVersioningFlag; // Restore flag
+      console.log('[CHEAT SHEET] 💾 Quick saving to database...');
       
-      console.log('[CHEAT SHEET] ✅ Quick save complete');
+      const payload = {
+        aiAgentSettings: {
+          cheatSheet: this.cheatSheet
+        }
+      };
+      
+      const response = await fetch(`/api/company/${this.companyId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('[CHEAT SHEET] ✅ Quick save successful:', data);
+      
+      // Mark as clean
+      this.isDirty = false;
+      
+      // Re-render status banner (will keep version system UI since useVersioning is still true)
+      this.renderStatus();
+      
       this.showNotification('✅ Changes saved successfully!', 'success');
       
     } catch (error) {
