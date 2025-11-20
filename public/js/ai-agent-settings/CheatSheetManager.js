@@ -397,6 +397,14 @@ class CheatSheetManager {
       
       // ✅ CHECKPOINT: Initialize V2 fields if they don't exist (for existing cheatSheets from MongoDB)
       console.log('[CHEAT SHEET] 📊 CHECKPOINT: Raw loaded data:', this.cheatSheet);
+      console.log('[CHEAT SHEET] 🔍 LOAD DEBUG: V2 arrays in raw data?', {
+        hasBookingRules: 'bookingRules' in this.cheatSheet,
+        bookingRulesIsArray: Array.isArray(this.cheatSheet.bookingRules),
+        bookingRulesValue: this.cheatSheet.bookingRules,
+        hasCompanyContacts: 'companyContacts' in this.cheatSheet,
+        hasLinks: 'links' in this.cheatSheet,
+        hasCalculators: 'calculators' in this.cheatSheet
+      });
       
       if (!Array.isArray(this.cheatSheet.bookingRules)) {
         console.log('[CHEAT SHEET] 🔧 Initializing bookingRules array (was missing)');
@@ -2900,6 +2908,19 @@ class CheatSheetManager {
       const token = localStorage.getItem('adminToken');
       console.log('[CHEAT SHEET] ✅ CHECKPOINT 6: Auth token exists?', !!token);
       
+      // CRITICAL DEBUG: Log what's in this.cheatSheet BEFORE creating payload
+      console.log('[CHEAT SHEET] 🔍 PRE-SAVE DEBUG: this.cheatSheet contains:', {
+        hasBookingRules: Array.isArray(this.cheatSheet.bookingRules),
+        bookingRulesCount: Array.isArray(this.cheatSheet.bookingRules) ? this.cheatSheet.bookingRules.length : 'NOT AN ARRAY',
+        bookingRulesData: this.cheatSheet.bookingRules,
+        hasCompanyContacts: Array.isArray(this.cheatSheet.companyContacts),
+        companyContactsCount: Array.isArray(this.cheatSheet.companyContacts) ? this.cheatSheet.companyContacts.length : 'NOT AN ARRAY',
+        hasLinks: Array.isArray(this.cheatSheet.links),
+        linksCount: Array.isArray(this.cheatSheet.links) ? this.cheatSheet.links.length : 'NOT AN ARRAY',
+        hasCalculators: Array.isArray(this.cheatSheet.calculators),
+        calculatorsCount: Array.isArray(this.cheatSheet.calculators) ? this.cheatSheet.calculators.length : 'NOT AN ARRAY'
+      });
+      
       const payload = {
         'aiAgentSettings.cheatSheet': {
           ...this.cheatSheet,
@@ -2908,7 +2929,15 @@ class CheatSheetManager {
         }
       };
       
-      console.log('[CHEAT SHEET] 📦 CHECKPOINT 7: Payload prepared:', JSON.stringify(payload, null, 2));
+      // Verify V2 arrays made it into payload
+      console.log('[CHEAT SHEET] 🔍 PAYLOAD V2 ARRAYS:', {
+        bookingRules: payload['aiAgentSettings.cheatSheet'].bookingRules?.length || 0,
+        companyContacts: payload['aiAgentSettings.cheatSheet'].companyContacts?.length || 0,
+        links: payload['aiAgentSettings.cheatSheet'].links?.length || 0,
+        calculators: payload['aiAgentSettings.cheatSheet'].calculators?.length || 0
+      });
+      
+      console.log('[CHEAT SHEET] 📦 CHECKPOINT 7: Payload prepared (truncated for readability)');
       console.log('[CHEAT SHEET] 🌐 CHECKPOINT 8: Sending PATCH request to:', `/api/company/${this.companyId}`);
       
       const response = await fetch(`/api/company/${this.companyId}`, {
