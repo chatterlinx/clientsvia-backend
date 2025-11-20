@@ -2023,34 +2023,10 @@ class CheatSheetManager {
         );
       }
       
-      if (contact.type) {
-        badges.push(
-          `<span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 999px; background: #f3f4f6; color: #374151; font-weight: 600;">
-            ${contact.type}
-          </span>`
-        );
-      }
-      
       if (contact.isPrimary) {
         badges.push(
           `<span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 999px; background: #10b981; color: #ffffff; font-weight: 600;">
             Primary
-          </span>`
-        );
-      }
-      
-      if (contact.isAfterHours) {
-        badges.push(
-          `<span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 999px; background: #f59e0b; color: #ffffff; font-weight: 600;">
-            After Hours
-          </span>`
-        );
-      }
-      
-      if (contact.smsEnabled) {
-        badges.push(
-          `<span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 999px; background: #3b82f6; color: #ffffff; font-weight: 600;">
-            SMS
           </span>`
         );
       }
@@ -2060,13 +2036,14 @@ class CheatSheetManager {
           <div style="flex: 1;">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
               <span style="font-size: 16px; font-weight: 600; color: #111827;">
-                ${contact.label || 'Unnamed Contact'}
+                ${contact.name || 'Unnamed Contact'}
               </span>
               ${badges.join('')}
             </div>
             <div style="font-size: 12px; color: #6b7280; line-height: 1.6;">
-              ${contact.phoneNumber ? `Phone: <strong style="color: #111827;">${contact.phoneNumber}</strong>` : 'No phone number set'}
-              ${typeof contact.priority === 'number' ? ` · Priority: <strong style="color: #111827;">${contact.priority}</strong>` : ''}
+              ${contact.phone ? `Phone: <strong style="color: #111827;">${contact.phone}</strong>` : ''}
+              ${contact.email ? ` · Email: <strong style="color: #111827;">${contact.email}</strong>` : ''}
+              ${contact.availableHours ? ` · Hours: <strong style="color: #111827;">${contact.availableHours}</strong>` : ''}
             </div>
             ${contact.notes ? `
               <div style="margin-top: 12px; padding: 12px; background: #f9fafb; border-left: 3px solid #4f46e5; border-radius: 4px; font-size: 12px; color: #374151; line-height: 1.5;">
@@ -2136,14 +2113,12 @@ class CheatSheetManager {
     
     const newContact = {
       id: `cc-${Date.now()}`,
-      label: 'New Contact',
+      name: 'New Contact',  // ← FIXED: Use "name" to match schema
       role: 'manager',
-      type: 'phone',
-      phoneNumber: '',
-      smsEnabled: true,
+      phone: '',  // ← FIXED: Use "phone" to match schema
+      email: '',
       isPrimary: false,
-      isAfterHours: false,
-      priority: this.cheatSheet.companyContacts.length + 1,
+      availableHours: '24/7',
       notes: ''
     };
     
@@ -2165,26 +2140,21 @@ class CheatSheetManager {
     const contact = this.cheatSheet.companyContacts[index];
     if (!contact) return;
     
-    const label = window.prompt('Contact name / label:', contact.label || '') ?? contact.label;
+    // FIXED: Use schema field names (name, phone, email) not (label, phoneNumber, type)
+    const name = window.prompt('Contact name:', contact.name || '') ?? contact.name;
     const role = window.prompt('Role (owner, manager, dispatcher, tech, front-desk, etc.):', contact.role || 'manager') ?? contact.role;
-    const type = window.prompt('Type (phone, mobile, sms-only, email):', contact.type || 'phone') ?? contact.type;
-    const phoneNumber = window.prompt('Phone number (for transfer/SMS):', contact.phoneNumber || '') ?? contact.phoneNumber;
-    const smsEnabledPrompt = window.prompt('Enable SMS notifications to this contact? (yes/no):', contact.smsEnabled === false ? 'no' : 'yes')?.toLowerCase() === 'no' ? false : true;
+    const phone = window.prompt('Phone number:', contact.phone || '') ?? contact.phone;
+    const email = window.prompt('Email address:', contact.email || '') ?? contact.email;
     const isPrimaryPrompt = window.prompt('Is this a PRIMARY contact? (yes/no):', contact.isPrimary ? 'yes' : 'no')?.toLowerCase() === 'yes';
-    const isAfterHoursPrompt = window.prompt('Use for AFTER HOURS routing? (yes/no):', contact.isAfterHours ? 'yes' : 'no')?.toLowerCase() === 'yes';
+    const availableHours = window.prompt('Available hours (e.g. "Mon-Fri 9-5", "24/7", "After 6pm"):', contact.availableHours || '24/7') ?? contact.availableHours;
+    const notes = window.prompt('Notes / routing instructions:', contact.notes || '') ?? contact.notes;
     
-    const priorityInput = window.prompt('Priority (1 = highest, 99 = lowest):', typeof contact.priority === 'number' ? String(contact.priority) : '1') ?? String(contact.priority ?? '1');
-    const priority = parseInt(priorityInput, 10);
-    const notes = window.prompt('Notes / routing instructions for this contact:', contact.notes || '') ?? contact.notes;
-    
-    contact.label = label;
+    contact.name = name;
     contact.role = role;
-    contact.type = type;
-    contact.phoneNumber = phoneNumber;
-    contact.smsEnabled = smsEnabledPrompt;
+    contact.phone = phone;
+    contact.email = email;
     contact.isPrimary = isPrimaryPrompt;
-    contact.isAfterHours = isAfterHoursPrompt;
-    contact.priority = isNaN(priority) ? contact.priority || 1 : priority;
+    contact.availableHours = availableHours;
     contact.notes = notes;
     
     console.log('[CHEAT SHEET] ✅ Company contact updated (local only)', contact);
