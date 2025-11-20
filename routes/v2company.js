@@ -740,12 +740,13 @@ router.patch('/company/:id', async (req, res) => {
                 arrayFrom: Array.from(cheatSheetPayload.bookingRules || [])
             });
             
-            // 🔧 NUCLEAR OPTION: Don't use spread at all, manually assign each field
+            // 🔧 ABSOLUTE FINAL FIX: NO SPREAD OPERATORS AT ALL
+            // Convert existing to plain object
             const existingCheatSheet = updatedCompany.aiAgentSettings.cheatSheet.toObject ? 
                 updatedCompany.aiAgentSettings.cheatSheet.toObject() : 
-                updatedCompany.aiAgentSettings.cheatSheet;
+                {...updatedCompany.aiAgentSettings.cheatSheet};
             
-            // Manually copy V2 arrays from payload
+            // Extract V2 arrays
             const bookingRulesArray = Array.from(cheatSheetPayload.bookingRules || []);
             const companyContactsArray = Array.from(cheatSheetPayload.companyContacts || []);
             const linksArray = Array.from(cheatSheetPayload.links || []);
@@ -758,18 +759,22 @@ router.patch('/company/:id', async (req, res) => {
                 calculators: calculatorsArray.length
             });
             
-            // Build new cheatSheet object manually
-            updatedCompany.aiAgentSettings.cheatSheet = {
-                ...existingCheatSheet,
-                ...cheatSheetPayload,
-                // Force override with extracted arrays
-                bookingRules: bookingRulesArray,
-                companyContacts: companyContactsArray,
-                links: linksArray,
-                calculators: calculatorsArray
-            };
+            // Manually copy metadata fields from payload (NOT arrays!)
+            existingCheatSheet.version = cheatSheetPayload.version ?? existingCheatSheet.version;
+            existingCheatSheet.status = cheatSheetPayload.status ?? existingCheatSheet.status;
+            existingCheatSheet.updatedBy = cheatSheetPayload.updatedBy ?? existingCheatSheet.updatedBy;
+            existingCheatSheet.updatedAt = cheatSheetPayload.updatedAt ?? existingCheatSheet.updatedAt;
             
-            logger.info('📊 [CHEAT SHEET DEBUG] After manual merge:', {
+            // NOW assign the arrays DIRECTLY
+            existingCheatSheet.bookingRules = bookingRulesArray;
+            existingCheatSheet.companyContacts = companyContactsArray;
+            existingCheatSheet.links = linksArray;
+            existingCheatSheet.calculators = calculatorsArray;
+            
+            // Set it back
+            updatedCompany.aiAgentSettings.cheatSheet = existingCheatSheet;
+            
+            logger.info('📊 [CHEAT SHEET DEBUG] After NO-SPREAD merge:', {
                 bookingRules: updatedCompany.aiAgentSettings.cheatSheet.bookingRules?.length || 0,
                 companyContacts: updatedCompany.aiAgentSettings.cheatSheet.companyContacts?.length || 0,
                 links: updatedCompany.aiAgentSettings.cheatSheet.links?.length || 0,
