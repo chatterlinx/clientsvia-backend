@@ -29,7 +29,7 @@
 
 const CheatSheetVersion = require('../../models/cheatsheet/CheatSheetVersion');
 const Company = require('../../models/v2Company');
-const CacheHelper = require('../../utils/CacheHelper');
+const CacheHelper = require('../../utils/cacheHelper');
 const logger = require('../../utils/logger');
 const {
   NoLiveConfigError,
