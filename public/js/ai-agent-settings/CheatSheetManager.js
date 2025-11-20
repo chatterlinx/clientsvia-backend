@@ -2932,7 +2932,9 @@ class CheatSheetManager {
       console.log('[CHEAT SHEET] ✅ CHECKPOINT 10: Response OK. Data:', responseData);
       console.log('[CHEAT SHEET] ✅ CHECKPOINT 11: Saved successfully to MongoDB');
       
-      this.showNotification('Cheat sheet saved successfully', 'success');
+      // Show prominent success popup
+      this.showSuccessPopup('✅ SAVED SUCCESSFULLY!', 'All changes have been saved to MongoDB.');
+      
       this.isDirty = false;
       this.renderStatus();
       
@@ -2944,7 +2946,9 @@ class CheatSheetManager {
         message: error.message,
         stack: error.stack
       });
-      this.showNotification('Failed to save cheat sheet', 'error');
+      
+      // Show prominent error popup
+      this.showErrorPopup('❌ SAVE FAILED', `Could not save to MongoDB: ${error.message}`);
     }
   }
   
@@ -4323,6 +4327,187 @@ class CheatSheetManager {
     } else {
       console.log(`[NOTIFICATION ${type.toUpperCase()}]`, message);
     }
+  }
+
+  /**
+   * Show prominent success popup modal
+   */
+  showSuccessPopup(title, message) {
+    console.log('[CHEAT SHEET] 🎉 Showing success popup:', title);
+    
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      animation: fadeIn 0.2s ease-in;
+    `;
+    
+    // Create modal content
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 500px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: slideIn 0.3s ease-out;
+      text-align: center;
+    `;
+    
+    modal.innerHTML = `
+      <div style="font-size: 64px; margin-bottom: 16px; animation: bounce 0.6s ease-in-out;">
+        ✅
+      </div>
+      <h2 style="font-size: 24px; font-weight: 700; color: #059669; margin-bottom: 12px;">
+        ${title}
+      </h2>
+      <p style="font-size: 16px; color: #6b7280; margin-bottom: 24px;">
+        ${message}
+      </p>
+      <button 
+        onclick="this.closest('[style*=fixed]').remove()" 
+        style="
+          background: #059669;
+          color: white;
+          border: none;
+          padding: 12px 32px;
+          border-radius: 8px;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        "
+        onmouseover="this.style.background='#047857'"
+        onmouseout="this.style.background='#059669'"
+      >
+        Got it!
+      </button>
+    `;
+    
+    // Add CSS animations
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes slideIn {
+        from { transform: translateY(-50px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+      @keyframes bounce {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.2); }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    // Auto-close after 3 seconds
+    setTimeout(() => {
+      if (overlay.parentNode) {
+        overlay.style.animation = 'fadeOut 0.3s ease-out';
+        setTimeout(() => overlay.remove(), 300);
+      }
+    }, 3000);
+    
+    console.log('[CHEAT SHEET] ✅ Success popup displayed');
+  }
+
+  /**
+   * Show prominent error popup modal
+   */
+  showErrorPopup(title, message) {
+    console.log('[CHEAT SHEET] ⚠️ Showing error popup:', title);
+    
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      animation: fadeIn 0.2s ease-in;
+    `;
+    
+    // Create modal content
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 500px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: slideIn 0.3s ease-out;
+      text-align: center;
+    `;
+    
+    modal.innerHTML = `
+      <div style="font-size: 64px; margin-bottom: 16px; animation: shake 0.5s ease-in-out;">
+        ❌
+      </div>
+      <h2 style="font-size: 24px; font-weight: 700; color: #dc2626; margin-bottom: 12px;">
+        ${title}
+      </h2>
+      <p style="font-size: 16px; color: #6b7280; margin-bottom: 24px;">
+        ${message}
+      </p>
+      <button 
+        onclick="this.closest('[style*=fixed]').remove()" 
+        style="
+          background: #dc2626;
+          color: white;
+          border: none;
+          padding: 12px 32px;
+          border-radius: 8px;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        "
+        onmouseover="this.style.background='#b91c1c'"
+        onmouseout="this.style.background='#dc2626'"
+      >
+        Understood
+      </button>
+    `;
+    
+    // Add CSS animations
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-10px); }
+        75% { transform: translateX(10px); }
+      }
+      @keyframes fadeOut {
+        from { opacity: 1; }
+        to { opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    console.log('[CHEAT SHEET] ⚠️ Error popup displayed');
   }
 
   // ═══════════════════════════════════════════════════════════════════
