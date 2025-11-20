@@ -714,10 +714,39 @@ router.patch('/company/:id', async (req, res) => {
                 return res.status(404).json({ message: 'Company not found.' });
             }
 
-            updatedCompany.set('aiAgentSettings.cheatSheet', cheatSheetPayload);
+            // 🔧 CRITICAL FIX: MERGE V2 arrays into existing cheatSheet, don't replace!
+            // Initialize aiAgentSettings and cheatSheet if they don't exist
+            if (!updatedCompany.aiAgentSettings) {
+                updatedCompany.aiAgentSettings = {};
+            }
+            if (!updatedCompany.aiAgentSettings.cheatSheet) {
+                updatedCompany.aiAgentSettings.cheatSheet = {};
+            }
+            
+            // MERGE the payload into existing cheatSheet (preserves V1 fields!)
+            updatedCompany.aiAgentSettings.cheatSheet = {
+                ...updatedCompany.aiAgentSettings.cheatSheet,
+                ...cheatSheetPayload,
+                // Explicitly set V2 arrays (these are what we're trying to save)
+                bookingRules: cheatSheetPayload.bookingRules || [],
+                companyContacts: cheatSheetPayload.companyContacts || [],
+                links: cheatSheetPayload.links || [],
+                calculators: cheatSheetPayload.calculators || [],
+                versionHistory: cheatSheetPayload.versionHistory || updatedCompany.aiAgentSettings.cheatSheet.versionHistory || []
+            };
+            
+            logger.info('📊 [CHEAT SHEET DEBUG] After merge - V2 arrays:', {
+                bookingRules: updatedCompany.aiAgentSettings.cheatSheet.bookingRules?.length || 0,
+                companyContacts: updatedCompany.aiAgentSettings.cheatSheet.companyContacts?.length || 0,
+                links: updatedCompany.aiAgentSettings.cheatSheet.links?.length || 0,
+                calculators: updatedCompany.aiAgentSettings.cheatSheet.calculators?.length || 0
+            });
+            
             updatedCompany.markModified('aiAgentSettings.cheatSheet');
+            updatedCompany.markModified('aiAgentSettings');
             updatedCompany.updatedAt = new Date();
             await updatedCompany.save({ validateBeforeSave: false });
+            
             logger.info('📊 [CHEAT SHEET DEBUG] Document save complete', {
                 bookingRulesAfterSave: updatedCompany.aiAgentSettings?.cheatSheet?.bookingRules?.length || 0
             });
