@@ -138,6 +138,22 @@ class CheatSheetManager {
       return;
     }
     
+    // Check if this is Version History tab (V2-only, fully implemented)
+    if (subTab === 'version-history') {
+      console.log('[CHEAT SHEET] 📚 Routing to Version History renderer');
+      this.renderVersionHistory();
+      // Hide all V1 sub-tab contents and show V2 container
+      document.querySelectorAll('.cheatsheet-subtab-content:not(#cheatsheet-v2-dynamic-content)').forEach(el => {
+        el.classList.add('hidden');
+      });
+      const v2Container = document.getElementById('cheatsheet-v2-dynamic-content');
+      if (v2Container) {
+        v2Container.classList.remove('hidden');
+      }
+      console.log(`[CHEAT SHEET] ✅ Switched to Version History tab`);
+      return;
+    }
+    
     // ═══════════════════════════════════════════════════════════════════
     // OLD V1 TABS (triage, transfer-calls, edge-cases, behavior, guardrails, frontline-intel)
     // ═══════════════════════════════════════════════════════════════════
@@ -2836,6 +2852,422 @@ class CheatSheetManager {
   }
   
   // ═══════════════════════════════════════════════════════════════════
+  // VERSION HISTORY RENDERER
+  // ═══════════════════════════════════════════════════════════════════
+  
+  async renderVersionHistory() {
+    console.log('[CHEAT SHEET] 🎨 renderVersionHistory called');
+    
+    if (!this.versioningAdapter) {
+      console.warn('[CHEAT SHEET] ⚠️ Versioning adapter not available');
+      this.renderComingSoon('version-history');
+      return;
+    }
+    
+    const container = document.getElementById('cheatsheet-v2-dynamic-content');
+    if (!container) {
+      console.warn('[CHEAT SHEET] ⚠️ V2 dynamic content container not found');
+      return;
+    }
+    
+    // Show loading state
+    container.innerHTML = `
+      <div style="padding: 24px; background: #ffffff; border-radius: 12px; margin: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+        <div style="text-align: center; padding: 40px;">
+          <div style="font-size: 48px; margin-bottom: 16px;">⏳</div>
+          <div style="font-size: 16px; color: #6b7280;">Loading version history...</div>
+        </div>
+      </div>
+    `;
+    
+    try {
+      // Fetch version history from API
+      const history = await this.versioningAdapter.getVersionHistory();
+      console.log('[CHEAT SHEET] ✅ Version history loaded:', history);
+      
+      // Render version history UI
+      container.innerHTML = `
+        <div style="padding: 24px; background: #ffffff; border-radius: 12px; margin: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+          
+          <!-- Header -->
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #e5e7eb;">
+            <div>
+              <h3 style="font-size: 24px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
+                📚 Version History
+              </h3>
+              <p style="font-size: 14px; color: #6b7280; margin: 0;">
+                Browse, compare, and restore previous configurations
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="padding: 8px 16px; border-radius: 8px; background: #f0f9ff; border: 1px solid #0ea5e9;">
+                <span style="font-size: 13px; font-weight: 600; color: #0369a1;">
+                  ${history.length} Version${history.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Version Cards List -->
+          <div id="version-cards-list" style="display: flex; flex-direction: column; gap: 16px;">
+            ${history.length === 0 ? `
+              <div style="border: 2px dashed #d1d5db; border-radius: 12px; padding: 48px; background: #f9fafb; text-align: center;">
+                <div style="font-size: 64px; margin-bottom: 16px; opacity: 0.5;">📦</div>
+                <div style="font-size: 18px; font-weight: 600; color: #374151; margin-bottom: 8px;">
+                  No Version History Yet
+                </div>
+                <p style="font-size: 14px; color: #6b7280; margin: 0;">
+                  Version history will appear here as you create and push drafts.
+                </p>
+              </div>
+            ` : '<!-- Version cards will be rendered dynamically -->'}
+          </div>
+          
+        </div>
+      `;
+      
+      // Render individual version cards
+      if (history.length > 0) {
+        const listEl = container.querySelector('#version-cards-list');
+        if (listEl) {
+          history.forEach((version, index) => {
+            const card = this.renderVersionCard(version, index);
+            listEl.appendChild(card);
+          });
+        }
+      }
+      
+      console.log('[CHEAT SHEET] ✅ Version history rendered. Count:', history.length);
+      
+    } catch (error) {
+      console.error('[CHEAT SHEET] ❌ Failed to load version history:', error);
+      
+      container.innerHTML = `
+        <div style="padding: 24px; background: #ffffff; border-radius: 12px; margin: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+          <div style="text-align: center; padding: 40px;">
+            <div style="font-size: 64px; margin-bottom: 16px;">❌</div>
+            <div style="font-size: 18px; font-weight: 600; color: #dc2626; margin-bottom: 8px;">
+              Failed to Load Version History
+            </div>
+            <p style="font-size: 14px; color: #6b7280; margin: 0;">
+              ${error.message || 'Unknown error occurred'}
+            </p>
+          </div>
+        </div>
+      `;
+    }
+  }
+  
+  renderVersionCard(version, index) {
+    const card = document.createElement('div');
+    
+    // Determine status color and icon
+    const statusConfig = {
+      'live': { color: '#10b981', bg: '#d1fae5', icon: '🔴', label: 'LIVE' },
+      'draft': { color: '#f59e0b', bg: '#fef3c7', icon: '✏️', label: 'DRAFT' },
+      'archived': { color: '#6b7280', bg: '#f3f4f6', icon: '📦', label: 'ARCHIVED' }
+    };
+    
+    const status = statusConfig[version.status] || statusConfig['archived'];
+    
+    // Format timestamp
+    const timestamp = version.activatedAt || version.createdAt;
+    const date = new Date(timestamp);
+    const formattedDate = date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    // Calculate quick stats from config
+    const config = version.config || {};
+    const stats = {
+      triageCards: (config.triageCards || []).length,
+      transferRules: (config.transferRules || []).length,
+      edgeCases: (config.edgeCases || []).length,
+      bookingRules: (config.bookingRules || []).length,
+      companyContacts: (config.companyContacts || []).length,
+      links: (config.links || []).length,
+      calculators: (config.calculators || []).length
+    };
+    
+    const totalRules = Object.values(stats).reduce((sum, val) => sum + val, 0);
+    
+    card.style.cssText = 'border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; background: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s; cursor: pointer;';
+    card.setAttribute('data-version-id', version.versionId);
+    
+    // Hover effect
+    card.onmouseenter = () => {
+      card.style.borderColor = '#0ea5e9';
+      card.style.boxShadow = '0 4px 12px rgba(14, 165, 233, 0.2)';
+    };
+    card.onmouseleave = () => {
+      card.style.borderColor = '#e5e7eb';
+      card.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
+    };
+    
+    card.innerHTML = `
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;">
+        
+        <!-- Left: Version Info -->
+        <div style="flex: 1;">
+          
+          <!-- Top Row: Name + Status Badge -->
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+            <h4 style="font-size: 18px; font-weight: 600; color: #111827; margin: 0;">
+              ${version.name}
+            </h4>
+            <span style="padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: ${status.color}; background: ${status.bg};">
+              ${status.icon} ${status.label}
+            </span>
+          </div>
+          
+          <!-- Version ID + Timestamp -->
+          <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px;">
+            <div style="font-size: 12px; color: #6b7280;">
+              <span style="font-weight: 600;">Version:</span>
+              <code style="font-family: 'Monaco', 'Courier New', monospace; background: #f3f4f6; padding: 2px 6px; border-radius: 4px; margin-left: 4px;">
+                ${version.versionId.substring(0, 12)}...
+              </code>
+            </div>
+            <div style="font-size: 12px; color: #6b7280;">
+              <span style="font-weight: 600;">Created:</span> ${formattedDate}
+            </div>
+            ${version.createdBy ? `
+              <div style="font-size: 12px; color: #6b7280;">
+                <span style="font-weight: 600;">By:</span> ${version.createdBy}
+              </div>
+            ` : ''}
+          </div>
+          
+          <!-- Quick Stats -->
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <span style="font-size: 13px; color: #6b7280; font-weight: 600;">
+              📊 ${totalRules} Total Rules
+            </span>
+            ${stats.triageCards > 0 ? `<span style="font-size: 12px; color: #6b7280;">🎯 ${stats.triageCards} Triage</span>` : ''}
+            ${stats.transferRules > 0 ? `<span style="font-size: 12px; color: #6b7280;">📞 ${stats.transferRules} Transfer</span>` : ''}
+            ${stats.edgeCases > 0 ? `<span style="font-size: 12px; color: #6b7280;">⚠️ ${stats.edgeCases} Edge Cases</span>` : ''}
+            ${stats.bookingRules > 0 ? `<span style="font-size: 12px; color: #6b7280;">📅 ${stats.bookingRules} Booking</span>` : ''}
+            ${stats.companyContacts > 0 ? `<span style="font-size: 12px; color: #6b7280;">👥 ${stats.companyContacts} Contacts</span>` : ''}
+          </div>
+          
+          <!-- Notes (if any) -->
+          ${version.notes ? `
+            <div style="margin-top: 12px; padding: 10px 12px; background: #f0f9ff; border-left: 3px solid #0ea5e9; border-radius: 4px;">
+              <div style="font-size: 12px; color: #0369a1; line-height: 1.5;">
+                ${version.notes}
+              </div>
+            </div>
+          ` : ''}
+          
+        </div>
+        
+        <!-- Right: Action Buttons -->
+        <div style="display: flex; flex-direction: column; gap: 8px; min-width: 120px;">
+          
+          <button 
+            onclick="cheatSheetManager.viewVersionDetail('${version.versionId}')"
+            style="padding: 8px 16px; font-size: 13px; font-weight: 500; border-radius: 6px; border: 1px solid #0ea5e9; background: #ffffff; color: #0ea5e9; cursor: pointer; transition: all 0.2s; text-align: center;"
+            onmouseover="this.style.background='#f0f9ff'" 
+            onmouseout="this.style.background='#ffffff'"
+          >
+            👁️ View
+          </button>
+          
+          ${version.status === 'archived' ? `
+            <button 
+              onclick="cheatSheetManager.restoreVersion('${version.versionId}', '${version.name}')"
+              style="padding: 8px 16px; font-size: 13px; font-weight: 500; border-radius: 6px; border: 1px solid #10b981; background: #ffffff; color: #10b981; cursor: pointer; transition: all 0.2s; text-align: center;"
+              onmouseover="this.style.background='#d1fae5'" 
+              onmouseout="this.style.background='#ffffff'"
+            >
+              🔄 Restore
+            </button>
+            
+            <button 
+              onclick="cheatSheetManager.deleteVersion('${version.versionId}', '${version.name}')"
+              style="padding: 8px 16px; font-size: 13px; font-weight: 500; border-radius: 6px; border: 1px solid #ef4444; background: #ffffff; color: #ef4444; cursor: pointer; transition: all 0.2s; text-align: center;"
+              onmouseover="this.style.background='#fef2f2'" 
+              onmouseout="this.style.background='#ffffff'"
+            >
+              🗑️ Delete
+            </button>
+          ` : version.status === 'live' ? `
+            <div style="padding: 8px 12px; font-size: 12px; text-align: center; color: #6b7280; font-style: italic;">
+              Currently active
+            </div>
+          ` : `
+            <div style="padding: 8px 12px; font-size: 12px; text-align: center; color: #6b7280; font-style: italic;">
+              Being edited
+            </div>
+          `}
+          
+        </div>
+        
+      </div>
+    `;
+    
+    return card;
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // VERSION ACTIONS (View, Restore, Delete)
+  // ═══════════════════════════════════════════════════════════════════
+  
+  async viewVersionDetail(versionId) {
+    console.log('[CHEAT SHEET] 👁️ Viewing version detail:', versionId);
+    
+    try {
+      const config = await this.versioningAdapter.getVersionConfig(versionId);
+      console.log('[CHEAT SHEET] ✅ Version config loaded:', config);
+      
+      // Create modal overlay
+      const modal = document.createElement('div');
+      modal.id = 'version-detail-modal';
+      modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        padding: 24px;
+      `;
+      
+      modal.innerHTML = `
+        <div style="background: #ffffff; border-radius: 16px; max-width: 900px; width: 100%; max-height: 90vh; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3); display: flex; flex-direction: column;">
+          
+          <!-- Modal Header -->
+          <div style="padding: 24px; border-bottom: 2px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <h2 style="font-size: 24px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
+                📄 Version Details
+              </h2>
+              <p style="font-size: 14px; color: #6b7280; margin: 0;">
+                Read-only snapshot of configuration
+              </p>
+            </div>
+            <button 
+              onclick="document.getElementById('version-detail-modal').remove()"
+              style="padding: 8px 12px; border-radius: 8px; border: none; background: #f3f4f6; color: #6b7280; cursor: pointer; font-size: 20px; line-height: 1; transition: all 0.2s;"
+              onmouseover="this.style.background='#e5e7eb'"
+              onmouseout="this.style.background='#f3f4f6'"
+            >
+              ✕
+            </button>
+          </div>
+          
+          <!-- Modal Body (Scrollable) -->
+          <div style="padding: 24px; overflow-y: auto; flex: 1;">
+            <pre style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; font-size: 12px; font-family: 'Monaco', 'Courier New', monospace; line-height: 1.6; overflow-x: auto; margin: 0;">${JSON.stringify(config, null, 2)}</pre>
+          </div>
+          
+          <!-- Modal Footer -->
+          <div style="padding: 16px 24px; border-top: 2px solid #e5e7eb; background: #f9fafb; display: flex; justify-content: flex-end;">
+            <button 
+              onclick="document.getElementById('version-detail-modal').remove()"
+              style="padding: 10px 24px; border-radius: 8px; border: none; background: #0ea5e9; color: #ffffff; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s;"
+              onmouseover="this.style.background='#0284c7'"
+              onmouseout="this.style.background='#0ea5e9'"
+            >
+              Close
+            </button>
+          </div>
+          
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+    } catch (error) {
+      console.error('[CHEAT SHEET] ❌ Failed to load version detail:', error);
+      this.showNotification(`Failed to load version: ${error.message}`, 'error');
+    }
+  }
+  
+  async restoreVersion(versionId, versionName) {
+    console.log('[CHEAT SHEET] 🔄 Restoring version:', versionId);
+    
+    const confirmed = window.confirm(
+      `🔄 RESTORE VERSION?\n\n` +
+      `This will create a new draft from "${versionName}".\n\n` +
+      `You can review the restored configuration before pushing it live.\n\n` +
+      `Continue?`
+    );
+    
+    if (!confirmed) {
+      console.log('[CHEAT SHEET] ⚠️ Restore cancelled by user');
+      return;
+    }
+    
+    try {
+      const newDraftName = window.prompt(
+        'Name for the restored draft:',
+        `Restored: ${versionName}`
+      );
+      
+      if (!newDraftName) {
+        console.log('[CHEAT SHEET] ⚠️ Restore cancelled (no name provided)');
+        return;
+      }
+      
+      console.log('[CHEAT SHEET] 🔄 Creating draft from archived version...');
+      const draft = await this.versioningAdapter.restoreVersion(versionId, newDraftName);
+      console.log('[CHEAT SHEET] ✅ Version restored as draft:', draft);
+      
+      // Reload to fetch the new draft
+      await this.load(this.companyId);
+      this.render();
+      
+      // Switch back to a main tab to see the draft status banner
+      this.switchSubTab('triage');
+      
+      this.showNotification(`✅ Version restored as "${newDraftName}"! Review and push live when ready.`, 'success');
+      
+    } catch (error) {
+      console.error('[CHEAT SHEET] ❌ Failed to restore version:', error);
+      this.showNotification(`Failed to restore version: ${error.message}`, 'error');
+    }
+  }
+  
+  async deleteVersion(versionId, versionName) {
+    console.log('[CHEAT SHEET] 🗑️ Deleting version:', versionId);
+    
+    const confirmed = window.confirm(
+      `🗑️ DELETE ARCHIVED VERSION?\n\n` +
+      `This will permanently delete "${versionName}".\n\n` +
+      `This action cannot be undone. Continue?`
+    );
+    
+    if (!confirmed) {
+      console.log('[CHEAT SHEET] ⚠️ Delete cancelled by user');
+      return;
+    }
+    
+    try {
+      console.log('[CHEAT SHEET] 🗑️ Deleting archived version...');
+      await this.versioningAdapter.deleteVersion(versionId);
+      console.log('[CHEAT SHEET] ✅ Version deleted successfully');
+      
+      // Re-render version history to remove the deleted card
+      this.renderVersionHistory();
+      
+      this.showNotification(`✅ Version "${versionName}" deleted permanently.`, 'success');
+      
+    } catch (error) {
+      console.error('[CHEAT SHEET] ❌ Failed to delete version:', error);
+      this.showNotification(`Failed to delete version: ${error.message}`, 'error');
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
   // TOGGLE HELPERS
   // ═══════════════════════════════════════════════════════════════════
   
@@ -3252,8 +3684,8 @@ class CheatSheetManager {
   
   async showVersionHistory() {
     console.log('[CHEAT SHEET] 📚 Opening version history...');
-    // TODO: Implement version history modal/tab
-    this.showNotification('Version history coming soon!', 'info');
+    // Switch to version-history tab
+    this.switchSubTab('version-history');
   }
   
   async compileCheatSheet() {

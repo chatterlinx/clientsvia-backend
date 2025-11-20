@@ -330,6 +330,59 @@ class CheatSheetVersioningAdapter {
     return data.data;
   }
   
+  /**
+   * Get version configuration (full config object)
+   */
+  async getVersionConfig(versionId) {
+    console.log('[VERSION ADAPTER] Fetching version config:', versionId);
+    
+    const response = await fetch(
+      `${this.baseUrl}/versions/${this.companyId}/${versionId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${this.token}`
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Failed to fetch version config: HTTP ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    console.log('[VERSION ADAPTER] Version config fetched');
+    
+    return data.data.config;
+  }
+  
+  /**
+   * Delete archived version permanently
+   */
+  async deleteVersion(versionId) {
+    console.log('[VERSION ADAPTER] Deleting version:', versionId);
+    
+    const response = await fetch(
+      `${this.baseUrl}/versions/${this.companyId}/${versionId}`,
+      {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${this.token}`
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Failed to delete version: HTTP ${response.status}`);
+    }
+    
+    console.log('[VERSION ADAPTER] Version deleted successfully');
+    
+    return true;
+  }
+  
   // ============================================================================
   // HELPER METHODS
   // ============================================================================

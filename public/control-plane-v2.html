@@ -117,6 +117,7 @@
     <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="company-contacts">Company Contacts</button>
     <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="links">Links</button>
     <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="calculator">Calculator</button>
+    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="version-history">📚 Version History</button>
     <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="cheat-active-instructions">Active Instructions Preview</button>
   </nav>
 
@@ -763,7 +764,7 @@
     // CHEAT SHEET SUB-TABS (CONTROL PLANE NAV → CheatSheetManager)
     const cheatTabButtons = document.querySelectorAll('.js-cheat-tab');
     // All tabs now handled by CheatSheetManager - working tabs render normally, Coming Soon tabs show placeholder
-    const cheatTabsHandledByManager = new Set(['triage','frontline-intel','transfer-calls','edge-cases','behavior','guardrails','booking','company-contacts','links','calculator','cheat-active-instructions']);
+    const cheatTabsHandledByManager = new Set(['triage','frontline-intel','transfer-calls','edge-cases','behavior','guardrails','booking','company-contacts','links','calculator','version-history','cheat-active-instructions']);
     const cheatTabLabels = {
       'triage': 'Triage',
       'frontline-intel': 'Frontline-Intel',
@@ -775,6 +776,7 @@
       'company-contacts': 'Company Contacts',
       'links': 'Links',
       'calculator': 'Calculator',
+      'version-history': 'Version History',
       'cheat-active-instructions': 'Active Instructions Preview'
     };
 
