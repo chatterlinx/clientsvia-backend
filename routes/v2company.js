@@ -723,6 +723,16 @@ router.patch('/company/:id', async (req, res) => {
                 updatedCompany.aiAgentSettings.cheatSheet = {};
             }
             
+            // 🔍 DEBUG: What's IN the payload before merge?
+            logger.info('📊 [CHEAT SHEET DEBUG] cheatSheetPayload BEFORE merge:', {
+                hasBookingRules: 'bookingRules' in cheatSheetPayload,
+                bookingRulesType: typeof cheatSheetPayload.bookingRules,
+                bookingRulesIsArray: Array.isArray(cheatSheetPayload.bookingRules),
+                bookingRulesLength: cheatSheetPayload.bookingRules?.length,
+                bookingRulesValue: cheatSheetPayload.bookingRules,
+                allKeys: Object.keys(cheatSheetPayload)
+            });
+            
             // MERGE the payload into existing cheatSheet (preserves V1 fields!)
             updatedCompany.aiAgentSettings.cheatSheet = {
                 ...updatedCompany.aiAgentSettings.cheatSheet,
