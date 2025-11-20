@@ -661,9 +661,10 @@ router.patch('/company/:id', async (req, res) => {
             updateOperation.profileComplete = true;
         }
 
+        // 🔧 FIX: Use $set for dot-notation fields to work properly
         const updatedCompany = await Company.findByIdAndUpdate(
             companyId,
-            updateOperation,
+            { $set: updateOperation },
             { new: true, runValidators: true }
         );
 
