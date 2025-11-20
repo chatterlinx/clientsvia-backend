@@ -734,23 +734,23 @@ router.patch('/company/:id', async (req, res) => {
             });
             
             // MERGE the payload into existing cheatSheet (preserves V1 fields!)
+            // 🔧 CRITICAL: Convert Mongoose document to plain object FIRST!
+            const existingCheatSheet = updatedCompany.aiAgentSettings.cheatSheet.toObject ? 
+                updatedCompany.aiAgentSettings.cheatSheet.toObject() : 
+                updatedCompany.aiAgentSettings.cheatSheet;
+            
             updatedCompany.aiAgentSettings.cheatSheet = {
-                ...updatedCompany.aiAgentSettings.cheatSheet,
-                ...cheatSheetPayload,
-                // Explicitly set V2 arrays (these are what we're trying to save)
-                bookingRules: cheatSheetPayload.bookingRules || [],
-                companyContacts: cheatSheetPayload.companyContacts || [],
-                links: cheatSheetPayload.links || [],
-                calculators: cheatSheetPayload.calculators || [],
-                versionHistory: cheatSheetPayload.versionHistory || updatedCompany.aiAgentSettings.cheatSheet.versionHistory || []
+                ...existingCheatSheet,    // Plain object with V1 fields
+                ...cheatSheetPayload      // Plain object with V2 arrays - this OVERWRITES correctly!
             };
             
-            logger.info('📊 [CHEAT SHEET DEBUG] After merge - V2 arrays:', {
+            logger.info('📊 [CHEAT SHEET DEBUG] After merge (converted to plain object first):', {
                 bookingRules: updatedCompany.aiAgentSettings.cheatSheet.bookingRules?.length || 0,
                 companyContacts: updatedCompany.aiAgentSettings.cheatSheet.companyContacts?.length || 0,
                 links: updatedCompany.aiAgentSettings.cheatSheet.links?.length || 0,
                 calculators: updatedCompany.aiAgentSettings.cheatSheet.calculators?.length || 0
             });
+            
             
             updatedCompany.markModified('aiAgentSettings.cheatSheet');
             updatedCompany.markModified('aiAgentSettings');
