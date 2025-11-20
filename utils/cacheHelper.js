@@ -158,7 +158,7 @@ class CacheHelper {
             const keys = [
                 `company:${companyId}`,                    // Main company cache
                 `company:${companyId}:settings`,           // Settings cache
-                `company:${companyId}:aiAgentLogic`,       // AI agent settings
+                `company:${companyId}:aiAgentSettings`,    // AI agent settings
                 `company:${companyId}:contacts`,           // Contact list
                 `company:${companyId}:templates`,          // Associated templates
                 `company:${companyId}:knowledgeBase`,      // Knowledge base

@@ -1460,10 +1460,10 @@
                         updatedAt: companyData.updatedAt
                     },
                     aiAgent: {
-                        voiceSettings: companyData.aiAgentLogic?.voiceSettings,
+                        voiceSettings: companyData.aiAgentSettings?.voiceSettings,
                         connectionMessages: companyData.connectionMessages,
-                        placeholders: companyData.aiAgentLogic?.placeholders,
-                        instantResponses: companyData.aiAgentLogic?.instantResponses
+                        placeholders: companyData.aiAgentSettings?.placeholders,
+                        instantResponses: companyData.aiAgentSettings?.instantResponses
                     },
                     configuration: companyData.configuration,
                     twilioConfig: {

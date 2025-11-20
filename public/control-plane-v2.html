@@ -1156,7 +1156,7 @@
         const data = await apiCall(`/api/company/${currentCompanyId}/settings`);
         container.innerHTML = `
           <h3>AI Agent Logic</h3>
-          <pre style="background:#f3f4f6;padding:12px;border-radius:6px;font-size:12px;overflow:auto;">${JSON.stringify(data.data.aiAgentLogic, null, 2)}</pre>
+          <pre style="background:#f3f4f6;padding:12px;border-radius:6px;font-size:12px;overflow:auto;">${JSON.stringify(data.data.aiAgentSettings, null, 2)}</pre>
           
           <h3 style="margin-top:24px;">Operating Hours</h3>
           <pre style="background:#f3f4f6;padding:12px;border-radius:6px;font-size:12px;overflow:auto;">${JSON.stringify(data.data.operatingHours, null, 2)}</pre>

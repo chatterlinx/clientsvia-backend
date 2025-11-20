@@ -738,7 +738,7 @@ async function startServer() {
         }
         
         // V2 DELETED: Legacy agent prompts loading - V2 uses aiAgentSettings system
-        console.log('[Server] Step 3/6: Skipping legacy agent prompts (V2 uses aiAgentLogic)...');
+        console.log('[Server] Step 3/6: Skipping legacy agent prompts (V2 uses aiAgentSettings)...');
         console.log(`[Server] ✅ Step 3 COMPLETE: Legacy agent prompts skipped - V2 system active`);
         
         console.log('[Server] Step 4/6: V2 DELETED - Legacy backup monitoring eliminated...');
