@@ -34,6 +34,11 @@ class CheatSheetManager {
     this.rootSelector = options.rootSelector || '#cheatsheet-container';
     this.rootElement = (typeof document !== 'undefined') ? document.querySelector(this.rootSelector) : null;
     
+    // Version System Integration
+    this.versioningAdapter = null; // Will be initialized in load()
+    this.versionStatus = null; // { live: {...}, draft: {...} }
+    this.useVersioning = true; // Feature flag - can be disabled for gradual rollout
+    
     console.log('[CHEAT SHEET MANAGER] 🏗️ About to ensureBaseLayout');
     this.ensureBaseLayout();
     console.log('[CHEAT SHEET MANAGER] 🏗️ Base layout ensured');
@@ -381,6 +386,22 @@ class CheatSheetManager {
     
     try {
       const token = localStorage.getItem('adminToken');
+      
+      // Initialize versioning adapter if enabled
+      if (this.useVersioning && typeof CheatSheetVersioningAdapter !== 'undefined') {
+        console.log('[CHEAT SHEET] 🔄 Initializing versioning adapter...');
+        this.versioningAdapter = new CheatSheetVersioningAdapter(companyId, token);
+        
+        try {
+          // Fetch version status (live + draft metadata)
+          this.versionStatus = await this.versioningAdapter.getStatus();
+          console.log('[CHEAT SHEET] ✅ Version status loaded:', this.versionStatus);
+        } catch (versionError) {
+          console.warn('[CHEAT SHEET] ⚠️ Version system not available, falling back to legacy mode:', versionError);
+          this.useVersioning = false; // Graceful degradation
+        }
+      }
+      
       const response = await fetch(`/api/company/${companyId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -502,6 +523,124 @@ class CheatSheetManager {
     const statusEl = document.getElementById('cheatsheet-status');
     if (!statusEl) return;
     
+    // Version System Mode
+    if (this.useVersioning && this.versionStatus) {
+      const hasDraft = !!this.versionStatus.draft;
+      const liveVersion = this.versionStatus.live;
+      
+      statusEl.innerHTML = `
+        <!-- Version System Status Banner -->
+        <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #0ea5e9; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            
+            <!-- Left: System Status -->
+            <div style="display: flex; align-items: center; gap: 24px;">
+              
+              <!-- LIVE System -->
+              <div>
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #0369a1; font-weight: 700; margin-bottom: 4px;">
+                  🔴 LIVE SYSTEM
+                </div>
+                <div style="font-size: 14px; font-weight: 600; color: #0c4a6e;">
+                  ${liveVersion ? liveVersion.name : 'No live version'}
+                </div>
+                ${liveVersion ? `
+                  <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+                    v${liveVersion.versionId.substring(0, 8)} • ${new Date(liveVersion.activatedAt || liveVersion.createdAt).toLocaleDateString()}
+                  </div>
+                ` : ''}
+              </div>
+              
+              <!-- Separator -->
+              <div style="width: 1px; height: 40px; background: #cbd5e1;"></div>
+              
+              <!-- YOUR WORKSPACE (Draft) -->
+              <div>
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #7c2d12; font-weight: 700; margin-bottom: 4px;">
+                  ✏️ YOUR WORKSPACE
+                </div>
+                ${hasDraft ? `
+                  <div style="font-size: 14px; font-weight: 600; color: #92400e;">
+                    ${this.versionStatus.draft.name} ${this.isDirty ? '(unsaved changes)' : ''}
+                  </div>
+                  <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+                    v${this.versionStatus.draft.versionId.substring(0, 8)} • Draft created ${new Date(this.versionStatus.draft.createdAt).toLocaleDateString()}
+                  </div>
+                ` : `
+                  <div style="font-size: 13px; color: #64748b; font-style: italic;">
+                    No draft in progress
+                  </div>
+                `}
+              </div>
+            </div>
+            
+            <!-- Right: Action Buttons -->
+            <div style="display: flex; align-items: center; gap: 8px;">
+              
+              ${hasDraft ? `
+                <!-- Save Draft Button -->
+                <button 
+                  onclick="cheatSheetManager.saveDraft()" 
+                  style="padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; cursor: pointer; transition: all 0.2s; ${
+                    this.isDirty 
+                      ? 'background: #f59e0b; color: #ffffff; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);' 
+                      : 'background: #e5e7eb; color: #9ca3af; cursor: not-allowed;'
+                  }"
+                  ${!this.isDirty ? 'disabled' : ''}
+                  ${this.isDirty ? 'onmouseover="this.style.background=\'#d97706\'" onmouseout="this.style.background=\'#f59e0b\'"' : ''}
+                >
+                  💾 Save Draft
+                </button>
+                
+                <!-- Push Live Button -->
+                <button 
+                  onclick="cheatSheetManager.pushDraftLive()" 
+                  style="padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; background: #10b981; color: #ffffff; cursor: pointer; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3); transition: all 0.2s;"
+                  onmouseover="this.style.background='#059669'" 
+                  onmouseout="this.style.background='#10b981'"
+                >
+                  🚀 Push Live
+                </button>
+                
+                <!-- Discard Draft Button -->
+                <button 
+                  onclick="cheatSheetManager.discardDraft()" 
+                  style="padding: 8px 16px; font-size: 13px; font-weight: 500; border-radius: 8px; border: 1px solid #ef4444; background: transparent; color: #ef4444; cursor: pointer; transition: all 0.2s;"
+                  onmouseover="this.style.background='#fef2f2'" 
+                  onmouseout="this.style.background='transparent'"
+                >
+                  🗑️ Discard
+                </button>
+              ` : `
+                <!-- Create Draft Button -->
+                <button 
+                  onclick="cheatSheetManager.createDraft()" 
+                  style="padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; background: #3b82f6; color: #ffffff; cursor: pointer; box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3); transition: all 0.2s;"
+                  onmouseover="this.style.background='#2563eb'" 
+                  onmouseout="this.style.background='#3b82f6'"
+                >
+                  ✏️ Create Draft
+                </button>
+              `}
+              
+              <!-- Version History Button -->
+              <button 
+                onclick="cheatSheetManager.showVersionHistory()" 
+                style="padding: 8px 16px; font-size: 13px; font-weight: 500; border-radius: 8px; border: 1px solid #0ea5e9; background: transparent; color: #0ea5e9; cursor: pointer; transition: all 0.2s;"
+                onmouseover="this.style.background='#f0f9ff'" 
+                onmouseout="this.style.background='transparent'"
+              >
+                📚 History
+              </button>
+            </div>
+            
+          </div>
+        </div>
+      `;
+      return;
+    }
+    
+    // Legacy Mode (No Version System)
     const isDraft = this.cheatSheet.status === 'draft';
     const hasChecksum = Boolean(this.cheatSheet.checksum);
     
@@ -529,7 +668,6 @@ class CheatSheetManager {
         </div>
         
         <div class="flex items-center space-x-2">
-          <!-- SAVE CHANGES BUTTON - Color changes based on isDirty -->
           <button 
             onclick="cheatSheetManager.save()" 
             class="px-4 py-2 rounded-lg transition-all text-sm font-medium ${
@@ -2950,6 +3088,172 @@ class CheatSheetManager {
       // Show prominent error popup
       this.showErrorPopup('❌ SAVE FAILED', `Could not save to MongoDB: ${error.message}`);
     }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // VERSION SYSTEM HANDLERS (Draft/Live Workflow)
+  // ═══════════════════════════════════════════════════════════════════
+  
+  async createDraft() {
+    if (!this.versioningAdapter) {
+      console.error('[CHEAT SHEET] ❌ Versioning adapter not initialized');
+      this.showNotification('Version system not available', 'error');
+      return;
+    }
+    
+    try {
+      console.log('[CHEAT SHEET] 📝 Creating new draft...');
+      const draftName = window.prompt('Name for this draft:', 'Working Draft ' + new Date().toLocaleDateString());
+      
+      if (!draftName) {
+        console.log('[CHEAT SHEET] ⚠️ Draft creation cancelled (no name provided)');
+        return;
+      }
+      
+      const notes = window.prompt('Notes for this draft (optional):', '');
+      
+      // Create draft from current live version
+      const draft = await this.versioningAdapter.createDraft(draftName, notes || '', null);
+      console.log('[CHEAT SHEET] ✅ Draft created:', draft);
+      
+      // Reload to fetch the new draft
+      await this.load(this.companyId);
+      this.render();
+      
+      this.showNotification(`✅ Draft "${draftName}" created successfully!`, 'success');
+    } catch (error) {
+      console.error('[CHEAT SHEET] ❌ Failed to create draft:', error);
+      this.showNotification(`Failed to create draft: ${error.message}`, 'error');
+    }
+  }
+  
+  async saveDraft() {
+    if (!this.versioningAdapter || !this.versionStatus?.draft) {
+      console.error('[CHEAT SHEET] ❌ No draft to save');
+      this.showNotification('No draft in progress', 'error');
+      return;
+    }
+    
+    if (!this.isDirty) {
+      console.log('[CHEAT SHEET] ℹ️ No changes to save');
+      this.showNotification('No changes to save', 'info');
+      return;
+    }
+    
+    try {
+      console.log('[CHEAT SHEET] 💾 Saving draft...', this.versionStatus.draft.versionId);
+      
+      // Save the draft with current config
+      await this.versioningAdapter.saveDraft(this.versionStatus.draft.versionId, this.cheatSheet);
+      console.log('[CHEAT SHEET] ✅ Draft saved successfully');
+      
+      this.isDirty = false;
+      
+      // Reload status (to get updated timestamps, etc.)
+      this.versionStatus = await this.versioningAdapter.getStatus();
+      this.renderStatus();
+      
+      this.showNotification('✅ Draft saved successfully!', 'success');
+    } catch (error) {
+      console.error('[CHEAT SHEET] ❌ Failed to save draft:', error);
+      
+      if (error.statusCode === 409) {
+        // Optimistic concurrency conflict
+        this.showNotification('⚠️ Draft was modified elsewhere. Please refresh and try again.', 'error');
+      } else {
+        this.showNotification(`Failed to save draft: ${error.message}`, 'error');
+      }
+    }
+  }
+  
+  async pushDraftLive() {
+    if (!this.versioningAdapter || !this.versionStatus?.draft) {
+      console.error('[CHEAT SHEET] ❌ No draft to push live');
+      this.showNotification('No draft to push live', 'error');
+      return;
+    }
+    
+    if (this.isDirty) {
+      const saveFirst = window.confirm('You have unsaved changes. Save draft before pushing live?');
+      if (saveFirst) {
+        await this.saveDraft();
+      } else {
+        return; // Don't proceed if user cancels
+      }
+    }
+    
+    const confirmed = window.confirm(
+      `🚀 PUSH DRAFT LIVE?\n\n` +
+      `This will:\n` +
+      `1. Make "${this.versionStatus.draft.name}" the new LIVE configuration\n` +
+      `2. Archive the current live version\n` +
+      `3. Delete the draft\n\n` +
+      `This change will affect all incoming calls immediately.\n\n` +
+      `Continue?`
+    );
+    
+    if (!confirmed) {
+      console.log('[CHEAT SHEET] ⚠️ Push live cancelled by user');
+      return;
+    }
+    
+    try {
+      console.log('[CHEAT SHEET] 🚀 Pushing draft live...', this.versionStatus.draft.versionId);
+      
+      await this.versioningAdapter.pushLive(this.versionStatus.draft.versionId);
+      console.log('[CHEAT SHEET] ✅ Draft pushed live successfully!');
+      
+      // Reload everything (draft is now deleted, we're back to live-only mode)
+      await this.load(this.companyId);
+      this.render();
+      
+      this.showNotification('✅ Draft pushed live! Configuration is now active.', 'success');
+    } catch (error) {
+      console.error('[CHEAT SHEET] ❌ Failed to push draft live:', error);
+      this.showNotification(`Failed to push live: ${error.message}`, 'error');
+    }
+  }
+  
+  async discardDraft() {
+    if (!this.versioningAdapter || !this.versionStatus?.draft) {
+      console.error('[CHEAT SHEET] ❌ No draft to discard');
+      this.showNotification('No draft to discard', 'error');
+      return;
+    }
+    
+    const confirmed = window.confirm(
+      `🗑️ DISCARD DRAFT?\n\n` +
+      `This will permanently delete "${this.versionStatus.draft.name}".\n\n` +
+      `${this.isDirty ? 'You have unsaved changes that will be lost.\n\n' : ''}` +
+      `This action cannot be undone. Continue?`
+    );
+    
+    if (!confirmed) {
+      console.log('[CHEAT SHEET] ⚠️ Discard cancelled by user');
+      return;
+    }
+    
+    try {
+      console.log('[CHEAT SHEET] 🗑️ Discarding draft...', this.versionStatus.draft.versionId);
+      
+      await this.versioningAdapter.discardDraft(this.versionStatus.draft.versionId);
+      console.log('[CHEAT SHEET] ✅ Draft discarded successfully');
+      
+      // Reload (draft is now gone, back to live)
+      await this.load(this.companyId);
+      this.render();
+      
+      this.showNotification('✅ Draft discarded. Reverted to live configuration.', 'success');
+    } catch (error) {
+      console.error('[CHEAT SHEET] ❌ Failed to discard draft:', error);
+      this.showNotification(`Failed to discard draft: ${error.message}`, 'error');
+    }
+  }
+  
+  async showVersionHistory() {
+    console.log('[CHEAT SHEET] 📚 Opening version history...');
+    // TODO: Implement version history modal/tab
+    this.showNotification('Version history coming soon!', 'info');
   }
   
   async compileCheatSheet() {
