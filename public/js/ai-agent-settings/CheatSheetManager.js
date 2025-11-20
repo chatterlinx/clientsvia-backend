@@ -406,11 +406,17 @@ class CheatSheetManager {
       // Initialize versioning adapter if enabled
       if (this.useVersioning && typeof CheatSheetVersioningAdapter !== 'undefined') {
         console.log('[CHEAT SHEET] 🔄 Initializing versioning adapter...');
-        this.versioningAdapter = new CheatSheetVersioningAdapter(companyId, token);
+        this.versioningAdapter = new CheatSheetVersioningAdapter(companyId);
         
         try {
-          // Fetch version status (live + draft metadata)
-          this.versionStatus = await this.versioningAdapter.getStatus();
+          // Initialize adapter (fetches status and sets up token)
+          await this.versioningAdapter.initialize();
+          
+          // Access status from adapter's property
+          this.versionStatus = {
+            liveVersion: this.versioningAdapter.getLive(),
+            draftVersion: this.versioningAdapter.getDraft()
+          };
           console.log('[CHEAT SHEET] ✅ Version status loaded:', this.versionStatus);
         } catch (versionError) {
           console.warn('[CHEAT SHEET] ⚠️ Version system not available, falling back to legacy mode:', versionError);
