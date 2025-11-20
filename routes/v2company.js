@@ -745,10 +745,21 @@ router.patch('/company/:id', async (req, res) => {
             updatedCompany.markModified('aiAgentSettings.cheatSheet');
             updatedCompany.markModified('aiAgentSettings');
             updatedCompany.updatedAt = new Date();
+            
+            logger.info('📊 [CHEAT SHEET DEBUG] BEFORE save() - bookingRules in memory:', updatedCompany.aiAgentSettings?.cheatSheet?.bookingRules?.length || 0);
+            
             await updatedCompany.save({ validateBeforeSave: false });
             
-            logger.info('📊 [CHEAT SHEET DEBUG] Document save complete', {
-                bookingRulesAfterSave: updatedCompany.aiAgentSettings?.cheatSheet?.bookingRules?.length || 0
+            logger.info('📊 [CHEAT SHEET DEBUG] AFTER save() - bookingRules in memory:', updatedCompany.aiAgentSettings?.cheatSheet?.bookingRules?.length || 0);
+            
+            // 🔍 CRITICAL: Verify what's ACTUALLY in MongoDB by re-fetching
+            const verifyDoc = await Company.findById(companyId).lean();
+            logger.info('📊 [CHEAT SHEET DEBUG] MONGODB VERIFICATION - Re-fetched from DB:', {
+                hasAiAgentSettings: Boolean(verifyDoc.aiAgentSettings),
+                hasCheatSheet: Boolean(verifyDoc.aiAgentSettings?.cheatSheet),
+                bookingRulesInDB: verifyDoc.aiAgentSettings?.cheatSheet?.bookingRules?.length || 0,
+                bookingRulesActualValue: verifyDoc.aiAgentSettings?.cheatSheet?.bookingRules,
+                cheatSheetKeys: Object.keys(verifyDoc.aiAgentSettings?.cheatSheet || {})
             });
         }
 
