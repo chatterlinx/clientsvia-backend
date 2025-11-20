@@ -643,6 +643,20 @@ class CheatSheetManager {
                 >
                   ✏️ Create Draft
                 </button>
+                
+                <!-- Quick Save Button (No Draft Needed) -->
+                <button 
+                  onclick="cheatSheetManager.quickSave()" 
+                  style="padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; cursor: pointer; transition: all 0.2s; ${
+                    this.isDirty 
+                      ? 'background: #10b981; color: #ffffff; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);' 
+                      : 'background: #e5e7eb; color: #9ca3af; cursor: not-allowed;'
+                  }"
+                  ${!this.isDirty ? 'disabled' : ''}
+                  ${this.isDirty ? 'onmouseover="this.style.background=\'#059669\'" onmouseout="this.style.background=\'#10b981\'"' : ''}
+                >
+                  💾 Quick Save
+                </button>
               `}
               
               <!-- Version History Button -->
@@ -3531,6 +3545,37 @@ class CheatSheetManager {
   // ═══════════════════════════════════════════════════════════════════
   // VERSION SYSTEM HANDLERS (Draft/Live Workflow)
   // ═══════════════════════════════════════════════════════════════════
+  
+  /**
+   * Quick Save - Saves changes directly without version system (legacy mode)
+   * Used when no draft exists and user just wants to save current state
+   */
+  async quickSave() {
+    console.log('[CHEAT SHEET] 💾 Quick Save initiated (bypassing version system)');
+    
+    if (!this.isDirty) {
+      console.log('[CHEAT SHEET] ⚠️ No changes to save');
+      this.showNotification('No changes to save', 'info');
+      return;
+    }
+    
+    try {
+      // Use the regular save method but force legacy mode temporarily
+      const originalVersioningFlag = this.useVersioning;
+      this.useVersioning = false; // Temporarily disable versioning
+      
+      await this.save();
+      
+      this.useVersioning = originalVersioningFlag; // Restore flag
+      
+      console.log('[CHEAT SHEET] ✅ Quick save complete');
+      this.showNotification('✅ Changes saved successfully!', 'success');
+      
+    } catch (error) {
+      console.error('[CHEAT SHEET] ❌ Quick save failed:', error);
+      this.showNotification(`Failed to save: ${error.message}`, 'error');
+    }
+  }
   
   async createDraft() {
     if (!this.versioningAdapter) {
