@@ -919,6 +919,29 @@ const companySchema = new mongoose.Schema({
         },
         
         // -------------------------------------------------------------------
+        // CHEAT SHEET META - Version Control Pointers (NEW ARCHITECTURE)
+        // -------------------------------------------------------------------
+        // LIGHTWEIGHT POINTERS ONLY - actual configs stored in CheatSheetVersion collection
+        // This prevents Company document bloat and enables clean version history
+        // See: models/cheatsheet/CheatSheetVersion.js
+        cheatSheetMeta: {
+            liveVersionId: { 
+                type: String, 
+                default: null,
+                trim: true
+                // Points to CheatSheetVersion doc with status='live'
+                // This is what production calls use
+            },
+            draftVersionId: { 
+                type: String, 
+                default: null,
+                trim: true
+                // Points to CheatSheetVersion doc with status='draft'
+                // Only one draft allowed per company (enforced by service layer)
+            }
+        },
+        
+        // -------------------------------------------------------------------
         // METADATA - Tracking and debugging
         // -------------------------------------------------------------------
         lastScanDate: { 
