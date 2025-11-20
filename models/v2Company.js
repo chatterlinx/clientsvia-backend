@@ -1188,89 +1188,6 @@ const companySchema = new mongoose.Schema({
                     'TRANSFER_EMERGENCY', 'TRANSFER_GENERAL', 'COLLECT_INFO',
                     'PROVIDE_HOURS', 'PROVIDE_PRICING'
                 ]
-            }],
-            
-            // -------------------------------------------------------------------
-            // V2-ONLY FIELDS - Control Plane V2 Features
-            // -------------------------------------------------------------------
-            
-            // Booking Rules - Advanced appointment booking logic
-            bookingRules: [{
-                id: { type: String, required: true },
-                label: { type: String, required: true },
-                trade: { type: String, default: '' },
-                serviceType: { type: String, default: '' },
-                priority: { 
-                    type: String, 
-                    enum: ['normal', 'high', 'emergency'], 
-                    default: 'normal' 
-                },
-                daysOfWeek: [{ type: String }],
-                timeWindow: {
-                    start: { type: String, default: '08:00' },
-                    end: { type: String, default: '17:00' }
-                },
-                sameDayAllowed: { type: Boolean, default: true },
-                weekendAllowed: { type: Boolean, default: false },
-                notes: { type: String, default: '' },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'admin' }
-            }],
-            
-            // Company Contacts - Transfer targets and notification contacts
-            companyContacts: [{
-                id: { type: String, required: true },
-                name: { type: String, required: true },
-                role: { type: String, default: '' },
-                phone: { type: String, default: '' },
-                email: { type: String, default: '' },
-                isPrimary: { type: Boolean, default: false },
-                availableHours: { type: String, default: '' },
-                notes: { type: String, default: '' },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'admin' }
-            }],
-            
-            // Links - Company-specific URLs (financing, portals, policies, etc.)
-            links: [{
-                id: { type: String, required: true },
-                label: { type: String, required: true },
-                category: { 
-                    type: String, 
-                    enum: ['financing', 'portal', 'policy', 'catalog', 'other'], 
-                    default: 'other' 
-                },
-                url: { type: String, required: true },
-                shortDescription: { type: String, default: '' },
-                notes: { type: String, default: '' },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'admin' }
-            }],
-            
-            // Calculators - Quick calculation tools (diagnostic fees, discounts, etc.)
-            calculators: [{
-                id: { type: String, required: true },
-                label: { type: String, required: true },
-                type: { 
-                    type: String, 
-                    enum: ['flat-fee', 'percentage', 'tiered', 'custom'], 
-                    default: 'flat-fee' 
-                },
-                baseAmount: { type: Number, default: 0 },
-                notes: { type: String, default: '' },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'admin' }
-            }],
-            
-            // Version History - Snapshots of cheat sheet configurations
-            versionHistory: [{
-                id: { type: String, required: true },
-                label: { type: String, required: true },
-                snapshot: { type: Object, default: {} }, // Full cheat sheet snapshot
-                checksum: { type: String, default: '' },
-                createdAt: { type: Date, default: Date.now },
-                createdBy: { type: String, default: 'admin' },
-                notes: { type: String, default: '' }
             }]
         },
         
@@ -1995,7 +1912,90 @@ const companySchema = new mongoose.Schema({
                     sentimentAnalysis: { type: Boolean, default: true },
                     crmIntegration: { type: Boolean, default: false }
                 }
-            }
+            },
+            
+            // -------------------------------------------------------------------
+            // V2-ONLY FIELDS - Control Plane V2 Features
+            // -------------------------------------------------------------------
+            
+            // Booking Rules - Advanced appointment booking logic
+            bookingRules: [{
+                id: { type: String, required: true },
+                label: { type: String, required: true },
+                trade: { type: String, default: '' },
+                serviceType: { type: String, default: '' },
+                priority: { 
+                    type: String, 
+                    enum: ['normal', 'high', 'emergency'], 
+                    default: 'normal' 
+                },
+                daysOfWeek: [{ type: String }],
+                timeWindow: {
+                    start: { type: String, default: '08:00' },
+                    end: { type: String, default: '17:00' }
+                },
+                sameDayAllowed: { type: Boolean, default: true },
+                weekendAllowed: { type: Boolean, default: false },
+                notes: { type: String, default: '' },
+                createdAt: { type: Date, default: Date.now },
+                createdBy: { type: String, default: 'admin' }
+            }],
+            
+            // Company Contacts - Transfer targets and notification contacts
+            companyContacts: [{
+                id: { type: String, required: true },
+                name: { type: String, required: true },
+                role: { type: String, default: '' },
+                phone: { type: String, default: '' },
+                email: { type: String, default: '' },
+                isPrimary: { type: Boolean, default: false },
+                availableHours: { type: String, default: '' },
+                notes: { type: String, default: '' },
+                createdAt: { type: Date, default: Date.now },
+                createdBy: { type: String, default: 'admin' }
+            }],
+            
+            // Links - Company-specific URLs (financing, portals, policies, etc.)
+            links: [{
+                id: { type: String, required: true },
+                label: { type: String, required: true },
+                category: { 
+                    type: String, 
+                    enum: ['financing', 'portal', 'policy', 'catalog', 'other'], 
+                    default: 'other' 
+                },
+                url: { type: String, required: true },
+                shortDescription: { type: String, default: '' },
+                notes: { type: String, default: '' },
+                createdAt: { type: Date, default: Date.now },
+                createdBy: { type: String, default: 'admin' }
+            }],
+            
+            // Calculators - Quick calculation tools (diagnostic fees, discounts, etc.)
+            calculators: [{
+                id: { type: String, required: true },
+                label: { type: String, required: true },
+                type: { 
+                    type: String, 
+                    enum: ['flat-fee', 'percentage', 'tiered', 'custom'], 
+                    default: 'flat-fee' 
+                },
+                baseAmount: { type: Number, default: 0 },
+                notes: { type: String, default: '' },
+                createdAt: { type: Date, default: Date.now },
+                createdBy: { type: String, default: 'admin' }
+            }],
+            
+            // Version History - Snapshots of cheat sheet configurations
+            versionHistory: [{
+                id: { type: String, required: true },
+                label: { type: String, required: true },
+                snapshot: { type: Object, default: {} }, // Full cheat sheet snapshot
+                checksum: { type: String, default: '' },
+                createdAt: { type: Date, default: Date.now },
+                createdBy: { type: String, default: 'admin' },
+                notes: { type: String, default: '' }
+            }]
         },
         
         // 🗑️ DELETED: quickVariables field - Replaced by aiAgentLogic.placeholders
