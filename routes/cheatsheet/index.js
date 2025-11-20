@@ -1,23 +1,22 @@
 /**
  * ============================================================================
- * CHEATSHEET ROUTES - CENTRALIZED EXPORTS
+ * CHEATSHEET ROUTES - MAIN ROUTER EXPORT
  * ============================================================================
  * 
- * Two separate routers:
- * 1. versions.js - Admin version management (auth required)
- * 2. runtime.js  - Production config reads (internal/public)
+ * Exports the versions router directly as the main router.
+ * Both version management and runtime routes are in versions.js.
+ * 
+ * Routes included:
+ * - /status/:companyId (GET) - Get version status
+ * - /draft/:companyId (POST, PATCH, DELETE) - Draft management
+ * - /draft/:companyId/:versionId/push-live (POST) - Push to live
+ * - /versions/:companyId (GET) - Version history
+ * - /versions/:companyId/:versionId (GET, POST) - Specific version ops
  * 
  * Usage in main app:
- *   app.use('/api/cheatsheet', cheatsheetRoutes.versions);
- *   app.use('/runtime-config', cheatsheetRoutes.runtime);
+ *   app.use('/api/cheatsheet', require('./routes/cheatsheet'));
  * ============================================================================
  */
 
-const versions = require('./versions');
-const runtime = require('./runtime');
-
-module.exports = {
-  versions,
-  runtime
-};
+module.exports = require('./versions');
 
