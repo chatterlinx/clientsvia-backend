@@ -223,7 +223,7 @@ router.get('/companies', async (req, res) => {
                     autoPurgeAt: 1,
                     tradeCategories: 1,
                     twilioConfig: 1,
-                    aiAgentLogic: 1,
+                    aiAgentSettings: 1,
                     accountStatus: 1,
                     
                     // Aggregated data
@@ -315,11 +315,11 @@ router.get('/companies', async (req, res) => {
                 
                 // Metrics
                 calls: company.calls,
-                scenarios: company.aiAgentLogic?.instantResponses?.length || 0,
+                scenarios: company.aiAgentSettings?.instantResponses?.length || 0,
                 customers: company.customers,
                 lastActivity: company.lastActivity,
                 lastActivityFormatted: CompanyHealthService.formatLastActivity(company.lastActivity),
-                readinessScore: company.aiAgentLogic?.readiness?.score || 0,
+                readinessScore: company.aiAgentSettings?.readiness?.score || 0,
                 
                 // Phone
                 phoneNumbers: company.twilioConfig?.phoneNumbers || [],
@@ -431,7 +431,7 @@ router.get('/companies/:id/inventory', async (req, res) => {
         ]);
 
         // Count scenarios
-        const scenariosCount = raw.aiAgentLogic?.instantResponses?.length || 0;
+        const scenariosCount = raw.aiAgentSettings?.instantResponses?.length || 0;
 
         // Count Redis keys (expensive - skip for now, or implement later)
         const redisKeysCount = 0; // TODO: Implement Redis SCAN if needed

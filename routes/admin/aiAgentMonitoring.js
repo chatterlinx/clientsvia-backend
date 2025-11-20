@@ -53,7 +53,7 @@ router.get('/health/:companyId', authenticateJWT, async (req, res) => {
 
         // 1. Database Connectivity
         try {
-            const company = await Company.findById(companyId).select('_id companyName aiAgentLogic');
+            const company = await Company.findById(companyId).select('_id companyName aiAgentSettings');
             if (company) {
                 healthStatus.components.database = {
                     status: 'healthy',
@@ -61,7 +61,7 @@ router.get('/health/:companyId', authenticateJWT, async (req, res) => {
                     details: {
                         companyFound: true,
                         companyName: company.companyName,
-                        aiAgentConfigured: Boolean(company.aiAgentLogic)
+                        aiAgentConfigured: Boolean(company.aiAgentSettings)
                     }
                 };
             } else {
@@ -118,7 +118,7 @@ router.get('/health/:companyId', authenticateJWT, async (req, res) => {
         // 3. Knowledge Sources Health
         try {
             const companyQnACount = await CompanyKnowledgeQnA.countDocuments({ companyId });
-            const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement');
+            const company = await Company.findById(companyId).select('aiAgentSettings.knowledgeManagement');
             
             const tradeQnACount = company?.aiAgentLogic?.knowledgeManagement?.tradeQnA?.length || 0;
             const templatesCount = company?.aiAgentLogic?.knowledgeManagement?.templates?.length || 0;
@@ -151,7 +151,7 @@ router.get('/health/:companyId', authenticateJWT, async (req, res) => {
 
         // 4. AI Agent Configuration
         try {
-            const company = await Company.findById(companyId).select('aiAgentLogic');
+            const company = await Company.findById(companyId).select('aiAgentSettings');
             const aiLogic = company?.aiAgentLogic;
             
             if (aiLogic) {
@@ -268,7 +268,7 @@ router.get('/metrics/:companyId', authenticateJWT, async (req, res) => {
         
         if (!metrics) {
             // Generate fresh metrics
-            const company = await Company.findById(companyId).select('aiAgentLogic');
+            const company = await Company.findById(companyId).select('aiAgentSettings');
             const companyQnACount = await CompanyKnowledgeQnA.countDocuments({ companyId });
             
             metrics = {
@@ -355,7 +355,7 @@ router.get('/diagnostics/:companyId', authenticateJWT, async (req, res) => {
                 details: {
                     exists: Boolean(company),
                     name: company?.companyName,
-                    hasAiLogic: Boolean(company?.aiAgentLogic),
+                    hasAiLogic: Boolean(company?.aiAgentSettings),
                     configuredAt: company?.aiAgentLogic?.lastUpdated
                 }
             };
@@ -374,14 +374,14 @@ router.get('/diagnostics/:companyId', authenticateJWT, async (req, res) => {
         // Test 2: Knowledge Sources Connectivity
         try {
             const companyQnAs = await CompanyKnowledgeQnA.find({ companyId }).limit(1);
-            const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement');
+            const company = await Company.findById(companyId).select('aiAgentSettings.knowledgeManagement');
             
             diagnostics.tests.knowledgeConnectivity = {
                 name: 'Knowledge Sources Connectivity',
                 status: 'pass',
                 details: {
                     companyQnACollection: companyQnAs.length > 0,
-                    embeddedKnowledge: Boolean(company?.aiAgentLogic?.knowledgeManagement),
+                    embeddedKnowledge: Boolean(company?.aiAgentSettings?.knowledgeManagement),
                     totalSources: companyQnAs.length + (company?.aiAgentLogic?.knowledgeManagement?.tradeQnA?.length || 0)
                 }
             };

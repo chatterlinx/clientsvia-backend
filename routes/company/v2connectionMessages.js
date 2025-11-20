@@ -318,8 +318,8 @@ router.post('/:companyId/connection-messages/voice/upload', upload.single('audio
         }
 
         // Initialize if doesn't exist
-        if (!company.aiAgentLogic) {
-            company.aiAgentLogic = {};
+        if (!company.aiAgentSettings) {
+            company.aiAgentSettings = {};
         }
         if (!company.connectionMessages) {
             company.connectionMessages = getDefaultConfig();
@@ -397,7 +397,7 @@ router.delete('/:companyId/connection-messages/voice/remove', async (req, res) =
             return res.status(404).json({ error: 'Company not found' });
         }
 
-        if (!company.aiAgentLogic?.connectionMessages?.voice?.prerecorded?.activeFileUrl) {
+        if (!company.aiAgentSettings?.connectionMessages?.voice?.prerecorded?.activeFileUrl) {
             return res.status(404).json({ error: 'No audio file to remove' });
         }
 
@@ -463,7 +463,7 @@ router.post('/:companyId/connection-messages/voice/generate', async (req, res) =
         }
 
         // Get company for ElevenLabs API key
-        const company = await Company.findById(req.params.companyId).select('aiAgentLogic companyName');
+        const company = await Company.findById(req.params.companyId).select('aiAgentSettings companyName');
 
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });
@@ -524,7 +524,7 @@ router.post('/:companyId/connection-messages/reset', async (req, res) => {
         }
 
         // Remove audio file if exists
-        if (company.aiAgentLogic?.connectionMessages?.voice?.prerecorded?.activeFileUrl) {
+        if (company.aiAgentSettings?.connectionMessages?.voice?.prerecorded?.activeFileUrl) {
             const filePath = path.join(__dirname, '../../public', company.connectionMessages.voice.prerecorded.activeFileUrl);
             if (fs.existsSync(filePath)) {
                 fs.unlinkSync(filePath);
@@ -533,8 +533,8 @@ router.post('/:companyId/connection-messages/reset', async (req, res) => {
         }
 
         // Reset to defaults
-        if (!company.aiAgentLogic) {
-            company.aiAgentLogic = {};
+        if (!company.aiAgentSettings) {
+            company.aiAgentSettings = {};
         }
         company.connectionMessages = getDefaultConfig();
 

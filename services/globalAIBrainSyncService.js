@@ -48,7 +48,7 @@ async function compareWithGlobal(companyId) {
         }
         
         // Get company's instant response categories
-        const companyCategories = company.aiAgentLogic?.instantResponseCategories || [];
+        const companyCategories = company.aiAgentSettings?.instantResponseCategories || [];
         
         // Build maps for quick lookup
         const companyScenarioMap = new Map();
@@ -237,14 +237,14 @@ async function importFromGlobal(companyId, scenarioIds) {
             }
             
             // Find or create category in company
-            let companyCategory = (company.aiAgentLogic?.instantResponseCategories || [])
+            let companyCategory = (company.aiAgentSettings?.instantResponseCategories || [])
                 .find(cat => cat.id === globalData.category.id);
             
             if (!companyCategory) {
                 // Create new category
-                if (!company.aiAgentLogic) {company.aiAgentLogic = {};}
-                if (!company.aiAgentLogic.instantResponseCategories) {
-                    company.aiAgentLogic.instantResponseCategories = [];
+                if (!company.aiAgentSettings) {company.aiAgentSettings = {};}
+                if (!company.aiAgentSettings.instantResponseCategories) {
+                    company.aiAgentSettings.instantResponseCategories = [];
                 }
                 
                 companyCategory = {
@@ -255,7 +255,7 @@ async function importFromGlobal(companyId, scenarioIds) {
                     description: globalData.category.description,
                     scenarios: []
                 };
-                company.aiAgentLogic.instantResponseCategories.push(companyCategory);
+                company.aiAgentSettings.instantResponseCategories.push(companyCategory);
             }
             
             // Check if scenario already exists
@@ -273,12 +273,12 @@ async function importFromGlobal(companyId, scenarioIds) {
         });
         
         // Update sync history
-        if (!company.aiAgentLogic.syncHistory) {
-            company.aiAgentLogic.syncHistory = {};
+        if (!company.aiAgentSettings.syncHistory) {
+            company.aiAgentSettings.syncHistory = {};
         }
-        company.aiAgentLogic.syncHistory.lastSyncedAt = new Date();
-        company.aiAgentLogic.syncHistory.globalTemplateVersion = globalTemplate.version;
-        company.aiAgentLogic.syncHistory.lastImportCount = imported.length;
+        company.aiAgentSettings.syncHistory.lastSyncedAt = new Date();
+        company.aiAgentSettings.syncHistory.globalTemplateVersion = globalTemplate.version;
+        company.aiAgentSettings.syncHistory.lastImportCount = imported.length;
         
         // Save company
         await company.save();

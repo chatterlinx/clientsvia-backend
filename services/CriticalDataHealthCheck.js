@@ -231,7 +231,7 @@ class CriticalDataHealthCheck {
     static async checkCompanies(results) {
         try {
             const totalCount = await Company.countDocuments();
-            const activeCount = await Company.countDocuments({ 'aiAgentLogic.enabled': true });
+            const activeCount = await Company.countDocuments({ 'aiAgentSettings.enabled': true });
             
             if (totalCount === 0) {
                 results.warnings++;

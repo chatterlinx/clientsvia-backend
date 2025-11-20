@@ -31,11 +31,11 @@ class CompanyHealthService {
         };
 
         // Extract scenario count
-        const scenarios = company.aiAgentLogic?.instantResponses || [];
+        const scenarios = company.aiAgentSettings?.instantResponses || [];
         health.metrics.scenarioCount = Array.isArray(scenarios) ? scenarios.length : 0;
 
         // Extract readiness score
-        health.metrics.readinessScore = company.aiAgentLogic?.readiness?.score || 0;
+        health.metrics.readinessScore = company.aiAgentSettings?.readiness?.score || 0;
 
         // Determine if company is "live"
         const hasPhone = company.twilioConfig?.phoneNumbers?.length > 0 ||

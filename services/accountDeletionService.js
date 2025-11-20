@@ -549,7 +549,7 @@ class AccountDeletionService {
     assessRiskLevel(dataPoints, company) {
         if (dataPoints > 10000) {return 'high';}
         if (dataPoints > 1000) {return 'medium';}
-        if (company.aiAgentLogic && Object.keys(company.aiAgentLogic).length > 0) {return 'medium';}
+        if (company.aiAgentSettings && Object.keys(company.aiAgentSettings).length > 0) {return 'medium';}
         return 'low';
     }
 

@@ -2364,13 +2364,13 @@ router.patch('/:companyId/intelligence', async (req, res) => {
             });
         }
         
-        // Ensure aiAgentLogic exists
-        if (!company.aiAgentLogic) {
-            company.aiAgentLogic = {};
+        // Ensure aiAgentSettings exists
+        if (!company.aiAgentSettings) {
+            company.aiAgentSettings = {};
         }
         
         // Update production intelligence settings
-        company.aiAgentLogic.productionIntelligence = {
+        company.aiAgentSettings.productionIntelligence = {
             enabled: productionIntelligence.enabled !== false, // default true
             thresholds: {
                 tier1: parseFloat(productionIntelligence.thresholds?.tier1) || 0.80,
@@ -2387,7 +2387,7 @@ router.patch('/:companyId/intelligence', async (req, res) => {
         
         // Add daily budget if provided (optional)
         if (productionIntelligence.llmConfig?.dailyBudget && parseFloat(productionIntelligence.llmConfig.dailyBudget) > 0) {
-            company.aiAgentLogic.productionIntelligence.llmConfig.dailyBudget = parseFloat(productionIntelligence.llmConfig.dailyBudget);
+            company.aiAgentSettings.productionIntelligence.llmConfig.dailyBudget = parseFloat(productionIntelligence.llmConfig.dailyBudget);
         }
         
         // ============================================================
@@ -2399,7 +2399,7 @@ router.patch('/:companyId/intelligence', async (req, res) => {
                 enabledType: typeof productionIntelligence.smartWarmup.enabled
             });
             
-            company.aiAgentLogic.productionIntelligence.smartWarmup = {
+            company.aiAgentSettings.productionIntelligence.smartWarmup = {
                 enabled: productionIntelligence.smartWarmup.enabled === true, // STRICT boolean check
                 confidenceThreshold: parseFloat(productionIntelligence.smartWarmup.confidenceThreshold) || 0.75,
                 dailyBudget: parseFloat(productionIntelligence.smartWarmup.dailyBudget) || 5.00,
@@ -2414,9 +2414,9 @@ router.patch('/:companyId/intelligence', async (req, res) => {
             };
             
             logger.info(`🔥 [SMART WARMUP] Saved to database:`, {
-                enabled: company.aiAgentLogic.productionIntelligence.smartWarmup.enabled,
-                confidenceThreshold: company.aiAgentLogic.productionIntelligence.smartWarmup.confidenceThreshold,
-                dailyBudget: company.aiAgentLogic.productionIntelligence.smartWarmup.dailyBudget
+                enabled: company.aiAgentSettings.productionIntelligence.smartWarmup.enabled,
+                confidenceThreshold: company.aiAgentSettings.productionIntelligence.smartWarmup.confidenceThreshold,
+                dailyBudget: company.aiAgentSettings.productionIntelligence.smartWarmup.dailyBudget
             });
         }
         
@@ -2424,8 +2424,8 @@ router.patch('/:companyId/intelligence', async (req, res) => {
         await company.save();
         
         console.log('🔥🔥🔥 [COMPANY INTELLIGENCE] ========== SAVED TO MONGODB ==========');
-        console.log('🔥🔥🔥 [COMPANY INTELLIGENCE] Saved smartWarmup.enabled:', company.aiAgentLogic.productionIntelligence.smartWarmup?.enabled);
-        console.log('🔥🔥🔥 [COMPANY INTELLIGENCE] Full smartWarmup:', JSON.stringify(company.aiAgentLogic.productionIntelligence.smartWarmup, null, 2));
+        console.log('🔥🔥🔥 [COMPANY INTELLIGENCE] Saved smartWarmup.enabled:', company.aiAgentSettings.productionIntelligence.smartWarmup?.enabled);
+        console.log('🔥🔥🔥 [COMPANY INTELLIGENCE] Full smartWarmup:', JSON.stringify(company.aiAgentSettings.productionIntelligence.smartWarmup, null, 2));
         logger.info(`✅ [COMPANY INTELLIGENCE] Settings saved for company: ${companyId}`);
         
         // Clear Redis cache for this company
@@ -2439,7 +2439,7 @@ router.patch('/:companyId/intelligence', async (req, res) => {
         res.json({ 
             success: true, 
             message: 'Production Intelligence settings saved successfully',
-            productionIntelligence: company.aiAgentLogic.productionIntelligence
+            productionIntelligence: company.aiAgentSettings.productionIntelligence
         });
         
     } catch (error) {

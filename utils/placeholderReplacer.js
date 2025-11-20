@@ -2,7 +2,7 @@
  * PLACEHOLDER REPLACEMENT UTILITY
  * 
  * Purpose: Centralized placeholder replacement system for AI Agent responses
- * - Replaces {placeholder} syntax with actual values from company.aiAgentLogic.placeholders
+ * - Replaces {placeholder} syntax with actual values from company.aiAgentSettings.placeholders
  * - Supports both {braces} and [brackets] syntax for backward compatibility
  * - Case-insensitive matching
  * - Comprehensive logging for debugging

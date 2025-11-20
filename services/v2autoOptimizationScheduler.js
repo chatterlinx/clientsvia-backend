@@ -58,8 +58,8 @@ class AutoOptimizationScheduler {
 
             // Find companies with auto-optimization enabled and due for optimization
             const companies = await Company.find({
-                'aiAgentLogic.autoOptimization.enabled': true,
-                'aiAgentLogic.autoOptimization.nextRun': { $lte: new Date() }
+                'aiAgentSettings.autoOptimization.enabled': true,
+                'aiAgentSettings.autoOptimization.nextRun': { $lte: new Date() }
             }).select('_id name aiAgentLogic.autoOptimization');
 
             logger.info(`🎯 Found ${companies.length} companies due for auto-optimization`);
@@ -110,7 +110,7 @@ class AutoOptimizationScheduler {
     // 🎯 OPTIMIZE A SINGLE COMPANY
     async optimizeCompany(company) {
         const companyId = company._id.toString();
-        const settings = company.aiAgentLogic.autoOptimization;
+        const settings = company.aiAgentSettings.autoOptimization;
         
         try {
             // 🔒 SAFETY CHECK 1: Minimum call volume
@@ -164,8 +164,8 @@ class AutoOptimizationScheduler {
             // ✅ OPTIMIZATION APPROVED - APPLY CHANGES
             await Company.findByIdAndUpdate(company._id, {
                 $set: {
-                    'aiAgentLogic.thresholds': optimizationResult.optimizedThresholds,
-                    'aiAgentLogic.autoOptimization.lastRun': new Date()
+                    'aiAgentSettings.thresholds': optimizationResult.optimizedThresholds,
+                    'aiAgentSettings.autoOptimization.lastRun': new Date()
                 }
             });
 
@@ -200,7 +200,7 @@ class AutoOptimizationScheduler {
 
     // ⏰ SCHEDULE NEXT OPTIMIZATION RUN
     async scheduleNextRun(company) {
-        const settings = company.aiAgentLogic.autoOptimization;
+        const settings = company.aiAgentSettings.autoOptimization;
         const now = new Date();
         const nextRun = new Date(now);
 
@@ -222,7 +222,7 @@ class AutoOptimizationScheduler {
 
         await Company.findByIdAndUpdate(company._id, {
             $set: {
-                'aiAgentLogic.autoOptimization.nextRun': nextRun
+                'aiAgentSettings.autoOptimization.nextRun': nextRun
             }
         });
 

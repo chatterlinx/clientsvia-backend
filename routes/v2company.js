@@ -371,7 +371,7 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
     }
     try {
         logger.debug(`📊 [DB] Loading company from database: ${companyId}`);
-        // ☠️ REMOVED: aiAgentLogic (legacy field nuked 2025-11-20)
+        // ☠️ REMOVED: aiAgentSettings (legacy field nuked 2025-11-20)
         const company = await Company.findById(companyId).lean();
         
         if (!company) {
@@ -439,10 +439,10 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
             logger.warn(`⚠️ [CACHE] Redis not ready, skipping cache save`);
         }
         
-        // Debug: Log if aiAgentLogic exists
-        logger.debug(`🔍 DEBUG: aiAgentLogic exists in response: ${Boolean(company.aiAgentLogic)}`);
-        if (company.aiAgentLogic) {
-            logger.debug(`🔍 DEBUG: aiAgentLogic thresholds:`, company.aiAgentLogic.thresholds);
+        // Debug: Log if aiAgentSettings exists
+        logger.debug(`🔍 DEBUG: aiAgentSettings exists in response: ${Boolean(company.aiAgentSettings)}`);
+        if (company.aiAgentSettings) {
+            logger.debug(`🔍 DEBUG: aiAgentSettings thresholds:`, company.aiAgentSettings.thresholds);
         }
 
         if (company.aiSettings?.elevenLabs?.apiKey) {
@@ -677,7 +677,7 @@ router.patch('/company/:id', async (req, res) => {
         // Clear cache using CacheHelper
         await CacheHelper.invalidateCompany(companyId);
         
-        // Clear AI Agent Logic cache when aiAgentLogic is updated (includes keywords)
+        // Clear AI Agent Logic cache when aiAgentSettings is updated (includes keywords)
         if (req.body.aiAgentLogic) {
             const aiLoader = require('../src/config/aiLoader');
             await aiLoader.invalidate(companyId);
@@ -1140,15 +1140,15 @@ router.patch('/company/:companyId/profile', authenticateJWT, async (req, res) =>
             updateFields.businessType = updateData.businessType;
         }
         
-        // Handle nested aiAgentLogic fields
+        // Handle nested aiAgentSettings fields
         Object.keys(updateData).forEach(key => {
-            if (key.startsWith('aiAgentLogic.')) {
+            if (key.startsWith('aiAgentSettings.')) {
                 updateFields[key] = updateData[key];
             }
         });
 
         // Always update lastUpdated
-        updateFields['aiAgentLogic.lastUpdated'] = new Date();
+        updateFields['aiAgentSettings.lastUpdated'] = new Date();
 
         logger.info(`[Profile Update] Updating fields:`, updateFields);
 
@@ -1579,7 +1579,7 @@ router.get('/:companyId/voice-settings', async (req, res) => {
 });
 
 // REMOVED: Legacy AI Settings endpoint - replaced by AI Agent Logic system
-// All AI configuration now handled through /api/company/:companyId (PATCH) with aiAgentLogic field
+// All AI configuration now handled through /api/company/:companyId (PATCH) with aiAgentSettings field
 
 // =============================================
 // AGENT PRIORITY CONFIGURATION ENDPOINTS
@@ -2329,7 +2329,7 @@ router.patch('/company/:companyId/intelligence-mode', authenticateJWT, async (re
         // SPECIAL LOGIC FOR GLOBAL → CUSTOM
         // ====================================================================
         if (newMode === 'custom' && currentMode === 'global') {
-            logger.info(`📋 [MODE SWITCH] Creating custom aiAgentLogic from AdminSettings template...`);
+            logger.info(`📋 [MODE SWITCH] Creating custom aiAgentSettings from AdminSettings template...`);
             
             // Load AdminSettings to copy global config
             const AdminSettings = require('../models/AdminSettings');
@@ -2337,13 +2337,13 @@ router.patch('/company/:companyId/intelligence-mode', authenticateJWT, async (re
             
             if (adminSettings && adminSettings.globalProductionIntelligence) {
                 // Copy global settings to company's aiAgentLogic
-                company.aiAgentLogic = company.aiAgentLogic || {};
-                company.aiAgentLogic.thresholds = adminSettings.globalProductionIntelligence.thresholds;
-                company.aiAgentLogic.llmConfig = adminSettings.globalProductionIntelligence.llmConfig;
-                company.aiAgentLogic.warmup = adminSettings.globalProductionIntelligence.warmup;
-                company.aiAgentLogic.lastUpdated = new Date();
+                company.aiAgentSettings = company.aiAgentSettings || {};
+                company.aiAgentSettings.thresholds = adminSettings.globalProductionIntelligence.thresholds;
+                company.aiAgentSettings.llmConfig = adminSettings.globalProductionIntelligence.llmConfig;
+                company.aiAgentSettings.warmup = adminSettings.globalProductionIntelligence.warmup;
+                company.aiAgentSettings.lastUpdated = new Date();
                 
-                logger.info(`✅ [MODE SWITCH] Custom aiAgentLogic initialized from global template`);
+                logger.info(`✅ [MODE SWITCH] Custom aiAgentSettings initialized from global template`);
             } else {
                 logger.warn(`⚠️ [MODE SWITCH] No AdminSettings.globalProductionIntelligence found, using default aiAgentLogic`);
             }
@@ -2353,18 +2353,18 @@ router.patch('/company/:companyId/intelligence-mode', authenticateJWT, async (re
         // SPECIAL LOGIC FOR CUSTOM → GLOBAL
         // ====================================================================
         if (newMode === 'global' && currentMode === 'custom') {
-            logger.info(`🗄️ [MODE SWITCH] Archiving custom aiAgentLogic settings...`);
+            logger.info(`🗄️ [MODE SWITCH] Archiving custom aiAgentSettings settings...`);
             
             // Archive current custom settings (don't delete, allow restoration)
             company.archivedAiAgentLogic = company.archivedAiAgentLogic || [];
             company.archivedAiAgentLogic.push({
-                settings: company.aiAgentLogic,
+                settings: company.aiAgentSettings,
                 archivedAt: new Date(),
                 archivedBy: adminEmail,
                 reason: reason || 'Switched to global mode'
             });
             
-            // Keep the aiAgentLogic but mark as archived
+            // Keep the aiAgentSettings but mark as archived
             logger.info(`✅ [MODE SWITCH] Custom settings archived (can be restored later)`);
         }
         

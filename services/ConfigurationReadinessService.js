@@ -490,7 +490,7 @@ class ConfigurationReadinessService {
         };
         
         try {
-            const voiceSettings = company.aiAgentLogic?.voiceSettings || {};
+            const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
             
             component.voiceId = voiceSettings.voiceId || null;
             component.apiSource = voiceSettings.apiSource || null;

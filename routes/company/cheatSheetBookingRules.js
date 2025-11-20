@@ -90,7 +90,7 @@ router.get('/', async (req, res) => {
     }
 
     // Get booking rules or use empty object
-    const bookingRules = company.aiAgentLogic?.bookingRules || {};
+    const bookingRules = company.aiAgentSettings?.bookingRules || {};
 
     // Filter by trade/serviceType if provided
     let filteredRules = bookingRules;
@@ -179,14 +179,14 @@ router.patch('/', async (req, res) => {
     }
 
     // Initialize nested structure if doesn't exist
-    if (!company.aiAgentLogic) {
-      company.aiAgentLogic = {};
+    if (!company.aiAgentSettings) {
+      company.aiAgentSettings = {};
     }
-    if (!company.aiAgentLogic.bookingRules) {
-      company.aiAgentLogic.bookingRules = {};
+    if (!company.aiAgentSettings.bookingRules) {
+      company.aiAgentSettings.bookingRules = {};
     }
-    if (!company.aiAgentLogic.bookingRules[trade]) {
-      company.aiAgentLogic.bookingRules[trade] = {};
+    if (!company.aiAgentSettings.bookingRules[trade]) {
+      company.aiAgentSettings.bookingRules[trade] = {};
     }
 
     // Validate required fields
@@ -217,9 +217,9 @@ router.patch('/', async (req, res) => {
     }
 
     // Merge with existing rules (preserve fields not being updated)
-    const existingRules = company.aiAgentLogic.bookingRules[trade][serviceType] || {};
+    const existingRules = company.aiAgentSettings.bookingRules[trade][serviceType] || {};
     
-    company.aiAgentLogic.bookingRules[trade][serviceType] = {
+    company.aiAgentSettings.bookingRules[trade][serviceType] = {
       requiredFields: rules.requiredFields || existingRules.requiredFields || DEFAULT_BOOKING_RULE.requiredFields,
       timeRules: {
         ...(existingRules.timeRules || DEFAULT_BOOKING_RULE.timeRules),
@@ -235,7 +235,7 @@ router.patch('/', async (req, res) => {
       }
     };
 
-    company.markModified('aiAgentLogic');
+    company.markModified('aiAgentSettings');
     await company.save();
 
     logger.info('[Cheat Sheet BookingRules] Rules updated', {
@@ -262,7 +262,7 @@ router.patch('/', async (req, res) => {
       data: {
         trade,
         serviceType,
-        rules: company.aiAgentLogic.bookingRules[trade][serviceType]
+        rules: company.aiAgentSettings.bookingRules[trade][serviceType]
       }
     });
 

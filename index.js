@@ -737,7 +737,7 @@ async function startServer() {
             // Don't crash server - indexes might already be correct
         }
         
-        // V2 DELETED: Legacy agent prompts loading - V2 uses aiAgentLogic system
+        // V2 DELETED: Legacy agent prompts loading - V2 uses aiAgentSettings system
         console.log('[Server] Step 3/6: Skipping legacy agent prompts (V2 uses aiAgentLogic)...');
         console.log(`[Server] ✅ Step 3 COMPLETE: Legacy agent prompts skipped - V2 system active`);
         

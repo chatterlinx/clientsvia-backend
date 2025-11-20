@@ -36,7 +36,7 @@ const { stripMarkdown, cleanTextForTTS } = require('../utils/textUtils');
 // ============================================================================
 // The 3-tier intelligence system (Tier 1 → 2 → 3) is now controlled by:
 // - GLOBAL MODE: AdminSettings.globalProductionIntelligence.enabled
-// - CUSTOM MODE: company.aiAgentLogic.productionIntelligence.enabled
+// ☠️ REMOVED: aiAgentSettings (legacy nuked 2025-11-20)
 // 
 // This is checked DYNAMICALLY at request time, not via environment variable.
 // UI and backend now use the SAME source of truth (database).
@@ -301,35 +301,29 @@ router.use((req, res, next) => {
 });
 
 // Helper function to check if transfer is enabled
+// ☠️ REMOVED: aiAgentLogic.callTransferConfig (legacy nuked 2025-11-20)
 function isTransferEnabled(company) {
-  return company?.aiAgentLogic?.callTransferConfig?.dialOutEnabled === true;
+  // Transfer now requires explicit Twilio fallback configuration
+  return company?.twilioConfig?.fallbackNumber ? true : false;
 }
 
 // Helper function to get the configured transfer number
+// ☠️ REMOVED: aiAgentLogic.callTransferConfig (legacy nuked 2025-11-20)
 function getTransferNumber(company) {
-  // First try the AI Agent Logic configured dial-out number
-  if (company?.aiAgentLogic?.callTransferConfig?.dialOutEnabled && 
-      company?.aiAgentLogic?.callTransferConfig?.dialOutNumber) {
-    logger.info('[AI AGENT] Using configured dial-out number:', company.aiAgentLogic.callTransferConfig.dialOutNumber);
-    return company.aiAgentLogic.callTransferConfig.dialOutNumber;
-  }
-  
-  // Fall back to Twilio config fallback number
+  // Use Twilio config fallback number only
   if (company?.twilioConfig?.fallbackNumber) {
     logger.info('[AI AGENT] Using Twilio fallback number:', company.twilioConfig.fallbackNumber);
     return company.twilioConfig.fallbackNumber;
   }
   
-  // No fallback number - transfer should be explicitly configured
+  // No fallback number - transfer disabled
   logger.info('[AI AGENT] No transfer number configured - transfer disabled');
   return null;
 }
 
 // Helper function to get the configured transfer message
+// ☠️ REMOVED: aiAgentLogic.callTransferConfig (legacy nuked 2025-11-20)
 function getTransferMessage(company) {
-  if (company?.aiAgentLogic?.callTransferConfig?.transferMessage) {
-    return company.aiAgentLogic.callTransferConfig.transferMessage;
-  }
   // Professional transfer - never sounds like AI is giving up
   return company.connectionMessages?.voice?.transferMessage || 
          "One moment while I transfer you to our team.";
@@ -928,15 +922,15 @@ router.post('/voice', async (req, res) => {
       // DOUBLE-CHECK: Reload company to verify voiceSettings are in DB
       logger.debug(`🔍 [CALL-4] Double-checking voice settings from database...`);
       const freshCompany = await Company.findById(company._id);
-      logger.debug(`🔍 [CALL-5] Fresh company.aiAgentLogic exists:`, Boolean(freshCompany.aiAgentLogic));
-      logger.debug(`🔍 [CALL-6] Fresh company.aiAgentLogic.voiceSettings:`, JSON.stringify(freshCompany.aiAgentLogic?.voiceSettings, null, 2));
+      logger.debug(`🔍 [CALL-5] Fresh company.aiAgentSettings exists:`, Boolean(freshCompany.aiAgentSettings));
+      logger.debug(`🔍 [CALL-6] Fresh company.aiAgentSettings.voiceSettings:`, JSON.stringify(freshCompany.aiAgentSettings?.voiceSettings, null, 2));
       
       logger.debug(`[V2 AGENT] Call initialized, greeting: "${initResult.greeting}"`);
       logger.debug(`[V2 VOICE] Voice settings:`, JSON.stringify(initResult.voiceSettings, null, 2));
       
       // Set up speech gathering with V2 Agent response handler
       // 📞 SPEECH DETECTION: Now configurable per company in Voice Settings
-      const speechDetection = company.aiAgentLogic?.voiceSettings?.speechDetection || {};
+      const speechDetection = company.aiAgentSettings?.voiceSettings?.speechDetection || {};
       
       // 🐰 RABBIT HOLE CHECKPOINT #1: WHERE WILL GATHER SEND USER INPUT?
       const actionUrl = `https://${req.get('host')}/api/twilio/v2-agent-respond/${company._id}`;
@@ -978,10 +972,10 @@ router.post('/voice', async (req, res) => {
           const buffer = await synthesizeSpeech({
             text: initResult.greeting,
             voiceId: elevenLabsVoice,
-            stability: company.aiAgentLogic?.voiceSettings?.stability,
-            similarity_boost: company.aiAgentLogic?.voiceSettings?.similarityBoost,
-            style: company.aiAgentLogic?.voiceSettings?.styleExaggeration,
-            model_id: company.aiAgentLogic?.voiceSettings?.aiModel,
+            stability: company.aiAgentSettings?.voiceSettings?.stability,
+            similarity_boost: company.aiAgentSettings?.voiceSettings?.similarityBoost,
+            style: company.aiAgentSettings?.voiceSettings?.styleExaggeration,
+            model_id: company.aiAgentSettings?.voiceSettings?.aiModel,
             company
           });
           
@@ -1153,7 +1147,7 @@ router.post('/handle-speech', async (req, res) => {
         return;
       }
       // Use configurable speech detection settings (fallback to defaults if not set)
-      const speechDetection = company.aiAgentLogic?.voiceSettings?.speechDetection || {};
+      const speechDetection = company.aiAgentSettings?.voiceSettings?.speechDetection || {};
       const gather = twiml.gather({
         input: 'speech',
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
@@ -1181,17 +1175,17 @@ router.post('/handle-speech', async (req, res) => {
       
       logger.info(`[RETRY MESSAGE] Using message: "${retryMsg}" for speech: "${speechText}" (confidence: ${confidence})`);
       
-      const elevenLabsVoice = company.aiAgentLogic?.voiceSettings?.voiceId;
+      const elevenLabsVoice = company.aiAgentSettings?.voiceSettings?.voiceId;
 
       if (elevenLabsVoice) {
         try {
           const buffer = await synthesizeSpeech({
             text: retryMsg,
             voiceId: elevenLabsVoice,
-            stability: company.aiAgentLogic?.voiceSettings?.stability,
-            similarity_boost: company.aiAgentLogic?.voiceSettings?.similarityBoost,
-            style: company.aiAgentLogic?.voiceSettings?.styleExaggeration,
-            model_id: company.aiAgentLogic?.voiceSettings?.aiModel,
+            stability: company.aiAgentSettings?.voiceSettings?.stability,
+            similarity_boost: company.aiAgentSettings?.voiceSettings?.similarityBoost,
+            style: company.aiAgentSettings?.voiceSettings?.styleExaggeration,
+            model_id: company.aiAgentSettings?.voiceSettings?.aiModel,
             company
           });
           
@@ -1264,7 +1258,7 @@ router.post('/handle-speech', async (req, res) => {
         const clarification = clarificationResponses[Math.floor(Math.random() * clarificationResponses.length)];
         
         // Use configurable speech detection settings (fallback to defaults if not set)
-        const speechDetection = company.aiAgentLogic?.voiceSettings?.speechDetection || {};
+        const speechDetection = company.aiAgentSettings?.voiceSettings?.speechDetection || {};
         const gather = twiml.gather({
           input: 'speech',
           action: `https://${req.get('host')}/api/twilio/handle-speech`,
@@ -1291,7 +1285,7 @@ router.post('/handle-speech', async (req, res) => {
       logger.info(`[Q&A RESPONSE] [OK] Using Q&A response (no repetition detected)`);
       
       // Use configurable speech detection settings (fallback to defaults if not set)
-      const speechDetection = company.aiAgentLogic?.voiceSettings?.speechDetection || {};
+      const speechDetection = company.aiAgentSettings?.voiceSettings?.speechDetection || {};
       const gather = twiml.gather({
         input: 'speech',
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
@@ -1304,17 +1298,17 @@ router.post('/handle-speech', async (req, res) => {
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
       });
 
-      const elevenLabsVoice = company.aiAgentLogic?.voiceSettings?.voiceId;
+      const elevenLabsVoice = company.aiAgentSettings?.voiceSettings?.voiceId;
       
       if (elevenLabsVoice) {
         try {
           const buffer = await synthesizeSpeech({
             text: cachedAnswer,
             voiceId: elevenLabsVoice,
-            stability: company.aiAgentLogic?.voiceSettings?.stability,
-            similarity_boost: company.aiAgentLogic?.voiceSettings?.similarityBoost,
-            style: company.aiAgentLogic?.voiceSettings?.styleExaggeration,
-            model_id: company.aiAgentLogic?.voiceSettings?.aiModel,
+            stability: company.aiAgentSettings?.voiceSettings?.stability,
+            similarity_boost: company.aiAgentSettings?.voiceSettings?.similarityBoost,
+            style: company.aiAgentSettings?.voiceSettings?.styleExaggeration,
+            model_id: company.aiAgentSettings?.voiceSettings?.aiModel,
             company
           });
           
@@ -1402,7 +1396,7 @@ router.post('/handle-speech', async (req, res) => {
     }
 
     // Generate TTS and respond immediately - using configurable speech detection settings
-    const speechDetection = company.aiAgentLogic?.voiceSettings?.speechDetection || {};
+    const speechDetection = company.aiAgentSettings?.voiceSettings?.speechDetection || {};
     const gather = twiml.gather({
       input: 'speech',
       action: `https://${req.get('host')}/api/twilio/handle-speech`,
@@ -1416,7 +1410,7 @@ router.post('/handle-speech', async (req, res) => {
     });
 
     const strippedAnswer = cleanTextForTTS(stripMarkdown(answerObj.text));
-    const elevenLabsVoice = company.aiAgentLogic?.voiceSettings?.voiceId;
+    const elevenLabsVoice = company.aiAgentSettings?.voiceSettings?.voiceId;
     // TTS without artificial timeouts - let it complete naturally
     if (elevenLabsVoice) {
       try {
@@ -1597,59 +1591,8 @@ router.post('/voice/:companyID', async (req, res) => {
 
     logger.info(`[AI AGENT COMPANY] ${company.businessName || company.companyName} (ID: ${companyID})`);
     
-    // Check if AI Agent Logic is enabled
-    if (company.aiAgentLogic?.enabled) {
-      logger.info(`[AI AGENT LOGIC] Enabled for company ${companyID}`);
-      
-      // Use new AI Agent Logic greeting - NO hardcoded fallbacks allowed
-      const greeting = company.aiAgentLogic.responseCategories?.greeting?.template || 
-        `Configuration error for ${company.businessName || company.companyName} - greeting not configured in Agent Personality tab`;
-      
-      // Apply placeholder replacement
-      const finalGreeting = greeting.replace('{companyName}', company.businessName || company.companyName);
-      
-      logger.info('🎯 CHECKPOINT 6: Adding AI greeting to TwiML');
-      logger.info(`🗣️ Greeting text: "${finalGreeting}"`);
-      
-      twiml.say({
-        voice: company.aiAgentLogic.agentPersonality?.voice?.tone === 'robotic' ? 'Polly.Joanna' : 'alice'
-      }, escapeTwiML(finalGreeting));
-      
-      logger.info('🎯 CHECKPOINT 7: Setting up speech gathering');
-      // Set up gather for AI Agent Logic flow - using configurable speech detection settings
-      const speechDetection = company.aiAgentLogic?.voiceSettings?.speechDetection || {};
-      const gather = twiml.gather({
-        input: 'speech',
-        speechTimeout: (speechDetection.speechTimeout ?? 3).toString(), // Configurable: 1-10 seconds (default: 3s)
-        speechModel: speechDetection.speechModel ?? 'phone_call',
-        bargeIn: speechDetection.bargeIn ?? false,
-        timeout: speechDetection.initialTimeout ?? 5,
-        enhanced: speechDetection.enhancedRecognition ?? true,
-        hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually', // Help recognize common filler words and pauses
-        action: `/api/twilio/v2-agent-respond/${companyID}`,
-        method: 'POST',
-        partialResultCallback: `/api/twilio/ai-agent-partial/${companyID}`,
-        partialResultCallbackMethod: 'POST'
-      });
-      
-      logger.info('🎯 CHECKPOINT 8: Adding empty gather.say()');
-      gather.say('');
-      
-      logger.info('🎯 CHECKPOINT 9: Adding fallback message');
-      // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
-      const noInputFallback = `I didn't hear anything. How can I help you today?`;
-      twiml.say(noInputFallback);
-      twiml.hangup();
-      
-    } else {
-      // AI Agent Logic not enabled - provide simple greeting and hang up
-      logger.info(`🎯 CHECKPOINT 6: AI Agent Logic not enabled for company ${companyID}, providing basic greeting`);
-      
-      // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
-      const aiNotEnabledResponse = `Thank you for calling. Please hold while I connect you to someone who can assist you.`;
-      twiml.say(aiNotEnabledResponse);
-      twiml.hangup();
-    }
+    // ☠️ REMOVED: aiAgentLogic.enabled block (legacy nuked 2025-11-20)
+    // This endpoint is now deprecated - V2 Agent handles all calls via /v2-agent-init/
     
     const twimlString = twiml.toString();
     logger.info('📤 CHECKPOINT 10: Sending final TwiML response');
@@ -1778,7 +1721,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // Get company transfer number and check if transfer is enabled
       // 🔧 PHASE 2 FIX: Use consistent company loading
       const company = await Company.findById(companyID)
-        .select('+aiAgentLogic.voiceSettings +aiAgentSettings')
+        .select('+aiAgentSettings')
         .lean();
       logger.info('🎯 CHECKPOINT 19: Calling handleTransfer function');
       // 🔥 Neutral transfer message - no generic apology
@@ -1790,7 +1733,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // 🎤 V2 ELEVENLABS INTEGRATION: Use ElevenLabs if configured
       // 🔧 PHASE 2 FIX: Explicitly load voice settings (was incomplete before)
       const company = await Company.findById(companyID)
-        .select('+aiAgentLogic.voiceSettings +aiAgentSettings')
+        .select('+aiAgentSettings')
         .lean();
       
       // 🎯 PHASE 2 DIAGNOSTIC: Enhanced voice settings debug
@@ -1798,19 +1741,19 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       console.log('[🔍 VOICE DEBUG] Second leg company load:');
       console.log('Company exists:', Boolean(company));
       console.log('Company ID:', company?._id?.toString());
-      console.log('aiAgentLogic exists:', Boolean(company?.aiAgentLogic));
-      console.log('voiceSettings exists:', Boolean(company?.aiAgentLogic?.voiceSettings));
-      console.log('voiceId:', company?.aiAgentLogic?.voiceSettings?.voiceId || 'UNDEFINED');
-      console.log('Full voiceSettings:', JSON.stringify(company?.aiAgentLogic?.voiceSettings, null, 2));
+      console.log('aiAgentSettings exists:', Boolean(company?.aiAgentSettings));
+      console.log('voiceSettings exists:', Boolean(company?.aiAgentSettings?.voiceSettings));
+      console.log('voiceId:', company?.aiAgentSettings?.voiceSettings?.voiceId || 'UNDEFINED');
+      console.log('Full voiceSettings:', JSON.stringify(company?.aiAgentSettings?.voiceSettings, null, 2));
       console.log('═'.repeat(80));
       
       // 🔍 DIAGNOSTIC: Log voice settings check
       logger.info('🔍 V2 VOICE CHECK: Company loaded:', Boolean(company));
-      logger.info('🔍 V2 VOICE CHECK: aiAgentLogic exists:', Boolean(company?.aiAgentLogic));
-      logger.info('🔍 V2 VOICE CHECK: voiceSettings exists:', Boolean(company?.aiAgentLogic?.voiceSettings));
-      logger.info('🔍 V2 VOICE CHECK: Full voiceSettings:', JSON.stringify(company?.aiAgentLogic?.voiceSettings, null, 2));
+      logger.info('🔍 V2 VOICE CHECK: aiAgentSettings exists:', Boolean(company?.aiAgentSettings));
+      logger.info('🔍 V2 VOICE CHECK: voiceSettings exists:', Boolean(company?.aiAgentSettings?.voiceSettings));
+      logger.info('🔍 V2 VOICE CHECK: Full voiceSettings:', JSON.stringify(company?.aiAgentSettings?.voiceSettings, null, 2));
       
-      const elevenLabsVoice = company?.aiAgentLogic?.voiceSettings?.voiceId;
+      const elevenLabsVoice = company?.aiAgentSettings?.voiceSettings?.voiceId;
       logger.info('🔍 V2 VOICE CHECK: Extracted voiceId:', elevenLabsVoice || 'NOT FOUND');
       
       // 🎯 PHASE A – STEP 3B: Check for follow-up mode (TRANSFER handling)
@@ -1876,11 +1819,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           const audioBuffer = await synthesizeSpeech({
             text: responseText,
             voiceId: elevenLabsVoice,
-            stability: company.aiAgentLogic?.voiceSettings?.stability,
-            similarity_boost: company.aiAgentLogic?.voiceSettings?.similarityBoost,
-            style: company.aiAgentLogic?.voiceSettings?.styleExaggeration,
-            use_speaker_boost: company.aiAgentLogic?.voiceSettings?.speakerBoost,
-            model_id: company.aiAgentLogic?.voiceSettings?.aiModel,
+            stability: company.aiAgentSettings?.voiceSettings?.stability,
+            similarity_boost: company.aiAgentSettings?.voiceSettings?.similarityBoost,
+            style: company.aiAgentSettings?.voiceSettings?.styleExaggeration,
+            use_speaker_boost: company.aiAgentSettings?.voiceSettings?.speakerBoost,
+            model_id: company.aiAgentSettings?.voiceSettings?.aiModel,
             company  // ✅ CRITICAL FIX: Pass company object for API key lookup
           });
           perfCheckpoints.ttsGeneration = Date.now() - ttsStart;
@@ -1939,7 +1882,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       
       logger.info('🎯 CHECKPOINT 21: Setting up next speech gathering');
       // Set up next gather - using configurable speech detection settings
-      const speechDetection = company.aiAgentLogic?.voiceSettings?.speechDetection || {};
+      const speechDetection = company.aiAgentSettings?.voiceSettings?.speechDetection || {};
       const gather = twiml.gather({
         input: 'speech',
         speechTimeout: (speechDetection.speechTimeout ?? 3).toString(), // Configurable: 1-10 seconds (default: 3s)

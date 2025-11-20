@@ -39,7 +39,7 @@ router.get('/:companyId/ai-agent-settings/diagnostics', async (req, res) => {
 
     try {
         const company = await Company.findById(req.params.companyId)
-            .select('companyName businessName aiAgentLogic twilioConfig createdAt updatedAt');
+            .select('companyName businessName aiAgentSettings twilioConfig createdAt updatedAt');
 
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });
@@ -244,26 +244,26 @@ function verifyDataPaths(company) {
         value: company.connectionMessages?.voice?.fallback?.enabled
     });
 
-    // Check aiAgentLogic (legacy, but still used for voiceSettings)
+    // Check aiAgentSettings (legacy, but still used for voiceSettings)
     checks.push({
-        path: 'aiAgentLogic',
-        exists: Boolean(company.aiAgentLogic),
-        status: company.aiAgentLogic ? 'OK' : 'MISSING'
+        path: 'aiAgentSettings',
+        exists: Boolean(company.aiAgentSettings),
+        status: company.aiAgentSettings ? 'OK' : 'MISSING'
     });
 
     // Check voiceSettings
     checks.push({
-        path: 'aiAgentLogic.voiceSettings',
-        exists: Boolean(company.aiAgentLogic?.voiceSettings),
-        status: company.aiAgentLogic?.voiceSettings ? 'OK' : 'MISSING'
+        path: 'aiAgentSettings.voiceSettings',
+        exists: Boolean(company.aiAgentSettings?.voiceSettings),
+        status: company.aiAgentSettings?.voiceSettings ? 'OK' : 'MISSING'
     });
 
     // Check voiceId
     checks.push({
-        path: 'aiAgentLogic.voiceSettings.voiceId',
-        exists: Boolean(company.aiAgentLogic?.voiceSettings?.voiceId),
-        status: company.aiAgentLogic?.voiceSettings?.voiceId ? 'OK' : 'NOT_SET',
-        value: company.aiAgentLogic?.voiceSettings?.voiceId || null
+        path: 'aiAgentSettings.voiceSettings.voiceId',
+        exists: Boolean(company.aiAgentSettings?.voiceSettings?.voiceId),
+        status: company.aiAgentSettings?.voiceSettings?.voiceId ? 'OK' : 'NOT_SET',
+        value: company.aiAgentSettings?.voiceSettings?.voiceId || null
     });
 
     // Check twilioConfig
@@ -348,12 +348,12 @@ function detectConfigurationConflicts(company) {
     }
 
     // Check voice settings (ElevenLabs)
-    if (!company.aiAgentLogic?.voiceSettings?.voiceId) {
+    if (!company.aiAgentSettings?.voiceSettings?.voiceId) {
         issues.push({
             type: 'MISSING_CONFIGURATION',
             severity: 'MEDIUM',
             message: 'No ElevenLabs voice selected',
-            field: 'aiAgentLogic.voiceSettings.voiceId',
+            field: 'aiAgentSettings.voiceSettings.voiceId',
             hint: 'Configure in AI Voice Settings tab'
         });
         recommendations.push({

@@ -4,7 +4,7 @@
  * This is the NEW V2 system that uses the Agent Personality tab configuration
  * NO LEGACY CODE - Built from scratch for V2 Agent Management Container
  * 
- * Reads from: company.aiAgentLogic (V2 system)
+ * Reads from: company.aiAgentSettings (V2 system)
  * NOT from: legacy aiSettings, agentSetup, or personalityResponses
  */
 
@@ -55,7 +55,7 @@ class V2AIAgentRuntime {
             }
 
             // Check if V2 AI Agent Logic is configured
-            if (!company.aiAgentLogic || !company.aiAgentLogic.enabled) {
+            if (!company.aiAgentSettings || !company.aiAgentSettings.enabled) {
                 logger.error(`❌ V2 AGENT: Company ${companyID} does not have V2 AI Agent Logic enabled`);
                 return {
                     greeting: "Configuration error: Company must configure V2 Agent Personality",
@@ -66,10 +66,10 @@ class V2AIAgentRuntime {
             logger.debug(`✅ V2 AGENT: Found V2 configuration for ${company.businessName || company.companyName}`);
             
             // 🔍 DIAGNOSTIC: Log voice settings from database
-            logger.debug(`🔍 V2 VOICE DEBUG: Raw voiceSettings from DB:`, JSON.stringify(company.aiAgentLogic?.voiceSettings, null, 2));
-            logger.debug(`🔍 V2 VOICE DEBUG: Has voiceSettings: ${Boolean(company.aiAgentLogic?.voiceSettings)}`);
-            logger.debug(`🔍 V2 VOICE DEBUG: Voice ID: ${company.aiAgentLogic?.voiceSettings?.voiceId || 'NOT SET'}`);
-            logger.debug(`🔍 V2 VOICE DEBUG: API Source: ${company.aiAgentLogic?.voiceSettings?.apiSource || 'NOT SET'}`);
+            logger.debug(`🔍 V2 VOICE DEBUG: Raw voiceSettings from DB:`, JSON.stringify(company.aiAgentSettings?.voiceSettings, null, 2));
+            logger.debug(`🔍 V2 VOICE DEBUG: Has voiceSettings: ${Boolean(company.aiAgentSettings?.voiceSettings)}`);
+            logger.debug(`🔍 V2 VOICE DEBUG: Voice ID: ${company.aiAgentSettings?.voiceSettings?.voiceId || 'NOT SET'}`);
+            logger.debug(`🔍 V2 VOICE DEBUG: API Source: ${company.aiAgentSettings?.voiceSettings?.apiSource || 'NOT SET'}`);
 
             // ─────────────────────────────────────────────────────────────
             // 🧠 CHEAT SHEET: Compile policy if needed (Phase 1)
@@ -124,8 +124,8 @@ class V2AIAgentRuntime {
                     callSource,  // 'company-test' | 'production'
                     isTest       // boolean flag
                 },
-                voiceSettings: company.aiAgentLogic.voiceSettings || null,
-                personality: company.aiAgentLogic.agentPersonality || null
+                voiceSettings: company.aiAgentSettings.voiceSettings || null,
+                personality: company.aiAgentSettings.agentPersonality || null
             };
 
         } catch (error) {
@@ -313,7 +313,7 @@ class V2AIAgentRuntime {
         try {
             // Load company V2 configuration
             const company = await Company.findById(companyID);
-            if (!company || !company.aiAgentLogic?.enabled) {
+            if (!company || !company.aiAgentSettings?.enabled) {
                 return {
                     response: null,  // 🔥 NO FALLBACK TEXT
                     action: 'transfer',  // Direct transfer to human
@@ -660,9 +660,9 @@ class V2AIAgentRuntime {
         
         // 🔧 PLACEHOLDERS: Replace all placeholders with their actual values
         // Supports both [brackets] and {braces}, case-insensitive
-        if (company.aiAgentLogic?.placeholders && Array.isArray(company.aiAgentLogic.placeholders)) {
-            logger.info(`🔧 [PLACEHOLDERS] Replacing ${company.aiAgentLogic.placeholders.length} placeholders in AI role response`);
-            company.aiAgentLogic.placeholders.forEach(placeholder => {
+        if (company.aiAgentSettings?.placeholders && Array.isArray(company.aiAgentSettings.placeholders)) {
+            logger.info(`🔧 [PLACEHOLDERS] Replacing ${company.aiAgentSettings.placeholders.length} placeholders in AI role response`);
+            company.aiAgentSettings.placeholders.forEach(placeholder => {
                 // Escape special regex characters in placeholder name
                 const escapedName = placeholder.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 

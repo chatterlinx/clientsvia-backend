@@ -506,7 +506,7 @@ class KeywordGenerationService {
    */
   initializeTradeDictionaries() {
     // 🚨 REMOVED: Hardcoded trade dictionaries - All trade-specific terms must come from company configuration
-    // Trade keywords are now loaded from company.aiAgentLogic.keywordConfiguration.tradeSpecificKeywords per multi-tenant requirements
+    // Trade keywords are now loaded from company.aiAgentSettings.keywordConfiguration.tradeSpecificKeywords per multi-tenant requirements
     return {}; // Empty - trade dictionaries must be configured per company
   }
 

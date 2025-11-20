@@ -4256,13 +4256,13 @@ class CompanyProfileManager {
        DATA FLOW:
        1. Load settings → populateVoiceTab() → display controls
        2. User adjusts → saveVoiceSettings() → backend API
-       3. Backend stores in company.aiAgentLogic.voiceSettings
+       3. Backend stores in company.aiAgentSettings.voiceSettings
        4. AI Agent Runtime uses settings for TTS generation
        
        INTEGRATION:
        - Connects to v2AIAgentRuntime.js
        - Used by v2TwilioControl.js for call greetings
-       - Stored in MongoDB: company.aiAgentLogic.voiceSettings
+       - Stored in MongoDB: company.aiAgentSettings.voiceSettings
        
        ======================================================================== */
 

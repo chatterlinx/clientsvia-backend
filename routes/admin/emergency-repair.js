@@ -48,16 +48,15 @@ router.get('/inspect-company/:companyId', async (req, res) => {
         const analysis = {
             companyId: company._id.toString(),
             companyName: company.companyName,
-            hasAiAgentLogic: Boolean(company.aiAgentLogic),
-            aiAgentLogicType: typeof company.aiAgentLogic,
-            hasVoiceSettings: Boolean(company.aiAgentLogic?.voiceSettings),
-            voiceSettingsType: typeof company.aiAgentLogic?.voiceSettings,
-            voiceSettingsIsArray: Array.isArray(company.aiAgentLogic?.voiceSettings),
-            voiceSettingsIsNull: company.aiAgentLogic?.voiceSettings === null,
-            voiceSettingsValue: company.aiAgentLogic?.voiceSettings,
+            hasAiAgentSettings: Boolean(company.aiAgentSettings),
+            aiAgentSettingsType: typeof company.aiAgentSettings,
+            hasVoiceSettings: Boolean(company.aiAgentSettings?.voiceSettings),
+            voiceSettingsType: typeof company.aiAgentSettings?.voiceSettings,
+            voiceSettingsIsArray: Array.isArray(company.aiAgentSettings?.voiceSettings),
+            voiceSettingsIsNull: company.aiAgentSettings?.voiceSettings === null,
+            voiceSettingsValue: company.aiAgentSettings?.voiceSettings,
             rawDocument: {
-                aiAgentLogic: company.aiAgentLogic
-            }
+                aiAgentLogic: company.aiAgentSettings             }
         };
         
         logger.info('📊 Analysis:', JSON.stringify(analysis, null, 2));
@@ -95,7 +94,7 @@ router.post('/migrate-voice-schema', async (req, res) => {
             fixed: {
                 aiVoiceProvider: 0,
                 aiVoice: 0,
-                aiAgentLogicVoiceSettings: 0
+                aiAgentSettingsVoiceSettings: 0
             }
         };
         
@@ -150,14 +149,14 @@ router.post('/migrate-voice-schema', async (req, res) => {
         results.fixed.aiVoice = fixB.modifiedCount;
         logger.info(`   Fixed ${fixB.modifiedCount} documents`);
         
-        // C) Fix aiAgentLogic.voiceSettings (if it's a string)
-        logger.info('🔍 Checking aiAgentLogic.voiceSettings...');
+        // C) Fix aiAgentSettings.voiceSettings (if it's a string)
+        logger.info('🔍 Checking aiAgentSettings.voiceSettings...');
         const fixC = await companies.updateMany(
-            { "aiAgentLogic.voiceSettings": { $type: "string" } },
+            { "aiAgentSettings.voiceSettings": { $type: "string" } },
             [
                 {
                     $set: {
-                        "aiAgentLogic.voiceSettings": {
+                        "aiAgentSettings.voiceSettings": {
                             apiSource: "clientsvia",
                             apiKey: null,
                             voiceId: null,
@@ -176,7 +175,7 @@ router.post('/migrate-voice-schema', async (req, res) => {
                 }
             ]
         );
-        results.fixed.aiAgentLogicVoiceSettings = fixC.modifiedCount;
+        results.fixed.aiAgentSettingsVoiceSettings = fixC.modifiedCount;
         logger.info(`   Fixed ${fixC.modifiedCount} documents`);
         
         // Summary
@@ -234,10 +233,10 @@ router.post('/repair-voice-settings', async (req, res) => {
         
         // Scan each company
         for (const company of allCompanies) {
-            const vsType = typeof company.aiAgentLogic?.voiceSettings;
-            const isValid = company.aiAgentLogic?.voiceSettings 
+            const vsType = typeof company.aiAgentSettings?.voiceSettings;
+            const isValid = company.aiAgentSettings?.voiceSettings 
                 && vsType === 'object' 
-                && !Array.isArray(company.aiAgentLogic.voiceSettings);
+                && !Array.isArray(company.aiAgentSettings.voiceSettings);
             
             // Track types
             if (!report.scannedTypes[vsType]) {
@@ -251,7 +250,7 @@ router.post('/repair-voice-settings', async (req, res) => {
                     _id: company._id.toString(),
                     companyName: company.companyName,
                     voiceSettingsType: vsType,
-                    voiceSettingsValue: company.aiAgentLogic?.voiceSettings
+                    voiceSettingsValue: company.aiAgentSettings?.voiceSettings
                 });
             }
         }
@@ -278,7 +277,7 @@ router.post('/repair-voice-settings', async (req, res) => {
                     { _id: company._id },
                     {
                         $set: {
-                            'aiAgentLogic.voiceSettings': {
+                            'aiAgentSettings.voiceSettings': {
                                 // V2 Default Settings
                                 apiSource: 'clientsvia',
                                 apiKey: null,
@@ -330,10 +329,10 @@ router.post('/repair-voice-settings', async (req, res) => {
         
         for (const company of corruptCompanies) {
             const updated = await companiesCollection.findOne({ _id: company._id });
-            const vsType = typeof updated.aiAgentLogic?.voiceSettings;
-            const isValid = updated.aiAgentLogic?.voiceSettings 
+            const vsType = typeof updated.aiAgentSettings?.voiceSettings;
+            const isValid = updated.aiAgentSettings?.voiceSettings 
                 && vsType === 'object' 
-                && !Array.isArray(updated.aiAgentLogic.voiceSettings);
+                && !Array.isArray(updated.aiAgentSettings.voiceSettings);
             
             if (!isValid) {
                 stillCorrupt.push({

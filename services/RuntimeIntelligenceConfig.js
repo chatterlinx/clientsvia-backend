@@ -8,7 +8,7 @@
  * CRITICAL INTEGRATION POINT:
  * This is the glue that connects:
  * - Test Pilot Intelligence Settings (AdminSettings.testPilotIntelligence)
- * - Company Production Intelligence (company.aiAgentLogic.productionIntelligence)
+ * - Company Production Intelligence (company.aiAgentSettings.productionIntelligence)
  * - Runtime Tier 1/2/3 matching (IntelligentRouter.js)
  * - Cost tracking (todaysCost.amount, todaysCost.tier3Calls)
  * - LLM Learning Console (ProductionLLMSuggestion generation)
@@ -153,7 +153,7 @@ class RuntimeIntelligenceConfig {
                         }
                     };
                 } else {
-                    // CUSTOM: Load from company.aiAgentLogic.productionIntelligence
+                    // CUSTOM: Load from company.aiAgentSettings.productionIntelligence
                     const productionConfig = company?.aiAgentLogic?.productionIntelligence || {};
                     
                     logger.info(`[RUNTIME CONFIG] 🎯 Using CUSTOM Company Intelligence:`, {
@@ -186,7 +186,7 @@ class RuntimeIntelligenceConfig {
                         },
                         costTracking: {
                             enabled: callSource === 'production', // Only track costs for real calls
-                            trackingPath: 'company.aiAgentLogic.productionIntelligence.todaysCost'
+                            trackingPath: 'company.aiAgentSettings.productionIntelligence.todaysCost'
                         }
                     };
                 }

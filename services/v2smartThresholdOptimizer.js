@@ -83,7 +83,7 @@ class SmartThresholdOptimizer {
         // In a real implementation, this would query call logs/analytics
         // For now, we'll simulate intelligent analysis based on company data
         
-        const company = await Company.findById(companyId).select('aiAgentLogic').lean();
+        const company = await Company.findById(companyId).select('aiAgentSettings').lean();
         const currentThresholds = company?.aiAgentLogic?.thresholds || {};
 
         // Simulate analysis of call patterns (in production, this would use real data)
@@ -187,20 +187,20 @@ class SmartThresholdOptimizer {
             throw new Error('Company not found');
         }
 
-        const oldThresholds = company.aiAgentLogic?.thresholds || {};
+        const oldThresholds = company.aiAgentSettings?.thresholds || {};
         
         // Update thresholds
-        if (!company.aiAgentLogic) {
-            company.aiAgentLogic = {};
+        if (!company.aiAgentSettings) {
+            company.aiAgentSettings = {};
         }
         
-        company.aiAgentLogic.thresholds = {
+        company.aiAgentSettings.thresholds = {
             ...oldThresholds,
             ...optimizedThresholds
         };
         
-        company.aiAgentLogic.lastOptimized = new Date();
-        company.aiAgentLogic.optimizationVersion = (company.aiAgentLogic.optimizationVersion || 0) + 1;
+        company.aiAgentSettings.lastOptimized = new Date();
+        company.aiAgentSettings.optimizationVersion = (company.aiAgentSettings.optimizationVersion || 0) + 1;
 
         await company.save();
 

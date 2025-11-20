@@ -304,7 +304,7 @@ class SmartWarmupService {
             }
 
             // Fallback to MongoDB
-            const company = await Company.findById(companyId).select('aiAgentLogic.productionIntelligence');
+            const company = await Company.findById(companyId).select('aiAgentSettings.productionIntelligence');
             const prodInt = company?.aiAgentLogic?.productionIntelligence;
             const smartWarmup = prodInt?.smartWarmup || {};
             const llmConfig = prodInt?.llmConfig || {};
@@ -451,9 +451,9 @@ class SmartWarmupService {
 
             // Update database
             await Company.findByIdAndUpdate(companyId, {
-                'aiAgentLogic.productionIntelligence.smartWarmup.enabled': false,
-                'aiAgentLogic.productionIntelligence.lastUpdated': new Date(),
-                'aiAgentLogic.productionIntelligence.updatedBy': 'System (Auto-disabled)'
+                'aiAgentSettings.productionIntelligence.smartWarmup.enabled': false,
+                'aiAgentSettings.productionIntelligence.lastUpdated': new Date(),
+                'aiAgentSettings.productionIntelligence.updatedBy': 'System (Auto-disabled)'
             });
 
             // Clear cache

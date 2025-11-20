@@ -14,8 +14,8 @@
 //
 // LEGACY FIELDS (READ-ONLY, DO NOT WRITE):
 // - company.configuration.variables
-// - company.aiAgentLogic.placeholders
-// - company.aiAgentLogic.variables
+// - company.aiAgentSettings.placeholders
+// - company.aiAgentSettings.variables
 
 const Company = require('../models/v2Company');
 const { validateBatch } = require('../utils/variableValidators');

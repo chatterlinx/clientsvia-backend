@@ -59,7 +59,7 @@ router.get('/:companyId/twilio-control/status', async (req, res) => {
         }
 
         const twilioConfig = company.twilioConfig || {};
-        const voiceSettings = company.aiAgentLogic?.voiceSettings || {};
+        const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
 
         // DIAGNOSTIC: Log what we're seeing
         logger.security(`[TWILIO CONTROL] 🔍 DIAGNOSTIC for ${company.companyName}:`);
@@ -193,7 +193,7 @@ router.get('/:companyId/twilio-control/config', async (req, res) => {
         }
 
         const twilioConfig = company.twilioConfig || {};
-        const voiceSettings = company.aiAgentLogic?.voiceSettings || {};
+        const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
 
         // Build safe config (never expose full auth token)
         const safeConfig = {
@@ -465,7 +465,7 @@ router.get('/:companyId/twilio-control/health', async (req, res) => {
         }
 
         const twilioConfig = company.twilioConfig || {};
-        const voiceSettings = company.aiAgentLogic?.voiceSettings || {};
+        const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
 
         let healthScore = 0;
         const checks = [];

@@ -9,9 +9,9 @@
  * 
  * ARCHITECTURE:
  * - Settings stored in: AdminSettings.globalProductionIntelligence
- * - Companies have flag: company.aiAgentLogic.useGlobalIntelligence
+ * - Companies have flag: company.aiAgentSettings.useGlobalIntelligence
  * - If true → use global settings (this API)
- * - If false → use company.aiAgentLogic.productionIntelligence
+ * - If false → use company.aiAgentSettings.productionIntelligence
  * 
  * ENDPOINTS:
  * - GET    /api/admin/global-intelligence          - Load global settings
@@ -54,7 +54,7 @@ async function clearGlobalIntelligenceCache() {
 
         // Find all companies using global intelligence
         const companies = await Company.find(
-            { 'aiAgentLogic.useGlobalIntelligence': true },
+            { 'aiAgentSettings.useGlobalIntelligence': true },
             '_id'
         ).lean();
 
@@ -131,7 +131,7 @@ router.get('/global-intelligence', async (req, res) => {
 
         // Count companies using global intelligence (REAL production data)
         const companiesAffected = await Company.countDocuments({
-            'aiAgentLogic.useGlobalIntelligence': { $ne: false } // Default is true
+            'aiAgentSettings.useGlobalIntelligence': { $ne: false } // Default is true
         });
 
         logger.info('✅ [GLOBAL INTELLIGENCE] Loaded successfully', {
@@ -266,12 +266,12 @@ router.get('/global-intelligence/stats', async (req, res) => {
 
         // Count companies using global
         const usingGlobal = await Company.countDocuments({
-            'aiAgentLogic.useGlobalIntelligence': true
+            'aiAgentSettings.useGlobalIntelligence': true
         });
 
         // Count companies using custom
         const usingCustom = await Company.countDocuments({
-            'aiAgentLogic.useGlobalIntelligence': false
+            'aiAgentSettings.useGlobalIntelligence': false
         });
 
         // Calculate percentages

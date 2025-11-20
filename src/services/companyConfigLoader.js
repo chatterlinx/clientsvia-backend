@@ -472,13 +472,13 @@ function buildIntelligenceSettings(company) {
   };
   
   try {
-    if (company.aiAgentLogic) {
-      intelligence.enabled = !!company.aiAgentLogic.enabled;
-      intelligence.thresholds = company.aiAgentLogic.thresholds || {};
-      intelligence.knowledgeSourcePriorities = company.aiAgentLogic.knowledgeSourcePriorities || [];
-      intelligence.memorySettings = company.aiAgentLogic.memorySettings || {};
-      intelligence.fallbackBehavior = company.aiAgentLogic.fallbackBehavior || {};
-      intelligence.voice = company.aiAgentLogic.voice || {};
+    if (company.aiAgentSettings) {
+      intelligence.enabled = !!company.aiAgentSettings.enabled;
+      intelligence.thresholds = company.aiAgentSettings.thresholds || {};
+      intelligence.knowledgeSourcePriorities = company.aiAgentSettings.knowledgeSourcePriorities || [];
+      intelligence.memorySettings = company.aiAgentSettings.memorySettings || {};
+      intelligence.fallbackBehavior = company.aiAgentSettings.fallbackBehavior || {};
+      intelligence.voice = company.aiAgentSettings.voice || {};
     }
     
     logger.debug(`[COMPANY CONFIG LOADER] Built intelligence settings`, {

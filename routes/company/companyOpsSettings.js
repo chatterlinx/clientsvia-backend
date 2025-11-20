@@ -14,7 +14,7 @@
  * - PATCH /api/company/:companyId/settings/risk-safety
  * 
  * DATA MODEL: v2Company (multiple sections)
- * - aiAgentLogic (AI Agent Core)
+ * - aiAgentSettings (AI Agent Core)
  * - operatingHours (Operating Hours)
  * - twilioConfig (Telephony)
  * - riskSafetySettings (Risk & Safety)
@@ -59,11 +59,11 @@ router.get('/', async (req, res) => {
 
     // AI Agent Core settings
     const aiAgent = {
-      enabled: company.aiAgentLogic?.enabled || false,
-      orchestratorEnabled: company.aiAgentLogic?.orchestratorEnabled || false,
-      debugOrchestrator: company.aiAgentLogic?.debugOrchestrator || false,
-      voiceProvider: company.aiAgentLogic?.voiceProvider || 'Google',
-      language: company.aiAgentLogic?.language || 'EN'
+      enabled: company.aiAgentSettings?.enabled || false,
+      orchestratorEnabled: company.aiAgentSettings?.orchestratorEnabled || false,
+      debugOrchestrator: company.aiAgentSettings?.debugOrchestrator || false,
+      voiceProvider: company.aiAgentSettings?.voiceProvider || 'Google',
+      language: company.aiAgentSettings?.language || 'EN'
     };
 
     // Operating Hours settings
@@ -153,25 +153,25 @@ router.patch('/ai-agent', async (req, res) => {
       });
     }
 
-    // Initialize aiAgentLogic if doesn't exist
-    if (!company.aiAgentLogic) {
-      company.aiAgentLogic = {};
+    // Initialize aiAgentSettings if doesn't exist
+    if (!company.aiAgentSettings) {
+      company.aiAgentSettings = {};
     }
 
     // Update fields
-    if (enabled !== undefined) company.aiAgentLogic.enabled = enabled;
-    if (orchestratorEnabled !== undefined) company.aiAgentLogic.orchestratorEnabled = orchestratorEnabled;
-    if (debugOrchestrator !== undefined) company.aiAgentLogic.debugOrchestrator = debugOrchestrator;
-    if (voiceProvider !== undefined) company.aiAgentLogic.voiceProvider = voiceProvider;
-    if (language !== undefined) company.aiAgentLogic.language = language;
+    if (enabled !== undefined) company.aiAgentSettings.enabled = enabled;
+    if (orchestratorEnabled !== undefined) company.aiAgentSettings.orchestratorEnabled = orchestratorEnabled;
+    if (debugOrchestrator !== undefined) company.aiAgentSettings.debugOrchestrator = debugOrchestrator;
+    if (voiceProvider !== undefined) company.aiAgentSettings.voiceProvider = voiceProvider;
+    if (language !== undefined) company.aiAgentSettings.language = language;
 
-    company.markModified('aiAgentLogic');
+    company.markModified('aiAgentSettings');
     await company.save();
 
     logger.info('[CompanyOps Settings] AI Agent settings updated', {
       companyId,
-      enabled: company.aiAgentLogic.enabled,
-      orchestratorEnabled: company.aiAgentLogic.orchestratorEnabled
+      enabled: company.aiAgentSettings.enabled,
+      orchestratorEnabled: company.aiAgentSettings.orchestratorEnabled
     });
 
     // Clear Redis cache
@@ -188,8 +188,7 @@ router.patch('/ai-agent', async (req, res) => {
     res.json({
       ok: true,
       message: 'AI Agent settings updated successfully',
-      data: company.aiAgentLogic
-    });
+      data: company.aiAgentSettings     });
 
   } catch (error) {
     logger.error('[CompanyOps Settings] PATCH ai-agent failed', {

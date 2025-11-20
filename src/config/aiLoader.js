@@ -75,7 +75,7 @@ class AIConfigLoader {
                 throw new Error(`Company not found: ${companyID}`);
             }
 
-            const aiLogic = company.aiAgentLogic || {};
+            const aiLogic = company.aiAgentSettings || {};
             
             // Build comprehensive configuration per Blueprint
             const config = {
@@ -88,7 +88,7 @@ class AIConfigLoader {
                 
                 // Confidence Thresholds
                 thresholds: {
-                    // 🚨 REMOVED: All hardcoded thresholds - must come from aiAgentLogic UI configuration
+                    // 🚨 REMOVED: All hardcoded thresholds - must come from aiAgentSettings UI configuration
                     ...aiLogic.thresholds
                 },
                 

@@ -9887,7 +9887,7 @@ Continue?`;
                 
                 const data = await response.json();
                 const company = data.company;
-                const intelligence = company.aiAgentLogic?.productionIntelligence || {};
+                const intelligence = company.aiAgentSettings?.productionIntelligence || {};
                 
                 console.log('✅ [COMPANY INTELLIGENCE] Loaded settings:', intelligence);
                 

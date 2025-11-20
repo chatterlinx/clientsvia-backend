@@ -1,24 +1,21 @@
 /**
  * V2 AI Voice Settings API Routes
- * V2-grade ElevenLabs integration with aiAgentLogic system
+ * V2-grade ElevenLabs integration with aiAgentSettings system
  * 
  * 🎤 V2 VOICE SETTINGS - V2 ARCHITECTURE:
  * ╔══════════════════════════════════════════════════════════════════╗
  * ║ ELEVENLABS INTEGRATION V2 - MULTI-TENANT VOICE SYSTEM            ║
  * ╠══════════════════════════════════════════════════════════════════╣
- * ║ Storage: aiAgentLogic.voiceSettings (NOT legacy aiSettings)      ║
+ * ║ Storage: aiAgentSettings.voiceSettings (V2 system)               ║
  * ║ Cache: Redis voice:company:{id} keys for sub-50ms performance    ║
  * ║ API: Latest ElevenLabs API with Turbo v2.5 model support        ║
  * ║ Security: Multi-tenant isolation + API key encryption           ║
  * ║ Performance: Streaming optimization + quality controls           ║
  * ╚══════════════════════════════════════════════════════════════════╝
  * 
- * Migration from Legacy:
- * - OLD: company.aiSettings.elevenLabs.*
- * - NEW: company.aiAgentLogic.voiceSettings.*
- * 
- * This ensures voice settings are part of the unified AI Agent Logic
- * system with complete v2-grade multi-tenant isolation.
+ * ☠️ REMOVED: aiAgentSettings (legacy nuked 2025-11-20)
+ * - OLD: company.aiAgentSettings.voiceSettings.*
+ * - NEW: company.aiAgentSettings.voiceSettings.*
  */
 
 const express = require('express');
@@ -73,7 +70,7 @@ router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
         // CHECK 1: DATABASE - Are settings saved?
         // ========================================
         logger.info(`🔍 [CHECK 1] Database check...`);
-        const voiceSettings = company.aiAgentLogic?.voiceSettings;
+        const voiceSettings = company.aiAgentSettings?.voiceSettings;
         
         status.checks.database = {
             name: 'Database Storage',
@@ -332,12 +329,12 @@ router.get('/:companyId/v2-voice-settings', async (req, res) => {
 
         // 🔍 DIAGNOSTIC: Log what we're getting from the database
         logger.info(`🔍 [GET VOICE] Company: ${company.companyName}`);
-        logger.info(`🔍 [GET VOICE] Has aiAgentLogic:`, Boolean(company.aiAgentLogic));
-        logger.info(`🔍 [GET VOICE] Has voiceSettings:`, Boolean(company.aiAgentLogic?.voiceSettings));
-        logger.info(`🔍 [GET VOICE] Raw voiceSettings:`, JSON.stringify(company.aiAgentLogic?.voiceSettings, null, 2));
+        logger.info(`🔍 [GET VOICE] Has aiAgentLogic:`, Boolean(company.aiAgentSettings));
+        logger.info(`🔍 [GET VOICE] Has voiceSettings:`, Boolean(company.aiAgentSettings?.voiceSettings));
+        logger.info(`🔍 [GET VOICE] Raw voiceSettings:`, JSON.stringify(company.aiAgentSettings?.voiceSettings, null, 2));
 
-        // Get voice settings from V2 aiAgentLogic system
-        const voiceSettings = company.aiAgentLogic?.voiceSettings || {
+        // Get voice settings from V2 aiAgentSettings system
+        const voiceSettings = company.aiAgentSettings?.voiceSettings || {
             // V2 Default Settings - V2 Grade
             apiSource: 'clientsvia', // 'clientsvia' or 'own'
             apiKey: null, // Only used when apiSource = 'own'
@@ -467,10 +464,10 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
 
         logger.debug(`🔍 [SAVE-9] Company found: ${company.companyName}`);
         
-        // Initialize aiAgentLogic if not exists
-        if (!company.aiAgentLogic) {
+        // Initialize aiAgentSettings if not exists
+        if (!company.aiAgentSettings) {
             logger.debug(`🔍 [SAVE-10] Initializing aiAgentLogic`);
-            company.aiAgentLogic = {};
+            company.aiAgentSettings = {};
         }
         
         // Build voice settings object (flat structure matching architecture doc)
@@ -502,7 +499,7 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
                 companyId,
                 {
                     $set: {
-                        'aiAgentLogic.voiceSettings': newVoiceSettings
+                        'aiAgentSettings.voiceSettings': newVoiceSettings
                     }
                 },
                 { new: true, runValidators: false } // Skip full validation, only validate the field we're updating
@@ -611,11 +608,11 @@ router.patch('/:companyId/v2-voice-settings', async (req, res) => {
         }
 
         // Initialize aiAgentLogic.voiceSettings if not exists
-        if (!company.aiAgentLogic) {
-            company.aiAgentLogic = {};
+        if (!company.aiAgentSettings) {
+            company.aiAgentSettings = {};
         }
-        if (!company.aiAgentLogic.voiceSettings) {
-            company.aiAgentLogic.voiceSettings = {
+        if (!company.aiAgentSettings.voiceSettings) {
+            company.aiAgentSettings.voiceSettings = {
                 apiSource: 'clientsvia',
                 enabled: true,
                 version: '2.0'
@@ -632,13 +629,13 @@ router.patch('/:companyId/v2-voice-settings', async (req, res) => {
         let hasChanges = false;
         allowedFields.forEach(field => {
             if (field in updates) {
-                company.aiAgentLogic.voiceSettings[field] = updates[field];
+                company.aiAgentSettings.voiceSettings[field] = updates[field];
                 hasChanges = true;
             }
         });
 
         if (hasChanges) {
-            company.aiAgentLogic.voiceSettings.lastUpdated = new Date();
+            company.aiAgentSettings.voiceSettings.lastUpdated = new Date();
             await company.save();
 
             // Clear cache
@@ -651,7 +648,7 @@ router.patch('/:companyId/v2-voice-settings', async (req, res) => {
         }
 
         // Return safe settings
-        const safeSettings = { ...company.aiAgentLogic.voiceSettings };
+        const safeSettings = { ...company.aiAgentSettings.voiceSettings };
         if (safeSettings.apiKey) {
             safeSettings.apiKey = '*****';
         }
@@ -686,7 +683,7 @@ router.post('/cleanup-hardcoded-voice', async (req, res) => {
         
         // Find companies with the hardcoded voice ID
         const companiesWithHardcodedVoice = await Company.find({
-            'aiAgentLogic.voiceSettings.voiceId': HARDCODED_VOICE_ID
+            'aiAgentSettings.voiceSettings.voiceId': HARDCODED_VOICE_ID
         });
 
         logger.info(`🔍 Found ${companiesWithHardcodedVoice.length} companies with hardcoded voice ID`);
@@ -701,10 +698,10 @@ router.post('/cleanup-hardcoded-voice', async (req, res) => {
 
         // Reset voice settings to clean defaults
         const updateResult = await Company.updateMany(
-            { 'aiAgentLogic.voiceSettings.voiceId': HARDCODED_VOICE_ID },
+            { 'aiAgentSettings.voiceSettings.voiceId': HARDCODED_VOICE_ID },
             {
                 $set: {
-                    'aiAgentLogic.voiceSettings': {
+                    'aiAgentSettings.voiceSettings': {
                         apiSource: 'clientsvia',
                         apiKey: null,
                         voiceId: null, // Reset to null - must be configured in UI

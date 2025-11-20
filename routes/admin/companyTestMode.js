@@ -282,17 +282,17 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
         logger.info(`📋 [TEST PILOT] Fetching company details: ${id}`);
         
         const company = await Company.findById(id)
-            .select('_id companyName businessName intelligenceMode aiAgentLogic aiAgentSettings')
+            .select('_id companyName businessName intelligenceMode aiAgentSettings aiAgentSettings')
             .lean();
         
         console.log('🔍🔍🔍 [TEST PILOT LOAD] ========== LOADING COMPANY ==========');
         console.log('🔍🔍🔍 [TEST PILOT LOAD] Company ID:', id);
         console.log('🔍🔍🔍 [TEST PILOT LOAD] Intelligence Mode:', company?.intelligenceMode || 'global (default)');
-        console.log('🔍🔍🔍 [TEST PILOT LOAD] Has aiAgentLogic:', !!company?.aiAgentLogic);
-        console.log('🔍🔍🔍 [TEST PILOT LOAD] Has productionIntelligence:', !!company?.aiAgentLogic?.productionIntelligence);
-        console.log('🔍🔍🔍 [TEST PILOT LOAD] Has smartWarmup:', !!company?.aiAgentLogic?.productionIntelligence?.smartWarmup);
-        console.log('🔍🔍🔍 [TEST PILOT LOAD] smartWarmup.enabled:', company?.aiAgentLogic?.productionIntelligence?.smartWarmup?.enabled);
-        console.log('🔍🔍🔍 [TEST PILOT LOAD] Full smartWarmup:', JSON.stringify(company?.aiAgentLogic?.productionIntelligence?.smartWarmup, null, 2));
+        console.log('🔍🔍🔍 [TEST PILOT LOAD] Has aiAgentLogic:', !!company?.aiAgentSettings);
+        console.log('🔍🔍🔍 [TEST PILOT LOAD] Has productionIntelligence:', !!company?.aiAgentSettings?.productionIntelligence);
+        console.log('🔍🔍🔍 [TEST PILOT LOAD] Has smartWarmup:', !!company?.aiAgentSettings?.productionIntelligence?.smartWarmup);
+        console.log('🔍🔍🔍 [TEST PILOT LOAD] smartWarmup.enabled:', company?.aiAgentSettings?.productionIntelligence?.smartWarmup?.enabled);
+        console.log('🔍🔍🔍 [TEST PILOT LOAD] Full smartWarmup:', JSON.stringify(company?.aiAgentSettings?.productionIntelligence?.smartWarmup, null, 2));
         
         if (!company) {
             return res.status(404).json({
@@ -453,9 +453,8 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
                     configured: variablesCount > 0
                 }
             },
-            // ✅ FIX: Include aiAgentLogic so frontend can load productionIntelligence settings
-            aiAgentLogic: company.aiAgentLogic
-        };
+            // ✅ FIX: Include aiAgentSettings so frontend can load productionIntelligence settings
+            aiAgentLogic: company.aiAgentSettings         };
         
         logger.info(`✅ [TEST PILOT] Company details loaded: ${companyInfo.name}`);
         

@@ -184,7 +184,7 @@ class AIBrain3tierllm {
 
             // Load company configuration
             const company = await Company.findById(companyId)
-                .select('configuration aiAgentSettings aiAgentLogic')
+                .select('configuration aiAgentSettings aiAgentSettings')
                 .lean();
 
             if (!company) {

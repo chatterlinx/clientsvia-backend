@@ -39,7 +39,7 @@ class DiagnosticService {
         try {
             // Load company data
             const company = await Company.findById(companyId)
-                .select('companyName configuration aiAgentSettings aiAgentLogic twilioConfig')
+                .select('companyName configuration aiAgentSettings aiAgentSettings twilioConfig')
                 .lean();
             
             if (!company) {
@@ -686,7 +686,7 @@ class DiagnosticService {
         const checks = [];
         let score = 0;
         
-        const voiceSettings = company.aiAgentLogic?.voiceSettings;
+        const voiceSettings = company.aiAgentSettings?.voiceSettings;
         
         // ────────────────────────────────────────────────────────────────────
         // CHECK 1: Voice ID Configured
@@ -706,7 +706,7 @@ class DiagnosticService {
                 codeReference: {
                     file: 'models/v2Company.js',
                     line: 214,
-                    path: 'aiAgentLogic.voiceSettings.voiceId'
+                    path: 'aiAgentSettings.voiceSettings.voiceId'
                 },
                 fix: {
                     action: 'navigate',
