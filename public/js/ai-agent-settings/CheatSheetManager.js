@@ -49,10 +49,48 @@ class CheatSheetManager {
   // SUB-TAB NAVIGATION
   // ═══════════════════════════════════════════════════════════════════
   
+  /**
+   * Update active state on tab navigation buttons
+   */
+  updateTabActiveState(activeTabId) {
+    // Find all tab buttons in the CheatSheet sub-navigation
+    const tabButtons = document.querySelectorAll('[data-cheat-target], button[onclick*="switchSubTab"]');
+    
+    tabButtons.forEach(btn => {
+      // Get the tab ID from data attribute or onclick
+      let tabId = btn.getAttribute('data-cheat-target');
+      if (!tabId) {
+        const onclickAttr = btn.getAttribute('onclick');
+        if (onclickAttr) {
+          const match = onclickAttr.match(/switchSubTab\(['"]([^'"]+)['"]\)/);
+          if (match) tabId = match[1];
+        }
+      }
+      
+      // Update active state
+      if (tabId === activeTabId) {
+        btn.classList.add('active');
+        // Add inline styles for immediate visual feedback
+        btn.style.background = 'rgba(255, 255, 255, 0.2)';
+        btn.style.fontWeight = '600';
+      } else {
+        btn.classList.remove('active');
+        // Remove inline styles
+        btn.style.background = '';
+        btn.style.fontWeight = '';
+      }
+    });
+    
+    console.log(`[CHEAT SHEET] 🎨 Updated tab active state: ${activeTabId}`);
+  }
+  
   switchSubTab(subTab) {
     console.log(`[CHEAT SHEET] Switching to sub-tab: ${subTab}`);
     
     this.currentSubTab = subTab;
+    
+    // Update active state on tab navigation buttons
+    this.updateTabActiveState(subTab);
     
     // Define which tabs are dynamically rendered (V2-only)
     const dynamicTabs = ['booking', 'company-contacts', 'links', 'calculator'];
