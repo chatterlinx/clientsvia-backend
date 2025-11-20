@@ -733,18 +733,43 @@ router.patch('/company/:id', async (req, res) => {
                 allKeys: Object.keys(cheatSheetPayload)
             });
             
-            // MERGE the payload into existing cheatSheet (preserves V1 fields!)
-            // 🔧 CRITICAL: Convert Mongoose document to plain object FIRST!
+            // 🔍 TEST: Can we access the first booking rule directly?
+            logger.info('📊 [CHEAT SHEET DEBUG] Direct access test:', {
+                firstRule: cheatSheetPayload.bookingRules[0],
+                spreadTest: {...cheatSheetPayload.bookingRules},
+                arrayFrom: Array.from(cheatSheetPayload.bookingRules || [])
+            });
+            
+            // 🔧 NUCLEAR OPTION: Don't use spread at all, manually assign each field
             const existingCheatSheet = updatedCompany.aiAgentSettings.cheatSheet.toObject ? 
                 updatedCompany.aiAgentSettings.cheatSheet.toObject() : 
                 updatedCompany.aiAgentSettings.cheatSheet;
             
+            // Manually copy V2 arrays from payload
+            const bookingRulesArray = Array.from(cheatSheetPayload.bookingRules || []);
+            const companyContactsArray = Array.from(cheatSheetPayload.companyContacts || []);
+            const linksArray = Array.from(cheatSheetPayload.links || []);
+            const calculatorsArray = Array.from(cheatSheetPayload.calculators || []);
+            
+            logger.info('📊 [CHEAT SHEET DEBUG] Extracted arrays:', {
+                bookingRules: bookingRulesArray.length,
+                companyContacts: companyContactsArray.length,
+                links: linksArray.length,
+                calculators: calculatorsArray.length
+            });
+            
+            // Build new cheatSheet object manually
             updatedCompany.aiAgentSettings.cheatSheet = {
-                ...existingCheatSheet,    // Plain object with V1 fields
-                ...cheatSheetPayload      // Plain object with V2 arrays - this OVERWRITES correctly!
+                ...existingCheatSheet,
+                ...cheatSheetPayload,
+                // Force override with extracted arrays
+                bookingRules: bookingRulesArray,
+                companyContacts: companyContactsArray,
+                links: linksArray,
+                calculators: calculatorsArray
             };
             
-            logger.info('📊 [CHEAT SHEET DEBUG] After merge (converted to plain object first):', {
+            logger.info('📊 [CHEAT SHEET DEBUG] After manual merge:', {
                 bookingRules: updatedCompany.aiAgentSettings.cheatSheet.bookingRules?.length || 0,
                 companyContacts: updatedCompany.aiAgentSettings.cheatSheet.companyContacts?.length || 0,
                 links: updatedCompany.aiAgentSettings.cheatSheet.links?.length || 0,
