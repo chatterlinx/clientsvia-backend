@@ -33,7 +33,7 @@ const {
   restoreVersionSchema,
   getVersionHistorySchema
 } = require('../../validators/cheatsheet');
-const authMiddleware = require('../../middleware/auth');
+const { authenticateJWT: authMiddleware } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
 
 // ============================================================================

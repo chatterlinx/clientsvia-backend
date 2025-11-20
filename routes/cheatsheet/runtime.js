@@ -25,7 +25,7 @@ const express = require('express');
 const router = express.Router();
 const { CheatSheetRuntimeService } = require('../../services/cheatsheet');
 const { validate, getTestConfigSchema } = require('../../validators/cheatsheet');
-const authMiddleware = require('../../middleware/auth');
+const { authenticateJWT: authMiddleware } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
 
 // ============================================================================
