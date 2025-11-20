@@ -91,7 +91,7 @@ router.get('/:companyId/connection-messages/config', async (req, res) => {
             return res.status(404).json({ error: 'Company not found' });
         }
 
-        // 🔧 FIX: connectionMessages is at ROOT level, not in aiAgentLogic!
+        // 🔧 FIX: connectionMessages is at ROOT level, not in aiAgentSettings!
         // Initialize if doesn't exist
         if (!company.connectionMessages) {
             const defaultConfig = getDefaultConfig();
@@ -141,7 +141,7 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
             return res.status(404).json({ error: 'Company not found' });
         }
 
-        // 🔧 FIX: connectionMessages is at ROOT level, not in aiAgentLogic!
+        // 🔧 FIX: connectionMessages is at ROOT level, not in aiAgentSettings!
         // Initialize if doesn't exist
         if (!company.connectionMessages) {
             company.connectionMessages = getDefaultConfig();
@@ -250,7 +250,7 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
             req.params.companyId,
             {
                 $set: {
-                    connectionMessages: plainConnectionMessages  // 🔧 FIX: Save to ROOT level, not aiAgentLogic!
+                    connectionMessages: plainConnectionMessages  // 🔧 FIX: Save to ROOT level, not aiAgentSettings!
                 }
             },
             { new: true, runValidators: false } // Skip full validation

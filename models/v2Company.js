@@ -170,8 +170,8 @@ const elevenLabsSettingsSchema = new mongoose.Schema({
     modelId: { type: String, trim: true, default: null }
 }, { _id: false });
 
-// V2 DELETED: Legacy aiSettingsSchema - replaced by aiAgentLogic system
-// All AI configuration now handled through aiAgentLogic field with 100% in-house system
+// V2 DELETED: Legacy aiSettingsSchema - replaced by aiAgentSettings system
+// All AI configuration now handled through aiAgentSettings field with 100% in-house system
 const daysOfWeekForOperatingHours = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const operatingHourSchema = new mongoose.Schema({ day: { type: String, required: true, enum: daysOfWeekForOperatingHours }, enabled: { type: Boolean, default: true }, start: { type: String, default: '09:00' }, end: { type: String, default: '17:00' } }, { _id: false });
 const protocolSchema = new mongoose.Schema({ systemDelay: { type: String, default: '' }, messageTaking: { type: String, default: '' }, callerReconnect: { type: String, default: '' }, whenInDoubt: { type: String, default: '' }, callerFrustration: { type: String, default: '' }, telemarketerFilter: { type: String, default: '' }, behaviorGuidelines: { type: String, default: '' }, bookingConfirmation: { type: String, default: '' }, textToPay: { type: String, default: '' } }, { _id: false });
@@ -181,12 +181,12 @@ const contactRecipientSchema = new mongoose.Schema({ contact: { type: String, tr
 const phoneRecipientSchema = new mongoose.Schema({ phoneNumber: { type: String, trim: true } }, { _id: false });
 const namedPhoneRecipientSchema = new mongoose.Schema({ name: { type: String, trim: true }, phoneNumber: { type: String, trim: true } }, { _id: false });
 
-// Legacy personality responses schema removed - using aiAgentLogic.responseCategories instead
+// Legacy personality responses schema removed - using aiAgentSettings.responseCategories instead
 
-// 🔧 CRITICAL FIX: Define aiAgentLogic as a proper Mongoose Schema
+// 🔧 CRITICAL FIX: Define aiAgentSettings as a proper Mongoose Schema
 // This ensures Mongoose properly tracks and persists nested changes (especially voice Settings)
 // ============================================================================
-// ⚠️ NAMING CLARIFICATION: Why "aiAgentLogic"?
+// ⚠️ NAMING CLARIFICATION: Why "aiAgentSettings"?
 // ============================================================================
 // HISTORY: This field was created when we had an "AI Agent Logic" UI tab
 // EVOLUTION: That tab was deleted and split into multiple tabs:
@@ -207,7 +207,7 @@ const agentSetupSchema = new mongoose.Schema({
     use247Routing: { type: Boolean, default: false },
     afterHoursAction: { type: String, default: 'message', trim: true },
     onCallForwardingNumber: { type: String, default: '', trim: true },
-    // ☢️ NUKED: greetingType, greetingAudioUrl, agentGreeting - replaced by aiAgentLogic.initialGreeting
+    // ☢️ NUKED: greetingType, greetingAudioUrl, agentGreeting - replaced by aiAgentSettings.initialGreeting
     // ☢️ NUKED: mainAgentScript, agentClosing - legacy agent setup system eliminated
     protocols: { type: protocolSchema, default: () => ({}) },
     textToPayPhoneSource: { type: String, default: 'callerID', trim: true },
@@ -311,7 +311,7 @@ const companySchema = new mongoose.Schema({
     connectionMessages: { type: connectionMessagesSchema, default: () => ({}) },
     smsSettings: { type: smsSettingsSchema, default: () => ({}) },
     // V2 DELETED: Legacy integrations field - HighLevel and Google OAuth eliminated 
-    // REMOVED: Legacy aiSettings field - replaced by aiAgentLogic system
+    // REMOVED: Legacy aiSettings field - replaced by aiAgentSettings system
     agentSetup: { type: agentSetupSchema, default: () => ({}) },
     aiAgentSetup: { type: mongoose.Schema.Types.Mixed, default: null }, // New AI Agent Setup data
     
@@ -322,9 +322,9 @@ const companySchema = new mongoose.Schema({
         index: true
     },
     // 🚨 REMOVED: All LLM settings violate "no external LLM" business rule
-    // All AI intelligence is now handled by aiAgentLogic configuration from UI
+    // All AI intelligence is now handled by aiAgentSettings configuration from UI
     
-    // 🚨 REMOVED: All intelligence settings now come from aiAgentLogic UI configuration
+    // 🚨 REMOVED: All intelligence settings now come from aiAgentSettings UI configuration
     // This ensures true multi-tenant isolation and no hardcoded behavior
     
     // 🧠 REMOVED DUPLICATE - This was overwritten by the complete definition below at line 538
@@ -353,24 +353,24 @@ const companySchema = new mongoose.Schema({
     }],
     // ☢️ NUCLEAR ELIMINATION: messageTemplates removed - legacy booking templates eliminated
     
-    // V2 DELETED: Legacy v2Agent field - using aiAgentLogic system only
-    // Legacy personalityResponses field removed - using aiAgentLogic.responseCategories instead
+    // V2 DELETED: Legacy v2Agent field - using aiAgentSettings system only
+    // Legacy personalityResponses field removed - using aiAgentSettings.responseCategories instead
     learningSettings: { type: learningSettingsSchema, default: () => ({}) },
     
-    // Legacy agentPersonalitySettings removed - using aiAgentLogic.personalitySystem instead
+    // Legacy agentPersonalitySettings removed - using aiAgentSettings.personalitySystem instead
     
-    // 📚 REMOVED: Legacy hardcoded knowledge settings - All settings now come from aiAgentLogic UI configuration
+    // 📚 REMOVED: Legacy hardcoded knowledge settings - All settings now come from aiAgentSettings UI configuration
     // This ensures true multi-tenant isolation where each company configures their own priorities and thresholds
     
     // ☢️ NUCLEAR ELIMINATION: agentPriorityConfig removed - legacy priority system eliminated
     
-    // ☠️ REMOVED 2025-11-20: aiAgentLogic - LEGACY SYSTEM NUKED
+    // ☠️ REMOVED 2025-11-20: aiAgentSettings - LEGACY SYSTEM NUKED
     // This entire field has been removed due to ongoing confusion with aiAgentSettings
     // All critical functionality migrated to aiAgentSettings
     // DO NOT RECREATE - Use aiAgentSettings instead
     // 
-    // aiAgentLogic: {
-    //     ☠️ REMOVED: aiAgentLogicSchema (nuked 2025-11-20)
+    // aiAgentSettings: {
+    //     ☠️ REMOVED: aiAgentSettingsSchema (nuked 2025-11-20)
     //     default: () => ({})
     // },
     
@@ -380,11 +380,11 @@ const companySchema = new mongoose.Schema({
     // PURPOSE: Enforce mutually exclusive intelligence configuration modes
     // OPTIONS: 
     //   - 'global': Uses platform-wide AdminSettings (99% of companies)
-    //   - 'custom': Uses company-specific aiAgentLogic (premium feature)
+    //   - 'custom': Uses company-specific aiAgentSettings (premium feature)
     // PROTECTION: Enum validation + audit logging on mode switches
     // BUSINESS LOGIC:
-    //   - When 'global': aiAgentLogic is ignored, AdminSettings used
-    //   - When 'custom': Company's own aiAgentLogic used independently
+    //   - When 'global': aiAgentSettings is ignored, AdminSettings used
+    //   - When 'custom': Company's own aiAgentSettings used independently
     // AUDIT: All mode switches logged with admin email + timestamp
     // ============================================================================
     intelligenceMode: {
@@ -1196,7 +1196,7 @@ const companySchema = new mongoose.Schema({
         // -------------------------------------------------------------------
         // VOICE SETTINGS - ElevenLabs TTS Configuration
         // -------------------------------------------------------------------
-        // Migrated from aiAgentLogic.voiceSettings (nuked 2025-11-20)
+        // Migrated from aiAgentSettings.voiceSettings (nuked 2025-11-20)
         voiceSettings: {
             apiSource: { 
                 type: String, 
@@ -1308,7 +1308,7 @@ const companySchema = new mongoose.Schema({
     },
     
     // OLD INLINE DEFINITIONS BELOW THIS LINE ARE NOW OBSOLETE - TO BE REMOVED
-    // ☠️ REMOVED: aiAgentLogicSchema (nuked 2025-11-20)
+    // ☠️ REMOVED: aiAgentSettingsSchema (nuked 2025-11-20)
     /*
         // Enable/disable AI Agent Logic system
         enabled: { type: Boolean, default: true },
@@ -1547,7 +1547,7 @@ const companySchema = new mongoose.Schema({
             }]
         },
         
-        // 🗑️ DELETED: quickVariables field - Replaced by aiAgentLogic.placeholders
+        // 🗑️ DELETED: quickVariables field - Replaced by aiAgentSettings.placeholders
         
         // 📞 Call Transfer & Escalation Configuration
         callTransferConfig: {
@@ -2150,7 +2150,7 @@ const companySchema = new mongoose.Schema({
             },
 
             // 🎤 V2 VOICE SETTINGS - ELEVENLABS INTEGRATION
-            // Migrated from legacy aiSettings.elevenLabs to aiAgentLogic.voiceSettings
+            // Migrated from legacy aiSettings.elevenLabs to aiAgentSettings.voiceSettings
             voiceSettings: {
                 // API Configuration
                 apiSource: { 
@@ -2272,7 +2272,7 @@ const companySchema = new mongoose.Schema({
                     default: '2.0' 
                 }
             }
-    */ // ← End of OLD inline aiAgentLogic definition (now obsolete)
+    */ // ← End of OLD inline aiAgentSettings definition (now obsolete)
         
     // V2 DELETED: Legacy HighLevel integration fields - v2 bloat eliminated
     // V2 DELETED: Legacy googleOAuth field - using JWT-only authentication system
@@ -2669,7 +2669,7 @@ companySchema.pre('save', async function(next) {
         }
         
         // Check ElevenLabs API key (check both old and new locations)
-        if (!this.aiSettings?.elevenLabs?.apiKey && !this.aiAgentLogic?.voiceSettings?.apiKey) {
+        if (!this.aiSettings?.elevenLabs?.apiKey && !this.aiAgentSettings?.voiceSettings?.apiKey) {
             missingCredentials.push('ElevenLabs API Key');
         }
         

@@ -10,8 +10,8 @@ const ELEVENLABS_API_BASE = 'https://api.elevenlabs.io/v1';
 function getElevenLabsApiKey(company) {
   logger.debug(`🔍 [API KEY CHECK] Starting API key detection for company: ${company?._id || 'unknown'}`);
   
-  // V2 VOICE SETTINGS: Check new aiAgentLogic.voiceSettings path first
-  const v2VoiceSettings = company?.aiAgentLogic?.voiceSettings;
+  // V2 VOICE SETTINGS: Check new aiAgentSettings.voiceSettings path first
+  const v2VoiceSettings = company?.aiAgentSettings?.voiceSettings;
   logger.debug(`🔍 [API KEY CHECK] Has voiceSettings: ${Boolean(v2VoiceSettings)}`);
   logger.debug(`🔍 [API KEY CHECK] API Source: ${v2VoiceSettings?.apiSource || 'NOT SET'}`);
   logger.debug(`🔍 [API KEY CHECK] Has company API key: ${Boolean(v2VoiceSettings?.apiKey)}`);
@@ -139,7 +139,7 @@ async function getAvailableVoices({ apiKey, company } = {}) {
         severity: error.statusCode === 401 ? 'WARNING' : 'CRITICAL',
         error,
         meta: {
-          apiSource: company?.aiAgentLogic?.voiceSettings?.apiSource,
+          apiSource: company?.aiAgentSettings?.voiceSettings?.apiSource,
           hasApiKey: Boolean(apiKey)
         }
       });
@@ -292,7 +292,7 @@ async function synthesizeSpeech({
           companyId,
           companyName,
           voiceId,
-          apiSource: company?.aiAgentLogic?.voiceSettings?.apiSource || 'unknown',
+          apiSource: company?.aiAgentSettings?.voiceSettings?.apiSource || 'unknown',
           error: error.message,
           impact: 'All voice generation stopped, all calls will fail',
           suggestedFix: 'Upgrade ElevenLabs plan, switch to company-owned API key, or wait for quota reset',

@@ -160,7 +160,7 @@ class V2AIAgentRuntime {
         logger.info(`[V2 GREETING] 🎭 Generating greeting for ${company.businessName || company.companyName}`);
         
         // ✅ FIX: Use ROOT LEVEL connectionMessages (AI Agent Settings tab)
-        // NOT aiAgentLogic.connectionMessages (deleted legacy tab)
+        // NOT aiAgentSettings.connectionMessages (deleted legacy tab)
         const connectionMessages = company.connectionMessages;
         const voiceConfig = connectionMessages?.voice;
 
@@ -478,7 +478,7 @@ class V2AIAgentRuntime {
     static async generateV2Response(userInput, company, callState) {
         logger.info(`[V2 RESPONSE] 🧠 Generating V2 response for: "${userInput}"`);
         
-        const aiLogic = company.aiAgentLogic;
+        const aiLogic = company.aiAgentSettings;
         
         // 🎯 Load company production intelligence settings
         let effectiveIntelligence = {};

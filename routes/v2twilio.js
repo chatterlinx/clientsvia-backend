@@ -301,14 +301,14 @@ router.use((req, res, next) => {
 });
 
 // Helper function to check if transfer is enabled
-// ☠️ REMOVED: aiAgentLogic.callTransferConfig (legacy nuked 2025-11-20)
+// ☠️ REMOVED: aiAgentSettings.callTransferConfig (legacy nuked 2025-11-20)
 function isTransferEnabled(company) {
   // Transfer now requires explicit Twilio fallback configuration
   return company?.twilioConfig?.fallbackNumber ? true : false;
 }
 
 // Helper function to get the configured transfer number
-// ☠️ REMOVED: aiAgentLogic.callTransferConfig (legacy nuked 2025-11-20)
+// ☠️ REMOVED: aiAgentSettings.callTransferConfig (legacy nuked 2025-11-20)
 function getTransferNumber(company) {
   // Use Twilio config fallback number only
   if (company?.twilioConfig?.fallbackNumber) {
@@ -322,7 +322,7 @@ function getTransferNumber(company) {
 }
 
 // Helper function to get the configured transfer message
-// ☠️ REMOVED: aiAgentLogic.callTransferConfig (legacy nuked 2025-11-20)
+// ☠️ REMOVED: aiAgentSettings.callTransferConfig (legacy nuked 2025-11-20)
 function getTransferMessage(company) {
   // Professional transfer - never sounds like AI is giving up
   return company.connectionMessages?.voice?.transferMessage || 
@@ -1591,7 +1591,7 @@ router.post('/voice/:companyID', async (req, res) => {
 
     logger.info(`[AI AGENT COMPANY] ${company.businessName || company.companyName} (ID: ${companyID})`);
     
-    // ☠️ REMOVED: aiAgentLogic.enabled block (legacy nuked 2025-11-20)
+    // ☠️ REMOVED: aiAgentSettings.enabled block (legacy nuked 2025-11-20)
     // This endpoint is now deprecated - V2 Agent handles all calls via /v2-agent-init/
     
     const twimlString = twiml.toString();

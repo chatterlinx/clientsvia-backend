@@ -403,7 +403,7 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
         if (!company.twilioConfig?.accountSID || !company.twilioConfig?.authToken) {
             missingCredentials.push('Twilio (accountSID/authToken)');
         }
-        // ☠️ REMOVED: aiAgentLogic.voiceSettings (legacy nuked 2025-11-20)
+        // ☠️ REMOVED: aiAgentSettings.voiceSettings (legacy nuked 2025-11-20)
         if (!company.aiSettings?.elevenLabs?.apiKey) {
             missingCredentials.push('ElevenLabs API Key');
         }
@@ -678,7 +678,7 @@ router.patch('/company/:id', async (req, res) => {
         await CacheHelper.invalidateCompany(companyId);
         
         // Clear AI Agent Logic cache when aiAgentSettings is updated (includes keywords)
-        if (req.body.aiAgentLogic) {
+        if (req.body.aiAgentSettings) {
             const aiLoader = require('../src/config/aiLoader');
             await aiLoader.invalidate(companyId);
             logger.debug(`⚡ AI Agent Logic cache invalidated for company: ${companyId}`);
@@ -2243,7 +2243,7 @@ logger.debug('[INIT] ✅ V3 AI Response System routes added (Instant Responses +
 // ============================================================================
 // ENDPOINT: PATCH /api/company/:companyId/intelligence-mode
 // AUTH: Required (JWT + Admin)
-// PURPOSE: Switch company between global (AdminSettings) and custom (aiAgentLogic) modes
+// PURPOSE: Switch company between global (AdminSettings) and custom (aiAgentSettings) modes
 // PROTECTION: Typed confirmation required, full audit trail, cache invalidation
 // ============================================================================
 router.patch('/company/:companyId/intelligence-mode', authenticateJWT, async (req, res) => {
@@ -2336,7 +2336,7 @@ router.patch('/company/:companyId/intelligence-mode', authenticateJWT, async (re
             const adminSettings = await AdminSettings.findOne();
             
             if (adminSettings && adminSettings.globalProductionIntelligence) {
-                // Copy global settings to company's aiAgentLogic
+                // Copy global settings to company's aiAgentSettings
                 company.aiAgentSettings = company.aiAgentSettings || {};
                 company.aiAgentSettings.thresholds = adminSettings.globalProductionIntelligence.thresholds;
                 company.aiAgentSettings.llmConfig = adminSettings.globalProductionIntelligence.llmConfig;
@@ -2345,7 +2345,7 @@ router.patch('/company/:companyId/intelligence-mode', authenticateJWT, async (re
                 
                 logger.info(`✅ [MODE SWITCH] Custom aiAgentSettings initialized from global template`);
             } else {
-                logger.warn(`⚠️ [MODE SWITCH] No AdminSettings.globalProductionIntelligence found, using default aiAgentLogic`);
+                logger.warn(`⚠️ [MODE SWITCH] No AdminSettings.globalProductionIntelligence found, using default settings`);
             }
         }
         

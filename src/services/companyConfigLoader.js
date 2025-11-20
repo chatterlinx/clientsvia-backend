@@ -4,7 +4,7 @@
  * ============================================================================
  * 
  * PURPOSE: Centralize reading and normalizing company AI configuration
- * SOURCES: v2Company (aiAgentSettings, aiAgentLogic, configuration), 
+ * SOURCES: v2Company (aiAgentSettings, aiAgentSettings, configuration), 
  *          GlobalInstantResponseTemplate, CompanyQnA, TradeQnA
  * 
  * USED BY: activeInstructionsService, future runtime (Frontline-Intel, 3-Tier)
@@ -457,7 +457,7 @@ async function loadKnowledgebaseSummary(company) {
 }
 
 /**
- * Build intelligence settings from aiAgentLogic
+ * Build intelligence settings from aiAgentSettings
  * @param {Object} company
  * @returns {Object} Intelligence settings
  */

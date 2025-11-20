@@ -9874,7 +9874,7 @@ Continue?`;
             }
             
             try {
-                // Fetch company data (includes aiAgentLogic.productionIntelligence)
+                // Fetch company data (includes aiAgentSettings.productionIntelligence)
                 const response = await fetch(`/api/admin/test-pilot/companies/${companyId}`, {
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('adminToken')}`

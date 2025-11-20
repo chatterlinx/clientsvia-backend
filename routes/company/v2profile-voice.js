@@ -13,8 +13,8 @@
  * ║ Performance: Streaming optimization + quality controls           ║
  * ╚══════════════════════════════════════════════════════════════════╝
  * 
- * ☠️ REMOVED: aiAgentLogic (legacy nuked 2025-11-20)
- * - OLD: company.aiAgentLogic.voiceSettings.*
+ * ☠️ REMOVED: aiAgentSettings (legacy nuked 2025-11-20)
+ * - OLD: company.aiAgentSettings.voiceSettings.*
  * - NEW: company.aiAgentSettings.voiceSettings.*
  */
 
@@ -305,7 +305,7 @@ router.get('/:companyId/v2-voice-settings/voices', async (req, res) => {
 
 /**
  * @route   GET /api/company/:companyId/v2-voice-settings
- * @desc    Get V2 voice settings from aiAgentLogic.voiceSettings
+ * @desc    Get V2 voice settings from aiAgentSettings.voiceSettings
  * @access  Private
  */
 router.get('/:companyId/v2-voice-settings', async (req, res) => {
@@ -329,7 +329,7 @@ router.get('/:companyId/v2-voice-settings', async (req, res) => {
 
         // 🔍 DIAGNOSTIC: Log what we're getting from the database
         logger.info(`🔍 [GET VOICE] Company: ${company.companyName}`);
-        logger.info(`🔍 [GET VOICE] Has aiAgentLogic:`, Boolean(company.aiAgentSettings));
+        logger.info(`🔍 [GET VOICE] Has aiAgentSettings:`, Boolean(company.aiAgentSettings));
         logger.info(`🔍 [GET VOICE] Has voiceSettings:`, Boolean(company.aiAgentSettings?.voiceSettings));
         logger.info(`🔍 [GET VOICE] Raw voiceSettings:`, JSON.stringify(company.aiAgentSettings?.voiceSettings, null, 2));
 
@@ -383,7 +383,7 @@ router.get('/:companyId/v2-voice-settings', async (req, res) => {
 
 /**
  * @route   POST /api/company/:companyId/v2-voice-settings
- * @desc    Save V2 voice settings to aiAgentLogic.voiceSettings
+ * @desc    Save V2 voice settings to aiAgentSettings.voiceSettings
  * @access  Private
  * 
  * 🔧 BULLETPROOF: Handles ALL legacy formats and prevents schema validation crashes
@@ -607,7 +607,7 @@ router.patch('/:companyId/v2-voice-settings', async (req, res) => {
             });
         }
 
-        // Initialize aiAgentLogic.voiceSettings if not exists
+        // Initialize aiAgentSettings.voiceSettings if not exists
         if (!company.aiAgentSettings) {
             company.aiAgentSettings = {};
         }

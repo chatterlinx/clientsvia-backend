@@ -117,7 +117,7 @@ router.get('/:companyId/ai-agent-settings/diagnostics', async (req, res) => {
  */
 function analyzeGreetingSystem(company) {
     // ✅ FIX: Use ROOT LEVEL connectionMessages (AI Agent Settings > Messages & Greetings)
-    // NOT aiAgentLogic.connectionMessages (deleted legacy tab)
+    // NOT aiAgentSettings.connectionMessages (deleted legacy tab)
     const connectionMessages = company.connectionMessages;
     const voiceConfig = connectionMessages?.voice;
     const greetingText = voiceConfig?.text || voiceConfig?.realtime?.text;

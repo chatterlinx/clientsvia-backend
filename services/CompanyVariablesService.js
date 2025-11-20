@@ -4,7 +4,7 @@
 // 
 // PURPOSE:
 // - Centralized read/write for aiAgentSettings.variables (Map) and variableDefinitions (Array)
-// - Handles legacy data migration from configuration.variables, aiAgentLogic.placeholders, etc.
+// - Handles legacy data migration from configuration.variables, aiAgentSettings.placeholders, etc.
 // - Enforces validation using variableValidators.js
 // - Auto-clears Redis cache on writes
 //
@@ -130,7 +130,7 @@ async function getVariablesForCompany(companyId) {
  * 
  * WRITE TARGET:
  * - ONLY writes to company.aiAgentSettings.variables (Map)
- * - NEVER writes to legacy fields (configuration.variables, aiAgentLogic.placeholders, etc.)
+ * - NEVER writes to legacy fields (configuration.variables, aiAgentSettings.placeholders, etc.)
  * 
  * CACHING:
  * - Auto-clears Redis cache after successful save

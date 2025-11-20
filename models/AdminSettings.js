@@ -738,7 +738,7 @@ const adminSettingsSchema = new mongoose.Schema({
     // ARCHITECTURE:
     //   - Companies have flag: useGlobalIntelligence (true/false)
     //   - If true → use this global config
-    //   - If false → use company.aiAgentLogic.productionIntelligence
+    //   - If false → use company.aiAgentSettings.productionIntelligence
     // 
     // INCLUDES:
     //   - Same settings as per-company intelligence

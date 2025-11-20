@@ -10,7 +10,7 @@
  * - GET   /api/company/:companyId/booking-rules
  * - PATCH /api/company/:companyId/booking-rules
  * 
- * DATA MODEL: v2Company.aiAgentLogic.bookingRules
+ * DATA MODEL: v2Company.aiAgentSettings.bookingRules
  * 
  * STRUCTURE:
  * bookingRules: {

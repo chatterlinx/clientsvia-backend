@@ -87,7 +87,7 @@ function replacePlaceholders(text, company) {
 /**
  * Replace placeholders in multiple responses (array)
  * @param {Array<string>} responses - Array of response texts
- * @param {Object} company - Company document with aiAgentLogic.placeholders array
+ * @param {Object} company - Company document with aiAgentSettings.placeholders array
  * @returns {Array<string>} Array with placeholders replaced
  */
 function replacePlaceholdersInArray(responses, company) {
@@ -102,7 +102,7 @@ function replacePlaceholdersInArray(responses, company) {
  * Replace placeholders in an object's text properties
  * @param {Object} obj - Object with text properties that may contain placeholders
  * @param {Array<string>} textFields - Array of field names to process
- * @param {Object} company - Company document with aiAgentLogic.placeholders array
+ * @param {Object} company - Company document with aiAgentSettings.placeholders array
  * @returns {Object} Object with placeholders replaced in specified fields
  */
 function replacePlaceholdersInObject(obj, textFields, company) {
