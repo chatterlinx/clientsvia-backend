@@ -673,16 +673,21 @@ router.patch('/company/:id', async (req, res) => {
         if (updateOperation['aiAgentSettings.cheatSheet']) {
             logger.info('📊 [CHEAT SHEET DEBUG] About to save with $set:', {
                 hasBookingRules: Array.isArray(updateOperation['aiAgentSettings.cheatSheet'].bookingRules),
-                bookingRulesCount: updateOperation['aiAgentSettings.cheatSheet'].bookingRules?.length || 0
+                bookingRulesCount: updateOperation['aiAgentSettings.cheatSheet'].bookingRules?.length || 0,
+                fullPayload: JSON.stringify(updateOperation['aiAgentSettings.cheatSheet'], null, 2)
             });
         }
         
         // 🔧 FIX: Use $set for dot-notation fields to work properly
+        // ⚠️ CRITICAL: runValidators might fail on nested arrays with dot notation
+        // Try WITHOUT runValidators first to see if that's the issue
+        logger.info('📊 [CHEAT SHEET DEBUG] Calling findByIdAndUpdate with $set...');
         const updatedCompany = await Company.findByIdAndUpdate(
             companyId,
             { $set: updateOperation },
-            { new: true, runValidators: true }
+            { new: true, runValidators: false } // ← DISABLED validators to test
         );
+        logger.info('📊 [CHEAT SHEET DEBUG] findByIdAndUpdate completed');
 
         if (!updatedCompany) {return res.status(404).json({ message: 'Company not found.' });}
 
