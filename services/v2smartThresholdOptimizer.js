@@ -84,7 +84,7 @@ class SmartThresholdOptimizer {
         // For now, we'll simulate intelligent analysis based on company data
         
         const company = await Company.findById(companyId).select('aiAgentSettings').lean();
-        const currentThresholds = company?.aiAgentLogic?.thresholds || {};
+        const currentThresholds = company?.aiAgentSettings?.thresholds || {};
 
         // Simulate analysis of call patterns (in production, this would use real data)
         const simulatedAnalysis = {

@@ -305,7 +305,7 @@ class SmartWarmupService {
 
             // Fallback to MongoDB
             const company = await Company.findById(companyId).select('aiAgentSettings.productionIntelligence');
-            const prodInt = company?.aiAgentLogic?.productionIntelligence;
+            const prodInt = company?.aiAgentSettings?.productionIntelligence;
             const smartWarmup = prodInt?.smartWarmup || {};
             const llmConfig = prodInt?.llmConfig || {};
 

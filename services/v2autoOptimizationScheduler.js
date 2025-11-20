@@ -60,7 +60,7 @@ class AutoOptimizationScheduler {
             const companies = await Company.find({
                 'aiAgentSettings.autoOptimization.enabled': true,
                 'aiAgentSettings.autoOptimization.nextRun': { $lte: new Date() }
-            }).select('_id name aiAgentLogic.autoOptimization');
+            }).select('_id name aiAgentSettings.autoOptimization');
 
             logger.info(`🎯 Found ${companies.length} companies due for auto-optimization`);
 

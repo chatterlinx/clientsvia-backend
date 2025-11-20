@@ -199,7 +199,7 @@ class AIBrain3tierllm {
             }
 
             // Determine intelligence settings (Global vs Custom)
-            const useGlobalIntelligence = company?.aiAgentLogic?.useGlobalIntelligence !== false;
+            const useGlobalIntelligence = company?.aiAgentSettings?.useGlobalIntelligence !== false;
             let intelligenceEnabled = false;
             let intelligenceConfig = null;
             
@@ -217,7 +217,7 @@ class AIBrain3tierllm {
                     tier3Enabled: globalIntelligence.thresholds?.enableTier3
                 });
             } else {
-                const productionIntelligence = company?.aiAgentLogic?.productionIntelligence || {};
+                const productionIntelligence = company?.aiAgentSettings?.productionIntelligence || {};
                 intelligenceEnabled = productionIntelligence.enabled === true;
                 intelligenceConfig = productionIntelligence;
                 

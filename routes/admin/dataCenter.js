@@ -1212,7 +1212,7 @@ router.get('/summary', async (req, res) => {
                     {
                         $project: {
                             zeroCalls: { $eq: [{ $size: '$callsAgg' }, 0] },
-                            scenariosSize: { $size: { $ifNull: ['$aiAgentLogic.instantResponses', []] } },
+                            scenariosSize: { $size: { $ifNull: ['$aiAgentSettings.instantResponses', []] } },
                             phoneCount: { $size: { $ifNull: ['$twilioConfig.phoneNumbers', []] } },
                             legacyPhone: { $ifNull: ['$twilioConfig.phoneNumber', null] }
                         }

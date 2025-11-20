@@ -111,7 +111,7 @@ class RuntimeIntelligenceConfig {
                 // ============================================================
                 // CHECK INHERITANCE FLAG: Global vs Custom Intelligence
                 // ============================================================
-                const useGlobal = company?.aiAgentLogic?.useGlobalIntelligence !== false; // Default: true
+                const useGlobal = company?.aiAgentSettings?.useGlobalIntelligence !== false; // Default: true
                 
                 if (useGlobal) {
                     // GLOBAL: Load from AdminSettings.globalProductionIntelligence
@@ -154,7 +154,7 @@ class RuntimeIntelligenceConfig {
                     };
                 } else {
                     // CUSTOM: Load from company.aiAgentSettings.productionIntelligence
-                    const productionConfig = company?.aiAgentLogic?.productionIntelligence || {};
+                    const productionConfig = company?.aiAgentSettings?.productionIntelligence || {};
                     
                     logger.info(`[RUNTIME CONFIG] 🎯 Using CUSTOM Company Intelligence:`, {
                         tier1: productionConfig.thresholds?.tier1 || 0.80,

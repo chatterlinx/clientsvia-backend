@@ -52,7 +52,7 @@ router.get('/:companyId/twilio-control/status', async (req, res) => {
 
     try {
         const company = await Company.findById(req.params.companyId)
-            .select('twilioConfig companyName aiAgentLogic.voiceSettings');
+            .select('twilioConfig companyName aiAgentSettings.voiceSettings');
 
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });
@@ -186,7 +186,7 @@ router.get('/:companyId/twilio-control/config', async (req, res) => {
 
     try {
         const company = await Company.findById(req.params.companyId)
-            .select('twilioConfig companyName aiAgentLogic.voiceSettings');
+            .select('twilioConfig companyName aiAgentSettings.voiceSettings');
 
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });
@@ -458,7 +458,7 @@ router.get('/:companyId/twilio-control/health', async (req, res) => {
 
     try {
         const company = await Company.findById(req.params.companyId)
-            .select('twilioConfig aiAgentLogic.voiceSettings');
+            .select('twilioConfig aiAgentSettings.voiceSettings');
 
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });

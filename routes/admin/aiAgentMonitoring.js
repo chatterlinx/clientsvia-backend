@@ -120,8 +120,8 @@ router.get('/health/:companyId', authenticateJWT, async (req, res) => {
             const companyQnACount = await CompanyKnowledgeQnA.countDocuments({ companyId });
             const company = await Company.findById(companyId).select('aiAgentSettings.knowledgeManagement');
             
-            const tradeQnACount = company?.aiAgentLogic?.knowledgeManagement?.tradeQnA?.length || 0;
-            const templatesCount = company?.aiAgentLogic?.knowledgeManagement?.templates?.length || 0;
+            const tradeQnACount = company?.aiAgentSettings?.knowledgeManagement?.tradeQnA?.length || 0;
+            const templatesCount = company?.aiAgentSettings?.knowledgeManagement?.templates?.length || 0;
             
             healthStatus.components.knowledgeSources = {
                 status: companyQnACount > 0 || tradeQnACount > 0 ? 'healthy' : 'warning',
@@ -152,7 +152,7 @@ router.get('/health/:companyId', authenticateJWT, async (req, res) => {
         // 4. AI Agent Configuration
         try {
             const company = await Company.findById(companyId).select('aiAgentSettings');
-            const aiLogic = company?.aiAgentLogic;
+            const aiLogic = company?.aiAgentSettings;
             
             if (aiLogic) {
                 const hasThresholds = aiLogic.thresholds && Object.keys(aiLogic.thresholds).length > 0;
@@ -282,8 +282,8 @@ router.get('/metrics/:companyId', authenticateJWT, async (req, res) => {
                 },
                 knowledgeBase: {
                     companyQnA: companyQnACount,
-                    tradeQnA: company?.aiAgentLogic?.knowledgeManagement?.tradeQnA?.length || 0,
-                    templates: company?.aiAgentLogic?.knowledgeManagement?.templates?.length || 0
+                    tradeQnA: company?.aiAgentSettings?.knowledgeManagement?.tradeQnA?.length || 0,
+                    templates: company?.aiAgentSettings?.knowledgeManagement?.templates?.length || 0
                 },
                 routing: {
                     companyQnAHits: 0,
@@ -291,8 +291,8 @@ router.get('/metrics/:companyId', authenticateJWT, async (req, res) => {
                     templateHits: 0,
                     fallbackHits: 0
                 },
-                thresholds: company?.aiAgentLogic?.thresholds || {},
-                lastUpdated: company?.aiAgentLogic?.lastUpdated || null
+                thresholds: company?.aiAgentSettings?.thresholds || {},
+                lastUpdated: company?.aiAgentSettings?.lastUpdated || null
             };
             
             // Cache for 5 minutes
@@ -356,7 +356,7 @@ router.get('/diagnostics/:companyId', authenticateJWT, async (req, res) => {
                     exists: Boolean(company),
                     name: company?.companyName,
                     hasAiLogic: Boolean(company?.aiAgentSettings),
-                    configuredAt: company?.aiAgentLogic?.lastUpdated
+                    configuredAt: company?.aiAgentSettings?.lastUpdated
                 }
             };
             diagnostics.summary.totalTests++;
@@ -382,7 +382,7 @@ router.get('/diagnostics/:companyId', authenticateJWT, async (req, res) => {
                 details: {
                     companyQnACollection: companyQnAs.length > 0,
                     embeddedKnowledge: Boolean(company?.aiAgentSettings?.knowledgeManagement),
-                    totalSources: companyQnAs.length + (company?.aiAgentLogic?.knowledgeManagement?.tradeQnA?.length || 0)
+                    totalSources: companyQnAs.length + (company?.aiAgentSettings?.knowledgeManagement?.tradeQnA?.length || 0)
                 }
             };
             diagnostics.summary.totalTests++;
