@@ -520,13 +520,26 @@ class CheatSheetManager {
         </div>
         
         <div class="flex items-center space-x-2">
+          <!-- SAVE CHANGES BUTTON - Color changes based on isDirty -->
+          <button 
+            onclick="cheatSheetManager.save()" 
+            class="px-4 py-2 rounded-lg transition-all text-sm font-medium ${
+              this.isDirty 
+                ? 'bg-green-600 text-white hover:bg-green-700 shadow-lg hover:shadow-xl transform hover:scale-105 animate-pulse' 
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-50'
+            }"
+            ${!this.isDirty ? 'disabled' : ''}
+          >
+            💾 Save Changes
+          </button>
+          
           ${hasChecksum ? `
             <button onclick="cheatSheetManager.testCheatSheet()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
               🧪 Test Rules
             </button>
           ` : ''}
           
-          <button onclick="cheatSheetManager.compileCheatSheet()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium" ${!this.isDirty ? 'disabled opacity-50 cursor-not-allowed' : ''}>
+          <button onclick="cheatSheetManager.compileCheatSheet()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium">
             🔧 ${hasChecksum ? 'Recompile' : 'Compile'} Policy
           </button>
           
@@ -2936,7 +2949,23 @@ class CheatSheetManager {
   }
   
   async compileCheatSheet() {
-    await this.save();
+    console.log('[CHEAT SHEET] 🔧 Compile requested. Checking for unsaved changes...');
+    
+    // Check if there are unsaved changes
+    if (this.isDirty) {
+      console.warn('[CHEAT SHEET] ⚠️ Unsaved changes detected. Prompting user to save first.');
+      const shouldSave = window.confirm('⚠️ You have unsaved changes!\n\nWould you like to save them before compiling?');
+      
+      if (shouldSave) {
+        console.log('[CHEAT SHEET] 💾 User chose to save first. Calling save()...');
+        await this.save();
+        console.log('[CHEAT SHEET] ✅ Save complete. Proceeding with compile...');
+      } else {
+        console.log('[CHEAT SHEET] ❌ User chose NOT to save. Aborting compile.');
+        this.showNotification('⚠️ Compile cancelled. Please save changes first.', 'warning');
+        return;
+      }
+    }
     
     console.log('[CHEAT SHEET] Compiling policy...');
     this.showNotification('Compiling policy...', 'info');
