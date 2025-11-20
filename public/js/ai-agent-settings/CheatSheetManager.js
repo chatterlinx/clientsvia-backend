@@ -309,8 +309,9 @@ class CheatSheetManager {
         </div>
 
         <!-- V2-ONLY DYNAMIC CONTENT CONTAINER -->
-        <div id="cheatsheet-v2-dynamic-content" class="cheatsheet-subtab-content hidden" data-dynamic-cheat-content>
+        <div id="cheatsheet-v2-dynamic-content" class="cheatsheet-subtab-content hidden" data-dynamic-cheat-content style="background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 50%, #2563eb 100%); border-radius: 16px; padding: 0; min-height: 400px; box-shadow: 0 4px 20px rgba(30, 58, 138, 0.15);">
           <!-- Booking Rules, Company Contacts, Links, Calculator, Coming Soon render here -->
+          <!-- Modern blue gradient background distinguishes V2 tabs from V1 white sections -->
         </div>
       </div>
     `;
@@ -1719,7 +1720,7 @@ class CheatSheetManager {
     const rules = this.cheatSheet.bookingRules;
     
     container.innerHTML = `
-      <div style="padding: 24px;">
+      <div style="padding: 24px; background: #ffffff; border-radius: 12px; margin: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
           <div>
             <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
@@ -1968,7 +1969,7 @@ class CheatSheetManager {
     const contacts = this.cheatSheet.companyContacts;
     
     container.innerHTML = `
-      <div style="padding: 24px;">
+      <div style="padding: 24px; background: #ffffff; border-radius: 12px; margin: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
           <div>
             <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
@@ -2214,7 +2215,7 @@ class CheatSheetManager {
     const links = this.cheatSheet.links;
     
     container.innerHTML = `
-      <div style="padding: 24px;">
+      <div style="padding: 24px; background: #ffffff; border-radius: 12px; margin: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
           <div>
             <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
@@ -2453,7 +2454,7 @@ class CheatSheetManager {
     const calculators = this.cheatSheet.calculators;
     
     container.innerHTML = `
-      <div style="padding: 24px;">
+      <div style="padding: 24px; background: #ffffff; border-radius: 12px; margin: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
           <div>
             <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
@@ -2667,8 +2668,8 @@ class CheatSheetManager {
     }
     
     container.innerHTML = `
-      <div style="padding: 24px;">
-        <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 2px solid #334155; border-radius: 16px; padding: 32px; margin-top: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+      <div style="padding: 24px; background: #ffffff; border-radius: 12px; margin: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+        <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 2px solid #334155; border-radius: 16px; padding: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
           <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px;">
             <div style="display: inline-flex; height: 48px; width: 48px; align-items: center; justify-content: center; border-radius: 50%; background: rgba(99, 102, 241, 0.2); border: 2px solid rgba(99, 102, 241, 0.4);">
               <span style="font-size: 24px;">🚧</span>
