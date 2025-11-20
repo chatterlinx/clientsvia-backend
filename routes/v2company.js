@@ -579,6 +579,14 @@ router.delete('/company/:id', async (req, res) => {
 router.patch('/company/:id', async (req, res) => {
     logger.debug(`[API PATCH /api/company/:id] (Overview) Received update for ID: ${req.params.id} with data:`, JSON.stringify(req.body, null, 2));
     
+    // 🔍 CRITICAL DEBUG: Check for cheatSheet updates with V2 arrays
+    if (req.body['aiAgentSettings.cheatSheet']) {
+        logger.info('📊 [CHEAT SHEET DEBUG] Dot-notation cheatSheet update detected!');
+        logger.info('📊 [CHEAT SHEET DEBUG] Has bookingRules?', Array.isArray(req.body['aiAgentSettings.cheatSheet'].bookingRules));
+        logger.info('📊 [CHEAT SHEET DEBUG] bookingRules count:', req.body['aiAgentSettings.cheatSheet'].bookingRules?.length || 0);
+        logger.info('📊 [CHEAT SHEET DEBUG] bookingRules data:', JSON.stringify(req.body['aiAgentSettings.cheatSheet'].bookingRules, null, 2));
+    }
+    
     // GOLD STANDARD: Debug notes data specifically
     if (req.body.notes) {
         logger.debug('📝 [NOTES DEBUG] Notes field received:', req.body.notes);
@@ -661,6 +669,14 @@ router.patch('/company/:id', async (req, res) => {
             updateOperation.profileComplete = true;
         }
 
+        // 🔍 CRITICAL DEBUG: Log what's about to be saved
+        if (updateOperation['aiAgentSettings.cheatSheet']) {
+            logger.info('📊 [CHEAT SHEET DEBUG] About to save with $set:', {
+                hasBookingRules: Array.isArray(updateOperation['aiAgentSettings.cheatSheet'].bookingRules),
+                bookingRulesCount: updateOperation['aiAgentSettings.cheatSheet'].bookingRules?.length || 0
+            });
+        }
+        
         // 🔧 FIX: Use $set for dot-notation fields to work properly
         const updatedCompany = await Company.findByIdAndUpdate(
             companyId,
@@ -669,6 +685,15 @@ router.patch('/company/:id', async (req, res) => {
         );
 
         if (!updatedCompany) {return res.status(404).json({ message: 'Company not found.' });}
+
+        // 🔍 CRITICAL DEBUG: Verify what was saved
+        if (updatedCompany.aiAgentSettings?.cheatSheet) {
+            logger.info('📊 [CHEAT SHEET DEBUG] After save - cheatSheet exists:', Boolean(updatedCompany.aiAgentSettings.cheatSheet));
+            logger.info('📊 [CHEAT SHEET DEBUG] After save - bookingRules count:', updatedCompany.aiAgentSettings.cheatSheet.bookingRules?.length || 0);
+            if (updatedCompany.aiAgentSettings.cheatSheet.bookingRules?.length > 0) {
+                logger.info('📊 [CHEAT SHEET DEBUG] After save - First booking rule:', updatedCompany.aiAgentSettings.cheatSheet.bookingRules[0]);
+            }
+        }
 
         // GOLD STANDARD: Debug notes after save
         if (updatedCompany.notes) {
