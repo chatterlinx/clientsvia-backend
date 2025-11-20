@@ -674,7 +674,7 @@ router.patch('/company/:id', async (req, res) => {
         }
 
         // Clear cache using CacheHelper
-        await CacheHelper.clearCompanyCache(companyId);
+        await CacheHelper.invalidateCompany(companyId);
         
         // Clear AI Agent Logic cache when aiAgentLogic is updated (includes keywords)
         if (req.body.aiAgentLogic) {
@@ -773,7 +773,7 @@ router.patch('/company/:companyId/account-status', authenticateJWT, async (req, 
         await company.save();
         
         // Clear cache using CacheHelper
-        await CacheHelper.clearCompanyCache(companyId);
+        await CacheHelper.invalidateCompany(companyId);
         
         logger.debug(`🚨 Account status changed for company ${company.companyName} (${companyId}): ${status}`);
         logger.debug(`   Changed by: ${changedBy} at ${historyEntry.changedAt}`);
