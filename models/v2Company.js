@@ -917,12 +917,15 @@ const companySchema = new mongoose.Schema({
     
     // ☢️ NUCLEAR ELIMINATION: agentPriorityConfig removed - legacy priority system eliminated
     
-    // 🤖 AI Agent Logic Configuration
-    // 🔧 CRITICAL FIX: Using proper schema reference instead of inline object  
-    aiAgentLogic: {
-        type: aiAgentLogicSchema,
-        default: () => ({})
-    },
+    // ☠️ REMOVED 2025-11-20: aiAgentLogic - LEGACY SYSTEM NUKED
+    // This entire field has been removed due to ongoing confusion with aiAgentSettings
+    // All critical functionality migrated to aiAgentSettings
+    // DO NOT RECREATE - Use aiAgentSettings instead
+    // 
+    // aiAgentLogic: {
+    //     type: aiAgentLogicSchema,
+    //     default: () => ({})
+    // },
     
     // ============================================================================
     // 🚀 INTELLIGENCE MODE SELECTOR - Global vs Custom Settings

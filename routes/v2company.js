@@ -371,7 +371,7 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
     }
     try {
         logger.debug(`📊 [DB] Loading company from database: ${companyId}`);
-        // Explicitly include aiAgentLogic field in the query
+        // ☠️ REMOVED: aiAgentLogic (legacy field nuked 2025-11-20)
         const company = await Company.findById(companyId).lean();
         
         if (!company) {
@@ -403,7 +403,8 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
         if (!company.twilioConfig?.accountSID || !company.twilioConfig?.authToken) {
             missingCredentials.push('Twilio (accountSID/authToken)');
         }
-        if (!company.aiSettings?.elevenLabs?.apiKey && !company.aiAgentLogic?.voiceSettings?.apiKey) {
+        // ☠️ REMOVED: aiAgentLogic.voiceSettings (legacy nuked 2025-11-20)
+        if (!company.aiSettings?.elevenLabs?.apiKey) {
             missingCredentials.push('ElevenLabs API Key');
         }
         
