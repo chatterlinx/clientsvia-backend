@@ -13,8 +13,8 @@
  * ║ Performance: Streaming optimization + quality controls           ║
  * ╚══════════════════════════════════════════════════════════════════╝
  * 
- * ☠️ REMOVED: aiAgentSettings (legacy nuked 2025-11-20)
- * - OLD: company.aiAgentSettings.voiceSettings.*
+ * ☠️ REMOVED: aiAgentLogic (legacy nuked 2025-11-20)
+ * - OLD: company.aiAgentLogic.voiceSettings.*
  * - NEW: company.aiAgentSettings.voiceSettings.*
  */
 
@@ -466,7 +466,7 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
         
         // Initialize aiAgentSettings if not exists
         if (!company.aiAgentSettings) {
-            logger.debug(`🔍 [SAVE-10] Initializing aiAgentLogic`);
+            logger.debug(`🔍 [SAVE-10] Initializing aiAgentSettings`);
             company.aiAgentSettings = {};
         }
         

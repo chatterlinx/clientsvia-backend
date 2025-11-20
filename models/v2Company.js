@@ -1194,6 +1194,105 @@ const companySchema = new mongoose.Schema({
         },
         
         // -------------------------------------------------------------------
+        // VOICE SETTINGS - ElevenLabs TTS Configuration
+        // -------------------------------------------------------------------
+        // Migrated from aiAgentLogic.voiceSettings (nuked 2025-11-20)
+        voiceSettings: {
+            apiSource: { 
+                type: String, 
+                enum: ['clientsvia', 'own'], 
+                default: 'clientsvia' 
+            },
+            apiKey: { 
+                type: String, 
+                trim: true, 
+                default: null
+            },
+            voiceId: { 
+                type: String, 
+                trim: true, 
+                default: null 
+            },
+            stability: { 
+                type: Number, 
+                min: 0, 
+                max: 1, 
+                default: 0.5 
+            },
+            similarityBoost: { 
+                type: Number, 
+                min: 0, 
+                max: 1, 
+                default: 0.7 
+            },
+            styleExaggeration: { 
+                type: Number, 
+                min: 0, 
+                max: 1, 
+                default: 0.0 
+            },
+            speakerBoost: { 
+                type: Boolean, 
+                default: true 
+            },
+            aiModel: { 
+                type: String, 
+                enum: ['eleven_turbo_v2_5', 'eleven_multilingual_v2', 'eleven_monolingual_v1'], 
+                default: 'eleven_turbo_v2_5' 
+            },
+            outputFormat: { 
+                type: String, 
+                enum: ['mp3_44100_128', 'mp3_22050_32', 'pcm_16000', 'pcm_22050', 'pcm_24000'], 
+                default: 'mp3_44100_128' 
+            },
+            streamingLatency: { 
+                type: Number, 
+                min: 0, 
+                max: 4, 
+                default: 0
+            },
+            speechDetection: {
+                speechTimeout: {
+                    type: Number,
+                    min: 1,
+                    max: 10,
+                    default: 3
+                },
+                initialTimeout: {
+                    type: Number,
+                    min: 3,
+                    max: 15,
+                    default: 5
+                },
+                bargeIn: {
+                    type: Boolean,
+                    default: false
+                },
+                enhancedRecognition: {
+                    type: Boolean,
+                    default: true
+                },
+                speechModel: {
+                    type: String,
+                    enum: ['default', 'numbers_and_commands', 'phone_call'],
+                    default: 'phone_call'
+                }
+            },
+            enabled: { 
+                type: Boolean, 
+                default: true 
+            },
+            lastUpdated: { 
+                type: Date, 
+                default: Date.now 
+            },
+            version: { 
+                type: String, 
+                default: '2.0' 
+            }
+        },
+        
+        // -------------------------------------------------------------------
         // METADATA - Tracking and debugging
         // -------------------------------------------------------------------
         lastScanDate: { 
