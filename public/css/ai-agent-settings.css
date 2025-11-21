@@ -1125,74 +1125,103 @@
 }
 
 .stat-item {
-    background: rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.95);
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 8px;
-    padding: 12px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 10px;
+    padding: 14px 12px;
     display: flex;
     align-items: center;
     gap: 10px;
     transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    cursor: pointer;
 }
 
 .stat-item:hover {
-    background: rgba(255,255,255,0.25);
-    transform: translateY(-2px);
+    background: #ffffff;
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-color: rgba(255,255,255,0.5);
 }
 
 /* Success state (green) */
 .stat-item.stat-success {
-    background: rgba(16, 185, 129, 0.2);
-    border-color: rgba(16, 185, 129, 0.4);
+    background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
+    border-color: #10b981;
 }
 
 .stat-item.stat-success:hover {
-    background: rgba(16, 185, 129, 0.3);
+    background: linear-gradient(135deg, #ffffff 0%, #dcfce7 100%);
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
 }
 
 .stat-item.stat-success .stat-value {
-    color: #10b981;
+    color: #059669;
+}
+
+.stat-item.stat-success .stat-icon {
+    filter: drop-shadow(0 2px 4px rgba(16, 185, 129, 0.3));
 }
 
 /* Error state (red) */
 .stat-item.stat-error {
-    background: rgba(239, 68, 68, 0.2);
-    border-color: rgba(239, 68, 68, 0.4);
+    background: linear-gradient(135deg, #ffffff 0%, #fef2f2 100%);
+    border-color: #ef4444;
 }
 
 .stat-item.stat-error:hover {
-    background: rgba(239, 68, 68, 0.3);
+    background: linear-gradient(135deg, #ffffff 0%, #fee2e2 100%);
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
 }
 
 .stat-item.stat-error .stat-value {
-    color: #ef4444;
+    color: #dc2626;
+}
+
+.stat-item.stat-error .stat-icon {
+    filter: drop-shadow(0 2px 4px rgba(239, 68, 68, 0.3));
 }
 
 .stat-icon {
-    font-size: 24px;
+    font-size: 26px;
     line-height: 1;
+    flex-shrink: 0;
 }
 
 .stat-content {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    flex: 1;
+    min-width: 0;
 }
 
 .stat-value {
-    font-size: 16px;
-    font-weight: 700;
-    color: #ffffff;
+    font-size: 18px;
+    font-weight: 800;
+    color: #1f2937;
     line-height: 1;
 }
 
 .stat-label {
-    font-size: 11px;
-    color: rgba(255,255,255,0.8);
+    font-size: 10px;
+    color: #6b7280;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    font-weight: 600;
+    font-weight: 700;
+}
+
+.stat-chevron {
+    font-size: 20px;
+    color: #9ca3af;
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.stat-item:hover .stat-chevron {
+    opacity: 1;
+    transform: translateX(2px);
 }
 
 /* Go Live Actions */
