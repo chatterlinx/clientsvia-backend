@@ -2202,7 +2202,17 @@ router.post('/:companyId/configuration/templates', async (req, res) => {
         
     } catch (error) {
         logger.error('[TEMPLATE HUB] Error adding template:', error);
-        res.status(500).json({ error: 'Failed to add template' });
+        logger.error('[TEMPLATE HUB] Error stack:', error.stack);
+        logger.error('[TEMPLATE HUB] Error details:', {
+            name: error.name,
+            message: error.message,
+            code: error.code
+        });
+        res.status(500).json({ 
+            error: 'Failed to add template',
+            message: error.message, // Send actual error to frontend for debugging
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 });
 
