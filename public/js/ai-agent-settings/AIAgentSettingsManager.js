@@ -499,10 +499,17 @@ class AIAgentSettingsManager {
             // CheatSheet
             const cheatsheetEl = document.getElementById('stat-cheatsheet');
             if (cheatsheetEl) {
-                // For now, always show as configured (will be updated when CheatSheet diagnostic is added)
-                const cheatsheetConfigured = true; // TODO: Add actual CheatSheet diagnostic check
+                const cheatsheetConfigured = stats.cheatsheet?.configured || false;
                 cheatsheetEl.textContent = cheatsheetConfigured ? '✓' : '✗';
                 cheatsheetEl.parentElement.parentElement.className = 'stat-item ' + (cheatsheetConfigured ? 'stat-success' : 'stat-error');
+            }
+            
+            // Frontline-Intel (separate icon from CheatSheet)
+            const frontlineIntelEl = document.getElementById('stat-frontline-intel');
+            if (frontlineIntelEl) {
+                const frontlineIntelConfigured = stats.cheatsheet?.hasInstructions || false;
+                frontlineIntelEl.textContent = frontlineIntelConfigured ? '✓' : '✗';
+                frontlineIntelEl.parentElement.parentElement.className = 'stat-item ' + (frontlineIntelConfigured ? 'stat-success' : 'stat-error');
             }
             
             // Update Go Live button

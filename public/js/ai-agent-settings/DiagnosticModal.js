@@ -125,7 +125,8 @@ class DiagnosticModal {
             twilio: '📞',
             voice: '🎙️',
             scenarios: '🎭',
-            cheatsheet: '📖'
+            cheatsheet: '📖',
+            'frontline-intel': '📝'
         };
         
         const icon = icons[component] || '📊';

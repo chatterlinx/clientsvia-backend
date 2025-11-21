@@ -58,6 +58,10 @@ class DiagnosticService {
                     return await this.checkVoice(company);
                 case 'scenarios':
                     return await this.checkScenarios(company);
+                case 'cheatsheet':
+                    return await this.checkCheatSheet(company);
+                case 'frontline-intel':
+                    return await this.checkFrontlineIntel(company);
                 default:
                     throw new Error(`Unknown component: ${component}`);
             }
@@ -1046,6 +1050,290 @@ class DiagnosticService {
                 activeScenarios,
                 disabledScenarios,
                 categoryCount
+            }
+        };
+    }
+    
+    /**
+     * ========================================================================
+     * CHEATSHEET DIAGNOSTIC
+     * ========================================================================
+     */
+    static async checkCheatSheet(company) {
+        const checks = [];
+        let score = 0;
+        const maxScore = 100;
+        
+        const liveVersionId = company.aiAgentSettings?.cheatSheetMeta?.liveVersionId;
+        
+        // Check 1: Live configuration exists
+        if (liveVersionId) {
+            const CheatSheetVersion = require('../models/cheatsheet/CheatSheetVersion');
+            const liveVersion = await CheatSheetVersion.findOne({
+                versionId: liveVersionId,
+                status: 'live'
+            }).lean();
+            
+            if (liveVersion) {
+                checks.push({
+                    name: 'Live Configuration',
+                    status: 'PASS',
+                    message: `Live version "${liveVersion.name}" (${liveVersionId})`,
+                    details: `Last updated: ${new Date(liveVersion.updatedAt).toLocaleString()}`,
+                    target: 'cheat-sheet'
+                });
+                score += 40;
+                
+                // Check 2: Frontline-Intel instructions
+                const instructions = liveVersion.config?.frontlineIntel?.instructions || '';
+                if (instructions.trim().length > 50) {
+                    checks.push({
+                        name: 'Frontline-Intel Instructions',
+                        status: 'PASS',
+                        message: `Instructions configured (${instructions.length} characters)`,
+                        target: 'cheat-sheet'
+                    });
+                    score += 40;
+                } else {
+                    checks.push({
+                        name: 'Frontline-Intel Instructions',
+                        status: 'FAIL',
+                        message: 'Frontline-Intel instructions missing or too short',
+                        details: 'AI needs core instructions to function properly',
+                        fix: 'Fill out Frontline-Intel in CheatSheet tab',
+                        target: 'cheat-sheet'
+                    });
+                }
+                
+                // Check 3: Section coverage
+                const config = liveVersion.config || {};
+                const sections = {
+                    triage: Object.keys(config.triage || {}).length > 0,
+                    frontlineIntel: instructions.trim().length > 0,
+                    transferRules: Object.keys(config.transferRules || {}).length > 0,
+                    edgeCases: Object.keys(config.edgeCases || {}).length > 0,
+                    behavior: Object.keys(config.behavior || {}).length > 0,
+                    guardrails: Object.keys(config.guardrails || {}).length > 0
+                };
+                
+                const populatedCount = Object.values(sections).filter(Boolean).length;
+                
+                if (populatedCount >= 3) {
+                    checks.push({
+                        name: 'Section Coverage',
+                        status: 'PASS',
+                        message: `${populatedCount}/6 sections configured`,
+                        target: 'cheat-sheet'
+                    });
+                    score += 20;
+                } else {
+                    checks.push({
+                        name: 'Section Coverage',
+                        status: 'WARN',
+                        message: `Only ${populatedCount}/6 sections configured`,
+                        details: 'More sections = better AI guidance',
+                        target: 'cheat-sheet'
+                    });
+                    score += 10;
+                }
+            } else {
+                checks.push({
+                    name: 'Live Configuration',
+                    status: 'FAIL',
+                    message: 'Live version not found in database',
+                    details: `Pointer exists (${liveVersionId}) but version is missing`,
+                    fix: 'Create a new CheatSheet configuration',
+                    target: 'cheat-sheet'
+                });
+            }
+        } else {
+            checks.push({
+                name: 'Live Configuration',
+                status: 'FAIL',
+                message: 'No live CheatSheet configuration',
+                details: 'AI has no instructions to follow',
+                fix: 'Configure CheatSheet in Control Plane V2',
+                target: 'cheat-sheet'
+            });
+        }
+        
+        const passed = checks.filter(c => c.status === 'PASS').length;
+        const failed = checks.filter(c => c.status === 'FAIL').length;
+        const warnings = checks.filter(c => c.status === 'WARN').length;
+        
+        return {
+            component: 'cheatsheet',
+            score,
+            maxScore,
+            status: score >= 80 ? 'HEALTHY' : score >= 50 ? 'WARNING' : 'CRITICAL',
+            timestamp: new Date().toISOString(),
+            checks,
+            summary: {
+                total: checks.length,
+                passed,
+                failed,
+                warnings
+            }
+        };
+    }
+    
+    /**
+     * ========================================================================
+     * FRONTLINE-INTEL DIAGNOSTIC (Detailed check for just the instructions)
+     * ========================================================================
+     */
+    static async checkFrontlineIntel(company) {
+        const checks = [];
+        let score = 0;
+        const maxScore = 100;
+        
+        const liveVersionId = company.aiAgentSettings?.cheatSheetMeta?.liveVersionId;
+        
+        if (liveVersionId) {
+            const CheatSheetVersion = require('../models/cheatsheet/CheatSheetVersion');
+            const liveVersion = await CheatSheetVersion.findOne({
+                versionId: liveVersionId,
+                status: 'live'
+            }).lean();
+            
+            if (liveVersion) {
+                const instructions = liveVersion.config?.frontlineIntel?.instructions || '';
+                const wordCount = instructions.trim().split(/\s+/).length;
+                const lineCount = instructions.trim().split('\n').length;
+                
+                // Check 1: Instructions exist
+                if (instructions.trim().length > 0) {
+                    checks.push({
+                        name: 'Instructions Exist',
+                        status: 'PASS',
+                        message: `Frontline-Intel configured`,
+                        details: `${instructions.length} characters, ${wordCount} words, ${lineCount} lines`,
+                        target: 'cheat-sheet'
+                    });
+                    score += 30;
+                } else {
+                    checks.push({
+                        name: 'Instructions Exist',
+                        status: 'FAIL',
+                        message: 'Frontline-Intel instructions are empty',
+                        details: 'AI has no core guidance',
+                        fix: 'Add instructions in CheatSheet → Frontline-Intel',
+                        target: 'cheat-sheet'
+                    });
+                }
+                
+                // Check 2: Adequate length
+                if (wordCount >= 50) {
+                    checks.push({
+                        name: 'Adequate Length',
+                        status: 'PASS',
+                        message: `${wordCount} words (sufficient)`,
+                        target: 'cheat-sheet'
+                    });
+                    score += 30;
+                } else if (wordCount > 0) {
+                    checks.push({
+                        name: 'Adequate Length',
+                        status: 'WARN',
+                        message: `Only ${wordCount} words (recommend 50+)`,
+                        details: 'More detailed instructions = better AI performance',
+                        target: 'cheat-sheet'
+                    });
+                    score += 15;
+                } else {
+                    checks.push({
+                        name: 'Adequate Length',
+                        status: 'FAIL',
+                        message: 'Instructions too short',
+                        target: 'cheat-sheet'
+                    });
+                }
+                
+                // Check 3: Not placeholder
+                const lowerInstructions = instructions.toLowerCase();
+                const isPlaceholder = lowerInstructions.includes('coming soon') ||
+                                     lowerInstructions.includes('placeholder') ||
+                                     lowerInstructions.includes('todo') ||
+                                     lowerInstructions.includes('tbd');
+                
+                if (!isPlaceholder) {
+                    checks.push({
+                        name: 'Real Content',
+                        status: 'PASS',
+                        message: 'Instructions contain real content',
+                        target: 'cheat-sheet'
+                    });
+                    score += 20;
+                } else {
+                    checks.push({
+                        name: 'Real Content',
+                        status: 'WARN',
+                        message: 'Instructions contain placeholder text',
+                        details: 'Replace placeholder with actual instructions',
+                        target: 'cheat-sheet'
+                    });
+                    score += 10;
+                }
+                
+                // Check 4: Key sections present
+                const hasMission = /mission|purpose|goal/i.test(instructions);
+                const hasProtocol = /protocol|process|procedure/i.test(instructions);
+                const hasExamples = /example|such as|for instance/i.test(instructions);
+                
+                const sectionCount = [hasMission, hasProtocol, hasExamples].filter(Boolean).length;
+                
+                if (sectionCount >= 2) {
+                    checks.push({
+                        name: 'Key Sections',
+                        status: 'PASS',
+                        message: `${sectionCount}/3 key sections found (mission/protocol/examples)`,
+                        target: 'cheat-sheet'
+                    });
+                    score += 20;
+                } else {
+                    checks.push({
+                        name: 'Key Sections',
+                        status: 'WARN',
+                        message: `Only ${sectionCount}/3 key sections found`,
+                        details: 'Include: mission statement, protocols, and examples',
+                        target: 'cheat-sheet'
+                    });
+                    score += 10;
+                }
+            } else {
+                checks.push({
+                    name: 'Live Configuration',
+                    status: 'FAIL',
+                    message: 'Live version not found',
+                    target: 'cheat-sheet'
+                });
+            }
+        } else {
+            checks.push({
+                name: 'Live Configuration',
+                status: 'FAIL',
+                message: 'No live CheatSheet configuration',
+                fix: 'Configure CheatSheet first',
+                target: 'cheat-sheet'
+            });
+        }
+        
+        const passed = checks.filter(c => c.status === 'PASS').length;
+        const failed = checks.filter(c => c.status === 'FAIL').length;
+        const warnings = checks.filter(c => c.status === 'WARN').length;
+        
+        return {
+            component: 'frontline-intel',
+            score,
+            maxScore,
+            status: score >= 80 ? 'HEALTHY' : score >= 50 ? 'WARNING' : 'CRITICAL',
+            timestamp: new Date().toISOString(),
+            checks,
+            summary: {
+                total: checks.length,
+                passed,
+                failed,
+                warnings
             }
         };
     }
