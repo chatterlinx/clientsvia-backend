@@ -1013,6 +1013,111 @@
    RESPONSIVE
    ============================================================================ */
 
+/* ============================================================================
+   RESPONSIVE DESIGN - COMPONENT STAT CARDS
+   ============================================================================ */
+
+/* Large screens (default) - Full size */
+@media (min-width: 1400px) {
+    .stat-icon {
+        font-size: 28px;
+    }
+    
+    .stat-value {
+        font-size: 20px;
+    }
+    
+    .stat-label {
+        font-size: 11px;
+    }
+}
+
+/* Medium screens - Slightly smaller */
+@media (max-width: 1200px) {
+    .mission-stats {
+        grid-template-columns: repeat(auto-fit, minmax(85px, 1fr));
+        gap: 8px;
+    }
+    
+    .stat-item {
+        padding: 12px 10px;
+    }
+    
+    .stat-icon {
+        font-size: 24px;
+    }
+    
+    .stat-value {
+        font-size: 16px;
+    }
+    
+    .stat-label {
+        font-size: 9px;
+        letter-spacing: 0.2px;
+    }
+}
+
+/* Small screens - Compact */
+@media (max-width: 900px) {
+    .mission-stats {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+    
+    .stat-item {
+        padding: 10px 8px;
+        flex-direction: column;
+        text-align: center;
+        gap: 6px;
+    }
+    
+    .stat-icon {
+        font-size: 22px;
+    }
+    
+    .stat-content {
+        align-items: center;
+    }
+    
+    .stat-value {
+        font-size: 14px;
+    }
+    
+    .stat-label {
+        font-size: 8px;
+        letter-spacing: 0.1px;
+    }
+    
+    .stat-chevron {
+        display: none;
+    }
+}
+
+/* Extra small screens - Very compact */
+@media (max-width: 600px) {
+    .mission-stats {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+    }
+    
+    .stat-item {
+        padding: 8px 6px;
+    }
+    
+    .stat-icon {
+        font-size: 20px;
+    }
+    
+    .stat-value {
+        font-size: 12px;
+    }
+    
+    .stat-label {
+        font-size: 7px;
+        letter-spacing: 0px;
+    }
+}
+
 @media (max-width: 768px) {
     .ai-settings-variable-row {
         grid-template-columns: 1fr;
@@ -1026,6 +1131,20 @@
     
     .ai-settings-container {
         padding: 16px;
+    }
+    
+    /* Mission control adjustments for mobile */
+    .mission-control-header {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .mission-control-icon {
+        margin: 0 auto;
+    }
+    
+    .progress-ring {
+        transform: rotate(-90deg) scale(0.6);
     }
 }
 
@@ -1119,8 +1238,8 @@
 /* Component Stats Grid */
 .mission-stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: 10px;
     margin-top: 12px;
 }
 
@@ -1208,8 +1327,12 @@
     font-size: 10px;
     color: #6b7280;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
     font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
 }
 
 .stat-chevron {
