@@ -552,9 +552,22 @@ class ConfigurationReadinessService {
                 .map(ref => ref.templateId);
             
             if (activeTemplateIds.length === 0) {
-                // No templates - scenarios check is N/A (blocker already added in templates check)
+                // No templates = no scenarios possible
                 component.score = 0;
-                logger.info(`[READINESS] 🎭 Scenarios: N/A (no templates)`);
+                component.active = 0;
+                component.total = 0;
+                
+                // Add blocker for scenarios too (not just rely on templates blocker)
+                report.blockers.push({
+                    code: 'NO_SCENARIOS',
+                    message: 'No active scenarios - AI Agent cannot match customer requests',
+                    severity: 'critical',
+                    target: 'templates',  // Fix by activating templates first
+                    component: 'scenarios',
+                    details: 'Activate at least one template in AiCore Templates tab to get scenarios.'
+                });
+                
+                logger.info(`[READINESS] 🎭 Scenarios: 0 (no templates activated)`);
                 report.components.scenarios = component;
                 return;
             }
