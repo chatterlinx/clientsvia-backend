@@ -1459,17 +1459,22 @@ router.get('/:companyId/configuration/readiness', async (req, res) => {
     try {
         const companyId = req.params.companyId;
         const cacheKey = `readiness:${companyId}`;
+        const forceRefresh = req.query.refresh === 'true';
         
-        // Check cache first (30 second TTL)
-        try {
-            const cached = await redisClient.get(cacheKey);
-            if (cached) {
-                logger.debug(`[COMPANY CONFIG] ✅ Returning cached readiness for ${companyId}`);
-                return res.json(JSON.parse(cached));
+        // Check cache first (30 second TTL) - unless force refresh requested
+        if (!forceRefresh) {
+            try {
+                const cached = await redisClient.get(cacheKey);
+                if (cached) {
+                    logger.debug(`[COMPANY CONFIG] ✅ Returning cached readiness for ${companyId}`);
+                    return res.json(JSON.parse(cached));
+                }
+            } catch (cacheError) {
+                logger.warn('[COMPANY CONFIG] Redis cache miss or error:', cacheError.message);
+                // Continue without cache
             }
-        } catch (cacheError) {
-            logger.warn('[COMPANY CONFIG] Redis cache miss or error:', cacheError.message);
-            // Continue without cache
+        } else {
+            logger.debug(`[COMPANY CONFIG] 🔄 Force refresh requested - bypassing cache for ${companyId}`);
         }
         
         // Load company

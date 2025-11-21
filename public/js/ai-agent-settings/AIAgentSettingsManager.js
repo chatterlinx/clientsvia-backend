@@ -396,7 +396,9 @@ class AIAgentSettingsManager {
         
         try {
             // Fetch readiness score from API
-            const response = await fetch(`/api/company/${this.companyId}/configuration/readiness`, {
+            // Add timestamp to force cache refresh
+            const timestamp = Date.now();
+            const response = await fetch(`/api/company/${this.companyId}/configuration/readiness?refresh=true&_=${timestamp}`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
                 }
