@@ -56,6 +56,9 @@ class ConfigurationReadinessService {
                 voice: null,
                 scenarios: null,
                 cheatsheet: null,
+                tierSettings: null,      // NEW: 3-Tier Intelligence settings
+                tierLlm: null,           // NEW: 3-Tier LLM connection
+                brainLlm: null,          // NEW: Control Plane Brain LLM
                 readiness: null
             }
         };
@@ -70,17 +73,25 @@ class ConfigurationReadinessService {
             this.checkTwilio(company, report),
             this.checkVoice(company, report),
             this.checkScenarios(company, report),
-            this.checkCheatSheet(company, report)
+            this.checkCheatSheet(company, report),
+            this.check3TierSettings(company, report),
+            this.check3TierLLM(company, report),
+            this.checkBrainLLM(company, report)
         ]);
         
         // Calculate total score (weighted sum)
-        // Templates (25%) + Variables (25%) + CheatSheet (20%) + Twilio (15%) + Scenarios (10%) + Voice (5%) = 100%
+        // NEW WEIGHTS (10 components):
+        // Templates (15%) + Variables (15%) + CheatSheet (15%) + Twilio (10%) + Scenarios (10%)
+        // + 3-Tier Settings (10%) + 3-Tier LLM (10%) + Brain LLM (10%) + Voice (5%) = 100%
         const totalScore = 
-            (report.components.templates.score * 0.25) +
-            (report.components.variables.score * 0.25) +
-            (report.components.cheatsheet.score * 0.20) +
-            (report.components.twilio.score * 0.15) +
+            (report.components.templates.score * 0.15) +
+            (report.components.variables.score * 0.15) +
+            (report.components.cheatsheet.score * 0.15) +
+            (report.components.twilio.score * 0.10) +
             (report.components.scenarios.score * 0.10) +
+            (report.components.tierSettings.score * 0.10) +
+            (report.components.tierLlm.score * 0.10) +
+            (report.components.brainLlm.score * 0.10) +
             (report.components.voice.score * 0.05);
         
         report.score = Math.round(totalScore);
@@ -812,6 +823,284 @@ class ConfigurationReadinessService {
         }
         
         report.components.cheatsheet = component;
+    }
+    
+    /**
+     * Check 3-Tier Intelligence Settings (10% of total)
+     * CRITICAL: 3-Tier system must be properly configured for AI to function
+     */
+    static async check3TierSettings(company, report) {
+        const component = {
+            name: '3-Tier Settings',
+            score: 0,
+            configured: false,
+            enabled: false,
+            tier1Enabled: false,
+            tier2Enabled: false,
+            tier3Enabled: false,
+            hasThresholds: false,
+            learningMode: false,
+            weight: 10
+        };
+        
+        try {
+            const settings = company.aiAgentSettings?.intelligenceSettings || {};
+            const enable3Tier = settings.enable3TierIntelligence;
+            
+            // Check if 3-Tier is enabled
+            if (enable3Tier === false) {
+                component.score = 0;
+                component.enabled = false;
+                report.blockers.push({
+                    code: 'THREE_TIER_DISABLED',
+                    message: '3-Tier Intelligence system is disabled',
+                    severity: 'critical',
+                    target: 'intelligence-settings',
+                    component: 'tier-settings',
+                    details: 'Enable 3-Tier Intelligence in AI Agent Settings to allow the AI to respond to calls.'
+                });
+                
+                logger.warn(`[READINESS] ❌ 3-TIER DISABLED: Intelligence system turned off`);
+            } else {
+                component.enabled = true;
+                
+                // Check individual tier settings
+                const tierConfig = settings.tierConfig || {};
+                component.tier1Enabled = tierConfig.tier1?.enabled !== false;
+                component.tier2Enabled = tierConfig.tier2?.enabled !== false;
+                component.tier3Enabled = tierConfig.tier3?.enabled !== false;
+                
+                const enabledTiers = [
+                    component.tier1Enabled,
+                    component.tier2Enabled,
+                    component.tier3Enabled
+                ].filter(Boolean).length;
+                
+                if (enabledTiers === 0) {
+                    component.score = 0;
+                    report.blockers.push({
+                        code: 'NO_TIERS_ENABLED',
+                        message: 'All tiers are disabled - AI cannot respond',
+                        severity: 'critical',
+                        target: 'intelligence-settings',
+                        component: 'tier-settings',
+                        details: 'Enable at least Tier 1 (Templates) for the AI to function.'
+                    });
+                    
+                    logger.warn(`[READINESS] ❌ NO TIERS: All tiers disabled`);
+                } else {
+                    // Check thresholds
+                    const hasThresholds = 
+                        typeof tierConfig.tier1?.confidenceThreshold === 'number' &&
+                        typeof tierConfig.tier2?.confidenceThreshold === 'number' &&
+                        typeof tierConfig.tier3?.confidenceThreshold === 'number';
+                    
+                    component.hasThresholds = hasThresholds;
+                    
+                    // Check learning mode
+                    component.learningMode = settings.learningMode?.enabled || false;
+                    
+                    // Calculate score
+                    let score = 0;
+                    
+                    // Base score for being enabled (30 points)
+                    score += 30;
+                    
+                    // Points for each tier enabled (20 points each = 60 points total)
+                    if (component.tier1Enabled) score += 20;
+                    if (component.tier2Enabled) score += 20;
+                    if (component.tier3Enabled) score += 20;
+                    
+                    // Points for thresholds configured (10 points)
+                    if (hasThresholds) score += 10;
+                    
+                    component.score = score;
+                    component.configured = true;
+                    
+                    // Warnings for suboptimal config
+                    if (!component.tier1Enabled) {
+                        report.warnings.push({
+                            code: 'TIER1_DISABLED',
+                            message: 'Tier 1 (Templates) is disabled - missing fast, free responses',
+                            severity: 'major',
+                            target: 'intelligence-settings',
+                            component: 'tier-settings',
+                            details: 'Enable Tier 1 for instant template-based responses (0ms, $0 cost).'
+                        });
+                    }
+                    
+                    if (!hasThresholds) {
+                        report.warnings.push({
+                            code: 'NO_THRESHOLDS',
+                            message: 'Confidence thresholds not configured',
+                            severity: 'minor',
+                            target: 'intelligence-settings',
+                            component: 'tier-settings',
+                            details: 'Set thresholds to control when to escalate from Tier 1 → Tier 2 → Tier 3.'
+                        });
+                    }
+                    
+                    logger.info(`[READINESS] ✅ 3-TIER OK: ${enabledTiers} tiers enabled, score: ${score}`);
+                }
+            }
+            
+        } catch (error) {
+            logger.error(`[READINESS] ❌ 3-Tier settings check error:`, error);
+            component.score = 0;
+            report.blockers.push({
+                code: 'TIER_SETTINGS_ERROR',
+                message: `Error checking 3-Tier settings: ${error.message}`,
+                severity: 'critical',
+                component: 'tier-settings'
+            });
+        }
+        
+        report.components.tierSettings = component;
+    }
+    
+    /**
+     * Check 3-Tier LLM Connection (10% of total)
+     * CRITICAL: Tier 3 LLM must be reachable for fallback responses
+     */
+    static async check3TierLLM(company, report) {
+        const component = {
+            name: '3-Tier LLM',
+            score: 0,
+            configured: false,
+            connected: false,
+            provider: null,
+            hasApiKey: false,
+            responseTime: null,
+            lastChecked: null,
+            weight: 10
+        };
+        
+        try {
+            // Check if company has LLM API key configured
+            const llmConfig = company.aiAgentSettings?.llmConfig || {};
+            const provider = llmConfig.provider || 'openai'; // default
+            const apiKey = llmConfig.apiKey || process.env.OPENAI_API_KEY;
+            
+            component.provider = provider;
+            component.hasApiKey = !!apiKey;
+            
+            if (!apiKey) {
+                component.score = 0;
+                report.blockers.push({
+                    code: 'NO_LLM_API_KEY',
+                    message: 'No LLM API key configured for Tier 3',
+                    severity: 'critical',
+                    target: 'intelligence-settings',
+                    component: 'tier-llm',
+                    details: 'Configure OpenAI or Anthropic API key in AI Agent Settings for Tier 3 fallback.'
+                });
+                
+                logger.warn(`[READINESS] ❌ NO LLM KEY: Tier 3 has no API key`);
+            } else {
+                // TODO: Actual health ping to LLM API (will implement in background service)
+                // For now, just check that key exists
+                component.score = 50; // Partial score (key exists, but not tested yet)
+                component.configured = true;
+                component.lastChecked = new Date();
+                
+                // Note: Full connection test will be done by PlatformHealthCheckService
+                report.warnings.push({
+                    code: 'LLM_NOT_TESTED',
+                    message: '3-Tier LLM connection not tested yet',
+                    severity: 'minor',
+                    target: 'intelligence-settings',
+                    component: 'tier-llm',
+                    details: 'Background health check will test LLM connection every 4 hours.'
+                });
+                
+                logger.info(`[READINESS] ⚠️ 3-TIER LLM: API key configured (${provider}), connection not tested yet`);
+            }
+            
+        } catch (error) {
+            logger.error(`[READINESS] ❌ 3-Tier LLM check error:`, error);
+            component.score = 0;
+            report.blockers.push({
+                code: 'TIER_LLM_ERROR',
+                message: `Error checking 3-Tier LLM: ${error.message}`,
+                severity: 'critical',
+                component: 'tier-llm'
+            });
+        }
+        
+        report.components.tierLlm = component;
+    }
+    
+    /**
+     * Check Brain LLM Connection (10% of total)
+     * CRITICAL: Orchestrator LLM must be working for call routing
+     */
+    static async checkBrainLLM(company, report) {
+        const component = {
+            name: 'Brain LLM',
+            score: 0,
+            configured: false,
+            connected: false,
+            provider: null,
+            hasApiKey: false,
+            responseTime: null,
+            lastChecked: null,
+            weight: 10
+        };
+        
+        try {
+            // Brain LLM typically uses same config as Tier 3, or separate orchestrator config
+            const brainConfig = company.aiAgentSettings?.brainLlmConfig || 
+                               company.aiAgentSettings?.llmConfig || {};
+            const provider = brainConfig.provider || 'openai';
+            const apiKey = brainConfig.apiKey || process.env.OPENAI_API_KEY;
+            
+            component.provider = provider;
+            component.hasApiKey = !!apiKey;
+            
+            if (!apiKey) {
+                component.score = 0;
+                report.blockers.push({
+                    code: 'NO_BRAIN_API_KEY',
+                    message: 'No LLM API key configured for Brain/Orchestrator',
+                    severity: 'critical',
+                    target: 'intelligence-settings',
+                    component: 'brain-llm',
+                    details: 'Configure OpenAI or Anthropic API key for the AI orchestrator/router.'
+                });
+                
+                logger.warn(`[READINESS] ❌ NO BRAIN KEY: Orchestrator has no API key`);
+            } else {
+                // TODO: Actual health ping to Brain LLM (will implement in background service)
+                // For now, just check that key exists
+                component.score = 50; // Partial score (key exists, but not tested yet)
+                component.configured = true;
+                component.lastChecked = new Date();
+                
+                // Note: Full connection test will be done by PlatformHealthCheckService
+                report.warnings.push({
+                    code: 'BRAIN_NOT_TESTED',
+                    message: 'Brain LLM connection not tested yet',
+                    severity: 'minor',
+                    target: 'intelligence-settings',
+                    component: 'brain-llm',
+                    details: 'Background health check will test Brain LLM connection every 4 hours.'
+                });
+                
+                logger.info(`[READINESS] ⚠️ BRAIN LLM: API key configured (${provider}), connection not tested yet`);
+            }
+            
+        } catch (error) {
+            logger.error(`[READINESS] ❌ Brain LLM check error:`, error);
+            component.score = 0;
+            report.blockers.push({
+                code: 'BRAIN_LLM_ERROR',
+                message: `Error checking Brain LLM: ${error.message}`,
+                severity: 'critical',
+                component: 'brain-llm'
+            });
+        }
+        
+        report.components.brainLlm = component;
     }
 }
 

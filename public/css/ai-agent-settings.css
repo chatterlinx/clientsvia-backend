@@ -1035,7 +1035,7 @@
 /* Medium screens - Slightly smaller */
 @media (max-width: 1200px) {
     .mission-stats {
-        grid-template-columns: repeat(7, 1fr); /* Keep 7 columns */
+        grid-template-columns: repeat(5, 1fr); /* Keep 5 columns (2 rows) */
         gap: 8px;
     }
     
@@ -1060,7 +1060,7 @@
 /* Small screens - Compact */
 @media (max-width: 900px) {
     .mission-stats {
-        grid-template-columns: repeat(4, 1fr); /* Changed from 3 to 4 for better 7-icon fit */
+        grid-template-columns: repeat(3, 1fr); /* 3 columns for tablets */
         gap: 8px;
     }
     
@@ -1233,7 +1233,7 @@
 /* Component Stats Grid */
 .mission-stats {
     display: grid;
-    grid-template-columns: repeat(7, 1fr); /* Changed from auto-fit to 7 columns for 7 icons */
+    grid-template-columns: repeat(5, 1fr); /* 10 icons = 2 rows of 5 */
     gap: 10px;
     margin-top: 12px;
 }

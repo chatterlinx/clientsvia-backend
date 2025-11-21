@@ -512,6 +512,30 @@ class AIAgentSettingsManager {
                 frontlineIntelEl.parentElement.parentElement.className = 'stat-item ' + (frontlineIntelConfigured ? 'stat-success' : 'stat-error');
             }
             
+            // 3-Tier Settings
+            const tierSettingsEl = document.getElementById('stat-tier-settings');
+            if (tierSettingsEl) {
+                const tierSettingsConfigured = stats.tierSettings?.configured || false;
+                tierSettingsEl.textContent = tierSettingsConfigured ? '✓' : '✗';
+                tierSettingsEl.parentElement.parentElement.className = 'stat-item ' + (tierSettingsConfigured ? 'stat-success' : 'stat-error');
+            }
+            
+            // 3-Tier LLM
+            const tierLlmEl = document.getElementById('stat-tier-llm');
+            if (tierLlmEl) {
+                const tierLlmConfigured = stats.tierLlm?.configured || false;
+                tierLlmEl.textContent = tierLlmConfigured ? '✓' : '✗';
+                tierLlmEl.parentElement.parentElement.className = 'stat-item ' + (tierLlmConfigured ? 'stat-success' : 'stat-error');
+            }
+            
+            // Brain LLM
+            const brainLlmEl = document.getElementById('stat-brain-llm');
+            if (brainLlmEl) {
+                const brainLlmConfigured = stats.brainLlm?.configured || false;
+                brainLlmEl.textContent = brainLlmConfigured ? '✓' : '✗';
+                brainLlmEl.parentElement.parentElement.className = 'stat-item ' + (brainLlmConfigured ? 'stat-success' : 'stat-error');
+            }
+            
             // Update Go Live button
             const goLiveBtn = document.getElementById('ai-settings-go-live-btn');
             const goLiveHint = document.getElementById('go-live-hint');

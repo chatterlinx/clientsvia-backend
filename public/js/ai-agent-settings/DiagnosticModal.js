@@ -126,7 +126,10 @@ class DiagnosticModal {
             voice: '🎙️',
             scenarios: '🎭',
             cheatsheet: '📖',
-            'frontline-intel': '📝'
+            'frontline-intel': '📝',
+            'tier-settings': '🎯',
+            'tier-llm': '🤖',
+            'brain-llm': '🧠'
         };
         
         const icon = icons[component] || '📊';
