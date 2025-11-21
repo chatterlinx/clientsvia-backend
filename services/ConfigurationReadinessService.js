@@ -597,24 +597,25 @@ class ConfigurationReadinessService {
                     code: 'NO_SCENARIOS',
                     message: 'No active scenarios - AI Agent cannot match customer requests',
                     severity: 'critical',
-                    target: 'aicore-live-scenarios',  // ✨ FIX: Navigate to AiCore Live Scenarios tab
+                    target: 'live-scenarios',
                     component: 'scenarios',
                     details: 'All scenarios are disabled. Enable scenarios in AI Agent Settings → AiCore Live Scenarios.'
                 });
                 
                 logger.warn(`[READINESS] ❌ NO SCENARIOS: All scenarios disabled`);
-            } else if (component.active < 5) {
+            } else if (component.active < 10) {
                 component.score = 50;
-                report.warnings.push({
+                // CHANGED: Make this a BLOCKER instead of warning so it shows in Action Required
+                report.blockers.push({
                     code: 'FEW_SCENARIOS',
-                    message: `Only ${component.active} active scenarios (recommended: 10+)`,
-                    severity: 'major',
-                    target: 'aicore-live-scenarios',  // ✨ FIX: Navigate to AiCore Live Scenarios tab
+                    message: `Only ${component.active} active scenario${component.active === 1 ? '' : 's'} - AI Agent needs more coverage`,
+                    severity: 'critical',
+                    target: 'live-scenarios',
                     component: 'scenarios',
-                    details: 'Enable more scenarios for better AI coverage.'
+                    details: `You have ${component.active} active scenario${component.active === 1 ? '' : 's'} but need at least 10 for adequate AI coverage. Enable more scenarios in AiCore Live Scenarios tab.`
                 });
                 
-                logger.warn(`[READINESS] ⚠️ FEW SCENARIOS: Only ${component.active} active`);
+                logger.warn(`[READINESS] ⚠️ FEW SCENARIOS: Only ${component.active} active (need 10+)`);
             } else {
                 component.score = 100;
                 logger.info(`[READINESS] ✅ SCENARIOS OK: ${component.active} active scenarios`);
