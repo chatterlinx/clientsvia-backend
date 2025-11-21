@@ -1603,7 +1603,18 @@ router.get('/:companyId/configuration/diagnostics/:component', async (req, res) 
         const DiagnosticService = require('../../services/DiagnosticService');
         
         // Validate component parameter
-        const validComponents = ['templates', 'variables', 'twilio', 'voice', 'scenarios'];
+        const validComponents = [
+            'templates', 
+            'variables', 
+            'twilio', 
+            'voice', 
+            'scenarios',
+            'cheatsheet',
+            'frontline-intel',
+            'tier-settings',
+            'tier-llm',
+            'brain-llm'
+        ];
         if (!validComponents.includes(component.toLowerCase())) {
             return res.status(400).json({ 
                 error: `Invalid component: ${component}`,

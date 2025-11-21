@@ -62,6 +62,12 @@ class DiagnosticService {
                     return await this.checkCheatSheet(company);
                 case 'frontline-intel':
                     return await this.checkFrontlineIntel(company);
+                case 'tier-settings':
+                    return await this.check3TierSettings(company);
+                case 'tier-llm':
+                    return await this.check3TierLlm(company);
+                case 'brain-llm':
+                    return await this.checkBrainLlm(company);
                 default:
                     throw new Error(`Unknown component: ${component}`);
             }
@@ -1335,6 +1341,328 @@ class DiagnosticService {
                 failed,
                 warnings
             }
+        };
+    }
+    
+    /**
+     * ========================================================================
+     * 3-TIER SETTINGS DIAGNOSTIC
+     * ========================================================================
+     */
+    static async check3TierSettings(company) {
+        const checks = [];
+        let score = 0;
+        const maxScore = 100;
+        
+        const intelligenceSettings = company.aiAgentSettings?.intelligenceSettings || {};
+        const enabled = intelligenceSettings.enable3TierIntelligence === true;
+        
+        // ────────────────────────────────────────────────────────────────────
+        // CHECK 1: 3-Tier Intelligence Enabled
+        // ────────────────────────────────────────────────────────────────────
+        checks.push({
+            id: '3tier_enabled',
+            type: 'configuration',
+            status: enabled ? 'passed' : 'failed',
+            severity: enabled ? 'info' : 'critical',
+            message: enabled ? '3-Tier Intelligence is enabled' : '3-Tier Intelligence is disabled',
+            currentValue: enabled ? 'Enabled' : 'Disabled',
+            expectedValue: 'Enabled',
+            impact: enabled ? [] : [
+                'Advanced AI routing unavailable',
+                'No intelligent tier escalation',
+                'Missing performance optimization',
+                'Reduced cost efficiency'
+            ],
+            codeReference: {
+                file: 'models/v2Company.js',
+                path: 'aiAgentSettings.intelligenceSettings.enable3TierIntelligence'
+            },
+            fix: {
+                action: 'navigate',
+                target: 'aicore-settings',
+                description: 'Enable 3-Tier Intelligence in AI Agent Settings'
+            }
+        });
+        
+        if (enabled) score += 40;
+        
+        // ────────────────────────────────────────────────────────────────────
+        // CHECK 2: Active Tiers
+        // ────────────────────────────────────────────────────────────────────
+        const tier1Active = intelligenceSettings.enableTier1 === true;
+        const tier2Active = intelligenceSettings.enableTier2 === true;
+        const tier3Active = intelligenceSettings.enableTier3 === true;
+        const activeTierCount = [tier1Active, tier2Active, tier3Active].filter(Boolean).length;
+        
+        checks.push({
+            id: '3tier_active_tiers',
+            type: 'configuration',
+            status: activeTierCount > 0 ? 'passed' : 'failed',
+            severity: activeTierCount > 0 ? 'info' : 'critical',
+            message: `${activeTierCount} out of 3 tiers are active`,
+            details: {
+                tier1: tier1Active ? 'Active' : 'Inactive',
+                tier2: tier2Active ? 'Active' : 'Inactive',
+                tier3: tier3Active ? 'Active' : 'Inactive'
+            },
+            currentValue: `${activeTierCount} tiers active`,
+            expectedValue: 'At least 1 tier active',
+            impact: activeTierCount === 0 ? [
+                'No AI routing available',
+                'System cannot classify requests',
+                'All calls will fail'
+            ] : [],
+            fix: {
+                action: 'navigate',
+                target: 'aicore-settings',
+                description: 'Enable at least one tier (Tier 1, 2, or 3)'
+            }
+        });
+        
+        if (activeTierCount > 0) score += 30;
+        
+        // ────────────────────────────────────────────────────────────────────
+        // CHECK 3: Confidence Thresholds
+        // ────────────────────────────────────────────────────────────────────
+        const thresholds = intelligenceSettings.confidenceThresholds || {};
+        const hasThresholds = (thresholds.tier1 !== undefined && thresholds.tier2 !== undefined);
+        
+        checks.push({
+            id: '3tier_thresholds',
+            type: 'configuration',
+            status: hasThresholds ? 'passed' : 'failed',
+            severity: hasThresholds ? 'info' : 'warning',
+            message: hasThresholds ? 'Confidence thresholds configured' : 'Confidence thresholds not set',
+            details: hasThresholds ? {
+                tier1Threshold: thresholds.tier1,
+                tier2Threshold: thresholds.tier2
+            } : null,
+            currentValue: hasThresholds ? 'Configured' : 'Not set',
+            expectedValue: 'Configured',
+            impact: hasThresholds ? [] : [
+                'Sub-optimal tier routing',
+                'May escalate too frequently',
+                'Reduced cost efficiency'
+            ],
+            fix: {
+                action: 'navigate',
+                target: 'aicore-settings',
+                description: 'Set confidence thresholds for tier routing'
+            }
+        });
+        
+        if (hasThresholds) score += 30;
+        
+        const passed = checks.filter(c => c.status === 'passed').length;
+        const failed = checks.filter(c => c.status === 'failed').length;
+        
+        return {
+            component: 'tier-settings',
+            companyId: company._id.toString(),
+            companyName: company.companyName,
+            status: score >= 80 ? 'passed' : score >= 50 ? 'warning' : 'critical',
+            score,
+            maxScore,
+            timestamp: new Date().toISOString(),
+            checks,
+            summary: {
+                total: checks.length,
+                passed,
+                failed,
+                warnings: 0
+            }
+        };
+    }
+    
+    /**
+     * ========================================================================
+     * 3-TIER LLM DIAGNOSTIC
+     * ========================================================================
+     */
+    static async check3TierLlm(company) {
+        const checks = [];
+        let score = 0;
+        const maxScore = 100;
+        
+        const llmSettings = company.aiAgentSettings?.llmSettings || {};
+        const provider = llmSettings.llmProvider;
+        const apiKey = llmSettings.openAIApiKey || llmSettings.anthropicApiKey;
+        
+        // ────────────────────────────────────────────────────────────────────
+        // CHECK 1: LLM Provider Configured
+        // ────────────────────────────────────────────────────────────────────
+        checks.push({
+            id: 'tier_llm_provider',
+            type: 'configuration',
+            status: provider ? 'passed' : 'failed',
+            severity: provider ? 'info' : 'critical',
+            message: provider ? `LLM Provider: ${provider}` : 'No LLM provider configured',
+            currentValue: provider || 'Not set',
+            expectedValue: 'OpenAI or Anthropic',
+            impact: provider ? [] : [
+                'Cannot generate AI responses',
+                'Tier 3 routing unavailable',
+                'All calls will fail'
+            ],
+            codeReference: {
+                file: 'models/v2Company.js',
+                path: 'aiAgentSettings.llmSettings.llmProvider'
+            },
+            fix: {
+                action: 'navigate',
+                target: 'aicore-settings',
+                description: 'Select an LLM provider (OpenAI or Anthropic)'
+            }
+        });
+        
+        if (provider) score += 50;
+        
+        // ────────────────────────────────────────────────────────────────────
+        // CHECK 2: API Key Configured
+        // ────────────────────────────────────────────────────────────────────
+        checks.push({
+            id: 'tier_llm_api_key',
+            type: 'configuration',
+            status: apiKey ? 'passed' : 'failed',
+            severity: apiKey ? 'info' : 'critical',
+            message: apiKey ? 'API key configured' : 'No API key configured',
+            currentValue: apiKey ? '••••••••' : 'Not set',
+            expectedValue: 'Valid API key',
+            impact: apiKey ? [] : [
+                'Cannot connect to LLM provider',
+                'All AI requests will fail',
+                'System is non-functional'
+            ],
+            codeReference: {
+                file: 'models/v2Company.js',
+                path: 'aiAgentSettings.llmSettings.openAIApiKey / anthropicApiKey'
+            },
+            fix: {
+                action: 'navigate',
+                target: 'aicore-settings',
+                description: 'Add your LLM provider API key'
+            }
+        });
+        
+        if (apiKey) score += 50;
+        
+        // Note: Actual connection test will be done by background health monitor
+        const passed = checks.filter(c => c.status === 'passed').length;
+        const failed = checks.filter(c => c.status === 'failed').length;
+        
+        return {
+            component: 'tier-llm',
+            companyId: company._id.toString(),
+            companyName: company.companyName,
+            status: score >= 80 ? 'passed' : score >= 50 ? 'warning' : 'critical',
+            score,
+            maxScore,
+            timestamp: new Date().toISOString(),
+            checks,
+            summary: {
+                total: checks.length,
+                passed,
+                failed,
+                warnings: 0
+            },
+            note: 'Full connection test will be performed by background health monitor'
+        };
+    }
+    
+    /**
+     * ========================================================================
+     * BRAIN LLM (ORCHESTRATOR) DIAGNOSTIC
+     * ========================================================================
+     */
+    static async checkBrainLlm(company) {
+        const checks = [];
+        let score = 0;
+        const maxScore = 100;
+        
+        const brainLlmSettings = company.aiAgentSettings?.brainLlmSettings || {};
+        const apiKey = brainLlmSettings.apiKey;
+        const model = brainLlmSettings.model;
+        
+        // ────────────────────────────────────────────────────────────────────
+        // CHECK 1: Brain LLM API Key
+        // ────────────────────────────────────────────────────────────────────
+        checks.push({
+            id: 'brain_llm_api_key',
+            type: 'configuration',
+            status: apiKey ? 'passed' : 'failed',
+            severity: apiKey ? 'info' : 'critical',
+            message: apiKey ? 'Brain LLM API key configured' : 'No Brain LLM API key',
+            currentValue: apiKey ? '••••••••' : 'Not set',
+            expectedValue: 'Valid API key',
+            impact: apiKey ? [] : [
+                'Cannot classify requests',
+                'No intelligent routing',
+                'AI orchestrator unavailable',
+                'System cannot function'
+            ],
+            codeReference: {
+                file: 'models/v2Company.js',
+                path: 'aiAgentSettings.brainLlmSettings.apiKey'
+            },
+            fix: {
+                action: 'navigate',
+                target: 'aicore-settings',
+                description: 'Add Brain/Orchestrator LLM API key'
+            }
+        });
+        
+        if (apiKey) score += 60;
+        
+        // ────────────────────────────────────────────────────────────────────
+        // CHECK 2: Brain LLM Model
+        // ────────────────────────────────────────────────────────────────────
+        checks.push({
+            id: 'brain_llm_model',
+            type: 'configuration',
+            status: model ? 'passed' : 'failed',
+            severity: model ? 'info' : 'critical',
+            message: model ? `Brain LLM Model: ${model}` : 'No Brain LLM model configured',
+            currentValue: model || 'Not set',
+            expectedValue: 'Valid LLM model (e.g., gpt-4, claude-3)',
+            impact: model ? [] : [
+                'Cannot initialize orchestrator',
+                'Request classification will fail',
+                'No AI routing available'
+            ],
+            codeReference: {
+                file: 'models/v2Company.js',
+                path: 'aiAgentSettings.brainLlmSettings.model'
+            },
+            fix: {
+                action: 'navigate',
+                target: 'aicore-settings',
+                description: 'Select a Brain/Orchestrator LLM model'
+            }
+        });
+        
+        if (model) score += 40;
+        
+        // Note: Actual connection test will be done by background health monitor
+        const passed = checks.filter(c => c.status === 'passed').length;
+        const failed = checks.filter(c => c.status === 'failed').length;
+        
+        return {
+            component: 'brain-llm',
+            companyId: company._id.toString(),
+            companyName: company.companyName,
+            status: score >= 80 ? 'passed' : score >= 50 ? 'warning' : 'critical',
+            score,
+            maxScore,
+            timestamp: new Date().toISOString(),
+            checks,
+            summary: {
+                total: checks.length,
+                passed,
+                failed,
+                warnings: 0
+            },
+            note: 'Full connection test will be performed by background health monitor'
         };
     }
 }
