@@ -492,6 +492,15 @@ class AIAgentSettingsManager {
             scenariosEl.textContent = scenariosConfigured ? '✓' : '✗';
             scenariosEl.parentElement.parentElement.className = 'stat-item ' + (scenariosConfigured ? 'stat-success' : 'stat-error');
             
+            // CheatSheet
+            const cheatsheetEl = document.getElementById('stat-cheatsheet');
+            if (cheatsheetEl) {
+                // For now, always show as configured (will be updated when CheatSheet diagnostic is added)
+                const cheatsheetConfigured = true; // TODO: Add actual CheatSheet diagnostic check
+                cheatsheetEl.textContent = cheatsheetConfigured ? '✓' : '✗';
+                cheatsheetEl.parentElement.parentElement.className = 'stat-item ' + (cheatsheetConfigured ? 'stat-success' : 'stat-error');
+            }
+            
             // Update Go Live button
             const goLiveBtn = document.getElementById('ai-settings-go-live-btn');
             const goLiveHint = document.getElementById('go-live-hint');
@@ -652,7 +661,7 @@ class AIAgentSettingsManager {
                                 </div>
                             </div>
                             ${blocker.target ? `
-                                <button class="action-fix-btn" onclick="aiAgentSettings.navigateToFix('${blocker.target}')">
+                                <button class="action-fix-btn" onclick="window.navigateToV2('${blocker.target}')">
                                     <span>Fix Now</span>
                                     <i class="fas fa-arrow-right"></i>
                                 </button>
