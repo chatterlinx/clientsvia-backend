@@ -106,7 +106,7 @@ class DiagnosticService {
                 },
                 fix: {
                     action: 'navigate',
-                    target: 'aicore-templates',
+                    target: 'templates',
                     description: 'Go to AiCore Templates tab and clone a template from Global AI Brain'
                 }
             });
@@ -710,7 +710,7 @@ class DiagnosticService {
                 },
                 fix: {
                     action: 'navigate',
-                    target: 'voice-settings',
+                    target: 'voicecore',
                     description: 'Select a voice from ElevenLabs voice library'
                 }
             });
@@ -747,7 +747,7 @@ class DiagnosticService {
                 expectedValue: 'Number between 0.0 and 1.0',
                 fix: {
                     action: 'navigate',
-                    target: 'voice-settings',
+                    target: 'voicecore',
                     description: 'Adjust stability slider to valid range (0.0 - 1.0)'
                 }
             });
@@ -778,7 +778,7 @@ class DiagnosticService {
                 expectedValue: 'Number between 0.0 and 1.0',
                 fix: {
                     action: 'navigate',
-                    target: 'voice-settings',
+                    target: 'voicecore',
                     description: 'Adjust similarity boost slider to valid range (0.0 - 1.0)'
                 }
             });
@@ -827,11 +827,11 @@ class DiagnosticService {
                     message: 'Own API key selected but not configured',
                     currentValue: null,
                     expectedValue: 'Valid ElevenLabs API key',
-                    fix: {
-                        action: 'navigate',
-                        target: 'voice-settings',
-                        description: 'Add your ElevenLabs API key or switch to ClientsVia API'
-                    }
+                fix: {
+                    action: 'navigate',
+                    target: 'voicecore',
+                    description: 'Add your ElevenLabs API key or switch to ClientsVia API'
+                }
                 });
             } else {
                 checks.push({
@@ -950,7 +950,7 @@ class DiagnosticService {
                 },
                 fix: {
                     action: 'navigate',
-                    target: 'aicore-templates',
+                    target: 'templates',
                     description: 'Clone a template from Global AI Brain to inherit scenarios'
                 }
             });
@@ -966,7 +966,7 @@ class DiagnosticService {
                 impact: ['Limited conversation handling', 'May not cover common queries'],
                 fix: {
                     action: 'navigate',
-                    target: 'aicore-live-scenarios',
+                    target: 'live-scenarios',
                     description: 'Review and enable more scenarios'
                 }
             });
