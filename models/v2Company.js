@@ -690,7 +690,7 @@ const companySchema = new mongoose.Schema({
                     enum: ['financing', 'portal', 'policy', 'catalog', 'other'], 
                     default: 'other' 
                 },
-                url: { type: String, required: true },
+                url: { type: String, default: '' }, // Changed: Not required, defaults to empty string
                 shortDescription: { type: String, default: '' },
                 notes: { type: String, default: '' },
                 createdAt: { type: Date, default: Date.now },
