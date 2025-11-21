@@ -412,6 +412,8 @@ class AIAgentSettingsManager {
             
             const readiness = await response.json();
             console.log('📊 [AI AGENT SETTINGS] Readiness score:', readiness);
+            console.log('🚨 [AI AGENT SETTINGS] Blockers count:', readiness.blockers?.length || 0);
+            console.log('🚨 [AI AGENT SETTINGS] Blockers:', readiness.blockers);
             
             // Determine state class
             banner.className = 'ai-settings-mission-control';
