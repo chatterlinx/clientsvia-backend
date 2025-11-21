@@ -26,6 +26,43 @@ class ControlPlaneV2Navigator {
   static navigateTo(target, subTarget = null, fieldId = null) {
     console.log(`🧭 [NAVIGATOR] Navigating to: ${target}`, { subTarget, fieldId });
     
+    // ============================================
+    // CRITICAL: Check if we're on control-plane-v2.html
+    // If not, redirect there first with navigation state
+    // ============================================
+    const currentPage = window.location.pathname;
+    const isOnControlPlane = currentPage.includes('control-plane-v2.html');
+    
+    if (!isOnControlPlane) {
+      console.log(`🧭 [NAVIGATOR] Not on Control Plane V2, redirecting...`);
+      
+      // Extract companyId from current URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const companyId = urlParams.get('companyId') || urlParams.get('id');
+      
+      if (!companyId) {
+        console.error(`🧭 [NAVIGATOR] Cannot redirect: companyId not found in URL`);
+        return;
+      }
+      
+      // Build navigation state for V2 to restore after load
+      const navState = {
+        target,
+        subTarget,
+        fieldId,
+        timestamp: Date.now()
+      };
+      
+      // Store in sessionStorage so V2 can pick it up
+      sessionStorage.setItem('v2NavigationPending', JSON.stringify(navState));
+      
+      // Redirect to Control Plane V2
+      const redirectUrl = `/control-plane-v2.html?companyId=${companyId}`;
+      console.log(`🧭 [NAVIGATOR] Redirecting to: ${redirectUrl}`);
+      window.location.href = redirectUrl;
+      return;
+    }
+    
     // Map diagnostic targets to V2 structure
     const navigationMap = {
       // ============================================
@@ -297,4 +334,39 @@ window.navigateToV2 = (target, subTarget, fieldId) => {
 };
 
 console.log('✅ [NAVIGATOR] Control Plane V2 Navigator loaded and ready');
+
+// ============================================
+// AUTO-NAVIGATION: Check for pending navigation on page load
+// ============================================
+// This runs when control-plane-v2.html loads and restores
+// navigation state from diagnostic "Fix Now" buttons
+// ============================================
+document.addEventListener('DOMContentLoaded', () => {
+  const pendingNav = sessionStorage.getItem('v2NavigationPending');
+  
+  if (pendingNav) {
+    console.log('🧭 [NAVIGATOR] Found pending navigation from diagnostic');
+    
+    try {
+      const navState = JSON.parse(pendingNav);
+      
+      // Clear the pending navigation
+      sessionStorage.removeItem('v2NavigationPending');
+      
+      // Execute navigation after a short delay to let page initialize
+      setTimeout(() => {
+        console.log('🧭 [NAVIGATOR] Executing pending navigation:', navState);
+        ControlPlaneV2Navigator.navigateTo(
+          navState.target,
+          navState.subTarget,
+          navState.fieldId
+        );
+      }, 500);
+      
+    } catch (error) {
+      console.error('🧭 [NAVIGATOR] Failed to parse pending navigation:', error);
+      sessionStorage.removeItem('v2NavigationPending');
+    }
+  }
+});
 
