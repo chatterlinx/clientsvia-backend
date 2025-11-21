@@ -1035,7 +1035,7 @@
 /* Medium screens - Slightly smaller */
 @media (max-width: 1200px) {
     .mission-stats {
-        grid-template-columns: repeat(auto-fit, minmax(85px, 1fr));
+        grid-template-columns: repeat(6, 1fr);
         gap: 8px;
     }
     
@@ -1329,10 +1329,9 @@
     text-transform: uppercase;
     letter-spacing: 0.3px;
     font-weight: 700;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     line-height: 1.2;
+    word-break: break-word;
+    hyphens: auto;
 }
 
 .stat-chevron {
