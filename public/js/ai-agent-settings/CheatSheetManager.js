@@ -693,10 +693,14 @@ class CheatSheetManager {
                 </div>
                 ${hasDraft ? `
                   <div style="font-size: 14px; font-weight: 600; color: #92400e;">
-                    ${this.versionStatus.draft.name} ${this.isDirty ? '(unsaved changes)' : ''}
+                    Draft in progress: ${this.versionStatus.draft.name}
                   </div>
                   <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
-                    v${this.versionStatus.draft.versionId.substring(0, 8)} • Draft created ${new Date(this.versionStatus.draft.createdAt).toLocaleDateString()}
+                    v${this.versionStatus.draft.versionId.substring(0, 8)} • Created ${new Date(this.versionStatus.draft.createdAt).toLocaleDateString()}
+                  </div>
+                ` : liveVersion ? `
+                  <div style="font-size: 13px; color: #64748b;">
+                    Live version: ${liveVersion.name}, no draft in progress
                   </div>
                 ` : `
                   <div style="font-size: 13px; color: #64748b; font-style: italic;">
@@ -744,12 +748,17 @@ class CheatSheetManager {
                   🗑️ Discard
                 </button>
               ` : `
-                <!-- Create Draft Button -->
+                <!-- Create Draft Button (Disabled if draft exists) -->
                 <button 
                   onclick="cheatSheetManager.createDraft()" 
-                  style="padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; background: #3b82f6; color: #ffffff; cursor: pointer; box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3); transition: all 0.2s;"
-                  onmouseover="this.style.background='#2563eb'" 
-                  onmouseout="this.style.background='#3b82f6'"
+                  style="padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; ${
+                    hasDraft
+                      ? 'background: #e5e7eb; color: #9ca3af; cursor: not-allowed;'
+                      : 'background: #3b82f6; color: #ffffff; cursor: pointer; box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);'
+                  } transition: all 0.2s;"
+                  ${hasDraft ? 'disabled' : ''}
+                  ${hasDraft ? '' : 'onmouseover="this.style.background=\'#2563eb\'" onmouseout="this.style.background=\'#3b82f6\'"'}
+                  title="${hasDraft ? 'You already have a draft. Push it live or discard it before creating another.' : 'Create a new draft to make changes'}"
                 >
                   ✏️ Create Draft
                 </button>
