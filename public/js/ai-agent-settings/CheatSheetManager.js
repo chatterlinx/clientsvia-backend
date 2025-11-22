@@ -462,6 +462,33 @@ class CheatSheetManager {
       
       this.globalCategories = Array.isArray(result.data) ? result.data : [];
       console.log('[CHEAT SHEET] ✅ Global categories loaded:', this.globalCategories.length);
+      
+      // After categories loaded, detect if this company already has a shared global config
+      if (this.companyId && this.companyCategoryId) {
+        try {
+          const sharedResponse = await fetch(`/api/global-config?categoryId=${encodeURIComponent(this.companyCategoryId)}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (sharedResponse.ok) {
+            const sharedResult = await sharedResponse.json();
+            if (sharedResult && sharedResult.success && Array.isArray(sharedResult.data)) {
+              const match = sharedResult.data.find((item) => item.companyId === this.companyId);
+              if (match) {
+                this.hasSharedGlobalConfig = true;
+                console.log('[CHEAT SHEET] ✅ Company has already shared config to global');
+              }
+            }
+          }
+        } catch (e) {
+          console.error('[CHEAT SHEET] Error checking shared global config state', e);
+        }
+      }
+      
       return this.globalCategories;
     } catch (err) {
       console.error('[CHEAT SHEET] Error loading global categories', err);
@@ -515,6 +542,7 @@ class CheatSheetManager {
       
       // Store company category ID for Global Config Sharing feature
       this.companyCategoryId = company.cheatSheetCategoryId || null;
+      this.hasSharedGlobalConfig = false; // Will be set to true if company has shared config
       
       this.cheatSheet = company.aiAgentSettings?.cheatSheet || this.getDefaultCheatSheet();
       
@@ -3296,6 +3324,53 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     }
   }
   
+  async shareToGlobal(versionId) {
+    if (!this.companyId) {
+      console.error('[CHEAT SHEET] Cannot share to global – companyId is missing');
+      return;
+    }
+    
+    if (!this.companyCategoryId) {
+      console.error('[CHEAT SHEET] Cannot share to global – category is not set');
+      return;
+    }
+    
+    try {
+      console.log('[CHEAT SHEET] Sharing live config to global for versionId:', versionId);
+      
+      const response = await fetch('/api/global-config/share', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          companyId: this.companyId
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result || !result.success) {
+        console.error('[CHEAT SHEET] Failed to share live config to global', {
+          status: response.status,
+          result
+        });
+        return;
+      }
+      
+      console.log('[CHEAT SHEET] ✅ Live config shared to global successfully');
+      
+      // Mark locally as shared
+      this.hasSharedGlobalConfig = true;
+      
+      // Re-render version history so the badge appears
+      await this.renderVersionHistory();
+    } catch (err) {
+      console.error('[CHEAT SHEET] Error sharing live config to global', err);
+    }
+  }
+  
   initVersionHistorySubtabs() {
     const container = document.getElementById('cheatsheet-v2-dynamic-content');
     if (!container) return;
@@ -3404,6 +3479,20 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
             <span style="padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: ${status.color}; background: ${status.bg};">
               ${status.icon} ${status.label}
             </span>
+            ${version.status === 'live' && this.hasSharedGlobalConfig ? `
+              <span style="
+                display:inline-flex;
+                align-items:center;
+                padding:4px 10px;
+                border-radius:999px;
+                font-size:11px;
+                font-weight:600;
+                background:#ecfdf3;
+                color:#166534;
+              ">
+                🌍 Shared to Global
+              </span>
+            ` : ''}
           </div>
           
           <!-- Version ID + Timestamp -->
@@ -3481,6 +3570,27 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
             <div style="padding: 8px 12px; font-size: 12px; text-align: center; color: #6b7280; font-style: italic;">
               Currently active
             </div>
+            
+            <button 
+              type="button"
+              class="share-global-btn"
+              data-version-id="${version.versionId}"
+              style="
+                margin-top: 4px;
+                padding: 6px 10px;
+                border-radius: 4px;
+                border: none;
+                font-size: 12px;
+                font-weight: 500;
+                cursor: ${this.companyCategoryId ? 'pointer' : 'not-allowed'};
+                background: ${this.companyCategoryId ? '#111827' : '#e5e7eb'};
+                color: ${this.companyCategoryId ? '#ffffff' : '#9ca3af'};
+              "
+              ${this.companyCategoryId ? '' : 'disabled'}
+              title="${this.companyCategoryId ? 'Share this live configuration to Global' : 'Set category first'}"
+            >
+              Share to Global
+            </button>
           ` : `
             <div style="padding: 8px 12px; font-size: 12px; text-align: center; color: #6b7280; font-style: italic;">
               Being edited
@@ -3491,6 +3601,20 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         
       </div>
     `;
+    
+    // Wire up Share to Global button for LIVE versions
+    if (version.status === 'live') {
+      // Use setTimeout to ensure DOM is ready
+      setTimeout(() => {
+        const shareBtn = card.querySelector('.share-global-btn');
+        if (shareBtn && this.companyCategoryId) {
+          shareBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent card click
+            this.shareToGlobal(version.versionId);
+          });
+        }
+      }, 0);
+    }
     
     return card;
   }
