@@ -3016,29 +3016,8 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     
     try {
       // Fetch version history from API
-      let history = await this.versioningAdapter.getVersionHistory();
+      const history = await this.versioningAdapter.getVersionHistory();
       console.log('[CHEAT SHEET] ✅ Version history loaded:', history);
-      
-      // TEMP FIX: If history is empty but we have draft/live in status, inject them
-      if (history.length === 0 && this.versioningAdapter.status) {
-        const tempHistory = [];
-        if (this.versioningAdapter.status.draft) {
-          tempHistory.push({
-            ...this.versioningAdapter.status.draft,
-            status: 'draft'
-          });
-        }
-        if (this.versioningAdapter.status.live) {
-          tempHistory.push({
-            ...this.versioningAdapter.status.live,
-            status: 'live'
-          });
-        }
-        if (tempHistory.length > 0) {
-          console.log('[CHEAT SHEET] ⚠️ Injecting status data into empty history (temp workaround)');
-          history = tempHistory;
-        }
-      }
       
       // Render version history UI
       container.innerHTML = `
