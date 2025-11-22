@@ -454,6 +454,25 @@ class CheatSheetVersionService {
         status: 'live'
       });
       
+      // Update GlobalConfigReference to point to new live (if company shared to global)
+      const GlobalConfigReference = require('../../models/GlobalConfigReference');
+      const updateResult = await GlobalConfigReference.updateOne(
+        { companyId, cheatSheetVersionId: { $exists: true } },
+        { $set: { cheatSheetVersionId: newLive._id } }
+      ).catch(err => {
+        logger.debug('GLOBAL_CONFIG_UPDATE_FAILED', { companyId, error: err.message });
+        return { modifiedCount: 0 };
+      });
+      
+      if (updateResult.modifiedCount > 0) {
+        logger.info('GLOBAL_CONFIG_REFERENCE_UPDATED', { 
+          companyId, 
+          newLiveVersionId: newLive._id 
+        });
+      } else {
+        logger.debug('GLOBAL_CONFIG_REFERENCE_NOT_PRESENT', { companyId });
+      }
+      
       return newLive;
       
     } catch (err) {

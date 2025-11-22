@@ -407,6 +407,20 @@ const companySchema = new mongoose.Schema({
     }],
     
     // ============================================================================
+    // 🔒 CHEATSHEET CATEGORY (Global Configuration Sharing)
+    // ============================================================================
+    // PURPOSE: Lock company to a specific category for Global Config sharing
+    // SCOPE: Version History → Global Configurations feature only
+    // LIFECYCLE: Once set, this is locked (cannot be changed without override)
+    // EXAMPLES: HVAC, Plumbing, Dental, Legal, etc.
+    // ============================================================================
+    cheatSheetCategoryId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'GlobalCategory',
+        default: null
+    },
+    
+    // ============================================================================
     // 🚀 AI AGENT SETTINGS - REFERENCE-BASED TEMPLATE SYSTEM
     // ============================================================================
     // PURPOSE: Multi-template support with smart placeholder management

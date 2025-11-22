@@ -171,6 +171,8 @@ async function loadAllRoutes() {
         routes.llmSettingsRoutes = await loadRouteWithTimeout('./routes/admin/llmSettings', 'llmSettingsRoutes');
         routes.cheatSheetRoutes = await loadRouteWithTimeout('./routes/admin/cheatSheet', 'cheatSheetRoutes'); // 🧠 Cheat Sheet Management (Phase 1)
         routes.cheatSheetVersioningRoutes = await loadRouteWithTimeout('./routes/cheatsheet', 'cheatSheetVersioningRoutes'); // 📚 CheatSheet Version System (Draft/Live/History)
+        routes.globalConfigRoutes = await loadRouteWithTimeout('./routes/global-config', 'globalConfigRoutes'); // 🌍 Global Config Sharing (Local/Global)
+        routes.cheatSheetCategoryRoutes = await loadRouteWithTimeout('./routes/cheatsheet/category', 'cheatSheetCategoryRoutes'); // 🔒 CheatSheet Category Locking
         routes.triageBuilderRoutes = await loadRouteWithTimeout('./routes/admin/triageBuilder', 'triageBuilderRoutes'); // 🤖 LLM Triage Builder (admin content generator)
         routes.callFlowRoutes = await loadRouteWithTimeout('./routes/admin/callFlow', 'callFlowRoutes'); // 🎯 Call Flow Management (Frontline-Intel)
         // V1 LLM Console removed - 2025-11-08
@@ -388,6 +390,8 @@ function registerRoutes(routes) {
     app.use('/api/admin/llm-settings', routes.llmSettingsRoutes); // 🎛️ LLM Enterprise Settings (profiles, compliance, advanced tuning)
     app.use('/api/admin/cheat-sheet', routes.cheatSheetRoutes); // 🧠 Cheat Sheet Management (Phase 1)
     app.use('/api/cheatsheet', routes.cheatSheetVersioningRoutes); // 📚 CheatSheet Version System (Draft/Live/History/Runtime)
+    app.use('/api/global-config', routes.globalConfigRoutes); // 🌍 Global Config Sharing (Local/Global)
+    app.use('/api/cheatsheet/category', routes.cheatSheetCategoryRoutes); // 🔒 CheatSheet Category Locking
     app.use('/api/admin/triage-builder', routes.triageBuilderRoutes); // 🤖 LLM Triage Builder (admin content generator)
     app.use('/api/admin/call-flow', routes.callFlowRoutes); // 🎯 Call Flow Management (Frontline-Intel)
     // V1 LLM Console API removed - 2025-11-08 (use V2 instead)

@@ -2970,19 +2970,82 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
             </div>
           </div>
           
-          <!-- Version Cards List -->
-          <div id="version-cards-list" style="display: flex; flex-direction: column; gap: 16px;">
-            ${history.length === 0 ? `
-              <div style="border: 2px dashed #d1d5db; border-radius: 12px; padding: 48px; background: #f9fafb; text-align: center;">
-                <div style="font-size: 64px; margin-bottom: 16px; opacity: 0.5;">📦</div>
-                <div style="font-size: 18px; font-weight: 600; color: #374151; margin-bottom: 8px;">
-                  No Version History Yet
+          <!-- Sub-tabs -->
+          <div id="version-history-subtabs" style="display:flex; gap:16px; border-bottom:1px solid #e5e7eb; margin-bottom:16px;">
+            <button
+              type="button"
+              class="version-subtab-btn active"
+              data-tab="local"
+              style="
+                padding: 0 0 8px;
+                border: none;
+                border-bottom: 2px solid #1976d2;
+                background: none;
+                cursor: pointer;
+                font-size: 13px;
+                font-weight: 600;
+                color: #1976d2;
+              "
+            >
+              Local Configurations
+            </button>
+            <button
+              type="button"
+              class="version-subtab-btn"
+              data-tab="global"
+              style="
+                padding: 0 0 8px;
+                border: none;
+                border-bottom: 2px solid transparent;
+                background: none;
+                cursor: pointer;
+                font-size: 13px;
+                font-weight: 500;
+                color: #6b7280;
+              "
+            >
+              Global Configurations
+            </button>
+          </div>
+          
+          <!-- Local Configurations Tab -->
+          <div
+            id="local-configs-tab"
+            class="version-subtab-content"
+            data-tab="local"
+            style="margin-top: 8px;"
+          >
+            <!-- Category selector block will be injected here in Phase 2 -->
+            <div id="category-selector-block" style="margin-bottom: 16px;"></div>
+            
+            <!-- Existing Version Cards List -->
+            <div id="version-cards-list" style="display: flex; flex-direction: column; gap: 16px;">
+              ${history.length === 0 ? `
+                <div style="border: 2px dashed #d1d5db; border-radius: 12px; padding: 48px; background: #f9fafb; text-align: center;">
+                  <div style="font-size: 64px; margin-bottom: 16px; opacity: 0.5;">📦</div>
+                  <div style="font-size: 18px; font-weight: 600; color: #374151; margin-bottom: 8px;">
+                    No Version History Yet
+                  </div>
+                  <p style="font-size: 14px; color: #6b7280; margin: 0;">
+                    Version history will appear here as you create and push drafts.
+                  </p>
                 </div>
-                <p style="font-size: 14px; color: #6b7280; margin: 0;">
-                  Version history will appear here as you create and push drafts.
-                </p>
-              </div>
-            ` : '<!-- Version cards will be rendered dynamically -->'}
+              ` : '<!-- Version cards will be rendered dynamically -->'}
+            </div>
+          </div>
+          
+          <!-- Global Configurations Tab -->
+          <div
+            id="global-configs-tab"
+            class="version-subtab-content"
+            data-tab="global"
+            style="margin-top: 8px; display: none;"
+          >
+            <!-- Placeholder for now; real content comes in later phases -->
+            <div id="global-configs-empty-state" style="font-size: 13px; color: #6b7280;">
+              Select a category in the Global tab to view shared configurations.
+            </div>
+            <div id="global-configs-list" style="margin-top: 16px; display:flex; flex-direction:column; gap:12px;"></div>
           </div>
           
         </div>
@@ -3001,6 +3064,9 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       
       console.log('[CHEAT SHEET] ✅ Version history rendered. Count:', history.length);
       
+      // Initialize sub-tab switching behavior
+      this.initVersionHistorySubtabs();
+      
     } catch (error) {
       console.error('[CHEAT SHEET] ❌ Failed to load version history:', error);
       
@@ -3018,6 +3084,54 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         </div>
       `;
     }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // VERSION HISTORY SUB-TABS (Local / Global Configurations)
+  // ═══════════════════════════════════════════════════════════════════
+  
+  initVersionHistorySubtabs() {
+    const container = document.getElementById('cheatsheet-v2-dynamic-content');
+    if (!container) return;
+    
+    const buttons = container.querySelectorAll('.version-subtab-btn');
+    const panels = container.querySelectorAll('.version-subtab-content');
+    
+    if (!buttons.length || !panels.length) return;
+    
+    const setActiveTab = (tabName) => {
+      // Update buttons
+      buttons.forEach((btn) => {
+        const isActive = btn.getAttribute('data-tab') === tabName;
+        if (isActive) {
+          btn.classList.add('active');
+          btn.style.color = '#1976d2';
+          btn.style.fontWeight = '600';
+          btn.style.borderBottom = '2px solid #1976d2';
+        } else {
+          btn.classList.remove('active');
+          btn.style.color = '#6b7280';
+          btn.style.fontWeight = '500';
+          btn.style.borderBottom = '2px solid transparent';
+        }
+      });
+      
+      // Update panels
+      panels.forEach((panel) => {
+        const isActive = panel.getAttribute('data-tab') === tabName;
+        panel.style.display = isActive ? '' : 'none';
+      });
+    };
+    
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tabName = btn.getAttribute('data-tab');
+        setActiveTab(tabName);
+      });
+    });
+    
+    // Ensure Local is active by default
+    setActiveTab('local');
   }
   
   renderVersionCard(version, index) {
