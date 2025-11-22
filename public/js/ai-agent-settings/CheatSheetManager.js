@@ -432,6 +432,44 @@ class CheatSheetManager {
   // LOAD CHEAT SHEET
   // ═══════════════════════════════════════════════════════════════════
   
+  async loadGlobalCategories() {
+    // Cache to avoid repeated network calls
+    if (this.globalCategories && Array.isArray(this.globalCategories)) {
+      return this.globalCategories;
+    }
+    
+    try {
+      const response = await fetch('/api/global-config/categories', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        console.error('[CHEAT SHEET] Failed to load global categories', response.status);
+        this.globalCategories = [];
+        return this.globalCategories;
+      }
+      
+      const result = await response.json();
+      if (!result || !result.success) {
+        console.error('[CHEAT SHEET] Global categories response not successful', result);
+        this.globalCategories = [];
+        return this.globalCategories;
+      }
+      
+      this.globalCategories = Array.isArray(result.data) ? result.data : [];
+      console.log('[CHEAT SHEET] ✅ Global categories loaded:', this.globalCategories.length);
+      return this.globalCategories;
+    } catch (err) {
+      console.error('[CHEAT SHEET] Error loading global categories', err);
+      this.globalCategories = [];
+      return this.globalCategories;
+    }
+  }
+  
   async load(companyId) {
     this.companyId = companyId;
     this.isReady = false; // Reset ready flag during load
@@ -475,6 +513,9 @@ class CheatSheetManager {
       const data = await response.json();
       const company = data.company || data;
       
+      // Store company category ID for Global Config Sharing feature
+      this.companyCategoryId = company.cheatSheetCategoryId || null;
+      
       this.cheatSheet = company.aiAgentSettings?.cheatSheet || this.getDefaultCheatSheet();
       
       // ✅ CHECKPOINT: Initialize V2 fields if they don't exist (for existing cheatSheets from MongoDB)
@@ -511,6 +552,9 @@ class CheatSheetManager {
       console.log('[CHEAT SHEET] 📊 links:', this.cheatSheet.links?.length || 0);
       console.log('[CHEAT SHEET] 📊 calculators:', this.cheatSheet.calculators?.length || 0);
       console.log('[CHEAT SHEET] 📊 About to render() - cheatSheet exists:', !!this.cheatSheet);
+      
+      // Load global categories for Version History → Global Configurations feature
+      await this.loadGlobalCategories();
       
       this.render();
       console.log('[CHEAT SHEET] 📊 render() completed, about to switchSubTab');
@@ -3051,6 +3095,9 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         </div>
       `;
       
+      // Render category selector block (Local Configurations tab)
+      this.renderCategorySelectorBlock();
+      
       // Render individual version cards
       if (history.length > 0) {
         const listEl = container.querySelector('#version-cards-list');
@@ -3089,6 +3136,165 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
   // ═══════════════════════════════════════════════════════════════════
   // VERSION HISTORY SUB-TABS (Local / Global Configurations)
   // ═══════════════════════════════════════════════════════════════════
+  
+  renderCategorySelectorBlock() {
+    const container = document.getElementById('cheatsheet-v2-dynamic-content');
+    if (!container) return;
+    
+    const block = container.querySelector('#category-selector-block');
+    if (!block) return;
+    
+    const categories = this.globalCategories || [];
+    const hasCategory = !!this.companyCategoryId;
+    
+    // If company already has a locked category
+    if (hasCategory) {
+      const matched = categories.find((c) => c._id === this.companyCategoryId);
+      const name = matched ? matched.name : 'Unknown category';
+      
+      block.innerHTML = `
+        <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:#374151;">
+          <span style="font-weight:600;">Category:</span>
+          <span style="font-weight:600;">${name}</span>
+          <span style="font-size:12px; color:#6b7280;">🔒 (locked)</span>
+        </div>
+      `;
+      return;
+    }
+    
+    // No category assigned yet
+    if (!categories.length) {
+      block.innerHTML = `
+        <div style="font-size:13px; color:#6b7280;">
+          No global categories are defined yet. Create at least one category in the Global Configurations tab to enable sharing.
+        </div>
+      `;
+      return;
+    }
+    
+    // Build dropdown + button
+    const optionsHtml = categories
+      .map((c) => `<option value="${c._id}">${c.name}</option>`)
+      .join('');
+    
+    block.innerHTML = `
+      <div style="display:flex; align-items:flex-end; gap:12px;">
+        <div style="display:flex; flex-direction:column; gap:4px; flex:0 0 220px;">
+          <label for="cheatsheet-category-select" style="font-size:12px; font-weight:500; color:#4b5563;">
+            Category (required before sharing to Global)
+          </label>
+          <select
+            id="cheatsheet-category-select"
+            style="
+              padding:6px 10px;
+              border-radius:4px;
+              border:1px solid #d1d5db;
+              font-size:13px;
+              color:#111827;
+              background:#fff;
+            "
+          >
+            <option value="">-- Select category --</option>
+            ${optionsHtml}
+          </select>
+        </div>
+        
+        <button
+          type="button"
+          id="cheatsheet-category-lock-btn"
+          style="
+            padding:7px 14px;
+            border-radius:4px;
+            border:none;
+            font-size:13px;
+            font-weight:600;
+            cursor:not-allowed;
+            background:#e5e7eb;
+            color:#9ca3af;
+          "
+          disabled
+        >
+          Set category and lock
+        </button>
+      </div>
+    `;
+    
+    const selectEl = block.querySelector('#cheatsheet-category-select');
+    const buttonEl = block.querySelector('#cheatsheet-category-lock-btn');
+    
+    if (!selectEl || !buttonEl) return;
+    
+    // Enable button when a category is chosen
+    selectEl.addEventListener('change', () => {
+      if (selectEl.value) {
+        buttonEl.disabled = false;
+        buttonEl.style.cursor = 'pointer';
+        buttonEl.style.background = '#1976d2';
+        buttonEl.style.color = '#ffffff';
+      } else {
+        buttonEl.disabled = true;
+        buttonEl.style.cursor = 'not-allowed';
+        buttonEl.style.background = '#e5e7eb';
+        buttonEl.style.color = '#9ca3af';
+      }
+    });
+    
+    buttonEl.addEventListener('click', () => {
+      if (!selectEl.value) return;
+      this.setCategoryAndLock(selectEl.value);
+    });
+  }
+  
+  async setCategoryAndLock(categoryId) {
+    if (!this.companyId) {
+      console.error('[CHEAT SHEET] Cannot set category – companyId is missing');
+      return;
+    }
+    
+    if (!categoryId) {
+      console.error('[CHEAT SHEET] Cannot set category – categoryId is missing');
+      return;
+    }
+    
+    // If already locked in memory, do nothing
+    if (this.companyCategoryId) {
+      console.debug('[CHEAT SHEET] Category already locked for this company, skipping setCategoryAndLock');
+      return;
+    }
+    
+    try {
+      console.log('[CHEAT SHEET] Setting and locking category:', categoryId);
+      
+      const response = await fetch('/api/cheatsheet/category', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          companyId: this.companyId,
+          categoryId
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result || !result.success) {
+        console.error('[CHEAT SHEET] Failed to set and lock category', { status: response.status, result });
+        return;
+      }
+      
+      console.log('[CHEAT SHEET] ✅ Category locked successfully');
+      
+      // Lock locally
+      this.companyCategoryId = categoryId;
+      
+      // Re-render selector block in locked state
+      this.renderCategorySelectorBlock();
+    } catch (err) {
+      console.error('[CHEAT SHEET] Error setting and locking category', err);
+    }
+  }
   
   initVersionHistorySubtabs() {
     const container = document.getElementById('cheatsheet-v2-dynamic-content');
