@@ -3335,8 +3335,21 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       return;
     }
     
+    // Find and disable the share button
+    const shareBtn = document.querySelector(`.share-global-btn[data-version-id="${versionId}"]`);
+    if (shareBtn) {
+      shareBtn.disabled = true;
+      shareBtn.style.cursor = 'wait';
+      shareBtn.style.background = '#9ca3af';
+      shareBtn.textContent = 'Sharing...';
+    }
+    
     try {
-      console.log('[CHEAT SHEET] Sharing live config to global for versionId:', versionId);
+      console.log('[CHEAT SHEET] 🔄 Sharing live config to global:', {
+        companyId: this.companyId,
+        categoryId: this.companyCategoryId,
+        versionId
+      });
       
       const response = await fetch('/api/global-config/share', {
         method: 'POST',
@@ -3352,14 +3365,26 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       const result = await response.json();
       
       if (!response.ok || !result || !result.success) {
-        console.error('[CHEAT SHEET] Failed to share live config to global', {
+        console.error('[CHEAT SHEET] ❌ Failed to share live config to global', {
           status: response.status,
           result
         });
+        
+        // Re-enable button on failure
+        if (shareBtn) {
+          shareBtn.disabled = false;
+          shareBtn.style.cursor = 'pointer';
+          shareBtn.style.background = '#111827';
+          shareBtn.textContent = 'Share to Global';
+        }
         return;
       }
       
-      console.log('[CHEAT SHEET] ✅ Live config shared to global successfully');
+      console.log('[CHEAT SHEET] ✅ Live config shared to global successfully:', {
+        companyId: result.data.companyId,
+        categoryId: result.data.categoryId,
+        cheatSheetVersionId: result.data.cheatSheetVersionId
+      });
       
       // Mark locally as shared
       this.hasSharedGlobalConfig = true;
@@ -3367,7 +3392,15 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       // Re-render version history so the badge appears
       await this.renderVersionHistory();
     } catch (err) {
-      console.error('[CHEAT SHEET] Error sharing live config to global', err);
+      console.error('[CHEAT SHEET] ❌ Error sharing live config to global', err);
+      
+      // Re-enable button on error
+      if (shareBtn) {
+        shareBtn.disabled = false;
+        shareBtn.style.cursor = 'pointer';
+        shareBtn.style.background = '#111827';
+        shareBtn.textContent = 'Share to Global';
+      }
     }
   }
   
@@ -3380,6 +3413,23 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     if (!container) return;
     
     const categories = this.globalCategories || [];
+    
+    // Handle empty categories case
+    if (categories.length === 0) {
+      container.innerHTML = `
+        <div style="padding:24px; background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; margin-bottom:16px;">
+          <strong style="color:#92400e; font-size:14px; display:block; margin-bottom:8px;">
+            ⚠️ No Global Categories Available
+          </strong>
+          <p style="margin:0; font-size:13px; color:#78350f; line-height:1.5;">
+            Global categories must be created before companies can share configurations.
+            Contact your system administrator or use the Global Config management tools to create categories (e.g., HVAC, Plumbing, Dental).
+          </p>
+        </div>
+      `;
+      console.warn('[CHEAT SHEET] ⚠️ No global categories found. Global sharing is not available.');
+      return;
+    }
     
     // Build category dropdown
     const categoryOptionsHtml = categories
@@ -3447,7 +3497,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     }
     
     try {
-      console.log('[CHEAT SHEET] Loading global configs for category:', categoryId);
+      console.log('[CHEAT SHEET] 🔄 Loading global configs for category:', categoryId);
       
       const response = await fetch(`/api/global-config?categoryId=${encodeURIComponent(categoryId)}`, {
         method: 'GET',
@@ -3458,22 +3508,33 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       });
       
       if (!response.ok) {
-        console.error('[CHEAT SHEET] Failed to load global configs', response.status);
+        console.error('[CHEAT SHEET] ❌ Failed to load global configs', {
+          status: response.status,
+          categoryId
+        });
         this.globalConfigs = [];
         return;
       }
       
       const result = await response.json();
       if (!result || !result.success) {
-        console.error('[CHEAT SHEET] Global configs response not successful', result);
+        console.error('[CHEAT SHEET] ❌ Global configs response not successful', result);
         this.globalConfigs = [];
         return;
       }
       
       this.globalConfigs = Array.isArray(result.data) ? result.data : [];
-      console.log('[CHEAT SHEET] ✅ Global configs loaded:', this.globalConfigs.length);
+      console.log('[CHEAT SHEET] ✅ Global configs loaded:', {
+        categoryId,
+        count: this.globalConfigs.length,
+        configs: this.globalConfigs.map(c => ({
+          id: c.globalConfigId,
+          company: c.companyName,
+          name: c.configName
+        }))
+      });
     } catch (err) {
-      console.error('[CHEAT SHEET] Error loading global configs', err);
+      console.error('[CHEAT SHEET] ❌ Error loading global configs', err);
       this.globalConfigs = [];
     }
   }
@@ -3586,13 +3647,13 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       btn.addEventListener('click', () => {
         const globalConfigId = btn.getAttribute('data-global-config-id');
         if (globalConfigId) {
-          this.importFromGlobal(globalConfigId);
+          this.importFromGlobal(globalConfigId, btn);
         }
       });
     });
   }
   
-  async importFromGlobal(globalConfigId) {
+  async importFromGlobal(globalConfigId, buttonElement) {
     if (!this.companyId) {
       console.error('[CHEAT SHEET] Cannot import from global – companyId is missing');
       return;
@@ -3603,8 +3664,19 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       return;
     }
     
+    // Disable button during POST
+    if (buttonElement) {
+      buttonElement.disabled = true;
+      buttonElement.style.cursor = 'wait';
+      buttonElement.style.background = '#9ca3af';
+      buttonElement.textContent = 'Importing...';
+    }
+    
     try {
-      console.log('[CHEAT SHEET] Importing global config:', globalConfigId);
+      console.log('[CHEAT SHEET] 🔄 Importing global config:', {
+        targetCompanyId: this.companyId,
+        globalConfigId
+      });
       
       const response = await fetch('/api/global-config/import', {
         method: 'POST',
@@ -3621,19 +3693,40 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       const result = await response.json();
       
       if (!response.ok || !result || !result.success) {
-        console.error('[CHEAT SHEET] Failed to import from global', {
+        console.error('[CHEAT SHEET] ❌ Failed to import from global', {
           status: response.status,
           result
         });
+        
+        // Re-enable button on failure
+        if (buttonElement) {
+          buttonElement.disabled = false;
+          buttonElement.style.cursor = 'pointer';
+          buttonElement.style.background = '#111827';
+          buttonElement.textContent = 'Import as Draft';
+        }
         return;
       }
       
-      console.log('[CHEAT SHEET] ✅ Config imported successfully as draft');
+      console.log('[CHEAT SHEET] ✅ Config imported successfully as draft:', {
+        newDraftId: result.data.cheatSheetVersionId,
+        targetCompanyId: result.data.companyId
+      });
       
       // Re-render version history so Local tab shows new draft
       await this.renderVersionHistory();
+      
+      // Note: Button will be replaced by re-render, so no need to re-enable
     } catch (err) {
-      console.error('[CHEAT SHEET] Error importing from global', err);
+      console.error('[CHEAT SHEET] ❌ Error importing from global', err);
+      
+      // Re-enable button on error
+      if (buttonElement) {
+        buttonElement.disabled = false;
+        buttonElement.style.cursor = 'pointer';
+        buttonElement.style.background = '#111827';
+        buttonElement.textContent = 'Import as Draft';
+      }
     }
   }
   
