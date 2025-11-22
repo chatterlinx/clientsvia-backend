@@ -3371,6 +3371,272 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     }
   }
   
+  // ═══════════════════════════════════════════════════════════════════
+  // GLOBAL CONFIGURATIONS TAB (Import System)
+  // ═══════════════════════════════════════════════════════════════════
+  
+  renderGlobalConfigsTab() {
+    const container = document.getElementById('global-configs-tab');
+    if (!container) return;
+    
+    const categories = this.globalCategories || [];
+    
+    // Build category dropdown
+    const categoryOptionsHtml = categories
+      .map((c) => `<option value="${c._id}">${c.name}</option>`)
+      .join('');
+    
+    container.innerHTML = `
+      <div style="margin-bottom: 24px;">
+        <label for="global-category-select" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:8px;">
+          Select Category
+        </label>
+        <select
+          id="global-category-select"
+          style="
+            padding:8px 12px;
+            border-radius:4px;
+            border:1px solid #d1d5db;
+            font-size:13px;
+            color:#111827;
+            background:#fff;
+            min-width:220px;
+          "
+        >
+          <option value="">-- Select category --</option>
+          ${categoryOptionsHtml}
+        </select>
+      </div>
+      
+      <div id="global-configs-content" style="margin-top:16px;">
+        <div style="font-size:13px; color:#6b7280; padding:20px; text-align:center; background:#f9fafb; border-radius:8px;">
+          Select a category above to view shared configurations.
+        </div>
+      </div>
+    `;
+    
+    const selectEl = container.querySelector('#global-category-select');
+    if (selectEl) {
+      selectEl.addEventListener('change', async () => {
+        const categoryId = selectEl.value;
+        if (categoryId) {
+          this.currentGlobalCategoryId = categoryId; // Track selected category
+          await this.loadGlobalConfigsByCategory(categoryId);
+          this.renderGlobalConfigCards();
+        } else {
+          this.currentGlobalCategoryId = null;
+          // Reset to empty state
+          const contentEl = container.querySelector('#global-configs-content');
+          if (contentEl) {
+            contentEl.innerHTML = `
+              <div style="font-size:13px; color:#6b7280; padding:20px; text-align:center; background:#f9fafb; border-radius:8px;">
+                Select a category above to view shared configurations.
+              </div>
+            `;
+          }
+        }
+      });
+    }
+  }
+  
+  async loadGlobalConfigsByCategory(categoryId) {
+    if (!categoryId) {
+      console.error('[CHEAT SHEET] Cannot load global configs – categoryId is missing');
+      this.globalConfigs = [];
+      return;
+    }
+    
+    try {
+      console.log('[CHEAT SHEET] Loading global configs for category:', categoryId);
+      
+      const response = await fetch(`/api/global-config?categoryId=${encodeURIComponent(categoryId)}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        console.error('[CHEAT SHEET] Failed to load global configs', response.status);
+        this.globalConfigs = [];
+        return;
+      }
+      
+      const result = await response.json();
+      if (!result || !result.success) {
+        console.error('[CHEAT SHEET] Global configs response not successful', result);
+        this.globalConfigs = [];
+        return;
+      }
+      
+      this.globalConfigs = Array.isArray(result.data) ? result.data : [];
+      console.log('[CHEAT SHEET] ✅ Global configs loaded:', this.globalConfigs.length);
+    } catch (err) {
+      console.error('[CHEAT SHEET] Error loading global configs', err);
+      this.globalConfigs = [];
+    }
+  }
+  
+  renderGlobalConfigCards() {
+    const container = document.getElementById('global-configs-tab');
+    if (!container) return;
+    
+    const contentEl = container.querySelector('#global-configs-content');
+    if (!contentEl) return;
+    
+    const configs = this.globalConfigs || [];
+    
+    // Empty state
+    if (configs.length === 0) {
+      contentEl.innerHTML = `
+        <div style="font-size:13px; color:#6b7280; padding:20px; text-align:center; background:#f9fafb; border-radius:8px;">
+          No shared configurations exist for this category yet.
+        </div>
+      `;
+      return;
+    }
+    
+    // Render stacked cards
+    const cardsHtml = configs.map((config) => {
+      const updatedDate = new Date(config.updatedAt);
+      const formattedDate = updatedDate.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      // Find category name
+      const category = (this.globalCategories || []).find(c => c._id === this.currentGlobalCategoryId);
+      const categoryName = category ? category.name : 'Unknown';
+      
+      return `
+        <div style="
+          border:1px solid #e5e7eb;
+          border-radius:8px;
+          padding:16px;
+          background:#ffffff;
+          box-shadow:0 1px 3px rgba(0,0,0,0.05);
+        ">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px;">
+            <div style="flex:1;">
+              <div style="margin-bottom:8px;">
+                <span style="
+                  display:inline-block;
+                  padding:2px 8px;
+                  border-radius:999px;
+                  font-size:11px;
+                  font-weight:600;
+                  background:#eff6ff;
+                  color:#1e40af;
+                ">
+                  ${categoryName}
+                </span>
+              </div>
+              
+              <h4 style="font-size:16px; font-weight:600; color:#111827; margin:0 0 4px 0;">
+                ${config.configName || 'Unnamed Configuration'}
+              </h4>
+              
+              <div style="font-size:13px; color:#6b7280; margin-bottom:4px;">
+                <span style="font-weight:500;">Source:</span> ${config.companyName || 'Unknown Company'}
+              </div>
+              
+              <div style="font-size:12px; color:#9ca3af;">
+                Last updated: ${formattedDate}
+              </div>
+            </div>
+            
+            <button
+              type="button"
+              class="import-global-btn"
+              data-global-config-id="${config.globalConfigId}"
+              style="
+                padding:6px 12px;
+                border-radius:4px;
+                border:none;
+                font-size:12px;
+                font-weight:500;
+                background:#111827;
+                color:#ffffff;
+                cursor:pointer;
+                white-space:nowrap;
+              "
+              onmouseover="this.style.background='#374151'"
+              onmouseout="this.style.background='#111827'"
+            >
+              Import as Draft
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    contentEl.innerHTML = `
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        ${cardsHtml}
+      </div>
+    `;
+    
+    // Wire up import buttons
+    const importButtons = contentEl.querySelectorAll('.import-global-btn');
+    importButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const globalConfigId = btn.getAttribute('data-global-config-id');
+        if (globalConfigId) {
+          this.importFromGlobal(globalConfigId);
+        }
+      });
+    });
+  }
+  
+  async importFromGlobal(globalConfigId) {
+    if (!this.companyId) {
+      console.error('[CHEAT SHEET] Cannot import from global – companyId is missing');
+      return;
+    }
+    
+    if (!globalConfigId) {
+      console.error('[CHEAT SHEET] Cannot import from global – globalConfigId is missing');
+      return;
+    }
+    
+    try {
+      console.log('[CHEAT SHEET] Importing global config:', globalConfigId);
+      
+      const response = await fetch('/api/global-config/import', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          targetCompanyId: this.companyId,
+          globalConfigId
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result || !result.success) {
+        console.error('[CHEAT SHEET] Failed to import from global', {
+          status: response.status,
+          result
+        });
+        return;
+      }
+      
+      console.log('[CHEAT SHEET] ✅ Config imported successfully as draft');
+      
+      // Re-render version history so Local tab shows new draft
+      await this.renderVersionHistory();
+    } catch (err) {
+      console.error('[CHEAT SHEET] Error importing from global', err);
+    }
+  }
+  
   initVersionHistorySubtabs() {
     const container = document.getElementById('cheatsheet-v2-dynamic-content');
     if (!container) return;
@@ -3402,6 +3668,11 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         const isActive = panel.getAttribute('data-tab') === tabName;
         panel.style.display = isActive ? '' : 'none';
       });
+      
+      // Trigger Global tab rendering when switched to
+      if (tabName === 'global') {
+        this.renderGlobalConfigsTab();
+      }
     };
     
     buttons.forEach((btn) => {
