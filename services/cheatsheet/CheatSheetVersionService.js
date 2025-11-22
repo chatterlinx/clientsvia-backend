@@ -514,7 +514,7 @@ class CheatSheetVersionService {
   async getVersionHistory(companyId, limit = 50) {
     return await CheatSheetVersion.find({
       companyId,
-      status: { $in: ['live', 'archived'] }
+      status: { $in: ['draft', 'live', 'archived'] }
     })
     .sort({ activatedAt: -1, createdAt: -1 })
     .limit(limit)
