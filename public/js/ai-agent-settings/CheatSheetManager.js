@@ -4045,7 +4045,19 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
           
           <!-- Modal Body (Scrollable) -->
           <div style="padding: 24px; overflow-y: auto; flex: 1;">
-            <pre style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; font-size: 12px; font-family: 'Monaco', 'Courier New', monospace; line-height: 1.6; overflow-x: auto; margin: 0;">${JSON.stringify(config, null, 2)}</pre>
+            ${config ? `
+              <pre style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; font-size: 12px; font-family: 'Monaco', 'Courier New', monospace; line-height: 1.6; overflow-x: auto; margin: 0;">${JSON.stringify(config, null, 2)}</pre>
+            ` : `
+              <div style="text-align: center; padding: 40px; background: #f9fafb; border: 2px dashed #e5e7eb; border-radius: 12px;">
+                <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;">📦</div>
+                <div style="font-size: 16px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">
+                  No Configuration Snapshot
+                </div>
+                <p style="font-size: 14px; color: #9ca3af; margin: 0;">
+                  No configuration snapshot was saved for this version yet.
+                </p>
+              </div>
+            `}
           </div>
           
           <!-- Modal Footer -->

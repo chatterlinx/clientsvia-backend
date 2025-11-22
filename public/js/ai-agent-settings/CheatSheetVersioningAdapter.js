@@ -337,7 +337,7 @@ class CheatSheetVersioningAdapter {
     console.log('[VERSION ADAPTER] Fetching version config:', versionId);
     
     const response = await fetch(
-      `${this.baseUrl}/versions/${this.companyId}/${versionId}`,
+      `${this.baseUrl}/versions/${this.companyId}/${versionId}?includeConfig=true`,
       {
         headers: {
           'Authorization': `Bearer ${this.token}`
@@ -352,9 +352,9 @@ class CheatSheetVersioningAdapter {
     
     const data = await response.json();
     
-    console.log('[VERSION ADAPTER] Version config fetched');
+    console.log('[VERSION ADAPTER] Version config fetched:', data.data.config ? 'config present' : 'config missing');
     
-    return data.data.config;
+    return data.data.config || null;
   }
   
   /**
