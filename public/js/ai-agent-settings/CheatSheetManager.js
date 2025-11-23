@@ -1904,9 +1904,47 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       this.cheatSheet.bookingRules = [];
     }
     
-    const newRule = {
-      id: `br-${Date.now()}`,
-      label: 'New Booking Rule',
+    // Open modal for new rule (pass null for both params)
+    this.openBookingRuleModal(null, null);
+  }
+  
+  handleEditBookingRule(index) {
+    if (!this.cheatSheet || !Array.isArray(this.cheatSheet.bookingRules)) return;
+    const rule = this.cheatSheet.bookingRules[index];
+    if (!rule) return;
+    
+    this.openBookingRuleModal(rule, index);
+  }
+  
+  /**
+   * Open enterprise-grade modal for Add/Edit Booking Rule
+   * @param {Object|null} rule - Existing rule to edit, or null for new rule
+   * @param {number|null} index - Index of rule being edited, or null for new
+   */
+  openBookingRuleModal(rule = null, index = null) {
+    const isEdit = rule !== null;
+    const modalTitle = isEdit ? 'Edit Booking Rule' : 'Add Booking Rule';
+    
+    // Inject CSS animations if not already present
+    if (!document.getElementById('cheatsheet-modal-animations')) {
+      const style = document.createElement('style');
+      style.id = 'cheatsheet-modal-animations';
+      style.textContent = `
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideUp {
+          from { transform: translateY(30px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    // Default values for new rule
+    const defaultRule = {
+      label: '',
       trade: '',
       serviceType: '',
       priority: 'normal',
@@ -1917,58 +1955,437 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       notes: ''
     };
     
-    this.cheatSheet.bookingRules.push(newRule);
+    const data = isEdit ? rule : defaultRule;
     
-    console.log('[CHEAT SHEET] ✅ New booking rule added (local only)', newRule);
+    // Create modal overlay
+    const modal = document.createElement('div');
+    modal.id = 'booking-rule-modal';
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      animation: fadeIn 0.2s ease-out;
+    `;
     
-    // Re-render list
-    this.renderBookingRules();
+    modal.innerHTML = `
+      <div style="
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        width: 90%;
+        max-width: 700px;
+        max-height: 90vh;
+        overflow-y: auto;
+        animation: slideUp 0.3s ease-out;
+      ">
+        <!-- Header -->
+        <div style="
+          padding: 24px;
+          border-bottom: 2px solid #e5e7eb;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        ">
+          <h2 style="
+            font-size: 24px;
+            font-weight: 700;
+            color: #111827;
+            margin: 0;
+          ">
+            📋 ${modalTitle}
+          </h2>
+          <button
+            onclick="document.getElementById('booking-rule-modal').remove()"
+            style="
+              background: none;
+              border: none;
+              font-size: 28px;
+              color: #9ca3af;
+              cursor: pointer;
+              padding: 0;
+              width: 32px;
+              height: 32px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              border-radius: 4px;
+              transition: all 0.2s;
+            "
+            onmouseover="this.style.background='#f3f4f6'; this.style.color='#111827';"
+            onmouseout="this.style.background='none'; this.style.color='#9ca3af';"
+          >
+            ×
+          </button>
+        </div>
+        
+        <!-- Form -->
+        <form id="booking-rule-form" style="padding: 24px;">
+          
+          <!-- Label -->
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+              Rule Name / Label <span style="color: #ef4444;">*</span>
+            </label>
+            <input
+              type="text"
+              name="label"
+              value="${this.escapeHtml(data.label)}"
+              required
+              placeholder="e.g., HVAC Emergency Repair"
+              style="
+                width: 100%;
+                padding: 10px 12px;
+                font-size: 14px;
+                border: 2px solid #d1d5db;
+                border-radius: 8px;
+                transition: all 0.2s;
+                box-sizing: border-box;
+              "
+              onfocus="this.style.borderColor='#4f46e5'; this.style.outline='none';"
+              onblur="this.style.borderColor='#d1d5db';"
+            />
+          </div>
+          
+          <!-- Trade and Service Type (side by side) -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+            <div>
+              <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                Trade
+              </label>
+              <input
+                type="text"
+                name="trade"
+                value="${this.escapeHtml(data.trade)}"
+                placeholder="e.g., HVAC, Plumbing"
+                style="
+                  width: 100%;
+                  padding: 10px 12px;
+                  font-size: 14px;
+                  border: 2px solid #d1d5db;
+                  border-radius: 8px;
+                  transition: all 0.2s;
+                  box-sizing: border-box;
+                "
+                onfocus="this.style.borderColor='#4f46e5'; this.style.outline='none';"
+                onblur="this.style.borderColor='#d1d5db';"
+              />
+            </div>
+            <div>
+              <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                Service Type
+              </label>
+              <input
+                type="text"
+                name="serviceType"
+                value="${this.escapeHtml(data.serviceType)}"
+                placeholder="e.g., Repair, Maintenance"
+                style="
+                  width: 100%;
+                  padding: 10px 12px;
+                  font-size: 14px;
+                  border: 2px solid #d1d5db;
+                  border-radius: 8px;
+                  transition: all 0.2s;
+                  box-sizing: border-box;
+                "
+                onfocus="this.style.borderColor='#4f46e5'; this.style.outline='none';"
+                onblur="this.style.borderColor='#d1d5db';"
+              />
+            </div>
+          </div>
+          
+          <!-- Priority -->
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+              Priority
+            </label>
+            <select
+              name="priority"
+              style="
+                width: 100%;
+                padding: 10px 12px;
+                font-size: 14px;
+                border: 2px solid #d1d5db;
+                border-radius: 8px;
+                transition: all 0.2s;
+                box-sizing: border-box;
+                background: #ffffff;
+              "
+              onfocus="this.style.borderColor='#4f46e5'; this.style.outline='none';"
+              onblur="this.style.borderColor='#d1d5db';"
+            >
+              <option value="normal" ${data.priority === 'normal' ? 'selected' : ''}>Normal</option>
+              <option value="high" ${data.priority === 'high' ? 'selected' : ''}>High</option>
+              <option value="emergency" ${data.priority === 'emergency' ? 'selected' : ''}>Emergency</option>
+            </select>
+          </div>
+          
+          <!-- Days of Week -->
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 8px;">
+              Days of Week
+            </label>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => `
+                <label style="
+                  display: flex;
+                  align-items: center;
+                  gap: 6px;
+                  padding: 8px 12px;
+                  border: 2px solid ${(data.daysOfWeek || []).includes(day) ? '#4f46e5' : '#d1d5db'};
+                  border-radius: 8px;
+                  font-size: 13px;
+                  font-weight: 500;
+                  cursor: pointer;
+                  transition: all 0.2s;
+                  background: ${(data.daysOfWeek || []).includes(day) ? '#eef2ff' : '#ffffff'};
+                  color: ${(data.daysOfWeek || []).includes(day) ? '#4f46e5' : '#6b7280'};
+                ">
+                  <input
+                    type="checkbox"
+                    name="daysOfWeek"
+                    value="${day}"
+                    ${(data.daysOfWeek || []).includes(day) ? 'checked' : ''}
+                    style="width: 16px; height: 16px; cursor: pointer;"
+                  />
+                  ${day}
+                </label>
+              `).join('')}
+            </div>
+          </div>
+          
+          <!-- Time Window -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+            <div>
+              <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                Start Time
+              </label>
+              <input
+                type="time"
+                name="timeStart"
+                value="${data.timeWindow?.start || '08:00'}"
+                style="
+                  width: 100%;
+                  padding: 10px 12px;
+                  font-size: 14px;
+                  border: 2px solid #d1d5db;
+                  border-radius: 8px;
+                  transition: all 0.2s;
+                  box-sizing: border-box;
+                "
+                onfocus="this.style.borderColor='#4f46e5'; this.style.outline='none';"
+                onblur="this.style.borderColor='#d1d5db';"
+              />
+            </div>
+            <div>
+              <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                End Time
+              </label>
+              <input
+                type="time"
+                name="timeEnd"
+                value="${data.timeWindow?.end || '17:00'}"
+                style="
+                  width: 100%;
+                  padding: 10px 12px;
+                  font-size: 14px;
+                  border: 2px solid #d1d5db;
+                  border-radius: 8px;
+                  transition: all 0.2s;
+                  box-sizing: border-box;
+                "
+                onfocus="this.style.borderColor='#4f46e5'; this.style.outline='none';"
+                onblur="this.style.borderColor='#d1d5db';"
+              />
+            </div>
+          </div>
+          
+          <!-- Toggles -->
+          <div style="margin-bottom: 20px; display: flex; flex-direction: column; gap: 12px;">
+            <label style="
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              padding: 12px;
+              border: 2px solid #d1d5db;
+              border-radius: 8px;
+              cursor: pointer;
+              transition: all 0.2s;
+            ">
+              <input
+                type="checkbox"
+                name="sameDayAllowed"
+                ${data.sameDayAllowed !== false ? 'checked' : ''}
+                style="width: 18px; height: 18px; cursor: pointer;"
+              />
+              <span style="font-size: 14px; font-weight: 500; color: #374151;">
+                Allow same-day booking
+              </span>
+            </label>
+            
+            <label style="
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              padding: 12px;
+              border: 2px solid #d1d5db;
+              border-radius: 8px;
+              cursor: pointer;
+              transition: all 0.2s;
+            ">
+              <input
+                type="checkbox"
+                name="weekendAllowed"
+                ${data.weekendAllowed ? 'checked' : ''}
+                style="width: 18px; height: 18px; cursor: pointer;"
+              />
+              <span style="font-size: 14px; font-weight: 500; color: #374151;">
+                Allow weekend booking
+              </span>
+            </label>
+          </div>
+          
+          <!-- Notes -->
+          <div style="margin-bottom: 24px;">
+            <label style="display: block; font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+              Notes / Instructions
+            </label>
+            <textarea
+              name="notes"
+              placeholder="Add any special instructions or notes for this booking rule..."
+              rows="3"
+              style="
+                width: 100%;
+                padding: 10px 12px;
+                font-size: 14px;
+                border: 2px solid #d1d5db;
+                border-radius: 8px;
+                transition: all 0.2s;
+                box-sizing: border-box;
+                font-family: inherit;
+                resize: vertical;
+              "
+              onfocus="this.style.borderColor='#4f46e5'; this.style.outline='none';"
+              onblur="this.style.borderColor='#d1d5db';"
+            >${this.escapeHtml(data.notes || '')}</textarea>
+          </div>
+          
+          <!-- Footer Buttons -->
+          <div style="display: flex; gap: 12px; justify-content: flex-end; padding-top: 20px; border-top: 2px solid #e5e7eb;">
+            <button
+              type="button"
+              onclick="document.getElementById('booking-rule-modal').remove()"
+              style="
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: 600;
+                border-radius: 8px;
+                border: 2px solid #d1d5db;
+                background: #ffffff;
+                color: #6b7280;
+                cursor: pointer;
+                transition: all 0.2s;
+              "
+              onmouseover="this.style.background='#f3f4f6'; this.style.borderColor='#9ca3af';"
+              onmouseout="this.style.background='#ffffff'; this.style.borderColor='#d1d5db';"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style="
+                padding: 10px 24px;
+                font-size: 14px;
+                font-weight: 600;
+                border-radius: 8px;
+                border: none;
+                background: #4f46e5;
+                color: #ffffff;
+                cursor: pointer;
+                transition: all 0.2s;
+                box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+              "
+              onmouseover="this.style.background='#4338ca';"
+              onmouseout="this.style.background='#4f46e5';"
+            >
+              ${isEdit ? 'Update Rule' : 'Create Rule'}
+            </button>
+          </div>
+        </form>
+      </div>
+    `;
     
-    // Mark as dirty for save
-    if (typeof this.markDirty === 'function') {
+    document.body.appendChild(modal);
+    
+    // Handle form submission
+    const form = document.getElementById('booking-rule-form');
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      
+      const formData = new FormData(form);
+      
+      // Collect days of week checkboxes
+      const daysOfWeek = [];
+      form.querySelectorAll('input[name="daysOfWeek"]:checked').forEach(cb => {
+        daysOfWeek.push(cb.value);
+      });
+      
+      const ruleData = {
+        id: isEdit ? rule.id : `br-${Date.now()}`,
+        label: formData.get('label'),
+        trade: formData.get('trade'),
+        serviceType: formData.get('serviceType'),
+        priority: formData.get('priority'),
+        daysOfWeek: daysOfWeek,
+        timeWindow: {
+          start: formData.get('timeStart'),
+          end: formData.get('timeEnd')
+        },
+        sameDayAllowed: formData.get('sameDayAllowed') === 'on',
+        weekendAllowed: formData.get('weekendAllowed') === 'on',
+        notes: formData.get('notes')
+      };
+      
+      if (isEdit) {
+        // Update existing rule
+        Object.assign(this.cheatSheet.bookingRules[index], ruleData);
+        console.log('[CHEAT SHEET] ✅ Booking rule updated:', ruleData);
+      } else {
+        // Add new rule
+        this.cheatSheet.bookingRules.push(ruleData);
+        console.log('[CHEAT SHEET] ✅ New booking rule added:', ruleData);
+      }
+      
+      // Close modal
+      modal.remove();
+      
+      // Re-render and mark dirty
+      this.renderBookingRules();
       this.markDirty();
-    }
-    this.markDirty(); // Update UI (respects Version Console)
+    });
+    
+    // Close on background click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.remove();
+      }
+    });
   }
   
-  handleEditBookingRule(index) {
-    if (!this.cheatSheet || !Array.isArray(this.cheatSheet.bookingRules)) return;
-    const rule = this.cheatSheet.bookingRules[index];
-    if (!rule) return;
-    
-    // Simple prompt-based editor (can upgrade to modal later)
-    const label = window.prompt('Rule name/label:', rule.label || '') ?? rule.label;
-    const trade = window.prompt('Trade (e.g. HVAC Residential):', rule.trade || '') ?? rule.trade;
-    const serviceType = window.prompt('Service type (e.g. Repair, Maintenance):', rule.serviceType || '') ?? rule.serviceType;
-    const priority = window.prompt('Priority (normal | high | emergency):', rule.priority || 'normal') ?? rule.priority;
-    const days = window.prompt('Days of week (comma-separated, e.g. Mon,Tue,Wed,Thu,Fri):', (rule.daysOfWeek || []).join(',')) ?? (rule.daysOfWeek || []).join(',');
-    
-    const start = window.prompt('Time window start (HH:MM):', (rule.timeWindow && rule.timeWindow.start) || '08:00') ?? ((rule.timeWindow && rule.timeWindow.start) || '08:00');
-    const end = window.prompt('Time window end (HH:MM):', (rule.timeWindow && rule.timeWindow.end) || '17:00') ?? ((rule.timeWindow && rule.timeWindow.end) || '17:00');
-    
-    const sameDayAllowed = window.prompt('Allow same-day booking? (yes/no):', rule.sameDayAllowed === false ? 'no' : 'yes')?.toLowerCase() === 'no' ? false : true;
-    const weekendAllowed = window.prompt('Allow weekend booking? (yes/no):', rule.weekendAllowed ? 'yes' : 'no')?.toLowerCase() === 'yes';
-    
-    const notes = window.prompt('Notes / instructions for this rule:', rule.notes || '') ?? rule.notes;
-    
-    rule.label = label;
-    rule.trade = trade;
-    rule.serviceType = serviceType;
-    rule.priority = priority;
-    rule.daysOfWeek = days.split(',').map((d) => d.trim()).filter(Boolean);
-    rule.timeWindow = { start, end };
-    rule.sameDayAllowed = sameDayAllowed;
-    rule.weekendAllowed = weekendAllowed;
-    rule.notes = notes;
-    
-    console.log('[CHEAT SHEET] ✅ Booking rule updated (local only)', rule);
-    
-    this.renderBookingRules();
-    
-    if (typeof this.markDirty === 'function') {
-      this.markDirty();
-    }
-    this.markDirty(); // Update UI (respects Version Console)
+  /**
+   * Escape HTML to prevent XSS
+   */
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
   
   handleDeleteBookingRule(index) {
