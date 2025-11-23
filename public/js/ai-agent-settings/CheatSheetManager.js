@@ -6963,6 +6963,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
 
   /**
    * Handle Save button click
+   * Saves current workspace version (name + config)
    */
   async csHandleSave() {
     if (!this.csWorkspaceVersion) return;
@@ -6973,7 +6974,21 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       
       // Get name from input
       const nameInput = document.getElementById('cs-version-name');
-      const name = nameInput ? nameInput.value : this.csWorkspaceVersion.name;
+      const name = nameInput ? nameInput.value.trim() : this.csWorkspaceVersion.name;
+      
+      // Validate name
+      if (!name) {
+        alert('⚠️ Please provide a name for this version before saving.');
+        if (nameInput) nameInput.focus();
+        return;
+      }
+      
+      // Disable save button during save
+      const btnSave = document.getElementById('cs-btn-save');
+      if (btnSave) {
+        btnSave.disabled = true;
+        btnSave.textContent = '💾 Saving...';
+      }
       
       // Update version via adapter
       await this.versioningAdapter.updateDraft(
@@ -6996,26 +7011,63 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       // If Version History is currently visible, refresh it to show updated data
       this.csRefreshVersionHistoryIfVisible();
       
-      console.log('[VERSION CONSOLE] Version saved:', this.csWorkspaceVersion.versionId);
+      console.log('[VERSION CONSOLE] ✅ Version saved:', this.csWorkspaceVersion.versionId);
+      
+      // Show brief success indicator
+      if (btnSave) {
+        btnSave.textContent = '✅ Saved';
+        setTimeout(() => {
+          if (btnSave && !this.csHasUnsavedChanges) {
+            btnSave.textContent = '💾 Save';
+          }
+        }, 1500);
+      }
+      
     } catch (error) {
-      console.error('[VERSION CONSOLE] Error saving version:', error);
-      alert(`Failed to save version: ${error.message}`);
+      console.error('[VERSION CONSOLE] ❌ Error saving version:', error);
+      alert(`❌ Failed to save version:\n\n${error.message}`);
+      
+      // Reset button
+      const btnSave = document.getElementById('cs-btn-save');
+      if (btnSave) {
+        btnSave.disabled = false;
+        btnSave.textContent = '💾 Save';
+      }
     }
   }
 
   /**
    * Handle Close button click
+   * Prompts to save if dirty, then deselects workspace
    */
   async csHandleClose() {
     if (!this.csWorkspaceVersion) return;
 
     if (this.csHasUnsavedChanges) {
-      const save = window.confirm('Save changes before closing? OK=Save, Cancel=Discard.');
-      if (save) {
+      const proceed = window.confirm(
+        '⚠️ UNSAVED CHANGES\n\n' +
+        `You have unsaved changes in "${this.csWorkspaceVersion.name}".\n\n` +
+        'Click OK to save before closing, or Cancel to discard changes.'
+      );
+      
+      if (proceed) {
+        // User chose to save
         await this.csHandleSave();
+        // After save, confirm they still want to close
+        const confirmClose = window.confirm('Changes saved. Close this workspace now?');
+        if (!confirmClose) return; // User cancelled close
+      } else {
+        // User chose to discard - confirm one more time
+        const confirmDiscard = window.confirm(
+          '⚠️ CONFIRM DISCARD\n\n' +
+          'Are you sure you want to close without saving?\n\n' +
+          'All unsaved changes will be lost.'
+        );
+        if (!confirmDiscard) return; // User cancelled discard
       }
     }
 
+    // Close workspace
     this.csWorkspaceVersion = null;
     this.csHasUnsavedChanges = false;
     
@@ -7031,19 +7083,22 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
 
   /**
    * Handle Go Live button click
+   * OPTION A: STRICT RULES - Must save before going live
    */
   async csHandleGoLive() {
     if (!this.csWorkspaceVersion) return;
 
-    // If dirty, save first
+    // OPTION A: STRICT - Require save first (no dirty publish allowed)
     if (this.csHasUnsavedChanges) {
-      const ok = window.confirm('Save changes before going live?');
-      if (!ok) return;
-      await this.csHandleSave();
+      alert('⚠️ You must save your changes before going live.\n\nClick the "💾 Save" button first, then try "Go Live" again.');
+      return;
     }
 
     const confirmLive = window.confirm(
-      'This will replace the current live configuration for this company. Continue?'
+      '🚀 PUBLISH TO LIVE\n\n' +
+      `This will make "${this.csWorkspaceVersion.name}" the active live configuration.\n\n` +
+      'All customer calls will use this configuration immediately.\n\n' +
+      'Continue?'
     );
     if (!confirmLive) return;
 
