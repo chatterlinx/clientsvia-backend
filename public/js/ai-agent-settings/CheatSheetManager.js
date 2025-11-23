@@ -7363,11 +7363,9 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     
     console.log('[VERSION CONSOLE] 🔓 Unlocked and restored', configTabs.length, 'config tabs');
     
-    // Re-render the current tab to ensure content is properly displayed
-    if (this.currentSubTab) {
-      console.log('[VERSION CONSOLE] 🔄 Re-rendering current tab:', this.currentSubTab);
-      this.switchSubTab(this.currentSubTab);
-    }
+    // Auto-switch to Booking Rules for clean UX (first config tab users typically need)
+    console.log('[VERSION CONSOLE] 📅 Switching to Booking Rules tab');
+    this.switchSubTab('booking');
   }
 
   /**
