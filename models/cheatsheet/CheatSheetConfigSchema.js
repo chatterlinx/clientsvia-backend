@@ -72,7 +72,17 @@ const LinkSchema = new mongoose.Schema({
   label: { type: String, required: true },
   category: { 
     type: String, 
-    enum: ['financing', 'portal', 'policy', 'catalog', 'other'], 
+    enum: [
+      'payment',
+      'scheduling',
+      'service-area',
+      'faq',
+      'portal',
+      'financing',
+      'catalog',
+      'policy',
+      'other'
+    ], 
     default: 'other' 
   },
   url: { type: String, default: '' }, // Changed: Not required, defaults to empty string
