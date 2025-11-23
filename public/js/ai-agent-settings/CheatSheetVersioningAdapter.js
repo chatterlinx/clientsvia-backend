@@ -153,6 +153,12 @@ class CheatSheetVersioningAdapter {
     const { expectedVersion = null } = options;
     
     console.log('[VERSION ADAPTER] Saving draft:', draftId);
+    console.log('[VERSION ADAPTER] 🔍 Payload being sent:', {
+      hasConfig: !!config,
+      configKeys: Object.keys(config || {}),
+      schemaVersion: config?.schemaVersion,
+      expectedVersion
+    });
     
     const response = await fetch(
       `${this.baseUrl}/draft/${this.companyId}/${draftId}`,
@@ -168,6 +174,15 @@ class CheatSheetVersioningAdapter {
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      
+      console.error('[VERSION ADAPTER] ❌ Save failed:', {
+        status: response.status,
+        error: errorData,
+        sentConfig: {
+          schemaVersion: config?.schemaVersion,
+          keys: Object.keys(config || {})
+        }
+      });
       
       // Handle version conflict (optimistic concurrency)
       if (response.status === 409) {

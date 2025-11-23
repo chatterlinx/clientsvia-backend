@@ -2731,27 +2731,8 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       this.cheatSheet.companyContacts = [];
     }
     
-    const newContact = {
-      id: `cc-${Date.now()}`,
-      name: 'New Contact',  // ← FIXED: Use "name" to match schema
-      role: 'manager',
-      phone: '',  // ← FIXED: Use "phone" to match schema
-      email: '',
-      isPrimary: false,
-      availableHours: '24/7',
-      notes: ''
-    };
-    
-    this.cheatSheet.companyContacts.push(newContact);
-    
-    console.log('[CHEAT SHEET] ✅ New company contact added (local only)', newContact);
-    
-    this.renderCompanyContacts();
-    
-    if (typeof this.markDirty === 'function') {
-      this.markDirty();
-    }
-    this.markDirty(); // Update UI (respects Version Console)
+    // Open modal for new contact
+    this.showCompanyContactModal();
   }
   
   handleEditCompanyContact(index) {
@@ -2759,31 +2740,350 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     const contact = this.cheatSheet.companyContacts[index];
     if (!contact) return;
     
-    // FIXED: Use schema field names (name, phone, email) not (label, phoneNumber, type)
-    const name = window.prompt('Contact name:', contact.name || '') ?? contact.name;
-    const role = window.prompt('Role (owner, manager, dispatcher, tech, front-desk, etc.):', contact.role || 'manager') ?? contact.role;
-    const phone = window.prompt('Phone number:', contact.phone || '') ?? contact.phone;
-    const email = window.prompt('Email address:', contact.email || '') ?? contact.email;
-    const isPrimaryPrompt = window.prompt('Is this a PRIMARY contact? (yes/no):', contact.isPrimary ? 'yes' : 'no')?.toLowerCase() === 'yes';
-    const availableHours = window.prompt('Available hours (e.g. "Mon-Fri 9-5", "24/7", "After 6pm"):', contact.availableHours || '24/7') ?? contact.availableHours;
-    const notes = window.prompt('Notes / routing instructions:', contact.notes || '') ?? contact.notes;
+    // Open modal for existing contact
+    this.showCompanyContactModal(index);
+  }
+  
+  /**
+   * Show Company Contact Modal (Enterprise Form)
+   * @param {number|null} contactIndex - Index of contact being edited, or null for new
+   */
+  showCompanyContactModal(contactIndex = null) {
+    const isEdit = contactIndex !== null;
+    const contact = isEdit ? this.cheatSheet.companyContacts[contactIndex] : null;
     
-    contact.name = name;
-    contact.role = role;
-    contact.phone = phone;
-    contact.email = email;
-    contact.isPrimary = isPrimaryPrompt;
-    contact.availableHours = availableHours;
-    contact.notes = notes;
+    // Create modal HTML
+    const modalHTML = `
+      <div id="company-contact-modal" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.75);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fadeIn 0.2s ease-out;
+      ">
+        <div style="
+          background: #ffffff;
+          border-radius: 12px;
+          width: 90%;
+          max-width: 600px;
+          max-height: 90vh;
+          overflow-y: auto;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          animation: slideUp 0.3s ease-out;
+        ">
+          <!-- Header -->
+          <div style="
+            padding: 24px 24px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            position: sticky;
+            top: 0;
+            background: #ffffff;
+            z-index: 1;
+          ">
+            <h2 style="margin: 0; font-size: 20px; font-weight: 600; color: #111827;">
+              ${isEdit ? '✏️ Edit Company Contact' : '➕ Add Company Contact'}
+            </h2>
+          </div>
+          
+          <!-- Form Body -->
+          <div style="padding: 24px;">
+            <form id="company-contact-form" style="display: flex; flex-direction: column; gap: 20px;">
+              
+              <!-- Name -->
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Contact Name *
+                </label>
+                <input 
+                  type="text" 
+                  id="cc-name" 
+                  value="${contact?.name || ''}" 
+                  placeholder="e.g., John Smith"
+                  required
+                  style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-family: inherit;
+                  "
+                />
+              </div>
+              
+              <!-- Role -->
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Role/Title *
+                </label>
+                <select 
+                  id="cc-role"
+                  required
+                  style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-family: inherit;
+                    background: #ffffff;
+                  "
+                >
+                  <option value="owner" ${contact?.role === 'owner' ? 'selected' : ''}>Owner</option>
+                  <option value="manager" ${contact?.role === 'manager' ? 'selected' : ''}>Manager</option>
+                  <option value="dispatcher" ${contact?.role === 'dispatcher' ? 'selected' : ''}>Dispatcher</option>
+                  <option value="tech" ${contact?.role === 'tech' ? 'selected' : ''}>Technician</option>
+                  <option value="front-desk" ${contact?.role === 'front-desk' ? 'selected' : ''}>Front Desk</option>
+                  <option value="billing" ${contact?.role === 'billing' ? 'selected' : ''}>Billing</option>
+                  <option value="other" ${contact?.role === 'other' ? 'selected' : ''}>Other</option>
+                </select>
+              </div>
+              
+              <!-- Phone & Email (2-column) -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                  <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                    Phone Number
+                  </label>
+                  <input 
+                    type="tel" 
+                    id="cc-phone" 
+                    value="${contact?.phone || ''}" 
+                    placeholder="(555) 123-4567"
+                    style="
+                      width: 100%;
+                      padding: 10px 12px;
+                      border: 1px solid #d1d5db;
+                      border-radius: 6px;
+                      font-size: 14px;
+                      font-family: inherit;
+                    "
+                  />
+                </div>
+                
+                <div>
+                  <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                    Email Address
+                  </label>
+                  <input 
+                    type="email" 
+                    id="cc-email" 
+                    value="${contact?.email || ''}" 
+                    placeholder="name@company.com"
+                    style="
+                      width: 100%;
+                      padding: 10px 12px;
+                      border: 1px solid #d1d5db;
+                      border-radius: 6px;
+                      font-size: 14px;
+                      font-family: inherit;
+                    "
+                  />
+                </div>
+              </div>
+              
+              <!-- Available Hours -->
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Available Hours
+                </label>
+                <input 
+                  type="text" 
+                  id="cc-available-hours" 
+                  value="${contact?.availableHours || '24/7'}" 
+                  placeholder="e.g., Mon-Fri 9-5, 24/7, After 6pm"
+                  style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-family: inherit;
+                  "
+                />
+              </div>
+              
+              <!-- Primary Contact Toggle -->
+              <div style="
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 12px;
+                background: #f9fafb;
+                border-radius: 6px;
+              ">
+                <input 
+                  type="checkbox" 
+                  id="cc-is-primary" 
+                  ${contact?.isPrimary ? 'checked' : ''}
+                  style="
+                    width: 18px;
+                    height: 18px;
+                    cursor: pointer;
+                  "
+                />
+                <label for="cc-is-primary" style="
+                  font-size: 14px;
+                  font-weight: 500;
+                  color: #374151;
+                  cursor: pointer;
+                  user-select: none;
+                ">
+                  ⭐ Primary Contact
+                </label>
+              </div>
+              
+              <!-- Notes -->
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Notes / Routing Instructions
+                </label>
+                <textarea 
+                  id="cc-notes" 
+                  rows="3"
+                  placeholder="Optional: Add internal notes, routing instructions, or special handling..."
+                  style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-family: inherit;
+                    resize: vertical;
+                  "
+                >${contact?.notes || ''}</textarea>
+              </div>
+              
+            </form>
+          </div>
+          
+          <!-- Footer Actions -->
+          <div style="
+            padding: 16px 24px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            position: sticky;
+            bottom: 0;
+            background: #ffffff;
+          ">
+            <button 
+              type="button" 
+              id="cc-modal-cancel"
+              style="
+                padding: 10px 20px;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                background: #ffffff;
+                color: #374151;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s;
+              "
+              onmouseover="this.style.background='#f9fafb'"
+              onmouseout="this.style.background='#ffffff'"
+            >
+              Cancel
+            </button>
+            <button 
+              type="button" 
+              id="cc-modal-save"
+              style="
+                padding: 10px 20px;
+                border: none;
+                border-radius: 6px;
+                background: #3b82f6;
+                color: #ffffff;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s;
+              "
+              onmouseover="this.style.background='#2563eb'"
+              onmouseout="this.style.background='#3b82f6'"
+            >
+              💾 Save Contact
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
     
-    console.log('[CHEAT SHEET] ✅ Company contact updated (local only)', contact);
+    // Inject modal into DOM
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
     
-    this.renderCompanyContacts();
+    // Wire up events
+    document.getElementById('cc-modal-cancel').addEventListener('click', () => {
+      document.getElementById('company-contact-modal').remove();
+    });
     
-    if (typeof this.markDirty === 'function') {
-      this.markDirty();
+    document.getElementById('cc-modal-save').addEventListener('click', () => {
+      this.saveCompanyContactForm(contactIndex);
+    });
+    
+    // Focus first field
+    setTimeout(() => {
+      document.getElementById('cc-name')?.focus();
+    }, 100);
+  }
+  
+  /**
+   * Save Company Contact Form Data
+   */
+  saveCompanyContactForm(contactIndex = null) {
+    const isEdit = contactIndex !== null;
+    
+    // Collect form data
+    const name = document.getElementById('cc-name').value.trim();
+    const role = document.getElementById('cc-role').value;
+    const phone = document.getElementById('cc-phone').value.trim();
+    const email = document.getElementById('cc-email').value.trim();
+    const availableHours = document.getElementById('cc-available-hours').value.trim();
+    const isPrimary = document.getElementById('cc-is-primary').checked;
+    const notes = document.getElementById('cc-notes').value.trim();
+    
+    // Validate required fields
+    if (!name) {
+      alert('⚠️ Contact name is required');
+      document.getElementById('cc-name').focus();
+      return;
     }
-    this.markDirty(); // Update UI (respects Version Console)
+    
+    // Build contact object
+    const contactData = {
+      id: isEdit ? this.cheatSheet.companyContacts[contactIndex].id : `cc-${Date.now()}`,
+      name,
+      role,
+      phone,
+      email,
+      availableHours: availableHours || '24/7',
+      isPrimary,
+      notes
+    };
+    
+    // Update or add contact
+    if (isEdit) {
+      this.cheatSheet.companyContacts[contactIndex] = contactData;
+      console.log('[CHEAT SHEET] ✅ Company contact updated:', contactData);
+    } else {
+      this.cheatSheet.companyContacts.push(contactData);
+      console.log('[CHEAT SHEET] ✅ Company contact added:', contactData);
+    }
+    
+    // Close modal
+    document.getElementById('company-contact-modal').remove();
+    
+    // Re-render and mark dirty
+    this.renderCompanyContacts();
+    this.markDirty();
   }
   
   handleDeleteCompanyContact(index) {
