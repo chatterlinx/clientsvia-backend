@@ -23,11 +23,21 @@
     .subnav button { padding: 8px 14px; border-radius: 6px; border: none; background: transparent; color: #6b7280; font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.2s; }
     .subnav button.active { background: #eef2ff; color: #4f46e5; font-weight: 600; border-bottom: 2px solid #4f46e5; }
     .subnav button:hover { background: #f9fafb; color: #111827; }
-    /* LEVEL 3: Cheat Sheet Sub-tabs - Modern Blue Background */
+    /* LEVEL 3: Cheat Sheet Sub-tabs - Modern Blue Background with Color-Coded Groups */
     #cheat-subnav { background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%); border-bottom: 3px solid #1e40af; padding: 12px 18px; box-shadow: 0 2px 8px rgba(30, 58, 138, 0.2); }
     .cheatsheet-subtab-btn { padding: 10px 16px !important; font-size: 13px !important; font-weight: 500 !important; border-bottom: 3px solid transparent !important; color: #cbd5e1 !important; cursor: pointer !important; background: transparent !important; transition: all 0.2s !important; border-radius: 6px !important; }
     .cheatsheet-subtab-btn:hover { color: #ffffff !important; background: rgba(255, 255, 255, 0.1) !important; border-bottom-color: transparent !important; }
     .cheatsheet-subtab-btn.active { color: #ffffff !important; font-weight: 700 !important; background: rgba(255, 255, 255, 0.15) !important; border-bottom-color: #60a5fa !important; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
+    /* Tab Group Visual Indicators */
+    .tab-group { position: relative; }
+    .tab-group::before { content: ''; position: absolute; left: -8px; top: 50%; transform: translateY(-50%); width: 2px; height: 60%; background: currentColor; opacity: 0.3; border-radius: 2px; }
+    .tab-group[data-group="ai-behavior"]::before { background: #f97316; }
+    .tab-group[data-group="reference"]::before { background: #3b82f6; }
+    .tab-group[data-group="admin"]::before { background: #10b981; }
+    /* Enhanced hover states for grouped tabs */
+    .tab-ai-behavior:hover { background: rgba(249, 115, 22, 0.15) !important; }
+    .tab-reference:hover { background: rgba(59, 130, 246, 0.15) !important; }
+    .tab-admin:hover { background: rgba(16, 185, 129, 0.15) !important; }
     /* Cheat Sheet Content Areas */
     .cheatsheet-subtab-content { padding: 20px 0; min-height: 300px; }
     .cheatsheet-subtab-content.hidden { display: none !important; }
@@ -106,19 +116,34 @@
 
   <!-- TERTIARY NAV (ONLY WHEN CHEAT SHEET ACTIVE) -->
   <nav id="cheat-subnav" class="subnav" style="display:none;">
-    <!-- CHEAT SHEET SUB-TABS -->
-    <button class="active js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="triage">Triage</button>
-    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="frontline-intel">Frontline-Intel</button>
-    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="transfer-calls">Transfer Calls</button>
-    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="edge-cases">Edge Cases</button>
-    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="behavior">Behavior</button>
-    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="guardrails">Guardrails</button>
-    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="booking">Booking Rules</button>
-    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="company-contacts">Company Contacts</button>
-    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="links">Links</button>
-    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="calculator">Calculator</button>
-    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="version-history">📚 Version History</button>
-    <button class="js-cheat-tab cheatsheet-subtab-btn" data-cheat-target="cheat-active-instructions">Active Instructions Preview</button>
+    <!-- CHEAT SHEET SUB-TABS - ORGANIZED BY IMPACT -->
+    
+    <!-- ⚡ AI BEHAVIOR CONFIG GROUP (Affects agent performance) -->
+    <div class="tab-group" data-group="ai-behavior" style="display: inline-flex; align-items: center; gap: 0; margin-right: 16px; position: relative;">
+      <span class="tab-group-indicator" style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #f97316; border-radius: 2px;" title="⚡ AI Behavior Config - Changes affect agent performance"></span>
+      <button class="active js-cheat-tab cheatsheet-subtab-btn tab-ai-behavior" data-cheat-target="triage" style="border-left: 3px solid #f97316;">Triage</button>
+      <button class="js-cheat-tab cheatsheet-subtab-btn tab-ai-behavior" data-cheat-target="frontline-intel" style="border-left: 3px solid #f97316;">Frontline-Intel</button>
+      <button class="js-cheat-tab cheatsheet-subtab-btn tab-ai-behavior" data-cheat-target="transfer-calls" style="border-left: 3px solid #f97316;">Transfer Calls</button>
+      <button class="js-cheat-tab cheatsheet-subtab-btn tab-ai-behavior" data-cheat-target="edge-cases" style="border-left: 3px solid #f97316;">Edge Cases</button>
+      <button class="js-cheat-tab cheatsheet-subtab-btn tab-ai-behavior" data-cheat-target="behavior" style="border-left: 3px solid #f97316;">Behavior</button>
+      <button class="js-cheat-tab cheatsheet-subtab-btn tab-ai-behavior" data-cheat-target="guardrails" style="border-left: 3px solid #f97316;">Guardrails</button>
+      <button class="js-cheat-tab cheatsheet-subtab-btn tab-ai-behavior" data-cheat-target="booking" style="border-left: 3px solid #f97316;">Booking Rules</button>
+      <button class="js-cheat-tab cheatsheet-subtab-btn tab-ai-behavior" data-cheat-target="company-contacts" style="border-left: 3px solid #f97316;">Company Contacts</button>
+    </div>
+    
+    <!-- 📚 REFERENCE DATA GROUP (Used by agent during calls) -->
+    <div class="tab-group" data-group="reference" style="display: inline-flex; align-items: center; gap: 0; margin-right: 16px; position: relative;">
+      <span class="tab-group-indicator" style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #3b82f6; border-radius: 2px;" title="📚 Reference Data - Used by agent during calls"></span>
+      <button class="js-cheat-tab cheatsheet-subtab-btn tab-reference" data-cheat-target="links" style="border-left: 3px solid #3b82f6;">Links</button>
+      <button class="js-cheat-tab cheatsheet-subtab-btn tab-reference" data-cheat-target="calculator" style="border-left: 3px solid #3b82f6;">Calculator</button>
+    </div>
+    
+    <!-- ⚙️ ADMIN TOOLS GROUP (Management & monitoring) -->
+    <div class="tab-group" data-group="admin" style="display: inline-flex; align-items: center; gap: 0; position: relative;">
+      <span class="tab-group-indicator" style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #10b981; border-radius: 2px;" title="⚙️ Admin Tools - Version management"></span>
+      <button class="js-cheat-tab cheatsheet-subtab-btn tab-admin" data-cheat-target="version-history" style="border-left: 3px solid #10b981;">📚 Version History</button>
+      <button class="js-cheat-tab cheatsheet-subtab-btn tab-admin" data-cheat-target="cheat-active-instructions" style="border-left: 3px solid #10b981;">Active Instructions Preview</button>
+    </div>
   </nav>
 
   <main class="page">
