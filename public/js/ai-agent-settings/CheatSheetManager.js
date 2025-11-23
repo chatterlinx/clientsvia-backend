@@ -2196,8 +2196,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     if (typeof this.markDirty === 'function') {
       this.markDirty();
     }
-    this.isDirty = true;
-    this.renderStatus(); // Update UI to enable save button
+    this.markDirty(); // Update UI (respects Version Console)
   }
   
   handleEditBookingRule(index) {
@@ -2237,8 +2236,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     if (typeof this.markDirty === 'function') {
       this.markDirty();
     }
-    this.isDirty = true;
-    this.renderStatus(); // Update UI to enable save button
+    this.markDirty(); // Update UI (respects Version Console)
   }
   
   handleDeleteBookingRule(index) {
@@ -2257,8 +2255,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     if (typeof this.markDirty === 'function') {
       this.markDirty();
     }
-    this.isDirty = true;
-    this.renderStatus(); // Update UI to enable save button
+    this.markDirty(); // Update UI (respects Version Console)
   }
   
   // ═══════════════════════════════════════════════════════════════════
@@ -2450,8 +2447,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     if (typeof this.markDirty === 'function') {
       this.markDirty();
     }
-    this.isDirty = true;
-    this.renderStatus(); // Update UI to enable save button
+    this.markDirty(); // Update UI (respects Version Console)
   }
   
   handleEditCompanyContact(index) {
@@ -2483,8 +2479,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     if (typeof this.markDirty === 'function') {
       this.markDirty();
     }
-    this.isDirty = true;
-    this.renderStatus(); // Update UI to enable save button
+    this.markDirty(); // Update UI (respects Version Console)
   }
   
   handleDeleteCompanyContact(index) {
@@ -2503,8 +2498,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     if (typeof this.markDirty === 'function') {
       this.markDirty();
     }
-    this.isDirty = true;
-    this.renderStatus(); // Update UI to enable save button
+    this.markDirty(); // Update UI (respects Version Console)
   }
   
   // ═══════════════════════════════════════════════════════════════════
@@ -2694,8 +2688,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     if (typeof this.markDirty === 'function') {
       this.markDirty();
     }
-    this.isDirty = true;
-    this.renderStatus(); // Update UI to enable save button
+    this.markDirty(); // Update UI (respects Version Console)
   }
   
   handleEditLink(index) {
@@ -2722,8 +2715,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     if (typeof this.markDirty === 'function') {
       this.markDirty();
     }
-    this.isDirty = true;
-    this.renderStatus(); // Update UI to enable save button
+    this.markDirty(); // Update UI (respects Version Console)
   }
   
   handleDeleteLink(index) {
@@ -2742,8 +2734,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     if (typeof this.markDirty === 'function') {
       this.markDirty();
     }
-    this.isDirty = true;
-    this.renderStatus(); // Update UI to enable save button
+    this.markDirty(); // Update UI (respects Version Console)
   }
   
   // ═══════════════════════════════════════════════════════════════════
@@ -2914,8 +2905,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     if (typeof this.markDirty === 'function') {
       this.markDirty();
     }
-    this.isDirty = true;
-    this.renderStatus(); // Update UI to enable save button
+    this.markDirty(); // Update UI (respects Version Console)
   }
   
   handleEditCalculator(index) {
@@ -2941,8 +2931,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     if (typeof this.markDirty === 'function') {
       this.markDirty();
     }
-    this.isDirty = true;
-    this.renderStatus(); // Update UI to enable save button
+    this.markDirty(); // Update UI (respects Version Console)
   }
   
   handleDeleteCalculator(index) {
@@ -2961,8 +2950,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     if (typeof this.markDirty === 'function') {
       this.markDirty();
     }
-    this.isDirty = true;
-    this.renderStatus(); // Update UI to enable save button
+    this.markDirty(); // Update UI (respects Version Console)
   }
   
   // ═══════════════════════════════════════════════════════════════════
@@ -4441,7 +4429,13 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       this.showSuccessPopup('✅ SAVED SUCCESSFULLY!', 'All changes have been saved to MongoDB.');
       
       this.isDirty = false;
-      this.renderStatus();
+      
+      // Update UI based on active system
+      if (this.useVersionConsole && this.csWorkspaceVersion) {
+        this.renderVersionConsole();
+      } else {
+        this.renderStatus();
+      }
       
       console.log('[CHEAT SHEET] ✅ CHECKPOINT 12: Save complete. isDirty now:', this.isDirty);
       
@@ -4510,8 +4504,12 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       // Mark as clean
       this.isDirty = false;
       
-      // Re-render status banner (will keep version system UI since useVersioning is still true)
-      this.renderStatus();
+      // Re-render console/banner based on active system
+      if (this.useVersionConsole && this.csWorkspaceVersion) {
+        this.renderVersionConsole();
+      } else {
+        this.renderStatus();
+      }
       
       this.showNotification('✅ Changes saved successfully!', 'success');
       
@@ -4578,7 +4576,13 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       
       // Reload status (to get updated timestamps, etc.)
       this.versionStatus = await this.versioningAdapter.getStatus();
-      this.renderStatus();
+      
+      // Update UI based on active system
+      if (this.useVersionConsole && this.csWorkspaceVersion) {
+        this.renderVersionConsole();
+      } else {
+        this.renderStatus();
+      }
       
       this.showNotification('✅ Draft saved successfully!', 'success');
     } catch (error) {
