@@ -7154,9 +7154,27 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
 
   /**
    * Collect current config from CheatSheet UI
+   * Returns config in the format expected by backend validator
    */
   csCollectConfigFromCheatSheetUI() {
-    return this.cheatSheet;
+    // Extract only the config fields, ensuring schemaVersion is present
+    return {
+      schemaVersion: this.cheatSheet.schemaVersion || 1,
+      
+      // V1 Legacy sections
+      triage: this.cheatSheet.triage || {},
+      frontlineIntel: this.cheatSheet.frontlineIntel || {},
+      transferRules: this.cheatSheet.transferRules || {},
+      edgeCases: this.cheatSheet.edgeCases || {},
+      behavior: this.cheatSheet.behavior || {},
+      guardrails: this.cheatSheet.guardrails || {},
+      
+      // V2 Structured sections
+      bookingRules: this.cheatSheet.bookingRules || [],
+      companyContacts: this.cheatSheet.companyContacts || [],
+      links: this.cheatSheet.links || [],
+      calculators: this.cheatSheet.calculators || []
+    };
   }
 
   /**
