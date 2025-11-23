@@ -1782,9 +1782,10 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
           </div>
           <button
             id="btn-add-booking-rule"
-            style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 14px; font-weight: 600; border-radius: 8px; border: none; background: #4f46e5; color: #ffffff; cursor: pointer; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3); transition: all 0.2s;"
-            onmouseover="this.style.background='#4338ca'"
-            onmouseout="this.style.background='#4f46e5'"
+            ${!this.csWorkspaceVersion ? 'disabled' : ''}
+            style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 14px; font-weight: 600; border-radius: 8px; border: none; background: ${!this.csWorkspaceVersion ? '#e5e7eb' : '#4f46e5'}; color: ${!this.csWorkspaceVersion ? '#9ca3af' : '#ffffff'}; cursor: ${!this.csWorkspaceVersion ? 'not-allowed' : 'pointer'}; box-shadow: ${!this.csWorkspaceVersion ? 'none' : '0 2px 4px rgba(79, 70, 229, 0.3)'}; transition: all 0.2s;"
+            ${this.csWorkspaceVersion ? `onmouseover="this.style.background='#4338ca'" onmouseout="this.style.background='#4f46e5'"` : ''}
+            title="${!this.csWorkspaceVersion ? '⚠️ Select a version to edit first' : 'Add a new booking rule'}"
           >
             <span style="font-size: 16px;">＋</span>
             <span>Add Booking Rule</span>
@@ -1845,17 +1846,19 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
           <div style="display: flex; gap: 8px;">
             <button
               class="btn-edit-booking-rule"
-              style="padding: 8px 14px; font-size: 13px; font-weight: 500; border-radius: 6px; border: 1px solid #d1d5db; background: #ffffff; color: #374151; cursor: pointer; transition: all 0.2s;"
-              onmouseover="this.style.background='#f3f4f6'"
-              onmouseout="this.style.background='#ffffff'"
+              ${!this.csWorkspaceVersion ? 'disabled' : ''}
+              style="padding: 8px 14px; font-size: 13px; font-weight: 500; border-radius: 6px; border: 1px solid ${!this.csWorkspaceVersion ? '#e5e7eb' : '#d1d5db'}; background: ${!this.csWorkspaceVersion ? '#f9fafb' : '#ffffff'}; color: ${!this.csWorkspaceVersion ? '#9ca3af' : '#374151'}; cursor: ${!this.csWorkspaceVersion ? 'not-allowed' : 'pointer'}; transition: all 0.2s;"
+              ${this.csWorkspaceVersion ? `onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#ffffff'"` : ''}
+              title="${!this.csWorkspaceVersion ? '⚠️ Select a version to edit first' : 'Edit this booking rule'}"
             >
               Edit
             </button>
             <button
               class="btn-delete-booking-rule"
-              style="padding: 8px 14px; font-size: 13px; font-weight: 500; border-radius: 6px; border: 1px solid #fecaca; background: #ffffff; color: #dc2626; cursor: pointer; transition: all 0.2s;"
-              onmouseover="this.style.background='#fef2f2'"
-              onmouseout="this.style.background='#ffffff'"
+              ${!this.csWorkspaceVersion ? 'disabled' : ''}
+              style="padding: 8px 14px; font-size: 13px; font-weight: 500; border-radius: 6px; border: 1px solid ${!this.csWorkspaceVersion ? '#e5e7eb' : '#fecaca'}; background: ${!this.csWorkspaceVersion ? '#f9fafb' : '#ffffff'}; color: ${!this.csWorkspaceVersion ? '#9ca3af' : '#dc2626'}; cursor: ${!this.csWorkspaceVersion ? 'not-allowed' : 'pointer'}; transition: all 0.2s;"
+              ${this.csWorkspaceVersion ? `onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='#ffffff'"` : ''}
+              title="${!this.csWorkspaceVersion ? '⚠️ Select a version to edit first' : 'Delete this booking rule'}"
             >
               Delete
             </button>
@@ -1898,6 +1901,13 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
   }
   
   handleAddBookingRule() {
+    // CRITICAL: Must have workspace selected
+    if (!this.csWorkspaceVersion) {
+      console.warn('[CHEAT SHEET] ⚠️ Cannot add booking rule - no workspace selected');
+      alert('⚠️ Please select a version to edit first from the dropdown above.');
+      return;
+    }
+    
     if (!this.cheatSheet) return;
     
     if (!Array.isArray(this.cheatSheet.bookingRules)) {
@@ -1909,6 +1919,13 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
   }
   
   handleEditBookingRule(index) {
+    // CRITICAL: Must have workspace selected
+    if (!this.csWorkspaceVersion) {
+      console.warn('[CHEAT SHEET] ⚠️ Cannot edit booking rule - no workspace selected');
+      alert('⚠️ Please select a version to edit first from the dropdown above.');
+      return;
+    }
+    
     if (!this.cheatSheet || !Array.isArray(this.cheatSheet.bookingRules)) return;
     const rule = this.cheatSheet.bookingRules[index];
     if (!rule) return;
@@ -2389,6 +2406,13 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
   }
   
   handleDeleteBookingRule(index) {
+    // CRITICAL: Must have workspace selected
+    if (!this.csWorkspaceVersion) {
+      console.warn('[CHEAT SHEET] ⚠️ Cannot delete booking rule - no workspace selected');
+      alert('⚠️ Please select a version to edit first from the dropdown above.');
+      return;
+    }
+    
     if (!this.cheatSheet || !Array.isArray(this.cheatSheet.bookingRules)) return;
     const rule = this.cheatSheet.bookingRules[index];
     if (!rule) return;
