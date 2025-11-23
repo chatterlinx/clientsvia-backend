@@ -106,6 +106,13 @@ class CheatSheetManager {
     // Check if this is a Coming Soon tab (V2-only placeholders)
     if (CHEATSHEET_COMING_SOON_TABS[subTab]) {
       console.log('[CHEAT SHEET] 📋 Routing to Coming Soon renderer for:', subTab);
+      
+      // Hide lockout screen (admin tabs are always accessible)
+      const lockoutScreen = document.getElementById('workspace-lockout-screen');
+      if (lockoutScreen) {
+        lockoutScreen.style.display = 'none';
+      }
+      
       this.renderComingSoon(subTab);
       // Hide all V1 sub-tab contents and show V2 container
       document.querySelectorAll('.cheatsheet-subtab-content:not(#cheatsheet-v2-dynamic-content)').forEach(el => {
@@ -114,6 +121,7 @@ class CheatSheetManager {
       const v2Container = document.getElementById('cheatsheet-v2-dynamic-content');
       if (v2Container) {
         v2Container.classList.remove('hidden');
+        v2Container.style.display = ''; // Ensure visible
       }
       console.log(`[CHEAT SHEET] ✅ Switched to Coming Soon tab: ${subTab}`);
       return;
@@ -122,6 +130,31 @@ class CheatSheetManager {
     // Check if this is Booking Rules tab (V2-only, fully implemented)
     if (subTab === 'booking') {
       console.log('[CHEAT SHEET] 📅 Routing to Booking Rules renderer');
+      
+      // If no workspace, show lockout screen instead of content
+      if (!this.csWorkspaceVersion) {
+        console.log('[CHEAT SHEET] ⚠️ No workspace selected, showing lockout screen');
+        const lockoutScreen = document.getElementById('workspace-lockout-screen');
+        if (lockoutScreen) {
+          lockoutScreen.style.display = 'block';
+        }
+        // Hide all content
+        document.querySelectorAll('.cheatsheet-subtab-content').forEach(el => {
+          el.classList.add('hidden');
+        });
+        const v2Container = document.getElementById('cheatsheet-v2-dynamic-content');
+        if (v2Container) {
+          v2Container.classList.add('hidden');
+        }
+        return;
+      }
+      
+      // Hide lockout screen when workspace is active
+      const lockoutScreen = document.getElementById('workspace-lockout-screen');
+      if (lockoutScreen) {
+        lockoutScreen.style.display = 'none';
+      }
+      
       this.renderBookingRules();
       // Hide all V1 sub-tab contents and show V2 container
       document.querySelectorAll('.cheatsheet-subtab-content:not(#cheatsheet-v2-dynamic-content)').forEach(el => {
@@ -130,6 +163,7 @@ class CheatSheetManager {
       const v2Container = document.getElementById('cheatsheet-v2-dynamic-content');
       if (v2Container) {
         v2Container.classList.remove('hidden');
+        v2Container.style.display = ''; // Ensure visible
       }
       console.log(`[CHEAT SHEET] ✅ Switched to Booking Rules tab`);
       return;
@@ -138,14 +172,30 @@ class CheatSheetManager {
     // Check if this is Company Contacts tab (V2-only, fully implemented)
     if (subTab === 'company-contacts') {
       console.log('[CHEAT SHEET] 📞 Routing to Company Contacts renderer');
+      
+      // If no workspace, show lockout screen instead of content
+      if (!this.csWorkspaceVersion) {
+        console.log('[CHEAT SHEET] ⚠️ No workspace selected, showing lockout screen');
+        const lockoutScreen = document.getElementById('workspace-lockout-screen');
+        if (lockoutScreen) lockoutScreen.style.display = 'block';
+        document.querySelectorAll('.cheatsheet-subtab-content').forEach(el => el.classList.add('hidden'));
+        const v2Container = document.getElementById('cheatsheet-v2-dynamic-content');
+        if (v2Container) v2Container.classList.add('hidden');
+        return;
+      }
+      
+      // Hide lockout, show content
+      const lockoutScreen = document.getElementById('workspace-lockout-screen');
+      if (lockoutScreen) lockoutScreen.style.display = 'none';
+      
       this.renderCompanyContacts();
-      // Hide all V1 sub-tab contents and show V2 container
       document.querySelectorAll('.cheatsheet-subtab-content:not(#cheatsheet-v2-dynamic-content)').forEach(el => {
         el.classList.add('hidden');
       });
       const v2Container = document.getElementById('cheatsheet-v2-dynamic-content');
       if (v2Container) {
         v2Container.classList.remove('hidden');
+        v2Container.style.display = '';
       }
       console.log(`[CHEAT SHEET] ✅ Switched to Company Contacts tab`);
       return;
@@ -154,14 +204,30 @@ class CheatSheetManager {
     // Check if this is Links tab (V2-only, fully implemented)
     if (subTab === 'links') {
       console.log('[CHEAT SHEET] 🔗 Routing to Links renderer');
+      
+      // If no workspace, show lockout screen instead of content
+      if (!this.csWorkspaceVersion) {
+        console.log('[CHEAT SHEET] ⚠️ No workspace selected, showing lockout screen');
+        const lockoutScreen = document.getElementById('workspace-lockout-screen');
+        if (lockoutScreen) lockoutScreen.style.display = 'block';
+        document.querySelectorAll('.cheatsheet-subtab-content').forEach(el => el.classList.add('hidden'));
+        const v2Container = document.getElementById('cheatsheet-v2-dynamic-content');
+        if (v2Container) v2Container.classList.add('hidden');
+        return;
+      }
+      
+      // Hide lockout, show content
+      const lockoutScreen = document.getElementById('workspace-lockout-screen');
+      if (lockoutScreen) lockoutScreen.style.display = 'none';
+      
       this.renderLinks();
-      // Hide all V1 sub-tab contents and show V2 container
       document.querySelectorAll('.cheatsheet-subtab-content:not(#cheatsheet-v2-dynamic-content)').forEach(el => {
         el.classList.add('hidden');
       });
       const v2Container = document.getElementById('cheatsheet-v2-dynamic-content');
       if (v2Container) {
         v2Container.classList.remove('hidden');
+        v2Container.style.display = '';
       }
       console.log(`[CHEAT SHEET] ✅ Switched to Links tab`);
       return;
@@ -170,14 +236,30 @@ class CheatSheetManager {
     // Check if this is Calculator tab (V2-only, fully implemented)
     if (subTab === 'calculator') {
       console.log('[CHEAT SHEET] 🧮 Routing to Calculator renderer');
+      
+      // If no workspace, show lockout screen instead of content
+      if (!this.csWorkspaceVersion) {
+        console.log('[CHEAT SHEET] ⚠️ No workspace selected, showing lockout screen');
+        const lockoutScreen = document.getElementById('workspace-lockout-screen');
+        if (lockoutScreen) lockoutScreen.style.display = 'block';
+        document.querySelectorAll('.cheatsheet-subtab-content').forEach(el => el.classList.add('hidden'));
+        const v2Container = document.getElementById('cheatsheet-v2-dynamic-content');
+        if (v2Container) v2Container.classList.add('hidden');
+        return;
+      }
+      
+      // Hide lockout, show content
+      const lockoutScreen = document.getElementById('workspace-lockout-screen');
+      if (lockoutScreen) lockoutScreen.style.display = 'none';
+      
       this.renderCalculator();
-      // Hide all V1 sub-tab contents and show V2 container
       document.querySelectorAll('.cheatsheet-subtab-content:not(#cheatsheet-v2-dynamic-content)').forEach(el => {
         el.classList.add('hidden');
       });
       const v2Container = document.getElementById('cheatsheet-v2-dynamic-content');
       if (v2Container) {
         v2Container.classList.remove('hidden');
+        v2Container.style.display = '';
       }
       console.log(`[CHEAT SHEET] ✅ Switched to Calculator tab`);
       return;
@@ -186,6 +268,13 @@ class CheatSheetManager {
     // Check if this is Version History tab (V2-only, fully implemented)
     if (subTab === 'version-history') {
       console.log('[CHEAT SHEET] 📚 Routing to Version History renderer');
+      
+      // Hide lockout screen (admin tabs are always accessible)
+      const lockoutScreen = document.getElementById('workspace-lockout-screen');
+      if (lockoutScreen) {
+        lockoutScreen.style.display = 'none';
+      }
+      
       this.renderVersionHistory();
       // Hide all V1 sub-tab contents and show V2 container
       document.querySelectorAll('.cheatsheet-subtab-content:not(#cheatsheet-v2-dynamic-content)').forEach(el => {
@@ -194,6 +283,7 @@ class CheatSheetManager {
       const v2Container = document.getElementById('cheatsheet-v2-dynamic-content');
       if (v2Container) {
         v2Container.classList.remove('hidden');
+        v2Container.style.display = ''; // Ensure visible
       }
       console.log(`[CHEAT SHEET] ✅ Switched to Version History tab`);
       return;
@@ -7208,18 +7298,17 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       if (el) el.style.display = 'none';
     });
     
-    // Fade ONLY config tabs (orange + blue groups, NOT green admin group)
+    // HIDE config tabs completely (orange + blue groups, NOT green admin group)
     const configTabs = document.querySelectorAll('.tab-ai-behavior, .tab-reference');
     configTabs.forEach(tab => {
-      tab.style.opacity = '0.4';
-      tab.style.cursor = 'not-allowed';
-      tab.style.pointerEvents = 'none';
+      tab.style.display = 'none';
       tab.setAttribute('data-locked', 'true');
     });
     
-    // Ensure green admin tabs stay accessible (explicit override)
+    // Ensure green admin tabs stay visible and accessible (explicit override)
     const adminTabs = document.querySelectorAll('.tab-admin');
     adminTabs.forEach(tab => {
+      tab.style.display = '';
       tab.style.opacity = '1';
       tab.style.cursor = 'pointer';
       tab.style.pointerEvents = 'auto';
