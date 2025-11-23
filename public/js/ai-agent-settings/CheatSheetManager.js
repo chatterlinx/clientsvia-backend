@@ -7331,9 +7331,10 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       lockoutScreen.style.display = 'none';
     }
     
-    // Restore config tabs to full visibility
+    // SHOW and restore config tabs to full visibility
     const configTabs = document.querySelectorAll('.tab-ai-behavior, .tab-reference');
     configTabs.forEach(tab => {
+      tab.style.display = ''; // SHOW the tab (remove display:none)
       tab.style.opacity = '1';
       tab.style.cursor = 'pointer';
       tab.style.pointerEvents = 'auto';
