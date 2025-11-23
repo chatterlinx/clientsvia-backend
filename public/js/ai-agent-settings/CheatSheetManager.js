@@ -7629,8 +7629,17 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     // Determine live version details
     const hasLive = !!this.csLiveVersionId;
     const liveVersion = hasLive ? this.csVersions.find(v => v.versionId === this.csLiveVersionId) : null;
-    const liveName = liveVersion?.name || (hasLive ? this.csLiveVersionId.substring(0, 12) + '...' : null);
-    const liveId = hasLive ? this.csLiveVersionId.substring(0, 15) + '...' : null;
+    const liveName = liveVersion?.name || 'Unnamed Version';
+    
+    // Format timestamp from version ID (e.g., draft-1763822273... → timestamp)
+    const timestamp = hasLive ? this.csLiveVersionId.split('-')[1] : null;
+    const liveDate = timestamp ? new Date(parseInt(timestamp)).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    }) : null;
 
     statusEl.innerHTML = `
       <!-- LIVE STATUS BANNER (Above Console) -->
@@ -7661,7 +7670,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
               ✅ Live Configuration Active
             </div>
             <div style="font-size: 12px; color: #047857; margin-top: 2px;">
-              <strong>${liveName}</strong> • ${liveId}
+              <strong>${liveName}</strong> • Published ${liveDate}
             </div>
           ` : `
             <div style="font-size: 13px; font-weight: 600; color: #991b1b;">
