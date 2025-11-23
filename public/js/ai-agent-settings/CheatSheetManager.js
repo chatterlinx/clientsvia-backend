@@ -39,6 +39,13 @@ class CheatSheetManager {
     this.versionStatus = null; // { live: {...}, draft: {...} }
     this.useVersioning = true; // Feature flag - can be disabled for gradual rollout
     
+    // Version Console State (Option A - Dropdown Driven)
+    this.useVersionConsole = true; // Feature flag - set to true to use new Version Console
+    this.csVersions = []; // All versions for this company
+    this.csLiveVersionId = null; // Current live version ID
+    this.csWorkspaceVersion = null; // Currently selected workspace version
+    this.csHasUnsavedChanges = false; // Dirty flag for workspace
+    
     console.log('[CHEAT SHEET MANAGER] 🏗️ About to ensureBaseLayout');
     this.ensureBaseLayout();
     console.log('[CHEAT SHEET MANAGER] 🏗️ Base layout ensured');
@@ -584,6 +591,13 @@ class CheatSheetManager {
       // Load global categories for Version History → Global Configurations feature
       await this.loadGlobalCategories();
       
+      // Initialize Version Console (if enabled)
+      if (this.useVersionConsole && this.versioningAdapter) {
+        console.log('[CHEAT SHEET] 🎮 Initializing Version Console...');
+        await this.csInit();
+        console.log('[CHEAT SHEET] ✅ Version Console initialized');
+      }
+      
       this.render();
       console.log('[CHEAT SHEET] 📊 render() completed, about to switchSubTab');
       this.switchSubTab('triage'); // Initialize to Triage sub-tab
@@ -636,7 +650,14 @@ class CheatSheetManager {
   
   render() {
     console.log('[CHEAT SHEET] 🎨 render() called - cheatSheet exists?', !!this.cheatSheet);
-    this.renderStatus();
+    
+    // Render Version Console or legacy status banner
+    if (this.useVersionConsole && this.versioningAdapter) {
+      this.renderVersionConsole();
+    } else {
+      this.renderStatus();
+    }
+    
     this.renderCompanyInstructions();
     this.renderTriageCardsList(); // 🎯 Triage Cards Management (atomic source of truth) - FIRST
     this.renderManualTriageTable(); // 📋 Manual Triage Rules Editor (quick add/edit) - SECOND
@@ -6004,7 +6025,13 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
   
   markDirty() {
     this.isDirty = true;
-    this.renderStatus();
+    
+    // Update Version Console if active
+    if (this.useVersionConsole && this.csWorkspaceVersion) {
+      this.csMarkDirty();
+    } else {
+      this.renderStatus();
+    }
   }
   
   showNotification(message, type = 'info') {
@@ -6591,6 +6618,553 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       this.showNotification('❌ Failed to insert example', 'error');
     }
   }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // VERSION CONSOLE (Option A - Dropdown Driven Workspace Selection)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Render the Version Console (replaces old banner)
+   * Shows dropdown to select workspace version, then shows/hides details panel
+   */
+  renderVersionConsole() {
+    const statusEl = document.getElementById('cheatsheet-status');
+    if (!statusEl) return;
+
+    // Check if we have a workspace active
+    const hasWorkspace = !!this.csWorkspaceVersion;
+
+    statusEl.innerHTML = `
+      <div id="cs-version-console" style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #0ea5e9; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+        
+        <!-- TOP ROW: DROPDOWN ONLY -->
+        <div style="margin-bottom: ${hasWorkspace ? '16px' : '0'};">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <label for="cs-version-select" style="font-size: 13px; font-weight: 600; color: #0c4a6e; min-width: 140px;">
+              Select version to edit:
+            </label>
+            <select 
+              id="cs-version-select" 
+              style="flex: 1; max-width: 400px; padding: 8px 12px; border: 2px solid #0ea5e9; border-radius: 8px; font-size: 13px; font-weight: 500; color: #0c4a6e; background: white; cursor: pointer;"
+            >
+              <option value="" disabled ${!hasWorkspace ? 'selected' : ''}>Choose version…</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- SECOND ROW: ONLY VISIBLE WHEN A WORKSPACE IS ACTIVE -->
+        <div id="cs-console-details" style="display: ${hasWorkspace ? 'block' : 'none'};">
+          <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px;">
+            
+            <!-- Version ID (read-only) -->
+            <div style="flex: 0 0 200px;">
+              <label style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">
+                Version ID
+              </label>
+              <input 
+                id="cs-version-id" 
+                type="text" 
+                readonly 
+                value="${hasWorkspace ? this.csWorkspaceVersion.versionId.substring(0, 12) + '...' : ''}"
+                style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; font-family: 'Monaco', monospace; background: #f8fafc; color: #475569;"
+              />
+            </div>
+
+            <!-- Name of version (editable) -->
+            <div style="flex: 1;">
+              <label for="cs-version-name" style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">
+                Name of version
+              </label>
+              <input 
+                id="cs-version-name" 
+                type="text" 
+                placeholder="Give this version a name…"
+                value="${hasWorkspace ? (this.csWorkspaceVersion.name || '') : ''}"
+                style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; color: #0c4a6e;"
+              />
+            </div>
+
+            <!-- Action Buttons -->
+            <div style="display: flex; align-items: flex-end; gap: 8px;">
+              <button 
+                id="cs-btn-save" 
+                style="padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; cursor: pointer; transition: all 0.2s; ${
+                  this.csHasUnsavedChanges 
+                    ? 'background: #f59e0b; color: #ffffff; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);' 
+                    : 'background: #e5e7eb; color: #9ca3af; cursor: not-allowed;'
+                }"
+                ${!this.csHasUnsavedChanges ? 'disabled' : ''}
+              >
+                💾 Save
+              </button>
+              <button 
+                id="cs-btn-close" 
+                style="padding: 8px 16px; font-size: 13px; font-weight: 500; border-radius: 8px; border: 1px solid #64748b; background: transparent; color: #64748b; cursor: pointer; transition: all 0.2s;"
+              >
+                ✖ Close
+              </button>
+              <button 
+                id="cs-btn-go-live" 
+                style="padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; background: #10b981; color: #ffffff; cursor: pointer; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3); transition: all 0.2s;"
+              >
+                🚀 Go Live
+              </button>
+            </div>
+          </div>
+
+          <!-- Status Pills -->
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span id="cs-status-live" style="display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #ecfdf3; color: #166534;">
+              Live: ${this.csLiveVersionId ? (this.csVersions.find(v => v.versionId === this.csLiveVersionId)?.name || this.csLiveVersionId.substring(0, 8)) : 'none'}
+            </span>
+            <span id="cs-status-workspace" style="display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #fef3c7; color: #92400e;">
+              Workspace: ${hasWorkspace ? `${this.csWorkspaceVersion.name || this.csWorkspaceVersion.versionId.substring(0, 8)} (${this.csWorkspaceVersion.status || 'DRAFT'})` : 'none selected'}
+            </span>
+          </div>
+        </div>
+
+      </div>
+    `;
+
+    // Render dropdown options
+    this.csRenderDropdown();
+
+    // Wire events
+    this.csWireEvents();
+  }
+
+  /**
+   * Populate the dropdown with versions
+   */
+  csRenderDropdown() {
+    const select = document.getElementById('cs-version-select');
+    if (!select) return;
+
+    // Clear existing options except placeholder
+    while (select.options.length > 1) {
+      select.remove(1);
+    }
+
+    // New Draft
+    const optNew = document.createElement('option');
+    optNew.value = '__NEW_DRAFT__';
+    optNew.textContent = '🆕 New Draft';
+    select.appendChild(optNew);
+
+    // Live Version (if any)
+    if (this.csLiveVersionId) {
+      const live = this.csVersions.find(v => v.versionId === this.csLiveVersionId);
+      if (live) {
+        const optLive = document.createElement('option');
+        optLive.value = `LIVE:${live.versionId}`;
+        optLive.textContent = `⭐ Live Version – ${live.name || live.versionId.substring(0, 12)}`;
+        select.appendChild(optLive);
+      }
+    }
+
+    // Local configuration list (all versions)
+    if (Array.isArray(this.csVersions)) {
+      this.csVersions.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.versionId;
+        let label = v.name || v.versionId.substring(0, 12);
+        if (v.status === 'draft') label = `Draft – ${label}`;
+        if (v.status === 'archived') label = `Archived – ${label}`;
+        if (v.isLive || v.status === 'live') label = `Live (stored) – ${label}`;
+        opt.textContent = label;
+        select.appendChild(opt);
+      });
+    }
+
+    // If a workspace is active, select it
+    if (this.csWorkspaceVersion) {
+      select.value = this.csWorkspaceVersion.versionId;
+    }
+  }
+
+  /**
+   * Wire all event handlers for Version Console
+   */
+  csWireEvents() {
+    const select = document.getElementById('cs-version-select');
+    const btnSave = document.getElementById('cs-btn-save');
+    const btnClose = document.getElementById('cs-btn-close');
+    const btnGoLive = document.getElementById('cs-btn-go-live');
+    const inputName = document.getElementById('cs-version-name');
+
+    if (select) {
+      select.removeEventListener('change', this.csHandleVersionSelectBound);
+      this.csHandleVersionSelectBound = this.csHandleVersionSelect.bind(this);
+      select.addEventListener('change', this.csHandleVersionSelectBound);
+    }
+
+    if (btnSave) {
+      btnSave.removeEventListener('click', this.csHandleSaveBound);
+      this.csHandleSaveBound = this.csHandleSave.bind(this);
+      btnSave.addEventListener('click', this.csHandleSaveBound);
+    }
+
+    if (btnClose) {
+      btnClose.removeEventListener('click', this.csHandleCloseBound);
+      this.csHandleCloseBound = this.csHandleClose.bind(this);
+      btnClose.addEventListener('click', this.csHandleCloseBound);
+    }
+
+    if (btnGoLive) {
+      btnGoLive.removeEventListener('click', this.csHandleGoLiveBound);
+      this.csHandleGoLiveBound = this.csHandleGoLive.bind(this);
+      btnGoLive.addEventListener('click', this.csHandleGoLiveBound);
+    }
+
+    if (inputName) {
+      inputName.removeEventListener('input', this.csHandleNameChangeBound);
+      this.csHandleNameChangeBound = this.csHandleNameChange.bind(this);
+      inputName.addEventListener('input', this.csHandleNameChangeBound);
+    }
+  }
+
+  /**
+   * Handle version selection from dropdown
+   */
+  async csHandleVersionSelect() {
+    const select = document.getElementById('cs-version-select');
+    if (!select) return;
+
+    const val = select.value;
+    if (!val) return;
+
+    // If current workspace has unsaved changes, confirm before switching
+    if (this.csWorkspaceVersion && this.csHasUnsavedChanges) {
+      const confirmLeave = window.confirm(
+        'You have unsaved changes in the current version. Switch anyway and lose them?'
+      );
+      if (!confirmLeave) {
+        // Revert dropdown back to current workspace
+        select.value = this.csWorkspaceVersion.versionId;
+        return;
+      }
+    }
+
+    if (val === '__NEW_DRAFT__') {
+      await this.csCreateNewDraft();
+    } else if (val.startsWith('LIVE:')) {
+      const liveId = val.split(':')[1];
+      await this.csCreateDraftFromLive(liveId);
+    } else {
+      await this.csLoadExistingVersion(val);
+    }
+
+    this.csHasUnsavedChanges = false;
+    this.renderVersionConsole();
+    this.csUnlockCheatSheetEditing();
+  }
+
+  /**
+   * Create a new draft
+   */
+  async csCreateNewDraft() {
+    try {
+      const response = await this.versioningAdapter.createDraft('Untitled Draft', '');
+      
+      // Refresh version list
+      await this.csFetchVersions();
+      
+      // Set as workspace
+      this.csWorkspaceVersion = response;
+      
+      // Load empty config into UI
+      this.csLoadConfigIntoCheatSheetUI(this.getDefaultCheatSheet());
+      
+      console.log('[VERSION CONSOLE] New draft created:', response.versionId);
+    } catch (error) {
+      console.error('[VERSION CONSOLE] Error creating new draft:', error);
+      alert(`Failed to create draft: ${error.message}`);
+    }
+  }
+
+  /**
+   * Create draft from live (safe "edit live")
+   */
+  async csCreateDraftFromLive(liveId) {
+    try {
+      // Fetch the live version's full config
+      const liveVersion = await this.versioningAdapter.getVersionConfig(liveId);
+      
+      // Create a new draft with that config
+      const response = await this.versioningAdapter.createDraft(
+        `Draft from Live – ${new Date().toLocaleString()}`,
+        '',
+        liveVersion
+      );
+      
+      // Refresh version list
+      await this.csFetchVersions();
+      
+      // Set as workspace
+      this.csWorkspaceVersion = response;
+      
+      // Load config into UI
+      this.csLoadConfigIntoCheatSheetUI(liveVersion);
+      
+      console.log('[VERSION CONSOLE] Draft created from live:', response.versionId);
+    } catch (error) {
+      console.error('[VERSION CONSOLE] Error creating draft from live:', error);
+      alert(`Failed to create draft from live: ${error.message}`);
+    }
+  }
+
+  /**
+   * Load an existing version (from Local Configs)
+   */
+  async csLoadExistingVersion(versionId) {
+    try {
+      const config = await this.versioningAdapter.getVersionConfig(versionId);
+      const version = this.csVersions.find(v => v.versionId === versionId);
+      
+      if (!version) {
+        throw new Error('Version not found in local list');
+      }
+      
+      // Set as workspace
+      this.csWorkspaceVersion = version;
+      
+      // Load config into UI
+      this.csLoadConfigIntoCheatSheetUI(config);
+      
+      console.log('[VERSION CONSOLE] Loaded existing version:', versionId);
+    } catch (error) {
+      console.error('[VERSION CONSOLE] Error loading existing version:', error);
+      alert(`Failed to load version: ${error.message}`);
+    }
+  }
+
+  /**
+   * Handle Save button click
+   */
+  async csHandleSave() {
+    if (!this.csWorkspaceVersion) return;
+
+    try {
+      // Collect current config from UI
+      const config = this.csCollectConfigFromCheatSheetUI();
+      
+      // Get name from input
+      const nameInput = document.getElementById('cs-version-name');
+      const name = nameInput ? nameInput.value : this.csWorkspaceVersion.name;
+      
+      // Update version via adapter
+      await this.versioningAdapter.updateDraft(
+        this.csWorkspaceVersion.versionId,
+        name,
+        '',
+        config
+      );
+      
+      // Update local state
+      this.csWorkspaceVersion.name = name;
+      this.csWorkspaceVersion.config = config;
+      
+      // Refresh version list
+      await this.csFetchVersions();
+      
+      this.csHasUnsavedChanges = false;
+      this.renderVersionConsole();
+      
+      console.log('[VERSION CONSOLE] Version saved:', this.csWorkspaceVersion.versionId);
+    } catch (error) {
+      console.error('[VERSION CONSOLE] Error saving version:', error);
+      alert(`Failed to save version: ${error.message}`);
+    }
+  }
+
+  /**
+   * Handle Close button click
+   */
+  async csHandleClose() {
+    if (!this.csWorkspaceVersion) return;
+
+    if (this.csHasUnsavedChanges) {
+      const save = window.confirm('Save changes before closing? OK=Save, Cancel=Discard.');
+      if (save) {
+        await this.csHandleSave();
+      }
+    }
+
+    this.csWorkspaceVersion = null;
+    this.csHasUnsavedChanges = false;
+    
+    const select = document.getElementById('cs-version-select');
+    if (select) select.value = '';
+    
+    this.renderVersionConsole();
+    this.csLockCheatSheetEditing();
+    this.csClearCheatSheetUI();
+    
+    console.log('[VERSION CONSOLE] Workspace closed');
+  }
+
+  /**
+   * Handle Go Live button click
+   */
+  async csHandleGoLive() {
+    if (!this.csWorkspaceVersion) return;
+
+    // If dirty, save first
+    if (this.csHasUnsavedChanges) {
+      const ok = window.confirm('Save changes before going live?');
+      if (!ok) return;
+      await this.csHandleSave();
+    }
+
+    const confirmLive = window.confirm(
+      'This will replace the current live configuration for this company. Continue?'
+    );
+    if (!confirmLive) return;
+
+    try {
+      // Call the new /publish endpoint
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(
+        `/api/cheatsheet/versions/${this.companyId}/${this.csWorkspaceVersion.versionId}/publish`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({})
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Update local state
+      this.csVersions = data.data.versions;
+      this.csLiveVersionId = data.data.liveVersionId;
+      
+      // Update workspace to point to the now-live version
+      const ws = this.csVersions.find(v => v.versionId === this.csWorkspaceVersion.versionId);
+      this.csWorkspaceVersion = ws || this.csWorkspaceVersion;
+      
+      this.renderVersionConsole();
+      
+      console.log('[VERSION CONSOLE] Version published as live:', this.csLiveVersionId);
+      alert('✅ Version published successfully!');
+    } catch (error) {
+      console.error('[VERSION CONSOLE] Error publishing version:', error);
+      alert(`Failed to publish version: ${error.message}`);
+    }
+  }
+
+  /**
+   * Handle name input change
+   */
+  csHandleNameChange() {
+    if (!this.csWorkspaceVersion) return;
+    
+    const nameInput = document.getElementById('cs-version-name');
+    if (nameInput) {
+      this.csWorkspaceVersion.name = nameInput.value;
+      this.csMarkDirty();
+    }
+  }
+
+  /**
+   * Mark workspace as having unsaved changes
+   */
+  csMarkDirty() {
+    this.csHasUnsavedChanges = true;
+    const btnSave = document.getElementById('cs-btn-save');
+    if (btnSave) {
+      btnSave.disabled = false;
+      btnSave.style.background = '#f59e0b';
+      btnSave.style.color = '#ffffff';
+      btnSave.style.boxShadow = '0 2px 8px rgba(245, 158, 11, 0.3)';
+      btnSave.style.cursor = 'pointer';
+    }
+  }
+
+  /**
+   * Load a config object into the CheatSheet UI
+   */
+  csLoadConfigIntoCheatSheetUI(config) {
+    this.cheatSheet = config;
+    this.render();
+  }
+
+  /**
+   * Collect current config from CheatSheet UI
+   */
+  csCollectConfigFromCheatSheetUI() {
+    return this.cheatSheet;
+  }
+
+  /**
+   * Lock CheatSheet editing (when no workspace selected)
+   */
+  csLockCheatSheetEditing() {
+    // Add visual lock indicator if needed
+    console.log('[VERSION CONSOLE] CheatSheet editing locked');
+  }
+
+  /**
+   * Unlock CheatSheet editing (when workspace selected)
+   */
+  csUnlockCheatSheetEditing() {
+    // Remove visual lock indicator if needed
+    console.log('[VERSION CONSOLE] CheatSheet editing unlocked');
+  }
+
+  /**
+   * Clear CheatSheet UI
+   */
+  csClearCheatSheetUI() {
+    // Optionally clear all fields or show a message
+    console.log('[VERSION CONSOLE] CheatSheet UI cleared');
+  }
+
+  /**
+   * Fetch all versions for this company
+   */
+  async csFetchVersions() {
+    try {
+      const versions = await this.versioningAdapter.getVersionHistory(100);
+      this.csVersions = Array.isArray(versions) ? versions : [];
+      
+      // Determine live version ID
+      const live = this.csVersions.find(v => v.isLive || v.status === 'live');
+      this.csLiveVersionId = live ? live.versionId : null;
+      
+      console.log('[VERSION CONSOLE] Fetched versions:', this.csVersions.length);
+    } catch (error) {
+      console.error('[VERSION CONSOLE] Error fetching versions:', error);
+      this.csVersions = [];
+      this.csLiveVersionId = null;
+    }
+  }
+
+  /**
+   * Initialize Version Console state
+   */
+  async csInit() {
+    this.csVersions = [];
+    this.csLiveVersionId = null;
+    this.csWorkspaceVersion = null;
+    this.csHasUnsavedChanges = false;
+
+    await this.csFetchVersions();
+    this.renderVersionConsole();
+    this.csLockCheatSheetEditing();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // END VERSION CONSOLE
+  // ═══════════════════════════════════════════════════════════════════════
 }
 
 // ═══════════════════════════════════════════════════════════════════
