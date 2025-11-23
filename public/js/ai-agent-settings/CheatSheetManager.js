@@ -7703,6 +7703,28 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
 
         <!-- SECOND ROW: ONLY VISIBLE WHEN A WORKSPACE IS ACTIVE -->
         <div id="cs-console-details" style="display: ${hasWorkspace ? 'block' : 'none'};">
+          
+          <!-- READ-ONLY BANNER (shown for Live/Archived versions) -->
+          ${hasWorkspace && this.csWorkspaceVersion.readOnly ? `
+            <div style="background: linear-gradient(135deg, #ecfdf3 0%, #d1fae5 100%); border: 2px solid #10b981; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
+              <span style="font-size: 24px;">👁️</span>
+              <div style="flex: 1;">
+                <div style="font-size: 14px; font-weight: 700; color: #166534; margin-bottom: 2px;">
+                  VIEW ONLY MODE
+                </div>
+                <div style="font-size: 12px; color: #166534;">
+                  This is a ${this.csWorkspaceVersion.isLive || this.csWorkspaceVersion.status === 'live' ? 'LIVE' : 'ARCHIVED'} version and cannot be edited. To make changes, create a new draft from this version.
+                </div>
+              </div>
+              <button 
+                onclick="document.getElementById('cs-version-select').value = '__NEW_DRAFT__'; document.getElementById('cs-version-select').dispatchEvent(new Event('change'));"
+                style="padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; background: #10b981; color: #ffffff; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);"
+              >
+                🆕 Create Draft from This
+              </button>
+            </div>
+          ` : ''}
+          
           <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px;">
             
             <!-- Version ID (read-only) -->
@@ -7734,8 +7756,8 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
               />
             </div>
 
-            <!-- Action Buttons -->
-            <div style="display: flex; align-items: flex-end; gap: 8px;">
+            <!-- Action Buttons (HIDDEN in read-only mode) -->
+            <div style="display: ${hasWorkspace && this.csWorkspaceVersion.readOnly ? 'none' : 'flex'}; align-items: flex-end; gap: 8px;">
               <button 
                 id="cs-btn-save" 
                 style="padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; cursor: pointer; transition: all 0.2s; ${
@@ -7767,8 +7789,12 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
             <span id="cs-status-live" style="display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #ecfdf3; color: #166534;">
               Live: ${this.csLiveVersionId ? (this.csVersions.find(v => v.versionId === this.csLiveVersionId)?.name || this.csLiveVersionId.substring(0, 8)) : 'none'}
             </span>
-            <span id="cs-status-workspace" style="display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #fef3c7; color: #92400e;">
-              Workspace: ${hasWorkspace ? `${this.csWorkspaceVersion.name || this.csWorkspaceVersion.versionId.substring(0, 8)} (${this.csWorkspaceVersion.status || 'DRAFT'})` : 'none selected'}
+            <span id="cs-status-workspace" style="display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; ${
+              hasWorkspace && this.csWorkspaceVersion.readOnly 
+                ? 'background: #ecfdf3; color: #166534;' 
+                : 'background: #fef3c7; color: #92400e;'
+            }">
+              ${hasWorkspace && this.csWorkspaceVersion.readOnly ? '👁️ ' : ''}Workspace: ${hasWorkspace ? `${this.csWorkspaceVersion.name || this.csWorkspaceVersion.versionId.substring(0, 8)} (${this.csWorkspaceVersion.readOnly ? 'VIEW ONLY' : this.csWorkspaceVersion.status || 'DRAFT'})` : 'none selected'}
             </span>
           </div>
         </div>
@@ -7785,6 +7811,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
 
   /**
    * Populate the dropdown with versions
+   * Structure: New Draft → Live Section (with indented drafts) → Archived Section
    */
   csRenderDropdown() {
     const select = document.getElementById('cs-version-select');
@@ -7795,33 +7822,105 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       select.remove(1);
     }
 
-    // New Draft
+    // New Draft button
     const optNew = document.createElement('option');
     optNew.value = '__NEW_DRAFT__';
-    optNew.textContent = '🆕 New Draft';
+    optNew.textContent = '🆕 New Draft (clone from Live)';
     select.appendChild(optNew);
 
-    // Live Version (if any)
-    if (this.csLiveVersionId) {
-      const live = this.csVersions.find(v => v.versionId === this.csLiveVersionId);
-      if (live) {
-        const optLive = document.createElement('option');
-        optLive.value = `LIVE:${live.versionId}`;
-        optLive.textContent = `⭐ Live Version – ${live.name || live.versionId.substring(0, 12)}`;
-        select.appendChild(optLive);
+    if (!Array.isArray(this.csVersions) || this.csVersions.length === 0) {
+      // If a workspace is active, select it
+      if (this.csWorkspaceVersion) {
+        select.value = this.csWorkspaceVersion.versionId;
       }
+      return;
     }
 
-    // Local configuration list (all versions)
-    if (Array.isArray(this.csVersions)) {
-      this.csVersions.forEach(v => {
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // SECTION 1: LIVE VERSION + INDENTED DRAFTS
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
+    // Find current live version
+    const liveVersion = this.csVersions.find(v => v.isLive || v.status === 'live');
+    
+    if (liveVersion) {
+      // Section header (disabled option)
+      const headerLive = document.createElement('option');
+      headerLive.disabled = true;
+      headerLive.textContent = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+      select.appendChild(headerLive);
+      
+      const sectionLabel = document.createElement('option');
+      sectionLabel.disabled = true;
+      sectionLabel.textContent = '⭐ LIVE VERSION';
+      sectionLabel.style.fontWeight = '700';
+      sectionLabel.style.background = '#ecfdf3';
+      sectionLabel.style.color = '#166534';
+      select.appendChild(sectionLabel);
+      
+      // Live version (read-only)
+      const optLive = document.createElement('option');
+      optLive.value = liveVersion.versionId;
+      const last5Live = liveVersion.versionId.slice(-5);
+      optLive.textContent = `⭐ ${liveVersion.name || 'Unnamed'} (${last5Live}) [VIEW ONLY]`;
+      optLive.style.background = '#ecfdf3';
+      optLive.style.color = '#166534';
+      optLive.style.fontWeight = '600';
+      select.appendChild(optLive);
+      
+      // Find drafts that belong to this live version (created after it)
+      // For now, we'll treat ALL drafts as belonging to current live
+      const drafts = this.csVersions.filter(v => v.status === 'draft');
+      
+      drafts.forEach(draft => {
         const opt = document.createElement('option');
-        opt.value = v.versionId;
-        let label = v.name || v.versionId.substring(0, 12);
-        if (v.status === 'draft') label = `Draft – ${label}`;
-        if (v.status === 'archived') label = `Archived – ${label}`;
-        if (v.isLive || v.status === 'live') label = `Live (stored) – ${label}`;
-        opt.textContent = label;
+        opt.value = draft.versionId;
+        const last5 = draft.versionId.slice(-5);
+        
+        // Extract timestamp for readable date
+        const timestamp = draft.versionId.split('-')[1];
+        const date = timestamp ? new Date(parseInt(timestamp)).toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        }) : '';
+        
+        // INDENT with spaces (HTML entities for proper spacing in <option>)
+        opt.textContent = `   📝 ${draft.name || 'Draft'} – ${date} (${last5})`;
+        opt.style.paddingLeft = '24px';
+        opt.style.background = '#fef3c7';
+        opt.style.color = '#92400e';
+        select.appendChild(opt);
+      });
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // SECTION 2: ARCHIVED VERSIONS (if any)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
+    const archivedVersions = this.csVersions.filter(v => v.status === 'archived');
+    
+    if (archivedVersions.length > 0) {
+      // Section divider
+      const divider = document.createElement('option');
+      divider.disabled = true;
+      divider.textContent = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+      select.appendChild(divider);
+      
+      const archLabel = document.createElement('option');
+      archLabel.disabled = true;
+      archLabel.textContent = '📦 ARCHIVED VERSIONS';
+      archLabel.style.fontWeight = '700';
+      archLabel.style.color = '#64748b';
+      select.appendChild(archLabel);
+      
+      archivedVersions.forEach(archived => {
+        const opt = document.createElement('option');
+        opt.value = archived.versionId;
+        const last5 = archived.versionId.slice(-5);
+        opt.textContent = `📦 ${archived.name || 'Archived'} (${last5}) [VIEW ONLY]`;
+        opt.style.color = '#64748b';
         select.appendChild(opt);
       });
     }
@@ -7892,17 +7991,36 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     }
 
     if (val === '__NEW_DRAFT__') {
-      await this.csCreateNewDraft();
-    } else if (val.startsWith('LIVE:')) {
-      const liveId = val.split(':')[1];
-      await this.csCreateDraftFromLive(liveId);
+      // Create a new draft by cloning from Live
+      await this.csCreateDraftFromLive();
     } else {
-      await this.csLoadExistingVersion(val);
+      // Check if selected version is LIVE or ARCHIVED (read-only)
+      const selectedVersion = this.csVersions.find(v => v.versionId === val);
+      const isReadOnly = selectedVersion && (selectedVersion.isLive || selectedVersion.status === 'live' || selectedVersion.status === 'archived');
+      
+      if (isReadOnly) {
+        // Load as read-only (VIEW ONLY mode)
+        await this.csLoadExistingVersion(val, true); // true = read-only
+      } else {
+        // Load as editable (DRAFT mode)
+        await this.csLoadExistingVersion(val, false);
+      }
     }
 
     this.csHasUnsavedChanges = false;
     this.renderVersionConsole();
-    this.csUnlockCheatSheetEditing();
+    
+    // Only unlock editing if NOT read-only
+    const selectedVersion = this.csVersions.find(v => v.versionId === val);
+    const isReadOnly = selectedVersion && (selectedVersion.isLive || selectedVersion.status === 'live' || selectedVersion.status === 'archived');
+    
+    if (!isReadOnly) {
+      this.csUnlockCheatSheetEditing();
+    } else {
+      // Keep locked for read-only versions
+      this.csLockCheatSheetEditing();
+      console.log('[VERSION CONSOLE] Loaded read-only version (VIEW ONLY mode)');
+    }
   }
 
   /**
@@ -7930,17 +8048,34 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
 
   /**
    * Create draft from live (safe "edit live")
+   * If liveId is not provided, uses the current live version
    */
-  async csCreateDraftFromLive(liveId) {
+  async csCreateDraftFromLive(liveId = null) {
     try {
+      // Find live version if not provided
+      if (!liveId) {
+        const liveVersion = this.csVersions.find(v => v.isLive || v.status === 'live');
+        if (!liveVersion) {
+          alert('No live version found. Cannot create draft from live.');
+          console.warn('[VERSION CONSOLE] No live version available to clone from');
+          return;
+        }
+        liveId = liveVersion.versionId;
+      }
+      
       // Fetch the live version's full config
-      const liveVersion = await this.versioningAdapter.getVersionConfig(liveId);
+      const liveConfig = await this.versioningAdapter.getVersionConfig(liveId);
+      
+      if (!liveConfig) {
+        alert('Failed to load live version configuration.');
+        return;
+      }
       
       // Create a new draft with that config
       const response = await this.versioningAdapter.createDraft(
-        `Draft from Live – ${new Date().toLocaleString()}`,
+        `Draft from Live – ${new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`,
         '',
-        liveVersion
+        liveConfig
       );
       
       // Refresh version list
@@ -7950,7 +8085,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       this.csWorkspaceVersion = response;
       
       // Load config into UI
-      this.csLoadConfigIntoCheatSheetUI(liveVersion);
+      this.csLoadConfigIntoCheatSheetUI(liveConfig);
       
       console.log('[VERSION CONSOLE] Draft created from live:', response.versionId);
     } catch (error) {
@@ -7961,8 +8096,10 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
 
   /**
    * Load an existing version (from Local Configs)
+   * @param {string} versionId - The version ID to load
+   * @param {boolean} readOnly - If true, loads in VIEW ONLY mode (no editing)
    */
-  async csLoadExistingVersion(versionId) {
+  async csLoadExistingVersion(versionId, readOnly = false) {
     try {
       const config = await this.versioningAdapter.getVersionConfig(versionId);
       const version = this.csVersions.find(v => v.versionId === versionId);
@@ -7971,13 +8108,20 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         throw new Error('Version not found in local list');
       }
       
-      // Set as workspace
-      this.csWorkspaceVersion = version;
+      // Set as workspace (even in read-only mode, to display details)
+      this.csWorkspaceVersion = {
+        ...version,
+        readOnly: readOnly
+      };
       
       // Load config into UI
       this.csLoadConfigIntoCheatSheetUI(config);
       
-      console.log('[VERSION CONSOLE] Loaded existing version:', versionId);
+      if (readOnly) {
+        console.log('[VERSION CONSOLE] Loaded existing version (READ-ONLY):', versionId);
+      } else {
+        console.log('[VERSION CONSOLE] Loaded existing version:', versionId);
+      }
     } catch (error) {
       console.error('[VERSION CONSOLE] Error loading existing version:', error);
       alert(`Failed to load version: ${error.message}`);
