@@ -260,6 +260,47 @@ class CheatSheetManager {
       <div data-cheatsheet-layout="control-plane-v2" style="display:flex; flex-direction:column; gap:24px;">
         <div id="cheatsheet-status"></div>
 
+        <!-- WORKSPACE LOCKOUT SCREEN (shown when no version selected) -->
+        <div id="workspace-lockout-screen" style="display: none; background: #ffffff; border-radius: 16px; padding: 80px 40px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 2px dashed #d1d5db;">
+          <div style="max-width: 600px; margin: 0 auto;">
+            <div style="font-size: 64px; margin-bottom: 24px; opacity: 0.3;">🔒</div>
+            <h2 style="font-size: 28px; font-weight: 700; color: #111827; margin: 0 0 16px 0;">
+              Select a Version to Edit
+            </h2>
+            <p style="font-size: 16px; color: #6b7280; line-height: 1.6; margin: 0 0 32px 0;">
+              Configuration tabs are locked until you select a workspace version from the dropdown above.
+            </p>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; text-align: left;">
+              <div style="padding: 20px; background: #f0fdf4; border-radius: 12px; border: 2px solid #10b981;">
+                <div style="font-size: 20px; margin-bottom: 8px;">✅</div>
+                <h3 style="font-size: 14px; font-weight: 600; color: #166534; margin: 0 0 8px 0;">What you can do:</h3>
+                <ul style="font-size: 13px; color: #166534; margin: 0; padding-left: 20px; line-height: 1.8;">
+                  <li>View Version History</li>
+                  <li>Create a new draft</li>
+                  <li>Edit an existing version</li>
+                </ul>
+              </div>
+              
+              <div style="padding: 20px; background: #fef2f2; border-radius: 12px; border: 2px solid #ef4444;">
+                <div style="font-size: 20px; margin-bottom: 8px;">⚠️</div>
+                <h3 style="font-size: 14px; font-weight: 600; color: #991b1b; margin: 0 0 8px 0;">What's locked:</h3>
+                <ul style="font-size: 13px; color: #991b1b; margin: 0; padding-left: 20px; line-height: 1.8;">
+                  <li>🔴 AI Behavior Config (8 tabs)</li>
+                  <li>🔵 Reference Data (2 tabs)</li>
+                  <li>All editing capabilities</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div style="padding: 16px; background: #eff6ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+              <p style="font-size: 13px; color: #1e40af; margin: 0; font-weight: 500;">
+                💡 <strong>Tip:</strong> Use the "Select version to edit" dropdown at the top to choose a workspace, or click "Version History" to create a new draft.
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div id="cheatsheet-subtab-triage" class="cheatsheet-subtab-content">
           <div id="triage-cards-list-section"></div>
           <div id="manual-triage-table-section"></div>
@@ -7138,18 +7179,70 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
 
   /**
    * Lock CheatSheet editing (when no workspace selected)
+   * - Shows lockout screen
+   * - Fades config tabs (orange + blue groups)
+   * - Hides all config tab content
    */
   csLockCheatSheetEditing() {
-    // Add visual lock indicator if needed
-    console.log('[VERSION CONSOLE] CheatSheet editing locked');
+    console.log('[VERSION CONSOLE] 🔒 CheatSheet editing locked');
+    
+    // Show lockout screen
+    const lockoutScreen = document.getElementById('workspace-lockout-screen');
+    if (lockoutScreen) {
+      lockoutScreen.style.display = 'block';
+    }
+    
+    // Hide all config tab content areas
+    const configContentAreas = [
+      'cheatsheet-subtab-triage',
+      'cheatsheet-subtab-frontline-intel',
+      'cheatsheet-subtab-transfer-calls',
+      'cheatsheet-subtab-edge-cases',
+      'cheatsheet-subtab-behavior',
+      'cheatsheet-subtab-guardrails',
+      'cheatsheet-v2-dynamic-content'
+    ];
+    
+    configContentAreas.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    
+    // Fade config tabs (orange + blue groups) using data attributes
+    const configTabs = document.querySelectorAll('.tab-ai-behavior, .tab-reference');
+    configTabs.forEach(tab => {
+      tab.style.opacity = '0.4';
+      tab.style.cursor = 'not-allowed';
+      tab.style.pointerEvents = 'none';
+      tab.setAttribute('data-locked', 'true');
+    });
   }
 
   /**
    * Unlock CheatSheet editing (when workspace selected)
+   * - Hides lockout screen
+   * - Restores config tab visibility
+   * - Enables config tab interactions
    */
   csUnlockCheatSheetEditing() {
-    // Remove visual lock indicator if needed
-    console.log('[VERSION CONSOLE] CheatSheet editing unlocked');
+    console.log('[VERSION CONSOLE] ✅ CheatSheet editing unlocked');
+    
+    // Hide lockout screen
+    const lockoutScreen = document.getElementById('workspace-lockout-screen');
+    if (lockoutScreen) {
+      lockoutScreen.style.display = 'none';
+    }
+    
+    // Restore config tabs to full visibility
+    const configTabs = document.querySelectorAll('.tab-ai-behavior, .tab-reference');
+    configTabs.forEach(tab => {
+      tab.style.opacity = '1';
+      tab.style.cursor = 'pointer';
+      tab.style.pointerEvents = 'auto';
+      tab.removeAttribute('data-locked');
+    });
+    
+    // Note: Content areas are shown by switchSubTab() when user clicks a tab
   }
 
   /**
