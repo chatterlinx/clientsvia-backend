@@ -3045,9 +3045,17 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     `;
     
     try {
-      // Fetch version history from API
-      const history = await this.versioningAdapter.getVersionHistory();
-      console.log('[CHEAT SHEET] ✅ Version history loaded:', history);
+      // Fetch version history from API (or use cached csVersions if Version Console is active)
+      let history;
+      if (this.useVersionConsole && Array.isArray(this.csVersions) && this.csVersions.length > 0) {
+        // Use cached versions from Version Console (single source of truth)
+        history = this.csVersions;
+        console.log('[CHEAT SHEET] ✅ Using cached versions from Version Console:', history.length);
+      } else {
+        // Fetch fresh (legacy mode or initial load)
+        history = await this.versioningAdapter.getVersionHistory();
+        console.log('[CHEAT SHEET] ✅ Version history loaded:', history);
+      }
       
       // Render version history UI
       container.innerHTML = `
@@ -3171,6 +3179,11 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       
       // Initialize sub-tab switching behavior
       this.initVersionHistorySubtabs();
+      
+      // Wire Version History edit buttons to Version Console (Phase 3)
+      if (this.useVersionConsole) {
+        this.bindVersionHistoryEvents();
+      }
       
     } catch (error) {
       console.error('[CHEAT SHEET] ❌ Failed to load version history:', error);
@@ -3940,6 +3953,16 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
             onmouseout="this.style.background='#ffffff'"
           >
             👁️ View
+          </button>
+          
+          <button 
+            class="js-cs-version-edit"
+            data-version-id="${version.versionId}"
+            style="padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 6px; border: none; background: #3b82f6; color: #ffffff; cursor: pointer; transition: all 0.2s; text-align: center; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);"
+            onmouseover="this.style.background='#2563eb'" 
+            onmouseout="this.style.background='#3b82f6'"
+          >
+            ✏️ Edit in Workspace
           </button>
           
           ${version.status === 'archived' ? `
@@ -6970,6 +6993,9 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       this.csHasUnsavedChanges = false;
       this.renderVersionConsole();
       
+      // If Version History is currently visible, refresh it to show updated data
+      this.csRefreshVersionHistoryIfVisible();
+      
       console.log('[VERSION CONSOLE] Version saved:', this.csWorkspaceVersion.versionId);
     } catch (error) {
       console.error('[VERSION CONSOLE] Error saving version:', error);
@@ -7052,6 +7078,9 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       this.csWorkspaceVersion = ws || this.csWorkspaceVersion;
       
       this.renderVersionConsole();
+      
+      // If Version History is currently visible, refresh it to show updated data
+      this.csRefreshVersionHistoryIfVisible();
       
       console.log('[VERSION CONSOLE] Version published as live:', this.csLiveVersionId);
       alert('✅ Version published successfully!');
@@ -7160,6 +7189,80 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     await this.csFetchVersions();
     this.renderVersionConsole();
     this.csLockCheatSheetEditing();
+  }
+
+  /**
+   * Bridge: Called from Version History to load a version into the Workspace
+   * This is the single integration point between Version History and Version Console
+   */
+  async csSetWorkspaceFromHistory(versionId) {
+    const select = document.getElementById('cs-version-select');
+    if (!select) return;
+
+    // If there are unsaved changes in current workspace, reuse the same logic as dropdown
+    if (this.csWorkspaceVersion && this.csHasUnsavedChanges) {
+      const confirmLeave = window.confirm(
+        'You have unsaved changes in the current version. Switch anyway and lose them?'
+      );
+      if (!confirmLeave) {
+        // Keep current workspace, do not switch
+        select.value = this.csWorkspaceVersion.versionId;
+        return;
+      }
+    }
+
+    // Set the dropdown value and trigger its normal handler
+    select.value = versionId;
+    
+    // Reuse the same handler we wired for the dropdown
+    await this.csHandleVersionSelect();
+    
+    console.log('[VERSION CONSOLE] Workspace set from Version History:', versionId);
+  }
+
+  /**
+   * Wire Version History "Edit" buttons to the Version Console
+   * Called after Version History DOM is rendered
+   */
+  bindVersionHistoryEvents() {
+    const buttons = document.querySelectorAll('.js-cs-version-edit');
+    if (!buttons.length) {
+      console.log('[VERSION CONSOLE] No Version History edit buttons found yet');
+      return;
+    }
+
+    buttons.forEach(btn => {
+      btn.removeEventListener('click', this.handleVersionHistoryEditBound);
+      
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const versionId = btn.getAttribute('data-version-id');
+        if (!versionId) {
+          console.error('[VERSION CONSOLE] Edit button missing data-version-id');
+          return;
+        }
+
+        await this.csSetWorkspaceFromHistory(versionId);
+      });
+    });
+
+    console.log('[VERSION CONSOLE] Wired', buttons.length, 'Version History edit buttons');
+  }
+
+  /**
+   * Refresh Version History UI if it's currently visible
+   * Called after Save or Go Live to keep both views in sync
+   */
+  csRefreshVersionHistoryIfVisible() {
+    // Check if Version History tab is currently active
+    const versionHistoryContainer = document.getElementById('cheatsheet-v2-dynamic-content');
+    if (versionHistoryContainer && versionHistoryContainer.style.display !== 'none') {
+      // Check if we're on the version-history sub-tab
+      if (this.currentSubTab === 'version-history') {
+        console.log('[VERSION CONSOLE] Refreshing Version History UI after change');
+        this.renderVersionHistory();
+      }
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════
