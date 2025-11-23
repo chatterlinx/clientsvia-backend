@@ -177,10 +177,14 @@ class CheatSheetVersioningAdapter {
       
       console.error('[VERSION ADAPTER] ❌ Save failed:', {
         status: response.status,
-        error: errorData,
+        errorMessage: errorData.message,
+        errorCode: errorData.error,
+        errorDetails: errorData.details,
+        fullError: errorData,
         sentConfig: {
           schemaVersion: config?.schemaVersion,
-          keys: Object.keys(config || {})
+          keys: Object.keys(config || {}),
+          fullConfig: config
         }
       });
       
