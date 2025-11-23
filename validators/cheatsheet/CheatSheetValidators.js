@@ -124,7 +124,17 @@ const companyContactValidator = Joi.object({
 const linkValidator = Joi.object({
   id: Joi.string().required(),
   label: Joi.string().min(1).max(200).required(),
-  category: Joi.string().valid('financing', 'portal', 'policy', 'catalog', 'other').default('other'),
+  category: Joi.string().valid(
+    'payment',
+    'scheduling', 
+    'service-area',
+    'faq',
+    'portal',
+    'financing',
+    'catalog',
+    'policy',
+    'other'
+  ).default('other'),
   url: Joi.string().uri().max(2000).required(),
   shortDescription: Joi.string().max(500).allow(''),
   notes: Joi.string().max(500).allow(''),
