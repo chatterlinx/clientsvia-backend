@@ -293,6 +293,62 @@ router.post(
 );
 
 /**
+ * POST /api/cheatsheet/versions/:companyId/:versionId/publish
+ * Alias for push-live - makes version the new live config
+ * Returns liveVersionId + all versions for Version Console
+ */
+router.post(
+  '/versions/:companyId/:versionId/publish',
+  authMiddleware,
+  validate('body', pushLiveSchema),
+  async (req, res) => {
+    try {
+      const { companyId, versionId } = req.params;
+      const userEmail = getUserEmail(req);
+      const metadata = extractMetadata(req);
+      
+      const newLive = await CheatSheetVersionService.pushDraftLive(
+        companyId,
+        versionId,
+        userEmail,
+        metadata
+      );
+      
+      // Invalidate cache
+      const { CheatSheetRuntimeService } = require('../../services/cheatsheet');
+      await CheatSheetRuntimeService.invalidateCache(companyId);
+      
+      // Fetch all versions to return updated list
+      const allVersions = await CheatSheetVersionService.getVersionHistory(companyId, 100);
+      
+      res.json({
+        success: true,
+        message: 'Version published successfully',
+        data: {
+          liveVersionId: newLive.versionId,
+          versions: allVersions
+        }
+      });
+      
+    } catch (err) {
+      logger.error('CHEATSHEET_API_PUBLISH_ERROR', {
+        companyId: req.params.companyId,
+        versionId: req.params.versionId,
+        error: err.message
+      });
+      
+      const statusCode = err.code === 'DRAFT_NOT_FOUND' ? 404 : 500;
+      
+      res.status(statusCode).json({
+        success: false,
+        error: err.code || 'INTERNAL_ERROR',
+        message: err.message
+      });
+    }
+  }
+);
+
+/**
  * GET /api/cheatsheet/versions/:companyId
  * Get version history
  */
