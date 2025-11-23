@@ -35,13 +35,13 @@
     .tab-group[data-group="reference"]::before { background: #3b82f6; }
     .tab-group[data-group="admin"]::before { background: #10b981; }
     /* Enhanced hover states for grouped tabs */
-    .tab-ai-behavior:hover { background: rgba(249, 115, 22, 0.15) !important; }
-    .tab-reference:hover { background: rgba(59, 130, 246, 0.15) !important; }
-    .tab-admin:hover { background: rgba(16, 185, 129, 0.15) !important; }
-    /* Active state: Tab lights up in its group color */
-    .tab-ai-behavior.active { background: rgba(249, 115, 22, 0.25) !important; border-bottom-color: #f97316 !important; color: #ffffff !important; }
-    .tab-reference.active { background: rgba(59, 130, 246, 0.25) !important; border-bottom-color: #3b82f6 !important; color: #ffffff !important; }
-    .tab-admin.active { background: rgba(16, 185, 129, 0.25) !important; border-bottom-color: #10b981 !important; color: #ffffff !important; }
+    .tab-ai-behavior:hover { background: rgba(249, 115, 22, 0.2) !important; }
+    .tab-reference:hover { background: rgba(59, 130, 246, 0.2) !important; }
+    .tab-admin:hover { background: rgba(16, 185, 129, 0.2) !important; }
+    /* Active state: SOLID vibrant glow in group color - no fade, full intensity */
+    .tab-ai-behavior.active { background: #f97316 !important; border-bottom-color: #ea580c !important; color: #ffffff !important; box-shadow: 0 0 12px rgba(249, 115, 22, 0.6) !important; }
+    .tab-reference.active { background: #3b82f6 !important; border-bottom-color: #2563eb !important; color: #ffffff !important; box-shadow: 0 0 12px rgba(59, 130, 246, 0.6) !important; }
+    .tab-admin.active { background: #10b981 !important; border-bottom-color: #059669 !important; color: #ffffff !important; box-shadow: 0 0 12px rgba(16, 185, 129, 0.6) !important; }
     /* Cheat Sheet Content Areas */
     .cheatsheet-subtab-content { padding: 20px 0; min-height: 300px; }
     .cheatsheet-subtab-content.hidden { display: none !important; }
