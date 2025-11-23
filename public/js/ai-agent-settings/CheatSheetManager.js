@@ -6697,6 +6697,18 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       // Collect current config from UI
       const config = this.csCollectConfigFromCheatSheetUI();
       
+      // Debug: Log what we're sending
+      console.log('[VERSION CONSOLE] 🔍 Config being saved:', {
+        hasSchemaVersion: !!config.schemaVersion,
+        schemaVersion: config.schemaVersion,
+        configKeys: Object.keys(config),
+        configSample: {
+          schemaVersion: config.schemaVersion,
+          bookingRulesCount: config.bookingRules?.length,
+          linksCount: config.links?.length
+        }
+      });
+      
       // Disable save button during save
       const btnSave = document.getElementById('cs-btn-save');
       if (btnSave) {
