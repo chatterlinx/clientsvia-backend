@@ -7208,13 +7208,22 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       if (el) el.style.display = 'none';
     });
     
-    // Fade config tabs (orange + blue groups) using data attributes
+    // Fade ONLY config tabs (orange + blue groups, NOT green admin group)
     const configTabs = document.querySelectorAll('.tab-ai-behavior, .tab-reference');
     configTabs.forEach(tab => {
       tab.style.opacity = '0.4';
       tab.style.cursor = 'not-allowed';
       tab.style.pointerEvents = 'none';
       tab.setAttribute('data-locked', 'true');
+    });
+    
+    // Ensure green admin tabs stay accessible (explicit override)
+    const adminTabs = document.querySelectorAll('.tab-admin');
+    adminTabs.forEach(tab => {
+      tab.style.opacity = '1';
+      tab.style.cursor = 'pointer';
+      tab.style.pointerEvents = 'auto';
+      tab.removeAttribute('data-locked');
     });
   }
 
