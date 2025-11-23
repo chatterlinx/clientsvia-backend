@@ -7625,8 +7625,56 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
 
     // Check if we have a workspace active
     const hasWorkspace = !!this.csWorkspaceVersion;
+    
+    // Determine live version details
+    const hasLive = !!this.csLiveVersionId;
+    const liveVersion = hasLive ? this.csVersions.find(v => v.versionId === this.csLiveVersionId) : null;
+    const liveName = liveVersion?.name || (hasLive ? this.csLiveVersionId.substring(0, 12) + '...' : null);
+    const liveId = hasLive ? this.csLiveVersionId.substring(0, 15) + '...' : null;
 
     statusEl.innerHTML = `
+      <!-- LIVE STATUS BANNER (Above Console) -->
+      <div style="
+        background: ${hasLive ? 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)' : 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)'};
+        border: 2px solid ${hasLive ? '#10b981' : '#ef4444'};
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      ">
+        <!-- Status Light -->
+        <div style="
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          background: ${hasLive ? '#10b981' : '#ef4444'};
+          box-shadow: 0 0 8px ${hasLive ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)'};
+          animation: pulse 2s infinite;
+        "></div>
+        
+        <!-- Status Text -->
+        <div style="flex: 1;">
+          ${hasLive ? `
+            <div style="font-size: 13px; font-weight: 600; color: #065f46;">
+              ✅ Live Configuration Active
+            </div>
+            <div style="font-size: 12px; color: #047857; margin-top: 2px;">
+              <strong>${liveName}</strong> • ${liveId}
+            </div>
+          ` : `
+            <div style="font-size: 13px; font-weight: 600; color: #991b1b;">
+              ⚠️ No Live Configuration
+            </div>
+            <div style="font-size: 12px; color: #b91c1c; margin-top: 2px;">
+              Create and publish a version to activate AI responses
+            </div>
+          `}
+        </div>
+      </div>
+      
+      <!-- VERSION CONSOLE -->
       <div id="cs-version-console" style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #0ea5e9; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
         
         <!-- TOP ROW: DROPDOWN ONLY -->
