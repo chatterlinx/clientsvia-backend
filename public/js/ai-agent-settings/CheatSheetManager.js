@@ -593,11 +593,9 @@ class CheatSheetManager {
   render() {
     console.log('[CHEAT SHEET] 🎨 render() called - cheatSheet exists?', !!this.cheatSheet);
     
-    // Render Version Console or legacy status banner
+    // Render Version Console (ONLY UI)
     if (this.useVersionConsole && this.versioningAdapter) {
       this.renderVersionConsole();
-    } else {
-      this.renderStatus();
     }
     
     this.renderCompanyInstructions();
@@ -612,214 +610,6 @@ class CheatSheetManager {
     this.renderGuardrails();
     this.renderActionAllowlist();
     console.log('[CHEAT SHEET] 🎨 render() complete');
-  }
-  
-  renderStatus() {
-    const statusEl = document.getElementById('cheatsheet-status');
-    if (!statusEl) return;
-    
-    // Version System Mode
-    if (this.useVersioning && this.versionStatus) {
-      const hasDraft = !!this.versionStatus.draft;
-      const liveVersion = this.versionStatus.live;
-      
-      statusEl.innerHTML = `
-        <!-- Version System Status Banner -->
-        <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #0ea5e9; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-          <div style="display: flex; align-items: center; justify-content: space-between;">
-            
-            <!-- Left: System Status -->
-            <div style="display: flex; align-items: center; gap: 24px;">
-              
-              <!-- LIVE System -->
-              <div>
-                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #0369a1; font-weight: 700; margin-bottom: 4px;">
-                  🔴 LIVE SYSTEM
-                </div>
-                <div style="font-size: 14px; font-weight: 600; color: #0c4a6e;">
-                  ${liveVersion ? liveVersion.name : 'No live version'}
-                </div>
-                ${liveVersion ? `
-                  <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
-                    v${liveVersion.versionId.substring(0, 8)} • ${new Date(liveVersion.activatedAt || liveVersion.createdAt).toLocaleDateString()}
-                  </div>
-                ` : ''}
-              </div>
-              
-              <!-- Separator -->
-              <div style="width: 1px; height: 40px; background: #cbd5e1;"></div>
-              
-              <!-- YOUR WORKSPACE (Draft) -->
-              <div>
-                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #7c2d12; font-weight: 700; margin-bottom: 4px;">
-                  ✏️ YOUR WORKSPACE
-                </div>
-                ${hasDraft ? `
-                  <div style="font-size: 14px; font-weight: 600; color: #92400e;">
-                    Draft in progress: ${this.versionStatus.draft.name}
-                  </div>
-                  <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
-                    v${this.versionStatus.draft.versionId.substring(0, 8)} • Created ${new Date(this.versionStatus.draft.createdAt).toLocaleDateString()}
-                  </div>
-                ` : liveVersion ? `
-                  <div style="font-size: 13px; color: #64748b;">
-                    Live version: ${liveVersion.name}, no draft in progress
-                  </div>
-                ` : `
-                  <div style="font-size: 13px; color: #64748b; font-style: italic;">
-                    No draft in progress
-                  </div>
-                `}
-              </div>
-            </div>
-            
-            <!-- Right: Action Buttons -->
-            <div style="display: flex; align-items: center; gap: 8px;">
-              
-              ${hasDraft ? `
-                <!-- Save Draft Button -->
-                <button 
-                  onclick="cheatSheetManager.saveDraft()" 
-                  style="padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; cursor: pointer; transition: all 0.2s; ${
-                    this.isDirty 
-                      ? 'background: #f59e0b; color: #ffffff; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);' 
-                      : 'background: #e5e7eb; color: #9ca3af; cursor: not-allowed;'
-                  }"
-                  ${!this.isDirty ? 'disabled' : ''}
-                  ${this.isDirty ? 'onmouseover="this.style.background=\'#d97706\'" onmouseout="this.style.background=\'#f59e0b\'"' : ''}
-                >
-                  💾 Save Draft
-                </button>
-                
-                <!-- Push Live Button -->
-                <button 
-                  onclick="cheatSheetManager.pushDraftLive()" 
-                  style="padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; background: #10b981; color: #ffffff; cursor: pointer; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3); transition: all 0.2s;"
-                  onmouseover="this.style.background='#059669'" 
-                  onmouseout="this.style.background='#10b981'"
-                >
-                  🚀 Push Live
-                </button>
-                
-                <!-- Discard Draft Button -->
-                <button 
-                  onclick="cheatSheetManager.discardDraft()" 
-                  style="padding: 8px 16px; font-size: 13px; font-weight: 500; border-radius: 8px; border: 1px solid #ef4444; background: transparent; color: #ef4444; cursor: pointer; transition: all 0.2s;"
-                  onmouseover="this.style.background='#fef2f2'" 
-                  onmouseout="this.style.background='transparent'"
-                >
-                  🗑️ Discard
-                </button>
-              ` : `
-                <!-- Create Draft Button (Disabled if draft exists) -->
-                <button 
-                  onclick="cheatSheetManager.createDraft()" 
-                  style="padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; ${
-                    hasDraft
-                      ? 'background: #e5e7eb; color: #9ca3af; cursor: not-allowed;'
-                      : 'background: #3b82f6; color: #ffffff; cursor: pointer; box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);'
-                  } transition: all 0.2s;"
-                  ${hasDraft ? 'disabled' : ''}
-                  ${hasDraft ? '' : 'onmouseover="this.style.background=\'#2563eb\'" onmouseout="this.style.background=\'#3b82f6\'"'}
-                  title="${hasDraft ? 'You already have a draft. Push it live or discard it before creating another.' : 'Create a new draft to make changes'}"
-                >
-                  ✏️ Create Draft
-                </button>
-                
-                <!-- Quick Save Button (No Draft Needed) -->
-                <button 
-                  onclick="cheatSheetManager.quickSave()" 
-                  style="padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; cursor: pointer; transition: all 0.2s; ${
-                    this.isDirty 
-                      ? 'background: #10b981; color: #ffffff; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);' 
-                      : 'background: #e5e7eb; color: #9ca3af; cursor: not-allowed;'
-                  }"
-                  ${!this.isDirty ? 'disabled' : ''}
-                  ${this.isDirty ? 'onmouseover="this.style.background=\'#059669\'" onmouseout="this.style.background=\'#10b981\'"' : ''}
-                >
-                  💾 Quick Save
-                </button>
-              `}
-              
-              <!-- Version History Button -->
-              <button 
-                onclick="cheatSheetManager.showVersionHistory()" 
-                style="padding: 8px 16px; font-size: 13px; font-weight: 500; border-radius: 8px; border: 1px solid #0ea5e9; background: transparent; color: #0ea5e9; cursor: pointer; transition: all 0.2s;"
-                onmouseover="this.style.background='#f0f9ff'" 
-                onmouseout="this.style.background='transparent'"
-              >
-                📚 History
-              </button>
-            </div>
-            
-          </div>
-        </div>
-      `;
-      return;
-    }
-    
-    // Legacy Mode (No Version System)
-    const isDraft = this.cheatSheet.status === 'draft';
-    const hasChecksum = Boolean(this.cheatSheet.checksum);
-    
-    statusEl.innerHTML = `
-      <div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-4">
-        <div class="flex items-center space-x-4">
-          <div class="flex items-center">
-            <span class="text-sm font-medium text-gray-700 mr-2">Status:</span>
-            <span class="px-3 py-1 rounded-full text-sm font-medium ${isDraft ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}">
-              ${isDraft ? '📝 Draft' : '✅ Active'}
-            </span>
-          </div>
-          
-          ${hasChecksum ? `
-            <div class="flex items-center">
-              <span class="text-sm font-medium text-gray-700 mr-2">Checksum:</span>
-              <code class="px-2 py-1 bg-gray-100 rounded text-xs font-mono">${this.cheatSheet.checksum.substring(0, 12)}...</code>
-            </div>
-          ` : '<span class="text-sm text-gray-500 italic">Not compiled yet</span>'}
-          
-          <div class="flex items-center">
-            <span class="text-sm font-medium text-gray-700 mr-2">Version:</span>
-            <span class="text-sm text-gray-600">${this.cheatSheet.version}</span>
-          </div>
-        </div>
-        
-        <div class="flex items-center space-x-2">
-          <button 
-            onclick="cheatSheetManager.save()" 
-            class="px-4 py-2 rounded-lg transition-all text-sm font-medium ${
-              this.isDirty 
-                ? 'bg-green-600 text-white hover:bg-green-700 shadow-lg hover:shadow-xl transform hover:scale-105 animate-pulse' 
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-50'
-            }"
-            ${!this.isDirty ? 'disabled' : ''}
-          >
-            💾 Save Changes
-          </button>
-          
-          ${hasChecksum ? `
-            <button onclick="cheatSheetManager.testCheatSheet()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
-              🧪 Test Rules
-            </button>
-          ` : ''}
-          
-          <button onclick="cheatSheetManager.compileCheatSheet()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium">
-            🔧 ${hasChecksum ? 'Recompile' : 'Compile'} Policy
-          </button>
-          
-          ${!isDraft ? `
-            <button onclick="cheatSheetManager.setStatus('draft')" class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm font-medium">
-              📝 Mark as Draft
-            </button>
-          ` : `
-            <button onclick="cheatSheetManager.setStatus('active')" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium" ${!hasChecksum ? 'disabled opacity-50 cursor-not-allowed' : ''}>
-              ✅ Activate
-            </button>
-          `}
-        </div>
-      </div>
-    `;
   }
   
   // ═══════════════════════════════════════════════════════════════════
@@ -4375,8 +4165,6 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       // Update UI based on active system
       if (this.useVersionConsole && this.csWorkspaceVersion) {
         this.renderVersionConsole();
-      } else {
-        this.renderStatus();
       }
       
       console.log('[CHEAT SHEET] ✅ CHECKPOINT 12: Save complete. isDirty now:', this.isDirty);
@@ -4449,8 +4237,6 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       // Re-render console/banner based on active system
       if (this.useVersionConsole && this.csWorkspaceVersion) {
         this.renderVersionConsole();
-      } else {
-        this.renderStatus();
       }
       
       this.showNotification('✅ Changes saved successfully!', 'success');
@@ -4522,8 +4308,6 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       // Update UI based on active system
       if (this.useVersionConsole && this.csWorkspaceVersion) {
         this.renderVersionConsole();
-      } else {
-        this.renderStatus();
       }
       
       this.showNotification('✅ Draft saved successfully!', 'success');
@@ -5780,8 +5564,6 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     // Update Version Console if active
     if (this.useVersionConsole && this.csWorkspaceVersion) {
       this.csMarkDirty();
-    } else {
-      this.renderStatus();
     }
   }
   
