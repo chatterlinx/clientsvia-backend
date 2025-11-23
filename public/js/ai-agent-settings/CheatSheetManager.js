@@ -6697,7 +6697,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
               />
             </div>
 
-            <!-- Name of version (editable) -->
+            <!-- Name of version (read-only - set at creation) -->
             <div style="flex: 1;">
               <label for="cs-version-name" style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">
                 Name of version
@@ -6705,9 +6705,10 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
               <input 
                 id="cs-version-name" 
                 type="text" 
-                placeholder="Give this version a name…"
+                readonly
                 value="${hasWorkspace ? (this.csWorkspaceVersion.name || '') : ''}"
-                style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; color: #0c4a6e;"
+                style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; color: #475569; background: #f8fafc;"
+                title="Version name is set at creation and cannot be changed"
               />
             </div>
 
@@ -6843,11 +6844,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       btnGoLive.addEventListener('click', this.csHandleGoLiveBound);
     }
 
-    if (inputName) {
-      inputName.removeEventListener('input', this.csHandleNameChangeBound);
-      this.csHandleNameChangeBound = this.csHandleNameChange.bind(this);
-      inputName.addEventListener('input', this.csHandleNameChangeBound);
-    }
+    // Name input is read-only, no event handler needed
   }
 
   /**
@@ -6967,7 +6964,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
 
   /**
    * Handle Save button click
-   * Saves current workspace version (name + config)
+   * Saves current workspace version config (name is read-only after creation)
    */
   async csHandleSave() {
     if (!this.csWorkspaceVersion) return;
@@ -6976,17 +6973,6 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       // Collect current config from UI
       const config = this.csCollectConfigFromCheatSheetUI();
       
-      // Get name from input
-      const nameInput = document.getElementById('cs-version-name');
-      const name = nameInput ? nameInput.value.trim() : this.csWorkspaceVersion.name;
-      
-      // Validate name
-      if (!name) {
-        alert('⚠️ Please provide a name for this version before saving.');
-        if (nameInput) nameInput.focus();
-        return;
-      }
-      
       // Disable save button during save
       const btnSave = document.getElementById('cs-btn-save');
       if (btnSave) {
@@ -6994,19 +6980,13 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         btnSave.textContent = '💾 Saving...';
       }
       
-      // Update version via adapter
-      await this.versioningAdapter.updateDraft(
-        this.csWorkspaceVersion.versionId,
-        name,
-        '',
-        config
-      );
+      // Save via adapter (uses correct saveDraft method)
+      await this.versioningAdapter.saveDraft(config);
       
       // Update local state
-      this.csWorkspaceVersion.name = name;
       this.csWorkspaceVersion.config = config;
       
-      // Refresh version list
+      // Refresh version list to get updated timestamps
       await this.csFetchVersions();
       
       this.csHasUnsavedChanges = false;
@@ -7146,19 +7126,6 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     } catch (error) {
       console.error('[VERSION CONSOLE] Error publishing version:', error);
       alert(`Failed to publish version: ${error.message}`);
-    }
-  }
-
-  /**
-   * Handle name input change
-   */
-  csHandleNameChange() {
-    if (!this.csWorkspaceVersion) return;
-    
-    const nameInput = document.getElementById('cs-version-name');
-    if (nameInput) {
-      this.csWorkspaceVersion.name = nameInput.value;
-      this.csMarkDirty();
     }
   }
 
