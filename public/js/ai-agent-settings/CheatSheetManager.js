@@ -4300,11 +4300,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
             >
               Share to Global
             </button>
-          ` : `
-            <div style="padding: 8px 12px; font-size: 12px; text-align: center; color: #6b7280; font-style: italic;">
-              Being edited
-            </div>
-          `}
+          ` : ''}
           
         </div>
         
