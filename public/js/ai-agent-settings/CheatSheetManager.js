@@ -7331,6 +7331,26 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       lockoutScreen.style.display = 'none';
     }
     
+    // Restore config tab content areas to be ready for display
+    const configContentAreas = [
+      'cheatsheet-subtab-triage',
+      'cheatsheet-subtab-frontline-intel',
+      'cheatsheet-subtab-transfer-calls',
+      'cheatsheet-subtab-edge-cases',
+      'cheatsheet-subtab-behavior',
+      'cheatsheet-subtab-guardrails',
+      'cheatsheet-v2-dynamic-content'
+    ];
+    
+    configContentAreas.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        // Remove the forced display:none from lockdown
+        // switchSubTab will handle showing the correct one
+        el.style.display = '';
+      }
+    });
+    
     // SHOW and restore config tabs to full visibility
     const configTabs = document.querySelectorAll('.tab-ai-behavior, .tab-reference');
     configTabs.forEach(tab => {
@@ -7341,7 +7361,13 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       tab.removeAttribute('data-locked');
     });
     
-    // Note: Content areas are shown by switchSubTab() when user clicks a tab
+    console.log('[VERSION CONSOLE] 🔓 Unlocked and restored', configTabs.length, 'config tabs');
+    
+    // Re-render the current tab to ensure content is properly displayed
+    if (this.currentSubTab) {
+      console.log('[VERSION CONSOLE] 🔄 Re-rendering current tab:', this.currentSubTab);
+      this.switchSubTab(this.currentSubTab);
+    }
   }
 
   /**
