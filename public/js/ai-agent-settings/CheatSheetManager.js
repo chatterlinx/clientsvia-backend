@@ -3762,24 +3762,8 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       this.cheatSheet.calculators = [];
     }
     
-    const newCalculator = {
-      id: `calc-${Date.now()}`,
-      label: 'New Calculator',
-      type: 'flat-fee',
-      baseAmount: 0,
-      notes: ''
-    };
-    
-    this.cheatSheet.calculators.push(newCalculator);
-    
-    console.log('[CHEAT SHEET] ✅ New calculator added (local only)', newCalculator);
-    
-    this.renderCalculator();
-    
-    if (typeof this.markDirty === 'function') {
-      this.markDirty();
-    }
-    this.markDirty(); // Update UI (respects Version Console)
+    // Open modal for new calculator
+    this.showCalculatorModal();
   }
   
   handleEditCalculator(index) {
@@ -3787,25 +3771,362 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     const calc = this.cheatSheet.calculators[index];
     if (!calc) return;
     
-    const label = window.prompt('Calculator name / label:', calc.label || '') ?? calc.label;
-    const type = window.prompt('Type (flat-fee for now):', calc.type || 'flat-fee') ?? calc.type;
-    const baseAmountInput = window.prompt('Base amount ($):', typeof calc.baseAmount === 'number' ? String(calc.baseAmount) : '0') ?? String(calc.baseAmount ?? '0');
-    const baseAmount = parseFloat(baseAmountInput);
-    const notes = window.prompt('Notes (when to use this calculator):', calc.notes || '') ?? calc.notes;
+    // Open modal for existing calculator
+    this.showCalculatorModal(index);
+  }
+  
+  /**
+   * Show Calculator Modal (Enterprise Form)
+   * @param {number|null} calcIndex - Index of calculator being edited, or null for new
+   */
+  showCalculatorModal(calcIndex = null) {
+    const isEdit = calcIndex !== null;
+    const calc = isEdit ? this.cheatSheet.calculators[calcIndex] : null;
     
-    calc.label = label;
-    calc.type = type;
-    calc.baseAmount = isNaN(baseAmount) ? calc.baseAmount || 0 : baseAmount;
-    calc.notes = notes;
+    // Create modal HTML
+    const modalHTML = `
+      <div id="calculator-modal" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.75);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fadeIn 0.2s ease-out;
+      ">
+        <div style="
+          background: #ffffff;
+          border-radius: 12px;
+          width: 90%;
+          max-width: 600px;
+          max-height: 90vh;
+          overflow-y: auto;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          animation: slideUp 0.3s ease-out;
+        ">
+          <!-- Header -->
+          <div style="
+            padding: 24px 24px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            position: sticky;
+            top: 0;
+            background: #ffffff;
+            z-index: 1;
+          ">
+            <h2 style="margin: 0; font-size: 20px; font-weight: 600; color: #111827;">
+              ${isEdit ? '✏️ Edit Calculator' : '🧮 Add Calculator'}
+            </h2>
+          </div>
+          
+          <!-- Form Body -->
+          <div style="padding: 24px;">
+            <form id="calculator-form" style="display: flex; flex-direction: column; gap: 20px;">
+              
+              <!-- Label -->
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Calculator Name *
+                </label>
+                <input 
+                  type="text" 
+                  id="calc-label" 
+                  value="${calc?.label || ''}" 
+                  placeholder="e.g., Service Call Fee, HVAC System Size"
+                  required
+                  style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-family: inherit;
+                  "
+                />
+              </div>
+              
+              <!-- Type -->
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Calculator Type *
+                </label>
+                <select 
+                  id="calc-type"
+                  required
+                  style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-family: inherit;
+                    background: #ffffff;
+                  "
+                >
+                  <option value="flat-fee" ${calc?.type === 'flat-fee' ? 'selected' : ''}>💵 Flat Fee</option>
+                  <option value="square-footage" ${calc?.type === 'square-footage' ? 'selected' : ''}>📐 Square Footage Based</option>
+                  <option value="btu" ${calc?.type === 'btu' ? 'selected' : ''}>🔥 BTU Calculator</option>
+                  <option value="tonnage" ${calc?.type === 'tonnage' ? 'selected' : ''}>⚖️ Tonnage Calculator</option>
+                  <option value="cost-estimator" ${calc?.type === 'cost-estimator' ? 'selected' : ''}>💰 Cost Estimator</option>
+                  <option value="custom" ${calc?.type === 'custom' ? 'selected' : ''}>⚙️ Custom Formula</option>
+                </select>
+              </div>
+              
+              <!-- Base Amount -->
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Base Amount / Value *
+                </label>
+                <div style="position: relative;">
+                  <span style="
+                    position: absolute;
+                    left: 12px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    font-size: 14px;
+                    color: #6b7280;
+                    font-weight: 500;
+                  ">$</span>
+                  <input 
+                    type="number" 
+                    id="calc-base-amount" 
+                    value="${calc?.baseAmount || 0}" 
+                    placeholder="0.00"
+                    step="0.01"
+                    min="0"
+                    required
+                    style="
+                      width: 100%;
+                      padding: 10px 12px 10px 28px;
+                      border: 1px solid #d1d5db;
+                      border-radius: 6px;
+                      font-size: 14px;
+                      font-family: inherit;
+                    "
+                  />
+                </div>
+                <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+                  For flat fees, this is the total. For calculators, this is the base value.
+                </div>
+              </div>
+              
+              <!-- Description -->
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Description
+                </label>
+                <textarea 
+                  id="calc-description" 
+                  rows="2"
+                  placeholder="Explain what this calculator does (e.g., 'Calculates recommended HVAC size based on square footage')"
+                  style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-family: inherit;
+                    resize: vertical;
+                  "
+                >${calc?.description || ''}</textarea>
+              </div>
+              
+              <!-- Formula/Logic -->
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Formula / Logic
+                </label>
+                <textarea 
+                  id="calc-formula" 
+                  rows="3"
+                  placeholder="e.g., 'sqft * 25 = BTU needed' or 'Base fee + ($X per unit)'"
+                  style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-family: 'Courier New', monospace;
+                    resize: vertical;
+                  "
+                >${calc?.formula || ''}</textarea>
+              </div>
+              
+              <!-- Units -->
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Output Units
+                </label>
+                <input 
+                  type="text" 
+                  id="calc-units" 
+                  value="${calc?.units || ''}" 
+                  placeholder="e.g., BTU, Tons, $, sq ft"
+                  style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-family: inherit;
+                  "
+                />
+              </div>
+              
+              <!-- Notes -->
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  AI Usage Notes
+                </label>
+                <textarea 
+                  id="calc-notes" 
+                  rows="3"
+                  placeholder="Internal: When should AI use this calculator? (e.g., 'Use when customer asks about service call pricing')"
+                  style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-family: inherit;
+                    resize: vertical;
+                  "
+                >${calc?.notes || ''}</textarea>
+              </div>
+              
+            </form>
+          </div>
+          
+          <!-- Footer Actions -->
+          <div style="
+            padding: 16px 24px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            position: sticky;
+            bottom: 0;
+            background: #ffffff;
+          ">
+            <button 
+              type="button" 
+              id="calc-modal-cancel"
+              style="
+                padding: 10px 20px;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                background: #ffffff;
+                color: #374151;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s;
+              "
+              onmouseover="this.style.background='#f9fafb'"
+              onmouseout="this.style.background='#ffffff'"
+            >
+              Cancel
+            </button>
+            <button 
+              type="button" 
+              id="calc-modal-save"
+              style="
+                padding: 10px 20px;
+                border: none;
+                border-radius: 6px;
+                background: #3b82f6;
+                color: #ffffff;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s;
+              "
+              onmouseover="this.style.background='#2563eb'"
+              onmouseout="this.style.background='#3b82f6'"
+            >
+              💾 Save Calculator
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
     
-    console.log('[CHEAT SHEET] ✅ Calculator updated (local only)', calc);
+    // Inject modal into DOM
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
     
-    this.renderCalculator();
+    // Wire up events
+    document.getElementById('calc-modal-cancel').addEventListener('click', () => {
+      document.getElementById('calculator-modal').remove();
+    });
     
-    if (typeof this.markDirty === 'function') {
-      this.markDirty();
+    document.getElementById('calc-modal-save').addEventListener('click', () => {
+      this.saveCalculatorForm(calcIndex);
+    });
+    
+    // Focus first field
+    setTimeout(() => {
+      document.getElementById('calc-label')?.focus();
+    }, 100);
+  }
+  
+  /**
+   * Save Calculator Form Data
+   */
+  saveCalculatorForm(calcIndex = null) {
+    const isEdit = calcIndex !== null;
+    
+    // Collect form data
+    const label = document.getElementById('calc-label').value.trim();
+    const type = document.getElementById('calc-type').value;
+    const baseAmount = parseFloat(document.getElementById('calc-base-amount').value);
+    const description = document.getElementById('calc-description').value.trim();
+    const formula = document.getElementById('calc-formula').value.trim();
+    const units = document.getElementById('calc-units').value.trim();
+    const notes = document.getElementById('calc-notes').value.trim();
+    
+    // Validate required fields
+    if (!label) {
+      alert('⚠️ Calculator name is required');
+      document.getElementById('calc-label').focus();
+      return;
     }
-    this.markDirty(); // Update UI (respects Version Console)
+    
+    if (isNaN(baseAmount) || baseAmount < 0) {
+      alert('⚠️ Base amount must be a valid number (0 or greater)');
+      document.getElementById('calc-base-amount').focus();
+      return;
+    }
+    
+    // Build calculator object
+    const calcData = {
+      id: isEdit ? this.cheatSheet.calculators[calcIndex].id : `calc-${Date.now()}`,
+      label,
+      type,
+      baseAmount,
+      description,
+      formula,
+      units,
+      notes
+    };
+    
+    // Update or add calculator
+    if (isEdit) {
+      this.cheatSheet.calculators[calcIndex] = calcData;
+      console.log('[CHEAT SHEET] ✅ Calculator updated:', calcData);
+    } else {
+      this.cheatSheet.calculators.push(calcData);
+      console.log('[CHEAT SHEET] ✅ Calculator added:', calcData);
+    }
+    
+    // Close modal
+    document.getElementById('calculator-modal').remove();
+    
+    // Re-render and mark dirty
+    this.renderCalculator();
+    this.markDirty();
   }
   
   handleDeleteCalculator(index) {
