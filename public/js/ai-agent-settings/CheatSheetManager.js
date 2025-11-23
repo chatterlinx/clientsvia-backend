@@ -3274,25 +3274,8 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       this.cheatSheet.links = [];
     }
     
-    const newLink = {
-      id: `link-${Date.now()}`,
-      label: 'New Link',
-      category: 'other',
-      url: '',
-      shortDescription: '',
-      notes: ''
-    };
-    
-    this.cheatSheet.links.push(newLink);
-    
-    console.log('[CHEAT SHEET] ✅ New link added (local only)', newLink);
-    
-    this.renderLinks();
-    
-    if (typeof this.markDirty === 'function') {
-      this.markDirty();
-    }
-    this.markDirty(); // Update UI (respects Version Console)
+    // Open modal for new link
+    this.showLinkModal();
   }
   
   handleEditLink(index) {
@@ -3300,26 +3283,313 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     const link = this.cheatSheet.links[index];
     if (!link) return;
     
-    const label = window.prompt('Link title / label:', link.label || '') ?? link.label;
-    const category = window.prompt('Category (financing, portal, policy, catalog, other):', link.category || 'other') ?? link.category;
-    const url = window.prompt('URL:', link.url || '') ?? link.url;
-    const shortDescription = window.prompt('Short description:', link.shortDescription || '') ?? link.shortDescription;
-    const notes = window.prompt('Notes (when/how AI should use this link):', link.notes || '') ?? link.notes;
+    // Open modal for existing link
+    this.showLinkModal(index);
+  }
+  
+  /**
+   * Show Link Modal (Enterprise Form)
+   * @param {number|null} linkIndex - Index of link being edited, or null for new
+   */
+  showLinkModal(linkIndex = null) {
+    const isEdit = linkIndex !== null;
+    const link = isEdit ? this.cheatSheet.links[linkIndex] : null;
     
-    link.label = label;
-    link.category = category;
-    link.url = url;
-    link.shortDescription = shortDescription;
-    link.notes = notes;
+    // Create modal HTML
+    const modalHTML = `
+      <div id="link-modal" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.75);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fadeIn 0.2s ease-out;
+      ">
+        <div style="
+          background: #ffffff;
+          border-radius: 12px;
+          width: 90%;
+          max-width: 600px;
+          max-height: 90vh;
+          overflow-y: auto;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          animation: slideUp 0.3s ease-out;
+        ">
+          <!-- Header -->
+          <div style="
+            padding: 24px 24px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            position: sticky;
+            top: 0;
+            background: #ffffff;
+            z-index: 1;
+          ">
+            <h2 style="margin: 0; font-size: 20px; font-weight: 600; color: #111827;">
+              ${isEdit ? '✏️ Edit Link' : '🔗 Add Link'}
+            </h2>
+          </div>
+          
+          <!-- Form Body -->
+          <div style="padding: 24px;">
+            <form id="link-form" style="display: flex; flex-direction: column; gap: 20px;">
+              
+              <!-- Label -->
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Link Label / Title *
+                </label>
+                <input 
+                  type="text" 
+                  id="link-label" 
+                  value="${link?.label || ''}" 
+                  placeholder="e.g., Payment Portal, Service Area Map"
+                  required
+                  style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-family: inherit;
+                  "
+                />
+              </div>
+              
+              <!-- Category -->
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Category *
+                </label>
+                <select 
+                  id="link-category"
+                  required
+                  style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-family: inherit;
+                    background: #ffffff;
+                  "
+                >
+                  <option value="payment" ${link?.category === 'payment' ? 'selected' : ''}>💳 Payment / Billing</option>
+                  <option value="scheduling" ${link?.category === 'scheduling' ? 'selected' : ''}>📅 Scheduling</option>
+                  <option value="service-area" ${link?.category === 'service-area' ? 'selected' : ''}>🗺️ Service Area Map</option>
+                  <option value="faq" ${link?.category === 'faq' ? 'selected' : ''}>❓ FAQ / Help</option>
+                  <option value="portal" ${link?.category === 'portal' ? 'selected' : ''}>🔐 Customer Portal</option>
+                  <option value="financing" ${link?.category === 'financing' ? 'selected' : ''}>💰 Financing Options</option>
+                  <option value="catalog" ${link?.category === 'catalog' ? 'selected' : ''}>📦 Product Catalog</option>
+                  <option value="policy" ${link?.category === 'policy' ? 'selected' : ''}>📜 Policies / Terms</option>
+                  <option value="other" ${link?.category === 'other' ? 'selected' : ''}>🔗 Other</option>
+                </select>
+              </div>
+              
+              <!-- URL -->
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  URL *
+                </label>
+                <input 
+                  type="url" 
+                  id="link-url" 
+                  value="${link?.url || ''}" 
+                  placeholder="https://company.com/portal"
+                  required
+                  style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-family: inherit;
+                  "
+                />
+                <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+                  Must start with https:// or http://
+                </div>
+              </div>
+              
+              <!-- Short Description -->
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Short Description
+                </label>
+                <textarea 
+                  id="link-description" 
+                  rows="2"
+                  placeholder="Brief description for customers (e.g., 'Pay your invoice securely online')"
+                  style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-family: inherit;
+                    resize: vertical;
+                  "
+                >${link?.shortDescription || ''}</textarea>
+              </div>
+              
+              <!-- Notes (AI Usage) -->
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  AI Usage Notes
+                </label>
+                <textarea 
+                  id="link-notes" 
+                  rows="3"
+                  placeholder="Internal: When/how should AI use this link? (e.g., 'Send when customer asks about payment options')"
+                  style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-family: inherit;
+                    resize: vertical;
+                  "
+                >${link?.notes || ''}</textarea>
+              </div>
+              
+            </form>
+          </div>
+          
+          <!-- Footer Actions -->
+          <div style="
+            padding: 16px 24px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            position: sticky;
+            bottom: 0;
+            background: #ffffff;
+          ">
+            <button 
+              type="button" 
+              id="link-modal-cancel"
+              style="
+                padding: 10px 20px;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                background: #ffffff;
+                color: #374151;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s;
+              "
+              onmouseover="this.style.background='#f9fafb'"
+              onmouseout="this.style.background='#ffffff'"
+            >
+              Cancel
+            </button>
+            <button 
+              type="button" 
+              id="link-modal-save"
+              style="
+                padding: 10px 20px;
+                border: none;
+                border-radius: 6px;
+                background: #3b82f6;
+                color: #ffffff;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s;
+              "
+              onmouseover="this.style.background='#2563eb'"
+              onmouseout="this.style.background='#3b82f6'"
+            >
+              💾 Save Link
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
     
-    console.log('[CHEAT SHEET] ✅ Link updated (local only)', link);
+    // Inject modal into DOM
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
     
-    this.renderLinks();
+    // Wire up events
+    document.getElementById('link-modal-cancel').addEventListener('click', () => {
+      document.getElementById('link-modal').remove();
+    });
     
-    if (typeof this.markDirty === 'function') {
-      this.markDirty();
+    document.getElementById('link-modal-save').addEventListener('click', () => {
+      this.saveLinkForm(linkIndex);
+    });
+    
+    // Focus first field
+    setTimeout(() => {
+      document.getElementById('link-label')?.focus();
+    }, 100);
+  }
+  
+  /**
+   * Save Link Form Data
+   */
+  saveLinkForm(linkIndex = null) {
+    const isEdit = linkIndex !== null;
+    
+    // Collect form data
+    const label = document.getElementById('link-label').value.trim();
+    const category = document.getElementById('link-category').value;
+    const url = document.getElementById('link-url').value.trim();
+    const shortDescription = document.getElementById('link-description').value.trim();
+    const notes = document.getElementById('link-notes').value.trim();
+    
+    // Validate required fields
+    if (!label) {
+      alert('⚠️ Link label is required');
+      document.getElementById('link-label').focus();
+      return;
     }
-    this.markDirty(); // Update UI (respects Version Console)
+    
+    if (!url) {
+      alert('⚠️ URL is required');
+      document.getElementById('link-url').focus();
+      return;
+    }
+    
+    // Validate URL format
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      alert('⚠️ URL must start with http:// or https://');
+      document.getElementById('link-url').focus();
+      return;
+    }
+    
+    // Build link object
+    const linkData = {
+      id: isEdit ? this.cheatSheet.links[linkIndex].id : `link-${Date.now()}`,
+      label,
+      category,
+      url,
+      shortDescription,
+      notes
+    };
+    
+    // Update or add link
+    if (isEdit) {
+      this.cheatSheet.links[linkIndex] = linkData;
+      console.log('[CHEAT SHEET] ✅ Link updated:', linkData);
+    } else {
+      this.cheatSheet.links.push(linkData);
+      console.log('[CHEAT SHEET] ✅ Link added:', linkData);
+    }
+    
+    // Close modal
+    document.getElementById('link-modal').remove();
+    
+    // Re-render and mark dirty
+    this.renderLinks();
+    this.markDirty();
   }
   
   handleDeleteLink(index) {
