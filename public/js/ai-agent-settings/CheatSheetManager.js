@@ -4674,20 +4674,93 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     
     const categories = this.globalCategories || [];
     
-    // Handle empty categories case
+    // SECTION 1: Category Management (Admin)
+    const categoryManagementHtml = `
+      <div style="background: #f0f9ff; border: 2px solid #0ea5e9; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+          <div>
+            <h4 style="font-size: 16px; font-weight: 700; color: #0369a1; margin: 0 0 4px 0;">
+              🏷️ Category Management
+            </h4>
+            <p style="font-size: 12px; color: #0c4a6e; margin: 0;">
+              Categories organize shared configurations by industry
+            </p>
+          </div>
+          <button
+            id="btn-create-category"
+            style="
+              padding: 8px 16px;
+              font-size: 13px;
+              font-weight: 600;
+              border-radius: 8px;
+              border: none;
+              background: #0ea5e9;
+              color: #ffffff;
+              cursor: pointer;
+              box-shadow: 0 2px 4px rgba(14, 165, 233, 0.3);
+              transition: all 0.2s;
+            "
+            onmouseover="this.style.background='#0284c7'"
+            onmouseout="this.style.background='#0ea5e9'"
+          >
+            ＋ Create Category
+          </button>
+        </div>
+        
+        ${categories.length > 0 ? `
+          <div style="margin-top: 16px;">
+            <div style="font-size: 12px; font-weight: 600; color: #0369a1; margin-bottom: 8px;">
+              Existing Categories (${categories.length}):
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+              ${categories.map(cat => `
+                <span style="
+                  display: inline-flex;
+                  align-items: center;
+                  padding: 6px 12px;
+                  border-radius: 999px;
+                  background: #ffffff;
+                  border: 1px solid #0ea5e9;
+                  color: #0369a1;
+                  font-size: 12px;
+                  font-weight: 600;
+                ">
+                  ${cat.name}
+                </span>
+              `).join('')}
+            </div>
+          </div>
+        ` : `
+          <div style="margin-top: 12px; padding: 12px; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 4px;">
+            <div style="font-size: 12px; color: #92400e; font-weight: 600;">
+              ⚠️ No categories created yet
+            </div>
+            <div style="font-size: 11px; color: #78350f; margin-top: 4px;">
+              Click "Create Category" to add your first industry category (e.g., HVAC, Plumbing, Dental)
+            </div>
+          </div>
+        `}
+      </div>
+    `;
+    
+    // Handle empty categories case (but still show create button)
     if (categories.length === 0) {
-      container.innerHTML = `
-        <div style="padding:24px; background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; margin-bottom:16px;">
-          <strong style="color:#92400e; font-size:14px; display:block; margin-bottom:8px;">
-            ⚠️ No Global Categories Available
-          </strong>
-          <p style="margin:0; font-size:13px; color:#78350f; line-height:1.5;">
-            Global categories must be created before companies can share configurations.
-            Contact your system administrator or use the Global Config management tools to create categories (e.g., HVAC, Plumbing, Dental).
-          </p>
+      container.innerHTML = categoryManagementHtml + `
+        <div style="padding:20px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; text-align:center;">
+          <div style="font-size: 48px; margin-bottom: 12px;">📦</div>
+          <div style="font-size:14px; color:#6b7280; font-weight: 600;">
+            No Shared Configurations Yet
+          </div>
+          <div style="font-size:12px; color:#9ca3af; margin-top: 4px;">
+            Create a category above, then companies can start sharing configurations
+          </div>
         </div>
       `;
-      console.warn('[CHEAT SHEET] ⚠️ No global categories found. Global sharing is not available.');
+      
+      // Wire create button
+      this.wireCreateCategoryButton();
+      
+      console.warn('[CHEAT SHEET] ⚠️ No global categories found. Showing create interface.');
       return;
     }
     
@@ -4696,31 +4769,37 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       .map((c) => `<option value="${c._id}">${c.name}</option>`)
       .join('');
     
-    container.innerHTML = `
-      <div style="margin-bottom: 24px;">
-        <label for="global-category-select" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:8px;">
-          Select Category
-        </label>
-        <select
-          id="global-category-select"
-          style="
-            padding:8px 12px;
-            border-radius:4px;
-            border:1px solid #d1d5db;
-            font-size:13px;
-            color:#111827;
-            background:#fff;
-            min-width:220px;
-          "
-        >
-          <option value="">-- Select category --</option>
-          ${categoryOptionsHtml}
-        </select>
-      </div>
-      
-      <div id="global-configs-content" style="margin-top:16px;">
-        <div style="font-size:13px; color:#6b7280; padding:20px; text-align:center; background:#f9fafb; border-radius:8px;">
-          Select a category above to view shared configurations.
+    container.innerHTML = categoryManagementHtml + `
+      <div style="background: #ffffff; border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px;">
+        <h4 style="font-size: 16px; font-weight: 700; color: #111827; margin: 0 0 16px 0;">
+          🌍 Browse Shared Configurations
+        </h4>
+        
+        <div style="margin-bottom: 24px;">
+          <label for="global-category-select" style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:8px;">
+            Select Category to View
+          </label>
+          <select
+            id="global-category-select"
+            style="
+              padding:8px 12px;
+              border-radius:4px;
+              border:1px solid #d1d5db;
+              font-size:13px;
+              color:#111827;
+              background:#fff;
+              min-width:220px;
+            "
+          >
+            <option value="">-- Select category --</option>
+            ${categoryOptionsHtml}
+          </select>
+        </div>
+        
+        <div id="global-configs-content" style="margin-top:16px;">
+          <div style="font-size:13px; color:#6b7280; padding:20px; text-align:center; background:#f9fafb; border-radius:8px;">
+            Select a category above to view shared configurations.
+          </div>
         </div>
       </div>
     `;
@@ -4746,6 +4825,211 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
           }
         }
       });
+    }
+    
+    // Wire create category button
+    this.wireCreateCategoryButton();
+  }
+  
+  wireCreateCategoryButton() {
+    const container = document.getElementById('global-configs-tab');
+    if (!container) return;
+    
+    const btn = container.querySelector('#btn-create-category');
+    if (btn) {
+      btn.addEventListener('click', () => this.showCreateCategoryModal());
+    }
+  }
+  
+  showCreateCategoryModal() {
+    const modalHtml = `
+      <div id="create-category-modal" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.75);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fadeIn 0.2s ease-out;
+      ">
+        <div style="
+          background: #ffffff;
+          border-radius: 12px;
+          width: 90%;
+          max-width: 500px;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          animation: slideUp 0.3s ease-out;
+        ">
+          <!-- Header -->
+          <div style="
+            padding: 24px 24px 16px;
+            border-bottom: 1px solid #e5e7eb;
+          ">
+            <h2 style="margin: 0; font-size: 20px; font-weight: 600; color: #111827;">
+              🏷️ Create Global Category
+            </h2>
+            <p style="margin: 8px 0 0 0; font-size: 13px; color: #6b7280;">
+              Categories organize shared configurations by industry
+            </p>
+          </div>
+          
+          <!-- Form Body -->
+          <div style="padding: 24px;">
+            <form id="create-category-form">
+              <div style="margin-bottom: 20px;">
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                  Category Name *
+                </label>
+                <input 
+                  type="text" 
+                  id="category-name-input" 
+                  placeholder="e.g., HVAC, Plumbing, Dental, Legal"
+                  required
+                  style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-family: inherit;
+                  "
+                />
+                <div style="margin-top: 6px; font-size: 11px; color: #6b7280;">
+                  💡 Examples: HVAC, Plumbing, Dental, Legal, Roofing, Landscaping
+                </div>
+              </div>
+            </form>
+          </div>
+          
+          <!-- Footer -->
+          <div style="
+            padding: 16px 24px;
+            background: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            border-radius: 0 0 12px 12px;
+          ">
+            <button
+              id="btn-cancel-category"
+              type="button"
+              style="
+                padding: 8px 16px;
+                font-size: 13px;
+                font-weight: 500;
+                border-radius: 6px;
+                border: 1px solid #d1d5db;
+                background: #ffffff;
+                color: #374151;
+                cursor: pointer;
+              "
+            >
+              Cancel
+            </button>
+            <button
+              id="btn-save-category"
+              type="submit"
+              style="
+                padding: 8px 16px;
+                font-size: 13px;
+                font-weight: 600;
+                border-radius: 6px;
+                border: none;
+                background: #0ea5e9;
+                color: #ffffff;
+                cursor: pointer;
+                box-shadow: 0 2px 4px rgba(14, 165, 233, 0.3);
+              "
+            >
+              Create Category
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Focus input
+    const input = document.getElementById('category-name-input');
+    if (input) input.focus();
+    
+    // Wire cancel button
+    const btnCancel = document.getElementById('btn-cancel-category');
+    if (btnCancel) {
+      btnCancel.addEventListener('click', () => {
+        const modal = document.getElementById('create-category-modal');
+        if (modal) modal.remove();
+      });
+    }
+    
+    // Wire save button
+    const btnSave = document.getElementById('btn-save-category');
+    if (btnSave) {
+      btnSave.addEventListener('click', async (e) => {
+        e.preventDefault();
+        await this.handleCreateCategory();
+      });
+    }
+    
+    // Wire form submit
+    const form = document.getElementById('create-category-form');
+    if (form) {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await this.handleCreateCategory();
+      });
+    }
+  }
+  
+  async handleCreateCategory() {
+    const input = document.getElementById('category-name-input');
+    if (!input) return;
+    
+    const name = input.value.trim();
+    if (!name) {
+      alert('Please enter a category name');
+      return;
+    }
+    
+    try {
+      const response = await fetch('/api/global-config/categories', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('[CHEAT SHEET] ✅ Category created:', result.data);
+      
+      // Refresh global categories
+      await this.loadGlobalCategories();
+      
+      // Close modal
+      const modal = document.getElementById('create-category-modal');
+      if (modal) modal.remove();
+      
+      // Re-render Global tab
+      this.renderGlobalConfigsTab();
+      
+      alert(`✅ Category "${name}" created successfully!`);
+      
+    } catch (error) {
+      console.error('[CHEAT SHEET] ❌ Error creating category:', error);
+      alert(`Failed to create category: ${error.message}`);
     }
   }
   
