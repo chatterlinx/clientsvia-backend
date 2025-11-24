@@ -5119,8 +5119,8 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
             ` : ''}
           </div>
           
-          <!-- Version ID + Timestamp -->
-          <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px;">
+          <!-- Version ID + Timestamps -->
+          <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px; flex-wrap: wrap;">
             <div style="font-size: 12px; color: #6b7280;">
               <span style="font-weight: 600;">Version:</span>
               <code style="font-family: 'Monaco', 'Courier New', monospace; background: #f3f4f6; padding: 2px 6px; border-radius: 4px; margin-left: 4px;">
@@ -5130,6 +5130,17 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
             <div style="font-size: 12px; color: #6b7280;">
               <span style="font-weight: 600;">Created:</span> ${formattedDate}
             </div>
+            ${version.updatedAt && new Date(version.updatedAt).getTime() !== new Date(version.createdAt).getTime() ? `
+              <div style="font-size: 12px; color: #0369a1; font-weight: 600;">
+                <span style="font-weight: 700;">Last Updated:</span> ${new Date(version.updatedAt).toLocaleDateString('en-US', { 
+                  month: 'short', 
+                  day: 'numeric', 
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </div>
+            ` : ''}
             ${version.createdBy ? `
               <div style="font-size: 12px; color: #6b7280;">
                 <span style="font-weight: 600;">By:</span> ${version.createdBy}
