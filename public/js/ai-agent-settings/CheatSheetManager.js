@@ -7943,6 +7943,19 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       // For now, we'll treat ALL drafts as belonging to current live
       const drafts = this.csVersions.filter(v => v.status === 'draft');
       
+      // Add DRAFTS section header if there are any drafts
+      if (drafts.length > 0) {
+        const draftsSectionLabel = document.createElement('option');
+        draftsSectionLabel.disabled = true;
+        draftsSectionLabel.textContent = '📝 DRAFTS';
+        draftsSectionLabel.style.fontWeight = '700';
+        draftsSectionLabel.style.background = '#fef3c7';
+        draftsSectionLabel.style.color = '#92400e';
+        draftsSectionLabel.style.paddingLeft = '8px';
+        draftsSectionLabel.style.marginTop = '4px';
+        select.appendChild(draftsSectionLabel);
+      }
+      
       drafts.forEach(draft => {
         const opt = document.createElement('option');
         opt.value = draft.versionId;
