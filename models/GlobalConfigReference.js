@@ -30,7 +30,7 @@ const GlobalConfigReferenceSchema = new mongoose.Schema(
   {
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'v2Company',
+      ref: 'Company', // Must match the model name in v2Company.js: mongoose.model('Company', ...)
       required: true,
       index: true
     },
