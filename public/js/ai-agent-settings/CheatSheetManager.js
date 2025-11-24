@@ -8098,6 +8098,37 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       console.log('[VERSION CONSOLE] Draft created from live:', response.versionId);
     } catch (error) {
       console.error('[VERSION CONSOLE] Error creating draft from live:', error);
+      
+      // Check if error is due to existing draft
+      if (error.message && error.message.includes('already has an active draft')) {
+        // Find the existing draft mentioned in error message
+        const draftIdMatch = error.message.match(/draft-[\d]+-[a-z0-9]+/);
+        const existingDraftId = draftIdMatch ? draftIdMatch[0] : null;
+        
+        if (existingDraftId) {
+          const confirmSwitch = confirm(
+            'You already have an active draft. Would you like to edit that draft instead?\n\n' +
+            'Click OK to load the existing draft, or Cancel to keep viewing the live version.'
+          );
+          
+          if (confirmSwitch) {
+            // Load the existing draft
+            await this.csLoadExistingVersion(existingDraftId, false);
+            this.csHasUnsavedChanges = false;
+            this.renderVersionConsole();
+            this.csUnlockCheatSheetEditing();
+            return;
+          } else {
+            // User cancelled, keep live version selected and in read-only mode
+            const select = document.getElementById('cs-version-select');
+            if (select && this.csLiveVersionId) {
+              select.value = this.csLiveVersionId;
+            }
+            return;
+          }
+        }
+      }
+      
       alert(`Failed to create draft from live: ${error.message}`);
     }
   }
