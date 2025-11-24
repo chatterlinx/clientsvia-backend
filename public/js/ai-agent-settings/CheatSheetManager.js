@@ -4441,10 +4441,25 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       const name = matched ? matched.name : 'Unknown category';
       
       block.innerHTML = `
-        <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:#374151;">
-          <span style="font-weight:600;">Category:</span>
-          <span style="font-weight:600;">${name}</span>
-          <span style="font-size:12px; color:#6b7280;">🔒 (locked)</span>
+        <div style="
+          background: #ecfdf3;
+          border: 2px solid #10b981;
+          border-radius: 8px;
+          padding: 12px 16px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        ">
+          <span style="font-size: 20px;">🏷️</span>
+          <div>
+            <div style="font-size: 11px; font-weight: 600; color: #065f46; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">
+              Category (Locked)
+            </div>
+            <div style="font-size: 15px; font-weight: 700; color: #047857;">
+              ${name}
+            </div>
+          </div>
+          <span style="margin-left: auto; font-size: 18px;">🔒</span>
         </div>
       `;
       return;
@@ -4453,8 +4468,18 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     // No category assigned yet
     if (!categories.length) {
       block.innerHTML = `
-        <div style="font-size:13px; color:#6b7280;">
-          No global categories are defined yet. Create at least one category in the Global Configurations tab to enable sharing.
+        <div style="
+          background: #fef3c7;
+          border: 2px solid #f59e0b;
+          border-radius: 8px;
+          padding: 12px 16px;
+        ">
+          <div style="font-size: 13px; font-weight: 600; color: #92400e; margin-bottom: 4px;">
+            ⚠️ No Categories Available
+          </div>
+          <div style="font-size: 12px; color: #78350f;">
+            Create at least one category in the <strong>Global Configurations</strong> tab to enable sharing.
+          </div>
         </div>
       `;
       return;
@@ -4466,44 +4491,61 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       .join('');
     
     block.innerHTML = `
-      <div style="display:flex; align-items:flex-end; gap:12px;">
-        <div style="display:flex; flex-direction:column; gap:4px; flex:0 0 220px;">
-          <label for="cheatsheet-category-select" style="font-size:12px; font-weight:500; color:#4b5563;">
-            Category (required before sharing to Global)
-          </label>
-          <select
-            id="cheatsheet-category-select"
-            style="
-              padding:6px 10px;
-              border-radius:4px;
-              border:1px solid #d1d5db;
-              font-size:13px;
-              color:#111827;
-              background:#fff;
-            "
-          >
-            <option value="">-- Select category --</option>
-            ${optionsHtml}
-          </select>
+      <div style="
+        background: #f0f9ff;
+        border: 2px solid #0ea5e9;
+        border-radius: 8px;
+        padding: 16px;
+      ">
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 13px; font-weight: 600; color: #0369a1; margin-bottom: 4px;">
+            🏷️ Set Category
+          </div>
+          <div style="font-size: 11px; color: #0c4a6e;">
+            Choose a category to enable sharing to Global. <strong>This cannot be changed later.</strong>
+          </div>
         </div>
         
-        <button
-          type="button"
-          id="cheatsheet-category-lock-btn"
-          style="
-            padding:7px 14px;
-            border-radius:4px;
-            border:none;
-            font-size:13px;
-            font-weight:600;
-            cursor:not-allowed;
-            background:#e5e7eb;
-            color:#9ca3af;
-          "
-          disabled
-        >
-          Set category and lock
-        </button>
+        <div style="display:flex; align-items:flex-end; gap:12px;">
+          <div style="display:flex; flex-direction:column; gap:6px; flex:1; max-width: 300px;">
+            <label for="cheatsheet-category-select" style="font-size:12px; font-weight:600; color:#0369a1;">
+              Select Category
+            </label>
+            <select
+              id="cheatsheet-category-select"
+              style="
+                padding:8px 12px;
+                border-radius:6px;
+                border:1px solid #0ea5e9;
+                font-size:13px;
+                color:#111827;
+                background:#fff;
+              "
+            >
+              <option value="">-- Select category --</option>
+              ${optionsHtml}
+            </select>
+          </div>
+          
+          <button
+            type="button"
+            id="cheatsheet-category-lock-btn"
+            style="
+              padding:8px 16px;
+              border-radius:6px;
+              border:none;
+              font-size:13px;
+              font-weight:600;
+              cursor:not-allowed;
+              background:#e5e7eb;
+              color:#9ca3af;
+              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            "
+            disabled
+          >
+            🔒 Lock Category
+          </button>
+        </div>
       </div>
     `;
     
@@ -4517,13 +4559,15 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       if (selectEl.value) {
         buttonEl.disabled = false;
         buttonEl.style.cursor = 'pointer';
-        buttonEl.style.background = '#1976d2';
+        buttonEl.style.background = '#10b981';
         buttonEl.style.color = '#ffffff';
+        buttonEl.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.3)';
       } else {
         buttonEl.disabled = true;
         buttonEl.style.cursor = 'not-allowed';
         buttonEl.style.background = '#e5e7eb';
         buttonEl.style.color = '#9ca3af';
+        buttonEl.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
       }
     });
     
