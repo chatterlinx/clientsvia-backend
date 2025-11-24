@@ -560,7 +560,8 @@ class CheatSheetManager {
               const match = sharedResult.data.find((item) => item.companyId === this.companyId);
               if (match) {
                 this.hasSharedGlobalConfig = true;
-                console.log('[CHEAT SHEET] ✅ Company has already shared config to global');
+                this.sharedGlobalVersionId = match.cheatSheetVersionId; // Track which version is shared
+                console.log('[CHEAT SHEET] ✅ Company has already shared config to global:', this.sharedGlobalVersionId);
               }
             }
           }
@@ -623,6 +624,7 @@ class CheatSheetManager {
       // Store company category ID for Global Config Sharing feature
       this.companyCategoryId = company.cheatSheetCategoryId || null;
       this.hasSharedGlobalConfig = false; // Will be set to true if company has shared config
+      this.sharedGlobalVersionId = null; // Track which specific version is shared
       
       this.cheatSheet = company.aiAgentSettings?.cheatSheet || this.getDefaultCheatSheet();
       
@@ -4710,17 +4712,20 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         return;
       }
       
-      console.log('[CHEAT SHEET] ✅ Live config shared to global successfully:', {
+      console.log('[CHEAT SHEET] ✅ Config shared to global successfully:', {
         companyId: result.data.companyId,
         categoryId: result.data.categoryId,
         cheatSheetVersionId: result.data.cheatSheetVersionId
       });
       
-      // Mark locally as shared
+      // Mark locally as shared and track which version
       this.hasSharedGlobalConfig = true;
+      this.sharedGlobalVersionId = result.data.cheatSheetVersionId;
       
-      // Re-render version history so the badge appears
+      // Re-render version history so the button state updates
       await this.renderVersionHistory();
+      
+      alert(`✅ Version shared to Global successfully!\n\nOther companies in the "${this.globalCategories.find(c => c._id === this.companyCategoryId)?.name || 'category'}" category can now import this configuration.`);
     } catch (err) {
       console.error('[CHEAT SHEET] ❌ Error sharing live config to global', err);
       
@@ -4730,6 +4735,79 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         shareBtn.style.cursor = 'pointer';
         shareBtn.style.background = '#111827';
         shareBtn.textContent = 'Share to Global';
+      }
+    }
+  }
+  
+  async unshareFromGlobal(versionId) {
+    if (!this.companyId) {
+      console.error('[CHEAT SHEET] Cannot unshare from global – companyId is missing');
+      return;
+    }
+    
+    const confirmed = confirm(
+      '⚠️ UNSHARE FROM GLOBAL?\n\n' +
+      'This will remove your shared configuration from Global.\n\n' +
+      'Other companies will no longer be able to import it.\n\n' +
+      'Are you sure?'
+    );
+    
+    if (!confirmed) {
+      console.log('[CHEAT SHEET] Unshare cancelled by user');
+      return;
+    }
+    
+    // Find and disable the unshare button
+    const unshareBtn = document.querySelector(`.unshare-global-btn[data-version-id="${versionId}"]`);
+    if (unshareBtn) {
+      unshareBtn.disabled = true;
+      unshareBtn.style.cursor = 'wait';
+      unshareBtn.style.background = '#9ca3af';
+      unshareBtn.textContent = 'Unsharing...';
+    }
+    
+    try {
+      console.log('[CHEAT SHEET] 🔄 Unsharing config from global:', {
+        companyId: this.companyId,
+        versionId
+      });
+      
+      // Call backend to delete GlobalConfigReference
+      const response = await fetch(`/api/global-config/unshare/${this.companyId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('[CHEAT SHEET] ✅ Config unshared from global successfully');
+      
+      // Mark locally as not shared
+      this.hasSharedGlobalConfig = false;
+      this.sharedGlobalVersionId = null;
+      
+      // Re-render version history so button state updates
+      await this.renderVersionHistory();
+      
+      alert('✅ Configuration unshared from Global successfully!\n\nIt is no longer visible to other companies.');
+      
+    } catch (err) {
+      console.error('[CHEAT SHEET] ❌ Error unsharing from global', err);
+      alert(`Failed to unshare: ${err.message}`);
+      
+      // Re-enable button on error
+      if (unshareBtn) {
+        unshareBtn.disabled = false;
+        unshareBtn.style.cursor = 'pointer';
+        unshareBtn.style.background = '#10b981';
+        unshareBtn.textContent = '✓ Shared to Global';
       }
     }
   }
@@ -6107,37 +6185,75 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
           ` : ''}
           
           <!-- Share to Global button - Available for ALL versions -->
-          <button 
-            type="button"
-            class="share-global-btn"
-            data-version-id="${version.versionId}"
-            style="
-              margin-top: 8px;
-              padding: 8px 14px;
-              border-radius: 6px;
-              border: none;
-              font-size: 12px;
-              font-weight: 600;
-              cursor: ${this.companyCategoryId ? 'pointer' : 'not-allowed'};
-              background: ${this.companyCategoryId ? '#0ea5e9' : '#e5e7eb'};
-              color: ${this.companyCategoryId ? '#ffffff' : '#9ca3af'};
-              box-shadow: ${this.companyCategoryId ? '0 2px 8px rgba(14, 165, 233, 0.3)' : 'none'};
-              transition: all 0.2s;
-            "
-            ${this.companyCategoryId ? '' : 'disabled'}
-            title="${this.companyCategoryId ? 'Share this version to Global' : 'Set category first'}"
-          >
-            🌍 Share to Global
-          </button>
+          ${(() => {
+            const isThisVersionShared = this.sharedGlobalVersionId === version.versionId;
+            const canShare = !!this.companyCategoryId;
+            
+            if (isThisVersionShared) {
+              // This version is currently shared
+              return `
+                <button 
+                  type="button"
+                  class="unshare-global-btn"
+                  data-version-id="${version.versionId}"
+                  style="
+                    margin-top: 8px;
+                    padding: 8px 14px;
+                    border-radius: 6px;
+                    border: none;
+                    font-size: 12px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    background: #10b981;
+                    color: #ffffff;
+                    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+                    transition: all 0.2s;
+                  "
+                  title="This version is shared globally. Click to unshare."
+                >
+                  ✓ Shared to Global
+                </button>
+              `;
+            } else {
+              // Not shared yet
+              return `
+                <button 
+                  type="button"
+                  class="share-global-btn"
+                  data-version-id="${version.versionId}"
+                  style="
+                    margin-top: 8px;
+                    padding: 8px 14px;
+                    border-radius: 6px;
+                    border: none;
+                    font-size: 12px;
+                    font-weight: 600;
+                    cursor: ${canShare ? 'pointer' : 'not-allowed'};
+                    background: ${canShare ? '#0ea5e9' : '#e5e7eb'};
+                    color: ${canShare ? '#ffffff' : '#9ca3af'};
+                    box-shadow: ${canShare ? '0 2px 8px rgba(14, 165, 233, 0.3)' : 'none'};
+                    transition: all 0.2s;
+                  "
+                  ${canShare ? '' : 'disabled'}
+                  title="${canShare ? 'Share this version to Global' : 'Set category first'}"
+                >
+                  🌍 Share to Global
+                </button>
+              `;
+            }
+          })()}
           
         </div>
         
       </div>
     `;
     
-    // Wire up Share to Global button for ALL versions
+    // Wire up Share/Unshare buttons for ALL versions
     setTimeout(() => {
       const shareBtn = card.querySelector('.share-global-btn');
+      const unshareBtn = card.querySelector('.unshare-global-btn');
+      
+      // Share button
       if (shareBtn && this.companyCategoryId) {
         shareBtn.addEventListener('click', (e) => {
           e.stopPropagation(); // Prevent card click
@@ -6150,6 +6266,24 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         });
         shareBtn.addEventListener('mouseleave', () => {
           shareBtn.style.background = '#0ea5e9';
+        });
+      }
+      
+      // Unshare button
+      if (unshareBtn) {
+        unshareBtn.addEventListener('click', (e) => {
+          e.stopPropagation(); // Prevent card click
+          this.unshareFromGlobal(version.versionId);
+        });
+        
+        // Add hover effects (red for unshare)
+        unshareBtn.addEventListener('mouseenter', () => {
+          unshareBtn.style.background = '#ef4444';
+          unshareBtn.textContent = '✕ Unshare';
+        });
+        unshareBtn.addEventListener('mouseleave', () => {
+          unshareBtn.style.background = '#10b981';
+          unshareBtn.textContent = '✓ Shared to Global';
         });
       }
     }, 0);
