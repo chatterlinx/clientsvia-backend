@@ -6104,57 +6104,55 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
             <div style="padding: 8px 12px; font-size: 12px; text-align: center; color: #6b7280; font-style: italic;">
               Currently active
             </div>
-            
-            <button 
-              type="button"
-              class="share-global-btn"
-              data-version-id="${version.versionId}"
-              style="
-                margin-top: 8px;
-                padding: 8px 14px;
-                border-radius: 6px;
-                border: none;
-                font-size: 12px;
-                font-weight: 600;
-                cursor: ${this.companyCategoryId ? 'pointer' : 'not-allowed'};
-                background: ${this.companyCategoryId ? '#0ea5e9' : '#e5e7eb'};
-                color: ${this.companyCategoryId ? '#ffffff' : '#9ca3af'};
-                box-shadow: ${this.companyCategoryId ? '0 2px 8px rgba(14, 165, 233, 0.3)' : 'none'};
-                transition: all 0.2s;
-              "
-              ${this.companyCategoryId ? '' : 'disabled'}
-              title="${this.companyCategoryId ? 'Share this live configuration to Global' : 'Set category first'}"
-            >
-              🌍 Share to Global
-            </button>
           ` : ''}
+          
+          <!-- Share to Global button - Available for ALL versions -->
+          <button 
+            type="button"
+            class="share-global-btn"
+            data-version-id="${version.versionId}"
+            style="
+              margin-top: 8px;
+              padding: 8px 14px;
+              border-radius: 6px;
+              border: none;
+              font-size: 12px;
+              font-weight: 600;
+              cursor: ${this.companyCategoryId ? 'pointer' : 'not-allowed'};
+              background: ${this.companyCategoryId ? '#0ea5e9' : '#e5e7eb'};
+              color: ${this.companyCategoryId ? '#ffffff' : '#9ca3af'};
+              box-shadow: ${this.companyCategoryId ? '0 2px 8px rgba(14, 165, 233, 0.3)' : 'none'};
+              transition: all 0.2s;
+            "
+            ${this.companyCategoryId ? '' : 'disabled'}
+            title="${this.companyCategoryId ? 'Share this version to Global' : 'Set category first'}"
+          >
+            🌍 Share to Global
+          </button>
           
         </div>
         
       </div>
     `;
     
-    // Wire up Share to Global button for LIVE versions
-    if (version.status === 'live') {
-      // Use setTimeout to ensure DOM is ready
-      setTimeout(() => {
-        const shareBtn = card.querySelector('.share-global-btn');
-        if (shareBtn && this.companyCategoryId) {
-          shareBtn.addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevent card click
-            this.shareToGlobal(version.versionId);
-          });
-          
-          // Add hover effects
-          shareBtn.addEventListener('mouseenter', () => {
-            shareBtn.style.background = '#0284c7';
-          });
-          shareBtn.addEventListener('mouseleave', () => {
-            shareBtn.style.background = '#0ea5e9';
-          });
-        }
-      }, 0);
-    }
+    // Wire up Share to Global button for ALL versions
+    setTimeout(() => {
+      const shareBtn = card.querySelector('.share-global-btn');
+      if (shareBtn && this.companyCategoryId) {
+        shareBtn.addEventListener('click', (e) => {
+          e.stopPropagation(); // Prevent card click
+          this.shareToGlobal(version.versionId);
+        });
+        
+        // Add hover effects
+        shareBtn.addEventListener('mouseenter', () => {
+          shareBtn.style.background = '#0284c7';
+        });
+        shareBtn.addEventListener('mouseleave', () => {
+          shareBtn.style.background = '#0ea5e9';
+        });
+      }
+    }, 0);
     
     return card;
   }
