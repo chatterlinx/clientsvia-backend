@@ -5229,16 +5229,327 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       </div>
     `;
     
-    // Wire up import buttons
+    // Wire up import buttons - SHOW PREVIEW FIRST
     const importButtons = contentEl.querySelectorAll('.import-global-btn');
     importButtons.forEach((btn) => {
       btn.addEventListener('click', () => {
         const globalConfigId = btn.getAttribute('data-global-config-id');
         if (globalConfigId) {
-          this.importFromGlobal(globalConfigId, btn);
+          // Find the config data
+          const configData = this.globalConfigs.find(c => c.globalConfigId === globalConfigId);
+          if (configData) {
+            this.showImportPreviewModal(configData);
+          }
         }
       });
     });
+  }
+  
+  showImportPreviewModal(configData) {
+    // Fetch the actual config details to show preview
+    const modalHtml = `
+      <div id="import-preview-modal" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.75);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fadeIn 0.2s ease-out;
+      ">
+        <div style="
+          background: #ffffff;
+          border-radius: 12px;
+          width: 90%;
+          max-width: 700px;
+          max-height: 80vh;
+          overflow: hidden;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          animation: slideUp 0.3s ease-out;
+          display: flex;
+          flex-direction: column;
+        ">
+          <!-- Header -->
+          <div style="
+            padding: 24px 24px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f0f9ff;
+          ">
+            <h2 style="margin: 0; font-size: 20px; font-weight: 600; color: #0369a1;">
+              📦 Import Configuration Preview
+            </h2>
+            <p style="margin: 8px 0 0 0; font-size: 13px; color: #0c4a6e;">
+              Review this shared configuration before importing as a new draft
+            </p>
+          </div>
+          
+          <!-- Body (scrollable) -->
+          <div style="
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+          ">
+            <!-- Source Info -->
+            <div style="
+              background: #ecfdf3;
+              border: 2px solid #10b981;
+              border-radius: 8px;
+              padding: 16px;
+              margin-bottom: 20px;
+            ">
+              <div style="font-size: 12px; font-weight: 600; color: #065f46; text-transform: uppercase; margin-bottom: 8px;">
+                Source Company
+              </div>
+              <div style="font-size: 16px; font-weight: 700; color: #047857; margin-bottom: 4px;">
+                ${configData.companyName}
+              </div>
+              <div style="font-size: 13px; color: #059669;">
+                <strong>Config Name:</strong> ${configData.configName}
+              </div>
+              <div style="font-size: 12px; color: #10b981; margin-top: 6px;">
+                <strong>Last Updated:</strong> ${new Date(configData.updatedAt).toLocaleString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </div>
+            </div>
+            
+            <!-- What Happens -->
+            <div style="
+              background: #fef3c7;
+              border-left: 4px solid #f59e0b;
+              padding: 16px;
+              margin-bottom: 20px;
+              border-radius: 4px;
+            ">
+              <div style="font-size: 13px; font-weight: 600; color: #92400e; margin-bottom: 8px;">
+                📋 What will happen:
+              </div>
+              <ul style="margin: 0; padding-left: 20px; font-size: 12px; color: #78350f; line-height: 1.8;">
+                <li>A <strong>new draft</strong> will be created for your company</li>
+                <li>The draft will contain a <strong>copy</strong> of this configuration</li>
+                <li>Your current live configuration will <strong>not</strong> be affected</li>
+                <li>You can edit the draft before going live</li>
+                <li>No ongoing link to the source company</li>
+              </ul>
+            </div>
+            
+            <!-- Loading indicator for config details -->
+            <div id="import-preview-loading" style="
+              padding: 20px;
+              text-align: center;
+              color: #6b7280;
+              font-size: 13px;
+            ">
+              <div style="font-size: 32px; margin-bottom: 8px;">⏳</div>
+              Loading configuration details...
+            </div>
+            
+            <!-- Config details (will be loaded) -->
+            <div id="import-preview-details" style="display: none;">
+              <!-- Will be populated dynamically -->
+            </div>
+          </div>
+          
+          <!-- Footer -->
+          <div style="
+            padding: 16px 24px;
+            background: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          ">
+            <button
+              id="btn-cancel-import"
+              type="button"
+              style="
+                padding: 8px 16px;
+                font-size: 13px;
+                font-weight: 500;
+                border-radius: 6px;
+                border: 1px solid #d1d5db;
+                background: #ffffff;
+                color: #374151;
+                cursor: pointer;
+              "
+            >
+              Cancel
+            </button>
+            <button
+              id="btn-confirm-import"
+              type="button"
+              style="
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: 600;
+                border-radius: 6px;
+                border: none;
+                background: #10b981;
+                color: #ffffff;
+                cursor: pointer;
+                box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+              "
+              onmouseover="this.style.background='#059669'"
+              onmouseout="this.style.background='#10b981'"
+            >
+              ✅ Import as Draft
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Load config details asynchronously
+    this.loadImportPreviewDetails(configData);
+    
+    // Wire cancel button
+    const btnCancel = document.getElementById('btn-cancel-import');
+    if (btnCancel) {
+      btnCancel.addEventListener('click', () => {
+        const modal = document.getElementById('import-preview-modal');
+        if (modal) modal.remove();
+      });
+    }
+    
+    // Wire confirm button
+    const btnConfirm = document.getElementById('btn-confirm-import');
+    if (btnConfirm) {
+      btnConfirm.addEventListener('click', async () => {
+        btnConfirm.disabled = true;
+        btnConfirm.textContent = 'Importing...';
+        btnConfirm.style.cursor = 'wait';
+        btnConfirm.style.background = '#9ca3af';
+        
+        await this.importFromGlobal(configData.globalConfigId, null);
+        
+        // Close modal
+        const modal = document.getElementById('import-preview-modal');
+        if (modal) modal.remove();
+        
+        // Show success message
+        alert('✅ Configuration imported successfully as a new draft!');
+      });
+    }
+  }
+  
+  async loadImportPreviewDetails(configData) {
+    const loadingEl = document.getElementById('import-preview-loading');
+    const detailsEl = document.getElementById('import-preview-details');
+    
+    if (!loadingEl || !detailsEl) return;
+    
+    try {
+      // Fetch the actual version config to show stats
+      const response = await fetch(`/api/cheatsheet/versions/${configData.cheatSheetVersionId}?includeConfig=true`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) throw new Error('Failed to load config details');
+      
+      const result = await response.json();
+      const config = result.data?.config || {};
+      
+      // Calculate stats
+      const stats = {
+        triageCards: (config.triageCards || []).length,
+        transferRules: (config.transferRules || []).length,
+        edgeCases: (config.edgeCases || []).length,
+        bookingRules: (config.bookingRules || []).length,
+        companyContacts: (config.companyContacts || []).length,
+        links: (config.links || []).length,
+        calculators: (config.calculators || []).length
+      };
+      
+      const totalRules = Object.values(stats).reduce((sum, val) => sum + val, 0);
+      
+      // Render stats
+      detailsEl.innerHTML = `
+        <div style="
+          background: #ffffff;
+          border: 2px solid #e5e7eb;
+          border-radius: 8px;
+          padding: 16px;
+        ">
+          <div style="font-size: 13px; font-weight: 600; color: #111827; margin-bottom: 12px;">
+            📊 Configuration Contents:
+          </div>
+          
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+            <div style="padding: 10px; background: #f9fafb; border-radius: 6px;">
+              <div style="font-size: 20px; font-weight: 700; color: #0ea5e9;">${totalRules}</div>
+              <div style="font-size: 11px; color: #6b7280; text-transform: uppercase;">Total Rules</div>
+            </div>
+            
+            ${stats.bookingRules > 0 ? `
+              <div style="padding: 10px; background: #f0f9ff; border-radius: 6px;">
+                <div style="font-size: 20px; font-weight: 700; color: #0369a1;">${stats.bookingRules}</div>
+                <div style="font-size: 11px; color: #0c4a6e;">📅 Booking Rules</div>
+              </div>
+            ` : ''}
+            
+            ${stats.companyContacts > 0 ? `
+              <div style="padding: 10px; background: #ecfdf3; border-radius: 6px;">
+                <div style="font-size: 20px; font-weight: 700; color: #065f46;">${stats.companyContacts}</div>
+                <div style="font-size: 11px; color: #047857;">👥 Company Contacts</div>
+              </div>
+            ` : ''}
+            
+            ${stats.triageCards > 0 ? `
+              <div style="padding: 10px; background: #fef3c7; border-radius: 6px;">
+                <div style="font-size: 20px; font-weight: 700; color: #92400e;">${stats.triageCards}</div>
+                <div style="font-size: 11px; color: #78350f;">🎯 Triage Cards</div>
+              </div>
+            ` : ''}
+            
+            ${stats.transferRules > 0 ? `
+              <div style="padding: 10px; background: #fef3c7; border-radius: 6px;">
+                <div style="font-size: 20px; font-weight: 700; color: #92400e;">${stats.transferRules}</div>
+                <div style="font-size: 11px; color: #78350f;">📞 Transfer Rules</div>
+              </div>
+            ` : ''}
+            
+            ${stats.links > 0 ? `
+              <div style="padding: 10px; background: #f0f9ff; border-radius: 6px;">
+                <div style="font-size: 20px; font-weight: 700; color: #0369a1;">${stats.links}</div>
+                <div style="font-size: 11px; color: #0c4a6e;">🔗 Links</div>
+              </div>
+            ` : ''}
+            
+            ${stats.calculators > 0 ? `
+              <div style="padding: 10px; background: #ecfdf3; border-radius: 6px;">
+                <div style="font-size: 20px; font-weight: 700; color: #065f46;">${stats.calculators}</div>
+                <div style="font-size: 11px; color: #047857;">🧮 Calculators</div>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+      
+      loadingEl.style.display = 'none';
+      detailsEl.style.display = 'block';
+      
+    } catch (error) {
+      console.error('[CHEAT SHEET] Failed to load import preview details:', error);
+      loadingEl.innerHTML = `
+        <div style="color: #dc2626; font-size: 13px;">
+          ⚠️ Could not load configuration details
+        </div>
+      `;
+    }
   }
   
   async importFromGlobal(globalConfigId, buttonElement) {
