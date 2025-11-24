@@ -560,8 +560,9 @@ class CheatSheetManager {
               const match = sharedResult.data.find((item) => item.companyId === this.companyId);
               if (match) {
                 this.hasSharedGlobalConfig = true;
-                this.sharedGlobalVersionId = match.cheatSheetVersionId; // Track which version is shared
-                console.log('[CHEAT SHEET] ✅ Company has already shared config to global:', this.sharedGlobalVersionId);
+                // Store the MongoDB ObjectId (_id) of the shared version, not versionId
+                this.sharedGlobalVersionMongoId = match.cheatSheetVersionId;
+                console.log('[CHEAT SHEET] ✅ Company has already shared config to global (MongoDB ID):', this.sharedGlobalVersionMongoId);
               }
             }
           }
@@ -624,7 +625,7 @@ class CheatSheetManager {
       // Store company category ID for Global Config Sharing feature
       this.companyCategoryId = company.cheatSheetCategoryId || null;
       this.hasSharedGlobalConfig = false; // Will be set to true if company has shared config
-      this.sharedGlobalVersionId = null; // Track which specific version is shared
+      this.sharedGlobalVersionMongoId = null; // Track which specific version is shared (MongoDB _id)
       
       this.cheatSheet = company.aiAgentSettings?.cheatSheet || this.getDefaultCheatSheet();
       
@@ -4718,9 +4719,9 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         cheatSheetVersionId: result.data.cheatSheetVersionId
       });
       
-      // Mark locally as shared and track which version
+      // Mark locally as shared and track which version (MongoDB _id)
       this.hasSharedGlobalConfig = true;
-      this.sharedGlobalVersionId = result.data.cheatSheetVersionId;
+      this.sharedGlobalVersionMongoId = result.data.cheatSheetVersionId;
       
       // Re-render version history so the button state updates
       await this.renderVersionHistory();
@@ -4791,7 +4792,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       
       // Mark locally as not shared
       this.hasSharedGlobalConfig = false;
-      this.sharedGlobalVersionId = null;
+      this.sharedGlobalVersionMongoId = null;
       
       // Re-render version history so button state updates
       await this.renderVersionHistory();
@@ -6186,7 +6187,8 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
           
           <!-- Share to Global button - Available for ALL versions -->
           ${(() => {
-            const isThisVersionShared = this.sharedGlobalVersionId === version.versionId;
+            // Compare by MongoDB _id, not versionId
+            const isThisVersionShared = this.sharedGlobalVersionMongoId === version._id;
             const canShare = !!this.companyCategoryId;
             
             if (isThisVersionShared) {

@@ -240,6 +240,63 @@ router.post('/share', authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * DELETE /api/global-config/unshare/:companyId
+ * Unshare (remove) company's CheatSheet config from global library
+ */
+router.delete('/unshare/:companyId', authMiddleware, async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    
+    if (!companyId) {
+      return res.status(400).json({
+        success: false,
+        error: 'INVALID_INPUT',
+        message: 'companyId is required'
+      });
+    }
+    
+    // Find and delete the GlobalConfigReference for this company
+    const deletedReference = await GlobalConfigReference.findOneAndDelete({ companyId });
+    
+    if (!deletedReference) {
+      return res.status(404).json({
+        success: false,
+        error: 'NOT_SHARED',
+        message: 'This company has not shared any configuration to global'
+      });
+    }
+    
+    logger.info('GLOBAL_CONFIG_UNSHARED', {
+      companyId,
+      categoryId: deletedReference.categoryId,
+      cheatSheetVersionId: deletedReference.cheatSheetVersionId,
+      unsharedBy: getUserEmail(req)
+    });
+    
+    res.json({
+      success: true,
+      message: 'Configuration unshared successfully',
+      data: {
+        companyId
+      }
+    });
+    
+  } catch (err) {
+    logger.error('GLOBAL_CONFIG_UNSHARE_ERROR', {
+      companyId: req.params.companyId,
+      error: err.message,
+      stack: err.stack
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: 'INTERNAL_ERROR',
+      message: 'Failed to unshare configuration'
+    });
+  }
+});
+
 // ============================================================================
 // LISTING ROUTES
 // ============================================================================
