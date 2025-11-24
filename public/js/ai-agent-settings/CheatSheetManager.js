@@ -7631,9 +7631,17 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     const liveVersion = hasLive ? this.csVersions.find(v => v.versionId === this.csLiveVersionId) : null;
     const liveName = liveVersion?.name || 'Unnamed Version';
     
-    // Format timestamp from version ID (e.g., draft-1763822273... → timestamp)
-    const timestamp = hasLive ? this.csLiveVersionId.split('-')[1] : null;
-    const liveDate = timestamp ? new Date(parseInt(timestamp)).toLocaleString('en-US', {
+    // Format CREATED date from createdAt field
+    const createdDate = liveVersion?.createdAt ? new Date(liveVersion.createdAt).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    }) : null;
+    
+    // Format PUBLISHED LIVE date from activatedAt field
+    const publishedDate = liveVersion?.activatedAt ? new Date(liveVersion.activatedAt).toLocaleString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
@@ -7670,8 +7678,18 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
               ✅ Live Configuration Active
             </div>
             <div style="font-size: 12px; color: #047857; margin-top: 2px;">
-              <strong>${liveName}</strong> • Published ${liveDate}
+              <strong>${liveName}</strong>
             </div>
+            ${createdDate ? `
+              <div style="font-size: 11px; color: #059669; margin-top: 4px;">
+                Created: ${createdDate}
+              </div>
+            ` : ''}
+            ${publishedDate ? `
+              <div style="font-size: 11px; color: #059669; font-weight: 600;">
+                Published Live: ${publishedDate}
+              </div>
+            ` : ''}
           ` : `
             <div style="font-size: 13px; font-weight: 600; color: #991b1b;">
               ⚠️ No Live Configuration
