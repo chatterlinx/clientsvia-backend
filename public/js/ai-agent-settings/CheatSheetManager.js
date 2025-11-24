@@ -5549,20 +5549,24 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
               class="share-global-btn"
               data-version-id="${version.versionId}"
               style="
-                margin-top: 4px;
-                padding: 6px 10px;
-                border-radius: 4px;
+                margin-top: 8px;
+                padding: 8px 14px;
+                border-radius: 6px;
                 border: none;
                 font-size: 12px;
-                font-weight: 500;
+                font-weight: 600;
                 cursor: ${this.companyCategoryId ? 'pointer' : 'not-allowed'};
-                background: ${this.companyCategoryId ? '#111827' : '#e5e7eb'};
+                background: ${this.companyCategoryId ? '#0ea5e9' : '#e5e7eb'};
                 color: ${this.companyCategoryId ? '#ffffff' : '#9ca3af'};
+                box-shadow: ${this.companyCategoryId ? '0 2px 8px rgba(14, 165, 233, 0.3)' : 'none'};
+                transition: all 0.2s;
               "
               ${this.companyCategoryId ? '' : 'disabled'}
               title="${this.companyCategoryId ? 'Share this live configuration to Global' : 'Set category first'}"
+              onmouseover="${this.companyCategoryId ? 'this.style.background=\\'#0284c7\\'' : ''}"
+              onmouseout="${this.companyCategoryId ? 'this.style.background=\\'#0ea5e9\\'' : ''}"
             >
-              Share to Global
+              🌍 Share to Global
             </button>
           ` : ''}
           
