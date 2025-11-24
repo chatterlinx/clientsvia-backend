@@ -5069,7 +5069,10 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       // Re-render Global tab
       this.renderGlobalConfigsTab();
       
-      alert(`✅ Category "${name}" created successfully!`);
+      // ALSO refresh the category selector in Local tab
+      this.renderCategorySelectorBlock();
+      
+      alert(`✅ Category "${name}" created successfully!\n\nYou can now:\n• Select this category in the "Local Configurations" tab\n• Share your live configuration to global after locking the category`);
       
     } catch (error) {
       console.error('[CHEAT SHEET] ❌ Error creating category:', error);
