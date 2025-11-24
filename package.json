@@ -25,7 +25,9 @@
     "guard:single-adapter": "scripts/guard-single-adapter.sh",
     "guard:registry-coverage": "node scripts/guard-registry-coverage.js",
     "guard:tenant-context": "node scripts/guard-tenant-context.js",
-    "guards": "scripts/run-guards.sh"
+    "guards": "scripts/run-guards.sh",
+    "migrate:cheatsheet:v1-to-v2:dry": "node scripts/migrateCheatSheetV1toV2.js --dry-run",
+    "migrate:cheatsheet:v1-to-v2": "node scripts/migrateCheatSheetV1toV2.js"
   },
   "keywords": [],
   "author": "",
