@@ -7814,6 +7814,8 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
    * Structure: New Draft → Live Section (with indented drafts) → Archived Section
    */
   csRenderDropdown() {
+    console.log('[VERSION CONSOLE] 🎨 csRenderDropdown HIERARCHICAL v2.1.0 - Rendering with visual structure');
+    
     const select = document.getElementById('cs-version-select');
     if (!select) return;
 
@@ -7827,8 +7829,11 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     optNew.value = '__NEW_DRAFT__';
     optNew.textContent = '🆕 New Draft (clone from Live)';
     select.appendChild(optNew);
+    
+    console.log('[VERSION CONSOLE] 📝 Added "New Draft" option');
 
     if (!Array.isArray(this.csVersions) || this.csVersions.length === 0) {
+      console.log('[VERSION CONSOLE] ⚠️ No versions available');
       // If a workspace is active, select it
       if (this.csWorkspaceVersion) {
         select.value = this.csWorkspaceVersion.versionId;
@@ -7836,12 +7841,15 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       return;
     }
 
+    console.log('[VERSION CONSOLE] 📊 Total versions to render:', this.csVersions.length);
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // SECTION 1: LIVE VERSION + INDENTED DRAFTS
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     
     // Find current live version
     const liveVersion = this.csVersions.find(v => v.isLive || v.status === 'live');
+    console.log('[VERSION CONSOLE] ⭐ Live version found:', !!liveVersion);
     
     if (liveVersion) {
       // Section header (disabled option)
