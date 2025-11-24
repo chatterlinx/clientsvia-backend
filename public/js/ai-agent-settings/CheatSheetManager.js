@@ -4342,6 +4342,32 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
             data-tab="local"
             style="margin-top: 8px;"
           >
+            <!-- Info Icon -->
+            <div style="display: flex; align-items: center; justify-content: flex-start; margin-bottom: 16px;">
+              <button
+                id="btn-local-config-info"
+                type="button"
+                style="
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 6px;
+                  padding: 6px 12px;
+                  border-radius: 6px;
+                  border: 1px solid #0ea5e9;
+                  background: #f0f9ff;
+                  color: #0369a1;
+                  font-size: 12px;
+                  font-weight: 600;
+                  cursor: pointer;
+                  transition: all 0.2s;
+                "
+                title="Learn how configuration versions work"
+              >
+                <span style="font-size: 16px;">ℹ️</span>
+                <span>How Versions Work</span>
+              </button>
+            </div>
+            
             <!-- Category selector block will be injected here in Phase 2 -->
             <div id="category-selector-block" style="margin-bottom: 16px;"></div>
             
@@ -5679,6 +5705,217 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     
     // Ensure Local is active by default
     setActiveTab('local');
+    
+    // Wire info button
+    const infoBtn = container.querySelector('#btn-local-config-info');
+    if (infoBtn) {
+      infoBtn.addEventListener('click', () => this.showLocalConfigInfoModal());
+    }
+  }
+  
+  showLocalConfigInfoModal() {
+    const modalHtml = `
+      <div id="local-config-info-modal" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.75);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fadeIn 0.2s ease-out;
+      ">
+        <div style="
+          background: #ffffff;
+          border-radius: 12px;
+          width: 90%;
+          max-width: 800px;
+          max-height: 85vh;
+          overflow-y: auto;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          animation: slideUp 0.3s ease-out;
+        ">
+          <!-- Header -->
+          <div style="
+            padding: 24px 24px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+            border-radius: 12px 12px 0 0;
+          ">
+            <h2 style="margin: 0; font-size: 24px; font-weight: 700; color: #ffffff;">
+              ℹ️ How Configuration Versions Work
+            </h2>
+            <p style="margin: 8px 0 0 0; font-size: 13px; color: #f0f9ff;">
+              Understanding drafts, live versions, and what gets saved
+            </p>
+          </div>
+          
+          <!-- Body -->
+          <div style="padding: 24px;">
+            
+            <!-- What Gets Saved Section -->
+            <div style="margin-bottom: 24px;">
+              <h3 style="font-size: 18px; font-weight: 700; color: #111827; margin: 0 0 12px 0;">
+                📋 What Gets Saved in Each Version
+              </h3>
+              <div style="background: #f0f9ff; border-left: 4px solid #0ea5e9; padding: 16px; border-radius: 4px; margin-bottom: 12px;">
+                <div style="font-size: 14px; color: #0c4a6e; line-height: 1.6;">
+                  Each configuration version saves a <strong>complete snapshot</strong> of all your AI Agent settings:
+                </div>
+              </div>
+              
+              <div style="display: grid; gap: 12px; margin-top: 16px;">
+                <!-- V2 Structured Tabs -->
+                <div style="background: #ecfdf3; border: 1px solid #10b981; border-radius: 8px; padding: 12px;">
+                  <div style="font-size: 13px; font-weight: 600; color: #065f46; margin-bottom: 6px;">
+                    📅 <strong>V2 Structured Tabs:</strong>
+                  </div>
+                  <ul style="margin: 4px 0 0 20px; padding: 0; font-size: 12px; color: #047857; line-height: 1.8;">
+                    <li><strong>Booking Rules</strong> - Hours, days, same-day, weekend settings</li>
+                    <li><strong>Company Contacts</strong> - Names, roles, phone, email, hours</li>
+                    <li><strong>Links</strong> - Payment portals, maps, catalogs, FAQs</li>
+                    <li><strong>Calculators</strong> - Pricing formulas, estimates, units</li>
+                  </ul>
+                </div>
+                
+                <!-- V1 Legacy Tabs -->
+                <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 12px;">
+                  <div style="font-size: 13px; font-weight: 600; color: #92400e; margin-bottom: 6px;">
+                    📝 <strong>V1 Legacy Tabs:</strong>
+                  </div>
+                  <ul style="margin: 4px 0 0 20px; padding: 0; font-size: 12px; color: #78350f; line-height: 1.8;">
+                    <li><strong>Triage Cards</strong> - Free-form scenario rules</li>
+                    <li><strong>Frontline Intel</strong> - Company knowledge, context</li>
+                    <li><strong>Transfer Rules</strong> - When/who to transfer to</li>
+                    <li><strong>Edge Cases</strong> - Unusual scenarios, exceptions</li>
+                    <li><strong>Behavior Guidelines</strong> - Tone, style, constraints</li>
+                    <li><strong>Guardrails</strong> - Never say, always avoid</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Version Workflow Section -->
+            <div style="margin-bottom: 24px;">
+              <h3 style="font-size: 18px; font-weight: 700; color: #111827; margin: 0 0 12px 0;">
+                🔄 Version Workflow
+              </h3>
+              
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <!-- Draft -->
+                <div style="background: #fef3c7; border: 2px solid #f59e0b; border-radius: 8px; padding: 14px;">
+                  <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <span style="font-size: 20px;">✏️</span>
+                    <div style="font-size: 15px; font-weight: 700; color: #92400e;">DRAFT</div>
+                  </div>
+                  <div style="font-size: 12px; color: #78350f; line-height: 1.6;">
+                    • Work in progress - not visible to AI Agent<br>
+                    • Edit any tab - all changes saved to this draft<br>
+                    • Review, test, and perfect before going live<br>
+                    • Can have multiple drafts, but only edit one at a time
+                  </div>
+                </div>
+                
+                <!-- Live -->
+                <div style="background: #ecfdf3; border: 2px solid #10b981; border-radius: 8px; padding: 14px;">
+                  <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <span style="font-size: 20px;">🔴</span>
+                    <div style="font-size: 15px; font-weight: 700; color: #065f46;">LIVE</div>
+                  </div>
+                  <div style="font-size: 12px; color: #047857; line-height: 1.6;">
+                    • Currently active - AI Agent uses this configuration<br>
+                    • Read-only - cannot edit live version directly<br>
+                    • Only one live version at a time<br>
+                    • Previous live version auto-archived when new one published
+                  </div>
+                </div>
+                
+                <!-- Archived -->
+                <div style="background: #f3f4f6; border: 2px solid #9ca3af; border-radius: 8px; padding: 14px;">
+                  <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <span style="font-size: 20px;">📦</span>
+                    <div style="font-size: 15px; font-weight: 700; color: #4b5563;">ARCHIVED</div>
+                  </div>
+                  <div style="font-size: 12px; color: #6b7280; line-height: 1.6;">
+                    • Historical versions - safe backup<br>
+                    • Read-only - preserved for reference<br>
+                    • Restore as Draft - create copy to edit<br>
+                    • ⚡ Restore as LIVE - emergency rollback (instant)
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Key Points Section -->
+            <div style="background: #f0f9ff; border: 2px solid #0ea5e9; border-radius: 8px; padding: 16px;">
+              <h4 style="font-size: 14px; font-weight: 700; color: #0369a1; margin: 0 0 10px 0;">
+                💡 Key Points to Remember
+              </h4>
+              <ul style="margin: 0; padding-left: 20px; font-size: 12px; color: #0c4a6e; line-height: 1.8;">
+                <li><strong>All tabs saved together</strong> - Each version is a complete snapshot</li>
+                <li><strong>Edit in workspace</strong> - Select a draft version in Version Console</li>
+                <li><strong>Always save</strong> - Click "💾 Save" before "🚀 Go Live"</li>
+                <li><strong>Test before live</strong> - Drafts are your safe testing environment</li>
+                <li><strong>Keep history</strong> - Archived versions = rollback safety net</li>
+              </ul>
+            </div>
+            
+          </div>
+          
+          <!-- Footer -->
+          <div style="
+            padding: 16px 24px;
+            background: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: flex-end;
+            border-radius: 0 0 12px 12px;
+          ">
+            <button
+              id="btn-close-info-modal"
+              type="button"
+              style="
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: 600;
+                border-radius: 6px;
+                border: none;
+                background: #0ea5e9;
+                color: #ffffff;
+                cursor: pointer;
+                box-shadow: 0 2px 4px rgba(14, 165, 233, 0.3);
+              "
+            >
+              Got it! ✓
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Wire close button
+    const btnClose = document.getElementById('btn-close-info-modal');
+    if (btnClose) {
+      btnClose.addEventListener('click', () => {
+        const modal = document.getElementById('local-config-info-modal');
+        if (modal) modal.remove();
+      });
+    }
+    
+    // Close on background click
+    const modal = document.getElementById('local-config-info-modal');
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          modal.remove();
+        }
+      });
+    }
   }
   
   renderVersionCard(version, index) {
