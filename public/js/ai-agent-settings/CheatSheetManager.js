@@ -5884,8 +5884,6 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
               "
               ${this.companyCategoryId ? '' : 'disabled'}
               title="${this.companyCategoryId ? 'Share this live configuration to Global' : 'Set category first'}"
-              onmouseover="${this.companyCategoryId ? 'this.style.background=\\'#0284c7\\'' : ''}"
-              onmouseout="${this.companyCategoryId ? 'this.style.background=\\'#0ea5e9\\'' : ''}"
             >
               🌍 Share to Global
             </button>
@@ -5905,6 +5903,14 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
           shareBtn.addEventListener('click', (e) => {
             e.stopPropagation(); // Prevent card click
             this.shareToGlobal(version.versionId);
+          });
+          
+          // Add hover effects
+          shareBtn.addEventListener('mouseenter', () => {
+            shareBtn.style.background = '#0284c7';
+          });
+          shareBtn.addEventListener('mouseleave', () => {
+            shareBtn.style.background = '#0ea5e9';
           });
         }
       }, 0);
