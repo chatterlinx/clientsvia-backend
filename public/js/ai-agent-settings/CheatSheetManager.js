@@ -5839,7 +5839,17 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
               onmouseover="this.style.background='#d1fae5'" 
               onmouseout="this.style.background='#ffffff'"
             >
-              🔄 Restore
+              🔄 Restore as Draft
+            </button>
+            
+            <button 
+              onclick="cheatSheetManager.restoreAsLive('${version.versionId}', '${version.name}')"
+              style="padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 6px; border: none; background: #f59e0b; color: #ffffff; cursor: pointer; transition: all 0.2s; text-align: center; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);"
+              onmouseover="this.style.background='#d97706'" 
+              onmouseout="this.style.background='#f59e0b'"
+              title="Emergency rollback - Restore this version as LIVE immediately"
+            >
+              ⚡ Restore as LIVE
             </button>
             
             <button 
@@ -6036,6 +6046,68 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     } catch (error) {
       console.error('[CHEAT SHEET] ❌ Failed to restore version:', error);
       this.showNotification(`Failed to restore version: ${error.message}`, 'error');
+    }
+  }
+  
+  async restoreAsLive(versionId, versionName) {
+    console.log('[CHEAT SHEET] ⚡ EMERGENCY ROLLBACK: Restoring version directly as LIVE:', versionId);
+    
+    const confirmed = window.confirm(
+      `⚡ EMERGENCY ROLLBACK?\n\n` +
+      `This will IMMEDIATELY restore "${versionName}" as your LIVE configuration.\n\n` +
+      `⚠️ WARNING:\n` +
+      `• Your current LIVE version will be archived\n` +
+      `• This version will become active instantly\n` +
+      `• AI Agent will use this configuration immediately\n\n` +
+      `Use this for emergency rollbacks only.\n\n` +
+      `Are you absolutely sure?`
+    );
+    
+    if (!confirmed) {
+      console.log('[CHEAT SHEET] ⚠️ Emergency rollback cancelled by user');
+      return;
+    }
+    
+    try {
+      console.log('[CHEAT SHEET] ⚡ Promoting archived version directly to LIVE...');
+      
+      // Use the push-live endpoint directly with the archived version
+      const response = await fetch(`/api/cheatsheet/versions/${this.companyId}/${versionId}/publish`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          notes: `Emergency rollback from archived version: ${versionName}`
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('[CHEAT SHEET] ✅ Emergency rollback successful:', result);
+      
+      // Reload everything
+      await this.load(this.companyId);
+      this.render();
+      
+      // Re-init Version Console to reflect new live version
+      if (this.useVersionConsole) {
+        await this.csInit();
+      }
+      
+      // Switch to Version History to show the change
+      this.switchSubTab('version-history');
+      
+      alert(`✅ EMERGENCY ROLLBACK SUCCESSFUL!\n\n"${versionName}" is now LIVE and active.`);
+      
+    } catch (error) {
+      console.error('[CHEAT SHEET] ❌ Emergency rollback failed:', error);
+      alert(`❌ Emergency rollback failed:\n\n${error.message}\n\nPlease contact support if this persists.`);
     }
   }
   
