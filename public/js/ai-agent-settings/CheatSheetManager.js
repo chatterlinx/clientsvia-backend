@@ -4302,6 +4302,19 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
               "
             >
               Local Configurations
+              <span style="
+                display: inline-block;
+                margin-left: 8px;
+                padding: 2px 8px;
+                border-radius: 4px;
+                background: #f0f9ff;
+                color: #0369a1;
+                font-size: 11px;
+                font-weight: 600;
+                font-family: 'Monaco', monospace;
+              ">
+                ${this.companyId ? `ID: ${this.companyId.substring(0, 8)}...` : ''}
+              </span>
             </button>
             <button
               type="button"
