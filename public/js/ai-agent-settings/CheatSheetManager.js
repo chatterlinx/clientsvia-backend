@@ -8025,8 +8025,8 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     if (!isReadOnly) {
       this.csUnlockCheatSheetEditing();
     } else {
-      // Keep locked for read-only versions
-      this.csLockCheatSheetEditing();
+      // Show content in read-only mode (visible but not editable)
+      this.csShowReadOnlyMode();
       console.log('[VERSION CONSOLE] Loaded read-only version (VIEW ONLY mode)');
     }
   }
@@ -8493,6 +8493,87 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     // Auto-switch to Booking Rules for clean UX (first config tab users typically need)
     console.log('[VERSION CONSOLE] 📅 Switching to Booking Rules tab');
     this.switchSubTab('booking');
+  }
+
+  /**
+   * Show content in READ-ONLY mode (visible but not editable)
+   * Used when viewing LIVE or ARCHIVED versions
+   */
+  csShowReadOnlyMode() {
+    console.log('[VERSION CONSOLE] 👁️ Showing content in READ-ONLY mode');
+    
+    // Hide lockout screen (we want to see content)
+    const lockoutScreen = document.getElementById('workspace-lockout-screen');
+    if (lockoutScreen) {
+      lockoutScreen.style.display = 'none';
+    }
+    
+    // Show all config tab content areas
+    const configContentAreas = [
+      'cheatsheet-subtab-triage',
+      'cheatsheet-subtab-frontline-intel',
+      'cheatsheet-subtab-transfer-calls',
+      'cheatsheet-subtab-edge-cases',
+      'cheatsheet-subtab-behavior',
+      'cheatsheet-subtab-guardrails',
+      'cheatsheet-v2-dynamic-content'
+    ];
+    
+    configContentAreas.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = '';
+    });
+    
+    // Show config tabs (make them visible and clickable)
+    const configTabs = document.querySelectorAll('.tab-ai-behavior, .tab-reference');
+    configTabs.forEach(tab => {
+      tab.style.display = '';
+      tab.style.opacity = '0.7'; // Slightly faded to indicate read-only
+      tab.style.cursor = 'pointer';
+      tab.style.pointerEvents = 'auto';
+      tab.removeAttribute('data-locked');
+    });
+    
+    // Ensure admin tabs stay fully visible
+    const adminTabs = document.querySelectorAll('.tab-admin');
+    adminTabs.forEach(tab => {
+      tab.style.display = '';
+      tab.style.opacity = '1';
+      tab.style.cursor = 'pointer';
+      tab.style.pointerEvents = 'auto';
+    });
+    
+    console.log('[VERSION CONSOLE] 👁️ Content visible in READ-ONLY mode');
+    
+    // Auto-switch to Booking Rules to show content
+    this.switchSubTab('booking');
+    
+    // Disable all "Add" and "Edit" buttons after rendering
+    setTimeout(() => this.csDisableEditButtons(), 100);
+  }
+
+  /**
+   * Disable all edit/add/delete buttons in READ-ONLY mode
+   */
+  csDisableEditButtons() {
+    // Disable all buttons that modify data
+    const editButtons = document.querySelectorAll(
+      'button[onclick*="add"], button[onclick*="edit"], button[onclick*="delete"], ' +
+      '.add-booking-rule-btn, .add-contact-btn, .add-link-btn, .add-calculator-btn, ' +
+      'button:not(.cheatsheet-subtab-btn):not(#cs-btn-close)'
+    );
+    
+    editButtons.forEach(btn => {
+      const btnText = btn.textContent.toLowerCase();
+      if (btnText.includes('add') || btnText.includes('edit') || btnText.includes('delete') || btnText.includes('save')) {
+        btn.disabled = true;
+        btn.style.opacity = '0.4';
+        btn.style.cursor = 'not-allowed';
+        btn.title = '🔒 READ-ONLY: Cannot edit LIVE version';
+      }
+    });
+    
+    console.log('[VERSION CONSOLE] 🔒 Disabled all edit buttons (READ-ONLY mode)');
   }
 
   /**
