@@ -48,7 +48,88 @@ class CheatSheetRuntimeService {
   // ============================================================================
   
   /**
-   * Get live config for production calls
+   * Get live config with metadata for production calls
+   * 
+   * This is the PRIMARY method for Phase C runtime cutover.
+   * Returns { versionId, name, config } for full context.
+   * Falls back to latest live if meta is out of sync.
+   * Returns null on failure (no throwing).
+   * 
+   * @param {string} companyId - Company ID
+   * @returns {Promise<object|null>} { versionId, name, config } or null
+   */
+  async getLiveConfig(companyId) {
+    try {
+      // 1) Try from company metadata first (fast path)
+      const company = await Company.findById(companyId)
+        .select('aiAgentSettings.cheatSheetMeta')
+        .lean();
+      
+      if (!company) {
+        logger.error('CHEATSHEET_RUNTIME_NO_COMPANY', { companyId });
+        return null;
+      }
+      
+      const aiSettings = company.aiAgentSettings || {};
+      const meta = aiSettings.cheatSheetMeta || {};
+      let liveVersion = null;
+      
+      if (meta.liveVersionId) {
+        liveVersion = await CheatSheetVersion.findOne({
+          companyId,
+          _id: meta.liveVersionId,
+          status: 'live'
+        }).lean();
+      }
+      
+      // 2) Fallback: query latest live version if meta is missing or stale
+      if (!liveVersion) {
+        liveVersion = await CheatSheetVersion.findOne({
+          companyId,
+          status: 'live'
+        })
+          .sort({ activatedAt: -1 })
+          .lean();
+        
+        if (liveVersion) {
+          logger.warn('CHEATSHEET_RUNTIME_META_OUT_OF_SYNC', {
+            companyId,
+            liveVersionId: liveVersion._id.toString()
+          });
+        }
+      }
+      
+      if (!liveVersion) {
+        logger.error('CHEATSHEET_RUNTIME_NO_LIVE_VERSION', { companyId });
+        return null;
+      }
+      
+      if (!liveVersion.config) {
+        logger.error('CHEATSHEET_RUNTIME_LIVE_VERSION_NO_CONFIG', {
+          companyId,
+          versionId: liveVersion._id.toString()
+        });
+        return null;
+      }
+      
+      return {
+        versionId: liveVersion._id.toString(),
+        name: liveVersion.name,
+        config: liveVersion.config
+      };
+      
+    } catch (err) {
+      logger.error('CHEATSHEET_RUNTIME_GET_LIVE_CONFIG_ERROR', {
+        companyId,
+        error: err.message,
+        stack: err.stack
+      });
+      return null;
+    }
+  }
+  
+  /**
+   * Get live config for production calls (LEGACY - kept for backward compat)
    * 
    * This is THE method that production call handler uses.
    * Optimized for speed with Redis caching.

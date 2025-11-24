@@ -72,34 +72,45 @@ class V2AIAgentRuntime {
             logger.debug(`🔍 V2 VOICE DEBUG: API Source: ${company.aiAgentSettings?.voiceSettings?.apiSource || 'NOT SET'}`);
 
             // ─────────────────────────────────────────────────────────────
-            // 🧠 CHEAT SHEET: Compile policy if needed (Phase 1)
+            // 🧠 CHEAT SHEET V2: Load live config from CheatSheetVersion
             // ─────────────────────────────────────────────────────────────
-            if (company.aiAgentSettings?.cheatSheet) {
-                const cheatSheet = company.aiAgentSettings.cheatSheet;
+            const CheatSheetRuntimeService = require('./cheatsheet/CheatSheetRuntimeService');
+            const liveCheatSheet = await CheatSheetRuntimeService.getLiveConfig(companyID);
+            
+            if (!liveCheatSheet) {
+                logger.error('[V2 AGENT] ❌ No live CheatSheet V2 config found', {
+                    companyId: companyID
+                });
+                // Graceful degradation - agent will run with minimal config
+                // Do NOT fallback to V1 - V1 is dead to runtime
+            } else {
+                logger.info('[V2 AGENT] ✅ Loaded live CheatSheet V2 config', {
+                    companyId: companyID,
+                    versionId: liveCheatSheet.versionId,
+                    versionName: liveCheatSheet.name
+                });
                 
-                // Check if policy needs compilation (missing checksum or status changed to active)
-                if (!cheatSheet.checksum || cheatSheet.status === 'draft') {
-                    logger.info('[V2 AGENT] 🔧 Compiling cheat sheet policy...', {
-                        companyId: companyID,
-                        version: cheatSheet.version,
-                        status: cheatSheet.status
-                    });
+                // Policy compilation now uses V2 config
+                // Note: PolicyCompiler expects version/status, so we wrap the config
+                try {
+                    const configWithMeta = {
+                        ...liveCheatSheet.config,
+                        version: liveCheatSheet.config.schemaVersion || 1,
+                        status: 'active', // Live versions are always active
+                        versionId: liveCheatSheet.versionId
+                    };
                     
-                    try {
-                        await PolicyCompiler.compile(companyID, cheatSheet);
-                        logger.info('[V2 AGENT] ✅ Cheat sheet policy compiled successfully');
-                    } catch (compileErr) {
-                        logger.error('[V2 AGENT] ❌ Cheat sheet compilation failed', {
-                            companyId: companyID,
-                            error: compileErr.message
-                        });
-                        // Continue without cheat sheet (graceful degradation)
-                    }
-                } else {
-                    logger.debug('[V2 AGENT] ✅ Cheat sheet policy already compiled', {
-                        companyId: companyID,
-                        checksum: cheatSheet.checksum.substring(0, 16) + '...'
+                    await PolicyCompiler.compile(companyID, configWithMeta);
+                    logger.info('[V2 AGENT] ✅ Cheat sheet V2 policy compiled successfully', {
+                        versionId: liveCheatSheet.versionId
                     });
+                } catch (compileErr) {
+                    logger.error('[V2 AGENT] ❌ Cheat sheet V2 compilation failed', {
+                        companyId: companyID,
+                        versionId: liveCheatSheet.versionId,
+                        error: compileErr.message
+                    });
+                    // Continue without cheat sheet (graceful degradation)
                 }
             }
 

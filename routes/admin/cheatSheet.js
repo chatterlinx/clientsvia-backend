@@ -1,6 +1,11 @@
 // routes/admin/cheatSheet.js
 // ============================================================================
-// CHEAT SHEET ADMIN ROUTES
+// CHEAT SHEET ADMIN ROUTES (LEGACY - V1)
+// ============================================================================
+// ⚠️ DEPRECATED: This route family writes to V1 (aiAgentSettings.cheatSheet)
+// ⚠️ STATUS: V1 is DEAD to runtime as of Phase C migration
+// ⚠️ ACTION REQUIRED: All write operations should throw errors
+// ⚠️ REPLACEMENT: Use /api/cheatsheet/versions/* routes (V2)
 // ============================================================================
 // PURPOSE: Admin endpoints for managing company cheat sheets
 // ROUTES: Compile policy, test rules, get stats
@@ -8,6 +13,9 @@
 
 const express = require('express');
 const router = express.Router();
+
+// Phase C Migration Guard: Prevent V1 writes
+const V1_WRITE_DISABLED = true; // Set to false to temporarily re-enable V1 writes
 const Company = require('../../models/v2Company');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 const PolicyCompiler = require('../../services/PolicyCompiler');
@@ -87,10 +95,24 @@ router.put('/:companyId', authenticateJWT, async (req, res) => {
   const { companyId } = req.params;
   const { cheatSheet } = req.body;
   
-  logger.info('[CHEAT SHEET API] Update request', { 
+  logger.info('[CHEAT SHEET API] Update request (V1 DEPRECATED)', { 
     companyId,
     updates: Object.keys(cheatSheet || {})
   });
+  
+  // Phase C Migration Guard: Block V1 writes
+  if (V1_WRITE_DISABLED) {
+    logger.error('[CHEAT SHEET API] V1 write attempted - BLOCKED', {
+      companyId,
+      endpoint: 'PUT /:companyId'
+    });
+    return res.status(410).json({
+      success: false,
+      error: 'LEGACY_V1_WRITE_DISABLED',
+      message: 'CheatSheet V1 writes are disabled. Please use /api/cheatsheet/versions/* (V2) routes.',
+      migrationGuide: 'https://docs.clientsvia.com/migration/v1-to-v2'
+    });
+  }
   
   try {
     const company = await Company.findById(companyId);

@@ -463,27 +463,43 @@ async function handleBookingFromContext(ctx) {
     // LOAD CHEAT SHEET (BOOKING RULES + COMPANY CONTACTS)
     // ═══════════════════════════════════════════════════════════════════
     
-    let cheatSheet = {};
+    // ═══════════════════════════════════════════════════════════════════
+    // LOAD LIVE CHEATSHEET V2 CONFIG
+    // ═══════════════════════════════════════════════════════════════════
+    const CheatSheetRuntimeService = require('../../services/cheatsheet/CheatSheetRuntimeService');
+    
     let bookingRules = [];
     let companyContacts = [];
     let selectedBookingRule = null;
+    let versionId = null;
     
     try {
-      const company = await Company.findById(companyId);
-      if (company && company.aiAgentSettings && company.aiAgentSettings.cheatSheet) {
-        cheatSheet = company.aiAgentSettings.cheatSheet;
-        bookingRules = Array.isArray(cheatSheet.bookingRules) ? cheatSheet.bookingRules : [];
-        companyContacts = Array.isArray(cheatSheet.companyContacts) ? cheatSheet.companyContacts : [];
+      const liveCheatSheet = await CheatSheetRuntimeService.getLiveConfig(companyId);
+      
+      if (!liveCheatSheet) {
+        logger.error('[BOOKING HANDLER] No live CheatSheet V2 config found', {
+          companyId
+        });
+        // Graceful degradation - booking will use default behavior
+        // Do NOT fallback to V1 - V1 is dead to runtime
+      } else {
+        versionId = liveCheatSheet.versionId;
+        const config = liveCheatSheet.config;
         
-        logger.info('[BOOKING HANDLER] Cheat sheet loaded', {
+        bookingRules = Array.isArray(config.bookingRules) ? config.bookingRules : [];
+        companyContacts = Array.isArray(config.companyContacts) ? config.companyContacts : [];
+        
+        logger.info('[BOOKING HANDLER] CheatSheet V2 loaded', {
+          companyId,
+          versionId,
+          versionName: liveCheatSheet.name,
           bookingRules: bookingRules.length,
           companyContacts: companyContacts.length
         });
-      } else {
-        logger.info('[BOOKING HANDLER] No cheat sheet configured, using default behavior');
       }
     } catch (cheatSheetError) {
-      logger.error('[BOOKING HANDLER] Failed to load cheat sheet, falling back to default behavior', {
+      logger.error('[BOOKING HANDLER] Failed to load CheatSheet V2, using default behavior', {
+        companyId,
         error: cheatSheetError.message
       });
     }
@@ -506,6 +522,14 @@ async function handleBookingFromContext(ctx) {
       };
       
       selectedBookingRule = selectBookingRule(bookingRules, bookingContext);
+      
+      if (selectedBookingRule) {
+        logger.info('[BOOKING HANDLER] Booking rule selected from V2', {
+          companyId,
+          versionId,
+          ruleLabel: selectedBookingRule.label
+        });
+      }
     }
     
     // PRODUCTION HARDENING: Check for existing appointment (idempotency)
