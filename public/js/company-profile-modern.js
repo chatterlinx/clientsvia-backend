@@ -3995,6 +3995,12 @@ class CompanyProfileManager {
             this.cheatSheetManagerInitialized = true;
         }
         
+        if (tabName === 'ai-agent-settings' && !this.aiAgentSettingsInitialized) {
+            logger.info('🤖 Initializing AI Agent Settings...');
+            this.initializeAIAgentSettings();
+            this.aiAgentSettingsInitialized = true;
+        }
+        
     }
 
     /**
@@ -4066,6 +4072,69 @@ class CompanyProfileManager {
             
         } catch (error) {
             logger.error('❌ [CHEAT SHEET] Failed to initialize manager:', error);
+        }
+    }
+
+    /**
+     * Initialize AI Agent Settings (Twilio, Diagnostics, etc.)
+     */
+    initializeAIAgentSettings() {
+        logger.info('🤖 [AI-AGENT] Initializing AI Agent Settings for company:', this.companyId);
+        
+        try {
+            // Initialize AI Agent Settings Manager (handles diagnostics and status)
+            if (typeof AIAgentSettingsManager !== 'undefined') {
+                window.aiAgentSettings = new AIAgentSettingsManager(this.companyId);
+                window.aiAgentSettings.initialize();
+                logger.info('✅ [AI-AGENT] AI Agent Settings Manager initialized');
+            } else {
+                logger.warn('⚠️ [AI-AGENT] AIAgentSettingsManager class not found');
+            }
+            
+            // Initialize VoiceCore Tab Manager (handles tab switching within AI Agent Settings)
+            if (typeof VoiceCoreTabManager !== 'undefined') {
+                window.voiceCoreTabManager = new VoiceCoreTabManager();
+                window.voiceCoreTabManager.initialize();
+                logger.info('✅ [AI-AGENT] VoiceCore tab manager initialized');
+            } else {
+                logger.warn('⚠️ [AI-AGENT] VoiceCoreTabManager class not found');
+            }
+            
+            // Initialize System Diagnostics (Dashboard tab - top panel)
+            if (typeof SystemDiagnostics !== 'undefined') {
+                window.systemDiagnostics = new SystemDiagnostics(this.companyId);
+                const diagnosticsPanel = document.getElementById('system-diagnostics-panel');
+                if (diagnosticsPanel) {
+                    diagnosticsPanel.innerHTML = window.systemDiagnostics.render();
+                    logger.info('✅ [AI-AGENT] System diagnostics rendered');
+                } else {
+                    logger.warn('⚠️ [AI-AGENT] System diagnostics panel not found');
+                }
+            } else {
+                logger.warn('⚠️ [AI-AGENT] SystemDiagnostics class not found');
+            }
+            
+            // Initialize Twilio Control Center (Dashboard tab)
+            if (typeof TwilioControlCenter !== 'undefined') {
+                window.twilioControl = new TwilioControlCenter(this.companyId);
+                window.twilioControl.initialize();
+                logger.info('✅ [AI-AGENT] Twilio Control Center initialized');
+            } else {
+                logger.warn('⚠️ [AI-AGENT] TwilioControlCenter class not found');
+            }
+            
+            // Initialize Connection Messages Manager (Messages & Greetings tab)
+            if (typeof ConnectionMessagesManager !== 'undefined') {
+                window.connectionMessagesManager = new ConnectionMessagesManager(this.companyId);
+                logger.info('✅ [AI-AGENT] Connection Messages Manager ready');
+            } else {
+                logger.warn('⚠️ [AI-AGENT] ConnectionMessagesManager class not found');
+            }
+            
+            logger.info('✅ [AI-AGENT] All managers initialized successfully');
+            
+        } catch (error) {
+            logger.error('❌ [AI-AGENT] Failed to initialize:', error);
         }
     }
 

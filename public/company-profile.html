@@ -1492,82 +1492,8 @@
                         <script src="/js/ai-voice-settings/VoiceSettingsManager.js?v=1.0"></script>
                         
                         <script>
-                            // Initialize when AI Agent Settings tab is activated
-                            let aiAgentSettings = null;
-                            let voiceCoreTabManager = null;
-                            let twilioControl = null;
-                            let systemDiagnostics = null;
-                            let connectionMessagesManager = null;
-                            let voiceSettingsManager = null;
-                            
-                            // Initialize on tab switch
-                            document.getElementById('tab-ai-agent-settings')?.addEventListener('click', function() {
-                                if (!aiAgentSettings) {
-                                    const companyId = window.currentCompanyId || document.getElementById('company-id')?.value;
-                                    if (companyId) {
-                                        console.log('[AI-AGENT] Init starting for company:', companyId);
-                                        
-                                        // Initialize AI Agent Settings Manager FIRST (handles diagnostics and status)
-                                        aiAgentSettings = new AIAgentSettingsManager(companyId);
-                                        aiAgentSettings.initialize();
-                                        console.log('[AI-AGENT] AI Agent Settings Manager initialized');
-                                        
-                                        // Initialize VoiceCore Tab Manager (handles tab switching)
-                                        voiceCoreTabManager = new VoiceCoreTabManager();
-                                        voiceCoreTabManager.initialize();
-                                        console.log('[AI-AGENT] VoiceCore tab manager initialized');
-                                        
-                                        // Initialize System Diagnostics (Dashboard tab - top panel)
-                                        systemDiagnostics = new SystemDiagnostics(companyId);
-                                        const diagnosticsPanel = document.getElementById('system-diagnostics-panel');
-                                        if (diagnosticsPanel) {
-                                            diagnosticsPanel.innerHTML = systemDiagnostics.render();
-                                            console.log('[AI-AGENT] System diagnostics rendered');
-                                        } else {
-                                            console.warn('[AI-AGENT] System diagnostics panel not found');
-                                        }
-                                        
-                                        // Initialize Twilio Control Center (Dashboard tab)
-                                        twilioControl = new TwilioControlCenter(companyId);
-                                        twilioControl.initialize();
-                                        console.log('[AI-AGENT] Twilio Control Center initialized');
-                                        
-                                        // Initialize Connection Messages Manager (Messages & Greetings tab)
-                                        connectionMessagesManager = new ConnectionMessagesManager(companyId);
-                                        console.log('[AI-AGENT] Connection Messages Manager ready');
-                                        
-                                        // Expose managers globally for onclick handlers
-                                        window.aiAgentSettings = aiAgentSettings;
-                                        window.voiceCoreTabManager = voiceCoreTabManager;
-                                        window.twilioControl = twilioControl;
-                                        window.systemDiagnostics = systemDiagnostics;
-                                        window.connectionMessagesManager = connectionMessagesManager;
-                                        
-                                        console.log('✅ [AI-AGENT] All managers initialized successfully');
-                                    } else {
-                                        console.error('[AI-AGENT] Company ID not found');
-                                    }
-                                }
-                            });
-                            
-                            // Initialize Voice Settings Manager when AI Voice Settings tab is clicked
-                            document.getElementById('tab-ai-voice')?.addEventListener('click', function() {
-                                if (!voiceSettingsManager) {
-                                    const companyId = window.currentCompanyId || document.getElementById('company-id')?.value;
-                                    
-                                    if (companyId) {
-                                        console.log('[AI-VOICE] Initializing for company:', companyId);
-                                        voiceSettingsManager = new VoiceSettingsManager(companyId);
-                                        voiceSettingsManager.initialize();
-                                        
-                                        // Make globally accessible for debugging
-                                        window.voiceSettingsManager = voiceSettingsManager;
-                                        console.log('✅ [AI-VOICE] Voice settings manager initialized');
-                                    } else {
-                                        console.error('[AI-VOICE] Company ID not found');
-                                    }
-                                }
-                            });
+                            // AI Agent Settings initialization is now handled by company-profile-modern.js switchTab() method
+                            // This ensures proper initialization when tab is activated via click or hash navigation
                         </script>
                         
                     </div>
