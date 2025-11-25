@@ -1473,6 +1473,95 @@
                             
                             <!-- ========================================== -->
                             <!-- V1 AICORE UI REMOVED (Phase D) -->
+                            <!-- Variables, Templates, Scenarios, Cheat Sheet, etc. moved to Control Plane V2 -->
+                            <!-- ========================================== -->
+                            
+                        </div>
+                        
+                        <!-- Load AI Agent Settings Managers (Customer-Facing Only) -->
+                        <script src="/js/ai-agent-settings/SystemDiagnostics.js?v=1.0"></script>
+                        <script src="/js/ai-agent-settings/VoiceCoreTabManager.js?v=6.0"></script>
+                        <script src="/js/ai-agent-settings/TwilioControlCenter.js?v=5.0"></script>
+                        <script src="/js/ai-agent-settings/ConnectionMessagesManager.js?v=13.0"></script>
+                        <!-- V2 Navigator - for diagnostic "Fix Now" buttons -->
+                        <script src="/js/control-plane-v2-navigator.js?v=1.0"></script>
+                        
+                        <!-- Load Voice Settings Manager -->
+                        <script src="/js/ai-voice-settings/VoiceSettingsManager.js?v=1.0"></script>
+                        
+                        <script>
+                            // Initialize when AI Agent Settings tab is activated
+                            let voiceCoreTabManager = null;
+                            let twilioControl = null;
+                            let systemDiagnostics = null;
+                            let connectionMessagesManager = null;
+                            let voiceSettingsManager = null;
+                            
+                            // Initialize on tab switch
+                            document.getElementById('tab-ai-agent-settings')?.addEventListener('click', function() {
+                                if (!voiceCoreTabManager) {
+                                    const companyId = window.currentCompanyId || document.getElementById('company-id')?.value;
+                                    if (companyId) {
+                                        console.log('[AI-AGENT] Init starting for company:', companyId);
+                                        
+                                        // Initialize VoiceCore Tab Manager (handles tab switching)
+                                        voiceCoreTabManager = new VoiceCoreTabManager();
+                                        voiceCoreTabManager.initialize();
+                                        console.log('[AI-AGENT] VoiceCore tab manager initialized');
+                                        
+                                        // Initialize System Diagnostics (Dashboard tab - top panel)
+                                        systemDiagnostics = new SystemDiagnostics(companyId);
+                                        const diagnosticsPanel = document.getElementById('system-diagnostics-panel');
+                                        if (diagnosticsPanel) {
+                                            diagnosticsPanel.innerHTML = systemDiagnostics.render();
+                                            console.log('[AI-AGENT] System diagnostics rendered');
+                                        } else {
+                                            console.warn('[AI-AGENT] System diagnostics panel not found');
+                                        }
+                                        
+                                        // Initialize Twilio Control Center (Dashboard tab)
+                                        twilioControl = new TwilioControlCenter(companyId);
+                                        twilioControl.initialize();
+                                        console.log('[AI-AGENT] Twilio Control Center initialized');
+                                        
+                                        // Initialize Connection Messages Manager (Messages & Greetings tab)
+                                        connectionMessagesManager = new ConnectionMessagesManager(companyId);
+                                        console.log('[AI-AGENT] Connection Messages Manager ready');
+                                        
+                                        // Expose managers globally for onclick handlers
+                                        window.voiceCoreTabManager = voiceCoreTabManager;
+                                        window.twilioControl = twilioControl;
+                                        window.systemDiagnostics = systemDiagnostics;
+                                        window.connectionMessagesManager = connectionMessagesManager;
+                                        
+                                        console.log('✅ [AI-AGENT] All managers initialized successfully');
+                                    } else {
+                                        console.error('[AI-AGENT] Company ID not found');
+                                    }
+                                }
+                            });
+                            
+                            // Initialize Voice Settings Manager when AI Voice Settings tab is clicked
+                            document.getElementById('tab-ai-voice')?.addEventListener('click', function() {
+                                if (!voiceSettingsManager) {
+                                    const companyId = window.currentCompanyId || document.getElementById('company-id')?.value;
+                                    
+                                    if (companyId) {
+                                        console.log('[AI-VOICE] Initializing for company:', companyId);
+                                        voiceSettingsManager = new VoiceSettingsManager(companyId);
+                                        voiceSettingsManager.initialize();
+                                        
+                                        // Make globally accessible for debugging
+                                        window.voiceSettingsManager = voiceSettingsManager;
+                                        console.log('✅ [AI-VOICE] Voice settings manager initialized');
+                                    } else {
+                                        console.error('[AI-VOICE] Company ID not found');
+                                    }
+                                }
+                            });
+                        </script>
+                        
+                    </div>
                     <!-- ===== TAB SECTION END: AI AGENT SETTINGS ===== -->
                     <!-- ============================================================================== -->
 
