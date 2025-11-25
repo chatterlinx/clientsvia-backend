@@ -1476,9 +1476,11 @@
                             <!-- Variables, Templates, Scenarios, Cheat Sheet, etc. moved to Control Plane V2 -->
                             <!-- ========================================== -->
                             
-                        </div>
-                        
+                                </div>
+                                
                         <!-- Load AI Agent Settings Managers (Customer-Facing Only) -->
+                        <script src="/js/ai-agent-settings/AIAgentSettingsManager.js?v=5.3"></script>
+                        <script src="/js/ai-agent-settings/DiagnosticModal.js?v=1.0"></script>
                         <script src="/js/ai-agent-settings/SystemDiagnostics.js?v=1.0"></script>
                         <script src="/js/ai-agent-settings/VoiceCoreTabManager.js?v=6.0"></script>
                         <script src="/js/ai-agent-settings/TwilioControlCenter.js?v=5.0"></script>
@@ -1491,6 +1493,7 @@
                         
                         <script>
                             // Initialize when AI Agent Settings tab is activated
+                            let aiAgentSettings = null;
                             let voiceCoreTabManager = null;
                             let twilioControl = null;
                             let systemDiagnostics = null;
@@ -1499,10 +1502,15 @@
                             
                             // Initialize on tab switch
                             document.getElementById('tab-ai-agent-settings')?.addEventListener('click', function() {
-                                if (!voiceCoreTabManager) {
+                                if (!aiAgentSettings) {
                                     const companyId = window.currentCompanyId || document.getElementById('company-id')?.value;
                                     if (companyId) {
                                         console.log('[AI-AGENT] Init starting for company:', companyId);
+                                        
+                                        // Initialize AI Agent Settings Manager FIRST (handles diagnostics and status)
+                                        aiAgentSettings = new AIAgentSettingsManager(companyId);
+                                        aiAgentSettings.initialize();
+                                        console.log('[AI-AGENT] AI Agent Settings Manager initialized');
                                         
                                         // Initialize VoiceCore Tab Manager (handles tab switching)
                                         voiceCoreTabManager = new VoiceCoreTabManager();
@@ -1529,6 +1537,7 @@
                                         console.log('[AI-AGENT] Connection Messages Manager ready');
                                         
                                         // Expose managers globally for onclick handlers
+                                        window.aiAgentSettings = aiAgentSettings;
                                         window.voiceCoreTabManager = voiceCoreTabManager;
                                         window.twilioControl = twilioControl;
                                         window.systemDiagnostics = systemDiagnostics;
