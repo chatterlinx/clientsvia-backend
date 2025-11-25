@@ -4001,6 +4001,12 @@ class CompanyProfileManager {
             this.aiAgentSettingsInitialized = true;
         }
         
+        if (tabName === 'ai-voice' && !this.aiVoiceSettingsInitialized) {
+            logger.info('🎙️ Initializing AI Voice Settings...');
+            this.initializeAIVoiceSettings();
+            this.aiVoiceSettingsInitialized = true;
+        }
+        
     }
 
     /**
@@ -4135,6 +4141,25 @@ class CompanyProfileManager {
             
         } catch (error) {
             logger.error('❌ [AI-AGENT] Failed to initialize:', error);
+        }
+    }
+
+    /**
+     * Initialize AI Voice Settings
+     */
+    initializeAIVoiceSettings() {
+        logger.info('🎙️ [AI-VOICE] Initializing Voice Settings for company:', this.companyId);
+        
+        try {
+            if (typeof VoiceSettingsManager !== 'undefined') {
+                window.voiceSettingsManager = new VoiceSettingsManager(this.companyId);
+                window.voiceSettingsManager.initialize();
+                logger.info('✅ [AI-VOICE] Voice settings manager initialized');
+            } else {
+                logger.warn('⚠️ [AI-VOICE] VoiceSettingsManager class not found');
+            }
+        } catch (error) {
+            logger.error('❌ [AI-VOICE] Failed to initialize:', error);
         }
     }
 
