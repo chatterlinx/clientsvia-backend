@@ -45,11 +45,12 @@ class AIAgentSettingsManager {
             // Load configuration
             await this.loadConfiguration();
             
-            // Initialize UI
-            this.initializeSubTabs();
-            
-            // Load default sub-tab
-            await this.switchSubTab('variables');
+            // NOTE: Sub-tabs removed - all AiCore functionality moved to Control Plane V2
+            // The AI Agent Settings tab now only handles:
+            // 1. Status banner and readiness score
+            // 2. Diagnostic modals
+            // 3. Pre-activation message
+            // 4. Go Live functionality
             
             console.log('✅ [AI AGENT SETTINGS] Initialized successfully');
         } catch (error) {
