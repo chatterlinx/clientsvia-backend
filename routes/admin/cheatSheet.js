@@ -95,6 +95,12 @@ router.put('/:companyId', authenticateJWT, async (req, res) => {
   const { companyId } = req.params;
   const { cheatSheet } = req.body;
   
+  console.log('🟦 BACKEND CHECKPOINT 1: CheatSheet save request received');
+  console.log('   - Company ID:', companyId);
+  console.log('   - Updates:', Object.keys(cheatSheet || {}));
+  console.log('   - Has frontlineIntel?:', !!cheatSheet?.frontlineIntel);
+  console.log('   - User:', req.user?.email || req.user?._id);
+  
   logger.info('[CHEAT SHEET API] Update request (V1 DEPRECATED)', { 
     companyId,
     updates: Object.keys(cheatSheet || {})
@@ -102,6 +108,7 @@ router.put('/:companyId', authenticateJWT, async (req, res) => {
   
   // Phase C Migration Guard: Block V1 writes
   if (V1_WRITE_DISABLED) {
+    console.error('🔴 BACKEND CHECKPOINT 2: V1 writes DISABLED - returning 410');
     logger.error('[CHEAT SHEET API] V1 write attempted - BLOCKED', {
       companyId,
       endpoint: 'PUT /:companyId'
@@ -114,20 +121,32 @@ router.put('/:companyId', authenticateJWT, async (req, res) => {
     });
   }
   
+  console.log('🟦 BACKEND CHECKPOINT 3: V1 writes ENABLED - proceeding');
+  
   try {
+    console.log('🟦 BACKEND CHECKPOINT 4: Finding company in database...');
     const company = await Company.findById(companyId);
     
     if (!company) {
+      console.error('🔴 BACKEND CHECKPOINT 5: Company NOT FOUND');
       return res.status(404).json({
         success: false,
         error: 'Company not found'
       });
     }
     
+    console.log('🟦 BACKEND CHECKPOINT 6: Company found:', company.businessName || company.companyName);
+    console.log('   - aiAgentSettings exists?:', !!company.aiAgentSettings);
+    
     // Initialize aiAgentSettings if it doesn't exist
     if (!company.aiAgentSettings) {
+      console.log('🟦 BACKEND CHECKPOINT 7: Initializing aiAgentSettings');
       company.aiAgentSettings = {};
     }
+    
+    console.log('🟦 BACKEND CHECKPOINT 8: Merging cheat sheet data...');
+    console.log('   - Existing cheatSheet?:', !!company.aiAgentSettings.cheatSheet);
+    console.log('   - Incoming updates:', Object.keys(cheatSheet));
     
     // Update cheat sheet
     const updatedCheatSheet = {
@@ -138,21 +157,31 @@ router.put('/:companyId', authenticateJWT, async (req, res) => {
       updatedBy: req.user.email || req.user._id.toString()
     };
     
+    console.log('🟦 BACKEND CHECKPOINT 9: Setting updated cheat sheet');
     company.aiAgentSettings.cheatSheet = updatedCheatSheet;
+    
+    console.log('🟦 BACKEND CHECKPOINT 10: Marking modified and saving to MongoDB...');
+    company.markModified('aiAgentSettings');
     await company.save();
     
+    console.log('🟢 BACKEND CHECKPOINT 11: Save SUCCESSFUL to MongoDB');
     logger.info('[CHEAT SHEET API] Update successful', {
       companyId,
       version: updatedCheatSheet.version,
       status: updatedCheatSheet.status
     });
     
+    console.log('🟢 BACKEND CHECKPOINT 12: Returning success response');
     return res.json({
       success: true,
       cheatSheet: updatedCheatSheet
     });
     
   } catch (error) {
+    console.error('🔴 BACKEND CHECKPOINT 13: EXCEPTION in save process');
+    console.error('   - Error:', error.message);
+    console.error('   - Stack:', error.stack);
+    
     logger.error('[CHEAT SHEET API] Update failed', {
       companyId,
       error: error.message,

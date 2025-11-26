@@ -336,34 +336,60 @@
         // Save Frontline-Intel
         async function saveFrontlineIntel() {
             try {
+                console.log('🔵 CHECKPOINT 1: Starting Frontline-Intel save...');
                 document.getElementById('loading-overlay').classList.add('active');
                 
                 const token = localStorage.getItem('adminToken');
-                const response = await fetch(`/api/admin/cheat-sheet/${companyId}`, {
+                console.log('🔵 CHECKPOINT 2: Token exists?', !!token);
+                
+                const url = `/api/admin/cheat-sheet/${companyId}`;
+                console.log('🔵 CHECKPOINT 3: Saving to URL:', url);
+                
+                const payload = {
+                    cheatSheet: {
+                        frontlineIntel: textarea.value
+                    }
+                };
+                console.log('🔵 CHECKPOINT 4: Payload:', payload);
+                console.log('🔵 CHECKPOINT 5: Frontline text length:', textarea.value.length);
+                
+                const response = await fetch(url, {
                     method: 'PUT',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        cheatSheet: {
-                            frontlineIntel: textarea.value
-                        }
-                    })
+                    body: JSON.stringify(payload)
                 });
+                
+                console.log('🔵 CHECKPOINT 6: Response received');
+                console.log('   - Status:', response.status);
+                console.log('   - OK?:', response.ok);
+                console.log('   - Status Text:', response.statusText);
                 
                 document.getElementById('loading-overlay').classList.remove('active');
                 
                 if (!response.ok) {
-                    throw new Error('Failed to save');
+                    const errorBody = await response.text();
+                    console.error('🔴 CHECKPOINT 7: Save FAILED');
+                    console.error('   - HTTP Status:', response.status);
+                    console.error('   - Response Body:', errorBody);
+                    throw new Error(`Failed to save: ${response.status} - ${errorBody.substring(0, 200)}`);
                 }
+                
+                const result = await response.json();
+                console.log('🟢 CHECKPOINT 8: Save SUCCESS');
+                console.log('   - Result:', result);
                 
                 showStatus('✅ Saved successfully!', 'success');
                 return true;
             } catch (error) {
                 document.getElementById('loading-overlay').classList.remove('active');
-                console.error('Save error:', error);
-                showStatus('❌ Save failed', 'error');
+                console.error('🔴 CHECKPOINT 9: EXCEPTION CAUGHT');
+                console.error('   - Error Message:', error.message);
+                console.error('   - Error Stack:', error.stack);
+                console.error('   - Full Error:', error);
+                showStatus(`❌ Save failed: ${error.message}`, 'error');
                 return false;
             }
         }
