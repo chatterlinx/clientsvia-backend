@@ -364,15 +364,13 @@ const companySchema = new mongoose.Schema({
     
     // ☢️ NUCLEAR ELIMINATION: agentPriorityConfig removed - legacy priority system eliminated
     
-    // ☠️ REMOVED 2025-11-20: aiAgentSettings - LEGACY SYSTEM NUKED
-    // This entire field has been removed due to ongoing confusion with aiAgentSettings
-    // All critical functionality migrated to aiAgentSettings
-    // DO NOT RECREATE - Use aiAgentSettings instead
-    // 
-    // aiAgentSettings: {
-    //     ☠️ REMOVED: aiAgentSettingsSchema (nuked 2025-11-20)
-    //     default: () => ({})
-    // },
+    // 🚨 AI AGENT SETTINGS - EMERGENCY RESTORE (2025-11-26)
+    // This field was removed but v2AIAgentRuntime still requires it
+    // Contains: enabled flag, voiceSettings, and other AI configuration
+    aiAgentSettings: {
+        type: mongoose.Schema.Types.Mixed,
+        default: () => ({ enabled: true })  // Default to enabled
+    },
     
     // ============================================================================
     // 🚀 INTELLIGENCE MODE SELECTOR - Global vs Custom Settings
