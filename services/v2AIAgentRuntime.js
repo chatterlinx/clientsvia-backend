@@ -195,12 +195,23 @@ class V2AIAgentRuntime {
         const voiceConfig = connectionMessages?.voice;
 
         // Check if connection messages are configured
-        if (!voiceConfig) {
-            logger.error(`❌ CRITICAL: No connection messages configured for company ${company._id}`);
+        if (!connectionMessages) {
+            logger.error(`❌ CRITICAL: connectionMessages object missing for company ${company._id}`);
             logger.error(`❌ HINT: Configure greeting in AI Agent Settings > Messages & Greetings tab`);
+            logger.error(`❌ DEBUG: company.connectionMessages is:`, connectionMessages);
             return {
                 mode: 'error',
-                text: "CONFIGURATION ERROR: No greeting has been set. Please configure a greeting in the AI Agent Settings tab."
+                text: "Thank you for calling. Please configure your greeting in AI Agent Settings."
+            };
+        }
+        
+        if (!voiceConfig) {
+            logger.error(`❌ CRITICAL: voice config missing in connectionMessages for company ${company._id}`);
+            logger.error(`❌ HINT: Configure greeting in AI Agent Settings > Messages & Greetings tab`);
+            logger.error(`❌ DEBUG: connectionMessages.voice is:`, voiceConfig);
+            return {
+                mode: 'error',
+                text: "Thank you for calling. Please configure your greeting in AI Agent Settings."
             };
         }
 
