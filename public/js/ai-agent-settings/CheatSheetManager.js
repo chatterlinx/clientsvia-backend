@@ -9576,16 +9576,26 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
    */
   csCollectConfigFromCheatSheetUI() {
     // Extract only the config fields, ensuring schemaVersion is present
+    // ⚠️ CRITICAL: V1 sections MUST be objects, not strings
+    // If stored as strings in this.cheatSheet, wrap them in {instructions: "..."} format
+    
+    const normalizeV1Section = (value) => {
+      if (!value) return {};
+      if (typeof value === 'string') return { instructions: value };
+      if (typeof value === 'object') return value;
+      return {};
+    };
+    
     return {
       schemaVersion: this.cheatSheet.schemaVersion || 1,
       
-      // V1 Legacy sections
-      triage: this.cheatSheet.triage || {},
-      frontlineIntel: this.cheatSheet.frontlineIntel || {},
-      transferRules: this.cheatSheet.transferRules || {},
-      edgeCases: this.cheatSheet.edgeCases || {},
-      behavior: this.cheatSheet.behavior || {},
-      guardrails: this.cheatSheet.guardrails || {},
+      // V1 Legacy sections (MUST be objects)
+      triage: normalizeV1Section(this.cheatSheet.triage),
+      frontlineIntel: normalizeV1Section(this.cheatSheet.frontlineIntel),
+      transferRules: normalizeV1Section(this.cheatSheet.transferRules),
+      edgeCases: normalizeV1Section(this.cheatSheet.edgeCases),
+      behavior: normalizeV1Section(this.cheatSheet.behavior),
+      guardrails: normalizeV1Section(this.cheatSheet.guardrails),
       
       // V2 Structured sections
       bookingRules: this.cheatSheet.bookingRules || [],
