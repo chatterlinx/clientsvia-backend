@@ -175,6 +175,14 @@ class CheatSheetVersioningAdapter {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       
+      // Log validation errors in detail
+      if (errorData.errors && Array.isArray(errorData.errors)) {
+        console.error('[VERSION ADAPTER] 🔍 VALIDATION ERRORS:', errorData.errors);
+        errorData.errors.forEach((err, idx) => {
+          console.error(`  ${idx + 1}. Field: "${err.field}" | Message: "${err.message}" | Type: ${err.type}`);
+        });
+      }
+      
       console.error('[VERSION ADAPTER] ❌ Save failed:', {
         status: response.status,
         errorMessage: errorData.message,
