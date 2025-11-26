@@ -501,17 +501,23 @@
             }, 3000);
         }
         
-        // Auto-save on blur
+        // Auto-save on blur (only if NOT editing a draft)
         textarea.addEventListener('blur', () => {
-            saveFrontlineIntel();
+            if (!versionId) {
+                saveFrontlineIntel();
+            }
         });
         
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            // Cmd/Ctrl + S to save
+            // Cmd/Ctrl + S to save (only if NOT editing a draft)
             if ((e.metaKey || e.ctrlKey) && e.key === 's') {
                 e.preventDefault();
-                saveFrontlineIntel();
+                if (!versionId) {
+                    saveFrontlineIntel();
+                } else {
+                    showStatus('💡 Use "Save & Close" button to save draft', 'success');
+                }
             }
             
             // Escape to close
