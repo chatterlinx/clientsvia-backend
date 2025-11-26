@@ -411,6 +411,41 @@
         
         // Reset to default
         async function resetToDefault() {
+            // When editing a draft, just load the default template text
+            if (versionId) {
+                if (!confirm('Load default HVAC template text? This will replace your current text (not saved until you click "Save & Close").')) {
+                    return;
+                }
+                
+                // Default HVAC Frontline-Intel template
+                const defaultTemplate = `**CONVERSATIONAL TONE:**
+- Never interrupt the caller
+- Always say "Ok" instead of "Got it!"
+- Use natural, friendly language
+- Avoid corporate jargon
+
+**BOOKING PROTOCOLS:**
+- Round appointment times to next hour + 2 hour buffer
+- Example: If caller asks for 2:30pm, offer 3:00pm or 5:00pm
+- Confirm: date, time, address, phone number
+
+**TRANSFER RULES:**
+- Before transferring, collect: name, phone, reason for call
+- If emergency keywords ("gas smell", "no heat", "flooding"), transfer immediately
+- Otherwise, take message and offer callback
+
+**EMERGENCY HANDLING:**
+- Keywords: emergency, urgent, gas smell, no heat, flooding, leak
+- If any emergency keyword detected, connect immediately
+- Do not take message for emergencies`;
+                
+                textarea.value = defaultTemplate;
+                updateCharCount();
+                showStatus('✅ Default template loaded! Click "Save & Close" to save.', 'success');
+                return;
+            }
+            
+            // Legacy: Non-draft mode uses API
             if (!confirm('Reset to default HVAC protocols? This will overwrite your current text.')) {
                 return;
             }
