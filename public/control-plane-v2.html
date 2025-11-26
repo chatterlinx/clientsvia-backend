@@ -96,8 +96,6 @@
       <!-- MAIN TABS -->
       <button class="tab-btn active js-main-tab" data-main-target="aicore">AiCore Control Center</button>
       <button class="tab-btn js-main-tab" data-main-target="companyops">CompanyOps Console</button>
-      <button class="tab-btn js-main-tab" data-main-target="billing">Billing & Usage</button>
-      <button class="tab-btn js-main-tab" data-main-target="intelligence">Intelligence / Observability</button>
     </nav>
   </header>
 
@@ -110,12 +108,8 @@
     <button class="js-aicore-tab" data-aicore-target="cheat-sheet">Cheat Sheet</button>
     <button class="js-aicore-tab" data-aicore-target="call-flow">Call Flow</button>
     <button class="js-aicore-tab" data-aicore-target="knowledgebase">AiCore Knowledgebase</button>
-    <button class="js-aicore-tab" data-aicore-target="simulator">Simulator</button>
-    <button class="js-aicore-tab" data-aicore-target="knowledge-ingestion">Knowledge Ingestion</button>
-    <button class="js-aicore-tab" data-aicore-target="versioning">Versioning / Releases</button>
     <button class="js-aicore-tab" data-aicore-target="observability">Observability (AI Metrics)</button>
     <button class="js-aicore-tab" data-aicore-target="llm-cortex-intel">LLM-0 Cortex-Intel</button>
-    <button class="js-aicore-tab" data-aicore-target="active-instructions">Active Instructions X-Ray</button>
   </nav>
 
   <!-- TERTIARY NAV (ONLY WHEN CHEAT SHEET ACTIVE) -->
@@ -246,30 +240,6 @@
         </div>
       </div>
 
-      <!-- AICORE: SIMULATOR -->
-      <div class="panel" data-aicore-panel="simulator">
-        <div class="card">
-          <h2>Simulator</h2>
-          <p class="muted">Test calls virtually: run utterances through Frontline-Intel, LLM-0, and 3-Tier without Twilio.</p>
-        </div>
-      </div>
-
-      <!-- AICORE: KNOWLEDGE INGESTION -->
-      <div class="panel" data-aicore-panel="knowledge-ingestion">
-        <div class="card">
-          <h2>Knowledge Ingestion</h2>
-          <p class="muted">Upload docs, paste FAQs, and approve generated Q&A + triage cards.</p>
-        </div>
-      </div>
-
-      <!-- AICORE: VERSIONING -->
-      <div class="panel" data-aicore-panel="versioning">
-        <div class="card">
-          <h2>Versioning / Releases</h2>
-          <p class="muted">Draft vs production configs, release notes, and rollback history per company.</p>
-        </div>
-      </div>
-
       <!-- AICORE: OBSERVABILITY -->
       <div class="panel" data-aicore-panel="observability">
         <div class="card">
@@ -288,25 +258,9 @@
 
       <!-- AICORE: LLM-0 CORTEX-INTEL -->
       <div class="panel" data-aicore-panel="llm-cortex-intel">
-        <div class="card">
-          <h2>LLM-0 Cortex-Intel</h2>
-          <p class="muted">
-            Intelligence tuning console for the orchestrator model. Shows misroutes, misclassifications, Tier-3 overuse,
-            and proposed corrections. Admin-approved changes only – no auto-training.
-          </p>
-        </div>
+        <div id="llm-cortex-intel-panel"></div>
       </div>
 
-      <!-- AICORE: ACTIVE INSTRUCTIONS X-RAY -->
-      <div class="panel" data-aicore-panel="active-instructions">
-        <div class="card">
-          <h2>Active Instructions X-Ray</h2>
-          <p class="muted">
-            Full JSON view of what LLM-0 sees for a given <span class="pill-label">companyId</span> and optional
-            <span class="pill-label">callId</span>.
-          </p>
-        </div>
-      </div>
     </section>
 
     <!-- ================= MAIN PANEL: COMPANYOPS ================= -->
@@ -496,22 +450,6 @@
         </div>
       </div>
     </section>
-
-    <!-- ================= MAIN PANEL: BILLING ================= -->
-    <section class="panel" data-main-panel="billing">
-      <div class="card">
-        <h2>Billing & Usage</h2>
-        <p class="muted">Plan, minutes, AI cost per company, and invoice exports.</p>
-      </div>
-    </section>
-
-    <!-- ================= MAIN PANEL: INTELLIGENCE / OBS ================= -->
-    <section class="panel" data-main-panel="intelligence">
-      <div class="card">
-        <h2>Intelligence / Observability</h2>
-        <p class="muted">Cross-company metrics: tier usage mix, error trends, latency, success rates.</p>
-      </div>
-    </section>
   </main>
 
   <!-- MODALS -->
@@ -584,6 +522,7 @@
     window.callFlowManager = null;  // Uses callFlowManager in onclick
     window.aiCoreKnowledgebaseManager = null;  // Uses aiCoreKnowledgebaseManager in onclick
     window.analyticsManager = null;  // Uses window.analyticsManager in onclick
+    window.llmCortexIntelInitialized = false;  // Track if LLM Cortex Intel panel has been initialized
 
     // Mock parent object for all managers (matches company-profile.html interface)
     const mockParent = {
@@ -680,6 +619,17 @@
         console.log('🎯 [CONTROL PLANE] Initializing AnalyticsManager');
         window.analyticsManager = new window.AnalyticsManager(mockParent);
         window.analyticsManager.load();
+      }
+    }
+
+    // Initialize LLM Cortex Intel panel
+    function initLlmCortexIntel() {
+      if (!currentCompanyId) return;
+      if (typeof window.initLlmCortexIntelPanel === 'function') {
+        console.log('🎯 [CONTROL PLANE] Initializing LLM Cortex Intel panel');
+        window.initLlmCortexIntelPanel(currentCompanyId);
+      } else {
+        console.error('🎯 [CONTROL PLANE] LlmCortexIntelManager not loaded!');
       }
     }
 
@@ -783,6 +733,9 @@
         } else if (target === 'observability' && !window.analyticsManagerLoaded) {
           initAnalyticsManager();
           window.analyticsManagerLoaded = true;
+        } else if (target === 'llm-cortex-intel' && !window.llmCortexIntelInitialized) {
+          initLlmCortexIntel();
+          window.llmCortexIntelInitialized = true;
         }
       });
     });
@@ -1274,5 +1227,6 @@
   <script src="/js/ai-agent-settings/CallFlowManager.js"></script>
   <script src="/js/ai-agent-settings/AiCoreKnowledgebaseManager.js"></script>
   <script src="/js/ai-agent-settings/AnalyticsManager.js"></script>
+  <script src="/js/ai-agent-settings/LlmCortexIntelManager.js"></script>
 </body>
 </html>

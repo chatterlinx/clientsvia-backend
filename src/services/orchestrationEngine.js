@@ -45,6 +45,7 @@ const bookingHandler = require('./bookingHandler');
 const IntelligentRouter = require('../../services/IntelligentRouter');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 const V2Company = require('../../models/v2Company');
+const TraceLogger = require('../../services/TraceLogger');
 
 /**
  * Process a single caller turn and return what to say next
@@ -566,6 +567,112 @@ Respond ONLY with the natural dialogue (no JSON, no meta-commentary).`;
         appointmentId: ctx.appointmentId || null
       });
     }
+    
+    // ========================================================================
+    // STEP 10: TRACE LOGGING (FIRE-AND-FORGET)
+    // ========================================================================
+    // Log full decision chain to MongoDB for Cortex-Intel debugging
+    // This NEVER blocks the call - errors are caught and logged only
+    // ========================================================================
+    const turnNumber = ctx.transcript.length;
+    
+    // Find 3-Tier knowledge result from tier trace if it exists
+    const knowledgeLookup = ctx.tierTrace.find(t => t.action === 'knowledge_search' && t.tier > 0);
+    
+    TraceLogger.logTurn({
+      callId,
+      companyId,
+      turnNumber,
+      
+      input: {
+        speaker,
+        text,
+        textCleaned: cleanedText,
+        sttMetadata: rawSttMetadata
+      },
+      
+      frontlineIntel: {
+        intent: intel.intent,
+        confidence: intel.confidence,
+        signals: intel.signals,
+        entities: null, // Could be enhanced later
+        metadata: null
+      },
+      
+      orchestratorDecision: {
+        action: decision.action,
+        nextPrompt: finalPrompt,
+        updatedIntent: decision.updatedIntent,
+        updates: decision.updates,
+        knowledgeQuery: decision.knowledgeQuery,
+        debugNotes: decision.debugNotes
+      },
+      
+      knowledgeLookup: knowledgeLookup ? {
+        triggered: true,
+        result: knowledgeLookup.reasoning ? JSON.parse(knowledgeLookup.reasoning) : null,
+        reason: 'LLM-0 requested knowledge search'
+      } : {
+        triggered: false,
+        result: null,
+        reason: 'Not requested'
+      },
+      
+      bookingAction: ctx.appointmentId ? {
+        triggered: true,
+        contactId: null, // bookingHandler doesn't expose this easily
+        locationId: null, // bookingHandler doesn't expose this easily
+        appointmentId: ctx.appointmentId,
+        result: 'success',
+        error: null
+      } : {
+        triggered: false,
+        contactId: null,
+        locationId: null,
+        appointmentId: null,
+        result: null,
+        error: null
+      },
+      
+      output: {
+        agentResponse: finalPrompt,
+        action: decision.action,
+        nextState: ctx.currentIntent
+      },
+      
+      performance: {
+        frontlineIntelMs: 5, // Frontline-Intel is sub-5ms (approx)
+        orchestratorMs: duration - 5, // Rest is orchestrator + other ops
+        knowledgeLookupMs: knowledgeLookup ? 100 : 0, // Approximate if available
+        bookingMs: ctx.appointmentId ? 50 : 0, // Approximate if booking happened
+        totalMs: duration
+      },
+      
+      cost: {
+        frontlineIntel: 0, // Free
+        orchestrator: decision.llmCost || 0, // If tracked in decision
+        knowledgeLookup: knowledgeLookup && knowledgeLookup.reasoning ? 
+          (JSON.parse(knowledgeLookup.reasoning).cost || 0) : 0,
+        booking: 0, // DB ops only
+        total: (decision.llmCost || 0) + (knowledgeLookup && knowledgeLookup.reasoning ? 
+          (JSON.parse(knowledgeLookup.reasoning).cost || 0) : 0)
+      },
+      
+      contextSnapshot: {
+        currentIntent: ctx.currentIntent,
+        extractedData: ctx.extracted,
+        conversationLength: turnNumber,
+        bookingReadiness: ctx.readyToBook
+      }
+    }).catch((traceError) => {
+      // Log trace errors but NEVER let them break the call
+      logger.error('[ORCHESTRATOR] Trace logging failed (non-fatal)', {
+        error: traceError.message,
+        callId,
+        companyId,
+        turnNumber
+      });
+    });
     
     return {
       nextPrompt: finalPrompt,

@@ -30,6 +30,7 @@ const usageRouter = require('./companyOpsUsage');
 const customersRouter = require('./companyOpsCustomers');
 const notificationSettingsRouter = require('./companyOpsNotificationSettings');
 const settingsRouter = require('./companyOpsSettings');
+const responseTracesRouter = require('./companyOpsResponseTraces');
 
 // Import sub-routers - Cheat Sheet Config
 const bookingRulesRouter = require('./cheatSheetBookingRules');
@@ -46,6 +47,7 @@ router.use('/usage', usageRouter);
 router.use('/customers', customersRouter);
 router.use('/notification-settings', notificationSettingsRouter);
 router.use('/settings', settingsRouter);
+router.use('/response-traces', responseTracesRouter);
 
 // Mount Cheat Sheet Config sub-routers
 router.use('/booking-rules', bookingRulesRouter);
