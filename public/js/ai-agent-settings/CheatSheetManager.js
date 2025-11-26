@@ -7176,7 +7176,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
           
           // Collect full config and save
           const config = this.csCollectConfigFromCheatSheetUI();
-          this.versioningAdapter.saveVersion(versionId, config)
+          this.versioningAdapter.saveDraft(config)
             .then(() => {
               console.log('[CHEAT SHEET] ✅ Draft saved successfully');
               this.showNotification('✅ Frontline-Intel saved to draft', 'success');
