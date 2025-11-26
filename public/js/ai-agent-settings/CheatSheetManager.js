@@ -754,7 +754,14 @@ class CheatSheetManager {
     const container = document.getElementById('company-instructions-section');
     if (!container) return;
     
-    const instructions = this.cheatSheet.frontlineIntel || '';
+    // Extract frontlineIntel text (may be string or {instructions: "text"} object)
+    let instructions = '';
+    if (typeof this.cheatSheet.frontlineIntel === 'string') {
+      instructions = this.cheatSheet.frontlineIntel;
+    } else if (typeof this.cheatSheet.frontlineIntel === 'object' && this.cheatSheet.frontlineIntel) {
+      instructions = this.cheatSheet.frontlineIntel.instructions || '';
+    }
+    
     const charCount = instructions.length;
     
     container.innerHTML = `
@@ -9564,9 +9571,28 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
 
   /**
    * Load a config object into the CheatSheet UI
+   * Converts V1 object sections back to strings for UI compatibility
    */
   csLoadConfigIntoCheatSheetUI(config) {
-    this.cheatSheet = config;
+    // Denormalize V1 sections from objects back to strings
+    const denormalizeV1Section = (value) => {
+      if (!value) return '';
+      if (typeof value === 'string') return value;
+      if (typeof value === 'object' && value.instructions) return value.instructions;
+      return '';
+    };
+    
+    this.cheatSheet = {
+      ...config,
+      // Convert V1 object sections back to strings for UI
+      triage: denormalizeV1Section(config.triage),
+      frontlineIntel: denormalizeV1Section(config.frontlineIntel),
+      transferRules: denormalizeV1Section(config.transferRules),
+      edgeCases: denormalizeV1Section(config.edgeCases),
+      behavior: denormalizeV1Section(config.behavior),
+      guardrails: denormalizeV1Section(config.guardrails)
+    };
+    
     this.render();
   }
 
