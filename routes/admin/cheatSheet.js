@@ -15,7 +15,7 @@ const express = require('express');
 const router = express.Router();
 
 // Phase C Migration Guard: Prevent V1 writes
-const V1_WRITE_DISABLED = true; // Set to false to temporarily re-enable V1 writes
+const V1_WRITE_DISABLED = false; // TEMPORARILY DISABLED for validation - TODO: migrate to V2
 const Company = require('../../models/v2Company');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 const PolicyCompiler = require('../../services/PolicyCompiler');
