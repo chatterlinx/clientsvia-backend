@@ -59,12 +59,26 @@ class V2AIAgentRuntime {
                 };
             }
 
-            // Check if V2 AI Agent Logic is configured
-            if (!company.aiAgentSettings || !company.aiAgentSettings.enabled) {
-                logger.error(`❌ V2 AGENT: Company ${companyID} does not have V2 AI Agent Logic enabled`);
+            // Initialize aiAgentSettings if missing (for backward compatibility)
+            if (!company.aiAgentSettings) {
+                logger.warn(`⚠️ V2 AGENT: Company ${companyID} missing aiAgentSettings - auto-initializing`);
+                company.aiAgentSettings = { enabled: true };
+                await company.save();
+            }
+            
+            // Auto-enable if enabled flag is missing
+            if (company.aiAgentSettings.enabled === undefined) {
+                logger.warn(`⚠️ V2 AGENT: Company ${companyID} missing enabled flag - auto-enabling`);
+                company.aiAgentSettings.enabled = true;
+                await company.save();
+            }
+            
+            // Check if explicitly disabled
+            if (company.aiAgentSettings.enabled === false) {
+                logger.error(`❌ V2 AGENT: Company ${companyID} has AI Agent explicitly disabled`);
                 return {
-                    greeting: "Configuration error: Company must configure V2 Agent Personality",
-                    callState: { callId, from, to, stage: 'configuration_error' }
+                    greeting: "AI Agent is currently disabled for this company",
+                    callState: { callId, from, to, stage: 'disabled' }
                 };
             }
 
