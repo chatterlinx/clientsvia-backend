@@ -577,14 +577,26 @@ router.delete('/company/:id', async (req, res) => {
 });
 
 router.patch('/company/:id', async (req, res) => {
+    console.log('🟦 BACKEND SAVE CHECKPOINT 1: PATCH /company/:id hit');
+    console.log('   - Company ID:', req.params.id);
+    console.log('   - Request body keys:', Object.keys(req.body));
+    console.log('   - Has aiAgentSettings.cheatSheet?:', 'aiAgentSettings.cheatSheet' in req.body);
+    
     logger.debug(`[API PATCH /api/company/:id] (Overview) Received update for ID: ${req.params.id} with data:`, JSON.stringify(req.body, null, 2));
     
     // 🔍 CRITICAL DEBUG: Check for cheatSheet updates with V2 arrays
     if (req.body['aiAgentSettings.cheatSheet']) {
+        console.log('🟦 BACKEND SAVE CHECKPOINT 2: aiAgentSettings.cheatSheet detected');
+        console.log('   - Has frontlineIntel?:', 'frontlineIntel' in req.body['aiAgentSettings.cheatSheet']);
+        console.log('   - frontlineIntel length:', req.body['aiAgentSettings.cheatSheet'].frontlineIntel?.length || 0);
+        console.log('   - frontlineIntel preview:', req.body['aiAgentSettings.cheatSheet'].frontlineIntel?.substring(0, 100));
+        
         logger.info('📊 [CHEAT SHEET DEBUG] Dot-notation cheatSheet update detected!');
         logger.info('📊 [CHEAT SHEET DEBUG] Has bookingRules?', Array.isArray(req.body['aiAgentSettings.cheatSheet'].bookingRules));
         logger.info('📊 [CHEAT SHEET DEBUG] bookingRules count:', req.body['aiAgentSettings.cheatSheet'].bookingRules?.length || 0);
         logger.info('📊 [CHEAT SHEET DEBUG] bookingRules data:', JSON.stringify(req.body['aiAgentSettings.cheatSheet'].bookingRules, null, 2));
+    } else {
+        console.log('🔴 BACKEND SAVE CHECKPOINT 2: NO aiAgentSettings.cheatSheet in request');
     }
     
     // GOLD STANDARD: Debug notes data specifically
@@ -705,23 +717,37 @@ router.patch('/company/:id', async (req, res) => {
         }
 
         if (cheatSheetPayload) {
+            console.log('🟦 BACKEND SAVE CHECKPOINT 3: cheatSheetPayload exists - processing');
+            console.log('   - Payload keys:', Object.keys(cheatSheetPayload));
+            console.log('   - Has frontlineIntel?:', 'frontlineIntel' in cheatSheetPayload);
+            console.log('   - frontlineIntel length:', cheatSheetPayload.frontlineIntel?.length || 0);
+            console.log('   - frontlineIntel preview:', cheatSheetPayload.frontlineIntel?.substring(0, 100));
+            
             logger.info('📊 [CHEAT SHEET DEBUG] Applying markModified fallback save for cheatSheet payload');
             if (!updatedCompany) {
+                console.log('🟦 BACKEND SAVE CHECKPOINT 4: No updatedCompany yet, fetching from DB...');
                 updatedCompany = await Company.findById(companyId);
             }
 
             if (!updatedCompany) {
+                console.error('🔴 BACKEND SAVE CHECKPOINT 5: Company NOT FOUND in database');
                 return res.status(404).json({ message: 'Company not found.' });
             }
+            
+            console.log('🟦 BACKEND SAVE CHECKPOINT 6: Company found:', updatedCompany.businessName || updatedCompany.companyName);
 
             // 🔧 CRITICAL FIX: MERGE V2 arrays into existing cheatSheet, don't replace!
             // Initialize aiAgentSettings and cheatSheet if they don't exist
             if (!updatedCompany.aiAgentSettings) {
+                console.log('🟦 BACKEND SAVE CHECKPOINT 7: Initializing aiAgentSettings');
                 updatedCompany.aiAgentSettings = {};
             }
             if (!updatedCompany.aiAgentSettings.cheatSheet) {
+                console.log('🟦 BACKEND SAVE CHECKPOINT 8: Initializing cheatSheet');
                 updatedCompany.aiAgentSettings.cheatSheet = {};
             }
+            
+            console.log('🟦 BACKEND SAVE CHECKPOINT 9: About to merge cheatSheet data');
             
             // 🔍 DEBUG: What's IN the payload before merge?
             logger.info('📊 [CHEAT SHEET DEBUG] cheatSheetPayload BEFORE merge:', {
@@ -765,6 +791,17 @@ router.patch('/company/:id', async (req, res) => {
             existingCheatSheet.updatedBy = cheatSheetPayload.updatedBy ?? existingCheatSheet.updatedBy;
             existingCheatSheet.updatedAt = cheatSheetPayload.updatedAt ?? existingCheatSheet.updatedAt;
             
+            // Copy other fields from payload (like frontlineIntel)
+            for (const key in cheatSheetPayload) {
+                if (key !== 'bookingRules' && key !== 'companyContacts' && key !== 'links' && key !== 'calculators') {
+                    existingCheatSheet[key] = cheatSheetPayload[key];
+                }
+            }
+            
+            console.log('🟦 BACKEND SAVE CHECKPOINT 10: Merged scalar fields from payload');
+            console.log('   - frontlineIntel in merged?:', 'frontlineIntel' in existingCheatSheet);
+            console.log('   - frontlineIntel length:', existingCheatSheet.frontlineIntel?.length || 0);
+            
             // NOW assign the arrays DIRECTLY
             existingCheatSheet.bookingRules = bookingRulesArray;
             existingCheatSheet.companyContacts = companyContactsArray;
@@ -774,6 +811,8 @@ router.patch('/company/:id', async (req, res) => {
             // Set it back
             updatedCompany.aiAgentSettings.cheatSheet = existingCheatSheet;
             
+            console.log('🟦 BACKEND SAVE CHECKPOINT 11: Arrays assigned, cheatSheet set back on company');
+            
             logger.info('📊 [CHEAT SHEET DEBUG] After NO-SPREAD merge:', {
                 bookingRules: updatedCompany.aiAgentSettings.cheatSheet.bookingRules?.length || 0,
                 companyContacts: updatedCompany.aiAgentSettings.cheatSheet.companyContacts?.length || 0,
@@ -781,15 +820,17 @@ router.patch('/company/:id', async (req, res) => {
                 calculators: updatedCompany.aiAgentSettings.cheatSheet.calculators?.length || 0
             });
             
-            
+            console.log('🟦 BACKEND SAVE CHECKPOINT 12: Marking modified and preparing to save...');
             updatedCompany.markModified('aiAgentSettings.cheatSheet');
             updatedCompany.markModified('aiAgentSettings');
             updatedCompany.updatedAt = new Date();
             
             logger.info('📊 [CHEAT SHEET DEBUG] BEFORE save() - bookingRules in memory:', updatedCompany.aiAgentSettings?.cheatSheet?.bookingRules?.length || 0);
             
+            console.log('🟦 BACKEND SAVE CHECKPOINT 13: Calling save()...');
             await updatedCompany.save({ validateBeforeSave: false });
             
+            console.log('🟢 BACKEND SAVE CHECKPOINT 14: save() completed successfully');
             logger.info('📊 [CHEAT SHEET DEBUG] AFTER save() - bookingRules in memory:', updatedCompany.aiAgentSettings?.cheatSheet?.bookingRules?.length || 0);
             
             // 🔍 CRITICAL: Verify what's ACTUALLY in MongoDB by re-fetching
@@ -833,9 +874,22 @@ router.patch('/company/:id', async (req, res) => {
             logger.debug(`⚡ AI Agent Logic cache invalidated for company: ${companyId}`);
         }
 
+        console.log('🟢 BACKEND SAVE CHECKPOINT FINAL: Returning success response');
+        console.log('   - Company ID:', companyId);
+        console.log('   - Updated company exists?:', !!updatedCompany);
+        console.log('   - Has aiAgentSettings?:', !!updatedCompany?.aiAgentSettings);
+        console.log('   - Has cheatSheet?:', !!updatedCompany?.aiAgentSettings?.cheatSheet);
+        console.log('   - Has frontlineIntel?:', !!updatedCompany?.aiAgentSettings?.cheatSheet?.frontlineIntel);
+        console.log('   - frontlineIntel length:', updatedCompany?.aiAgentSettings?.cheatSheet?.frontlineIntel?.length || 0);
+        
         res.json(updatedCompany);
     } catch (error) {
-        logger.error(`[API PATCH /api/company/:id] (Overview) Error updating company ${companyId}:`, error.message, error.stack);
+        console.error('🔴 BACKEND SAVE CHECKPOINT ERROR: Exception in save route');
+        console.error('   - Company ID:', req.params.id);
+        console.error('   - Error message:', error.message);
+        console.error('   - Error stack:', error.stack);
+        
+        logger.error(`[API PATCH /api/company/:id] (Overview) Error updating company ${req.params.id}:`, error.message, error.stack);
         res.status(500).json({ message: `Error updating company: ${error.message}` });
     }
 });
