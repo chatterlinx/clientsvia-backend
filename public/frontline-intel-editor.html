@@ -305,6 +305,9 @@
         const textarea = document.getElementById('frontline-intel-textarea');
         const charCount = document.getElementById('char-count');
         
+        // Default Frontline-Intel template (from config/defaultFrontlineIntel.js)
+        const DEFAULT_TEMPLATE_URL = '/api/admin/cheat-sheet/default-frontline-intel';
+        
         // Update character count
         function updateCharCount() {
             const count = textarea.value.length;
@@ -422,22 +425,36 @@
                     
                     const token = localStorage.getItem('adminToken');
                     // Use GET endpoint that returns template without saving to database
-                    const response = await fetch(`/api/admin/cheat-sheet/default-frontline-intel`, {
+                    const response = await fetch(DEFAULT_TEMPLATE_URL, {
                         method: 'GET',
                         headers: {
                             'Authorization': `Bearer ${token}`
                         }
                     });
                     
-                    document.getElementById('loading-overlay').classList.remove('active');
-                    
                     if (!response.ok) {
+                        console.warn('[FRONTLINE EDITOR] API endpoint not available, using fallback');
+                        // Fallback: Fetch from the config file directly via a simple script endpoint
+                        const fallbackResponse = await fetch('/config/defaultFrontlineIntel.js');
+                        if (fallbackResponse.ok) {
+                            let jsContent = await fallbackResponse.text();
+                            // Extract the template string from the module.exports
+                            const match = jsContent.match(/const defaultFrontlineIntel = `([\s\S]*?)`;[\s\S]*module\.exports/);
+                            if (match && match[1]) {
+                                textarea.value = match[1];
+                                updateCharCount();
+                                document.getElementById('loading-overlay').classList.remove('active');
+                                showStatus('✅ Default template loaded! Click "Save & Close" to save.', 'success');
+                                return;
+                            }
+                        }
                         throw new Error('Failed to load default template');
                     }
                     
                     const result = await response.json();
                     textarea.value = result.frontlineIntel;
                     updateCharCount();
+                    document.getElementById('loading-overlay').classList.remove('active');
                     showStatus('✅ Default template loaded! Click "Save & Close" to save.', 'success');
                 } catch (error) {
                     document.getElementById('loading-overlay').classList.remove('active');
