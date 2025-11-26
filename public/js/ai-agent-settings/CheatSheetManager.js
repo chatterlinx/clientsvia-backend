@@ -7148,7 +7148,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
                 this.csWorkspaceVersion = activeDraftId;
                 this.cheatSheet = config;
                 this.render();
-                this.csUnlockUI();
+                this.csUnlockCheatSheetEditing();
                 console.log('[CHEAT SHEET] ✅ Draft restored successfully');
               }
             }).catch((err) => {
