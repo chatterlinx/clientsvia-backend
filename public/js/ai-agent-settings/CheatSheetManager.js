@@ -7139,15 +7139,20 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         this.load(this.companyId).then(() => {
           // Restore the draft that was active
           if (activeDraftId && this.versioningAdapter) {
-            console.log('[CHEAT SHEET] Restoring draft after reload:', activeDraftId);
-            this.versioningAdapter.loadVersion(activeDraftId).then((config) => {
+            console.log('[CHEAT SHEET] Restoring draft after reload:', activeDraftId.versionId || activeDraftId);
+            const versionId = activeDraftId.versionId || activeDraftId;
+            
+            this.versioningAdapter.getVersionConfig(versionId).then((config) => {
               if (config) {
-                this.csWorkspaceVersion = activeDraftId;
+                this.csWorkspaceVersion = versionId;
                 this.cheatSheet = config;
                 this.render();
                 this.csUnlockUI();
                 console.log('[CHEAT SHEET] ✅ Draft restored successfully');
               }
+            }).catch((err) => {
+              console.error('[CHEAT SHEET] ❌ Failed to restore draft:', err);
+              // If restore fails, just stay in locked state
             });
           }
         });
