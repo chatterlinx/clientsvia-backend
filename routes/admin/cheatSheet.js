@@ -785,5 +785,19 @@ router.post('/:companyId/reset-frontline-intel', authenticateJWT, async (req, re
   return router.handle(req, res);
 });
 
+// ═══════════════════════════════════════════════════════════════════
+// GET /api/admin/cheat-sheet/default-frontline-intel
+// ═══════════════════════════════════════════════════════════════════
+// Get default Frontline-Intel template (read-only, no save)
+// ═══════════════════════════════════════════════════════════════════
+router.get('/default-frontline-intel', authenticateJWT, (req, res) => {
+  logger.info('[CHEAT SHEET API] Get default Frontline-Intel template request');
+  
+  return res.json({
+    success: true,
+    frontlineIntel: defaultFrontlineIntel
+  });
+});
+
 module.exports = router;
 
