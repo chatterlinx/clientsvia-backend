@@ -7130,8 +7130,27 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     window.addEventListener('message', (event) => {
       if (event.data.type === 'frontlineIntelUpdated') {
         console.log('[CHEAT SHEET] Frontline-Intel updated from full editor');
+        
+        // 🔧 FIX: Save the currently active draft BEFORE reloading
+        const activeDraftId = this.csWorkspaceVersion;
+        console.log('[CHEAT SHEET] Preserving active draft:', activeDraftId);
+        
         // Reload to get latest data
-        this.load(this.companyId);
+        this.load(this.companyId).then(() => {
+          // Restore the draft that was active
+          if (activeDraftId && this.versioningAdapter) {
+            console.log('[CHEAT SHEET] Restoring draft after reload:', activeDraftId);
+            this.versioningAdapter.loadVersion(activeDraftId).then((config) => {
+              if (config) {
+                this.csWorkspaceVersion = activeDraftId;
+                this.cheatSheet = config;
+                this.render();
+                this.csUnlockUI();
+                console.log('[CHEAT SHEET] ✅ Draft restored successfully');
+              }
+            });
+          }
+        });
       }
     });
     
