@@ -7117,13 +7117,22 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       return;
     }
     
+    // Get current Frontline-Intel value
+    const currentValue = this.cheatSheet.frontlineIntel || '';
+    
+    // Check if we're editing a draft
+    const isDraft = this.csWorkspaceVersion && this.csWorkspaceVersion.versionId;
+    const versionId = isDraft ? this.csWorkspaceVersion.versionId : null;
+    
+    console.log('[CHEAT SHEET] Opening full editor', { isDraft, versionId, valueLength: currentValue.length });
+    
     const width = Math.min(1400, window.screen.availWidth * 0.9);
     const height = Math.min(900, window.screen.availHeight * 0.9);
     const left = (window.screen.availWidth - width) / 2;
     const top = (window.screen.availHeight - height) / 2;
     
     const editorWindow = window.open(
-      `/frontline-intel-editor.html?companyId=${this.companyId}`,
+      `/frontline-intel-editor.html?companyId=${this.companyId}${versionId ? `&versionId=${versionId}` : ''}`,
       'FrontlineIntelEditor',
       `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
     );
@@ -7133,6 +7142,15 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       return;
     }
     
+    // Send initial data to the editor once it's loaded
+    editorWindow.addEventListener('load', () => {
+      editorWindow.postMessage({
+        type: 'initFrontlineIntel',
+        value: currentValue,
+        versionId: versionId
+      }, '*');
+    });
+    
     // Listen for updates from the editor (ONE-TIME listener)
     const messageHandler = (event) => {
       if (event.data.type === 'frontlineIntelUpdated') {
@@ -7141,32 +7159,32 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         // Remove listener immediately to prevent duplicate handling
         window.removeEventListener('message', messageHandler);
         
-        // 🔧 FIX: Save the currently active draft BEFORE reloading
-        const activeDraftId = this.csWorkspaceVersion;
-        console.log('[CHEAT SHEET] Preserving active draft:', activeDraftId);
+        // Update local state with new value
+        const newValue = event.data.value;
+        this.cheatSheet.frontlineIntel = newValue;
         
-        // Reload to get latest data
-        this.load(this.companyId).then(() => {
-          // Restore the draft that was active
-          if (activeDraftId && this.versioningAdapter) {
-            const versionId = activeDraftId.versionId || activeDraftId;
-            console.log('[CHEAT SHEET] Restoring draft after reload:', versionId);
-            
-            this.versioningAdapter.getVersionConfig(versionId).then((config) => {
-              if (config) {
-                // Restore the FULL object, not just versionId string
-                this.csWorkspaceVersion = activeDraftId;
-                this.cheatSheet = config;
-                this.render();
-                this.csUnlockCheatSheetEditing();
-                console.log('[CHEAT SHEET] ✅ Draft restored successfully');
-              }
-            }).catch((err) => {
-              console.error('[CHEAT SHEET] ❌ Failed to restore draft:', err);
-              // If restore fails, just stay in locked state
+        // If we're in a draft, save it immediately
+        if (versionId) {
+          console.log('[CHEAT SHEET] Saving updated Frontline-Intel to draft:', versionId);
+          
+          // Collect full config and save
+          const config = this.csCollectConfigFromCheatSheetUI();
+          this.versioningAdapter.saveVersion(versionId, config)
+            .then(() => {
+              console.log('[CHEAT SHEET] ✅ Draft saved successfully');
+              this.showNotification('✅ Frontline-Intel saved to draft', 'success');
+              
+              // Re-render to show updated content
+              this.render();
+            })
+            .catch((err) => {
+              console.error('[CHEAT SHEET] ❌ Failed to save draft:', err);
+              this.showNotification('❌ Failed to save draft', 'error');
             });
-          }
-        });
+        } else {
+          // Not in a draft, just re-render
+          this.render();
+        }
       }
     };
     

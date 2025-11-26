@@ -290,14 +290,17 @@
     </div>
 
     <script>
-        // Get company ID from URL parameter
+        // Get company ID and versionId from URL parameters
         const urlParams = new URLSearchParams(window.location.search);
         const companyId = urlParams.get('companyId');
+        const versionId = urlParams.get('versionId'); // If editing a draft
         
         if (!companyId) {
             alert('Error: No company ID provided');
             window.close();
         }
+        
+        console.log('[FRONTLINE EDITOR] Initialized', { companyId, versionId, isDraft: !!versionId });
         
         const textarea = document.getElementById('frontline-intel-textarea');
         const charCount = document.getElementById('char-count');
@@ -309,6 +312,18 @@
         }
         
         textarea.addEventListener('input', updateCharCount);
+        
+        // Listen for initial data from parent window
+        window.addEventListener('message', (event) => {
+            if (event.data.type === 'initFrontlineIntel') {
+                console.log('[FRONTLINE EDITOR] Received initial data from parent', {
+                    valueLength: event.data.value?.length,
+                    versionId: event.data.versionId
+                });
+                textarea.value = event.data.value || '';
+                updateCharCount();
+            }
+        });
         
         // Load current Frontline-Intel text
         async function loadFrontlineIntel() {
@@ -430,15 +445,35 @@
         
         // Save and close
         async function saveAndClose() {
-            const saved = await saveFrontlineIntel();
-            if (saved) {
+            // If editing a draft, send data to parent window directly
+            if (versionId) {
+                console.log('[FRONTLINE EDITOR] Sending data to parent window for draft save');
+                if (window.opener && !window.opener.closed) {
+                    window.opener.postMessage({ 
+                        type: 'frontlineIntelUpdated',
+                        value: textarea.value,
+                        versionId: versionId
+                    }, '*');
+                }
+                showStatus('✅ Changes sent to parent window', 'success');
                 setTimeout(() => {
-                    // Notify parent window
-                    if (window.opener && !window.opener.closed) {
-                        window.opener.postMessage({ type: 'frontlineIntelUpdated' }, '*');
-                    }
                     window.close();
                 }, 500);
+            } else {
+                // Legacy: save directly to main cheat sheet endpoint
+                const saved = await saveFrontlineIntel();
+                if (saved) {
+                    setTimeout(() => {
+                        // Notify parent window
+                        if (window.opener && !window.opener.closed) {
+                            window.opener.postMessage({ 
+                                type: 'frontlineIntelUpdated',
+                                value: textarea.value
+                            }, '*');
+                        }
+                        window.close();
+                    }, 500);
+                }
             }
         }
         
