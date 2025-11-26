@@ -60,17 +60,16 @@ class V2AIAgentRuntime {
             }
 
             // Initialize aiAgentSettings if missing (for backward compatibility)
+            // NOTE: Do NOT save to database - just set in memory to avoid validation errors
             if (!company.aiAgentSettings) {
-                logger.warn(`⚠️ V2 AGENT: Company ${companyID} missing aiAgentSettings - auto-initializing`);
+                logger.warn(`⚠️ V2 AGENT: Company ${companyID} missing aiAgentSettings - auto-initializing (memory only)`);
                 company.aiAgentSettings = { enabled: true };
-                await company.save();
             }
             
             // Auto-enable if enabled flag is missing
             if (company.aiAgentSettings.enabled === undefined) {
-                logger.warn(`⚠️ V2 AGENT: Company ${companyID} missing enabled flag - auto-enabling`);
+                logger.warn(`⚠️ V2 AGENT: Company ${companyID} missing enabled flag - auto-enabling (memory only)`);
                 company.aiAgentSettings.enabled = true;
-                await company.save();
             }
             
             // Check if explicitly disabled
