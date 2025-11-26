@@ -7139,12 +7139,13 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         this.load(this.companyId).then(() => {
           // Restore the draft that was active
           if (activeDraftId && this.versioningAdapter) {
-            console.log('[CHEAT SHEET] Restoring draft after reload:', activeDraftId.versionId || activeDraftId);
             const versionId = activeDraftId.versionId || activeDraftId;
+            console.log('[CHEAT SHEET] Restoring draft after reload:', versionId);
             
             this.versioningAdapter.getVersionConfig(versionId).then((config) => {
               if (config) {
-                this.csWorkspaceVersion = versionId;
+                // Restore the FULL object, not just versionId string
+                this.csWorkspaceVersion = activeDraftId;
                 this.cheatSheet = config;
                 this.render();
                 this.csUnlockUI();
