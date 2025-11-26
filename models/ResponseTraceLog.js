@@ -21,6 +21,7 @@ const ResponseTraceLogSchema = new mongoose.Schema(
     traceId: { type: String, required: true, index: true }, // uuid
     callId: { type: String, required: true, index: true },   // Twilio CallSid or internal call id
     companyId: { type: String, required: true, index: true },
+    source: { type: String, enum: ['orchestrationEngine', 'v2AIAgentRuntime'], default: 'orchestrationEngine' }, // which pipeline produced this trace
 
     // Turn metadata
     turnNumber: { type: Number, required: true },

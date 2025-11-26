@@ -15,6 +15,11 @@ const logger = require('../utils/logger.js');
 const { redisClient } = require('../clients');
 
 // ═══════════════════════════════════════════════════════════════════
+// TRACE LOGGING - Visibility into production brain decisions
+// ═══════════════════════════════════════════════════════════════════
+const TraceLogger = require('./TraceLogger');
+
+// ═══════════════════════════════════════════════════════════════════
 // CHEAT SHEET SYSTEM - Phase 1 Integration
 // ═══════════════════════════════════════════════════════════════════
 const PolicyCompiler = require('./PolicyCompiler');
@@ -367,17 +372,119 @@ class V2AIAgentRuntime {
                     action: executionContext.finalAction
                 });
                 
+                const shortCircuitCallState = {
+                    ...callState,
+                    lastInput: userInput,
+                    lastResponse: executionContext.finalResponse,
+                    frontlineIntel: executionContext.frontlineIntelResult,
+                    triageDecision: executionContext.triageDecision,
+                    shortCircuit: true,
+                    turnCount: (callState.turnCount || 0) + 1
+                };
+
+                // ═════════════════════════════════════════════════════════════════
+                // 📊 TRACE LOGGING: Log short-circuit turn (non-blocking)
+                // ═════════════════════════════════════════════════════════════════
+                const turnNumber = shortCircuitCallState.turnCount;
+                const frontlineIntelResult = executionContext.frontlineIntelResult;
+                
+                const turnTrace = {
+                    companyId: companyID,
+                    callId,
+                    source: 'v2AIAgentRuntime',
+                    turnNumber,
+                    timestamp: new Date(),
+
+                    input: {
+                        speaker: 'caller',
+                        text: userInput,
+                        textCleaned: frontlineIntelResult?.cleanedInput || null,
+                        sttMetadata: null
+                    },
+
+                    frontlineIntel: frontlineIntelResult ? {
+                        intent: frontlineIntelResult.detectedIntent || null,
+                        confidence: frontlineIntelResult.confidence || null,
+                        signals: {
+                            customer: frontlineIntelResult.customer || {},
+                            context: frontlineIntelResult.context || {},
+                            triageDecision: executionContext.triageDecision || null
+                        },
+                        entities: null,
+                        metadata: {
+                            shortCircuit: true,
+                            timeMs: frontlineIntelResult.timeMs || null
+                        }
+                    } : {},
+
+                    orchestratorDecision: {
+                        action: executionContext.finalAction || null,
+                        nextPrompt: null,
+                        updatedIntent: frontlineIntelResult?.detectedIntent || null,
+                        updates: {},
+                        knowledgeQuery: null,
+                        debugNotes: 'Short-circuit: early exit from call flow'
+                    },
+
+                    knowledgeLookup: {
+                        triggered: false,
+                        result: null,
+                        reason: null
+                    },
+
+                    bookingAction: {
+                        triggered: false,
+                        contactId: null,
+                        locationId: null,
+                        appointmentId: null,
+                        result: null,
+                        error: null
+                    },
+
+                    output: {
+                        agentResponse: executionContext.finalResponse,
+                        action: executionContext.finalAction || null,
+                        nextState: shortCircuitCallState.stage || null
+                    },
+
+                    performance: {
+                        frontlineIntelMs: frontlineIntelResult?.timeMs || null,
+                        orchestratorMs: null,
+                        knowledgeLookupMs: null,
+                        bookingMs: null,
+                        totalMs: null
+                    },
+
+                    cost: {
+                        frontlineIntel: frontlineIntelResult?.cost || 0,
+                        orchestrator: 0,
+                        knowledgeLookup: 0,
+                        booking: 0,
+                        total: frontlineIntelResult?.cost || 0
+                    },
+
+                    contextSnapshot: {
+                        currentIntent: frontlineIntelResult?.detectedIntent || null,
+                        extractedData: shortCircuitCallState.collectedEntities || {},
+                        conversationLength: turnNumber,
+                        bookingReadiness: false
+                    }
+                };
+
+                // Fire-and-forget logging (never blocks the call)
+                TraceLogger.logTurn(turnTrace).catch(err => {
+                    console.error('[TRACE LOGGER] Failed to log short-circuit turn', {
+                        error: err.message,
+                        callId,
+                        companyId: companyID,
+                        turnNumber
+                    });
+                });
+                
                 return {
                     response: executionContext.finalResponse,
                     action: executionContext.finalAction,
-                    callState: {
-                        ...callState,
-                        lastInput: userInput,
-                        lastResponse: executionContext.finalResponse,
-                        frontlineIntel: executionContext.frontlineIntelResult,
-                        triageDecision: executionContext.triageDecision,
-                        shortCircuit: true
-                    },
+                    callState: shortCircuitCallState,
                     confidence: executionContext.frontlineIntelResult?.confidence || 0.8,
                     frontlineIntelMeta: executionContext.frontlineIntelMeta,
                     cheatSheetMeta: executionContext.cheatSheetMeta
@@ -446,6 +553,102 @@ class V2AIAgentRuntime {
 
             logger.info(`✅ V2 AGENT: Final response: "${finalResponse}"`);
 
+            // ═════════════════════════════════════════════════════════════════
+            // 📊 TRACE LOGGING: Log this turn for visibility (non-blocking)
+            // ═════════════════════════════════════════════════════════════════
+            const turnNumber = updatedCallState.turnCount || 1;
+            const turnTrace = {
+                companyId: companyID,
+                callId,
+                source: 'v2AIAgentRuntime',
+                turnNumber,
+                timestamp: new Date(),
+
+                input: {
+                    speaker: 'caller',
+                    text: userInput,
+                    textCleaned: frontlineIntelResult?.cleanedInput || null,
+                    sttMetadata: null
+                },
+
+                frontlineIntel: frontlineIntelResult ? {
+                    intent: frontlineIntelResult.detectedIntent || null,
+                    confidence: frontlineIntelResult.confidence || null,
+                    signals: {
+                        customer: frontlineIntelResult.customer || {},
+                        context: frontlineIntelResult.context || {}
+                    },
+                    entities: null,
+                    metadata: {
+                        triageDecision: frontlineIntelResult.triageDecision || null,
+                        timeMs: frontlineIntelResult.timeMs || null
+                    }
+                } : {},
+
+                orchestratorDecision: {
+                    action: finalAction || null,
+                    nextPrompt: null,
+                    updatedIntent: frontlineIntelResult?.detectedIntent || null,
+                    updates: {},
+                    knowledgeQuery: null,
+                    debugNotes: null
+                },
+
+                knowledgeLookup: {
+                    triggered: false, // v2AIAgentRuntime doesn't use 3-tier yet
+                    result: null,
+                    reason: null
+                },
+
+                bookingAction: {
+                    triggered: false, // will update when booking is integrated
+                    contactId: null,
+                    locationId: null,
+                    appointmentId: null,
+                    result: null,
+                    error: null
+                },
+
+                output: {
+                    agentResponse: finalResponse,
+                    action: finalAction || null,
+                    nextState: updatedCallState.stage || null
+                },
+
+                performance: {
+                    frontlineIntelMs: frontlineIntelResult?.timeMs || null,
+                    orchestratorMs: null,
+                    knowledgeLookupMs: null,
+                    bookingMs: null,
+                    totalMs: null
+                },
+
+                cost: {
+                    frontlineIntel: frontlineIntelResult?.cost || 0,
+                    orchestrator: 0,
+                    knowledgeLookup: 0,
+                    booking: 0,
+                    total: frontlineIntelResult?.cost || 0
+                },
+
+                contextSnapshot: {
+                    currentIntent: frontlineIntelResult?.detectedIntent || null,
+                    extractedData: updatedCallState.collectedEntities || {},
+                    conversationLength: turnNumber,
+                    bookingReadiness: false
+                }
+            };
+
+            // Fire-and-forget logging (never blocks the call)
+            TraceLogger.logTurn(turnTrace).catch(err => {
+                console.error('[TRACE LOGGER] Failed to log turn from v2AIAgentRuntime', {
+                    error: err.message,
+                    callId,
+                    companyId: companyID,
+                    turnNumber
+                });
+            });
+
             return {
                 response: finalResponse,
                 action: finalAction,
@@ -469,6 +672,90 @@ class V2AIAgentRuntime {
                     callStage: callState.stage,
                     turnCount: callState.turnCount || 0
                 }
+            });
+            
+            // ═════════════════════════════════════════════════════════════════
+            // 📊 TRACE LOGGING: Log error turn for debugging (non-blocking)
+            // ═════════════════════════════════════════════════════════════════
+            const turnNumber = (callState.turnCount || 0) + 1;
+            const turnTrace = {
+                companyId: companyID,
+                callId,
+                source: 'v2AIAgentRuntime',
+                turnNumber,
+                timestamp: new Date(),
+
+                input: {
+                    speaker: 'caller',
+                    text: userInput,
+                    textCleaned: null,
+                    sttMetadata: null
+                },
+
+                frontlineIntel: {},
+
+                orchestratorDecision: {
+                    action: 'transfer',
+                    nextPrompt: null,
+                    updatedIntent: null,
+                    updates: {},
+                    knowledgeQuery: null,
+                    debugNotes: `ERROR: ${error.message}`
+                },
+
+                knowledgeLookup: {
+                    triggered: false,
+                    result: null,
+                    reason: null
+                },
+
+                bookingAction: {
+                    triggered: false,
+                    contactId: null,
+                    locationId: null,
+                    appointmentId: null,
+                    result: null,
+                    error: error.message
+                },
+
+                output: {
+                    agentResponse: "I'm experiencing a technical issue. Let me connect you to our support team.",
+                    action: 'transfer',
+                    nextState: 'error'
+                },
+
+                performance: {
+                    frontlineIntelMs: null,
+                    orchestratorMs: null,
+                    knowledgeLookupMs: null,
+                    bookingMs: null,
+                    totalMs: null
+                },
+
+                cost: {
+                    frontlineIntel: 0,
+                    orchestrator: 0,
+                    knowledgeLookup: 0,
+                    booking: 0,
+                    total: 0
+                },
+
+                contextSnapshot: {
+                    currentIntent: null,
+                    extractedData: {},
+                    conversationLength: turnNumber,
+                    bookingReadiness: false
+                }
+            };
+
+            // Fire-and-forget logging (never blocks the call)
+            TraceLogger.logTurn(turnTrace).catch(err => {
+                console.error('[TRACE LOGGER] Failed to log error turn', {
+                    error: err.message,
+                    callId,
+                    companyId: companyID,
+                    turnNumber
+                });
             });
             
             return {
