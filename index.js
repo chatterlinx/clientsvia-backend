@@ -370,6 +370,9 @@ function registerRoutes(routes) {
     app.use('/api/twilio', twilioRequestLogger);
     app.use('/api/twilio', routes.v2TwilioRoutes);
 
+    // EMERGENCY ROUTE - DELETE AFTER USE
+    app.use('/api', require('./routes/emergency-enable'));
+
     // --- API Routes ---
     app.use('/api', routes.v2CompanyRoutes);
     app.use('/api/company', routes.v2VoiceRoutes); // V2 Voice Settings API (must be /api/company for /:companyId/v2-voice-settings)
