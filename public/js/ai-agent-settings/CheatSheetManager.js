@@ -7143,13 +7143,20 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     }
     
     // Send initial data to the editor once it's loaded
-    editorWindow.addEventListener('load', () => {
+    // Use a small delay to ensure the editor window is ready to receive messages
+    const sendInitialData = () => {
+      console.log('[CHEAT SHEET] Sending initial data to editor window');
       editorWindow.postMessage({
         type: 'initFrontlineIntel',
         value: currentValue,
         versionId: versionId
       }, '*');
-    });
+    };
+    
+    // Try multiple times to ensure the message is received
+    setTimeout(sendInitialData, 100);
+    setTimeout(sendInitialData, 300);
+    setTimeout(sendInitialData, 500);
     
     // Listen for updates from the editor (ONE-TIME listener)
     const messageHandler = (event) => {

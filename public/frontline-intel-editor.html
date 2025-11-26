@@ -520,8 +520,13 @@
             }
         });
         
-        // Load on page load
-        loadFrontlineIntel();
+        // Load on page load (only if not editing a draft - parent will send data)
+        if (!versionId) {
+            console.log('[FRONTLINE EDITOR] Loading from API (not editing a draft)');
+            loadFrontlineIntel();
+        } else {
+            console.log('[FRONTLINE EDITOR] Waiting for parent window to send data (editing draft)');
+        }
     </script>
 
 </body>
