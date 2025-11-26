@@ -260,7 +260,7 @@
             <h2>💡 Full Screen Editor</h2>
             <p>
                 Edit your Frontline-Intel protocols with more space and better visibility.
-                Changes auto-save when you edit. Click "Save & Close" when done.
+                Click "Save & Close" when done, or press <kbd>Cmd/Ctrl + S</kbd>.
             </p>
         </div>
 
@@ -501,23 +501,12 @@
             }, 3000);
         }
         
-        // Auto-save on blur (only if NOT editing a draft)
-        textarea.addEventListener('blur', () => {
-            if (!versionId) {
-                saveFrontlineIntel();
-            }
-        });
-        
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            // Cmd/Ctrl + S to save (only if NOT editing a draft)
+            // Cmd/Ctrl + S to save and close
             if ((e.metaKey || e.ctrlKey) && e.key === 's') {
                 e.preventDefault();
-                if (!versionId) {
-                    saveFrontlineIntel();
-                } else {
-                    showStatus('💡 Use "Save & Close" button to save draft', 'success');
-                }
+                saveAndClose();
             }
             
             // Escape to close
