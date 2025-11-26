@@ -179,6 +179,7 @@ class CheatSheetVersioningAdapter {
         status: response.status,
         errorMessage: errorData.message,
         errorCode: errorData.error,
+        validationErrors: errorData.errors, // ← Backend sends 'errors' not 'details'
         errorDetails: errorData.details,
         fullError: errorData,
         sentConfig: {
