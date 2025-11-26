@@ -7126,10 +7126,13 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       return;
     }
     
-    // Listen for updates from the editor
-    window.addEventListener('message', (event) => {
+    // Listen for updates from the editor (ONE-TIME listener)
+    const messageHandler = (event) => {
       if (event.data.type === 'frontlineIntelUpdated') {
         console.log('[CHEAT SHEET] Frontline-Intel updated from full editor');
+        
+        // Remove listener immediately to prevent duplicate handling
+        window.removeEventListener('message', messageHandler);
         
         // 🔧 FIX: Save the currently active draft BEFORE reloading
         const activeDraftId = this.csWorkspaceVersion;
@@ -7158,7 +7161,9 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
           }
         });
       }
-    });
+    };
+    
+    window.addEventListener('message', messageHandler);
     
     console.log('[CHEAT SHEET] Opened full screen editor');
   }
