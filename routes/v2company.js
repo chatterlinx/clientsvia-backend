@@ -2654,4 +2654,101 @@ router.patch('/company/:companyId/intelligence-mode', authenticateJWT, async (re
 
 logger.debug('[INIT] ✅ Intelligence Mode Switcher endpoint added');
 
+// ============================================================================
+// GET /api/company/:companyId/active-instructions
+// ============================================================================
+// Returns the EXACT configuration the live agent is using right now
+// This is the "X-ray screen" - shows what CheatSheetRuntimeService loads
+// READ-ONLY: No editing, just observability
+// ============================================================================
+
+router.get('/:companyId/active-instructions', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    const startTime = Date.now();
+    
+    try {
+        logger.info('[ACTIVE INSTRUCTIONS] Fetching live config', { companyId });
+        
+        // Load CheatSheetRuntimeService (same source the agent uses)
+        const CheatSheetRuntimeService = require('../services/cheatsheet/CheatSheetRuntimeService');
+        
+        // Get live config (exact same call the agent makes)
+        const liveConfigResult = await CheatSheetRuntimeService.getLiveConfig(companyId);
+        
+        if (!liveConfigResult) {
+            return res.status(404).json({
+                success: false,
+                error: 'NO_LIVE_CONFIG',
+                message: 'No live CheatSheet configuration found for this company'
+            });
+        }
+        
+        // Get company for additional context
+        const company = await Company.findById(companyId)
+            .select('companyName aiAgentSettings.callFlowConfig aiAgentSettings.variables')
+            .lean();
+        
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                error: 'COMPANY_NOT_FOUND',
+                message: 'Company not found'
+            });
+        }
+        
+        // Build complete active instructions response
+        const activeInstructions = {
+            companyId,
+            companyName: company.companyName,
+            
+            // CheatSheet version info
+            cheatSheet: {
+                versionId: liveConfigResult.versionId,
+                versionName: liveConfigResult.name,
+                config: liveConfigResult.config
+            },
+            
+            // Call Flow configuration
+            callFlow: company.aiAgentSettings?.callFlowConfig || null,
+            
+            // Enterprise variables
+            variables: company.aiAgentSettings?.variables || null,
+            
+            // Metadata
+            meta: {
+                source: 'CheatSheetRuntimeService.getLiveConfig()',
+                note: 'This is the EXACT config the live agent loads from Redis/MongoDB',
+                triageNote: 'Triage rules use separate TriageCard collection (not in config.triage)',
+                responseTime: Date.now() - startTime
+            }
+        };
+        
+        logger.info('[ACTIVE INSTRUCTIONS] Live config retrieved successfully', {
+            companyId,
+            versionId: liveConfigResult.versionId,
+            responseTime: Date.now() - startTime
+        });
+        
+        res.json({
+            success: true,
+            data: activeInstructions
+        });
+        
+    } catch (error) {
+        logger.error('[ACTIVE INSTRUCTIONS] Error fetching live config', {
+            companyId,
+            error: error.message,
+            stack: error.stack
+        });
+        
+        res.status(500).json({
+            success: false,
+            error: 'FETCH_ERROR',
+            message: error.message
+        });
+    }
+});
+
+logger.debug('[INIT] ✅ Active Instructions Preview endpoint added');
+
 module.exports = router;

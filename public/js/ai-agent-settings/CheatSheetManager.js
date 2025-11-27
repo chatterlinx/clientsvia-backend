@@ -15,10 +15,7 @@ const CHEATSHEET_COMING_SOON_TABS = {
   // 'company-contacts' removed - now fully implemented
   // 'links' removed - now fully implemented
   // 'calculator' removed - now fully implemented
-  'cheat-active-instructions': {
-    title: 'Active Instructions Preview – Coming Soon',
-    description: 'This section will show a live preview of the final playbook the AI is running: triage rules, edge cases, behavior rules, and booking logic compiled into one instruction set.'
-  }
+  // 'cheat-active-instructions' removed - now fully implemented
 };
 
 class CheatSheetManager {
@@ -286,6 +283,30 @@ class CheatSheetManager {
         v2Container.style.display = ''; // Ensure visible
       }
       console.log(`[CHEAT SHEET] ✅ Switched to Version History tab`);
+      return;
+    }
+    
+    // Check if this is Active Instructions Preview tab (V2-only, read-only X-ray)
+    if (subTab === 'cheat-active-instructions') {
+      console.log('[CHEAT SHEET] 👁️ Routing to Active Instructions Preview renderer');
+      
+      // Hide lockout screen (admin tabs are always accessible)
+      const lockoutScreen = document.getElementById('workspace-lockout-screen');
+      if (lockoutScreen) {
+        lockoutScreen.style.display = 'none';
+      }
+      
+      this.renderActiveInstructions();
+      // Hide all V1 sub-tab contents and show V2 container
+      document.querySelectorAll('.cheatsheet-subtab-content:not(#cheatsheet-v2-dynamic-content)').forEach(el => {
+        el.classList.add('hidden');
+      });
+      const v2Container = document.getElementById('cheatsheet-v2-dynamic-content');
+      if (v2Container) {
+        v2Container.classList.remove('hidden');
+        v2Container.style.display = ''; // Ensure visible
+      }
+      console.log(`[CHEAT SHEET] ✅ Switched to Active Instructions Preview tab`);
       return;
     }
     
@@ -4451,6 +4472,230 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
             <p style="font-size: 14px; color: #6b7280; margin: 0;">
               ${error.message || 'Unknown error occurred'}
             </p>
+          </div>
+        </div>
+      `;
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // ACTIVE INSTRUCTIONS PREVIEW (X-RAY SCREEN)
+  // ═══════════════════════════════════════════════════════════════════
+  
+  async renderActiveInstructions() {
+    console.log('[CHEAT SHEET] 👁️ renderActiveInstructions called');
+    
+    const container = document.getElementById('cheatsheet-v2-dynamic-content');
+    if (!container) {
+      console.warn('[CHEAT SHEET] ⚠️ V2 dynamic content container not found');
+      return;
+    }
+    
+    // Show loading state
+    container.innerHTML = `
+      <div style="padding: 24px; background: #ffffff; border-radius: 12px; margin: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+        <div style="text-align: center; padding: 40px;">
+          <div style="font-size: 48px; margin-bottom: 16px;">⏳</div>
+          <div style="font-size: 16px; color: #6b7280;">Loading live agent configuration...</div>
+        </div>
+      </div>
+    `;
+    
+    try {
+      // Fetch active instructions from API
+      const response = await fetch(`/api/company/${this.companyId}/active-instructions`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to load active instructions');
+      }
+      
+      const data = result.data;
+      
+      // Render Active Instructions UI
+      container.innerHTML = `
+        <div style="padding: 24px; background: #ffffff; border-radius: 12px; margin: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+          
+          <!-- Header -->
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #e5e7eb;">
+            <div>
+              <h3 style="font-size: 24px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
+                👁️ Active Instructions Preview
+              </h3>
+              <p style="font-size: 14px; color: #6b7280; margin: 0;">
+                <strong>X-RAY SCREEN</strong> - This is the EXACT config the live agent is using right now
+              </p>
+            </div>
+            <div style="background: #10b981; color: white; padding: 8px 16px; border-radius: 999px; font-size: 13px; font-weight: 600;">
+              ✅ LIVE CONFIG
+            </div>
+          </div>
+          
+          <!-- Version Info Card -->
+          <div style="background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); border: 2px solid #818cf8; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div>
+                <div style="font-size: 12px; color: #6366f1; font-weight: 600; margin-bottom: 4px;">COMPANY</div>
+                <div style="font-size: 16px; font-weight: 600; color: #111827;">${data.companyName}</div>
+              </div>
+              <div>
+                <div style="font-size: 12px; color: #6366f1; font-weight: 600; margin-bottom: 4px;">LIVE VERSION</div>
+                <div style="font-size: 16px; font-weight: 600; color: #111827;">${data.cheatSheet.versionName}</div>
+              </div>
+            </div>
+            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #c7d2fe;">
+              <div style="font-size: 12px; color: #6b7280;">
+                <strong>Source:</strong> ${data.meta.source}<br>
+                <strong>Note:</strong> ${data.meta.note}<br>
+                <strong style="color: #f59e0b;">Triage:</strong> ${data.meta.triageNote}
+              </div>
+            </div>
+          </div>
+          
+          <!-- Config Sections -->
+          <div style="display: grid; gap: 16px;">
+            
+            <!-- Edge Cases -->
+            <div style="border: 2px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+              <div style="background: #f3f4f6; padding: 12px 16px; border-bottom: 2px solid #e5e7eb; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                <div style="font-size: 16px; font-weight: 700; color: #111827;">
+                  🔴 Edge Cases <span style="font-size: 12px; color: #6b7280;">(Highest Precedence)</span>
+                </div>
+              </div>
+              <div style="padding: 16px; background: #ffffff; display: none;">
+                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.cheatSheet.config.edgeCases || {}, null, 2)}</pre>
+              </div>
+            </div>
+            
+            <!-- Transfer Rules -->
+            <div style="border: 2px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+              <div style="background: #f3f4f6; padding: 12px 16px; border-bottom: 2px solid #e5e7eb; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                <div style="font-size: 16px; font-weight: 700; color: #111827;">
+                  📞 Transfer Rules
+                </div>
+              </div>
+              <div style="padding: 16px; background: #ffffff; display: none;">
+                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.cheatSheet.config.transferRules || {}, null, 2)}</pre>
+              </div>
+            </div>
+            
+            <!-- Behavior -->
+            <div style="border: 2px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+              <div style="background: #f3f4f6; padding: 12px 16px; border-bottom: 2px solid #e5e7eb; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                <div style="font-size: 16px; font-weight: 700; color: #111827;">
+                  🎭 Behavior Rules
+                </div>
+              </div>
+              <div style="padding: 16px; background: #ffffff; display: none;">
+                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.cheatSheet.config.behavior || {}, null, 2)}</pre>
+              </div>
+            </div>
+            
+            <!-- Guardrails -->
+            <div style="border: 2px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+              <div style="background: #f3f4f6; padding: 12px 16px; border-bottom: 2px solid #e5e7eb; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                <div style="font-size: 16px; font-weight: 700; color: #111827;">
+                  🛡️ Guardrails <span style="font-size: 12px; color: #6b7280;">(Safety Net)</span>
+                </div>
+              </div>
+              <div style="padding: 16px; background: #ffffff; display: none;">
+                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.cheatSheet.config.guardrails || {}, null, 2)}</pre>
+              </div>
+            </div>
+            
+            <!-- Frontline Intel -->
+            <div style="border: 2px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+              <div style="background: #f3f4f6; padding: 12px 16px; border-bottom: 2px solid #e5e7eb; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                <div style="font-size: 16px; font-weight: 700; color: #111827;">
+                  🧠 Frontline-Intel
+                </div>
+              </div>
+              <div style="padding: 16px; background: #ffffff; display: none;">
+                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.cheatSheet.config.frontlineIntel || {}, null, 2)}</pre>
+              </div>
+            </div>
+            
+            <!-- Booking Rules -->
+            <div style="border: 2px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+              <div style="background: #f3f4f6; padding: 12px 16px; border-bottom: 2px solid #e5e7eb; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                <div style="font-size: 16px; font-weight: 700; color: #111827;">
+                  📅 Booking Rules <span style="font-size: 12px; color: #6b7280;">(${(data.cheatSheet.config.bookingRules || []).length} rules)</span>
+                </div>
+              </div>
+              <div style="padding: 16px; background: #ffffff; display: none;">
+                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.cheatSheet.config.bookingRules || [], null, 2)}</pre>
+              </div>
+            </div>
+            
+            <!-- Company Contacts -->
+            <div style="border: 2px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+              <div style="background: #f3f4f6; padding: 12px 16px; border-bottom: 2px solid #e5e7eb; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                <div style="font-size: 16px; font-weight: 700; color: #111827;">
+                  👥 Company Contacts <span style="font-size: 12px; color: #6b7280;">(${(data.cheatSheet.config.companyContacts || []).length} contacts)</span>
+                </div>
+              </div>
+              <div style="padding: 16px; background: #ffffff; display: none;">
+                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.cheatSheet.config.companyContacts || [], null, 2)}</pre>
+              </div>
+            </div>
+            
+            <!-- Call Flow Config -->
+            ${data.callFlow ? `
+            <div style="border: 2px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+              <div style="background: #f3f4f6; padding: 12px 16px; border-bottom: 2px solid #e5e7eb; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                <div style="font-size: 16px; font-weight: 700; color: #111827;">
+                  🔄 Call Flow Configuration
+                </div>
+              </div>
+              <div style="padding: 16px; background: #ffffff; display: none;">
+                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.callFlow, null, 2)}</pre>
+              </div>
+            </div>
+            ` : ''}
+            
+            <!-- Variables -->
+            ${data.variables ? `
+            <div style="border: 2px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+              <div style="background: #f3f4f6; padding: 12px 16px; border-bottom: 2px solid #e5e7eb; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                <div style="font-size: 16px; font-weight: 700; color: #111827;">
+                  📝 Enterprise Variables
+                </div>
+              </div>
+              <div style="padding: 16px; background: #ffffff; display: none;">
+                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.variables, null, 2)}</pre>
+              </div>
+            </div>
+            ` : ''}
+            
+          </div>
+          
+        </div>
+      `;
+      
+      console.log('[CHEAT SHEET] ✅ Active Instructions rendered successfully');
+      
+    } catch (error) {
+      console.error('[CHEAT SHEET] ❌ Failed to load active instructions:', error);
+      
+      // Show error state
+      container.innerHTML = `
+        <div style="padding: 24px; background: #ffffff; border-radius: 12px; margin: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+          <div style="text-align: center; padding: 40px;">
+            <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
+            <div style="font-size: 18px; font-weight: 600; color: #dc2626; margin-bottom: 8px;">Failed to Load Active Instructions</div>
+            <div style="font-size: 14px; color: #6b7280; margin-bottom: 16px;">${error.message}</div>
+            <button onclick="window.location.reload()" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
+              🔄 Retry
+            </button>
           </div>
         </div>
       `;
