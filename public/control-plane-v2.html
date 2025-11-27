@@ -541,6 +541,31 @@
       }
     };
 
+    // 🔧 LAZY SCRIPT LOADER - Prevents ERR_INSUFFICIENT_RESOURCES
+    const loadedScripts = new Set();
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        if (loadedScripts.has(src)) {
+          resolve(); // Already loaded
+          return;
+        }
+        
+        console.log(`📦 [LAZY LOAD] Loading script: ${src}`);
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = () => {
+          loadedScripts.add(src);
+          console.log(`✅ [LAZY LOAD] Script loaded: ${src}`);
+          resolve();
+        };
+        script.onerror = () => {
+          console.error(`❌ [LAZY LOAD] Failed to load: ${src}`);
+          reject(new Error(`Failed to load script: ${src}`));
+        };
+        document.body.appendChild(script);
+      });
+    }
+
     // Initialize VariablesManager
     function initVariablesManager() {
       if (!currentCompanyId) {
@@ -555,28 +580,35 @@
     }
 
     // Initialize AiCoreTemplatesManager
-    function initTemplatesManager() {
+    async function initTemplatesManager() {
       if (!currentCompanyId) return;
       if (!window.aiCoreTemplatesManager) {
         console.log('🎯 [CONTROL PLANE] Initializing AiCoreTemplatesManager');
+        await loadScript('/js/ai-agent-settings/AiCoreTemplatesManager.js');
         window.aiCoreTemplatesManager = new window.AiCoreTemplatesManager(mockParent);
         window.aiCoreTemplatesManager.load();
       }
     }
 
     // Initialize AiCoreLiveScenariosManager
-    function initLiveScenariosManager() {
+    async function initLiveScenariosManager() {
       if (!currentCompanyId) return;
       if (!window.aiCoreLiveScenariosManager) {
         console.log('🎯 [CONTROL PLANE] Initializing AiCoreLiveScenariosManager');
+        await loadScript('/js/ai-agent-settings/AiCoreLiveScenariosManager.js');
         window.aiCoreLiveScenariosManager = new window.AiCoreLiveScenariosManager(mockParent);
         window.aiCoreLiveScenariosManager.load();
       }
     }
 
     // Initialize CheatSheetManager (use existing global instance from CheatSheetManager.js)
-    function initCheatSheetManager() {
+    async function initCheatSheetManager() {
       if (!currentCompanyId) return;
+      
+      // Load CheatSheetVersioningAdapter first (dependency)
+      await loadScript('/js/ai-agent-settings/CheatSheetVersioningAdapter.js?t=1732651400');
+      // Then load CheatSheetManager
+      await loadScript('/js/ai-agent-settings/CheatSheetManager.js?t=1732652400');
       
       // Use the global instance that was auto-created when CheatSheetManager.js loaded
       if (window.cheatSheetManager) {
@@ -593,38 +625,42 @@
     }
 
     // Initialize CallFlowManager (no constructor params, load() takes companyId)
-    function initCallFlowManager() {
+    async function initCallFlowManager() {
       if (!currentCompanyId) return;
       if (!window.callFlowManager || window.callFlowManager.companyId !== currentCompanyId) {
         console.log('🎯 [CONTROL PLANE] Initializing CallFlowManager');
+        await loadScript('/js/ai-agent-settings/CallFlowManager.js');
         window.callFlowManager = new window.CallFlowManager();
         window.callFlowManager.load(currentCompanyId);
       }
     }
 
     // Initialize AiCoreKnowledgebaseManager
-    function initKnowledgebaseManager() {
+    async function initKnowledgebaseManager() {
       if (!currentCompanyId) return;
       if (!window.aiCoreKnowledgebaseManager) {
         console.log('🎯 [CONTROL PLANE] Initializing AiCoreKnowledgebaseManager');
+        await loadScript('/js/ai-agent-settings/AiCoreKnowledgebaseManager.js');
         window.aiCoreKnowledgebaseManager = new window.AiCoreKnowledgebaseManager(mockParent);
         window.aiCoreKnowledgebaseManager.load();
       }
     }
 
     // Initialize AnalyticsManager (for Observability tab)
-    function initAnalyticsManager() {
+    async function initAnalyticsManager() {
       if (!currentCompanyId) return;
       if (!window.analyticsManager) {
         console.log('🎯 [CONTROL PLANE] Initializing AnalyticsManager');
+        await loadScript('/js/ai-agent-settings/AnalyticsManager.js');
         window.analyticsManager = new window.AnalyticsManager(mockParent);
         window.analyticsManager.load();
       }
     }
 
     // Initialize LLM Cortex Intel panel
-    function initLlmCortexIntel() {
+    async function initLlmCortexIntel() {
       if (!currentCompanyId) return;
+      await loadScript('/js/ai-agent-settings/LlmCortexIntelManager.js');
       if (typeof window.initLlmCortexIntelPanel === 'function') {
         console.log('🎯 [CONTROL PLANE] Initializing LLM Cortex Intel panel');
         window.initLlmCortexIntelPanel(currentCompanyId);
@@ -1210,23 +1246,17 @@
   </script>
 
   <!-- ═══════════════════════════════════════════════════════════════════════ -->
-  <!-- AICORE MANAGERS (SAME AS COMPANY-PROFILE.HTML) -->
+  <!-- AICORE MANAGERS - LAZY LOADED (load on-demand to prevent resource exhaustion) -->
   <!-- ═══════════════════════════════════════════════════════════════════════ -->
   <!-- NAVIGATION: V2 Navigator for diagnostic "Fix Now" buttons -->
   <script src="/js/control-plane-v2-navigator.js?v=1.0"></script>
   
-  <!-- MANAGERS -->
+  <!-- ONLY LOAD VARIABLES MANAGER IMMEDIATELY (first tab, always shown) -->
   <script src="/js/ai-agent-settings/VariablesManager.js"></script>
-  <script src="/js/ai-agent-settings/AiCoreTemplatesManager.js"></script>
-  <script src="/js/ai-agent-settings/AiCoreLiveScenariosManager.js"></script>
   
-  <!-- CheatSheet Version System (load BEFORE CheatSheetManager) -->
-  <script src="/js/ai-agent-settings/CheatSheetVersioningAdapter.js?t=1732651400"></script>
-  
-  <script src="/js/ai-agent-settings/CheatSheetManager.js?t=1732652400"></script>
-  <script src="/js/ai-agent-settings/CallFlowManager.js"></script>
-  <script src="/js/ai-agent-settings/AiCoreKnowledgebaseManager.js"></script>
-  <script src="/js/ai-agent-settings/AnalyticsManager.js"></script>
-  <script src="/js/ai-agent-settings/LlmCortexIntelManager.js"></script>
+  <!-- 
+    ALL OTHER MANAGERS ARE LAZY-LOADED VIA loadScript() WHEN THEIR TAB IS CLICKED
+    This prevents ERR_INSUFFICIENT_RESOURCES from loading 9+ scripts simultaneously
+  -->
 </body>
 </html>
