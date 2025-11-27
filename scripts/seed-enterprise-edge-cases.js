@@ -39,14 +39,63 @@ const { CheatSheetRuntimeService } = require('../services/cheatsheet');
 
 const ENTERPRISE_EDGE_CASES = [
   // ──────────────────────────────────────────────────────────────────────
-  // 1. ABUSE & PROFANITY DETECTION (HIGHEST PRIORITY)
+  // 0. HIGH-RISK CALLER – SPAM BRIDGE (Marc's Directive: Nov 27, 2025)
+  // ──────────────────────────────────────────────────────────────────────
+  {
+    id: 'ec-high-risk-spam-auto-hangup',
+    name: 'High-Risk Caller – Auto Hangup',
+    description: 'Detects high spam score (>=0.85) and politely terminates call. Spam → Edge Case Bridge demonstration.',
+    enabled: true,
+    priority: 1,  // HIGHEST PRIORITY - fires before all others
+    
+    // NO keywords - this is a PURE spam bridge rule
+    match: {
+      keywordsAny: [],
+      keywordsAll: [],
+      regexPatterns: [],
+      callerType: [],
+      timeWindows: [],
+      spamFlagsRequired: [],
+      tradeRequired: []
+    },
+    
+    // SPAM BRIDGE: Only spam score matters
+    minSpamScore: 0.85,      // Requires spam score >= 0.85
+    spamRequired: true,      // Requires spam signal to be present
+    
+    action: {
+      type: 'polite_hangup',
+      responseTemplateId: '',
+      inlineResponse: '',
+      transferTarget: '',
+      transferMessage: '',
+      hangupMessage: 'Sorry, we\'re unable to take this call right now. Thank you for calling.'
+    },
+    
+    sideEffects: {
+      autoBlacklist: true,   // Auto-blacklist high-risk spam
+      autoTag: ['spam', 'high_risk', 'auto_terminated'],
+      notifyContacts: [],
+      logSeverity: 'critical'
+    },
+    
+    auditMeta: {
+      createdBy: 'Enterprise Seed Script (Spam Bridge)',
+      createdAt: new Date(),
+      updatedBy: 'Enterprise Seed Script (Spam Bridge)',
+      updatedAt: new Date()
+    }
+  },
+  
+  // ──────────────────────────────────────────────────────────────────────
+  // 1. ABUSE & PROFANITY DETECTION
   // ──────────────────────────────────────────────────────────────────────
   {
     id: 'ec-abuse-detection-baseline',
     name: 'Abuse & Profanity Detection (Baseline)',
     description: 'Detects profanity, abuse, and threats. Hangs up politely and logs for review.',
     enabled: true,
-    priority: 1,  // Highest priority
+    priority: 2,  // Second highest priority
     
     match: {
       keywordsAny: [
@@ -103,7 +152,7 @@ const ENTERPRISE_EDGE_CASES = [
     name: 'Legal Threat Detection (Baseline)',
     description: 'Detects legal threats or lawsuit language. Escalates to management immediately.',
     enabled: true,
-    priority: 2,
+    priority: 3,
     
     match: {
       keywordsAny: [
@@ -154,7 +203,7 @@ const ENTERPRISE_EDGE_CASES = [
     name: 'PCI & Data Security Guard (Baseline)',
     description: 'Prevents collection of credit cards, SSNs, passwords over voice. Redirects to secure payment methods.',
     enabled: true,
-    priority: 3,
+    priority: 4,
     
     match: {
       keywordsAny: [
