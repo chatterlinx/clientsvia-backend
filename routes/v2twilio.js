@@ -635,6 +635,18 @@ router.post('/voice', async (req, res) => {
       twilioCallSid: req.body.CallSid
     });
 
+    // 📊 STRUCTURED SPAM LOG - For traceability
+    logger.info('[SPAM-FIREWALL] decision', {
+      route: '/voice',
+      companyId: company._id.toString(),
+      fromNumber: callerNumber,
+      toNumber: calledNumber,
+      decision: filterResult.shouldBlock ? 'BLOCK' : 'ALLOW',
+      reason: filterResult.reason || null,
+      callSid: req.body.CallSid,
+      timestamp: new Date().toISOString()
+    });
+
     if (filterResult.shouldBlock) {
       logger.security(`🚫 [SPAM BLOCKED] Call from ${callerNumber} blocked. Reason: ${filterResult.reason}`);
       
@@ -1545,6 +1557,16 @@ router.post('/voice/:companyID', async (req, res) => {
   const callStartTime = Date.now();
   const { companyID } = req.params;
   
+  // 🚨 HIGH-VISIBILITY LOG: This route should be deprecated - watch for traffic
+  logger.warn('⚠️ [TWILIO] DEPRECATED ROUTE USED: /voice/:companyID', {
+    companyId: companyID,
+    fromNumber: req.body.From,
+    toNumber: req.body.To,
+    callSid: req.body.CallSid,
+    timestamp: new Date().toISOString(),
+    message: 'This route is deprecated. If you see this log, investigate why traffic is still using this endpoint.'
+  });
+  
   // 🚨 CRITICAL CHECKPOINT: Log EVERYTHING at company-specific webhook entry
   logger.info('='.repeat(80));
   logger.info(`🚨 COMPANY WEBHOOK HIT: /api/twilio/voice/${companyID} at ${new Date().toISOString()}`);
@@ -1560,6 +1582,10 @@ router.post('/voice/:companyID', async (req, res) => {
   
   try {
     const twiml = new twilio.twiml.VoiceResponse();
+    
+    // Normalize phone numbers
+    const callerNumber = normalizePhoneNumber(req.body.From);
+    const calledNumber = normalizePhoneNumber(req.body.To);
     
     // Load company by ID
     const company = await Company.findById(companyID);
@@ -1595,8 +1621,45 @@ router.post('/voice/:companyID', async (req, res) => {
 
     logger.info(`[AI AGENT COMPANY] ${company.businessName || company.companyName} (ID: ${companyID})`);
     
+    // 🚫 SPAM FILTER - SECURED 2025-11-27
+    // This deprecated route was bypassing spam filter - now secured with same logic as /voice
+    const SmartCallFilter = require('../services/SmartCallFilter');
+    const filterResult = await SmartCallFilter.checkCall({
+      callerPhone: callerNumber,
+      companyId: company._id.toString(),
+      companyPhone: calledNumber,
+      twilioCallSid: req.body.CallSid
+    });
+    
+    // 📊 STRUCTURED SPAM LOG - For traceability
+    logger.info('[SPAM-FIREWALL] decision', {
+      route: '/voice/:companyID',
+      companyId: company._id.toString(),
+      fromNumber: callerNumber,
+      toNumber: calledNumber,
+      decision: filterResult.shouldBlock ? 'BLOCK' : 'ALLOW',
+      reason: filterResult.reason || null,
+      callSid: req.body.CallSid,
+      timestamp: new Date().toISOString()
+    });
+
+    if (filterResult.shouldBlock) {
+      logger.security(`🚫 [SPAM BLOCKED] Call from ${callerNumber} blocked on deprecated route. Reason: ${filterResult.reason}`);
+      
+      // Play rejection message and hangup
+      twiml.say('This call has been blocked. Goodbye.');
+      twiml.hangup();
+      
+      res.type('text/xml');
+      res.send(twiml.toString());
+      return;
+    }
+
+    logger.security(`✅ [SPAM FILTER] Call from ${callerNumber} passed all security checks on deprecated route`);
+    
     // ☠️ REMOVED: aiAgentSettings.enabled block (legacy nuked 2025-11-20)
     // This endpoint is now deprecated - V2 Agent handles all calls via /v2-agent-init/
+    // NOTE: This route returns empty TwiML - if still in use, needs full implementation
     
     const twimlString = twiml.toString();
     logger.info('📤 CHECKPOINT 10: Sending final TwiML response');
