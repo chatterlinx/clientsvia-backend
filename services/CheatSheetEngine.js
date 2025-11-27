@@ -62,8 +62,39 @@ class CheatSheetEngine {
     const edgeCase = this.detectEdgeCase(userInput, deserializedPolicy.edgeCases);
     
     if (edgeCase) {
-      // ✨ VARIABLE REPLACEMENT - Replace {variables} in edge case response
-      response = edgeCase.response;
+      // ────────────────────────────────────────────────────────────────
+      // DETERMINE ACTION TYPE (Enterprise Mode vs Legacy Mode)
+      // ────────────────────────────────────────────────────────────────
+      // Legacy mode: Only has responseText, no action object
+      // Enterprise mode: Has action.type (override_response | force_transfer | polite_hangup | flag_only)
+      
+      const actionType = edgeCase.action?.type || 'override_response';  // Default to legacy behavior
+      
+      // ────────────────────────────────────────────────────────────────
+      // GET RESPONSE TEXT (based on action type and mode)
+      // ────────────────────────────────────────────────────────────────
+      let responseText = '';
+      
+      if (actionType === 'override_response') {
+        // Legacy: edgeCase.response (from PolicyCompiler)
+        // Enterprise: action.inlineResponse or action.responseTemplateId
+        responseText = edgeCase.action?.inlineResponse || 
+                       edgeCase.responseText ||  // Backward compat with old schema
+                       edgeCase.response ||      // Backward compat with compiled policy
+                       '';
+      } else if (actionType === 'force_transfer') {
+        responseText = edgeCase.action?.transferMessage || 
+                       "Let me connect you with someone who can help.";
+      } else if (actionType === 'polite_hangup') {
+        responseText = edgeCase.action?.hangupMessage || 
+                       "Thank you for calling. Goodbye.";
+      } else if (actionType === 'flag_only') {
+        // No response override - use base response
+        responseText = baseResponse;
+      }
+      
+      // ✨ VARIABLE REPLACEMENT - Replace {variables} in response
+      response = responseText;
       if (response && context.company) {
         logger.info('[CHEAT SHEET ENGINE] Replacing variables in edge case response...');
         response = replacePlaceholders(response, context.company);
@@ -72,7 +103,8 @@ class CheatSheetEngine {
       appliedBlocks.push({ 
         type: 'EDGE_CASE', 
         id: edgeCase.id,
-        name: edgeCase.name
+        name: edgeCase.name,
+        actionType: actionType
       });
       
       const elapsed = Date.now() - startTime;
@@ -80,40 +112,37 @@ class CheatSheetEngine {
       // ────────────────────────────────────────────────────────────────
       // 📊 ENHANCED LOGGING (Enterprise-grade observability)
       // ────────────────────────────────────────────────────────────────
-      logger.info('[CHEAT SHEET ENGINE] Edge case triggered (short-circuit)', {
+      logger.info('[CHEAT SHEET ENGINE] Edge case triggered', {
         companyId: context.companyId,
         callId: context.callId,
         edgeCase: {
           id: edgeCase.id,
           name: edgeCase.name,
           priority: edgeCase.priority || 10,
-          actionType: edgeCase.action?.type || 'override_response',  // Legacy: assumes override if not specified
-          matchedPattern: edgeCase._matchedPattern || 'unknown'       // Pattern that triggered the match
+          actionType: actionType,
+          matchedPattern: edgeCase._matchedPattern || 'unknown'
         },
+        sideEffects: {
+          autoBlacklist: edgeCase.sideEffects?.autoBlacklist || false,
+          tags: edgeCase.sideEffects?.autoTag || [],
+          notifyContacts: edgeCase.sideEffects?.notifyContacts || [],
+          logSeverity: edgeCase.sideEffects?.logSeverity || 'info'
+        },
+        shortCircuit: actionType !== 'flag_only',  // flag_only doesn't short-circuit
         timeMs: elapsed
       });
       
       // ────────────────────────────────────────────────────────────────
-      // 🤖 AUTO-BLACKLIST TRIGGER (Nov 2025)
+      // 🎬 SIDE EFFECTS (Auto-blacklist, tagging, notifications)
       // ────────────────────────────────────────────────────────────────
-      // Check if this edge case should trigger auto-blacklist
-      // This is ASYNC and NON-BLOCKING - don't wait for completion
-      // 
-      // Auto-blacklist will:
-      // 1. Check if auto-blacklist is enabled for company
-      // 2. Check if this edge case is in configured triggers
-      // 3. Check detection threshold
-      // 4. Add to blacklist (pending or active based on settings)
-      // 5. Clear Redis cache
-      // 
-      // Future calls from this number will be blocked at Layer 1
-      // (before reaching AI agent, saving AI credits)
+      // These are ASYNC and NON-BLOCKING - don't wait for completion
       // ────────────────────────────────────────────────────────────────
       
-      if (context.callerPhone) {
+      // AUTO-BLACKLIST (if configured in side effects OR legacy auto-blacklist enabled)
+      if (edgeCase.sideEffects?.autoBlacklist && context.callerPhone) {
         const SmartCallFilter = require('./SmartCallFilter');
         
-        logger.security('[CHEAT SHEET ENGINE] 🤖 Checking auto-blacklist trigger...', {
+        logger.security('[CHEAT SHEET ENGINE] 🤖 Triggering auto-blacklist (side effect)...', {
           companyId: context.companyId,
           callerPhone: context.callerPhone,
           edgeCaseId: edgeCase.id,
@@ -136,7 +165,6 @@ class CheatSheetEngine {
               message: result.message
             });
           } else {
-            // Not an error - just didn't meet criteria (disabled, threshold not met, etc.)
             logger.debug('[CHEAT SHEET ENGINE] ⏭️ Auto-blacklist skipped:', {
               companyId: context.companyId,
               phoneNumber: context.callerPhone,
@@ -146,7 +174,6 @@ class CheatSheetEngine {
             });
           }
         }).catch(error => {
-          // Log error but don't fail the call
           logger.error('[CHEAT SHEET ENGINE] ❌ Auto-blacklist error (non-critical):', {
             error: error.message,
             companyId: context.companyId,
@@ -154,20 +181,87 @@ class CheatSheetEngine {
             edgeCaseName: edgeCase.name
           });
         });
-      } else {
-        logger.warn('[CHEAT SHEET ENGINE] ⚠️ Auto-blacklist skipped: No caller phone number in context');
       }
       
-      // Enforce performance budget
-      this.enforcePerformanceBudget(startTime, 10, context);
+      // AUTO-TAGGING (if configured)
+      if (edgeCase.sideEffects?.autoTag && edgeCase.sideEffects.autoTag.length > 0) {
+        logger.info('[CHEAT SHEET ENGINE] 🏷️ Auto-tagging call', {
+          companyId: context.companyId,
+          callId: context.callId,
+          tags: edgeCase.sideEffects.autoTag
+        });
+        // TODO: Implement call tagging in call log system
+      }
       
-      return {
-        response,
-        appliedBlocks,
-        action: 'RESPOND',
-        timeMs: elapsed,
-        shortCircuit: true
-      };
+      // CONTACT NOTIFICATIONS (if configured)
+      if (edgeCase.sideEffects?.notifyContacts && edgeCase.sideEffects.notifyContacts.length > 0) {
+        logger.info('[CHEAT SHEET ENGINE] 📧 Triggering contact notifications', {
+          companyId: context.companyId,
+          callId: context.callId,
+          contactIds: edgeCase.sideEffects.notifyContacts,
+          severity: edgeCase.sideEffects.logSeverity
+        });
+        // TODO: Implement contact notification system
+      }
+      
+      // ────────────────────────────────────────────────────────────────
+      // FLAG-ONLY MODE: Don't short-circuit, continue to other rules
+      // ────────────────────────────────────────────────────────────────
+      if (actionType === 'flag_only') {
+        logger.info('[CHEAT SHEET ENGINE] Edge case flag-only mode: continuing to other rules', {
+          companyId: context.companyId,
+          callId: context.callId,
+          edgeCaseId: edgeCase.id
+        });
+        // Don't return yet - let transfer/behavior/guardrails run
+        // Just log and continue (fall through to next precedence layer)
+      } else {
+        // ────────────────────────────────────────────────────────────────
+        // SHORT-CIRCUIT: Return immediately for override/transfer/hangup
+        // ────────────────────────────────────────────────────────────────
+        
+        // Enforce performance budget
+        this.enforcePerformanceBudget(startTime, 10, context);
+        
+        // Determine final action based on edge case type
+        let finalAction = 'RESPOND';
+        const result = {
+          response,
+          appliedBlocks,
+          timeMs: elapsed,
+          shortCircuit: true
+        };
+        
+        if (actionType === 'override_response') {
+          finalAction = 'RESPOND';
+          result.action = finalAction;
+          
+        } else if (actionType === 'force_transfer') {
+          finalAction = 'TRANSFER';
+          result.action = finalAction;
+          result.transferTarget = edgeCase.action?.transferTarget || 'manager';
+          result.shouldTransfer = true;
+          
+          logger.info('[CHEAT SHEET ENGINE] Edge case forcing transfer', {
+            companyId: context.companyId,
+            callId: context.callId,
+            transferTarget: result.transferTarget
+          });
+          
+        } else if (actionType === 'polite_hangup') {
+          finalAction = 'HANGUP';
+          result.action = finalAction;
+          result.shouldHangup = true;
+          
+          logger.info('[CHEAT SHEET ENGINE] Edge case forcing hangup', {
+            companyId: context.companyId,
+            callId: context.callId,
+            hangupMessage: response
+          });
+        }
+        
+        return result;
+      }
     }
     
     // ────────────────────────────────────────────────────────────────
