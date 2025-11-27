@@ -643,6 +643,8 @@ router.post('/voice', async (req, res) => {
       toNumber: calledNumber,
       decision: filterResult.shouldBlock ? 'BLOCK' : 'ALLOW',
       reason: filterResult.reason || null,
+      spamScore: filterResult.spamScore || 0,
+      spamFlags: filterResult.flags || [],
       callSid: req.body.CallSid,
       timestamp: new Date().toISOString()
     });
@@ -660,6 +662,21 @@ router.post('/voice', async (req, res) => {
     }
 
     logger.security(`✅ [SPAM FILTER] Call from ${callerNumber} passed all security checks`);
+    
+    // ────────────────────────────────────────────────────────────────
+    // 🛡️ SPAM CONTEXT: Attach spam data to session for edge case bridge
+    // ────────────────────────────────────────────────────────────────
+    // This allows Edge Cases to react to spam score even if call passed filter.
+    // Edge cases can enforce "minSpamScore" thresholds for polite hangup.
+    const spamContext = {
+      spamScore: filterResult.spamScore || 0,
+      spamReason: filterResult.reason || null,
+      spamFlags: filterResult.flags || []
+    };
+    
+    // Store in session for /v2-agent-respond to access
+    req.session = req.session || {};
+    req.session.spamContext = spamContext;
 
     // ============================================================================
     // 🎯 CALL SOURCE DETECTION (Phase 2: 3-Mode System)
@@ -1663,6 +1680,8 @@ router.post('/voice/:companyID', async (req, res) => {
       toNumber: calledNumber,
       decision: filterResult.shouldBlock ? 'BLOCK' : 'ALLOW',
       reason: filterResult.reason || null,
+      spamScore: filterResult.spamScore || 0,
+      spamFlags: filterResult.flags || [],
       callSid: req.body.CallSid,
       timestamp: new Date().toISOString()
     });
@@ -1680,6 +1699,18 @@ router.post('/voice/:companyID', async (req, res) => {
     }
 
     logger.security(`✅ [SPAM FILTER] Call from ${callerNumber} passed all security checks on deprecated route`);
+    
+    // ────────────────────────────────────────────────────────────────
+    // 🛡️ SPAM CONTEXT: Attach spam data to session for edge case bridge
+    // ────────────────────────────────────────────────────────────────
+    const spamContext = {
+      spamScore: filterResult.spamScore || 0,
+      spamReason: filterResult.reason || null,
+      spamFlags: filterResult.flags || []
+    };
+    
+    req.session = req.session || {};
+    req.session.spamContext = spamContext;
     
     // ☠️ REMOVED: aiAgentSettings.enabled block (legacy nuked 2025-11-20)
     // This endpoint is now deprecated - V2 Agent handles all calls via /v2-agent-init/
@@ -1785,6 +1816,20 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       failedAttempts: 0,
       startTime: new Date()
     };
+    
+    // ────────────────────────────────────────────────────────────────
+    // 🛡️ SPAM CONTEXT: Pass spam data into agent brain
+    // ────────────────────────────────────────────────────────────────
+    // This allows CheatSheetEngine to enforce minSpamScore thresholds
+    // in edge case matching (spam → edge case bridge).
+    if (req.session?.spamContext) {
+      callState.spamContext = req.session.spamContext;
+      logger.debug('[SPAM BRIDGE] Spam context attached to callState', {
+        spamScore: callState.spamContext.spamScore,
+        spamReason: callState.spamContext.spamReason
+      });
+    }
+    
     perfCheckpoints.callStateInit = Date.now() - perfStart;
     
     logger.debug('🎯 CHECKPOINT 14: Calling V2 AI Agent Runtime processUserInput');

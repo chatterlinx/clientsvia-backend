@@ -62,8 +62,9 @@ class CheatSheetEngine {
       // ────────────────────────────────────────────────────────────────
       // Check for unusual caller inputs (machine detection, system delays)
       // If matched → RETURN IMMEDIATELY (short-circuit all other rules)
+      // NOW WITH SPAM BRIDGE: Can also react to spam score thresholds
       
-      const edgeCase = this.detectEdgeCase(userInput, deserializedPolicy.edgeCases);
+      const edgeCase = this.detectEdgeCase(userInput, deserializedPolicy.edgeCases, context);
     
     if (edgeCase) {
       // ────────────────────────────────────────────────────────────────
@@ -124,7 +125,9 @@ class CheatSheetEngine {
           name: edgeCase.name,
           priority: edgeCase.priority || 10,
           actionType: actionType,
-          matchedPattern: edgeCase._matchedPattern || 'unknown'
+          matchedPattern: edgeCase._matchedPattern || 'unknown',
+          spamScore: edgeCase._spamScore || 0,  // Include spam score for spam bridge
+          spamBridgeActive: edgeCase.minSpamScore != null || edgeCase.spamRequired
         },
         sideEffects: {
           autoBlacklist: edgeCase.sideEffects?.autoBlacklist || false,
@@ -467,23 +470,58 @@ class CheatSheetEngine {
   // First match wins (already sorted by priority)
   // ═══════════════════════════════════════════════════════════════════
   
-  detectEdgeCase(input, edgeCases) {
+  detectEdgeCase(input, edgeCases, context = {}) {
     const lowerInput = input.toLowerCase();
+    const spam = context.spamContext || {};
     
     for (const edgeCase of edgeCases) {
+      // ────────────────────────────────────────────────────────────────
+      // 🛡️ SPAM → EDGE CASE BRIDGE: Enforce spam thresholds FIRST
+      // ────────────────────────────────────────────────────────────────
+      // Check spam conditions before keyword matching.
+      // If spam requirements aren't met, skip this edge case entirely.
+      
+      if (edgeCase.minSpamScore != null) {
+        if (!spam.spamScore || spam.spamScore < edgeCase.minSpamScore) {
+          logger.debug('[CHEAT SHEET ENGINE] Edge case skipped (spam score too low)', {
+            edgeCaseId: edgeCase.id,
+            edgeCaseName: edgeCase.name,
+            required: edgeCase.minSpamScore,
+            actual: spam.spamScore || 0
+          });
+          continue; // Doesn't qualify, skip this rule
+        }
+      }
+      
+      if (edgeCase.spamRequired) {
+        if (!spam.spamScore && (!spam.spamFlags || spam.spamFlags.length === 0)) {
+          logger.debug('[CHEAT SHEET ENGINE] Edge case skipped (spam required but not present)', {
+            edgeCaseId: edgeCase.id,
+            edgeCaseName: edgeCase.name
+          });
+          continue; // No spam signal present, skip
+        }
+      }
+      
+      // ────────────────────────────────────────────────────────────────
+      // PATTERN MATCHING: Check keywords/patterns
+      // ────────────────────────────────────────────────────────────────
       for (const pattern of edgeCase.patterns) {
         if (pattern.test(lowerInput)) {
           logger.debug('[CHEAT SHEET ENGINE] Edge case matched', {
             edgeCaseId: edgeCase.id,
             edgeCaseName: edgeCase.name,
             pattern: pattern.source,
-            priority: edgeCase.priority
+            priority: edgeCase.priority,
+            spamScore: spam.spamScore || 0,
+            spamBridgeActive: edgeCase.minSpamScore != null || edgeCase.spamRequired
           });
           
           // Return edge case with matched pattern metadata for logging
           return {
             ...edgeCase,
-            _matchedPattern: pattern.source  // Add matched pattern to result
+            _matchedPattern: pattern.source,  // Add matched pattern to result
+            _spamScore: spam.spamScore || 0   // Include spam score for logging
           };
         }
       }

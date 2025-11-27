@@ -155,6 +155,22 @@ const EdgeCaseSchema = new mongoose.Schema({
   },
   
   // ═══════════════════════════════════════════════════════════════
+  // SPAM → EDGE CASE BRIDGE (Marc's Directive: Nov 27, 2025)
+  // ═══════════════════════════════════════════════════════════════
+  // Allows edge cases to react to spam score from SmartCallFilter.
+  // If spam is high-risk, edge case can force polite hangup.
+  minSpamScore: { 
+    type: Number, 
+    default: null,
+    min: 0,
+    max: 1
+  },  // 0-1 float, if set: spam score must be >= this threshold
+  spamRequired: { 
+    type: Boolean, 
+    default: false 
+  },  // If true, requires spamContext to have score or flags
+  
+  // ═══════════════════════════════════════════════════════════════
   // ENTERPRISE ACTION (What to do when matched)
   // ═══════════════════════════════════════════════════════════════
   action: {
