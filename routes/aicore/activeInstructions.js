@@ -56,8 +56,7 @@ router.get('/:companyId', authMiddleware, async (req, res) => {
     // CheatSheetRuntimeService.getRuntimeConfig() returns:
     // { versionId, name, config, ...metadata }
     
-    const runtimeService = new CheatSheetRuntimeService();
-    const liveConfig = await runtimeService.getLiveConfig(companyId);
+    const liveConfig = await CheatSheetRuntimeService.getRuntimeConfig(companyId);
     
     if (!liveConfig) {
       logger.warn('[ACTIVE INSTRUCTIONS] No live config found', {
