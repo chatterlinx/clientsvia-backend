@@ -56,10 +56,25 @@ router.get('/:companyId', authMiddleware, async (req, res) => {
   try {
     const { companyId } = req.params;
     
-    logger.info('[ACTIVE INSTRUCTIONS] Fetching live config', {
+    logger.info('[ACTIVE INSTRUCTIONS] Request received', {
       companyId,
-      user: req.user?.email || 'Unknown'
+      user: req.user?.email || 'Unknown',
+      serviceType: typeof CheatSheetRuntimeService,
+      hasGetRuntimeConfig: typeof CheatSheetRuntimeService?.getRuntimeConfig === 'function'
     });
+    
+    // Safety check
+    if (!CheatSheetRuntimeService || typeof CheatSheetRuntimeService.getRuntimeConfig !== 'function') {
+      logger.error('[ACTIVE INSTRUCTIONS] Service not properly initialized', {
+        companyId,
+        serviceType: typeof CheatSheetRuntimeService
+      });
+      return res.status(503).json({
+        success: false,
+        error: 'SERVICE_UNAVAILABLE',
+        message: 'CheatSheet runtime service is not available'
+      });
+    }
     
     // ────────────────────────────────────────────────────────────────
     // CRITICAL: Use the SAME service the runtime agent uses
