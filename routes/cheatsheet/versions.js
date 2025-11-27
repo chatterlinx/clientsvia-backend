@@ -237,8 +237,8 @@ router.delete('/draft/:companyId/:versionId', authMiddleware, async (req, res) =
 
 /**
  * DELETE /api/cheatsheet/versions/:companyId/:versionId
- * Alias for /draft/:companyId/:versionId (UI compatibility)
  * Delete any version (draft or archived) by versionId
+ * UI uses this for "Delete" button in Version History
  */
 router.delete('/versions/:companyId/:versionId', authMiddleware, async (req, res) => {
   try {
@@ -246,7 +246,7 @@ router.delete('/versions/:companyId/:versionId', authMiddleware, async (req, res
     const userEmail = getUserEmail(req);
     const metadata = extractMetadata(req);
     
-    await CheatSheetVersionService.discardDraft(
+    await CheatSheetVersionService.deleteVersion(
       companyId,
       versionId,
       userEmail,
@@ -265,7 +265,7 @@ router.delete('/versions/:companyId/:versionId', authMiddleware, async (req, res
       error: err.message
     });
     
-    const statusCode = err.code === 'DRAFT_NOT_FOUND' ? 404 : 500;
+    const statusCode = err.code === 'DRAFT_NOT_FOUND' || err.code === 'CANNOT_DELETE_LIVE' ? 404 : 500;
     
     res.status(statusCode).json({
       success: false,

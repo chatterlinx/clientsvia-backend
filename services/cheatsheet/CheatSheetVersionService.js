@@ -336,6 +336,89 @@ class CheatSheetVersionService {
     }
   }
   
+  /**
+   * Delete any version (draft or archived)
+   * Used by Version History UI
+   */
+  async deleteVersion(companyId, versionId, userEmail, metadata = {}) {
+    logger.info('CHEATSHEET_VERSION_DELETE', {
+      companyId,
+      versionId,
+      userEmail
+    });
+    
+    try {
+      // Find version (can be draft or archived, but NOT live)
+      const version = await CheatSheetVersion.findOne({
+        companyId,
+        versionId,
+        status: { $in: ['draft', 'archived'] }
+      });
+      
+      if (!version) {
+        const error = new Error(`Draft ${versionId} not found for company ${companyId}`);
+        error.code = 'DRAFT_NOT_FOUND';
+        throw error;
+      }
+      
+      // Prevent deleting live version
+      if (version.status === 'live') {
+        const error = new Error('Cannot delete live version. Archive it first.');
+        error.code = 'CANNOT_DELETE_LIVE';
+        throw error;
+      }
+      
+      const previousState = {
+        name: version.name,
+        status: version.status,
+        checksum: version.checksum
+      };
+      
+      // Hard delete
+      await version.deleteOne();
+      
+      // Clear company pointer if it was a draft
+      if (version.status === 'draft') {
+        await Company.updateOne(
+          { _id: companyId },
+          { $set: { 'aiAgentSettings.cheatSheetMeta.draftVersionId': null } }
+        );
+      }
+      
+      // Audit log
+      await CheatSheetAuditLog.logAction({
+        companyId,
+        versionId,
+        action: 'delete_version',
+        actor: userEmail,
+        actorIp: metadata.ip || null,
+        actorUserAgent: metadata.userAgent || null,
+        previousState,
+        success: true
+      });
+      
+      logger.info('CHEATSHEET_VERSION_DELETED', {
+        companyId,
+        versionId,
+        status: version.status
+      });
+      
+    } catch (err) {
+      // Audit log failure
+      await CheatSheetAuditLog.logAction({
+        companyId,
+        versionId,
+        action: 'delete_version',
+        actor: userEmail,
+        actorIp: metadata.ip || null,
+        success: false,
+        errorMessage: err.message
+      });
+      
+      throw err;
+    }
+  }
+  
   // ============================================================================
   // PUSH LIVE (ATOMIC TRANSACTION)
   // ============================================================================

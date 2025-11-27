@@ -77,11 +77,19 @@ class CheatSheetEngine {
       
       const elapsed = Date.now() - startTime;
       
+      // ────────────────────────────────────────────────────────────────
+      // 📊 ENHANCED LOGGING (Enterprise-grade observability)
+      // ────────────────────────────────────────────────────────────────
       logger.info('[CHEAT SHEET ENGINE] Edge case triggered (short-circuit)', {
         companyId: context.companyId,
         callId: context.callId,
-        edgeCaseId: edgeCase.id,
-        edgeCaseName: edgeCase.name,
+        edgeCase: {
+          id: edgeCase.id,
+          name: edgeCase.name,
+          priority: edgeCase.priority || 10,
+          actionType: edgeCase.action?.type || 'override_response',  // Legacy: assumes override if not specified
+          matchedPattern: edgeCase._matchedPattern || 'unknown'       // Pattern that triggered the match
+        },
         timeMs: elapsed
       });
       
@@ -336,7 +344,11 @@ class CheatSheetEngine {
             priority: edgeCase.priority
           });
           
-          return edgeCase;
+          // Return edge case with matched pattern metadata for logging
+          return {
+            ...edgeCase,
+            _matchedPattern: pattern.source  // Add matched pattern to result
+          };
         }
       }
     }

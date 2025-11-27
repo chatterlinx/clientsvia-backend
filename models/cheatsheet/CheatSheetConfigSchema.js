@@ -106,6 +106,129 @@ const CalculatorSchema = new mongoose.Schema({
   createdBy: { type: String, default: 'System' }
 }, { _id: false });
 
+/**
+ * Edge Case Schema - Enterprise Tier-1 Override System
+ * Highest precedence rules that short-circuit all other AI logic
+ * 
+ * BACKWARD COMPATIBLE: Supports both legacy (triggerPatterns + responseText) 
+ * and enterprise (match + action + sideEffects) modes
+ */
+const EdgeCaseSchema = new mongoose.Schema({
+  // ═══════════════════════════════════════════════════════════════
+  // IDENTITY
+  // ═══════════════════════════════════════════════════════════════
+  id: { type: String, required: false },  // Optional for backward compat, auto-generated if missing
+  name: { type: String, required: true },
+  description: { type: String, default: '' },
+  
+  // ═══════════════════════════════════════════════════════════════
+  // CONTROL FLAGS
+  // ═══════════════════════════════════════════════════════════════
+  enabled: { type: Boolean, default: true },
+  priority: { type: Number, default: 10, min: 1, max: 100 },
+  
+  // ═══════════════════════════════════════════════════════════════
+  // LEGACY FIELDS (Backward Compatibility)
+  // ═══════════════════════════════════════════════════════════════
+  triggerPatterns: { 
+    type: [String], 
+    default: undefined  // Undefined = not set (allows detection of enterprise mode)
+  },
+  responseText: { 
+    type: String, 
+    default: undefined  // Undefined = not set
+  },
+  
+  // ═══════════════════════════════════════════════════════════════
+  // ENTERPRISE MATCHING (Multi-dimensional conditions)
+  // ═══════════════════════════════════════════════════════════════
+  match: {
+    type: {
+      keywordsAny: { type: [String], default: [] },      // ANY keyword triggers
+      keywordsAll: { type: [String], default: [] },      // ALL required
+      regexPatterns: { type: [String], default: [] },    // Advanced patterns
+      callerType: { 
+        type: [String], 
+        enum: ['new', 'existing', 'vendor', 'unknown', ''],
+        default: [] 
+      },
+      timeWindows: [{
+        daysOfWeek: { type: [Number], default: [] },    // 0-6 (Sunday-Saturday)
+        start: { type: String, default: '00:00' },      // HH:mm
+        end: { type: String, default: '23:59' }         // HH:mm
+      }],
+      spamFlagsRequired: { type: [String], default: [] },
+      tradeRequired: { type: [String], default: [] }
+    },
+    default: undefined  // Undefined = legacy mode
+  },
+  
+  // ═══════════════════════════════════════════════════════════════
+  // ENTERPRISE ACTION (What to do when matched)
+  // ═══════════════════════════════════════════════════════════════
+  action: {
+    type: {
+      type: { 
+        type: String, 
+        enum: ['override_response', 'force_transfer', 'polite_hangup', 'flag_only'],
+        default: 'override_response'
+      },
+      
+      // For override_response
+      responseTemplateId: { type: String, default: '' },
+      inlineResponse: { type: String, default: '' },
+      
+      // For force_transfer
+      transferTarget: { type: String, default: '' },      // contactId, role, or phone
+      transferMessage: { type: String, default: '' },
+      
+      // For polite_hangup
+      hangupMessage: { type: String, default: '' }
+    },
+    default: undefined  // Undefined = legacy mode (uses responseText)
+  },
+  
+  // ═══════════════════════════════════════════════════════════════
+  // SIDE EFFECTS (Auto-actions when triggered)
+  // ═══════════════════════════════════════════════════════════════
+  sideEffects: {
+    type: {
+      autoBlacklist: { type: Boolean, default: false },
+      autoTag: { type: [String], default: [] },
+      notifyContacts: { type: [String], default: [] },   // contactIds
+      logSeverity: { 
+        type: String, 
+        enum: ['info', 'warning', 'critical'],
+        default: 'info'
+      }
+    },
+    default: () => ({
+      autoBlacklist: false,
+      autoTag: [],
+      notifyContacts: [],
+      logSeverity: 'info'
+    })
+  },
+  
+  // ═══════════════════════════════════════════════════════════════
+  // AUDIT TRAIL
+  // ═══════════════════════════════════════════════════════════════
+  auditMeta: {
+    type: {
+      createdBy: { type: String, default: 'System' },
+      createdAt: { type: Date, default: Date.now },
+      updatedBy: { type: String, default: 'System' },
+      updatedAt: { type: Date, default: Date.now }
+    },
+    default: () => ({
+      createdBy: 'System',
+      createdAt: new Date(),
+      updatedBy: 'System',
+      updatedAt: new Date()
+    })
+  }
+}, { _id: false });
+
 // ============================================================================
 // MAIN CONFIG SCHEMA - THE SINGLE SOURCE OF TRUTH
 // ============================================================================
@@ -126,9 +249,25 @@ const CheatSheetConfigSchema = new mongoose.Schema({
   triage: { type: Object, default: {} },
   frontlineIntel: { type: Object, default: {} },
   transferRules: { type: Object, default: {} },
-  edgeCases: { type: Object, default: {} },
   behavior: { type: Object, default: {} },
   guardrails: { type: Object, default: {} },
+  
+  // ============================================================================
+  // EDGE CASES (Upgraded from Object to Structured Array - Nov 2025)
+  // ============================================================================
+  // NOTE: This field was upgraded from { type: Object } to [EdgeCaseSchema]
+  // to support enterprise features while maintaining backward compatibility.
+  // Legacy edge cases stored as Object will be migrated to array format.
+  edgeCases: { 
+    type: [EdgeCaseSchema], 
+    default: [],
+    validate: {
+      validator: function(arr) {
+        return arr.length <= 50; // Reasonable limit
+      },
+      message: 'Cannot have more than 50 edge cases'
+    }
+  },
   
   // ============================================================================
   // V2 STRUCTURED SECTIONS (Type-safe, validated)
@@ -201,6 +340,7 @@ module.exports = {
   BookingRuleSchema,
   CompanyContactSchema,
   LinkSchema,
-  CalculatorSchema
+  CalculatorSchema,
+  EdgeCaseSchema
 };
 
