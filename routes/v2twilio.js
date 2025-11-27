@@ -1707,6 +1707,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     logger.security('🎯 CHECKPOINT 16: Creating TwiML response');
     const twiml = new twilio.twiml.VoiceResponse();
     
+    // 🔧 FIX: Map action-based responses to legacy boolean flags for compatibility
+    if (result.action === 'transfer') {
+      result.shouldTransfer = true;
+      result.text = result.response || "I'm connecting you to our team.";
+    } else if (result.action === 'hangup') {
+      result.shouldHangup = true;
+      result.text = result.response || "Thank you for calling.";
+    }
+    
     // Handle different response types
     if (result.shouldHangup) {
       logger.info('🎯 CHECKPOINT 17: AI decided to hang up');
