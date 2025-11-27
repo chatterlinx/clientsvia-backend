@@ -4502,8 +4502,9 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     `;
     
     try {
-      // Fetch active instructions from API (CORRECTED ENDPOINT)
-      const token = localStorage.getItem('token');
+      // Fetch active instructions from API
+      // CRITICAL: Use 'adminToken' not 'token' (matches other managers)
+      const token = localStorage.getItem('adminToken');
       console.log('[ACTIVE INSTRUCTIONS] Token present?', !!token);
       console.log('[ACTIVE INSTRUCTIONS] Token length:', token?.length || 0);
       console.log('[ACTIVE INSTRUCTIONS] Fetching from:', `/api/aicore/active-instructions/${this.companyId}`);
