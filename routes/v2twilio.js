@@ -935,6 +935,17 @@ router.post('/voice', async (req, res) => {
       logger.debug(`🔍 [CALL-2] Greeting from initializeCall:`, initResult.greeting);
       logger.debug(`🔍 [CALL-3] Voice settings from initializeCall:`, JSON.stringify(initResult.voiceSettings, null, 2));
       
+      // 📊 STRUCTURED LOG: Greeting initialized
+      logger.info('[GREETING] initialized', {
+        companyId: company._id.toString(),
+        callSid: req.body.CallSid,
+        route: '/voice',
+        greetingMode: initResult.greetingConfig?.mode,
+        textPreview: initResult.greeting?.slice(0, 80),
+        voiceId: initResult.voiceSettings?.voiceId || null,
+        timestamp: new Date().toISOString()
+      });
+      
       // DOUBLE-CHECK: Reload company to verify voiceSettings are in DB
       logger.debug(`🔍 [CALL-4] Double-checking voice settings from database...`);
       const freshCompany = await Company.findById(company._id);
@@ -1053,6 +1064,19 @@ router.post('/voice', async (req, res) => {
     console.log('TwiML Length:', twimlString.length);
     console.log('TwiML Content:', twimlString);
     console.log('═'.repeat(80));
+    
+    // 📊 STRUCTURED LOG: Gather configured
+    const elevenLabsVoice = initResult.voiceSettings?.voiceId;
+    logger.info('[GATHER] first-turn configured', {
+      companyId: company._id.toString(),
+      callSid: req.body.CallSid,
+      route: '/voice',
+      actionUrl: `https://${req.get('host')}/api/twilio/v2-agent-respond/${company._id}`,
+      partialUrl: `https://${req.get('host')}/api/twilio/v2-agent-partial/${company._id}`,
+      usesElevenLabs: Boolean(elevenLabsVoice && initResult.greeting),
+      twimlLength: twimlString.length,
+      timestamp: new Date().toISOString()
+    });
     
     logger.info(`[Twilio Voice] Sending AI Agent Logic TwiML: ${twimlString}`);
     res.send(twimlString);
