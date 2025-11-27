@@ -369,16 +369,61 @@ class CheatSheetRuntimeService {
     const cacheKey = this._getCacheKey(companyId);
     
     try {
+      // Invalidate CheatSheet config cache
       await CacheHelper.invalidate(cacheKey);
       
-      logger.info('CHEATSHEET_CACHE_INVALIDATED', {
-        companyId,
-        cacheKey
-      });
+      // ────────────────────────────────────────────────────────────────
+      // 🚨 CRITICAL: Also invalidate compiled policy cache
+      // ────────────────────────────────────────────────────────────────
+      // The compiled policy (`policy:{companyId}:active`) must be cleared
+      // so that CallFlowExecutor recompiles on next call with fresh config.
+      // Without this, calls may use stale rules for 24 hours (policy TTL).
+      const { getRedisClient } = require('../../config/redis');
+      const redis = getRedisClient();
+      
+      if (redis && redis.isOpen) {
+        // Delete active pointer and all policy artifacts for this company
+        const policyKeys = [
+          `policy:${companyId}:active`,          // Active policy pointer
+          `policy:${companyId}:*`                 // All policy artifacts (wildcard)
+        ];
+        
+        for (const key of policyKeys) {
+          if (key.includes('*')) {
+            // Scan and delete all matching keys
+            const keys = await redis.keys(key);
+            if (keys.length > 0) {
+              await redis.del(...keys);
+              logger.info('CHEATSHEET_POLICY_CACHE_CLEARED', {
+                companyId,
+                keysDeleted: keys.length,
+                pattern: key
+              });
+            }
+          } else {
+            await redis.del(key);
+          }
+        }
+        
+        logger.info('CHEATSHEET_CACHE_INVALIDATED', {
+          companyId,
+          cacheKey,
+          policyCacheCleared: true
+        });
+      } else {
+        logger.warn('CHEATSHEET_CACHE_INVALIDATION_PARTIAL', {
+          companyId,
+          cacheKey,
+          policyCacheCleared: false,
+          reason: 'Redis client not available'
+        });
+      }
+      
     } catch (err) {
       logger.error('CHEATSHEET_CACHE_INVALIDATION_FAILED', {
         companyId,
-        error: err.message
+        error: err.message,
+        stack: err.stack
       });
       // Don't throw - cache invalidation failure isn't critical
     }

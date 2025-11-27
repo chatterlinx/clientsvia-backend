@@ -42,24 +42,28 @@ class CheatSheetEngine {
     let response = baseResponse;
     const appliedBlocks = [];
     
-    // Deserialize policy if needed (Redis stores as JSON)
-    const deserializedPolicy = this.deserializePolicy(policy);
-    
-    logger.debug('[CHEAT SHEET ENGINE] Starting application', {
-      companyId: context.companyId,
-      callId: context.callId,
-      turnNumber: context.turnNumber,
-      policyVersion: deserializedPolicy.version,
-      policyChecksum: deserializedPolicy.checksum
-    });
-    
     // ────────────────────────────────────────────────────────────────
-    // PRECEDENCE STEP 1: EDGE CASES (Highest Priority)
+    // 🛡️ SAFETY WRAPPER: Never crash the call if CheatSheet fails
     // ────────────────────────────────────────────────────────────────
-    // Check for unusual caller inputs (machine detection, system delays)
-    // If matched → RETURN IMMEDIATELY (short-circuit all other rules)
-    
-    const edgeCase = this.detectEdgeCase(userInput, deserializedPolicy.edgeCases);
+    try {
+      // Deserialize policy if needed (Redis stores as JSON)
+      const deserializedPolicy = this.deserializePolicy(policy);
+      
+      logger.debug('[CHEAT SHEET ENGINE] Starting application', {
+        companyId: context.companyId,
+        callId: context.callId,
+        turnNumber: context.turnNumber,
+        policyVersion: deserializedPolicy.version,
+        policyChecksum: deserializedPolicy.checksum
+      });
+      
+      // ────────────────────────────────────────────────────────────────
+      // PRECEDENCE STEP 1: EDGE CASES (Highest Priority)
+      // ────────────────────────────────────────────────────────────────
+      // Check for unusual caller inputs (machine detection, system delays)
+      // If matched → RETURN IMMEDIATELY (short-circuit all other rules)
+      
+      const edgeCase = this.detectEdgeCase(userInput, deserializedPolicy.edgeCases);
     
     if (edgeCase) {
       // ────────────────────────────────────────────────────────────────
@@ -394,28 +398,66 @@ class CheatSheetEngine {
       });
     }
     
-    // ────────────────────────────────────────────────────────────────
-    // FINAL: Enforce Performance Budget & Return
-    // ────────────────────────────────────────────────────────────────
-    
-    const elapsed = Date.now() - startTime;
-    this.enforcePerformanceBudget(startTime, 10, context);
-    
-    logger.debug('[CHEAT SHEET ENGINE] Application complete', {
-      companyId: context.companyId,
-      callId: context.callId,
-      turnNumber: context.turnNumber,
-      appliedBlocks: appliedBlocks.map(b => b.type),
-      timeMs: elapsed
-    });
-    
-    return {
-      response,
-      appliedBlocks,
-      action: 'RESPOND',
-      timeMs: elapsed,
-      shortCircuit: false
-    };
+      // ────────────────────────────────────────────────────────────────
+      // FINAL: Enforce Performance Budget & Return
+      // ────────────────────────────────────────────────────────────────
+      
+      const elapsed = Date.now() - startTime;
+      this.enforcePerformanceBudget(startTime, 10, context);
+      
+      logger.debug('[CHEAT SHEET ENGINE] Application complete', {
+        companyId: context.companyId,
+        callId: context.callId,
+        turnNumber: context.turnNumber,
+        appliedBlocks: appliedBlocks.map(b => b.type),
+        timeMs: elapsed
+      });
+      
+      return {
+        response,
+        appliedBlocks,
+        action: 'RESPOND',
+        timeMs: elapsed,
+        shortCircuit: false
+      };
+      
+    } catch (error) {
+      // ────────────────────────────────────────────────────────────────
+      // 🛡️ SAFE FALLBACK: CheatSheetEngine failed - never crash the call
+      // ────────────────────────────────────────────────────────────────
+      // If CheatSheet processing fails for ANY reason, we:
+      // 1. Log CRITICAL error with full context
+      // 2. Return base response (unchanged from 3-Tier)
+      // 3. Mark failure in appliedBlocks for forensics
+      // 4. DO NOT throw - call must continue gracefully
+      
+      const elapsed = Date.now() - startTime;
+      
+      logger.error('[CHEAT SHEET ENGINE] ❌ CRITICAL FAILURE - Safe fallback activated', {
+        companyId: context.companyId,
+        callId: context.callId,
+        turnNumber: context.turnNumber,
+        error: error.message,
+        stack: error.stack,
+        userInput: userInput.slice(0, 100),  // First 100 chars for context
+        timeMs: elapsed,
+        fallbackBehavior: 'returning_base_response'
+      });
+      
+      // Return safe fallback response (no CheatSheet modifications)
+      return {
+        response: baseResponse,  // Use original 3-Tier response unchanged
+        appliedBlocks: [{
+          type: 'CHEATSHEET_FAILURE',
+          error: error.message,
+          failedAt: new Date().toISOString()
+        }],
+        action: 'RESPOND',
+        timeMs: elapsed,
+        shortCircuit: false,
+        failureMode: true  // Flag for monitoring
+      };
+    }
   }
   
   // ═══════════════════════════════════════════════════════════════════
