@@ -4502,8 +4502,8 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     `;
     
     try {
-      // Fetch active instructions from API
-      const response = await fetch(`/api/company/${this.companyId}/active-instructions`, {
+      // Fetch active instructions from API (CORRECTED ENDPOINT)
+      const response = await fetch(`/api/aicore/active-instructions/${this.companyId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -4519,9 +4519,9 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         throw new Error(result.message || 'Failed to load active instructions');
       }
       
-      const data = result.data;
+      const { version, sections, rawConfig, retrievedAt } = result.data;
       
-      // Render Active Instructions UI
+      // Render Active Instructions UI with toggle
       container.innerHTML = `
         <div style="padding: 24px; background: #ffffff; border-radius: 12px; margin: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
           
@@ -4535,44 +4535,80 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
                 <strong>X-RAY SCREEN</strong> - This is the EXACT config the live agent is using right now
               </p>
             </div>
-            <div style="background: #10b981; color: white; padding: 8px 16px; border-radius: 999px; font-size: 13px; font-weight: 600;">
-              ✅ LIVE CONFIG
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <!-- View Toggle -->
+              <div style="display: inline-flex; background: #f3f4f6; border-radius: 8px; padding: 4px;">
+                <button 
+                  id="toggle-readable" 
+                  onclick="document.getElementById('readable-view').style.display='block'; document.getElementById('raw-view').style.display='none'; this.style.background='white'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.1)'; document.getElementById('toggle-raw').style.background='transparent'; document.getElementById('toggle-raw').style.boxShadow='none';"
+                  style="padding: 6px 12px; border: none; background: white; color: #111827; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                  Readable View
+                </button>
+                <button 
+                  id="toggle-raw" 
+                  onclick="document.getElementById('readable-view').style.display='none'; document.getElementById('raw-view').style.display='block'; this.style.background='white'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.1)'; document.getElementById('toggle-readable').style.background='transparent'; document.getElementById('toggle-readable').style.boxShadow='none';"
+                  style="padding: 6px 12px; border: none; background: transparent; color: #6b7280; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;">
+                  Raw JSON
+                </button>
+              </div>
+              <div style="background: #10b981; color: white; padding: 8px 16px; border-radius: 999px; font-size: 13px; font-weight: 600;">
+                ✅ LIVE
+              </div>
             </div>
           </div>
           
           <!-- Version Info Card -->
           <div style="background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); border: 2px solid #818cf8; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
               <div>
-                <div style="font-size: 12px; color: #6366f1; font-weight: 600; margin-bottom: 4px;">COMPANY</div>
-                <div style="font-size: 16px; font-weight: 600; color: #111827;">${data.companyName}</div>
+                <div style="font-size: 12px; color: #6366f1; font-weight: 600; margin-bottom: 4px;">VERSION ID</div>
+                <div style="font-size: 14px; font-weight: 600; color: #111827; font-family: monospace;">${version.versionId}</div>
               </div>
               <div>
-                <div style="font-size: 12px; color: #6366f1; font-weight: 600; margin-bottom: 4px;">LIVE VERSION</div>
-                <div style="font-size: 16px; font-weight: 600; color: #111827;">${data.cheatSheet.versionName}</div>
+                <div style="font-size: 12px; color: #6366f1; font-weight: 600; margin-bottom: 4px;">VERSION NAME</div>
+                <div style="font-size: 14px; font-weight: 600; color: #111827;">${version.name}</div>
+              </div>
+              <div>
+                <div style="font-size: 12px; color: #6366f1; font-weight: 600; margin-bottom: 4px;">ACTIVATED AT</div>
+                <div style="font-size: 14px; font-weight: 600; color: #111827;">${version.activatedAt ? new Date(version.activatedAt).toLocaleString() : 'N/A'}</div>
               </div>
             </div>
             <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #c7d2fe;">
               <div style="font-size: 12px; color: #6b7280;">
-                <strong>Source:</strong> ${data.meta.source}<br>
-                <strong>Note:</strong> ${data.meta.note}<br>
-                <strong style="color: #f59e0b;">Triage:</strong> ${data.meta.triageNote}
+                <strong>Status:</strong> ${version.status} | 
+                <strong>Schema Version:</strong> ${version.schemaVersion} |
+                <strong>Retrieved:</strong> ${new Date(retrievedAt).toLocaleTimeString()}
               </div>
             </div>
           </div>
           
-          <!-- Config Sections -->
-          <div style="display: grid; gap: 16px;">
+          <!-- READABLE VIEW -->
+          <div id="readable-view" style="display: grid; gap: 16px;">
             
             <!-- Edge Cases -->
             <div style="border: 2px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
               <div style="background: #f3f4f6; padding: 12px 16px; border-bottom: 2px solid #e5e7eb; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
                 <div style="font-size: 16px; font-weight: 700; color: #111827;">
-                  🔴 Edge Cases <span style="font-size: 12px; color: #6b7280;">(Highest Precedence)</span>
+                  🔴 Edge Cases 
+                  <span style="font-size: 12px; color: #6b7280;">(${sections.edgeCases.count} total, ${sections.edgeCases.enabled} enabled)</span>
+                  <span style="font-size: 11px; color: #f59e0b; margin-left: 8px;">HIGHEST PRECEDENCE</span>
                 </div>
               </div>
               <div style="padding: 16px; background: #ffffff; display: none;">
-                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.cheatSheet.config.edgeCases || {}, null, 2)}</pre>
+                ${sections.edgeCases.items.length > 0 ? sections.edgeCases.items.map((ec, i) => `
+                  <div style="padding: 12px; background: ${ec.enabled !== false ? '#f0fdf4' : '#f9fafb'}; border: 1px solid ${ec.enabled !== false ? '#86efac' : '#e5e7eb'}; border-radius: 8px; margin-bottom: 8px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                      <div style="font-size: 14px; font-weight: 600; color: #111827;">${ec.name || `Edge Case ${i+1}`}</div>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="padding: 4px 8px; background: ${ec.enabled !== false ? '#10b981' : '#9ca3af'}; color: white; border-radius: 999px; font-size: 11px; font-weight: 600;">${ec.enabled !== false ? 'ENABLED' : 'DISABLED'}</span>
+                        <span style="padding: 4px 8px; background: #3b82f6; color: white; border-radius: 999px; font-size: 11px; font-weight: 600;">P${ec.priority || 10}</span>
+                        <span style="padding: 4px 8px; background: #8b5cf6; color: white; border-radius: 999px; font-size: 11px; font-weight: 600;">${(ec.action?.type || 'override_response').toUpperCase()}</span>
+                      </div>
+                    </div>
+                    ${ec.description ? `<div style="font-size: 12px; color: #6b7280; margin-bottom: 8px;">${ec.description}</div>` : ''}
+                    <div style="font-size: 11px; color: #9ca3af;">ID: ${ec.id}</div>
+                  </div>
+                `).join('') : '<div style="text-align: center; padding: 20px; color: #9ca3af;">No edge cases configured</div>'}
               </div>
             </div>
             
@@ -4647,35 +4683,20 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
                 <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.cheatSheet.config.companyContacts || [], null, 2)}</pre>
               </div>
             </div>
-            
-            <!-- Call Flow Config -->
-            ${data.callFlow ? `
-            <div style="border: 2px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
-              <div style="background: #f3f4f6; padding: 12px 16px; border-bottom: 2px solid #e5e7eb; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
-                <div style="font-size: 16px; font-weight: 700; color: #111827;">
-                  🔄 Call Flow Configuration
-                </div>
+          
+          </div>
+          
+          <!-- RAW JSON VIEW -->
+          <div id="raw-view" style="display: none;">
+            <div style="background: #1e293b; border-radius: 12px; padding: 20px;">
+              <div style="display: flex; align-items: center; justify-content: between; margin-bottom: 16px;">
+                <div style="font-size: 14px; font-weight: 600; color: #f1f5f9;">📄 Raw Configuration JSON</div>
+                <button onclick="navigator.clipboard.writeText(JSON.stringify(${JSON.stringify(rawConfig)}, null, 2)); alert('Copied to clipboard!');" style="margin-left: auto; padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">
+                  📋 Copy
+                </button>
               </div>
-              <div style="padding: 16px; background: #ffffff; display: none;">
-                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.callFlow, null, 2)}</pre>
-              </div>
+              <pre style="background: #0f172a; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 12px; color: #94a3b8; margin: 0; max-height: 800px; overflow-y: auto; font-family: 'Courier New', monospace;">${JSON.stringify(rawConfig, null, 2)}</pre>
             </div>
-            ` : ''}
-            
-            <!-- Variables -->
-            ${data.variables ? `
-            <div style="border: 2px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
-              <div style="background: #f3f4f6; padding: 12px 16px; border-bottom: 2px solid #e5e7eb; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
-                <div style="font-size: 16px; font-weight: 700; color: #111827;">
-                  📝 Enterprise Variables
-                </div>
-              </div>
-              <div style="padding: 16px; background: #ffffff; display: none;">
-                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.variables, null, 2)}</pre>
-              </div>
-            </div>
-            ` : ''}
-            
           </div>
           
         </div>
