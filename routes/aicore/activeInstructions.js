@@ -30,6 +30,18 @@ const logger = require('../../utils/logger');
 // ============================================================================
 
 /**
+ * GET /api/aicore/active-instructions/test
+ * Test endpoint to verify route is working
+ */
+router.get('/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Active Instructions route is accessible',
+    serviceAvailable: typeof CheatSheetRuntimeService !== 'undefined' && typeof CheatSheetRuntimeService.getRuntimeConfig === 'function'
+  });
+});
+
+/**
  * GET /api/aicore/active-instructions/:companyId
  * Get live runtime config (what agent is using NOW)
  * 
