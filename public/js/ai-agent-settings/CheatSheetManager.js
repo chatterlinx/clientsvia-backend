@@ -4503,10 +4503,16 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     
     try {
       // Fetch active instructions from API (CORRECTED ENDPOINT)
+      const token = localStorage.getItem('token');
+      console.log('[ACTIVE INSTRUCTIONS] Token present?', !!token);
+      console.log('[ACTIVE INSTRUCTIONS] Token length:', token?.length || 0);
+      console.log('[ACTIVE INSTRUCTIONS] Fetching from:', `/api/aicore/active-instructions/${this.companyId}`);
+      
       const response = await fetch(`/api/aicore/active-instructions/${this.companyId}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+          'Authorization': `Bearer ${token}`
+        },
+        credentials: 'include' // Include cookies for session
       });
       
       if (!response.ok) {
