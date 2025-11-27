@@ -4627,7 +4627,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
                 </div>
               </div>
               <div style="padding: 16px; background: #ffffff; display: none;">
-                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.cheatSheet.config.transferRules || {}, null, 2)}</pre>
+                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(sections.transferRules.raw || {}, null, 2)}</pre>
               </div>
             </div>
             
@@ -4639,7 +4639,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
                 </div>
               </div>
               <div style="padding: 16px; background: #ffffff; display: none;">
-                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.cheatSheet.config.behavior || {}, null, 2)}</pre>
+                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(sections.behavior.raw || {}, null, 2)}</pre>
               </div>
             </div>
             
@@ -4651,7 +4651,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
                 </div>
               </div>
               <div style="padding: 16px; background: #ffffff; display: none;">
-                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.cheatSheet.config.guardrails || {}, null, 2)}</pre>
+                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(sections.guardrails.raw || {}, null, 2)}</pre>
               </div>
             </div>
             
@@ -4663,7 +4663,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
                 </div>
               </div>
               <div style="padding: 16px; background: #ffffff; display: none;">
-                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.cheatSheet.config.frontlineIntel || {}, null, 2)}</pre>
+                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(sections.frontlineIntel.raw || {}, null, 2)}</pre>
               </div>
             </div>
             
@@ -4671,11 +4671,11 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
             <div style="border: 2px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
               <div style="background: #f3f4f6; padding: 12px 16px; border-bottom: 2px solid #e5e7eb; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
                 <div style="font-size: 16px; font-weight: 700; color: #111827;">
-                  📅 Booking Rules <span style="font-size: 12px; color: #6b7280;">(${(data.cheatSheet.config.bookingRules || []).length} rules)</span>
+                  📅 Booking Rules <span style="font-size: 12px; color: #6b7280;">(${sections.bookingRules.count} rules)</span>
                 </div>
               </div>
               <div style="padding: 16px; background: #ffffff; display: none;">
-                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.cheatSheet.config.bookingRules || [], null, 2)}</pre>
+                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(sections.bookingRules.items || [], null, 2)}</pre>
               </div>
             </div>
             
@@ -4683,11 +4683,11 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
             <div style="border: 2px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
               <div style="background: #f3f4f6; padding: 12px 16px; border-bottom: 2px solid #e5e7eb; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
                 <div style="font-size: 16px; font-weight: 700; color: #111827;">
-                  👥 Company Contacts <span style="font-size: 12px; color: #6b7280;">(${(data.cheatSheet.config.companyContacts || []).length} contacts)</span>
+                  👥 Company Contacts <span style="font-size: 12px; color: #6b7280;">(${sections.companyContacts.count} contacts)</span>
                 </div>
               </div>
               <div style="padding: 16px; background: #ffffff; display: none;">
-                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(data.cheatSheet.config.companyContacts || [], null, 2)}</pre>
+                <pre style="background: #f9fafb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; color: #111827; margin: 0;">${JSON.stringify(sections.companyContacts.items || [], null, 2)}</pre>
               </div>
             </div>
           
