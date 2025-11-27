@@ -348,7 +348,11 @@ function handleTransfer(twiml, company, fallbackMessage = "I'm connecting you to
     twiml.hangup();
   } else {
     logger.info('[AI AGENT] Transfer disabled, providing fallback message and continuing conversation');
-    twiml.say(fallbackMessage);
+    
+    // Only say fallback message if one was provided (not null)
+    if (fallbackMessage) {
+      twiml.say(fallbackMessage);
+    }
     
     // Continue conversation instead of hanging up [[memory:8276820]]
     const gather = twiml.gather({
@@ -1725,16 +1729,35 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     } else if (result.shouldTransfer) {
       logger.info('🎯 CHECKPOINT 18: AI decided to transfer call');
       logger.info(`🗣️ Transfer message: "${result.text}"`);
-      twiml.say(escapeTwiML(result.text));
       
       // Get company transfer number and check if transfer is enabled
       // 🔧 PHASE 2 FIX: Use consistent company loading
       const company = await Company.findById(companyID)
         .select('+aiAgentSettings')
         .lean();
+      
+      // 🎤 FIX: Use ElevenLabs for transfer message, not Twilio <Say>
+      const elevenLabsVoice = company?.aiAgentSettings?.voiceSettings?.voiceId;
+      const transferMessage = result.text || "I'm connecting you to our team.";
+      
+      if (elevenLabsVoice && transferMessage) {
+        try {
+          logger.info(`🎤 V2 ELEVENLABS: Generating transfer message with voice ${elevenLabsVoice}`);
+          const audioUrl = await synthesizeSpeech(transferMessage, elevenLabsVoice, companyID);
+          twiml.play(audioUrl);
+          logger.info(`🎤 V2 ELEVENLABS: Transfer message audio generated: ${audioUrl}`);
+        } catch (err) {
+          logger.error('❌ ElevenLabs transfer TTS failed, using Say fallback:', err);
+          twiml.say(escapeTwiML(transferMessage));
+        }
+      } else {
+        // Fallback to Twilio Say if no voice configured
+        twiml.say(escapeTwiML(transferMessage));
+      }
+      
       logger.info('🎯 CHECKPOINT 19: Calling handleTransfer function');
-      // 🔥 Neutral transfer message - no generic apology
-      handleTransfer(twiml, company, "I'm connecting you to our team.", companyID);
+      // Pass null for fallbackMessage since we already spoke the transfer message above
+      handleTransfer(twiml, company, null, companyID);
     } else {
       logger.info('🎯 CHECKPOINT 20: AI continuing conversation');
       logger.info(`🗣️ AI Response: "${result.response}"`);
@@ -2014,6 +2037,27 @@ router.post('/ai-agent-partial/:companyID', async (req, res) => {
   } catch (error) {
     logger.error('[ERROR] AI Agent Partial error:', error);
     res.json({ success: false });
+  }
+});
+
+// 🎯 V2 AGENT PARTIAL SPEECH CALLBACK (for real-time speech streaming)
+// This is called by Twilio during speech recognition for partial results
+// We return EMPTY response - NO greeting, NO Say, NO Gather
+router.post('/v2-agent-partial/:companyId', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { UnstableSpeechResult, StableSpeechResult, CallSid, Stability } = req.body;
+    
+    logger.debug(`[V2 PARTIAL] Company: ${companyId}, CallSid: ${CallSid}, Stable: "${StableSpeechResult || ''}", Unstable: "${UnstableSpeechResult || ''}", Stability: ${Stability}`);
+    
+    // Return EMPTY TwiML - do NOT interrupt the call, do NOT greet
+    // This is just for logging/monitoring real-time speech
+    res.type('text/xml').send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+    
+  } catch (error) {
+    logger.error('[ERROR] V2 Agent Partial error:', error);
+    // Still return empty response, never interrupt
+    res.type('text/xml').send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
   }
 });
 

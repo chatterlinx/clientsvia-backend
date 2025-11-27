@@ -399,14 +399,16 @@ class TriageCardService {
       });
 
       // 6️⃣ Add FALLBACK rule (lowest priority, catches everything)
+      // Changed from ESCALATE_TO_HUMAN to DIRECT_TO_3TIER to allow AI to handle unknown requests
+      // instead of immediately transferring to human on first turn
       compiledConfig.triageRules.push({
         keywords: [],
         excludeKeywords: [],
         serviceType: 'UNKNOWN',
-        action: 'ESCALATE_TO_HUMAN',
+        action: 'DIRECT_TO_3TIER', // Let AI Brain handle it, don't transfer immediately
         categorySlug: 'general-question',
         priority: 0, // Lowest priority
-        reason: 'Fallback rule - no specific match found',
+        reason: 'Fallback rule - direct to AI Brain for intelligent routing',
         source: 'SYSTEM',
         isFallback: true,
         updatedAt: new Date()
