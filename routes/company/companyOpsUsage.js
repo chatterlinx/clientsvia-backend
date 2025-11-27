@@ -75,7 +75,10 @@ router.get('/', async (req, res) => {
         $gte: startDate,
         $lte: endDate
       }
-    }).lean();
+    }).lean().catch(err => {
+      logger.warn('[CompanyOps Usage] No usage records found', { companyId, error: err.message });
+      return []; // Return empty array if collection doesn't exist yet
+    });
 
     // Calculate aggregates
     const stats = {
@@ -175,7 +178,9 @@ router.get('/', async (req, res) => {
     
     res.status(500).json({
       ok: false,
-      error: 'Failed to fetch usage stats'
+      error: 'Failed to fetch usage stats',
+      message: error.message,
+      details: 'This company may not have any call history yet. Usage data will appear after the first call.'
     });
   }
 });

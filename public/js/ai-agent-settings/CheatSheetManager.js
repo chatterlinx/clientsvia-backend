@@ -6757,9 +6757,20 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       return;
     }
     
+    // Show loading notification immediately
+    this.showNotification(`⏳ Deleting "${versionName}"...`, 'info');
+    
     try {
       console.log('[CHEAT SHEET] 🗑️ Deleting archived version...');
-      await this.versioningAdapter.deleteVersion(versionId);
+      
+      // Delete version (with timeout to catch slow responses)
+      const deletePromise = this.versioningAdapter.deleteVersion(versionId);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timed out after 10 seconds')), 10000)
+      );
+      
+      await Promise.race([deletePromise, timeoutPromise]);
+      
       console.log('[CHEAT SHEET] ✅ Version deleted successfully');
       
       // Re-render version history to remove the deleted card
@@ -6769,7 +6780,18 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       
     } catch (error) {
       console.error('[CHEAT SHEET] ❌ Failed to delete version:', error);
-      this.showNotification(`Failed to delete version: ${error.message}`, 'error');
+      
+      // More helpful error messages
+      let errorMsg = error.message;
+      if (error.message.includes('not found')) {
+        errorMsg = 'Version was already deleted or does not exist.';
+        // Still re-render to remove it from UI
+        this.renderVersionHistory();
+      } else if (error.message.includes('timed out')) {
+        errorMsg = 'Delete request timed out. The version may have been deleted - please refresh the page.';
+      }
+      
+      this.showNotification(`Failed to delete: ${errorMsg}`, 'error');
     }
   }
   
