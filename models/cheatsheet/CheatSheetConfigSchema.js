@@ -130,64 +130,50 @@ const EdgeCaseSchema = new mongoose.Schema({
   // ═══════════════════════════════════════════════════════════════
   // LEGACY FIELDS (Backward Compatibility)
   // ═══════════════════════════════════════════════════════════════
-  triggerPatterns: { 
-    type: [String]
-    // No default - allows detection of legacy vs enterprise mode
-  },
-  responseText: { 
-    type: String
-    // No default - allows detection of legacy vs enterprise mode
-  },
+  triggerPatterns: [String],  // Optional - allows detection of legacy vs enterprise mode
+  responseText: String,        // Optional - allows detection of legacy vs enterprise mode
   
   // ═══════════════════════════════════════════════════════════════
   // ENTERPRISE MATCHING (Multi-dimensional conditions)
   // ═══════════════════════════════════════════════════════════════
   match: {
-    type: {
-      keywordsAny: { type: [String], default: [] },      // ANY keyword triggers
-      keywordsAll: { type: [String], default: [] },      // ALL required
-      regexPatterns: { type: [String], default: [] },    // Advanced patterns
-      callerType: { 
-        type: [String], 
-        enum: ['new', 'existing', 'vendor', 'unknown', ''],
-        default: [] 
-      },
-      timeWindows: [{
-        daysOfWeek: { type: [Number], default: [] },    // 0-6 (Sunday-Saturday)
-        start: { type: String, default: '00:00' },      // HH:mm
-        end: { type: String, default: '23:59' }         // HH:mm
-      }],
-      spamFlagsRequired: { type: [String], default: [] },
-      tradeRequired: { type: [String], default: [] }
+    keywordsAny: { type: [String], default: [] },      // ANY keyword triggers
+    keywordsAll: { type: [String], default: [] },      // ALL required
+    regexPatterns: { type: [String], default: [] },    // Advanced patterns
+    callerType: { 
+      type: [String], 
+      enum: ['new', 'existing', 'vendor', 'unknown', ''],
+      default: [] 
     },
-    required: false
-    // No default - allows detection of legacy vs enterprise mode
+    timeWindows: [{
+      daysOfWeek: { type: [Number], default: [] },    // 0-6 (Sunday-Saturday)
+      start: { type: String, default: '00:00' },      // HH:mm
+      end: { type: String, default: '23:59' }         // HH:mm
+    }],
+    spamFlagsRequired: { type: [String], default: [] },
+    tradeRequired: { type: [String], default: [] }
   },
   
   // ═══════════════════════════════════════════════════════════════
   // ENTERPRISE ACTION (What to do when matched)
   // ═══════════════════════════════════════════════════════════════
   action: {
-    type: {
-      type: { 
-        type: String, 
-        enum: ['override_response', 'force_transfer', 'polite_hangup', 'flag_only'],
-        default: 'override_response'
-      },
-      
-      // For override_response
-      responseTemplateId: { type: String, default: '' },
-      inlineResponse: { type: String, default: '' },
-      
-      // For force_transfer
-      transferTarget: { type: String, default: '' },      // contactId, role, or phone
-      transferMessage: { type: String, default: '' },
-      
-      // For polite_hangup
-      hangupMessage: { type: String, default: '' }
+    type: { 
+      type: String, 
+      enum: ['override_response', 'force_transfer', 'polite_hangup', 'flag_only'],
+      default: 'override_response'
     },
-    required: false
-    // No default - allows detection of legacy vs enterprise mode (uses responseText)
+    
+    // For override_response
+    responseTemplateId: { type: String, default: '' },
+    inlineResponse: { type: String, default: '' },
+    
+    // For force_transfer
+    transferTarget: { type: String, default: '' },      // contactId, role, or phone
+    transferMessage: { type: String, default: '' },
+    
+    // For polite_hangup
+    hangupMessage: { type: String, default: '' }
   },
   
   // ═══════════════════════════════════════════════════════════════
