@@ -236,6 +236,46 @@ router.delete('/draft/:companyId/:versionId', authMiddleware, async (req, res) =
 });
 
 /**
+ * DELETE /api/cheatsheet/versions/:companyId/:versionId
+ * Alias for /draft/:companyId/:versionId (UI compatibility)
+ * Delete any version (draft or archived) by versionId
+ */
+router.delete('/versions/:companyId/:versionId', authMiddleware, async (req, res) => {
+  try {
+    const { companyId, versionId } = req.params;
+    const userEmail = getUserEmail(req);
+    const metadata = extractMetadata(req);
+    
+    await CheatSheetVersionService.discardDraft(
+      companyId,
+      versionId,
+      userEmail,
+      metadata
+    );
+    
+    res.json({
+      success: true,
+      message: 'Version deleted successfully'
+    });
+    
+  } catch (err) {
+    logger.error('CHEATSHEET_API_DELETE_VERSION_ERROR', {
+      companyId: req.params.companyId,
+      versionId: req.params.versionId,
+      error: err.message
+    });
+    
+    const statusCode = err.code === 'DRAFT_NOT_FOUND' ? 404 : 500;
+    
+    res.status(statusCode).json({
+      success: false,
+      error: err.code || 'INTERNAL_ERROR',
+      message: err.message
+    });
+  }
+});
+
+/**
  * POST /api/cheatsheet/draft/:companyId/:versionId/push-live
  * Push draft to live (atomic transaction)
  */
