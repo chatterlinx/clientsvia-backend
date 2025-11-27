@@ -180,6 +180,17 @@ class CallFlowExecutor {
                 shortCircuit: frontlineIntelResult.shouldShortCircuit
             });
             
+            // 📊 STRUCTURED LOG 2: Frontline Triage Decision
+            logger.info('[FRONTLINE]', {
+                companyId: context.company._id.toString(),
+                callSid: context.callState.callSid || context.callId,
+                triageAction: frontlineIntelResult.triageDecision?.action || 'NONE',
+                matchedRuleId: frontlineIntelResult.triageDecision?.ruleId || null,
+                matchedCategory: frontlineIntelResult.triageDecision?.categorySlug || null,
+                shouldShortCircuit: frontlineIntelResult.shouldShortCircuit,
+                timestamp: new Date().toISOString()
+            });
+            
             // Check for short-circuit (wrong number, wrong service, etc.)
             if (frontlineIntelResult.shouldShortCircuit) {
                 logger.warn(`[CALL FLOW EXECUTOR] 🛑 Frontline-Intel short-circuit detected`);
@@ -270,6 +281,18 @@ class CallFlowExecutor {
             
             logger.info(`[CALL FLOW EXECUTOR] ✅ Scenario Matching complete: "${baseResponse.text?.substring(0, 100)}..."`);
             
+            // 📊 STRUCTURED LOG 3: 3-Tier Intelligence Result
+            logger.info('[3TIER]', {
+                companyId: context.company._id.toString(),
+                callSid: context.callState.callSid || context.callId,
+                tierUsed: baseResponse.metadata?.trace?.tierUsed || 'UNKNOWN',
+                source: baseResponse.source || null,
+                confidence: baseResponse.confidence || null,
+                scenarioId: baseResponse.metadata?.scenarioId || null,
+                scenarioCategory: baseResponse.metadata?.category || null,
+                timestamp: new Date().toISOString()
+            });
+            
             // ═════════════════════════════════════════════════════════════════
             // Apply CheatSheetEngine (Edge Cases, Transfer, Guardrails, Behavior)
             // ═════════════════════════════════════════════════════════════════
@@ -318,6 +341,19 @@ class CallFlowExecutor {
                             logger.info(`[CALL FLOW EXECUTOR] ✅ CheatSheetEngine applied`, {
                                 appliedBlocks: cheatSheetResult.appliedBlocks.map(b => b.type),
                                 shortCircuit: cheatSheetResult.shortCircuit
+                            });
+                            
+                            // 📊 STRUCTURED LOG 4: CheatSheet Application Result
+                            logger.info('[CHEATSHEET]', {
+                                companyId: context.company._id.toString(),
+                                callSid: context.callState.callSid || context.callId,
+                                appliedBlocks: cheatSheetResult.appliedBlocks.map(b => ({
+                                    type: b.type,
+                                    id: b.id || null
+                                })),
+                                finalAction: cheatSheetResult.action === 'TRANSFER' ? 'transfer' : finalAction,
+                                shortCircuit: cheatSheetResult.shortCircuit,
+                                timestamp: new Date().toISOString()
                             });
                         }
                     }

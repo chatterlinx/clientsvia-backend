@@ -1755,6 +1755,17 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
   try {
     const { companyID } = req.params;
     
+    // 📊 STRUCTURED LOG 1: Agent Input
+    logger.info('[AGENT-INPUT]', {
+      companyId: companyID,
+      callSid,
+      fromNumber,
+      toNumber: req.body.To || null,
+      speechResult,
+      confidence: req.body.Confidence || null,
+      timestamp: new Date().toISOString()
+    });
+    
     logger.debug('🎯 CHECKPOINT 12: Processing AI Agent Response');
     logger.debug(`🏢 Company ID: ${companyID}`);
     
@@ -1806,6 +1817,17 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       result.shouldHangup = true;
       result.text = result.response || "Thank you for calling.";
     }
+    
+    // 📊 STRUCTURED LOG 5: Agent Output (before TwiML generation)
+    logger.info('[AGENT-OUTPUT]', {
+      companyId: companyID,
+      callSid,
+      finalAction: result.action || 'continue',
+      shortResponsePreview: (result.text || '').slice(0, 160),
+      willTransfer: Boolean(result.shouldTransfer),
+      willHangup: Boolean(result.shouldHangup),
+      timestamp: new Date().toISOString()
+    });
     
     // Handle different response types
     if (result.shouldHangup) {
