@@ -21,7 +21,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { CheatSheetRuntimeService } = require('../../services/cheatsheet');
+const CheatSheetRuntimeService = require('../../services/cheatsheet/CheatSheetRuntimeService');
 const { authenticateJWT: authMiddleware } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
 
@@ -53,8 +53,8 @@ router.get('/:companyId', authMiddleware, async (req, res) => {
     // CRITICAL: Use the SAME service the runtime agent uses
     // ────────────────────────────────────────────────────────────────
     // This ensures we see exactly what live calls are using.
-    // CheatSheetRuntimeService.getRuntimeConfig() returns:
-    // { versionId, name, config, ...metadata }
+    // CheatSheetRuntimeService is a singleton instance.
+    // getRuntimeConfig() returns: { versionId, name, config, ...metadata }
     
     const liveConfig = await CheatSheetRuntimeService.getRuntimeConfig(companyId);
     
