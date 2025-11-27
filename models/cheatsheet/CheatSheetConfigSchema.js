@@ -131,12 +131,12 @@ const EdgeCaseSchema = new mongoose.Schema({
   // LEGACY FIELDS (Backward Compatibility)
   // ═══════════════════════════════════════════════════════════════
   triggerPatterns: { 
-    type: [String], 
-    default: undefined  // Undefined = not set (allows detection of enterprise mode)
+    type: [String]
+    // No default - allows detection of legacy vs enterprise mode
   },
   responseText: { 
-    type: String, 
-    default: undefined  // Undefined = not set
+    type: String
+    // No default - allows detection of legacy vs enterprise mode
   },
   
   // ═══════════════════════════════════════════════════════════════
@@ -160,7 +160,8 @@ const EdgeCaseSchema = new mongoose.Schema({
       spamFlagsRequired: { type: [String], default: [] },
       tradeRequired: { type: [String], default: [] }
     },
-    default: undefined  // Undefined = legacy mode
+    required: false
+    // No default - allows detection of legacy vs enterprise mode
   },
   
   // ═══════════════════════════════════════════════════════════════
@@ -185,7 +186,8 @@ const EdgeCaseSchema = new mongoose.Schema({
       // For polite_hangup
       hangupMessage: { type: String, default: '' }
     },
-    default: undefined  // Undefined = legacy mode (uses responseText)
+    required: false
+    // No default - allows detection of legacy vs enterprise mode (uses responseText)
   },
   
   // ═══════════════════════════════════════════════════════════════
