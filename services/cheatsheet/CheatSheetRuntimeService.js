@@ -77,7 +77,7 @@ class CheatSheetRuntimeService {
       if (meta.liveVersionId) {
         liveVersion = await CheatSheetVersion.findOne({
           companyId,
-          _id: meta.liveVersionId,
+          versionId: meta.liveVersionId, // Query by versionId (custom string), not _id (MongoDB ObjectId)
           status: 'live'
         }).lean();
       }
@@ -94,7 +94,7 @@ class CheatSheetRuntimeService {
         if (liveVersion) {
           logger.warn('CHEATSHEET_RUNTIME_META_OUT_OF_SYNC', {
             companyId,
-            liveVersionId: liveVersion._id.toString()
+            liveVersionId: liveVersion.versionId // Use custom versionId, not MongoDB _id
           });
         }
       }

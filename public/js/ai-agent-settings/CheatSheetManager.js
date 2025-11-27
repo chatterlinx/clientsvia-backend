@@ -7181,16 +7181,16 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
               console.log('[CHEAT SHEET] ✅ Draft saved successfully');
               this.showNotification('✅ Frontline-Intel saved to draft', 'success');
               
-              // Re-render to show updated content
-              this.render();
+              // Update ONLY the Frontline-Intel display, don't re-render everything
+              this.renderCompanyInstructions();
             })
             .catch((err) => {
               console.error('[CHEAT SHEET] ❌ Failed to save draft:', err);
               this.showNotification('❌ Failed to save draft', 'error');
             });
         } else {
-          // Not in a draft, just re-render
-          this.render();
+          // Not in a draft, just update the display
+          this.renderCompanyInstructions();
         }
       }
     };
