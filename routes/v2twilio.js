@@ -1082,15 +1082,13 @@ router.post('/voice', async (req, res) => {
     console.log('TwiML Content:', twimlString);
     console.log('═'.repeat(80));
     
-    // 📊 STRUCTURED LOG: Gather configured
-    const elevenLabsVoice = initResult.voiceSettings?.voiceId;
+    // 📊 STRUCTURED LOG: Gather configured (note: initResult may not be in scope for fallback path)
     logger.info('[GATHER] first-turn configured', {
       companyId: company._id.toString(),
       callSid: req.body.CallSid,
       route: '/voice',
       actionUrl: `https://${req.get('host')}/api/twilio/v2-agent-respond/${company._id}`,
       partialUrl: `https://${req.get('host')}/api/twilio/v2-agent-partial/${company._id}`,
-      usesElevenLabs: Boolean(elevenLabsVoice && initResult.greeting),
       twimlLength: twimlString.length,
       timestamp: new Date().toISOString()
     });
