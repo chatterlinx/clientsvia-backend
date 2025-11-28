@@ -353,10 +353,25 @@ class V2AIAgentRuntime {
         try {
             // Load company V2 configuration
             const company = await Company.findById(companyID);
-            if (!company || !company.aiAgentSettings?.enabled) {
+            
+            // Check if company exists
+            if (!company) {
+                logger.error('[V2 AGENT] ❌ Company not found', { companyID });
                 return {
-                    response: null,  // 🔥 NO FALLBACK TEXT
-                    action: 'transfer',  // Direct transfer to human
+                    response: null,
+                    action: 'transfer',
+                    callState: { ...callState, stage: 'transfer' }
+                };
+            }
+            
+            // Check if AI Agent is enabled
+            // Default to enabled if aiAgentSettings exists (backward compatibility)
+            const isEnabled = company.aiAgentSettings?.enabled !== false;
+            if (!isEnabled) {
+                logger.warn('[V2 AGENT] ⚠️ AI Agent explicitly disabled for company', { companyID });
+                return {
+                    response: null,
+                    action: 'transfer',
                     callState: { ...callState, stage: 'transfer' }
                 };
             }
