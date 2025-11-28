@@ -46,6 +46,7 @@ const SmartWarmupService = require('./SmartWarmupService');  // 🔥 Smart LLM P
 const { logTier3SuggestionSmart } = require('./LlmLearningLogger');  // 🧠 V2 LLM Learning Console
 const LLMCallLog = require('../models/LLMCallLog');
 const LLMLearningTask = require('../models/LLMLearningTask');  // 📋 Phase C.0: Tier-3 event queue
+const MemoryOptimizationEngine = require('./MemoryOptimizationEngine');  // 🧠 Brain-5: Optimization Engine
 const logger = require('../utils/logger');
 
 class IntelligentRouter {
@@ -353,8 +354,73 @@ class IntelligentRouter {
             });
             
             // ============================================
+            // 🧠 BRAIN-5: MEMORY OPTIMIZATION ENGINE
+            // ============================================
+            // Prepare scenarios FIRST (needed for Brain-5 to find forced scenarios)
+            const availableScenarios = this.prepareScenarios(template);
+            
+            // Decide if we actually need LLM or if memory/cache can handle it
+            const optimizationDecision = await MemoryOptimizationEngine.shouldUseLLM(callerInput, context);
+            
+            logger.info('[BRAIN-5] 🔍 LLM Optimization Decision', {
+                routingId,
+                useLLM: optimizationDecision.useLLM,
+                reason: optimizationDecision.reason,
+                forcedScenarioId: context.forcedScenarioId || null,
+                cachedResponse: Boolean(context.cachedResponse)
+            });
+            
+            // If Brain-5 says skip LLM and we have a forced scenario, use it
+            if (!optimizationDecision.useLLM && context.forcedScenarioId) {
+                const forcedScenario = availableScenarios.find(
+                    s => s.scenarioId === context.forcedScenarioId
+                );
+                
+                if (forcedScenario) {
+                    result.tierUsed = 2; // Treated as Tier 2 (brain-based)
+                    result.matched = true;
+                    result.scenario = forcedScenario;
+                    result.confidence = 0.90; // High confidence for proven paths
+                    result.response = forcedScenario.fullReplies?.[0] || forcedScenario.quickReplies?.[0] || null;
+                    result.success = true;
+                    
+                    logger.info('✅ [BRAIN-5] Using proven resolution path (FREE!)', {
+                        routingId,
+                        scenarioId: context.forcedScenarioId,
+                        scenarioName: forcedScenario.name,
+                        reason: optimizationDecision.reason
+                    });
+                    
+                    await this.logCall(result, template, company);
+                    result.performance.totalTime = Date.now() - startTime;
+                    return result;
+                }
+            }
+            
+            // If Brain-5 says skip LLM and we have a cached response, use it
+            if (!optimizationDecision.useLLM && context.cachedResponse) {
+                result.tierUsed = 2; // Treated as Tier 2 (cache hit)
+                result.matched = true;
+                result.scenario = null; // No specific scenario, just cached text
+                result.confidence = 0.95; // Very high confidence for cache hits
+                result.response = context.cachedResponse.responseText;
+                result.success = true;
+                
+                logger.info('✅ [BRAIN-5] Using cached response (FREE!)', {
+                    routingId,
+                    cacheHitCount: context.cachedResponse.hitCount,
+                    reason: optimizationDecision.reason
+                });
+                
+                await this.logCall(result, template, company);
+                result.performance.totalTime = Date.now() - startTime;
+                return result;
+            }
+            
+            // ============================================
             // TIER 3: LLM FALLBACK (GPT-4 Turbo - $$$)
             // ============================================
+            // Only reach here if Brain-5 determined we need LLM
             
             // Check budget before calling LLM
             const budgetCheck = await this.checkBudget(template);
@@ -378,9 +444,6 @@ class IntelligentRouter {
                 result.performance.totalTime = Date.now() - startTime;
                 return result;
             }
-            
-            // Prepare scenarios for LLM
-            const availableScenarios = this.prepareScenarios(template);
             
             // ============================================
             // SMART WARMUP: Use pre-warmed LLM if available

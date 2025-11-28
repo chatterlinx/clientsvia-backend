@@ -374,15 +374,36 @@ class V2AIAgentRuntime {
                 userInput: userInput.substring(0, 100)
             });
             
-            // Execute call flow dynamically
-            const executionContext = await CallFlowExecutor.execute({
+            // ═════════════════════════════════════════════════════════════════
+            // 🧠 BRAIN-4: MEMORY ENGINE - Hydrate caller history & resolution paths
+            // ═════════════════════════════════════════════════════════════════
+            const MemoryEngine = require('./MemoryEngine');
+            const executionContext = {
                 userInput,
                 company,
                 callState,
                 callId,
                 companyID,
                 generateV2Response: this.generateV2Response.bind(this)
-            });
+            };
+            
+            try {
+                await MemoryEngine.hydrateMemoryContext(executionContext);
+                logger.debug('[V2 AGENT] 🧠 Memory context hydrated', {
+                    callId,
+                    callerHistoryCount: executionContext.memory?.callerHistory?.length || 0,
+                    resolutionPathsCount: executionContext.memory?.resolutionPaths?.length || 0
+                });
+            } catch (memErr) {
+                logger.error('[V2 AGENT] ❌ Memory hydration failed (non-fatal)', {
+                    callId,
+                    error: memErr.message
+                });
+                // Continue without memory (graceful degradation)
+            }
+            
+            // Execute call flow dynamically
+            const contextAfterExecution = await CallFlowExecutor.execute(executionContext);
             
             logger.info('[CALL FLOW] ✅ Call flow execution complete', {
                 shortCircuit: executionContext.shortCircuit,
@@ -516,11 +537,11 @@ class V2AIAgentRuntime {
             }
             
             // Extract results from execution context
-            const finalResponse = executionContext.finalResponse;
-            const finalAction = executionContext.finalAction;
-            const frontlineIntelResult = executionContext.frontlineIntelResult;
-            const cheatSheetMeta = executionContext.cheatSheetMeta;
-            const baseResponse = executionContext.baseResponse;
+            const finalResponse = contextAfterExecution.finalResponse;
+            const finalAction = contextAfterExecution.finalAction;
+            const frontlineIntelResult = contextAfterExecution.frontlineIntelResult;
+            const cheatSheetMeta = contextAfterExecution.cheatSheetMeta;
+            const baseResponse = contextAfterExecution.baseResponse;
             
             // Update call state
             const updatedCallState = {
@@ -576,6 +597,37 @@ class V2AIAgentRuntime {
             }
 
             logger.info(`✅ V2 AGENT: Final response: "${finalResponse}"`);
+
+            // ═════════════════════════════════════════════════════════════════
+            // 📚 BRAIN-5: POST-CALL LEARNING - Update memory after successful turn
+            // ═════════════════════════════════════════════════════════════════
+            const PostCallLearningService = require('./PostCallLearningService');
+            
+            try {
+                await PostCallLearningService.learnFromCall({
+                    companyID,
+                    callState: updatedCallState,
+                    matchedScenario: baseResponse?.matchedScenario || null,
+                    finalAction,
+                    triageResult: frontlineIntelResult?.triageDecision ? {
+                        intent: frontlineIntelResult.detectedIntent,
+                        category: frontlineIntelResult.triageDecision
+                    } : null,
+                    finalResponse,
+                    userInput,
+                    userInputNormalized: contextAfterExecution.userInputNormalized,
+                    frontlineIntelResult,
+                    callId
+                });
+                
+                logger.debug('[V2 AGENT] 📚 Post-call learning complete', { callId });
+            } catch (learningErr) {
+                logger.error('[V2 AGENT] ❌ Post-call learning failed (non-fatal)', {
+                    callId,
+                    error: learningErr.message
+                });
+                // Continue - learning failures don't block calls
+            }
 
             // ═════════════════════════════════════════════════════════════════
             // 📊 TRACE LOGGING: Log this turn for visibility (non-blocking)
