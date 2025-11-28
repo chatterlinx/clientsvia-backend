@@ -560,6 +560,29 @@ const companySchema = new mongoose.Schema({
         },
         
         // -------------------------------------------------------------------
+        // V22 MEMORY OPTIMIZATION - AI Maturity & Performance Tracking
+        // -------------------------------------------------------------------
+        // PURPOSE: Track company's AI learning progress and optimization stats
+        // LIFECYCLE: LEARNING → MATURE → ULTRA_LEAN (auto-promoted by MemoryOptimizationEngine)
+        // BENEFITS: Companies that mature use 0% LLM calls, saving ~$0.50/call
+        aiMaturityLevel: {
+            type: String,
+            enum: ['LEARNING', 'MATURE', 'ULTRA_LEAN'],
+            default: 'LEARNING'
+        },
+        optimizationStats: {
+            lastEvaluatedAt: { type: Date, default: null },
+            last30Days: {
+                llmUsageRate: { type: Number, default: 1.0 },      // 1.0 = 100% LLM, 0.0 = 0% LLM
+                cacheHitRate: { type: Number, default: 0.0 },      // Cache hits / total calls
+                successRate: { type: Number, default: 0.0 },       // Successful resolutions
+                totalCalls: { type: Number, default: 0 },          // Total calls in window
+                totalLLMCalls: { type: Number, default: 0 },       // Calls that used LLM
+                totalCachedCalls: { type: Number, default: 0 }     // Calls resolved from cache
+            }
+        },
+        
+        // -------------------------------------------------------------------
         // CHEAT SHEET - Company-Level AI Agent Behavior Rules
         // -------------------------------------------------------------------
         // Global behavior rules, edge cases, transfer protocols, and guardrails
