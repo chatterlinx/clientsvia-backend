@@ -497,9 +497,13 @@ class IntelligentRouter {
             if (!warmupResult || !warmupResult.success) {
                 result.tier3Result = await Tier3LLMFallback.analyze({
                     callerInput,
-                    template,
-                    availableScenarios,
-                    context
+                    scenarios: availableScenarios,  // Map to expected param name
+                    context: {
+                        ...context,
+                        template,
+                        companyName: company?.companyName || company?.businessName,
+                        categoryName: template?.name || 'Unknown'
+                    }
                 });
                 
                 result.performance.tier3Time = result.tier3Result.performance.responseTime;

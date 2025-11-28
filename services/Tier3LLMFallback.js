@@ -62,7 +62,8 @@ class Tier3LLMFallback {
     if (!callerInput || !Array.isArray(scenarios) || scenarios.length === 0) {
       logger.warn('[Tier3] Invalid input', {
         hasCallerInput: !!callerInput,
-        scenarioCount: scenarios.length,
+        scenarioCount: Array.isArray(scenarios) ? scenarios.length : 0,
+        scenariosType: typeof scenarios
       });
       return {
         success: false,
