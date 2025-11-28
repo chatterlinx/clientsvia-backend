@@ -306,6 +306,17 @@ class SessionManager {
     });
     
     // LEGACY: AI Gateway CallLog model removed - sessions only use L0/L1 cache
+    // Lazy-load CallLog model if not already loaded
+    if (!this.CallLog) {
+      try {
+        this.CallLog = require('../models/v2AIAgentCallLog');
+      } catch (err) {
+        // Model might not exist - skip MongoDB writes
+        logger.debug('[SESSION MANAGER] CallLog model not available, clearing write buffer');
+        writeBuffer.clear();
+        return;
+      }
+    }
     
     let successCount = 0;
     let errorCount = 0;
