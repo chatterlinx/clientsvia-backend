@@ -21,7 +21,15 @@ const express = require('express');
 const router = express.Router();
 
 const ProductionLLMSuggestion = require('../../models/ProductionLLMSuggestion');
-const AIGatewaySuggestion = require('../../models/aiGateway/Suggestion');  // STUB: Returns no-op to prevent crashes
+// V22 NUKED: AIGatewaySuggestion removed (AI Gateway legacy)
+// V22 uses IntentResolutionPath for learned patterns
+// Stub to prevent crashes
+const AIGatewaySuggestion = {
+  create: async () => ({}),
+  find: () => ({ sort: () => ({ skip: () => ({ limit: () => ({ lean: async () => [] }) }) }) }),
+  findById: async () => null,
+  countDocuments: async () => 0
+};
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');  // For Apply handlers
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const logger = require('../../utils/logger');

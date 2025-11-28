@@ -814,29 +814,8 @@ async function startServer() {
             // Initialize AFTER port binding to prevent blocking Render health checks
             // ────────────────────────────────────────────────────────────────────────
             setTimeout(async () => {
-                try {
-                    console.log('[Post-Startup] 🚀 Initializing AI Gateway Health Monitor...');
-                    
-                    // ═══════════════════════════════════════════════════════════════════
-                    // 🛡️ CRITICAL SAFETY CHECK: Only start health monitor if Redis is working
-                    // ═══════════════════════════════════════════════════════════════════
-                    const { redisClient } = require('./db');
-                    
-                    if (!redisClient || !redisClient.isReady) {
-                        console.warn('[Post-Startup] ⚠️ SKIPPING AI Gateway Health Monitor: Redis not ready');
-                        console.warn('[Post-Startup] ⚠️ Health monitor will not auto-start to prevent alert loops');
-                        console.warn('[Post-Startup] ⚠️ You can manually test health via UI: AI Gateway tab → Test OpenAI Connection');
-                        return; // Exit early - do NOT start health monitor
-                    }
-                    
-                    console.log('[Post-Startup] ✅ Redis is ready, starting AI Gateway Health Monitor...');
-                    const { HealthMonitor } = require('./services/aiGateway');
-                    await HealthMonitor.startPeriodicHealthChecks();
-                    console.log('[Post-Startup] ✅ AI Gateway Health Monitor started (runs every 8 hours)');
-                } catch (error) {
-                    console.error('[Post-Startup] ❌ Failed to start AI Gateway Health Monitor:', error.message);
-                    // Non-blocking: server continues even if health monitor fails
-                }
+                // V22 NUKED: AI Gateway Health Monitor removed (legacy system)
+                // All AI operations now use V22 Memory/Optimization brains (Brain-4, Brain-5)
                 
                 try {
                     console.log('[Post-Startup] 📊 Starting MongoDB Performance Monitor...');
@@ -862,24 +841,8 @@ async function startServer() {
                     // Non-blocking: server continues even if monitor fails
                 }
                 
-                try {
-                    console.log('[Post-Startup] 🚀 Initializing AI Gateway LLM Analyzer cron...');
-                    const { LLMAnalyzer } = require('./services/aiGateway');
-                    
-                    // Run batch analysis every 5 minutes
-                    setInterval(async () => {
-                        try {
-                            await LLMAnalyzer.analyzePendingCalls(10);
-                        } catch (error) {
-                            console.error('[AI Gateway Cron] Analysis batch failed:', error.message);
-                        }
-                    }, 5 * 60 * 1000); // 5 minutes
-                    
-                    console.log('[Post-Startup] ✅ AI Gateway LLM Analyzer cron started (runs every 5 minutes)');
-                } catch (error) {
-                    console.error('[Post-Startup] ❌ Failed to start AI Gateway LLM Analyzer:', error.message);
-                    // Non-blocking: server continues even if analyzer fails
-                }
+                // V22 NUKED: AI Gateway LLM Analyzer removed (legacy system)
+                // LLM learning now handled by PostCallLearningService (V22)
                 
                 // 📋 PHASE C.0: Start LLM Learning Worker for Tier-3 event processing
                 try {

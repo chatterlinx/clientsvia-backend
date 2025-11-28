@@ -25,7 +25,14 @@
  */
 
 const LLMLearningTask = require('../models/LLMLearningTask');
-const AIGatewaySuggestion = require('../models/aiGateway/Suggestion');  // STUB: Returns no-op to prevent crashes
+// V22 NUKED: AIGatewaySuggestion removed (AI Gateway legacy)
+// V22 uses IntentResolutionPath for learned patterns
+// Stub to prevent crashes - use ProductionLLMSuggestion instead
+const AIGatewaySuggestion = {
+  create: async () => ({}),
+  find: async () => [],
+  findById: async () => null
+};
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const CallTrace = require('../models/CallTrace');
 const openaiClient = require('../config/openai');

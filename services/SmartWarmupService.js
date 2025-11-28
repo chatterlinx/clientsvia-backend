@@ -21,7 +21,13 @@
 
 const { OpenAI } = require('openai');
 const Company = require('../models/v2Company');
-const CostLog = require('../models/aiGateway/CostLog');  // STUB: Returns no-op to prevent crashes
+// V22 NUKED: CostLog removed (AI Gateway legacy)
+// Stub to prevent crashes - warmup cost tracking disabled
+const CostLog = {
+  aggregate: async () => [],
+  create: async () => ({}),
+  find: async () => []
+};
 const redisClient = require('../db').redisClient;
 
 // Initialize OpenAI client
