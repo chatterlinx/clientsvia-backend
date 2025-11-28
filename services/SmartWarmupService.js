@@ -302,11 +302,13 @@ class SmartWarmupService {
 
     async getWarmupSettings(companyId) {
         try {
-            // Try Redis cache first
-            const cacheKey = `company:${companyId}:warmup_settings`;
-            const cached = await redisClient.get(cacheKey);
-            if (cached) {
-                return JSON.parse(cached);
+            // Try Redis cache first (if available)
+            if (redisClient && typeof redisClient.get === 'function') {
+                const cacheKey = `company:${companyId}:warmup_settings`;
+                const cached = await redisClient.get(cacheKey);
+                if (cached) {
+                    return JSON.parse(cached);
+                }
             }
 
             // Fallback to MongoDB
@@ -352,9 +354,12 @@ class SmartWarmupService {
             const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
             const cacheKey = `company:${companyId}:warmup_spend:${today}`;
             
-            const cached = await redisClient.get(cacheKey);
-            if (cached) {
-                return parseFloat(cached);
+            // Check Redis cache (if available)
+            if (redisClient && typeof redisClient.get === 'function') {
+                const cached = await redisClient.get(cacheKey);
+                if (cached) {
+                    return parseFloat(cached);
+                }
             }
 
             // Query CostLog for today's warmup spend
@@ -380,8 +385,10 @@ class SmartWarmupService {
 
             const totalSpend = result.length > 0 ? result[0].totalCost : 0;
 
-            // Cache for 5 minutes
-            await redisClient.setex(cacheKey, 300, totalSpend.toString());
+            // Cache for 5 minutes (if Redis available)
+            if (redisClient && typeof redisClient.setex === 'function') {
+                await redisClient.setex(cacheKey, 300, totalSpend.toString());
+            }
 
             return totalSpend;
 
@@ -393,6 +400,11 @@ class SmartWarmupService {
 
     async incrementDailySpend(companyId, amount) {
         try {
+            // Skip if Redis not available
+            if (!redisClient || typeof redisClient.get !== 'function') {
+                return 0;
+            }
+            
             const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
             const cacheKey = `company:${companyId}:warmup_spend:${today}`;
             
