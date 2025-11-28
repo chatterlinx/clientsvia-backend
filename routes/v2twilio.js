@@ -1895,7 +1895,22 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       if (elevenLabsVoice && transferMessage) {
         try {
           logger.info(`🎤 V2 ELEVENLABS: Generating transfer message with voice ${elevenLabsVoice}`);
-          const audioUrl = await synthesizeSpeech(transferMessage, elevenLabsVoice, companyID);
+          const buffer = await synthesizeSpeech({
+            text: transferMessage,
+            voiceId: elevenLabsVoice,
+            stability: company?.aiAgentSettings?.voiceSettings?.stability,
+            similarity_boost: company?.aiAgentSettings?.voiceSettings?.similarityBoost,
+            style: company?.aiAgentSettings?.voiceSettings?.styleExaggeration,
+            model_id: company?.aiAgentSettings?.voiceSettings?.aiModel,
+            company
+          });
+          // Save audio file and play it
+          const fileName = `transfer_${Date.now()}.mp3`;
+          const audioDir = path.join(__dirname, '../public/audio');
+          if (!fs.existsSync(audioDir)) { fs.mkdirSync(audioDir, { recursive: true }); }
+          const filePath = path.join(audioDir, fileName);
+          fs.writeFileSync(filePath, buffer);
+          const audioUrl = `http://${req.get('host')}/audio/${fileName}`;
           twiml.play(audioUrl);
           logger.info(`🎤 V2 ELEVENLABS: Transfer message audio generated: ${audioUrl}`);
         } catch (err) {
