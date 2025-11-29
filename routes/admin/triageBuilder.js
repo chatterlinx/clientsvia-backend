@@ -99,6 +99,199 @@ router.post('/generate-card', async (req, res, next) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// V23: LLM-A TRIAGE ARCHITECT (STRUCTURED GENERATION WITH VALIDATION)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const LLMAV23 = require('../../services/LLMA_TriageCardGeneratorV23');
+
+/**
+ * POST /api/admin/triage-builder/generate-card-v23
+ * 
+ * V23 LLM-A Triage Architect - generates validated card draft
+ * 
+ * Input: {
+ *   companyId: string,
+ *   tradeKey: string (HVAC, PLUMBING, etc.),
+ *   regionProfile: { climate, supportsHeating, supportsCooling, ... },
+ *   triageIdea: {
+ *     adminTitle: string,
+ *     adminNotes: string,
+ *     exampleUtterances: string[],
+ *     desiredAction: string,
+ *     serviceTypeHint: string,
+ *     priorityHint: number
+ *   }
+ * }
+ * 
+ * Output: {
+ *   ok: boolean,
+ *   draft: object (triageCardDraft),
+ *   validationReport: { status, coverage, failures },
+ *   errors: string[]
+ * }
+ */
+router.post('/generate-card-v23', async (req, res, next) => {
+  try {
+    const { companyId, tradeKey, regionProfile, triageIdea } = req.body;
+    
+    logger.info('[TRIAGE BUILDER V23] Generate request', {
+      companyId,
+      tradeKey,
+      adminTitle: triageIdea?.adminTitle,
+      userId: req.user?._id
+    });
+    
+    const result = await LLMAV23.generateTriageCardV23({
+      companyId,
+      tradeKey,
+      regionProfile,
+      triageIdea
+    });
+    
+    if (!result.ok) {
+      logger.warn('[TRIAGE BUILDER V23] Generation failed', {
+        companyId,
+        errors: result.errors
+      });
+      return res.status(400).json(result);
+    }
+    
+    logger.info('[TRIAGE BUILDER V23] Generation success', {
+      companyId,
+      cardLabel: result.draft?.triageLabel,
+      validationStatus: result.validationReport?.status
+    });
+    
+    res.json(result);
+    
+  } catch (err) {
+    logger.error('[TRIAGE BUILDER V23] Error', {
+      error: err.message,
+      stack: err.stack,
+      companyId: req.body?.companyId
+    });
+    next(err);
+  }
+});
+
+/**
+ * POST /api/admin/triage-builder/save-draft-v23
+ * 
+ * Save a V23 draft as actual TriageCard (inactive by default)
+ */
+router.post('/save-draft-v23', async (req, res, next) => {
+  try {
+    const { companyId, tradeKey, draft, validationReport } = req.body;
+    
+    if (!companyId || !tradeKey || !draft) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Missing required fields: companyId, tradeKey, draft'
+      });
+    }
+    
+    // Convert draft to TriageCard
+    const cardData = LLMAV23.draftToTriageCard(companyId, tradeKey, draft, validationReport);
+    cardData.createdBy = req.user?._id || null;
+    
+    // Check for existing card with same label
+    const existing = await TriageCard.findOne({
+      companyId,
+      triageLabel: cardData.triageLabel
+    });
+    
+    if (existing) {
+      return res.status(409).json({
+        ok: false,
+        error: `Card with label "${cardData.triageLabel}" already exists`,
+        existingCardId: existing._id
+      });
+    }
+    
+    // Create card
+    const card = await TriageCard.create(cardData);
+    
+    // Invalidate cache
+    TriageService.invalidateCache(companyId, tradeKey);
+    
+    logger.info('[TRIAGE BUILDER V23] Card saved', {
+      cardId: card._id,
+      triageLabel: card.triageLabel,
+      companyId,
+      validationStatus: validationReport?.status
+    });
+    
+    res.json({
+      ok: true,
+      card: card.toObject(),
+      message: 'Card saved (inactive). Activate when ready.'
+    });
+    
+  } catch (err) {
+    logger.error('[TRIAGE BUILDER V23] Save error', {
+      error: err.message,
+      companyId: req.body?.companyId
+    });
+    next(err);
+  }
+});
+
+/**
+ * POST /api/admin/triage-builder/validate-utterances
+ * 
+ * Test a list of utterances against current triage rules
+ * Returns which ones match and which don't
+ */
+router.post('/validate-utterances', async (req, res, next) => {
+  try {
+    const { companyId, trade, utterances, expectedCardLabel } = req.body;
+    
+    if (!companyId || !utterances || !Array.isArray(utterances)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Missing required fields: companyId, utterances[]'
+      });
+    }
+    
+    const results = [];
+    
+    for (const utterance of utterances) {
+      const result = await TriageService.applyQuickTriageRules(utterance, companyId, trade);
+      
+      results.push({
+        utterance,
+        matched: result.matched,
+        matchedCard: result.triageLabel || null,
+        expectedMatch: expectedCardLabel ? result.triageLabel === expectedCardLabel : null,
+        action: result.action || null
+      });
+    }
+    
+    const summary = {
+      total: results.length,
+      matched: results.filter(r => r.matched).length,
+      unmatched: results.filter(r => !r.matched).length,
+      expectedMatches: expectedCardLabel 
+        ? results.filter(r => r.expectedMatch === true).length 
+        : null
+    };
+    
+    res.json({
+      ok: true,
+      results,
+      summary
+    });
+    
+  } catch (err) {
+    logger.error('[TRIAGE BUILDER] Validate utterances error', {
+      error: err.message,
+      companyId: req.body?.companyId
+    });
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CRUD: LIST CARDS
 // ═══════════════════════════════════════════════════════════════════════════
 
