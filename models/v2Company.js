@@ -241,6 +241,33 @@ const companySchema = new mongoose.Schema({
     serviceArea: { type: String, trim: true, default: null },
     businessHours: { type: String, trim: true, default: null },
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V23: TRADE & REGION PROFILE (for LLM-A Triage Architect)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // These fields enable LLM-A to generate context-aware triage cards
+    // and flag region conflicts (e.g., "furnace" for Florida cooling-only company)
+    trade: { 
+        type: String, 
+        trim: true, 
+        uppercase: true,
+        default: null,
+        description: 'Primary trade: HVAC, PLUMBING, ELECTRICAL, DENTAL, REAL_ESTATE, etc.'
+    },
+    regionProfile: {
+        climate: { 
+            type: String, 
+            enum: ['HOT_ONLY', 'COLD_ONLY', 'MIXED'], 
+            default: 'MIXED',
+            description: 'Regional climate affects which services are relevant'
+        },
+        supportsHeating: { type: Boolean, default: true },
+        supportsCooling: { type: Boolean, default: true },
+        supportsMaintenance: { type: Boolean, default: true },
+        supportsEmergency: { type: Boolean, default: true },
+        // Future: region-specific keywords to exclude
+        regionKeywordsExclude: { type: [String], default: [] }
+    },
+    
     // Legacy/detailed fields (now optional - filled in Overview tab)
     ownerName: { type: String, trim: true, default: null }, // Removed required validation
     ownerEmail: { type: String, trim: true, default: null, lowercase: true }, // Removed required validation
