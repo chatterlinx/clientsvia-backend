@@ -359,10 +359,49 @@ const HVAC_LLM_A_TEST_PACK = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CLI TEST RUNNER (optional)
+// EXPECTED GOOD OUTPUT (visual target for QA)
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function runLLMATest(laneName) {
+const EXPECTED_GOOD_OUTPUT = {
+  AC_MAINTENANCE: {
+    triageLabel: 'HVAC_AC_MAINTENANCE',
+    mustHaveKeywords: ['tuneup'],  // 1 decisive token
+    excludeKeywords: ['not cooling', 'estimate', 'quote', 'emergency', 'broken'],
+    intent: 'AC_MAINTENANCE',
+    serviceType: 'MAINTENANCE',
+    action: 'DIRECT_TO_3TIER'
+  },
+  AC_REPAIR: {
+    triageLabel: 'HVAC_AC_REPAIR',
+    mustHaveKeywords: ['not cooling'],  // OR ['ac', 'broken'] - decisive
+    excludeKeywords: ['tuneup', 'maintenance', 'estimate', 'quote'],
+    intent: 'AC_REPAIR',
+    serviceType: 'REPAIR',
+    action: 'DIRECT_TO_3TIER'
+  },
+  NEW_SYSTEM: {
+    triageLabel: 'HVAC_NEW_SYSTEM_ESTIMATE',
+    mustHaveKeywords: ['new', 'ac'],  // OR ['estimate'] OR ['quote', 'ac']
+    excludeKeywords: ['tuneup', 'maintenance', 'not cooling', 'broken'],
+    intent: 'NEW_SYSTEM_ESTIMATE',
+    serviceType: 'OTHER',
+    action: 'DIRECT_TO_3TIER'
+  },
+  AC_EMERGENCY: {
+    triageLabel: 'HVAC_AC_EMERGENCY',
+    mustHaveKeywords: ['emergency'],  // OR ['smoke'] OR ['burning']
+    excludeKeywords: [],  // Don't block anything - emergencies are priority
+    intent: 'AC_EMERGENCY',
+    serviceType: 'EMERGENCY',
+    action: 'ESCALATE_TO_HUMAN'
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CLI TEST RUNNER
+// ═══════════════════════════════════════════════════════════════════════════
+
+function printInput(laneName) {
   const lane = HVAC_LLM_A_TEST_PACK.lanes[laneName];
   if (!lane) {
     console.error(`Unknown lane: ${laneName}`);
@@ -371,46 +410,116 @@ async function runLLMATest(laneName) {
   }
   
   console.log('\n═══════════════════════════════════════════════════════════════');
-  console.log(`🚀 LLM-A TEST: ${laneName}`);
+  console.log(`🚀 LLM-A INPUT: ${laneName}`);
   console.log('═══════════════════════════════════════════════════════════════\n');
   
-  console.log('📤 INPUT PAYLOAD:\n');
+  console.log('📤 INPUT PAYLOAD (for /generate-card-v23):\n');
   console.log(JSON.stringify(lane.input, null, 2));
   
-  console.log('\n\n📋 STRESS TEST UTTERANCES:');
+  console.log('\n\n📊 STRESS TEST COUNTS:');
   console.log(`   Positives: ${lane.stressTest.positiveUtterances.length}`);
   console.log(`   Negatives: ${lane.stressTest.negativeUtterances.length}`);
   
-  console.log('\n\n📝 CURL COMMAND:\n');
-  console.log(`curl -X POST http://localhost:10000/api/admin/triage-builder/generate-card-v23 \\
-  -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer YOUR_TOKEN" \\
-  -d '${JSON.stringify(lane.input)}'`);
+  console.log('\n\n🎯 EXPECTED GOOD OUTPUT:');
+  const expected = EXPECTED_GOOD_OUTPUT[laneName];
+  if (expected) {
+    console.log(`   mustHaveKeywords: ${JSON.stringify(expected.mustHaveKeywords)}`);
+    console.log(`   excludeKeywords: ${JSON.stringify(expected.excludeKeywords)}`);
+    console.log(`   action: ${expected.action}`);
+  }
   
   console.log('\n');
 }
 
+function printFullTest(laneName) {
+  const lane = HVAC_LLM_A_TEST_PACK.lanes[laneName];
+  if (!lane) {
+    console.error(`Unknown lane: ${laneName}`);
+    return;
+  }
+  
+  console.log('\n═══════════════════════════════════════════════════════════════');
+  console.log(`🔥 FULL TEST PLAN: ${laneName}`);
+  console.log('═══════════════════════════════════════════════════════════════\n');
+  
+  console.log('📋 FULL TEST PLAN (for /validate-utterances):\n');
+  console.log(JSON.stringify({
+    positiveUtterances: lane.stressTest.positiveUtterances,
+    negativeUtterances: lane.stressTest.negativeUtterances
+  }, null, 2));
+  
+  console.log('\n');
+}
+
+function printSummary(laneName, result) {
+  // This is what the summary should look like after running tests
+  console.log('\n═══════════════════════════════════════════════════════════════');
+  console.log(`📊 LANE SUMMARY: ${laneName}`);
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log(`Status: ${result.status}`);
+  console.log(`Positives: ${result.positiveMatched}/${result.positiveTotal}`);
+  console.log(`Negatives: ${result.negativeBlocked}/${result.negativeTotal}`);
+  console.log(`Must: ${JSON.stringify(result.mustHaveKeywords)}`);
+  console.log(`Exclude: ${JSON.stringify(result.excludeKeywords)}`);
+  console.log(`Guardrails: ${JSON.stringify(result.guardrailFlags)}`);
+  console.log('═══════════════════════════════════════════════════════════════\n');
+}
+
+function printAllLanes() {
+  console.log('\n═══════════════════════════════════════════════════════════════');
+  console.log('🔥 HVAC LLM-A TEST PACK - ALL LANES');
+  console.log('═══════════════════════════════════════════════════════════════\n');
+  
+  Object.entries(HVAC_LLM_A_TEST_PACK.lanes).forEach(([name, lane]) => {
+    const expected = EXPECTED_GOOD_OUTPUT[name];
+    console.log(`📦 ${name}`);
+    console.log(`   Action: ${lane.input.triageIdea.desiredAction}`);
+    console.log(`   Service: ${lane.input.triageIdea.serviceTypeHint}`);
+    console.log(`   Examples: ${lane.input.triageIdea.exampleUtterances.length}`);
+    console.log(`   Stress Positives: ${lane.stressTest.positiveUtterances.length}`);
+    console.log(`   Stress Negatives: ${lane.stressTest.negativeUtterances.length}`);
+    if (expected) {
+      console.log(`   Expected must: ${JSON.stringify(expected.mustHaveKeywords)}`);
+    }
+    console.log('');
+  });
+}
+
 // Main
 if (require.main === module) {
-  const laneName = process.argv[2];
+  const args = process.argv.slice(2);
+  const laneName = args[0];
+  const flags = args.slice(1);
   
   if (!laneName) {
     console.log('\n═══════════════════════════════════════════════════════════════');
     console.log('🔥 HVAC LLM-A TEST PACK');
     console.log('═══════════════════════════════════════════════════════════════\n');
-    console.log('Usage: node seeds/hvacLLMATestPack.js <LANE_NAME>\n');
-    console.log('Available lanes:');
+    console.log('Usage:');
+    console.log('  node seeds/hvacLLMATestPack.js <LANE_NAME>              # Get input payload');
+    console.log('  node seeds/hvacLLMATestPack.js <LANE_NAME> --full-test  # Get full test plan');
+    console.log('  node seeds/hvacLLMATestPack.js --all                    # Summary of all lanes');
+    console.log('\nAvailable lanes:');
     Object.keys(HVAC_LLM_A_TEST_PACK.lanes).forEach(name => {
       console.log(`  - ${name}`);
     });
-    console.log('\nExample: node seeds/hvacLLMATestPack.js AC_MAINTENANCE\n');
-    
-    console.log('Or use in code:');
-    console.log('  const { HVAC_LLM_A_TEST_PACK } = require("./seeds/hvacLLMATestPack");');
-    console.log('  const input = HVAC_LLM_A_TEST_PACK.lanes.AC_MAINTENANCE.input;');
+    console.log('\nExamples:');
+    console.log('  node seeds/hvacLLMATestPack.js AC_MAINTENANCE');
+    console.log('  node seeds/hvacLLMATestPack.js AC_MAINTENANCE --full-test');
+    console.log('  node seeds/hvacLLMATestPack.js --all');
+    console.log('\nTest Workflow:');
+    console.log('  1. Get input:     node seeds/hvacLLMATestPack.js AC_MAINTENANCE');
+    console.log('  2. Call:          POST /api/admin/triage-builder/generate-card-v23');
+    console.log('  3. Get full test: node seeds/hvacLLMATestPack.js AC_MAINTENANCE --full-test');
+    console.log('  4. Validate:      POST /api/admin/triage-builder/validate-utterances');
+    console.log('  5. If PASSED:     POST /api/admin/triage-builder/save-draft-v23');
     console.log('');
+  } else if (laneName === '--all') {
+    printAllLanes();
+  } else if (flags.includes('--full-test')) {
+    printFullTest(laneName);
   } else {
-    runLLMATest(laneName);
+    printInput(laneName);
   }
 }
 
@@ -424,6 +533,8 @@ module.exports = {
   NEW_SYSTEM_STRESS_TEST,
   AC_EMERGENCY_INPUT,
   AC_EMERGENCY_STRESS_TEST,
-  HVAC_LLM_A_TEST_PACK
+  HVAC_LLM_A_TEST_PACK,
+  EXPECTED_GOOD_OUTPUT,
+  printSummary
 };
 
