@@ -598,6 +598,7 @@ class V2AIAgentRuntime {
             const frontlineIntelResult = contextAfterExecution.frontlineIntelResult;
             const cheatSheetMeta = contextAfterExecution.cheatSheetMeta;
             const baseResponse = contextAfterExecution.baseResponse;
+            const behaviorMeta = contextAfterExecution.behaviorMeta; // V23: Behavior Engine
             
             // Update call state
             const updatedCallState = {
@@ -621,7 +622,10 @@ class V2AIAgentRuntime {
                 
                 // Cheat Sheet metadata
                 cheatSheetApplied: cheatSheetMeta !== null,
-                cheatSheetMeta
+                cheatSheetMeta,
+                
+                // V23: Behavior Engine metadata
+                behaviorMeta
             };
             
             // ─────────────────────────────────────────────────────────────
@@ -786,7 +790,8 @@ class V2AIAgentRuntime {
                 action: finalAction,
                 callState: updatedCallState,
                 confidence: baseResponse.confidence || 0.8,
-                cheatSheetMeta
+                cheatSheetMeta,
+                behaviorMeta // V23: Behavior Engine metadata (tone, styleInstructions, signals)
             };
 
         } catch (error) {

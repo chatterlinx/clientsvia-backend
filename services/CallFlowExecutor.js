@@ -16,6 +16,7 @@
 const logger = require('../utils/logger');
 const FrontlineIntel = require('./FrontlineIntel');
 const CheatSheetEngine = require('./CheatSheetEngine');
+const BehaviorEngine = require('./BehaviorEngine');
 const redisClient = require('../db').redisClient;
 const defaultCallFlowConfig = require('../config/defaultCallFlowConfig');
 
@@ -363,11 +364,86 @@ class CallFlowExecutor {
                 }
             }
             
+            // ═════════════════════════════════════════════════════════════════
+            // 🎭 BEHAVIOR ENGINE: Apply HYBRID tone styling (V23)
+            // ═════════════════════════════════════════════════════════════════
+            let behaviorTone = 'NEUTRAL';
+            let styleInstructions = null;
+            let behaviorSignals = null;
+            
+            const behaviorProfile = context.company?.aiAgentSettings?.behaviorProfile;
+            
+            if (behaviorProfile && behaviorProfile.mode === 'HYBRID') {
+                try {
+                    logger.info(`[CALL FLOW EXECUTOR] 🎭 Applying BehaviorEngine (HYBRID mode)...`);
+                    
+                    // Build context for BehaviorEngine
+                    const behaviorContext = {
+                        company: context.company,
+                        companyId: context.companyID,
+                        tradeKey: context.company?.trade || context.callState?.triageDecision?.tradeKey,
+                        triageDecision: context.callState?.triageDecision || frontlineIntelResult?.triageDecision,
+                        latestUserMessage: context.userInput
+                    };
+                    
+                    const behaviorResult = BehaviorEngine.applyHybridStyle(behaviorContext, finalResponse);
+                    
+                    behaviorTone = behaviorResult.tone || 'NEUTRAL';
+                    styleInstructions = behaviorResult.styleInstructions || null;
+                    behaviorSignals = behaviorResult.signals || null;
+                    
+                    // 📊 STRUCTURED LOG 5: Behavior Engine Decision
+                    logger.info('[BEHAVIOR]', {
+                        companyId: context.company._id.toString(),
+                        callSid: context.callState.callSid || context.callId,
+                        mode: 'HYBRID',
+                        tone: behaviorTone,
+                        signals: {
+                            hasEmergency: behaviorSignals?.hasEmergency || false,
+                            hasBillingConflict: behaviorSignals?.hasBillingConflict || false,
+                            userIsJoking: behaviorSignals?.userIsJoking || false
+                        },
+                        intent: behaviorContext.triageDecision?.intent || 'UNKNOWN',
+                        humorLevel: styleInstructions?.humorLevel || 0,
+                        timestamp: new Date().toISOString()
+                    });
+                    
+                    logger.info(`[CALL FLOW EXECUTOR] ✅ BehaviorEngine applied → tone: ${behaviorTone}`);
+                    
+                    // ═════════════════════════════════════════════════════════════════
+                    // 🎙️ LLM-C VOICE STYLING (Optional - if styleInstructions present)
+                    // ═════════════════════════════════════════════════════════════════
+                    // TODO: Future enhancement - call LLM-C to restyle the response
+                    // based on styleInstructions. For now, we just log the decision.
+                    // The response text remains as-is, but tone/style metadata is captured.
+                    //
+                    // When ready to enable LLM-C styling:
+                    // if (styleInstructions && finalResponse) {
+                    //     finalResponse = await callLLMC({
+                    //         companyName: context.company.companyName,
+                    //         responseTemplate: finalResponse,
+                    //         styleInstructions
+                    //     });
+                    // }
+                    // ═════════════════════════════════════════════════════════════════
+                    
+                } catch (behaviorErr) {
+                    logger.error(`[CALL FLOW EXECUTOR] ❌ BehaviorEngine failed:`, behaviorErr.message);
+                    // Continue without behavior styling (graceful degradation)
+                }
+            }
+            
             return {
                 baseResponse,
                 finalResponse,
                 finalAction,
-                cheatSheetMeta
+                cheatSheetMeta,
+                // V23: Behavior Engine metadata
+                behaviorMeta: behaviorProfile?.mode === 'HYBRID' ? {
+                    tone: behaviorTone,
+                    styleInstructions,
+                    signals: behaviorSignals
+                } : null
             };
             
         } catch (error) {
