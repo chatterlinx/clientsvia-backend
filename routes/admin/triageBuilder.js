@@ -10,6 +10,124 @@ const LLMA = require('../../services/LLMA_TriageCardGenerator');
 const logger = require('../../utils/logger');
 
 // ═══════════════════════════════════════════════════════════════════════════
+// CARD VIEW MODEL TRANSFORMER
+// Maps TriageCard to UI-friendly format (matches screenshot design)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Transform a TriageCard document into the UI card view model.
+ * This matches the visual design from the HVAC Template screenshot.
+ * 
+ * @param {Object} card - TriageCard document (lean or full)
+ * @param {Object} [options] - Optional overrides
+ * @param {string} [options.templateName] - Template name to display
+ * @param {string} [options.templateVersion] - Template version
+ * @returns {Object} Card view model for frontend
+ */
+function toCardViewModel(card, options = {}) {
+  if (!card) return null;
+
+  // Extract first keyword as trigger label
+  const keywords = card.quickRuleConfig?.keywordsMustHave || [];
+  const triggerLabel = keywords[0] || card.triageLabel?.toLowerCase().replace(/_/g, ' ') || '';
+
+  // Build preview reply from various sources
+  let previewReply = '';
+  if (card.frontlinePlaybook?.openingLines?.[0]) {
+    previewReply = card.frontlinePlaybook.openingLines[0];
+  } else if (card.actionPlaybooks?.explainAndPush?.explanationLines?.[0]) {
+    previewReply = card.actionPlaybooks.explainAndPush.explanationLines[0];
+  } else if (card.description) {
+    previewReply = card.description;
+  }
+
+  // Compute stats
+  const totalMatches = card.matchHistory?.totalMatches || 0;
+  const successRate = card.matchHistory?.successRate || 0;
+  const successPercent = totalMatches > 0 ? Math.round(successRate * 100) : null;
+
+  // Category/folder label
+  const categoryLabel = card.threeTierPackageDraft?.categoryName 
+    || card.triageCategory 
+    || card.trade 
+    || 'Uncategorized';
+
+  return {
+    // Identity
+    id: card._id?.toString() || card.id,
+    triageLabel: card.triageLabel,
+    
+    // UI Display (matches screenshot)
+    active: card.isActive || false,
+    title: card.displayName || card.triageLabel,
+    triggerLabel: triggerLabel,
+    previewReply: previewReply.substring(0, 200) + (previewReply.length > 200 ? '...' : ''),
+    
+    // Template info
+    templateName: options.templateName || `${card.trade} Trade Knowledge Template`,
+    templateVersion: options.templateVersion || 'V22',
+    trade: card.trade,
+    
+    // Stats (right side pills)
+    uses: totalMatches,
+    successPercent: successPercent, // null = "--%" in UI
+    
+    // Classification
+    categoryLabel: categoryLabel,
+    serviceType: card.serviceType,
+    intent: card.intent,
+    priority: card.priority || 100,
+    
+    // Action info
+    action: card.quickRuleConfig?.action || 'DIRECT_TO_3TIER',
+    
+    // Keywords for display
+    keywordsMustHave: keywords,
+    keywordsExclude: card.quickRuleConfig?.keywordsExclude || [],
+    
+    // Linked scenario (if any)
+    linkedScenarioId: card.linkedScenario?.scenarioId || null,
+    linkedScenarioName: card.linkedScenario?.scenarioName || null,
+    
+    // Timestamps
+    createdAt: card.createdAt,
+    updatedAt: card.updatedAt
+  };
+}
+
+/**
+ * Transform array of cards to view models
+ */
+function toCardViewModels(cards, options = {}) {
+  return cards.map(card => toCardViewModel(card, options));
+}
+
+/**
+ * Group cards by category for folder display
+ */
+function groupByCategory(cardViewModels) {
+  const groups = {};
+  
+  for (const card of cardViewModels) {
+    const category = card.categoryLabel || 'Uncategorized';
+    if (!groups[category]) {
+      groups[category] = {
+        name: category,
+        cards: [],
+        count: 0,
+        activeCount: 0
+      };
+    }
+    groups[category].cards.push(card);
+    groups[category].count++;
+    if (card.active) groups[category].activeCount++;
+  }
+  
+  // Sort groups by name, convert to array
+  return Object.values(groups).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // LLM-A: GENERATE CARD DRAFT
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -93,11 +211,21 @@ router.post('/generate-card', async (req, res, next) => {
 /**
  * GET /api/admin/triage/cards/:companyId
  * List all triage cards for a company
+ * 
+ * Query params:
+ *   - trade: Filter by trade (e.g., "HVAC")
+ *   - isActive: Filter by active status ("true" or "false")
+ *   - format: "raw" (default) | "view" | "grouped"
+ * 
+ * Response formats:
+ *   - raw: Full TriageCard documents
+ *   - view: UI card view models (matches screenshot design)
+ *   - grouped: Cards grouped by category (for folder view)
  */
 router.get('/cards/:companyId', async (req, res, next) => {
   try {
     const { companyId } = req.params;
-    const { trade, isActive } = req.query;
+    const { trade, isActive, format = 'raw' } = req.query;
 
     const query = { companyId };
     if (trade) query.trade = trade;
@@ -107,9 +235,44 @@ router.get('/cards/:companyId', async (req, res, next) => {
       .sort({ priority: -1, createdAt: -1 })
       .lean();
 
+    // Summary stats
+    const summary = {
+      totalCards: cards.length,
+      activeCards: cards.filter(c => c.isActive).length,
+      disabledCards: cards.filter(c => !c.isActive).length,
+      totalTriggers: cards.reduce((sum, c) => sum + (c.quickRuleConfig?.keywordsMustHave?.length || 0), 0),
+      trades: [...new Set(cards.map(c => c.trade))],
+      categories: [...new Set(cards.map(c => c.threeTierPackageDraft?.categoryName || c.triageCategory).filter(Boolean))]
+    };
+
+    if (format === 'view') {
+      // UI card view models
+      const viewModels = toCardViewModels(cards, { templateVersion: 'V22' });
+      return res.json({
+        ok: true,
+        format: 'view',
+        summary,
+        cards: viewModels
+      });
+    }
+
+    if (format === 'grouped') {
+      // Grouped by category (folder view)
+      const viewModels = toCardViewModels(cards, { templateVersion: 'V22' });
+      const groups = groupByCategory(viewModels);
+      return res.json({
+        ok: true,
+        format: 'grouped',
+        summary,
+        categories: groups
+      });
+    }
+
+    // Default: raw cards
     res.json({
       ok: true,
-      count: cards.length,
+      format: 'raw',
+      summary,
       cards
     });
   } catch (err) {
@@ -124,6 +287,8 @@ router.get('/cards/:companyId', async (req, res, next) => {
 /**
  * GET /api/admin/triage/card/:cardId
  * Get single triage card by ID
+ * 
+ * Returns both raw card and UI view model
  */
 router.get('/card/:cardId', async (req, res, next) => {
   try {
@@ -139,7 +304,11 @@ router.get('/card/:cardId', async (req, res, next) => {
       return res.status(404).json({ ok: false, error: 'Card not found' });
     }
 
-    res.json({ ok: true, card });
+    res.json({ 
+      ok: true, 
+      card,
+      viewModel: toCardViewModel(card, { templateVersion: 'V22' })
+    });
   } catch (err) {
     logger.error('[TRIAGE BUILDER] Get card error', {
       error: err.message,
