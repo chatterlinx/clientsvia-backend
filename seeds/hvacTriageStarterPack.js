@@ -24,8 +24,10 @@ const HVAC_STARTER_CARDS = [
     serviceType: 'REPAIR',
     priority: 100,
     quickRuleConfig: {
-      keywordsMustHave: ['not cooling', 'ac', 'air conditioning'],
-      keywordsExclude: ['maintenance', 'tune up', '$89'],
+      // V22: "not cooling" is the decisive signal for this lane
+      // After normalization: "air conditioning" → "ac", "no cool" → "not cooling"
+      keywordsMustHave: ['not cooling'],
+      keywordsExclude: ['tuneup', 'maintenance', 'annual'],
       action: 'DIRECT_TO_3TIER',
       explanation: 'Route AC cooling issues to repair flow'
     },
@@ -82,10 +84,11 @@ const HVAC_STARTER_CARDS = [
     serviceType: 'REPAIR',
     priority: 100,
     quickRuleConfig: {
-      keywordsMustHave: ['not turning on', 'won\'t start', 'ac'],
-      keywordsExclude: [],
+      // V22: "not turning on" is the decisive signal
+      keywordsMustHave: ['not turning on'],
+      keywordsExclude: ['tuneup', 'maintenance'],
       action: 'DIRECT_TO_3TIER',
-      explanation: 'Non-starting AC needs repair visit'
+      explanation: 'Non-starting equipment needs repair visit'
     },
     frontlinePlaybook: {
       frontlineGoal: 'Check basics then schedule repair',
@@ -103,16 +106,18 @@ const HVAC_STARTER_CARDS = [
   {
     triageLabel: 'AC_SERVICE_GENERAL',
     displayName: 'General AC service request',
-    description: 'Caller needs air conditioning service but hasn\'t specified the exact issue.',
+    description: 'Catch-all for AC/cooling requests. Routes to 3-Tier which has detailed scenarios.',
     intent: 'AC_SERVICE',
     triageCategory: 'COOLING_ISSUES',
     serviceType: 'REPAIR',
-    priority: 80,
+    priority: 50,  // Lower priority - catches what specific cards miss
     quickRuleConfig: {
-      keywordsMustHave: ['air conditioning service', 'ac service', 'cooling service'],
-      keywordsExclude: ['maintenance', 'tune up'],
+      // V22: Single keyword "ac" catches most cooling requests
+      // Excludes maintenance words so those go to maintenance lane
+      keywordsMustHave: ['ac'],
+      keywordsExclude: ['tuneup', 'maintenance', 'annual', 'checkup'],
       action: 'DIRECT_TO_3TIER',
-      explanation: 'General AC service requests go to repair flow'
+      explanation: 'General AC requests go to repair flow (3-Tier has specific scenarios)'
     },
     frontlinePlaybook: {
       frontlineGoal: 'Clarify issue and route appropriately',
@@ -123,8 +128,8 @@ const HVAC_STARTER_CARDS = [
     },
     threeTierPackageDraft: {
       categoryName: 'Cooling / No Cool',
-      scenarioName: 'General AC Service',
-      scenarioObjective: 'Gather details and route to appropriate repair flow'
+      scenarioName: '(3-Tier has: AC_NOT_COOLING, AC_BLOWING_WARM, AC_NOT_STARTING, etc.)',
+      scenarioObjective: 'Gather details and route to appropriate repair scenario'
     }
   },
 
@@ -140,8 +145,9 @@ const HVAC_STARTER_CARDS = [
     serviceType: 'REPAIR',
     priority: 100,
     quickRuleConfig: {
-      keywordsMustHave: ['heat', 'not working'],
-      keywordsExclude: ['ac', 'cooling', 'air conditioning'],
+      // V22: "no heat" or "heat not working" - decisive signals
+      keywordsMustHave: ['not working'],  // Combined with exclude of AC terms
+      keywordsExclude: ['ac', 'cooling', 'tuneup', 'maintenance'],
       action: 'DIRECT_TO_3TIER',
       explanation: 'No heat is urgent, route to repair'
     },
@@ -272,60 +278,92 @@ const HVAC_STARTER_CARDS = [
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // MAINTENANCE (2 cards)
+  // MAINTENANCE (1 generic card - 3-Tier decides AC vs Furnace)
+  // V22 Architecture: Triage picks LANE, 3-Tier picks SCENARIO
   // ─────────────────────────────────────────────────────────────────────────
   {
-    triageLabel: 'AC_TUNE_UP',
-    displayName: 'AC tune-up / maintenance',
-    description: 'Caller wants preventive maintenance or seasonal tune-up for their AC.',
+    triageLabel: 'HVAC_MAINTENANCE',
+    displayName: 'HVAC maintenance / tune-up',
+    description: 'Generic maintenance lane for any HVAC tune-up, cleaning, or preventive service. 3-Tier handles AC vs Furnace specifics.',
     intent: 'MAINTENANCE',
     triageCategory: 'MAINTENANCE',
     serviceType: 'MAINTENANCE',
     priority: 70,
     quickRuleConfig: {
-      keywordsMustHave: ['tune up', 'maintenance', 'ac'],
-      keywordsExclude: ['not working', 'broken', 'emergency'],
+      // V22: Minimal keywords for LANE selection only
+      // Just need ONE decisive signal - "tuneup" or "maintenance" or "annual"
+      // 3-Tier handles: AC tuneup vs furnace tuneup vs filter change etc.
+      keywordsMustHave: ['tuneup'],  // Single trigger - catches "tuneup", "ac tuneup", "furnace tuneup"
+      keywordsExclude: ['not working', 'broken', 'emergency', 'not cooling', 'no heat', 'leaking'],
       action: 'DIRECT_TO_3TIER',
-      explanation: 'Route maintenance requests to booking'
+      explanation: 'Route ALL maintenance requests to 3-Tier (which has AC/Furnace scenarios)'
     },
     frontlinePlaybook: {
-      frontlineGoal: 'Book maintenance appointment',
+      frontlineGoal: 'Confirm maintenance intent and route to booking',
       openingLines: [
         "Great idea to get a tune-up! Regular maintenance keeps your system running efficiently. Let me get you scheduled.",
-        "Preventive maintenance is smart. We can get you on the schedule for a tune-up."
+        "Preventive maintenance is smart. We can get you on the schedule."
       ]
     },
     threeTierPackageDraft: {
       categoryName: 'Maintenance',
-      scenarioName: 'AC Tune-Up',
+      scenarioName: '(3-Tier decides: AC_TUNEUP / FURNACE_TUNEUP / FILTER_CHANGE)',
       scenarioObjective: 'Book preventive maintenance visit'
     }
   },
   {
-    triageLabel: 'FURNACE_TUNE_UP',
-    displayName: 'Furnace tune-up / maintenance',
-    description: 'Caller wants preventive maintenance or seasonal tune-up for their furnace.',
+    triageLabel: 'HVAC_MAINTENANCE_ALT',
+    displayName: 'HVAC maintenance (alternate triggers)',
+    description: 'Catches maintenance requests using "maintenance", "annual", "checkup" instead of "tuneup".',
     intent: 'MAINTENANCE',
     triageCategory: 'MAINTENANCE',
     serviceType: 'MAINTENANCE',
-    priority: 70,
+    priority: 65,  // Slightly lower than tuneup card
     quickRuleConfig: {
-      keywordsMustHave: ['tune up', 'maintenance', 'furnace'],
-      keywordsExclude: ['not working', 'broken', 'emergency'],
+      // Alternate triggers for maintenance lane
+      keywordsMustHave: ['maintenance'],
+      keywordsExclude: ['not working', 'broken', 'emergency', 'not cooling', 'no heat', 'leaking', 'repair'],
       action: 'DIRECT_TO_3TIER',
-      explanation: 'Route furnace maintenance to booking'
+      explanation: 'Alternate path into maintenance lane'
     },
     frontlinePlaybook: {
-      frontlineGoal: 'Book furnace maintenance',
+      frontlineGoal: 'Book maintenance appointment',
       openingLines: [
-        "Getting your furnace tuned up before winter is a great idea. Let me get you scheduled.",
-        "Annual furnace maintenance helps prevent breakdowns. I can book that for you."
+        "Regular maintenance keeps your system running efficiently. Let me get you scheduled.",
+        "Preventive maintenance is a great investment. I can book that for you."
       ]
     },
     threeTierPackageDraft: {
       categoryName: 'Maintenance',
-      scenarioName: 'Furnace Tune-Up',
-      scenarioObjective: 'Book preventive furnace maintenance'
+      scenarioName: '(3-Tier decides based on caller context)',
+      scenarioObjective: 'Book preventive maintenance visit'
+    }
+  },
+  {
+    triageLabel: 'HVAC_ANNUAL_SERVICE',
+    displayName: 'Annual / seasonal service',
+    description: 'Catches "annual service", "yearly checkup", "seasonal" maintenance requests.',
+    intent: 'MAINTENANCE',
+    triageCategory: 'MAINTENANCE',
+    serviceType: 'MAINTENANCE',
+    priority: 60,
+    quickRuleConfig: {
+      keywordsMustHave: ['annual'],
+      keywordsExclude: ['not working', 'broken', 'emergency'],
+      action: 'DIRECT_TO_3TIER',
+      explanation: 'Annual service requests go to maintenance lane'
+    },
+    frontlinePlaybook: {
+      frontlineGoal: 'Book annual service',
+      openingLines: [
+        "Annual service is a great way to keep everything running smoothly. Let me get you scheduled.",
+        "Yearly checkups help catch small issues before they become big ones. I can book that for you."
+      ]
+    },
+    threeTierPackageDraft: {
+      categoryName: 'Maintenance',
+      scenarioName: 'Annual Service',
+      scenarioObjective: 'Book yearly preventive maintenance'
     }
   },
 

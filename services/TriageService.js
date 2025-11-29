@@ -24,12 +24,35 @@ const triageCache = new Map();
  */
 function normalizeText(text) {
   if (!text) return '';
-  return String(text)
+  let normalized = String(text)
     .toLowerCase()
     .replace(/[\r\n]+/g, ' ')
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+  
+  // V22: Normalize common HVAC variations for consistent matching
+  // This allows cards to use ONE keyword form and match all variations
+  normalized = normalized
+    // "tune up" / "tune-up" → "tuneup"
+    .replace(/tune\s*up/g, 'tuneup')
+    // "air conditioning" → "ac"
+    .replace(/air\s*conditioning/g, 'ac')
+    // "a\/c" or "a c" → "ac"
+    .replace(/a\s*c\b/g, 'ac')
+    // "not cooling" variations
+    .replace(/no\s*cool/g, 'not cooling')
+    .replace(/wont\s*cool/g, 'not cooling')
+    .replace(/isnt\s*cooling/g, 'not cooling')
+    // "not working" variations
+    .replace(/doesnt\s*work/g, 'not working')
+    .replace(/wont\s*work/g, 'not working')
+    .replace(/isnt\s*working/g, 'not working')
+    // Clean up any double spaces introduced
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  return normalized;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
