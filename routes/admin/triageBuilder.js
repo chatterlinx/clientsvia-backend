@@ -534,4 +534,96 @@ router.get('/stats/:companyId', async (req, res, next) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SEED: HVAC STARTER PACK
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/admin/triage-builder/seed-hvac/:companyId
+ * Seed HVAC starter pack for a company (admin-only)
+ */
+router.post('/seed-hvac/:companyId', async (req, res, next) => {
+  try {
+    const { companyId } = req.params;
+    const { activate = true } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(companyId)) {
+      return res.status(400).json({ ok: false, error: 'Invalid company ID' });
+    }
+
+    const { HVAC_STARTER_CARDS } = require('../../seeds/hvacTriageStarterPack');
+
+    logger.info('[TRIAGE BUILDER] Seeding HVAC starter pack', {
+      companyId,
+      activate,
+      cardCount: HVAC_STARTER_CARDS.length
+    });
+
+    const results = {
+      created: [],
+      skipped: [],
+      errors: []
+    };
+
+    for (const cardData of HVAC_STARTER_CARDS) {
+      try {
+        // Check if card already exists
+        const existing = await TriageCard.findOne({
+          companyId,
+          triageLabel: cardData.triageLabel
+        });
+
+        if (existing) {
+          results.skipped.push(cardData.triageLabel);
+          continue;
+        }
+
+        // Create the card
+        const card = await TriageCard.create({
+          companyId,
+          trade: 'HVAC',
+          isActive: activate,
+          ...cardData
+        });
+
+        results.created.push(cardData.triageLabel);
+
+      } catch (err) {
+        results.errors.push({ triageLabel: cardData.triageLabel, error: err.message });
+      }
+    }
+
+    // Invalidate cache
+    TriageService.invalidateCache(companyId, 'HVAC');
+
+    logger.info('[TRIAGE BUILDER] HVAC seed complete', {
+      companyId,
+      created: results.created.length,
+      skipped: results.skipped.length,
+      errors: results.errors.length
+    });
+
+    res.json({
+      ok: true,
+      results: {
+        created: results.created,
+        skipped: results.skipped,
+        errors: results.errors
+      },
+      summary: {
+        created: results.created.length,
+        skipped: results.skipped.length,
+        errors: results.errors.length,
+        total: HVAC_STARTER_CARDS.length
+      }
+    });
+  } catch (err) {
+    logger.error('[TRIAGE BUILDER] Seed HVAC error', {
+      error: err.message,
+      companyId: req.params.companyId
+    });
+    next(err);
+  }
+});
+
 module.exports = router;
