@@ -777,6 +777,97 @@ expect(tone).toBe('EMERGENCY_SERIOUS');
 
 ---
 
+---
+
+## 13. Production Edge Cases (V23)
+
+### 13.1 Edge Case Handler
+
+**File:** `services/EdgeCaseHandler.js`
+
+Handles three critical production scenarios:
+
+| Edge Case | Problem | Solution |
+|-----------|---------|----------|
+| **Unknown Loop** | Bot loops "I didn't catch that" forever | Escalate to human after 2 unknowns |
+| **Latency Masking** | Tier 3 LLM takes 2+ seconds | Inject filler: "One moment please" |
+| **Barge-In** | User interrupts while TTS playing | Stop TTS, process urgent interruptions |
+
+### 13.2 Unknown Loop Prevention
+
+```javascript
+const EdgeCaseHandler = require('./EdgeCaseHandler');
+
+// In CallFlowExecutor, after triage decision:
+const unknownCheck = EdgeCaseHandler.checkUnknownLoop(callState, triageDecision);
+
+if (unknownCheck.shouldEscalate) {
+  // Max unknowns reached (default: 2)
+  return {
+    response: "I'm having trouble understanding. Let me connect you with someone.",
+    action: 'transfer'
+  };
+}
+```
+
+**Progressive Clarifications:**
+- Unknown #1: "I didn't quite catch that. Could you say that again?"
+- Unknown #2: "I'm still not understanding. What do you need help with today?"
+- Unknown #3: → ESCALATE TO HUMAN (automatic)
+
+### 13.3 Latency Masking
+
+When Tier 3 LLM is called (>800ms expected):
+
+```javascript
+if (EdgeCaseHandler.shouldInjectFiller(expectedLatencyMs)) {
+  const filler = EdgeCaseHandler.getLatencyFillerPhrase(company);
+  // Play: "One moment please." while LLM thinks
+}
+```
+
+**Default Filler Phrases:**
+- "One moment please."
+- "Let me check on that."
+- "Just a moment."
+- "Let me look into that for you."
+
+**Custom Fillers:** Set in `company.aiAgentSettings.latencyFillers[]`
+
+### 13.4 Barge-In Handling
+
+**Configuration:**
+```javascript
+company.aiAgentSettings.speechDetection.bargeIn = true;  // Enable
+```
+
+**Twilio Config:**
+```xml
+<Gather bargeIn="true" partialResultCallback="/api/twilio/partial-speech">
+```
+
+**Handler:**
+```javascript
+const result = EdgeCaseHandler.handleBargeIn(partialText, callState);
+
+if (result.isUrgent) {
+  // Urgent words: "emergency", "stop", "operator", "human"
+  // → Stop TTS immediately, process input
+}
+```
+
+### 13.5 Silence Handling
+
+```javascript
+const response = EdgeCaseHandler.handleSilence(callState);
+
+// Silence #1: "Are you still there?"
+// Silence #2: "I haven't heard from you. Are you still on the line?"
+// Silence #3: "I'll end the call. Please call back when you're ready. Goodbye." → hangup
+```
+
+---
+
 ## Summary
 
 **V22 Delivered:**
@@ -791,6 +882,11 @@ expect(tone).toBe('EMERGENCY_SERIOUS');
 - Dynamic preset system (no code changes)
 - Full CRUD for trades/presets
 - Region-aware guardrails
+- **Production edge case handling:**
+  - Unknown loop prevention (max 2)
+  - Latency masking for Tier 3
+  - Barge-in support
+  - Progressive silence handling
 
 **Result:**
 A multi-tenant, multi-trade AI receptionist platform where:
@@ -798,6 +894,7 @@ A multi-tenant, multi-trade AI receptionist platform where:
 - <1% fall back to paid LLM
 - New trades added via API, not code
 - Same codebase works for HVAC, Dental, Accounting, anything
+- **Production-ready edge case handling**
 
 ---
 

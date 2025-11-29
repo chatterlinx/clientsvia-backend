@@ -17,6 +17,7 @@ const logger = require('../utils/logger');
 const FrontlineIntel = require('./FrontlineIntel');
 const CheatSheetEngine = require('./CheatSheetEngine');
 const BehaviorEngine = require('./BehaviorEngine');
+const EdgeCaseHandler = require('./EdgeCaseHandler');
 const redisClient = require('../db').redisClient;
 const defaultCallFlowConfig = require('../config/defaultCallFlowConfig');
 
@@ -201,6 +202,33 @@ class CallFlowExecutor {
                     finalAction: frontlineIntelResult.callValidation?.correctService === false ? 'hangup' : 'continue',
                     shortCircuit: true
                 };
+            }
+            
+            // ═════════════════════════════════════════════════════════════════
+            // 🚨 V23 EDGE CASE: Unknown Loop Prevention
+            // ═════════════════════════════════════════════════════════════════
+            const unknownCheck = EdgeCaseHandler.checkUnknownLoop(
+                context.callState, 
+                frontlineIntelResult.triageDecision
+            );
+            
+            if (unknownCheck.shouldEscalate) {
+                logger.warn(`[CALL FLOW EXECUTOR] ⚠️ Unknown loop detected - escalating to human`);
+                return {
+                    frontlineIntelResult,
+                    finalResponse: unknownCheck.response,
+                    finalAction: unknownCheck.action,
+                    shortCircuit: true,
+                    edgeCaseTriggered: 'UNKNOWN_LOOP'
+                };
+            }
+            
+            // If we got a clarification needed but not escalation
+            if (unknownCheck.clarificationResponse && !frontlineIntelResult.triageDecision?.matched) {
+                logger.info(`[CALL FLOW EXECUTOR] 🔄 Requesting clarification (attempt ${context.callState.consecutiveUnknowns})`);
+                // Don't short-circuit, let the normal flow handle it with the clarification
+                frontlineIntelResult.needsClarification = true;
+                frontlineIntelResult.clarificationResponse = unknownCheck.clarificationResponse;
             }
             
             // ═════════════════════════════════════════════════════════════════
