@@ -136,16 +136,17 @@ async function getCompanyTriageConfig(companyId, trade) {
   if (trade) cardQuery.trade = trade;
   const cards = await TriageCard.find(cardQuery).lean().exec();
 
-  // Load Manual Rules from Company.cheatSheet.manualTriageRules
+  // Load Manual Rules from Company.aiAgentSettings.cheatSheet.manualTriageRules
+  // (This is where CheatSheetManager UI saves them)
   let manualRules = [];
   try {
     const company = await Company.findById(companyId)
-      .select('cheatSheet.manualTriageRules')
+      .select('aiAgentSettings.cheatSheet.manualTriageRules')
       .lean()
       .exec();
     
-    if (company?.cheatSheet?.manualTriageRules) {
-      manualRules = company.cheatSheet.manualTriageRules;
+    if (company?.aiAgentSettings?.cheatSheet?.manualTriageRules) {
+      manualRules = company.aiAgentSettings.cheatSheet.manualTriageRules;
     }
   } catch (err) {
     logger.warn('[TRIAGE] Failed to load manual rules', {
