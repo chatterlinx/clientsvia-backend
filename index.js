@@ -175,6 +175,7 @@ async function loadAllRoutes() {
         routes.globalConfigRoutes = await loadRouteWithTimeout('./routes/global-config', 'globalConfigRoutes'); // 🌍 Global Config Sharing (Local/Global)
         routes.cheatSheetCategoryRoutes = await loadRouteWithTimeout('./routes/cheatsheet/category', 'cheatSheetCategoryRoutes'); // 🔒 CheatSheet Category Locking
         routes.triageBuilderRoutes = await loadRouteWithTimeout('./routes/admin/triageBuilder', 'triageBuilderRoutes'); // 🤖 LLM Triage Builder (admin content generator)
+        routes.triagePresetsRoutes = await loadRouteWithTimeout('./routes/admin/triagePresets', 'triagePresetsRoutes'); // 🎯 Dynamic Triage Presets per Trade
         routes.callFlowRoutes = await loadRouteWithTimeout('./routes/admin/callFlow', 'callFlowRoutes'); // 🎯 Call Flow Management (Frontline-Intel)
         // V1 LLM Console removed - 2025-11-08
         routes.llmLearningV2Routes = await loadRouteWithTimeout('./routes/admin/llmLearningV2', 'llmLearningV2Routes');
@@ -398,6 +399,7 @@ function registerRoutes(routes) {
     app.use('/api/global-config', routes.globalConfigRoutes); // 🌍 Global Config Sharing (Local/Global)
     app.use('/api/cheatsheet/category', routes.cheatSheetCategoryRoutes); // 🔒 CheatSheet Category Locking
     app.use('/api/admin/triage-builder', routes.triageBuilderRoutes); // 🤖 LLM Triage Builder (admin content generator)
+    app.use('/api/admin/triage-presets', routes.triagePresetsRoutes); // 🎯 Dynamic Triage Presets per Trade
     app.use('/api/admin/call-flow', routes.callFlowRoutes); // 🎯 Call Flow Management (Frontline-Intel)
     // V1 LLM Console API removed - 2025-11-08 (use V2 instead)
     app.use('/api/admin/llm-learning/v2', routes.llmLearningV2Routes); // LLM Learning Console V2 API (Enhanced with latency tracking)
