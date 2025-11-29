@@ -417,6 +417,47 @@ class V2AIAgentRuntime {
                 // Continue without memory (graceful degradation)
             }
             
+            // ═════════════════════════════════════════════════════════════════
+            // 🎯 V22 TRIAGE: QUICK RULES (Brain-1 Tier-0 pre-check)
+            // Uses TriageCard quickRuleConfig as fast-path before 3-Tier Router
+            // ═════════════════════════════════════════════════════════════════
+            const TriageService = require('./TriageService');
+            
+            try {
+                const quickTriageResult = await TriageService.applyQuickTriageRules(
+                    userInput,
+                    companyID,
+                    company.trade || null
+                );
+
+                if (quickTriageResult.matched) {
+                    logger.info('[V2 AGENT] 🎯 Quick triage matched', {
+                        callId,
+                        triageCardId: quickTriageResult.triageCardId,
+                        triageLabel: quickTriageResult.triageLabel,
+                        action: quickTriageResult.action,
+                        intent: quickTriageResult.intent,
+                        serviceType: quickTriageResult.serviceType
+                    });
+
+                    // Attach to executionContext so Frontline-Intel / CallFlowExecutor can use it
+                    executionContext.quickTriageResult = quickTriageResult;
+                    
+                    // If we have a linkedScenarioId, set it for Brain-5 optimization
+                    if (quickTriageResult.linkedScenarioId) {
+                        executionContext.forcedScenarioId = quickTriageResult.linkedScenarioId;
+                    }
+                } else {
+                    logger.debug('[V2 AGENT] 🎯 No quick triage match', { callId });
+                }
+            } catch (triageErr) {
+                logger.error('[V2 AGENT] ❌ Quick triage failed (non-fatal)', {
+                    callId,
+                    error: triageErr.message
+                });
+                // Continue without quick triage (graceful degradation)
+            }
+            
             // Execute call flow dynamically
             const contextAfterExecution = await CallFlowExecutor.execute(executionContext);
             

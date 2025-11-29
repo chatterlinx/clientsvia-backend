@@ -1,277 +1,322 @@
-// ═════════════════════════════════════════════════════════════════════════════
-// TRIAGE CARD MODEL
-// ═════════════════════════════════════════════════════════════════════════════
-// Purpose: Atomic source of truth for Frontline-Intel triage configuration
-// Scope: Per-company, multi-tenant isolated
-// Architecture: Single card contains 4 parts (Frontline rules, Triage map, 
-//               Response library, Category skeleton)
-// ═════════════════════════════════════════════════════════════════════════════
+// models/TriageCard.js
+// V22 Triage Card - Single source of truth for quick rules, frontline playbooks, and 3-tier drafts
 
 const mongoose = require('mongoose');
-const Schema = mongoose.Schema;
+const { Schema } = mongoose;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TRIAGE MAP RULE SCHEMA
-// ─────────────────────────────────────────────────────────────────────────────
-// Purpose: Structured decision tree for call classification
-// Logic: keywords + excludeKeywords → serviceType + action
-// Example: ["not cooling", "maintenance"] → REPAIR + EXPLAIN_AND_PUSH
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// REUSABLE SUB-SCHEMAS
+// ═══════════════════════════════════════════════════════════════════════════
 
-const TriageRuleSchema = new Schema({
-  keywords: {
-    type: [String],
-    required: true,
-    description: 'Phrases to detect (AND logic: all must be present)'
+const ObjectionPairSchema = new Schema(
+  {
+    customer: { type: String, trim: true },
+    agent: { type: String, trim: true }
   },
-  excludeKeywords: {
-    type: [String],
-    default: [],
-    description: 'Phrases that disqualify this rule (must NOT be present)'
-  },
-  serviceType: {
-    type: String,
-    enum: ['REPAIR', 'MAINTENANCE', 'EMERGENCY', 'INSTALL', 'INSPECTION', 'QUOTE', 'OTHER', 'UNKNOWN'],
-    required: true,
-    description: 'Target service type classification'
-  },
-  action: {
-    type: String,
-    enum: ['DIRECT_TO_3TIER', 'EXPLAIN_AND_PUSH', 'ESCALATE_TO_HUMAN', 'TAKE_MESSAGE', 'END_CALL_POLITE'],
-    required: true,
-    description: 'DIRECT_TO_3TIER: clean handoff | EXPLAIN_AND_PUSH: educate then handoff | ESCALATE_TO_HUMAN: transfer | TAKE_MESSAGE: collect info and end | END_CALL_POLITE: polite rejection'
-  },
-  responseCategory: {
-    type: String,
-    description: 'Which response pool to use (e.g., "downgrade_prevention")',
-    default: 'general'
-  },
-  priority: {
-    type: Number,
-    required: true,
-    description: 'Higher priority rules checked first (conflict resolution)',
-    default: 10,
-    min: 1,
-    max: 100
-  },
-  reason: {
-    type: String,
-    description: 'Human-readable explanation for this rule (admin reference)'
-  }
-}, { _id: false });
+  { _id: false }
+);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CATEGORY SCHEMA
-// ─────────────────────────────────────────────────────────────────────────────
-// Purpose: Category skeleton for 3-Tier system + AI Scenario Architect
-// Flow: Card generates → admin uses seeds → AI Scenario Architect builds full scenarios
-// ─────────────────────────────────────────────────────────────────────────────
+const QuickRuleConfigSchema = new Schema(
+  {
+    keywordsMustHave: {
+      type: [String],
+      default: []
+    },
+    keywordsExclude: {
+      type: [String],
+      default: []
+    },
+    action: {
+      type: String,
+      enum: [
+        'DIRECT_TO_3TIER',
+        'EXPLAIN_AND_PUSH',
+        'ESCALATE_TO_HUMAN',
+        'TAKE_MESSAGE',
+        'END_CALL_POLITE'
+      ],
+      required: true
+    },
+    explanation: { type: String, trim: true },
+    qnaCardRef: { type: String, trim: true }
+  },
+  { _id: false }
+);
 
-const CategorySchema = new Schema({
-  name: {
-    type: String,
-    required: true,
-    description: 'Human-readable category name (e.g., "AC Not Cooling - Repair")'
+const FrontlinePlaybookSchema = new Schema(
+  {
+    frontlineGoal: { type: String, trim: true },
+    openingLines: {
+      type: [String],
+      default: []
+    },
+    explainAndPushLines: {
+      type: [String],
+      default: []
+    },
+    objectionHandling: {
+      type: [ObjectionPairSchema],
+      default: []
+    }
   },
-  slug: {
-    type: String,
-    required: true,
-    description: 'Machine-readable slug (e.g., "ac_not_cooling_repair")',
-    lowercase: true,
-    trim: true
-  },
-  description: {
-    type: String,
-    required: true,
-    description: 'Category description for 3-Tier matching'
-  },
-  scenarioSeeds: {
-    type: [String],
-    default: [],
-    description: 'One-line scenario examples for AI Scenario Architect (5-10 seeds)'
-  }
-}, { _id: false });
+  { _id: false }
+);
 
-// ─────────────────────────────────────────────────────────────────────────────
+const ExplainAndPushPlaybookSchema = new Schema(
+  {
+    explanationLines: {
+      type: [String],
+      default: []
+    },
+    pushLines: {
+      type: [String],
+      default: []
+    },
+    objectionPairs: {
+      type: [ObjectionPairSchema],
+      default: []
+    }
+  },
+  { _id: false }
+);
+
+const EscalateToHumanPlaybookSchema = new Schema(
+  {
+    reasonLabel: { type: String, trim: true },
+    preTransferLines: {
+      type: [String],
+      default: []
+    }
+  },
+  { _id: false }
+);
+
+const TakeMessagePlaybookSchema = new Schema(
+  {
+    introLines: {
+      type: [String],
+      default: []
+    },
+    fieldsToCollect: {
+      type: [String],
+      default: [] // e.g. ["name", "phone", "address", "issueSummary"]
+    },
+    closingLines: {
+      type: [String],
+      default: []
+    }
+  },
+  { _id: false }
+);
+
+const EndCallPolitePlaybookSchema = new Schema(
+  {
+    reasonLabel: { type: String, trim: true },
+    closingLines: {
+      type: [String],
+      default: []
+    }
+  },
+  { _id: false }
+);
+
+const ActionPlaybooksSchema = new Schema(
+  {
+    explainAndPush: { type: ExplainAndPushPlaybookSchema, default: () => ({}) },
+    escalateToHuman: { type: EscalateToHumanPlaybookSchema, default: () => ({}) },
+    takeMessage: { type: TakeMessagePlaybookSchema, default: () => ({}) },
+    endCallPolite: { type: EndCallPolitePlaybookSchema, default: () => ({}) }
+  },
+  { _id: false }
+);
+
+const ThreeTierPackageDraftSchema = new Schema(
+  {
+    categoryName: { type: String, trim: true },
+    categoryDescription: { type: String, trim: true },
+    scenarioName: { type: String, trim: true },
+    scenarioObjective: { type: String, trim: true },
+    scenarioExamples: {
+      type: [String],
+      default: []
+    },
+    suggestedStepsOutline: {
+      type: [String],
+      default: []
+    },
+    notesForAdmin: { type: String, trim: true }
+  },
+  { _id: false }
+);
+
+const LinkedScenarioSchema = new Schema(
+  {
+    scenarioId: { type: Schema.Types.ObjectId, ref: 'Scenario', default: null },
+    scenarioName: { type: String, trim: true }
+  },
+  { _id: false }
+);
+
+const MatchHistorySampleSchema = new Schema(
+  {
+    text: { type: String, trim: true }, // normalized user input
+    matchedAt: { type: Date },
+    outcome: {
+      finalAction: { type: String, trim: true, default: null },
+      successFlag: { type: Boolean, default: null }
+    }
+  },
+  { _id: false }
+);
+
+const MatchHistorySchema = new Schema(
+  {
+    totalMatches: { type: Number, default: 0 },
+    totalSuccesses: { type: Number, default: 0 },
+    lastMatchedAt: { type: Date, default: null },
+    lastSuccessAt: { type: Date, default: null },
+    successRate: { type: Number, default: 0 }, // 0–1
+    recentSamplePhrases: {
+      type: [MatchHistorySampleSchema],
+      default: []
+    }
+  },
+  { _id: false }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MAIN TRIAGE CARD SCHEMA
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
 
-const TriageCardSchema = new Schema({
-  
-  // ─── MULTI-TENANT SCOPING ───
-  companyId: {
-    type: Schema.Types.ObjectId,
-    ref: 'Company',
-    required: true,
-    index: true,
-    description: 'Company this card belongs to (multi-tenant isolation)'
-  },
-
-  // ─── CARD METADATA ───
-  status: {
-    type: String,
-    enum: ['DRAFT', 'ACTIVE', 'ARCHIVED'],
-    default: 'DRAFT',
-    required: true,
-    index: true,
-    description: 'DRAFT: not used | ACTIVE: compiled into runtime config | ARCHIVED: historical reference'
-  },
-
-  trade: {
-    type: String,
-    required: true,
-    description: 'Industry/trade this card applies to (HVAC, Plumbing, Electrical, etc.)'
-  },
-
-  serviceTypes: {
-    type: [String],
-    required: true,
-    description: 'Service types this card handles (REPAIR, MAINTENANCE, etc.)'
-  },
-
-  // ─── PART 1: FRONTLINE-INTEL BLOCK ───
-  frontlineIntelBlock: {
-    type: String,
-    required: true,
-    description: 'Procedural text: how Frontline should think and triage this situation'
-  },
-
-  // ─── PART 2: TRIAGE MAP (STRUCTURED DECISION TREE) ───
-  triageMap: {
-    type: [TriageRuleSchema],
-    required: true,
-    validate: {
-      validator: function(arr) {
-        return arr.length > 0;
-      },
-      message: 'Triage map must contain at least one rule'
+const TriageCardSchema = new Schema(
+  {
+    companyId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Company',
+      required: true,
+      index: true
     },
-    description: 'Structured rules for call classification (THE BRAIN OF CALL DISTRIBUTION)'
-  },
 
-  // ─── PART 3: RESPONSE LIBRARY ───
-  responses: {
-    type: [String],
-    required: true,
-    validate: {
-      validator: function(arr) {
-        return arr.length >= 5;
-      },
-      message: 'Response library must contain at least 5 variations'
+    trade: {
+      type: String,
+      required: true // e.g. "HVAC", "PLUMBING"
     },
-    description: '10+ rotating response lines to keep AI sounding human'
-  },
 
-  // ─── PART 4: CATEGORY SKELETON + SCENARIO SEEDS ───
-  category: {
-    type: CategorySchema,
-    required: true,
-    description: 'Category structure for 3-Tier + scenario seeds for AI Scenario Architect'
-  },
+    triageLabel: {
+      type: String,
+      required: true,
+      trim: true
+    },
 
-  // ─── VERSION TRACKING ───
-  version: {
-    type: Number,
-    default: 1,
-    description: 'Version number (incremented on each update)'
-  },
+    displayName: {
+      type: String,
+      required: true,
+      trim: true
+    },
 
-  generatedBy: {
-    type: String,
-    enum: ['LLM', 'MANUAL', 'IMPORT'],
-    default: 'LLM',
-    description: 'How this card was created'
-  },
+    description: {
+      type: String,
+      trim: true
+    },
 
-  llmModel: {
-    type: String,
-    description: 'LLM model used for generation (e.g., "gpt-4o-mini")'
-  },
+    intent: {
+      type: String,
+      trim: true
+    },
 
-  // ─── AUDIT TRAIL ───
-  createdBy: {
-    type: Schema.Types.ObjectId,
-    ref: 'Admin',
-    description: 'Admin who created this card'
-  },
+    triageCategory: {
+      type: String,
+      trim: true
+    },
 
-  lastModifiedBy: {
-    type: Schema.Types.ObjectId,
-    ref: 'Admin',
-    description: 'Admin who last modified this card'
+    serviceType: {
+      type: String,
+      enum: ['REPAIR', 'MAINTENANCE', 'EMERGENCY', 'OTHER'],
+      required: true
+    },
+
+    priority: {
+      type: Number,
+      default: 100
+    },
+
+    isActive: {
+      type: Boolean,
+      default: false
+    },
+
+    quickRuleConfig: {
+      type: QuickRuleConfigSchema,
+      required: true
+    },
+
+    frontlinePlaybook: {
+      type: FrontlinePlaybookSchema,
+      default: () => ({})
+    },
+
+    actionPlaybooks: {
+      type: ActionPlaybooksSchema,
+      default: () => ({})
+    },
+
+    threeTierPackageDraft: {
+      type: ThreeTierPackageDraftSchema,
+      default: () => ({})
+    },
+
+    linkedScenario: {
+      type: LinkedScenarioSchema,
+      default: () => ({ scenarioId: null, scenarioName: '' })
+    },
+
+    matchHistory: {
+      type: MatchHistorySchema,
+      default: () => ({})
+    },
+
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null }
+  },
+  {
+    timestamps: true
   }
+);
 
-}, {
-  timestamps: true,
-  collection: 'triageCards'
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
 // INDEXES
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
 
-TriageCardSchema.index({ companyId: 1, status: 1 });
-TriageCardSchema.index({ companyId: 1, 'category.slug': 1 });
-TriageCardSchema.index({ companyId: 1, trade: 1 });
-TriageCardSchema.index({ createdAt: -1 });
+TriageCardSchema.index(
+  { companyId: 1, trade: 1, isActive: 1, priority: -1 },
+  { name: 'company_trade_active_priority' }
+);
 
-// ─────────────────────────────────────────────────────────────────────────────
+TriageCardSchema.index(
+  { companyId: 1, 'matchHistory.successRate': 1 },
+  { name: 'company_success_rate' }
+);
+
+TriageCardSchema.index(
+  { companyId: 1, triageLabel: 1 },
+  { name: 'company_triage_label', unique: true }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
 // INSTANCE METHODS
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
 
-TriageCardSchema.methods.activate = function() {
-  this.status = 'ACTIVE';
-  return this.save();
-};
-
-TriageCardSchema.methods.deactivate = function() {
-  this.status = 'DRAFT';
-  return this.save();
-};
-
-TriageCardSchema.methods.archive = function() {
-  this.status = 'ARCHIVED';
-  return this.save();
-};
-
-TriageCardSchema.methods.incrementVersion = function() {
-  this.version += 1;
-  return this;
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STATIC METHODS
-// ─────────────────────────────────────────────────────────────────────────────
-
-TriageCardSchema.statics.findActiveByCompany = function(companyId) {
-  return this.find({ companyId, status: 'ACTIVE' }).sort({ 'category.name': 1 });
-};
-
-TriageCardSchema.statics.findByCompany = function(companyId) {
-  return this.find({ companyId }).sort({ createdAt: -1 });
-};
-
-TriageCardSchema.statics.findByCategorySlug = function(companyId, categorySlug) {
-  return this.findOne({ companyId, 'category.slug': categorySlug });
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PRE-SAVE HOOKS
-// ─────────────────────────────────────────────────────────────────────────────
-
-TriageCardSchema.pre('save', function(next) {
-  // Sort triageMap by priority (descending) for runtime optimization
-  if (this.isModified('triageMap')) {
-    this.triageMap.sort((a, b) => b.priority - a.priority);
+/**
+ * Recompute successRate from totalMatches/totalSuccesses
+ */
+TriageCardSchema.methods.recomputeSuccessRate = function recomputeSuccessRate() {
+  if (!this.matchHistory) this.matchHistory = {};
+  const m = this.matchHistory;
+  if (m.totalMatches && m.totalMatches > 0) {
+    m.successRate = m.totalSuccesses / m.totalMatches;
+  } else {
+    m.successRate = 0;
   }
-  next();
-});
+};
 
-// ─────────────────────────────────────────────────────────────────────────────
-// EXPORT
-// ─────────────────────────────────────────────────────────────────────────────
-
-const TriageCard = mongoose.model('TriageCard', TriageCardSchema);
-
-module.exports = TriageCard;
-
+module.exports = mongoose.model('TriageCard', TriageCardSchema);
