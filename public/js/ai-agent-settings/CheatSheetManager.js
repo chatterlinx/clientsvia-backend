@@ -7995,43 +7995,94 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     const threeTier = card.threeTierPackageDraft || {};
     const scenarioExamples = threeTier.scenarioExamples || [];
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ACTION BADGE COLOR SYSTEM (V22 Visual Intelligence)
+    // ═══════════════════════════════════════════════════════════════════════════
+    const actionBadges = {
+      'DIRECT_TO_3TIER':   { bg: 'bg-blue-500',   text: 'text-white', icon: '🔵', label: '3-TIER' },
+      'ESCALATE_TO_HUMAN': { bg: 'bg-red-500',    text: 'text-white', icon: '🔴', label: 'HUMAN' },
+      'EXPLAIN_AND_PUSH':  { bg: 'bg-purple-500', text: 'text-white', icon: '🟣', label: 'PUSH' },
+      'TAKE_MESSAGE':      { bg: 'bg-orange-500', text: 'text-white', icon: '🟠', label: 'MSG' },
+      'END_CALL_POLITE':   { bg: 'bg-gray-500',   text: 'text-white', icon: '⚫', label: 'END' }
+    };
+    const actionBadge = actionBadges[action] || actionBadges['DIRECT_TO_3TIER'];
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // HEATMAP STYLING (Traffic + Success Visual Indicators)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Uses heatmap: darker = more traffic
+    let usesStyle = 'bg-gray-100 text-gray-500';
+    if (uses >= 100) usesStyle = 'bg-blue-600 text-white font-bold';
+    else if (uses >= 50) usesStyle = 'bg-blue-500 text-white';
+    else if (uses >= 20) usesStyle = 'bg-blue-400 text-white';
+    else if (uses >= 5) usesStyle = 'bg-blue-200 text-blue-800';
+    else if (uses > 0) usesStyle = 'bg-blue-100 text-blue-700';
+    
+    // Success heatmap: green = good, yellow = warning, red = problem
+    let successStyle = 'bg-gray-100 text-gray-400';
+    let successGlow = '';
+    if (successPercent !== null) {
+      if (successPercent >= 90) {
+        successStyle = 'bg-green-500 text-white font-bold';
+        successGlow = 'ring-2 ring-green-300 ring-opacity-50';
+      } else if (successPercent >= 70) {
+        successStyle = 'bg-green-400 text-white';
+      } else if (successPercent >= 50) {
+        successStyle = 'bg-yellow-400 text-yellow-900';
+      } else {
+        successStyle = 'bg-red-400 text-white';
+        successGlow = 'ring-2 ring-red-300 ring-opacity-50';
+      }
+    }
+    
     return `
-      <div class="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow" data-card-id="${card._id}">
+      <div class="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow ${!isActive ? 'opacity-60' : ''}" data-card-id="${card._id}">
         
-        <!-- Card Header (V22 Screenshot Style) -->
+        <!-- Card Header (V22 Action-Badge Enhanced) -->
         <div class="bg-gradient-to-r from-gray-50 to-indigo-50 px-4 py-3 border-b border-gray-200">
           <div class="flex items-center justify-between">
             <div class="flex-1">
-              <div class="flex items-center space-x-3">
-                <label class="relative inline-flex items-center cursor-pointer">
+              <div class="flex items-center space-x-2 flex-wrap gap-y-1">
+                <!-- Toggle -->
+                <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
                   <input type="checkbox" ${isActive ? 'checked' : ''} 
                     onchange="cheatSheetManager.toggleTriageCardActive('${card._id}', this.checked)"
                     class="sr-only peer">
                   <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"></div>
                 </label>
+                <!-- Title -->
                 <h4 class="text-base font-semibold text-gray-900">${this.escapeHtml(displayName)}</h4>
-                <span class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
+                <!-- Trade Badge -->
+                <span class="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
                   ${trade}
                 </span>
+                <!-- ACTION BADGE (V22 Visual Routing) -->
+                <span class="px-2 py-0.5 text-xs font-bold ${actionBadge.bg} ${actionBadge.text} rounded shadow-sm">
+                  ${actionBadge.icon} ${actionBadge.label}
+                </span>
               </div>
-              <p class="text-xs text-gray-600 mt-1">
-                <span class="text-red-600">🎯 Trigger:</span> <span class="font-medium">${this.escapeHtml(triggerLabel)}</span>
+              <p class="text-xs text-gray-600 mt-1.5">
+                <span class="text-red-600 font-medium">🎯 Trigger:</span> <span class="font-semibold text-gray-800">${this.escapeHtml(triggerLabel)}</span>
               </p>
               <p class="text-xs text-gray-500 mt-1 line-clamp-2">
                 💬 ${this.escapeHtml(openingLines[0] || card.description || 'No preview available')}
               </p>
             </div>
-            <div class="flex items-center space-x-2">
-              <span class="px-2 py-1 text-xs font-medium ${successPercent !== null ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'} rounded">
+            <div class="flex items-center space-x-1.5 flex-shrink-0">
+              <!-- Success % (Heatmap) -->
+              <span class="px-2 py-1 text-xs font-medium ${successStyle} ${successGlow} rounded transition-all" title="Success Rate">
                 ${successPercent !== null ? successPercent + '%' : '--%'}
               </span>
-              <span class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded">
-                ${uses} uses
+              <!-- Uses Count (Heatmap) -->
+              <span class="px-2 py-1 text-xs font-medium ${usesStyle} rounded transition-all" title="Total Uses">
+                ${uses}
               </span>
-              <button onclick="cheatSheetManager.deleteTriageCard('${card._id}')" class="px-2 py-1 text-xs bg-red-100 text-red-700 border border-red-300 rounded hover:bg-red-200 transition-colors">
+              <!-- Delete -->
+              <button onclick="cheatSheetManager.deleteTriageCard('${card._id}')" class="px-2 py-1 text-xs bg-red-100 text-red-700 border border-red-300 rounded hover:bg-red-200 transition-colors" title="Delete Card">
                 🗑️
               </button>
-              <button onclick="cheatSheetManager.toggleCardAccordion('${card._id}')" class="p-2 text-gray-600 hover:text-gray-900 transition-colors">
+              <!-- Expand -->
+              <button onclick="cheatSheetManager.toggleCardAccordion('${card._id}')" class="p-2 text-gray-600 hover:text-gray-900 transition-colors" title="Expand Details">
                 <i class="fas fa-chevron-down" id="accordion-icon-${card._id}"></i>
               </button>
             </div>
