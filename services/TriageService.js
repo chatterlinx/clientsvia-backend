@@ -121,32 +121,56 @@ function buildQuickRules(cards, manualRules = []) {
  * Merges both sources into unified quickRules array.
  */
 async function getCompanyTriageConfig(companyId, trade) {
-  if (!companyId) return { cards: [], quickRules: [], manualRules: [] };
+  if (!companyId) {
+    logger.warn('[TRIAGE] getCompanyTriageConfig called with no companyId');
+    return { cards: [], quickRules: [], manualRules: [] };
+  }
 
   const key = String(companyId) + (trade ? `:${trade}` : '');
   const now = Date.now();
   const cached = triageCache.get(key);
 
   if (cached && cached.expiresAt > now) {
+    logger.info('[TRIAGE] Using cached config', {
+      companyId: String(companyId),
+      cachedCards: cached.cards?.length || 0,
+      cachedRules: cached.quickRules?.length || 0
+    });
     return { cards: cached.cards, quickRules: cached.quickRules, manualRules: cached.manualRules };
   }
 
-  // Load TriageCards
-  const cardQuery = { companyId, isActive: true };
+  // Load TriageCards - ensure companyId is treated as ObjectId
+  const mongoose = require('mongoose');
+  let companyObjectId;
+  try {
+    companyObjectId = new mongoose.Types.ObjectId(String(companyId));
+  } catch (err) {
+    logger.error('[TRIAGE] Invalid companyId format', { companyId: String(companyId), error: err.message });
+    return { cards: [], quickRules: [], manualRules: [] };
+  }
+
+  const cardQuery = { companyId: companyObjectId, isActive: true };
   if (trade) cardQuery.trade = trade;
+  
+  logger.info('[TRIAGE] Querying TriageCards', {
+    companyId: String(companyId),
+    query: JSON.stringify(cardQuery)
+  });
+  
   const cards = await TriageCard.find(cardQuery).lean().exec();
 
   // Load Manual Rules from Company.aiAgentSettings.cheatSheet.manualTriageRules
   // (This is where CheatSheetManager UI saves them)
   let manualRules = [];
   try {
-    const company = await Company.findById(companyId)
+    const company = await Company.findById(companyObjectId)
       .select('aiAgentSettings.cheatSheet.manualTriageRules')
       .lean()
       .exec();
     
     if (company?.aiAgentSettings?.cheatSheet?.manualTriageRules) {
       manualRules = company.aiAgentSettings.cheatSheet.manualTriageRules;
+      logger.info('[TRIAGE] Loaded manual rules', { count: manualRules.length });
     }
   } catch (err) {
     logger.warn('[TRIAGE] Failed to load manual rules', {
@@ -297,14 +321,32 @@ async function recordMatchSuccess(triageCardId) {
  *   }
  */
 async function applyQuickTriageRules(userText, companyId, trade) {
+  logger.info('[TRIAGE] applyQuickTriageRules called', {
+    companyId: String(companyId),
+    trade: trade || null,
+    userTextPreview: userText?.substring(0, 50) || null
+  });
+
   const normalized = normalizeText(userText);
   if (!normalized) {
+    logger.warn('[TRIAGE] Empty input after normalization', { userText });
     return { matched: false };
   }
 
+  logger.info('[TRIAGE] Normalized input', { normalized: normalized.substring(0, 100) });
+
   const { quickRules } = await getCompanyTriageConfig(companyId, trade);
+  
+  logger.info('[TRIAGE] Quick rules loaded', {
+    companyId: String(companyId),
+    rulesCount: quickRules?.length || 0
+  });
+  
   if (!quickRules.length) {
-    logger.debug('[TRIAGE] No quick rules configured', { companyId: String(companyId), trade });
+    logger.info('[TRIAGE] No quick rules configured - check if cards are seeded and active', { 
+      companyId: String(companyId), 
+      trade 
+    });
     return { matched: false };
   }
 
