@@ -149,6 +149,226 @@ router.get('/:tradeKey/:presetKey', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// POST /api/admin/triage-presets/trade
+// CREATE a new trade (no code changes needed!)
+// ═══════════════════════════════════════════════════════════════════════════
+
+router.post('/trade', async (req, res) => {
+  try {
+    const { tradeKey, displayName, description, icon, sortOrder } = req.body;
+
+    if (!tradeKey || !displayName) {
+      return res.status(400).json({
+        success: false,
+        error: 'tradeKey and displayName are required'
+      });
+    }
+
+    const trade = await TradeDefinition.findOneAndUpdate(
+      { tradeKey: tradeKey.toUpperCase() },
+      {
+        tradeKey: tradeKey.toUpperCase(),
+        displayName,
+        description: description || '',
+        icon: icon || '📋',
+        sortOrder: sortOrder || 50,
+        isActive: true
+      },
+      { upsert: true, new: true }
+    );
+
+    logger.info('[TRIAGE PRESETS] Trade created/updated:', trade.tradeKey);
+
+    res.json({
+      success: true,
+      message: `Trade ${trade.tradeKey} created/updated`,
+      trade
+    });
+
+  } catch (error) {
+    logger.error('[TRIAGE PRESETS] Error creating trade:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to create trade'
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// POST /api/admin/triage-presets/preset
+// CREATE a new preset (no code changes needed!)
+// ═══════════════════════════════════════════════════════════════════════════
+
+router.post('/preset', async (req, res) => {
+  try {
+    const {
+      tradeKey,
+      presetKey,
+      displayName,
+      description,
+      category,
+      quickRuleSkeleton,
+      samplePhrases,
+      sortOrder
+    } = req.body;
+
+    if (!tradeKey || !presetKey || !displayName) {
+      return res.status(400).json({
+        success: false,
+        error: 'tradeKey, presetKey, and displayName are required'
+      });
+    }
+
+    // Build the preset document
+    const presetData = {
+      tradeKey: tradeKey.toUpperCase(),
+      presetKey: presetKey.toUpperCase(),
+      displayName,
+      description: description || '',
+      category: category || 'Other',
+      quickRuleSkeleton: quickRuleSkeleton || {
+        action: 'DIRECT_TO_3TIER',
+        intent: 'SERVICE_REPAIR',
+        serviceType: 'REPAIR',
+        priority: 100,
+        keywordsMustHave: [],
+        keywordsExclude: []
+      },
+      samplePhrases: samplePhrases || [],
+      sortOrder: sortOrder || 100,
+      isActive: true
+    };
+
+    const preset = await TriagePresetScenario.findOneAndUpdate(
+      { tradeKey: presetData.tradeKey, presetKey: presetData.presetKey },
+      presetData,
+      { upsert: true, new: true }
+    );
+
+    logger.info('[TRIAGE PRESETS] Preset created/updated:', preset.presetKey);
+
+    res.json({
+      success: true,
+      message: `Preset ${preset.presetKey} created/updated`,
+      preset
+    });
+
+  } catch (error) {
+    logger.error('[TRIAGE PRESETS] Error creating preset:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to create preset'
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PUT /api/admin/triage-presets/preset/:presetId
+// UPDATE an existing preset
+// ═══════════════════════════════════════════════════════════════════════════
+
+router.put('/preset/:presetId', async (req, res) => {
+  try {
+    const { presetId } = req.params;
+    const updates = req.body;
+
+    // Don't allow changing tradeKey or presetKey (use delete + create instead)
+    delete updates.tradeKey;
+    delete updates.presetKey;
+
+    const preset = await TriagePresetScenario.findByIdAndUpdate(
+      presetId,
+      { $set: updates },
+      { new: true }
+    );
+
+    if (!preset) {
+      return res.status(404).json({
+        success: false,
+        error: 'Preset not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Preset ${preset.presetKey} updated`,
+      preset
+    });
+
+  } catch (error) {
+    logger.error('[TRIAGE PRESETS] Error updating preset:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update preset'
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DELETE /api/admin/triage-presets/preset/:presetId
+// DELETE a preset
+// ═══════════════════════════════════════════════════════════════════════════
+
+router.delete('/preset/:presetId', async (req, res) => {
+  try {
+    const { presetId } = req.params;
+
+    const preset = await TriagePresetScenario.findByIdAndDelete(presetId);
+
+    if (!preset) {
+      return res.status(404).json({
+        success: false,
+        error: 'Preset not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Preset ${preset.presetKey} deleted`
+    });
+
+  } catch (error) {
+    logger.error('[TRIAGE PRESETS] Error deleting preset:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to delete preset'
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DELETE /api/admin/triage-presets/trade/:tradeKey
+// DELETE a trade and all its presets
+// ═══════════════════════════════════════════════════════════════════════════
+
+router.delete('/trade/:tradeKey', async (req, res) => {
+  try {
+    const { tradeKey } = req.params;
+
+    // Delete the trade
+    await TradeDefinition.findOneAndDelete({ tradeKey: tradeKey.toUpperCase() });
+
+    // Delete all presets for this trade
+    const deletedPresets = await TriagePresetScenario.deleteMany({
+      tradeKey: tradeKey.toUpperCase()
+    });
+
+    res.json({
+      success: true,
+      message: `Trade ${tradeKey} deleted`,
+      presetsDeleted: deletedPresets.deletedCount
+    });
+
+  } catch (error) {
+    logger.error('[TRIAGE PRESETS] Error deleting trade:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to delete trade'
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // POST /api/admin/triage-presets/clone
 // Clone a preset into a TriageCard for a specific company
 // ═══════════════════════════════════════════════════════════════════════════
