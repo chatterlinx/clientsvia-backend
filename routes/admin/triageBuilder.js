@@ -239,53 +239,69 @@ router.post('/save-draft-v23', async (req, res, next) => {
 /**
  * POST /api/admin/triage-builder/validate-utterances
  * 
- * Test a list of utterances against current triage rules
- * Returns which ones match and which don't
+ * Test utterances against a draft card (LOCAL simulation, no DB)
+ * OR against live triage rules (if companyId provided)
  */
 router.post('/validate-utterances', async (req, res, next) => {
   try {
-    const { companyId, trade, utterances, expectedCardLabel } = req.body;
+    const { companyId, trade, utterances, triageCardDraft, testPlan } = req.body;
     
-    if (!companyId || !utterances || !Array.isArray(utterances)) {
-      return res.status(400).json({
-        ok: false,
-        error: 'Missing required fields: companyId, utterances[]'
-      });
-    }
+    // Import the validator helper
+    const { simulateTriageMatch, validateAgainstTestPlan } = require('../../services/TriageValidatorHelper');
     
-    const results = [];
-    
-    for (const utterance of utterances) {
-      const result = await TriageService.applyQuickTriageRules(utterance, companyId, trade);
+    // Mode 1: Validate draft card against test plan (local simulation)
+    if (triageCardDraft && testPlan) {
+      const validationReport = validateAgainstTestPlan(
+        triageCardDraft.quickRuleConfig,
+        testPlan
+      );
       
-      results.push({
-        utterance,
-        matched: result.matched,
-        matchedCard: result.triageLabel || null,
-        expectedMatch: expectedCardLabel ? result.triageLabel === expectedCardLabel : null,
-        action: result.action || null
+      return res.json({
+        ok: true,
+        mode: 'draft_simulation',
+        validationReport
       });
     }
     
-    const summary = {
-      total: results.length,
-      matched: results.filter(r => r.matched).length,
-      unmatched: results.filter(r => !r.matched).length,
-      expectedMatches: expectedCardLabel 
-        ? results.filter(r => r.expectedMatch === true).length 
-        : null
-    };
+    // Mode 2: Test utterances against live triage rules
+    if (companyId && utterances && Array.isArray(utterances)) {
+      const results = [];
+      
+      for (const utterance of utterances) {
+        const result = await TriageService.applyQuickTriageRules(utterance, companyId, trade);
+        
+        results.push({
+          utterance,
+          matched: result.matched,
+          matchedCard: result.triageLabel || null,
+          action: result.action || null,
+          intent: result.intent || null,
+          serviceType: result.serviceType || null
+        });
+      }
+      
+      const summary = {
+        total: results.length,
+        matched: results.filter(r => r.matched).length,
+        unmatched: results.filter(r => !r.matched).length
+      };
+      
+      return res.json({
+        ok: true,
+        mode: 'live_rules',
+        results,
+        summary
+      });
+    }
     
-    res.json({
-      ok: true,
-      results,
-      summary
+    return res.status(400).json({
+      ok: false,
+      error: 'Provide either (triageCardDraft + testPlan) for draft simulation, or (companyId + utterances[]) for live testing'
     });
     
   } catch (err) {
     logger.error('[TRIAGE BUILDER] Validate utterances error', {
-      error: err.message,
-      companyId: req.body?.companyId
+      error: err.message
     });
     next(err);
   }

@@ -4,12 +4,17 @@
 // PURPOSE: Admin-side only. LLM never runs during calls.
 // FLOW: Admin input → LLM generates draft → Auto-validate → Admin approves
 //
+// CRITICAL: LLM-A generates ROUTING METADATA, not conversation scripts.
+// See: docs/V23-TRIAGE-RUNTIME-AND-LLM-A-SPEC.md
+//
 // ═══════════════════════════════════════════════════════════════════════════
 
 const OpenAI = require('openai');
 const logger = require('../utils/logger');
-const TriageCard = require('../models/TriageCard');
-const TriageService = require('./TriageService');
+const {
+  validateAgainstTestPlan,
+  checkRegionConflicts
+} = require('./TriageValidatorHelper');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // OPENAI CLIENT
@@ -23,125 +28,97 @@ const openai = new OpenAI({
 // SYSTEM PROMPT - Enforces V23 Output Contract
 // ═══════════════════════════════════════════════════════════════════════════
 
-const SYSTEM_PROMPT = `You are LLM-A, the Triage Architect for ClientsVia V23.
+// ═══════════════════════════════════════════════════════════════════════════
+// SYSTEM PROMPT - V23 Guardrails (from authoritative spec)
+// ═══════════════════════════════════════════════════════════════════════════
 
-Your job is to design triage cards that route incoming calls to the correct lane (REPAIR, MAINTENANCE, EMERGENCY, OTHER).
+const SYSTEM_PROMPT = `You are LLM-A, an OFFLINE TRIAGE ARCHITECT for a multi-tenant AI receptionist platform.
 
-## CRITICAL RULES
+Your job:
+- Generate CLEAN, MINIMAL routing rules (TriageCards) used ONLY for keyword routing.
+- You NEVER write conversational scripts or phone dialogues.
+- You NEVER talk to callers.
+- You ONLY output:
+  - triageCardDraft
+  - testPlan
+  - guardrailFlags
 
-1. **Must-Have Keywords (1-3 max)**
-   - Keep them SHORT and DECISIVE: "ac", "tuneup", "not cooling", "emergency"
-   - These are AND-ed by the matcher. Too many = card never fires.
-   - Do NOT put all variations here. That's what synonymGroups are for.
+Critical rules:
+1) You are generating routing metadata, not phone answers.
+2) mustHaveKeywords must be 1–3 short tokens, no sentences, no synonyms list.
+3) excludeKeywords must be short tokens that disqualify this card.
+4) Use regionProfile:
+   - If climate is HOT_ONLY and supportsHeating=false:
+     - Do NOT focus on furnaces, heaters, boilers.
+     - If admin examples mention them, add a guardrail flag
+       "REGION_HEATING_MENTIONED_IN_HOT_ONLY".
+5) Synonyms are allowed in your reasoning, but do NOT stuff them into mustHaveKeywords.
+   - Example: For AC maintenance:
+     - Good mustHaveKeywords: ["ac", "tuneup"] or ["ac", "maintenance"]
+6) You must produce a testPlan with both:
+   - positiveUtterances: 5+ variants that SHOULD match.
+   - negativeUtterances: 5+ variants that SHOULD NOT match.
+7) threeTierLink is only a hint for humans:
+   - categoryKey and scenarioKey used by admins later.
+   - You are NOT creating 3-Tier scenarios.
+8) All outputs must be valid JSON and strictly follow the schema.
 
-2. **Synonym Groups**
-   - Put ALL phrasing variations in synonymGroups[].terms
-   - These are for debugging, 3-Tier expansion, and future auto-matching
-   - NOT used in runtime AND matching
-
-3. **Exclude Keywords**
-   - Words that should BLOCK this card from matching
-   - MAINTENANCE cards exclude: "not cooling", "leaking", "emergency", "no power"
-   - REPAIR cards exclude: "tuneup", "maintenance", "annual service"
-
-4. **Region Profile Compliance**
-   - If supportsHeating=false: NEVER include furnace/heat/boiler in mustHaveKeywords
-   - If you see heating words in examples, set regionConflict=true and note it
-
-5. **Test Plan**
-   - Generate 5+ positive utterances (should match this card)
-   - Generate 5+ negative utterances (should NOT match - go elsewhere)
-
-6. **Output Format**
-   - Return ONLY valid JSON matching the exact schema below
-   - No markdown, no explanations, just the JSON object
-
-## OUTPUT SCHEMA (return exactly this structure)
+OUTPUT SCHEMA (return exactly this structure):
 
 {
   "triageCardDraft": {
     "displayName": "string - human readable name",
     "triageLabel": "string - UPPERCASE_SNAKE_CASE identifier",
-    
     "quickRuleConfig": {
-      "intent": "string - e.g. MAINTENANCE, AC_REPAIR, EMERGENCY",
+      "intent": "string - e.g. AC_MAINTENANCE, AC_REPAIR, EMERGENCY",
       "serviceType": "REPAIR | MAINTENANCE | EMERGENCY | OTHER",
-      "action": "DIRECT_TO_3TIER | ESCALATE_TO_HUMAN | TAKE_MESSAGE | END_CALL_POLITE | EXPLAIN_AND_PUSH",
-      "priority": "number 1-150 (higher = checked first)",
-      
-      "mustHaveKeywords": ["1-3 decisive keywords only"],
-      
-      "synonymGroups": [
-        {
-          "label": "group_name",
-          "terms": ["variation1", "variation2", "variation3"]
-        }
-      ],
-      
-      "excludeKeywords": ["words that block this card"]
+      "action": "DIRECT_TO_3TIER | ESCALATE_TO_HUMAN | TAKE_MESSAGE | END_CALL_POLITE",
+      "mustHaveKeywords": ["1-3 short tokens only"],
+      "excludeKeywords": ["tokens that disqualify"]
     },
-    
-    "frontlinePlaybook": {
-      "goal": "one-sentence goal",
-      "steps": ["step 1", "step 2", "step 3"],
-      "sampleReplies": ["reply option 1", "reply option 2", "reply option 3"]
+    "threeTierLink": {
+      "categoryKey": "string or null",
+      "scenarioKey": "string or null"
     },
-    
-    "threeTierPackageDraft": {
-      "categoryName": "string",
-      "scenarioName": "string",
-      "objective": "string",
-      "notesForScenarioBuilder": ["note 1", "note 2"]
-    },
-    
-    "testPlan": {
-      "positiveUtterances": ["5+ phrases that SHOULD match"],
-      "negativeUtterances": ["5+ phrases that should NOT match"]
-    },
-    
-    "guardrailFlags": {
-      "heatingTermsUsed": "boolean - true if heating words detected",
-      "regionConflict": "boolean - true if conflict with regionProfile",
-      "requiresHumanReview": "boolean - always true for new cards"
-    }
-  }
+    "adminNotes": "string - optional notes for admin"
+  },
+  "testPlan": {
+    "positiveUtterances": ["5+ phrases that SHOULD match"],
+    "negativeUtterances": ["5+ phrases that should NOT match"]
+  },
+  "guardrailFlags": ["array of flag strings if any conflicts detected"]
 }`;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// BUILD USER PROMPT
+// BUILD USER PROMPT (matches V23 spec input contract)
 // ═══════════════════════════════════════════════════════════════════════════
 
 function buildUserPrompt(input) {
-  const { companyId, tradeKey, regionProfile, triageIdea } = input;
+  // Build the exact input structure from the spec
+  const userPayload = {
+    company: {
+      id: input.companyId,
+      name: input.companyName || 'Unknown Company',
+      tradeKey: input.tradeKey,
+      regionProfile: input.regionProfile || {
+        climate: 'MIXED',
+        supportsHeating: true,
+        supportsCooling: true
+      }
+    },
+    triageIdea: {
+      adminTitle: input.triageIdea.adminTitle,
+      desiredAction: input.triageIdea.desiredAction,
+      intentHint: input.triageIdea.intentHint || input.triageIdea.serviceTypeHint,
+      serviceTypeHint: input.triageIdea.serviceTypeHint,
+      threeTierHint: input.triageIdea.threeTierHint || null,
+      exampleUtterances: input.triageIdea.exampleUtterances || []
+    }
+  };
   
-  return `## Company Context
-- Company ID: ${companyId}
-- Trade: ${tradeKey}
-- Climate: ${regionProfile.climate}
-- Supports Heating: ${regionProfile.supportsHeating}
-- Supports Cooling: ${regionProfile.supportsCooling}
-- Supports Maintenance: ${regionProfile.supportsMaintenance}
-- Supports Emergency: ${regionProfile.supportsEmergency}
+  return `Here is the input. Respond ONLY with a JSON object as specified:
 
-## Triage Request
-- Admin Title: ${triageIdea.adminTitle}
-- Admin Notes: ${triageIdea.adminNotes || 'None provided'}
-- Desired Action: ${triageIdea.desiredAction}
-- Service Type Hint: ${triageIdea.serviceTypeHint}
-- Priority Hint: ${triageIdea.priorityHint || 70}
-
-## Example Caller Utterances (admin provided)
-${triageIdea.exampleUtterances.map((u, i) => `${i + 1}. "${u}"`).join('\n')}
-
-## Your Task
-Generate a complete triageCardDraft JSON that:
-1. Uses 1-3 mustHaveKeywords (decisive, short)
-2. Puts all variations in synonymGroups
-3. Has proper excludeKeywords to avoid false matches
-4. Includes 5+ positive and 5+ negative test utterances
-5. Respects regionProfile (no furnace/heater if supportsHeating=false)
-
-Return ONLY the JSON object, no other text.`;
+${JSON.stringify(userPayload, null, 2)}`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -229,79 +206,31 @@ function validateLLMOutput(output) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// RUN AUTO-VALIDATION
+// RUN AUTO-VALIDATION (uses TriageValidatorHelper for consistent matching)
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function runAutoValidation(companyId, draft, trade) {
-  const testPlan = draft.testPlan || {};
-  const positives = testPlan.positiveUtterances || [];
-  const negatives = testPlan.negativeUtterances || [];
+function runAutoValidation(draft, testPlan, regionProfile) {
+  // Use the helper to validate against test plan
+  const quickRuleConfig = draft.quickRuleConfig || {};
+  const validationReport = validateAgainstTestPlan(quickRuleConfig, testPlan);
   
-  const report = {
-    status: 'PENDING',
-    coverage: {
-      positiveTotal: positives.length,
-      positiveMatched: 0,
-      negativeTotal: negatives.length,
-      negativeBlocked: 0
-    },
-    failures: []
-  };
+  // Check for region conflicts in the keywords
+  const allKeywords = [
+    ...(quickRuleConfig.mustHaveKeywords || []),
+    ...(quickRuleConfig.excludeKeywords || [])
+  ];
   
-  // Test positive utterances (should match this card)
-  for (const utterance of positives) {
-    try {
-      const result = await TriageService.applyQuickTriageRules(utterance, companyId, trade);
-      
-      // For now, we just check if ANY card matched
-      // In production, we'd check if THIS specific card matched
-      if (result.matched) {
-        report.coverage.positiveMatched++;
-      } else {
-        report.failures.push({
-          type: 'POSITIVE_NOT_MATCHED',
-          utterance,
-          reason: 'No triage rule matched this utterance'
-        });
-      }
-    } catch (err) {
-      report.failures.push({
-        type: 'TEST_ERROR',
-        utterance,
-        reason: err.message
-      });
+  const regionFlags = checkRegionConflicts(allKeywords, regionProfile);
+  
+  // Merge region flags into the report
+  if (regionFlags.length > 0) {
+    validationReport.guardrailFlags = regionFlags;
+    if (validationReport.status === 'PASSED') {
+      validationReport.status = 'NEEDS_REVIEW';
     }
   }
   
-  // Test negative utterances (should NOT match this specific card)
-  // For now, we just ensure they don't cause errors
-  for (const utterance of negatives) {
-    try {
-      const result = await TriageService.applyQuickTriageRules(utterance, companyId, trade);
-      // If it doesn't match this card specifically, that's good
-      // (In a full implementation, we'd check the card ID)
-      report.coverage.negativeBlocked++;
-    } catch (err) {
-      report.failures.push({
-        type: 'TEST_ERROR',
-        utterance,
-        reason: err.message
-      });
-    }
-  }
-  
-  // Determine overall status
-  const positivePassRate = report.coverage.positiveMatched / report.coverage.positiveTotal;
-  
-  if (positivePassRate >= 0.8 && report.failures.length === 0) {
-    report.status = 'PASSED';
-  } else if (positivePassRate >= 0.6) {
-    report.status = 'NEEDS_REVIEW';
-  } else {
-    report.status = 'FAILED';
-  }
-  
-  return report;
+  return validationReport;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -398,26 +327,37 @@ async function generateTriageCardV23(input) {
   }
   
   const draft = llmOutput.triageCardDraft;
+  const testPlan = llmOutput.testPlan || {};
+  const llmGuardrailFlags = llmOutput.guardrailFlags || [];
   
-  // 4. Run auto-validation
+  // 4. Run auto-validation (local simulation, no DB calls)
   let validationReport;
   try {
-    validationReport = await runAutoValidation(
-      input.companyId,
+    validationReport = runAutoValidation(
       draft,
-      input.tradeKey
+      testPlan,
+      input.regionProfile
     );
+    
+    // Merge LLM-provided guardrail flags
+    if (llmGuardrailFlags.length > 0) {
+      validationReport.guardrailFlags = [
+        ...(validationReport.guardrailFlags || []),
+        ...llmGuardrailFlags
+      ];
+    }
     
     logger.info('[LLM-A V23] Auto-validation complete', {
       status: validationReport.status,
-      positiveMatched: validationReport.coverage.positiveMatched,
-      positiveTotal: validationReport.coverage.positiveTotal
+      positiveMatched: validationReport.coverage.positiveMatchedCount,
+      positiveTotal: validationReport.coverage.positiveTotal,
+      guardrailFlags: validationReport.guardrailFlags?.length || 0
     });
   } catch (err) {
     logger.error('[LLM-A V23] Auto-validation failed', { error: err.message });
     validationReport = {
       status: 'ERROR',
-      coverage: { positiveTotal: 0, positiveMatched: 0, negativeTotal: 0, negativeBlocked: 0 },
+      coverage: { positiveMatchedCount: 0, positiveTotal: 0, negativeMatchedCount: 0, negativeTotal: 0 },
       failures: [{ type: 'VALIDATION_ERROR', reason: err.message }]
     };
   }
@@ -429,63 +369,71 @@ async function generateTriageCardV23(input) {
     cardLabel: draft.triageLabel
   });
   
+  // Return the exact contract from V23 spec
   return {
     ok: true,
-    draft,
-    validationReport,
+    triageCardDraft: draft,
+    testPlan,
+    guardrailFlags: validationReport.guardrailFlags || [],
+    validationReport: {
+      status: validationReport.status,
+      coverage: validationReport.coverage,
+      failures: validationReport.failures || []
+    },
     errors: []
   };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CONVERT DRAFT TO TRIAGE CARD
+// CONVERT DRAFT TO TRIAGE CARD (matches V23 spec TriageCard contract)
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
  * Convert LLM-A draft to actual TriageCard document
+ * Follows the exact schema from V23-TRIAGE-RUNTIME-AND-LLM-A-SPEC.md
  */
-function draftToTriageCard(companyId, trade, draft, validationReport) {
+function draftToTriageCard(companyId, tradeKey, draft, validationReport) {
+  const qrc = draft.quickRuleConfig || {};
+  
   return {
     companyId,
-    trade,
-    isActive: false, // Admin must explicitly activate
+    tradeKey,
+    active: false, // Admin must explicitly activate
+    priority: qrc.priority || 100,
     
-    triageLabel: draft.triageLabel,
     displayName: draft.displayName,
-    description: `Generated by LLM-A V23`,
+    triageLabel: draft.triageLabel,
     
-    intent: draft.quickRuleConfig.intent,
-    triageCategory: draft.quickRuleConfig.serviceType,
-    serviceType: draft.quickRuleConfig.serviceType,
-    priority: draft.quickRuleConfig.priority || 70,
-    
+    // The core routing config
     quickRuleConfig: {
-      keywordsMustHave: draft.quickRuleConfig.mustHaveKeywords,
-      keywordsExclude: draft.quickRuleConfig.excludeKeywords || [],
-      action: draft.quickRuleConfig.action,
-      explanation: `LLM-A generated for: ${draft.displayName}`
+      intent: qrc.intent || 'UNKNOWN',
+      serviceType: qrc.serviceType || 'OTHER',
+      action: qrc.action || 'DIRECT_TO_3TIER',
+      mustHaveKeywords: qrc.mustHaveKeywords || [],
+      excludeKeywords: qrc.excludeKeywords || []
     },
     
-    frontlinePlaybook: {
-      frontlineGoal: draft.frontlinePlaybook?.goal || '',
-      openingLines: draft.frontlinePlaybook?.sampleReplies || [],
-      conversationFlow: draft.frontlinePlaybook?.steps || []
+    // 3-Tier hint (admin uses this to map to scenario later)
+    threeTierLink: {
+      categoryKey: draft.threeTierLink?.categoryKey || null,
+      scenarioKey: draft.threeTierLink?.scenarioKey || null
     },
     
-    threeTierPackageDraft: {
-      categoryName: draft.threeTierPackageDraft?.categoryName || '',
-      scenarioName: draft.threeTierPackageDraft?.scenarioName || '',
-      scenarioObjective: draft.threeTierPackageDraft?.objective || ''
+    // Stats (initialized)
+    stats: {
+      uses: 0,
+      successRate: 0,
+      lastMatchedAt: null
     },
     
-    // V23 metadata
-    llmaGeneration: {
+    adminNotes: draft.adminNotes || `Generated by LLM-A V23 on ${new Date().toISOString()}`,
+    
+    // V23 metadata (for debugging/auditing)
+    llmaMetadata: {
       generatedAt: new Date(),
       version: 'V23',
-      synonymGroups: draft.quickRuleConfig.synonymGroups || [],
-      testPlan: draft.testPlan,
-      validationReport,
-      guardrailFlags: draft.guardrailFlags
+      validationStatus: validationReport?.status || 'UNKNOWN',
+      guardrailFlags: validationReport?.guardrailFlags || []
     }
   };
 }
