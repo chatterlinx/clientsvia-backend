@@ -975,6 +975,20 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     // Get company data for context
     const companyData = this.getCompanyContext();
     
+    // V22 HVAC Preset Pack definitions
+    const hvacPresets = [
+      { id: 'ac_not_cooling', label: 'AC not cooling', category: 'Cooling / No Cool', serviceTypes: ['REPAIR'], action: 'DIRECT_TO_3TIER', scenario: 'Customer reports AC is running but not cooling the house. Air is blowing but feels warm or room temperature. Needs proper repair diagnosis, not a tune-up.' },
+      { id: 'ac_blowing_warm', label: 'AC blowing warm air', category: 'Cooling / No Cool', serviceTypes: ['REPAIR'], action: 'DIRECT_TO_3TIER', scenario: 'Customer says AC is blowing warm air specifically. Unit may be running but producing warm air instead of cold. Could be refrigerant, compressor, or other issues requiring repair.' },
+      { id: 'ac_not_turning_on', label: 'AC not turning on', category: 'Cooling / No Cool', serviceTypes: ['REPAIR'], action: 'DIRECT_TO_3TIER', scenario: 'Customer reports AC unit will not start or turn on at all. May have checked thermostat and breaker already. Needs diagnostic repair visit.' },
+      { id: 'thermostat_blank', label: 'Thermostat blank/dead', category: 'Thermostat', serviceTypes: ['REPAIR'], action: 'DIRECT_TO_3TIER', scenario: 'Customer says thermostat screen is blank, dead, or not displaying anything. May need batteries or could indicate electrical issue.' },
+      { id: 'thermostat_not_responding', label: 'Thermostat not responding', category: 'Thermostat', serviceTypes: ['REPAIR'], action: 'DIRECT_TO_3TIER', scenario: 'Customer reports thermostat has power but system does not respond to temperature changes. Display works but AC/heat does not engage.' },
+      { id: 'heat_not_working', label: 'Heat not working', category: 'Heating', serviceTypes: ['REPAIR'], action: 'DIRECT_TO_3TIER', scenario: 'Customer reports heating system not producing heat. Furnace may be running but blowing cold air, or not engaging at all.' },
+      { id: 'ac_tune_up', label: 'AC tune-up / maintenance', category: 'Maintenance', serviceTypes: ['MAINTENANCE'], action: 'DIRECT_TO_3TIER', scenario: 'Customer wants routine AC maintenance, seasonal tune-up, or preventive service. System is working fine, just wants regular checkup.' },
+      { id: 'furnace_tune_up', label: 'Furnace tune-up / maintenance', category: 'Maintenance', serviceTypes: ['MAINTENANCE'], action: 'DIRECT_TO_3TIER', scenario: 'Customer wants furnace maintenance or winter prep service. Heating system is working fine, just wants seasonal checkup.' },
+      { id: 'hvac_emergency', label: 'HVAC emergency (gas smell, fire, flood)', category: 'Emergency', serviceTypes: ['EMERGENCY'], action: 'ESCALATE_TO_HUMAN', scenario: 'Customer reports urgent HVAC emergency: gas smell, burning smell, smoke, water leak flooding house, or complete system failure in extreme weather. Needs immediate human dispatch.' },
+      { id: 'estimate_request', label: 'Estimate / quote request', category: 'Other', serviceTypes: ['OTHER'], action: 'EXPLAIN_AND_PUSH', scenario: 'Customer is asking for a price estimate or quote for HVAC work. May be shopping around or planning a future project. Need to gather details and schedule estimate visit.' }
+    ];
+    
     container.innerHTML = `
       <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
         
@@ -986,11 +1000,11 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
                 <span class="mr-2">✨</span>
                 AI Triage Builder
                 <span class="ml-3 px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-700 rounded-full">
-                  ENTERPRISE
+                  V22 ENTERPRISE
                 </span>
               </h3>
               <p class="text-sm text-gray-600 mt-1">
-                LLM-powered content generator for service type triage rules & response scripts
+                LLM-A factory for generating complete TriageCards — drafts only, you approve before live
               </p>
             </div>
             <button 
@@ -1007,23 +1021,23 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         <!-- Collapsible Content -->
         <div id="triage-builder-content" class="hidden">
           
-          <!-- Info Banner -->
+          <!-- V22 Info Banner -->
           <div class="px-6 pt-4">
             <div class="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg">
               <div class="flex items-start space-x-3">
-                <span class="text-purple-600 text-xl">💡</span>
+                <span class="text-purple-600 text-xl">🧠</span>
                 <div class="flex-1">
-                  <h4 class="text-sm font-semibold text-purple-900 mb-1">How This Works</h4>
+                  <h4 class="text-sm font-semibold text-purple-900 mb-1">V22 Triage Card Factory</h4>
                   <p class="text-sm text-purple-800 mb-2">
-                    Describe a triage scenario (e.g., "customer wants cheap maintenance but AC isn't cooling"), and the AI will generate:
+                    Generate a complete <strong>TriageCard draft</strong> with one click:
                   </p>
                   <ul class="text-sm text-purple-800 space-y-1">
-                    <li>• <strong>Frontline-Intel procedural text</strong> — How to handle the scenario step-by-step</li>
-                    <li>• <strong>Cheat Sheet triage map</strong> — Symptom keywords → service type classification</li>
-                    <li>• <strong>Response Library</strong> — 7-10 natural, human-like phrase variations</li>
+                    <li>• <strong>Quick Rule Config</strong> — Keywords, intent, action, priority</li>
+                    <li>• <strong>Frontline Playbook</strong> — Goal + opening lines + objection handling</li>
+                    <li>• <strong>3-Tier Package Draft</strong> — Category, scenario, objective for scenario builder</li>
                   </ul>
                   <p class="text-sm text-purple-700 mt-2 font-medium">
-                    ⚠️ Output is for admin review only — NOT used for live calls until you approve & paste it in.
+                    ⚠️ Output is DRAFT only — Click "Create Triage Card" to add to your live brain.
                   </p>
                 </div>
               </div>
@@ -1034,31 +1048,68 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
           <div class="px-6 py-4">
             <form id="triage-builder-form" onsubmit="cheatSheetManager.handleTriageGenerate(event); return false;">
               
-              <!-- Trade Selection -->
-              <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">
-                  <i class="fas fa-industry mr-1 text-indigo-600"></i>
-                  Trade / Industry
-                </label>
-                <select 
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" 
-                  id="triage-trade-select" 
-                  required
-                >
-                  <option value="">-- Select Trade --</option>
-                  <option value="HVAC" ${companyData.trade === 'HVAC' ? 'selected' : ''}>HVAC</option>
-                  <option value="Plumbing" ${companyData.trade === 'Plumbing' ? 'selected' : ''}>Plumbing</option>
-                  <option value="Electrical" ${companyData.trade === 'Electrical' ? 'selected' : ''}>Electrical</option>
-                  <option value="Dental" ${companyData.trade === 'Dental' ? 'selected' : ''}>Dental</option>
-                  <option value="Medical" ${companyData.trade === 'Medical' ? 'selected' : ''}>Medical</option>
-                  <option value="Veterinary" ${companyData.trade === 'Veterinary' ? 'selected' : ''}>Veterinary</option>
-                  <option value="Roofing" ${companyData.trade === 'Roofing' ? 'selected' : ''}>Roofing</option>
-                  <option value="Landscaping" ${companyData.trade === 'Landscaping' ? 'selected' : ''}>Landscaping</option>
-                  <option value="Pest Control" ${companyData.trade === 'Pest Control' ? 'selected' : ''}>Pest Control</option>
-                  <option value="Locksmith" ${companyData.trade === 'Locksmith' ? 'selected' : ''}>Locksmith</option>
-                  <option value="Appliance Repair" ${companyData.trade === 'Appliance Repair' ? 'selected' : ''}>Appliance Repair</option>
-                  <option value="Auto Repair" ${companyData.trade === 'Auto Repair' ? 'selected' : ''}>Auto Repair</option>
-                </select>
+              <!-- Row 1: Trade + Preset Selector -->
+              <div class="grid grid-cols-2 gap-4 mb-4">
+                <!-- Trade Selection -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-industry mr-1 text-indigo-600"></i>
+                    Trade / Industry
+                  </label>
+                  <select 
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" 
+                    id="triage-trade-select" 
+                    onchange="cheatSheetManager.onTriageTradeChange(this.value)"
+                    required
+                  >
+                    <option value="">-- Select Trade --</option>
+                    <option value="HVAC" ${companyData.trade === 'HVAC' ? 'selected' : ''}>HVAC</option>
+                    <option value="Plumbing" ${companyData.trade === 'Plumbing' ? 'selected' : ''}>Plumbing</option>
+                    <option value="Electrical" ${companyData.trade === 'Electrical' ? 'selected' : ''}>Electrical</option>
+                    <option value="Dental" ${companyData.trade === 'Dental' ? 'selected' : ''}>Dental</option>
+                    <option value="Medical" ${companyData.trade === 'Medical' ? 'selected' : ''}>Medical</option>
+                    <option value="Roofing" ${companyData.trade === 'Roofing' ? 'selected' : ''}>Roofing</option>
+                    <option value="Pest Control" ${companyData.trade === 'Pest Control' ? 'selected' : ''}>Pest Control</option>
+                    <option value="Auto Repair" ${companyData.trade === 'Auto Repair' ? 'selected' : ''}>Auto Repair</option>
+                  </select>
+                </div>
+                
+                <!-- V22 Preset Selector -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-bookmark mr-1 text-purple-600"></i>
+                    Quick Preset (HVAC)
+                  </label>
+                  <select 
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" 
+                    id="triage-preset-select" 
+                    onchange="cheatSheetManager.onTriagePresetChange(this.value)"
+                  >
+                    <option value="">-- Start from scratch --</option>
+                    <optgroup label="Cooling / No Cool">
+                      <option value="ac_not_cooling">AC not cooling</option>
+                      <option value="ac_blowing_warm">AC blowing warm air</option>
+                      <option value="ac_not_turning_on">AC not turning on</option>
+                    </optgroup>
+                    <optgroup label="Thermostat">
+                      <option value="thermostat_blank">Thermostat blank/dead</option>
+                      <option value="thermostat_not_responding">Thermostat not responding</option>
+                    </optgroup>
+                    <optgroup label="Heating">
+                      <option value="heat_not_working">Heat not working</option>
+                    </optgroup>
+                    <optgroup label="Maintenance">
+                      <option value="ac_tune_up">AC tune-up / maintenance</option>
+                      <option value="furnace_tune_up">Furnace tune-up / maintenance</option>
+                    </optgroup>
+                    <optgroup label="Emergency">
+                      <option value="hvac_emergency">HVAC emergency</option>
+                    </optgroup>
+                    <optgroup label="Other">
+                      <option value="estimate_request">Estimate / quote request</option>
+                    </optgroup>
+                  </select>
+                </div>
               </div>
 
               <!-- Situation Description -->
@@ -1066,69 +1117,81 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
                 <label class="block text-sm font-medium text-gray-700 mb-2">
                   <i class="fas fa-file-alt mr-1 text-indigo-600"></i>
                   Triage Situation / Scenario
-                  <button 
-                    type="button"
-                    onclick="cheatSheetManager.openTriageExamplesModal()"
-                    class="ml-2 text-blue-600 hover:text-blue-800 transition-colors"
-                    title="See example triage scenarios"
-                  >
-                    <i class="fas fa-info-circle"></i>
-                  </button>
                 </label>
                 <textarea 
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 font-mono text-sm" 
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm" 
                   id="triage-situation-textarea" 
-                  rows="4" 
-                  placeholder="Example: Customer wants a cheap maintenance special even though their AC is not cooling."
+                  rows="3" 
+                  placeholder="Describe what the caller says and what you want the AI to understand..."
                   required
                 ></textarea>
-                <p class="mt-1 text-xs text-gray-500">
-                  <i class="fas fa-lightbulb mr-1"></i>
-                  Describe the scenario where the AI needs to correctly classify service type and prevent downgrades.
-                </p>
               </div>
 
-              <!-- Service Types -->
-              <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">
-                  <i class="fas fa-list-check mr-1 text-indigo-600"></i>
-                  Service Types to Include
-                </label>
-                <div class="grid grid-cols-2 gap-3">
-                  <div class="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                    <label class="flex items-center cursor-pointer">
-                      <input type="checkbox" class="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" value="REPAIR" id="triage-service-repair" checked>
-                      <span class="ml-2 text-sm">
-                        <strong class="text-gray-900">REPAIR</strong>
-                        <span class="block text-xs text-gray-600">Something is broken</span>
-                      </span>
+              <!-- Row 2: Action + Category -->
+              <div class="grid grid-cols-2 gap-4 mb-4">
+                <!-- Preferred Action -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-route mr-1 text-red-600"></i>
+                    Preferred Action
+                  </label>
+                  <div class="space-y-2">
+                    <label class="flex items-center p-2 bg-blue-50 border border-blue-200 rounded cursor-pointer hover:bg-blue-100">
+                      <input type="radio" name="triage-action" value="DIRECT_TO_3TIER" class="h-4 w-4 text-blue-600" checked>
+                      <span class="ml-2 text-sm"><strong class="text-blue-700">🔵 3-TIER</strong> — Route to scenario matching</span>
+                    </label>
+                    <label class="flex items-center p-2 bg-purple-50 border border-purple-200 rounded cursor-pointer hover:bg-purple-100">
+                      <input type="radio" name="triage-action" value="EXPLAIN_AND_PUSH" class="h-4 w-4 text-purple-600">
+                      <span class="ml-2 text-sm"><strong class="text-purple-700">🟣 PUSH</strong> — Explain then route</span>
+                    </label>
+                    <label class="flex items-center p-2 bg-red-50 border border-red-200 rounded cursor-pointer hover:bg-red-100">
+                      <input type="radio" name="triage-action" value="ESCALATE_TO_HUMAN" class="h-4 w-4 text-red-600">
+                      <span class="ml-2 text-sm"><strong class="text-red-700">🔴 HUMAN</strong> — Transfer immediately</span>
+                    </label>
+                    <label class="flex items-center p-2 bg-orange-50 border border-orange-200 rounded cursor-pointer hover:bg-orange-100">
+                      <input type="radio" name="triage-action" value="TAKE_MESSAGE" class="h-4 w-4 text-orange-600">
+                      <span class="ml-2 text-sm"><strong class="text-orange-700">🟠 MSG</strong> — Take a message</span>
                     </label>
                   </div>
-                  <div class="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                    <label class="flex items-center cursor-pointer">
-                      <input type="checkbox" class="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" value="MAINTENANCE" id="triage-service-maintenance" checked>
-                      <span class="ml-2 text-sm">
-                        <strong class="text-gray-900">MAINTENANCE</strong>
-                        <span class="block text-xs text-gray-600">Routine service, tune-up</span>
-                      </span>
+                </div>
+                
+                <!-- Triage Category -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-folder mr-1 text-green-600"></i>
+                    Triage Category
+                  </label>
+                  <select 
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 mb-2" 
+                    id="triage-category-select"
+                  >
+                    <option value="Cooling / No Cool">Cooling / No Cool</option>
+                    <option value="Heating">Heating</option>
+                    <option value="Thermostat">Thermostat</option>
+                    <option value="Maintenance">Maintenance</option>
+                    <option value="Emergency">Emergency</option>
+                    <option value="Billing/Admin">Billing/Admin</option>
+                    <option value="Other">Other</option>
+                  </select>
+                  
+                  <!-- Service Types -->
+                  <label class="block text-xs font-medium text-gray-600 mb-1 mt-3">Service Types</label>
+                  <div class="grid grid-cols-2 gap-2">
+                    <label class="flex items-center p-2 bg-gray-50 border border-gray-200 rounded cursor-pointer text-xs">
+                      <input type="checkbox" value="REPAIR" id="triage-service-repair" class="h-3 w-3 text-purple-600" checked>
+                      <span class="ml-2">REPAIR</span>
                     </label>
-                  </div>
-                  <div class="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                    <label class="flex items-center cursor-pointer">
-                      <input type="checkbox" class="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" value="EMERGENCY" id="triage-service-emergency" checked>
-                      <span class="ml-2 text-sm">
-                        <strong class="text-gray-900">EMERGENCY</strong>
-                        <span class="block text-xs text-gray-600">Urgent, after-hours</span>
-                      </span>
+                    <label class="flex items-center p-2 bg-gray-50 border border-gray-200 rounded cursor-pointer text-xs">
+                      <input type="checkbox" value="MAINTENANCE" id="triage-service-maintenance" class="h-3 w-3 text-purple-600">
+                      <span class="ml-2">MAINTENANCE</span>
                     </label>
-                  </div>
-                  <div class="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                    <label class="flex items-center cursor-pointer">
-                      <input type="checkbox" class="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" value="OTHER" id="triage-service-other" checked>
-                      <span class="ml-2 text-sm">
-                        <strong class="text-gray-900">OTHER</strong>
-                        <span class="block text-xs text-gray-600">Quotes, consultations</span>
-                      </span>
+                    <label class="flex items-center p-2 bg-gray-50 border border-gray-200 rounded cursor-pointer text-xs">
+                      <input type="checkbox" value="EMERGENCY" id="triage-service-emergency" class="h-3 w-3 text-purple-600">
+                      <span class="ml-2">EMERGENCY</span>
+                    </label>
+                    <label class="flex items-center p-2 bg-gray-50 border border-gray-200 rounded cursor-pointer text-xs">
+                      <input type="checkbox" value="OTHER" id="triage-service-other" class="h-3 w-3 text-purple-600">
+                      <span class="ml-2">OTHER</span>
                     </label>
                   </div>
                 </div>
@@ -1141,8 +1204,8 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
                   id="triage-generate-btn"
                   class="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all transform hover:scale-105 shadow-md font-medium flex items-center space-x-2"
                 >
-                  <i class="fas fa-sparkles"></i>
-                  <span>Generate Triage Package</span>
+                  <i class="fas fa-wand-magic-sparkles"></i>
+                  <span>Generate TriageCard Draft</span>
                 </button>
               </div>
             </form>
@@ -1161,65 +1224,31 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
             </div>
           </div>
           
-          <!-- Results Container -->
+          <!-- V22 Draft Card Preview -->
           <div id="triage-results-container" class="hidden px-6 pb-6 space-y-4">
             
-            <!-- Success Banner -->
-            <div class="p-4 bg-green-50 border border-green-200 rounded-lg">
+            <!-- Success Banner + Create Button -->
+            <div class="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
               <div class="flex items-center space-x-2">
                 <i class="fas fa-circle-check text-green-600"></i>
-                <span class="text-sm font-semibold text-green-900">Triage package generated successfully!</span>
-                <span class="text-sm text-green-700">Review content below and copy sections as needed.</span>
+                <span class="text-sm font-semibold text-green-900">Draft TriageCard generated!</span>
               </div>
+              <button 
+                onclick="cheatSheetManager.createTriageCardFromDraft()" 
+                id="create-card-btn"
+                class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center space-x-2"
+              >
+                <i class="fas fa-plus"></i>
+                <span>Create Triage Card</span>
+              </button>
             </div>
             
-            <!-- Section 1: Frontline-Intel -->
-            <div class="border border-gray-200 rounded-lg overflow-hidden">
-              <div class="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 flex items-center justify-between border-b border-gray-200">
-                <div class="flex items-center space-x-2">
-                  <i class="fas fa-brain text-blue-600"></i>
-                  <h4 class="text-sm font-semibold text-gray-900">Frontline-Intel Section</h4>
-                  <span id="frontline-stats" class="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600 rounded-full"></span>
-                </div>
-                <button 
-                  onclick="cheatSheetManager.copyTriageSection('frontline')" 
-                  class="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center space-x-1"
-                  data-section="frontline"
-                >
-                  <i class="fas fa-copy"></i>
-                  <span>Copy</span>
-                </button>
-              </div>
-              <div class="p-4 bg-gray-50">
-                <pre id="frontline-content" class="bg-white border border-gray-200 rounded p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-words max-h-96 overflow-y-auto"></pre>
-              </div>
+            <!-- Draft Card Preview (V22 Style) -->
+            <div id="draft-card-preview" class="border-2 border-dashed border-purple-300 rounded-lg overflow-hidden bg-purple-50/30">
+              <!-- Will be populated by displayTriageDraft() -->
             </div>
             
-            <!-- Section 2: Cheat Sheet Triage Map (Table View) -->
-            <div class="border border-gray-200 rounded-lg overflow-hidden">
-              <div class="bg-gradient-to-r from-purple-50 to-pink-50 px-4 py-3 flex items-center justify-between border-b border-gray-200">
-                <div class="flex items-center space-x-2">
-                  <i class="fas fa-table text-purple-600"></i>
-                  <h4 class="text-sm font-semibold text-gray-900">Cheat Sheet Triage Map</h4>
-                  <span id="cheatsheet-stats" class="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600 rounded-full"></span>
-                </div>
-                <button 
-                  onclick="cheatSheetManager.copyTriageSection('cheatsheet')" 
-                  class="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center space-x-1"
-                  data-section="cheatsheet"
-                >
-                  <i class="fas fa-copy"></i>
-                  <span>Copy</span>
-                </button>
-              </div>
-              <div class="p-4 bg-gray-50">
-                <div id="cheatsheet-content" class="overflow-x-auto max-h-96 overflow-y-auto">
-                  <!-- Table will be rendered here -->
-                </div>
-              </div>
-            </div>
-            
-            <!-- Section 3: Response Library -->
+            <!-- Legacy Sections (Response Library) -->
             <div class="border border-gray-200 rounded-lg overflow-hidden">
               <div class="bg-gradient-to-r from-green-50 to-teal-50 px-4 py-3 flex items-center justify-between border-b border-gray-200">
                 <div class="flex items-center space-x-2">
@@ -1230,7 +1259,6 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
                 <button 
                   onclick="cheatSheetManager.copyTriageSection('responses')" 
                   class="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center space-x-1"
-                  data-section="responses"
                 >
                   <i class="fas fa-copy"></i>
                   <span>Copy All</span>
@@ -1245,6 +1273,51 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         
       </div>
     `;
+    
+    // Store presets for use by handlers
+    this.triagePresets = {
+      HVAC: hvacPresets
+    };
+  }
+  
+  /**
+   * Handle preset selection change - auto-fill form
+   */
+  onTriagePresetChange(presetId) {
+    if (!presetId) return;
+    
+    const trade = document.getElementById('triage-trade-select').value || 'HVAC';
+    const presets = this.triagePresets[trade] || this.triagePresets['HVAC'];
+    const preset = presets.find(p => p.id === presetId);
+    
+    if (!preset) return;
+    
+    console.log('[TRIAGE BUILDER] Applying preset:', presetId, preset);
+    
+    // Fill scenario
+    document.getElementById('triage-situation-textarea').value = preset.scenario;
+    
+    // Set category
+    document.getElementById('triage-category-select').value = preset.category;
+    
+    // Set action
+    const actionRadio = document.querySelector(`input[name="triage-action"][value="${preset.action}"]`);
+    if (actionRadio) actionRadio.checked = true;
+    
+    // Set service types
+    const serviceTypes = preset.serviceTypes || ['REPAIR'];
+    ['REPAIR', 'MAINTENANCE', 'EMERGENCY', 'OTHER'].forEach(type => {
+      const checkbox = document.getElementById(`triage-service-${type.toLowerCase()}`);
+      if (checkbox) checkbox.checked = serviceTypes.includes(type);
+    });
+  }
+  
+  /**
+   * Handle trade change - could load different presets
+   */
+  onTriageTradeChange(trade) {
+    console.log('[TRIAGE BUILDER] Trade changed to:', trade);
+    // Future: load trade-specific presets
   }
   
   /**
@@ -1429,21 +1502,16 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     // Store the full result for later use (saving)
     this.triageResults = result;
     
-    // Section 1: Frontline Intel
-    document.getElementById('frontline-content').textContent = result.frontlineIntelBlock || result.frontlineIntelSection || '';
-    document.getElementById('frontline-stats').textContent = `${(result.frontlineIntelBlock || result.frontlineIntelSection || '').length} chars`;
+    // Also store form values for card creation
+    this.triageDraftFormValues = {
+      trade: document.getElementById('triage-trade-select').value,
+      category: document.getElementById('triage-category-select')?.value || 'Other',
+      action: document.querySelector('input[name="triage-action"]:checked')?.value || 'DIRECT_TO_3TIER',
+      serviceTypes: this.getSelectedServiceTypes()
+    };
     
-    // Section 2: Cheat Sheet Triage Map - DISPLAY AS TABLE!
-    const cheatsheetContainer = document.getElementById('cheatsheet-content');
-    if (result.triageMap && Array.isArray(result.triageMap)) {
-      // Display structured triageMap as a beautiful table
-      cheatsheetContainer.innerHTML = this.renderTriageMapTable(result.triageMap);
-      document.getElementById('cheatsheet-stats').textContent = `${result.triageMap.length} rules`;
-    } else {
-      // Fallback to raw text if triageMap is not structured
-      cheatsheetContainer.textContent = result.cheatSheetTriageMap || 'No triage map generated';
-      document.getElementById('cheatsheet-stats').textContent = `${(result.cheatSheetTriageMap || '').length} chars`;
-    }
+    // V22: Display Draft Card Preview
+    this.displayTriageDraftPreview(result);
     
     // Section 3: Response Library
     const responses = result.responses || result.responseLibrary || [];
@@ -1474,6 +1542,269 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     
     // Show results container
     this.showTriageResults();
+  }
+  
+  /**
+   * V22: Display draft TriageCard preview in card format
+   */
+  displayTriageDraftPreview(result) {
+    const container = document.getElementById('draft-card-preview');
+    if (!container) return;
+    
+    const formValues = this.triageDraftFormValues || {};
+    const triageMap = result.triageMap || [];
+    const firstRule = triageMap[0] || {};
+    const responses = result.responses || result.responseLibrary || [];
+    
+    // Extract keywords from triageMap
+    const keywords = firstRule.keywords || [];
+    const excludeKeywords = firstRule.excludeKeywords || [];
+    const action = formValues.action || firstRule.action || 'DIRECT_TO_3TIER';
+    const serviceType = (formValues.serviceTypes && formValues.serviceTypes[0]) || firstRule.serviceType || 'REPAIR';
+    const category = formValues.category || 'Other';
+    const trade = formValues.trade || 'HVAC';
+    
+    // Generate display name from scenario
+    const scenario = document.getElementById('triage-situation-textarea')?.value || '';
+    const displayName = this.generateDisplayName(scenario, keywords);
+    
+    // Action badge colors
+    const actionBadges = {
+      'DIRECT_TO_3TIER':   { bg: 'bg-blue-500',   text: 'text-white', label: '🔵 3-TIER' },
+      'ESCALATE_TO_HUMAN': { bg: 'bg-red-500',    text: 'text-white', label: '🔴 HUMAN' },
+      'EXPLAIN_AND_PUSH':  { bg: 'bg-purple-500', text: 'text-white', label: '🟣 PUSH' },
+      'TAKE_MESSAGE':      { bg: 'bg-orange-500', text: 'text-white', label: '🟠 MSG' },
+      'END_CALL_POLITE':   { bg: 'bg-gray-500',   text: 'text-white', label: '⚫ END' }
+    };
+    const badge = actionBadges[action] || actionBadges['DIRECT_TO_3TIER'];
+    
+    container.innerHTML = `
+      <div class="p-4 space-y-4">
+        
+        <!-- Draft Header -->
+        <div class="flex items-center justify-between bg-white rounded-lg p-3 border border-purple-200">
+          <div class="flex items-center space-x-3">
+            <span class="px-2 py-1 text-xs font-bold bg-yellow-100 text-yellow-800 rounded">DRAFT</span>
+            <h4 class="text-base font-semibold text-gray-900">${this.escapeHtml(displayName)}</h4>
+            <span class="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">${trade}</span>
+            <span class="px-2 py-0.5 text-xs font-bold ${badge.bg} ${badge.text} rounded shadow-sm">${badge.label}</span>
+          </div>
+        </div>
+        
+        <!-- Quick Rule Config -->
+        <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div class="bg-purple-50 px-4 py-2 border-b border-gray-200">
+            <span class="text-sm font-semibold text-gray-900">🔑 Quick Rule Config</span>
+          </div>
+          <div class="p-4 space-y-3">
+            <div class="grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <span class="font-semibold text-gray-700">Action:</span>
+                <span class="ml-2 px-2 py-1 rounded ${badge.bg} ${badge.text}">${action}</span>
+              </div>
+              <div>
+                <span class="font-semibold text-gray-700">Service Type:</span>
+                <span class="ml-2">${serviceType}</span>
+              </div>
+              <div>
+                <span class="font-semibold text-gray-700">Category:</span>
+                <span class="ml-2">${category}</span>
+              </div>
+              <div>
+                <span class="font-semibold text-gray-700">Priority:</span>
+                <span class="ml-2">100</span>
+              </div>
+            </div>
+            <div>
+              <span class="font-semibold text-gray-700 text-xs">Must Have Keywords:</span>
+              <div class="flex flex-wrap gap-1 mt-1">
+                ${keywords.length > 0 
+                  ? keywords.map(k => `<span class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded">${this.escapeHtml(k)}</span>`).join('')
+                  : '<span class="text-xs text-gray-400">No keywords extracted</span>'
+                }
+              </div>
+            </div>
+            ${excludeKeywords.length > 0 ? `
+            <div>
+              <span class="font-semibold text-gray-700 text-xs">Exclude Keywords:</span>
+              <div class="flex flex-wrap gap-1 mt-1">
+                ${excludeKeywords.map(k => `<span class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded">${this.escapeHtml(k)}</span>`).join('')}
+              </div>
+            </div>` : ''}
+          </div>
+        </div>
+        
+        <!-- Frontline Playbook -->
+        <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div class="bg-blue-50 px-4 py-2 border-b border-gray-200">
+            <span class="text-sm font-semibold text-gray-900">🧠 Frontline Playbook</span>
+          </div>
+          <div class="p-4">
+            <p class="text-xs text-gray-700 mb-2"><span class="font-semibold">Goal:</span> ${this.escapeHtml(result.frontlineGoal || 'Handle scenario and route appropriately')}</p>
+            <div class="space-y-2">
+              ${responses.slice(0, 3).map((line, idx) => `
+                <div class="flex items-start space-x-2 p-2 bg-gray-50 border border-gray-200 rounded">
+                  <span class="text-xs font-semibold text-gray-500 mt-0.5">${idx + 1}.</span>
+                  <span class="text-xs text-gray-800 flex-1">${this.escapeHtml(line)}</span>
+                </div>
+              `).join('') || '<p class="text-xs text-gray-500">No opening lines</p>'}
+            </div>
+          </div>
+        </div>
+        
+        <!-- 3-Tier Package Draft -->
+        <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div class="bg-indigo-50 px-4 py-2 border-b border-gray-200">
+            <span class="text-sm font-semibold text-gray-900">📦 3-Tier Package Draft</span>
+          </div>
+          <div class="p-4 text-xs">
+            <div class="grid grid-cols-2 gap-4 mb-2">
+              <div>
+                <span class="font-semibold text-gray-700">Category:</span>
+                <span class="ml-2">${category}</span>
+              </div>
+              <div>
+                <span class="font-semibold text-gray-700">Scenario:</span>
+                <span class="ml-2">${this.escapeHtml(displayName)}</span>
+              </div>
+            </div>
+            <p class="text-gray-700"><span class="font-semibold">Objective:</span> ${this.escapeHtml(result.scenarioObjective || scenario.slice(0, 100) + '...')}</p>
+          </div>
+        </div>
+        
+      </div>
+    `;
+  }
+  
+  /**
+   * Generate display name from scenario text
+   */
+  generateDisplayName(scenario, keywords) {
+    // Try to create a short descriptive name
+    if (keywords && keywords.length > 0) {
+      return keywords.slice(0, 2).join(' / ').substring(0, 40);
+    }
+    
+    // Fall back to first few words of scenario
+    const words = scenario.split(' ').slice(0, 5).join(' ');
+    return words.length > 40 ? words.substring(0, 37) + '...' : words;
+  }
+  
+  /**
+   * V22: Create a TriageCard from the generated draft
+   */
+  async createTriageCardFromDraft() {
+    if (!this.triageResults || !this.triageDraftFormValues) {
+      this.showNotification('No draft to create card from', 'error');
+      return;
+    }
+    
+    console.log('[TRIAGE BUILDER] Creating card from draft...');
+    
+    const btn = document.getElementById('create-card-btn');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Creating...</span>';
+    }
+    
+    try {
+      const token = localStorage.getItem('adminToken');
+      const result = this.triageResults;
+      const form = this.triageDraftFormValues;
+      
+      // Extract data from triageMap
+      const triageMap = result.triageMap || [];
+      const firstRule = triageMap[0] || {};
+      const responses = result.responses || result.responseLibrary || [];
+      
+      // Build TriageCard payload
+      const cardPayload = {
+        trade: form.trade || 'HVAC',
+        triageLabel: this.generateTriageLabel(result, form),
+        displayName: this.generateDisplayName(
+          document.getElementById('triage-situation-textarea')?.value || '',
+          firstRule.keywords || []
+        ),
+        description: document.getElementById('triage-situation-textarea')?.value || '',
+        intent: firstRule.intent || form.category?.toUpperCase().replace(/[^A-Z0-9]/g, '_') || 'GENERAL',
+        triageCategory: form.category || 'Other',
+        serviceType: (form.serviceTypes && form.serviceTypes[0]) || 'REPAIR',
+        priority: 100,
+        isActive: false, // Draft starts disabled
+        
+        quickRuleConfig: {
+          keywordsMustHave: firstRule.keywords || [],
+          keywordsExclude: firstRule.excludeKeywords || [],
+          action: form.action || 'DIRECT_TO_3TIER',
+          explanation: result.frontlineGoal || 'Generated by AI Triage Builder'
+        },
+        
+        frontlinePlaybook: {
+          frontlineGoal: result.frontlineGoal || 'Handle scenario appropriately',
+          openingLines: responses.slice(0, 3),
+          explainAndPushLines: responses.slice(3, 6),
+          objectionHandling: []
+        },
+        
+        threeTierPackageDraft: {
+          categoryName: form.category || 'Other',
+          categoryDescription: '',
+          scenarioName: this.generateDisplayName(
+            document.getElementById('triage-situation-textarea')?.value || '',
+            firstRule.keywords || []
+          ),
+          scenarioObjective: result.scenarioObjective || result.frontlineGoal || '',
+          scenarioExamples: (firstRule.keywords || []).slice(0, 3),
+          notesForAdmin: 'Generated by AI Triage Builder - Review before activating'
+        }
+      };
+      
+      console.log('[TRIAGE BUILDER] Card payload:', cardPayload);
+      
+      // POST to create card
+      const response = await fetch(`/api/admin/triage-builder/cards/${this.companyId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(cardPayload)
+      });
+      
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to create card');
+      }
+      
+      const data = await response.json();
+      console.log('[TRIAGE BUILDER] Card created:', data);
+      
+      this.showNotification('✅ Triage Card created! Enable it in the cards list above.', 'success');
+      
+      // Refresh the triage cards list
+      this.renderTriageCardsList();
+      
+      // Scroll to cards section
+      document.getElementById('triage-cards-section')?.scrollIntoView({ behavior: 'smooth' });
+      
+    } catch (error) {
+      console.error('[TRIAGE BUILDER] Card creation failed:', error);
+      this.showNotification(`❌ Failed to create card: ${error.message}`, 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-plus"></i> <span>Create Triage Card</span>';
+      }
+    }
+  }
+  
+  /**
+   * Generate a triageLabel from draft data
+   */
+  generateTriageLabel(result, form) {
+    const category = form.category || 'GENERAL';
+    const timestamp = Date.now().toString(36).toUpperCase();
+    return `${category.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_${timestamp}`;
   }
   
   /**
