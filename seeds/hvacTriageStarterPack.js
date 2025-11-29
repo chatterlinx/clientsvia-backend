@@ -350,7 +350,8 @@ const HVAC_STARTER_CARDS = [
       frontlineGoal: 'Transfer to human immediately',
       openingLines: [
         "I understand this is urgent. Let me transfer you to our emergency dispatch right away.",
-        "For emergencies, I need to connect you with our team immediately. Please hold."
+        "For emergencies, I need to connect you with our team immediately. Please hold.",
+        "I'm here with you. Since this sounds urgent, I'll get someone on the line right now."
       ]
     },
     actionPlaybooks: {
@@ -358,7 +359,8 @@ const HVAC_STARTER_CARDS = [
         reasonLabel: 'HVAC Emergency',
         preTransferLines: [
           "This sounds like it needs immediate attention. Let me connect you with our emergency team.",
-          "I'm transferring you to dispatch right now. They can get someone out to you quickly."
+          "I'm transferring you to dispatch right now. They can get someone out to you quickly.",
+          "Stay with me — I'm connecting you to our emergency dispatch now."
         ]
       }
     },
