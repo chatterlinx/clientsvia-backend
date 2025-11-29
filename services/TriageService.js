@@ -2,6 +2,7 @@
 // V22 Triage Service - Runtime matcher for quick rules (Brain-1 Tier-0)
 
 const TriageCard = require('../models/TriageCard');
+const Company = require('../models/v2Company');
 const logger = require('../utils/logger');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -36,10 +37,10 @@ function normalizeText(text) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Precompute quick rules for fast evaluation.
+ * Precompute quick rules from TriageCards.
  * Returns sorted array (highest priority first).
  */
-function buildQuickRules(cards) {
+function buildQuickRulesFromCards(cards) {
   return cards
     .filter((c) => c.isActive && c.quickRuleConfig && c.quickRuleConfig.action)
     .map((card) => {
@@ -60,10 +61,55 @@ function buildQuickRules(cards) {
         must,
         exclude,
         linkedScenarioId: card.linkedScenario?.scenarioId || null,
-        linkedScenarioName: card.linkedScenario?.scenarioName || null
+        linkedScenarioName: card.linkedScenario?.scenarioName || null,
+        source: 'TRIAGE_CARD'
       };
-    })
-    .sort((a, b) => b.priority - a.priority); // high priority first
+    });
+}
+
+/**
+ * Precompute quick rules from Company manual triage rules.
+ * These are simpler inline rules stored in CheatSheet.
+ */
+function buildQuickRulesFromManual(manualRules) {
+  if (!Array.isArray(manualRules)) return [];
+  
+  return manualRules
+    .filter((r) => r.enabled !== false && r.action && r.keywords && r.keywords.length > 0)
+    .map((rule, idx) => {
+      const must = (rule.keywords || []).map((k) => normalizeText(k)).filter(Boolean);
+      const exclude = (rule.excludeKeywords || []).map((k) => normalizeText(k)).filter(Boolean);
+      return {
+        cardId: `manual-${idx}`,
+        triageLabel: `MANUAL_RULE_${idx}`,
+        displayName: rule.notes || `Manual Rule ${idx + 1}`,
+        intent: rule.intent || '',
+        triageCategory: rule.triageCategory || '',
+        serviceType: rule.serviceType || 'OTHER',
+        action: rule.action,
+        qnaCardRef: null,
+        explanation: rule.notes || '',
+        priority: rule.priority || 50,
+        must,
+        exclude,
+        linkedScenarioId: null,
+        linkedScenarioName: null,
+        source: 'MANUAL_RULE'
+      };
+    });
+}
+
+/**
+ * Merge and sort all quick rules from both sources.
+ * Manual rules default to priority 50 (lower than most cards at 100+).
+ * Returns sorted array (highest priority first).
+ */
+function buildQuickRules(cards, manualRules = []) {
+  const cardRules = buildQuickRulesFromCards(cards);
+  const manualQuickRules = buildQuickRulesFromManual(manualRules);
+  
+  // Combine and sort by priority (highest first)
+  return [...cardRules, ...manualQuickRules].sort((a, b) => b.priority - a.priority);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -71,27 +117,49 @@ function buildQuickRules(cards) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Load active triage cards for a company (and optional trade) from cache or DB.
+ * Load active triage cards + manual rules for a company (and optional trade) from cache or DB.
+ * Merges both sources into unified quickRules array.
  */
 async function getCompanyTriageConfig(companyId, trade) {
-  if (!companyId) return { cards: [], quickRules: [] };
+  if (!companyId) return { cards: [], quickRules: [], manualRules: [] };
 
   const key = String(companyId) + (trade ? `:${trade}` : '');
   const now = Date.now();
   const cached = triageCache.get(key);
 
   if (cached && cached.expiresAt > now) {
-    return { cards: cached.cards, quickRules: cached.quickRules };
+    return { cards: cached.cards, quickRules: cached.quickRules, manualRules: cached.manualRules };
   }
 
-  const query = { companyId, isActive: true };
-  if (trade) query.trade = trade;
+  // Load TriageCards
+  const cardQuery = { companyId, isActive: true };
+  if (trade) cardQuery.trade = trade;
+  const cards = await TriageCard.find(cardQuery).lean().exec();
 
-  const cards = await TriageCard.find(query).lean().exec();
-  const quickRules = buildQuickRules(cards);
+  // Load Manual Rules from Company.cheatSheet.manualTriageRules
+  let manualRules = [];
+  try {
+    const company = await Company.findById(companyId)
+      .select('cheatSheet.manualTriageRules')
+      .lean()
+      .exec();
+    
+    if (company?.cheatSheet?.manualTriageRules) {
+      manualRules = company.cheatSheet.manualTriageRules;
+    }
+  } catch (err) {
+    logger.warn('[TRIAGE] Failed to load manual rules', {
+      companyId: String(companyId),
+      error: err.message
+    });
+  }
+
+  // Merge both sources into unified quickRules
+  const quickRules = buildQuickRules(cards, manualRules);
 
   triageCache.set(key, {
     cards,
+    manualRules,
     quickRules,
     expiresAt: now + CACHE_TTL_MS
   });
@@ -100,10 +168,11 @@ async function getCompanyTriageConfig(companyId, trade) {
     companyId: String(companyId),
     trade: trade || null,
     cardCount: cards.length,
+    manualRuleCount: manualRules.length,
     quickRuleCount: quickRules.length
   });
 
-  return { cards, quickRules };
+  return { cards, quickRules, manualRules };
 }
 
 /**

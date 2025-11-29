@@ -756,6 +756,41 @@ const companySchema = new mongoose.Schema({
                 createdAt: { type: Date, default: Date.now },
                 createdBy: { type: String, default: 'System' },
                 notes: { type: String, default: '' }
+            }],
+            
+            // -------------------------------------------------------------------
+            // MANUAL TRIAGE RULES - Quick keyword overrides (V22 Quick Rules)
+            // Simple rules without full TriageCard structure
+            // These are LIVE and checked alongside TriageCards in TriageService
+            // -------------------------------------------------------------------
+            manualTriageRules: [{
+                keywords: {
+                    type: [String],
+                    default: [],
+                    description: 'Keywords that must ALL be present for this rule to match'
+                },
+                excludeKeywords: {
+                    type: [String],
+                    default: [],
+                    description: 'Keywords that if ANY is present, this rule will NOT match'
+                },
+                action: {
+                    type: String,
+                    enum: ['DIRECT_TO_3TIER', 'ESCALATE_TO_HUMAN', 'EXPLAIN_AND_PUSH', 'TAKE_MESSAGE', 'END_CALL_POLITE'],
+                    default: 'DIRECT_TO_3TIER'
+                },
+                intent: { type: String, default: '' },
+                triageCategory: { type: String, default: '' },
+                serviceType: {
+                    type: String,
+                    enum: ['REPAIR', 'MAINTENANCE', 'EMERGENCY', 'OTHER'],
+                    default: 'OTHER'
+                },
+                priority: { type: Number, default: 50 },
+                enabled: { type: Boolean, default: true },
+                notes: { type: String, default: '' },
+                createdAt: { type: Date, default: Date.now },
+                createdBy: { type: String, default: 'Admin' }
             }]
         },
         
