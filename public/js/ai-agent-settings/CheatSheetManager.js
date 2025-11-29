@@ -8740,6 +8740,10 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     }
   }
   
+  /**
+   * V22: Test triage card using backend TriageService (same as production)
+   * Calls POST /api/admin/triage-builder/test-rules
+   */
   async testTriageCard(cardId) {
     const input = document.getElementById(`test-input-${cardId}`);
     const resultContainer = document.getElementById(`test-result-${cardId}`);
@@ -8754,36 +8758,80 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     
     console.log('[TRIAGE CARDS] Testing card:', cardId, 'with text:', testText);
     
-    // Fetch the card data
     try {
       const token = localStorage.getItem('adminToken');
-      const response = await fetch(`/api/company/${this.companyId}/triage-cards/${cardId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      
+      // V22: Call backend test endpoint (uses same TriageService as production)
+      const response = await fetch('/api/admin/triage-builder/test-rules', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          companyId: this.companyId,
+          testInput: testText
+        })
       });
       
-      if (!response.ok) throw new Error('Failed to fetch card');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Test failed');
+      }
       
-      const { card } = await response.json();
-      
-      // Run local triage simulation
-      const result = this.simulateTriageMatching(testText, card.triageMap);
+      const data = await response.json();
+      const result = data.result;
       
       // Display results
       resultContainer.classList.remove('hidden');
       
-      if (result.matched) {
+      if (result && result.matched) {
+        // Get action badge color
+        const actionColors = {
+          'DIRECT_TO_3TIER': 'bg-blue-500 text-white',
+          'ESCALATE_TO_HUMAN': 'bg-red-500 text-white',
+          'EXPLAIN_AND_PUSH': 'bg-purple-500 text-white',
+          'TAKE_MESSAGE': 'bg-orange-500 text-white',
+          'END_CALL_POLITE': 'bg-gray-500 text-white'
+        };
+        const actionColor = actionColors[result.action] || 'bg-gray-200 text-gray-800';
+        
         resultContainer.innerHTML = `
           <div class="p-4 bg-green-50 border border-green-200 rounded-lg">
             <div class="flex items-start space-x-3">
               <i class="fas fa-check-circle text-green-600 text-xl mt-0.5"></i>
               <div class="flex-1">
-                <h5 class="text-sm font-semibold text-green-900 mb-2">✅ Match Found (Priority: ${result.rule.priority})</h5>
-                <div class="space-y-1 text-xs">
-                  <div><strong class="text-green-800">Keywords Matched:</strong> <span class="text-green-700">${result.rule.keywords.join(', ')}</span></div>
-                  <div><strong class="text-green-800">Service Type:</strong> <span class="px-2 py-0.5 bg-green-100 text-green-800 rounded font-semibold">${result.rule.serviceType}</span></div>
-                  <div><strong class="text-green-800">Action:</strong> <span class="px-2 py-0.5 ${this.getActionBadgeColor(result.rule.action)} rounded font-semibold">${result.rule.action}</span></div>
-                  <div><strong class="text-green-800">Category Slug:</strong> <code class="text-green-700">${result.rule.categorySlug || 'N/A'}</code></div>
-                  ${result.rule.reason ? `<div class="mt-2 text-green-700"><strong>Reason:</strong> ${this.escapeHtml(result.rule.reason)}</div>` : ''}
+                <h5 class="text-sm font-semibold text-green-900 mb-2">✅ Match Found</h5>
+                <div class="space-y-2 text-xs">
+                  <div class="flex items-center space-x-2">
+                    <span class="font-semibold text-green-800">Card:</span>
+                    <span class="text-green-700">${this.escapeHtml(result.triageLabel || result.displayName || 'Unknown')}</span>
+                  </div>
+                  <div class="flex items-center space-x-2">
+                    <span class="font-semibold text-green-800">Action:</span>
+                    <span class="px-2 py-0.5 ${actionColor} rounded font-semibold">${result.action}</span>
+                  </div>
+                  <div class="flex items-center space-x-2">
+                    <span class="font-semibold text-green-800">Service Type:</span>
+                    <span class="px-2 py-0.5 bg-green-100 text-green-800 rounded">${result.serviceType || 'N/A'}</span>
+                  </div>
+                  <div class="flex items-center space-x-2">
+                    <span class="font-semibold text-green-800">Intent:</span>
+                    <span class="text-green-700">${result.intent || 'N/A'}</span>
+                  </div>
+                  <div class="flex items-center space-x-2">
+                    <span class="font-semibold text-green-800">Source:</span>
+                    <span class="px-2 py-0.5 bg-gray-100 text-gray-700 rounded">${result.source || 'TRIAGE_CARD'}</span>
+                  </div>
+                  <div class="flex items-center space-x-2">
+                    <span class="font-semibold text-green-800">Confidence:</span>
+                    <span class="text-green-700">${Math.round((result.confidence || 1) * 100)}%</span>
+                  </div>
+                  ${data.normalizedInput ? `
+                  <div class="mt-2 pt-2 border-t border-green-200">
+                    <span class="font-semibold text-green-800">Normalized Input:</span>
+                    <code class="text-green-700 text-xs block mt-1">${this.escapeHtml(data.normalizedInput)}</code>
+                  </div>` : ''}
                 </div>
               </div>
             </div>
@@ -8797,9 +8845,14 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
               <div class="flex-1">
                 <h5 class="text-sm font-semibold text-red-900 mb-1">❌ No Match</h5>
                 <p class="text-xs text-red-700">
-                  None of the triage rules matched this input. In production, this would trigger:
-                  <br/>
-                  <strong>serviceType: UNKNOWN</strong> → <strong>action: ESCALATE_TO_HUMAN</strong>
+                  None of the active triage rules matched this input.
+                </p>
+                ${data.normalizedInput ? `
+                <p class="text-xs text-red-600 mt-2">
+                  <strong>Normalized:</strong> <code>${this.escapeHtml(data.normalizedInput)}</code>
+                </p>` : ''}
+                <p class="text-xs text-red-500 mt-2 italic">
+                  In production, this would fall back to Frontline-Intel / 3-Tier Router.
                 </p>
               </div>
             </div>
@@ -8816,25 +8869,6 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         </div>
       `;
     }
-  }
-  
-  simulateTriageMatching(text, triageMap) {
-    const normalized = text.toLowerCase();
-    
-    // Loop through rules (already sorted by priority)
-    for (const rule of triageMap) {
-      // Check if ALL keywords are present
-      const allKeywordsPresent = rule.keywords.every(kw => normalized.includes(kw.toLowerCase()));
-      
-      // Check if NO excludeKeywords are present
-      const noExcludesPresent = !rule.excludeKeywords || rule.excludeKeywords.every(kw => !normalized.includes(kw.toLowerCase()));
-      
-      if (allKeywordsPresent && noExcludesPresent) {
-        return { matched: true, rule };
-      }
-    }
-    
-    return { matched: false };
   }
   
   escapeForTemplate(str) {
