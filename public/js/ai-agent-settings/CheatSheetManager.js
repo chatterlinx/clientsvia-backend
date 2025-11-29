@@ -7959,45 +7959,77 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
   }
   
   renderTriageCard(card) {
+    // V22 TriageCard schema support
+    const isActive = card.isActive === true;
+    const status = isActive ? 'ACTIVE' : 'DRAFT';
+    
     const statusColors = {
       'ACTIVE': 'bg-green-100 text-green-800 border-green-200',
       'DRAFT': 'bg-yellow-100 text-yellow-800 border-yellow-200',
       'ARCHIVED': 'bg-gray-100 text-gray-800 border-gray-200'
     };
     
-    const statusColor = statusColors[card.status] || statusColors['DRAFT'];
+    const statusColor = statusColors[status] || statusColors['DRAFT'];
+    
+    // V22 field mappings
+    const displayName = card.displayName || card.triageLabel || 'Untitled';
+    const trade = card.trade || 'GENERAL';
+    const serviceType = card.serviceType || 'OTHER';
+    const keywords = card.quickRuleConfig?.keywordsMustHave || [];
+    const excludeKeywords = card.quickRuleConfig?.keywordsExclude || [];
+    const action = card.quickRuleConfig?.action || 'DIRECT_TO_3TIER';
+    const openingLines = card.frontlinePlaybook?.openingLines || [];
+    const triggerLabel = keywords[0] || card.triageLabel?.toLowerCase().replace(/_/g, ' ') || '';
+    const uses = card.matchHistory?.totalMatches || 0;
+    const successRate = card.matchHistory?.successRate;
+    const successPercent = uses > 0 && successRate != null ? Math.round(successRate * 100) : null;
+    
+    // Build frontline block text for display
+    const frontlineGoal = card.frontlinePlaybook?.frontlineGoal || '';
+    const frontlineBlockText = [
+      frontlineGoal ? `Goal: ${frontlineGoal}` : '',
+      openingLines.length ? `Opening Lines:\n${openingLines.map((l, i) => `  ${i+1}. ${l}`).join('\n')}` : ''
+    ].filter(Boolean).join('\n\n');
+    
+    // 3-Tier package draft
+    const threeTier = card.threeTierPackageDraft || {};
+    const scenarioExamples = threeTier.scenarioExamples || [];
     
     return `
       <div class="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow" data-card-id="${card._id}">
         
-        <!-- Card Header -->
+        <!-- Card Header (V22 Screenshot Style) -->
         <div class="bg-gradient-to-r from-gray-50 to-indigo-50 px-4 py-3 border-b border-gray-200">
           <div class="flex items-center justify-between">
             <div class="flex-1">
               <div class="flex items-center space-x-3">
-                <h4 class="text-base font-semibold text-gray-900">${this.escapeHtml(card.category?.name || 'Untitled')}</h4>
-                <span class="px-2 py-1 text-xs font-semibold ${statusColor} rounded-full border">
-                  ${card.status}
-                </span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" ${isActive ? 'checked' : ''} 
+                    onchange="cheatSheetManager.toggleTriageCardActive('${card._id}', this.checked)"
+                    class="sr-only peer">
+                  <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"></div>
+                </label>
+                <h4 class="text-base font-semibold text-gray-900">${this.escapeHtml(displayName)}</h4>
                 <span class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
-                  ${card.trade}
+                  ${trade}
                 </span>
               </div>
               <p class="text-xs text-gray-600 mt-1">
-                ${card.serviceTypes.join(', ')} • ${card.triageMap.length} rules • ${card.responses.length} responses
+                <span class="text-red-600">🎯 Trigger:</span> <span class="font-medium">${this.escapeHtml(triggerLabel)}</span>
+              </p>
+              <p class="text-xs text-gray-500 mt-1 line-clamp-2">
+                💬 ${this.escapeHtml(openingLines[0] || card.description || 'No preview available')}
               </p>
             </div>
             <div class="flex items-center space-x-2">
-              ${card.status === 'ACTIVE' 
-                ? `<button onclick="cheatSheetManager.deactivateTriageCard('${card._id}')" class="px-3 py-1.5 text-xs bg-yellow-100 text-yellow-700 border border-yellow-300 rounded-md hover:bg-yellow-200 transition-colors font-medium">
-                     ⏸️ Deactivate
-                   </button>`
-                : `<button onclick="cheatSheetManager.activateTriageCard('${card._id}')" class="px-3 py-1.5 text-xs bg-green-100 text-green-700 border border-green-300 rounded-md hover:bg-green-200 transition-colors font-medium">
-                     ▶️ Activate
-                   </button>`
-              }
-              <button onclick="cheatSheetManager.deleteTriageCard('${card._id}')" class="px-3 py-1.5 text-xs bg-red-100 text-red-700 border border-red-300 rounded-md hover:bg-red-200 transition-colors font-medium">
-                🗑️ Delete
+              <span class="px-2 py-1 text-xs font-medium ${successPercent !== null ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'} rounded">
+                ${successPercent !== null ? successPercent + '%' : '--%'}
+              </span>
+              <span class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded">
+                ${uses} uses
+              </span>
+              <button onclick="cheatSheetManager.deleteTriageCard('${card._id}')" class="px-2 py-1 text-xs bg-red-100 text-red-700 border border-red-300 rounded hover:bg-red-200 transition-colors">
+                🗑️
               </button>
               <button onclick="cheatSheetManager.toggleCardAccordion('${card._id}')" class="p-2 text-gray-600 hover:text-gray-900 transition-colors">
                 <i class="fas fa-chevron-down" id="accordion-icon-${card._id}"></i>
@@ -8009,87 +8041,103 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         <!-- Accordion Content (Collapsed by default) -->
         <div id="accordion-content-${card._id}" class="hidden">
           
-          <!-- Part 1: Frontline-Intel Block -->
+          <!-- Part 1: Quick Rule Config -->
+          <div class="border-b border-gray-200">
+            <div class="bg-purple-50 px-4 py-2 flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <i class="fas fa-key text-purple-600"></i>
+                <span class="text-sm font-semibold text-gray-900">Quick Rule Config</span>
+                <span class="px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-full">${keywords.length} keywords</span>
+              </div>
+            </div>
+            <div class="p-4 bg-gray-50">
+              <div class="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                  <span class="font-semibold text-gray-700">Action:</span>
+                  <span class="ml-2 px-2 py-1 rounded ${action === 'ESCALATE_TO_HUMAN' ? 'bg-red-100 text-red-700' : action === 'DIRECT_TO_3TIER' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">${action}</span>
+                </div>
+                <div>
+                  <span class="font-semibold text-gray-700">Service Type:</span>
+                  <span class="ml-2">${serviceType}</span>
+                </div>
+                <div>
+                  <span class="font-semibold text-gray-700">Intent:</span>
+                  <span class="ml-2">${card.intent || 'N/A'}</span>
+                </div>
+                <div>
+                  <span class="font-semibold text-gray-700">Priority:</span>
+                  <span class="ml-2">${card.priority || 100}</span>
+                </div>
+              </div>
+              <div class="mt-3">
+                <span class="font-semibold text-gray-700 text-xs">Must Have Keywords:</span>
+                <div class="flex flex-wrap gap-1 mt-1">
+                  ${keywords.map(k => `<span class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded">${this.escapeHtml(k)}</span>`).join('')}
+                </div>
+              </div>
+              ${excludeKeywords.length ? `
+              <div class="mt-2">
+                <span class="font-semibold text-gray-700 text-xs">Exclude Keywords:</span>
+                <div class="flex flex-wrap gap-1 mt-1">
+                  ${excludeKeywords.map(k => `<span class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded">${this.escapeHtml(k)}</span>`).join('')}
+                </div>
+              </div>` : ''}
+            </div>
+          </div>
+          
+          <!-- Part 2: Frontline Playbook -->
           <div class="border-b border-gray-200">
             <div class="bg-blue-50 px-4 py-2 flex items-center justify-between">
               <div class="flex items-center space-x-2">
                 <i class="fas fa-brain text-blue-600"></i>
-                <span class="text-sm font-semibold text-gray-900">Frontline-Intel Block</span>
-                <span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">${card.frontlineIntelBlock.length} chars</span>
+                <span class="text-sm font-semibold text-gray-900">Frontline Playbook</span>
+                <span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">${openingLines.length} lines</span>
               </div>
-              <button onclick="cheatSheetManager.copyToClipboard(\`${this.escapeForTemplate(card.frontlineIntelBlock)}\`, 'Frontline-Intel')" class="px-2 py-1 text-xs bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors">
-                <i class="fas fa-copy mr-1"></i> Copy
-              </button>
             </div>
             <div class="p-4 bg-gray-50">
-              <pre class="text-xs font-mono whitespace-pre-wrap break-words bg-white border border-gray-200 rounded p-3 max-h-64 overflow-y-auto">${this.escapeHtml(card.frontlineIntelBlock)}</pre>
-            </div>
-          </div>
-          
-          <!-- Part 2: Triage Map Table (THE BRAIN) -->
-          <div class="border-b border-gray-200">
-            <div class="bg-purple-50 px-4 py-2 flex items-center justify-between">
-              <div class="flex items-center space-x-2">
-                <i class="fas fa-table text-purple-600"></i>
-                <span class="text-sm font-semibold text-gray-900">Triage Map (Decision Table)</span>
-                <span class="px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-full">${card.triageMap.length} rules</span>
+              ${frontlineGoal ? `<p class="text-xs text-gray-700 mb-2"><span class="font-semibold">Goal:</span> ${this.escapeHtml(frontlineGoal)}</p>` : ''}
+              <div class="space-y-2">
+                ${openingLines.map((line, idx) => `
+                  <div class="flex items-start space-x-2 p-2 bg-white border border-gray-200 rounded">
+                    <span class="text-xs font-semibold text-gray-500 mt-0.5">${idx + 1}.</span>
+                    <span class="text-xs text-gray-800 flex-1">${this.escapeHtml(line)}</span>
+                  </div>
+                `).join('') || '<p class="text-xs text-gray-500">No opening lines configured</p>'}
               </div>
             </div>
-            <div class="p-4 bg-gray-50 overflow-x-auto">
-              ${this.renderTriageMapTable(card.triageMap)}
-            </div>
           </div>
           
-          <!-- Part 3: Response Library -->
-          <div class="border-b border-gray-200">
-            <div class="bg-green-50 px-4 py-2 flex items-center justify-between">
-              <div class="flex items-center space-x-2">
-                <i class="fas fa-comments text-green-600"></i>
-                <span class="text-sm font-semibold text-gray-900">Response Library</span>
-                <span class="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">${card.responses.length} variations</span>
-              </div>
-              <button onclick="cheatSheetManager.copyToClipboard(\`${this.escapeForTemplate(card.responses.join('\\n'))}\`, 'Responses')" class="px-2 py-1 text-xs bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors">
-                <i class="fas fa-copy mr-1"></i> Copy All
-              </button>
-            </div>
-            <div class="p-4 bg-gray-50 space-y-2 max-h-96 overflow-y-auto">
-              ${card.responses.map((resp, idx) => `
-                <div class="flex items-start space-x-2 p-2 bg-white border border-gray-200 rounded">
-                  <span class="text-xs font-semibold text-gray-500 mt-0.5">${idx + 1}.</span>
-                  <span class="text-xs text-gray-800 flex-1">${this.escapeHtml(resp)}</span>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-          
-          <!-- Part 4: Category & Scenario Seeds -->
+          <!-- Part 3: 3-Tier Package Draft -->
           <div class="border-b border-gray-200">
             <div class="bg-indigo-50 px-4 py-2 flex items-center justify-between">
               <div class="flex items-center space-x-2">
                 <i class="fas fa-sitemap text-indigo-600"></i>
-                <span class="text-sm font-semibold text-gray-900">Category & Scenario Seeds</span>
-                <span class="px-2 py-0.5 text-xs bg-indigo-100 text-indigo-700 rounded-full">${card.category?.scenarioSeeds?.length || 0} seeds</span>
+                <span class="text-sm font-semibold text-gray-900">3-Tier Package Draft</span>
               </div>
             </div>
             <div class="p-4 bg-gray-50">
-              <div class="mb-3">
-                <span class="text-xs font-semibold text-gray-700">Category:</span>
-                <span class="ml-2 text-xs font-mono text-gray-900">${this.escapeHtml(card.category?.slug || '')}</span>
+              <div class="grid grid-cols-2 gap-4 text-xs mb-3">
+                <div>
+                  <span class="font-semibold text-gray-700">Category:</span>
+                  <span class="ml-2">${this.escapeHtml(threeTier.categoryName || 'N/A')}</span>
+                </div>
+                <div>
+                  <span class="font-semibold text-gray-700">Scenario:</span>
+                  <span class="ml-2">${this.escapeHtml(threeTier.scenarioName || 'N/A')}</span>
+                </div>
               </div>
-              <div class="mb-3">
-                <span class="text-xs font-semibold text-gray-700">Description:</span>
-                <p class="text-xs text-gray-800 mt-1">${this.escapeHtml(card.category?.description || '')}</p>
-              </div>
-              <div>
-                <span class="text-xs font-semibold text-gray-700 mb-2 block">Scenario Seeds:</span>
-                <div class="space-y-1 max-h-48 overflow-y-auto">
-                  ${(card.category?.scenarioSeeds || []).map((seed, idx) => `
+              ${threeTier.scenarioObjective ? `<p class="text-xs text-gray-700 mb-2"><span class="font-semibold">Objective:</span> ${this.escapeHtml(threeTier.scenarioObjective)}</p>` : ''}
+              ${scenarioExamples.length ? `
+              <div class="mt-2">
+                <span class="font-semibold text-gray-700 text-xs">Example Triggers:</span>
+                <div class="space-y-1 mt-1">
+                  ${scenarioExamples.map((ex, idx) => `
                     <div class="text-xs text-gray-800 p-2 bg-white border border-gray-200 rounded">
-                      <span class="font-semibold text-gray-500">${idx + 1}.</span> ${this.escapeHtml(seed)}
+                      <span class="font-semibold text-gray-500">${idx + 1}.</span> ${this.escapeHtml(ex)}
                     </div>
                   `).join('')}
                 </div>
-              </div>
+              </div>` : ''}
             </div>
           </div>
           
@@ -8245,6 +8293,44 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     } catch (error) {
       console.error('[TRIAGE CARDS] Deactivation failed:', error);
       this.showNotification('❌ Failed to deactivate card', 'error');
+    }
+  }
+  
+  // V22: Toggle card active state via checkbox
+  async toggleTriageCardActive(cardId, isActive) {
+    console.log('[TRIAGE CARDS] Toggling card:', cardId, 'to', isActive);
+    
+    try {
+      const token = localStorage.getItem('adminToken');
+      const endpoint = isActive ? 'activate' : 'deactivate';
+      
+      // Try V22 triage-builder endpoint first, fallback to legacy
+      let response = await fetch(`/api/admin/triage-builder/card/${cardId}/${endpoint}`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      // Fallback to legacy endpoint if V22 endpoint doesn't exist
+      if (response.status === 404) {
+        response = await fetch(`/api/company/${this.companyId}/triage-cards/${cardId}/${endpoint}`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      }
+      
+      if (!response.ok) throw new Error('Toggle failed');
+      
+      this.showNotification(`✅ Triage Card ${isActive ? 'activated' : 'deactivated'}`, 'success');
+      // Don't reload - the checkbox is already in the correct state
+      
+    } catch (error) {
+      console.error('[TRIAGE CARDS] Toggle failed:', error);
+      this.showNotification('❌ Failed to toggle card', 'error');
+      // Reload to reset checkbox state
+      this.renderTriageCardsList();
     }
   }
   
