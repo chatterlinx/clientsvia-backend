@@ -991,4 +991,245 @@ router.post('/seed-hvac/:companyId', async (req, res, next) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// AUTO-SCAN: FULL SCAN (Generate cards for ALL scenarios)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/admin/triage-builder/auto-scan/:companyId
+ * 
+ * Full scan of Brain 2 - generates cards for ALL active scenarios
+ * 
+ * Response: {
+ *   success: true,
+ *   totalScenarios: 47,
+ *   cardsGenerated: 47,
+ *   categoriesFound: 8,
+ *   categories: [{ categoryName, cards: [...] }],
+ *   cards: [...],
+ *   errors: [],
+ *   elapsedMs: 12543
+ * }
+ */
+router.post('/auto-scan/:companyId', async (req, res, next) => {
+  const startTime = Date.now();
+  
+  try {
+    const { companyId } = req.params;
+    
+    logger.info('[TRIAGE AUTO-SCAN] Full scan request', {
+      companyId,
+      userId: req.user?._id
+    });
+    
+    // Import AutoScanService
+    const AutoScanService = require('../../services/AutoScanService');
+    
+    // Run full scan
+    const result = await AutoScanService.scanAndGenerateCards(companyId);
+    
+    if (!result.success) {
+      logger.warn('[TRIAGE AUTO-SCAN] Scan failed', {
+        companyId,
+        error: result.error,
+        message: result.message
+      });
+      
+      return res.status(400).json({
+        ok: false,
+        error: result.error,
+        message: result.message
+      });
+    }
+    
+    logger.info('[TRIAGE AUTO-SCAN] ✅ Full scan complete', {
+      companyId,
+      totalScenarios: result.totalScenarios,
+      cardsGenerated: result.cardsGenerated,
+      categoriesFound: result.categoriesFound,
+      errors: result.errors.length,
+      elapsedMs: Date.now() - startTime
+    });
+    
+    res.json({
+      ok: true,
+      ...result
+    });
+    
+  } catch (err) {
+    logger.error('[TRIAGE AUTO-SCAN] Fatal error', {
+      error: err.message,
+      stack: err.stack,
+      companyId: req.params.companyId
+    });
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUTO-SCAN: RESCAN (Generate cards only for NEW scenarios)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/admin/triage-builder/rescan/:companyId
+ * 
+ * Rescan Brain 2 - generates cards ONLY for NEW scenarios
+ * 
+ * Response: {
+ *   success: true,
+ *   totalScenarios: 52,
+ *   existingCards: 47,
+ *   newScenariosFound: 5,
+ *   newCardsGenerated: 5,
+ *   categories: [{ categoryName, cards: [...] }],
+ *   newCards: [...],
+ *   errors: []
+ * }
+ */
+router.post('/rescan/:companyId', async (req, res, next) => {
+  const startTime = Date.now();
+  
+  try {
+    const { companyId } = req.params;
+    
+    logger.info('[TRIAGE RESCAN] Rescan request', {
+      companyId,
+      userId: req.user?._id
+    });
+    
+    // Import AutoScanService
+    const AutoScanService = require('../../services/AutoScanService');
+    
+    // Run rescan
+    const result = await AutoScanService.rescan(companyId);
+    
+    if (!result.success) {
+      logger.warn('[TRIAGE RESCAN] Rescan failed', {
+        companyId,
+        error: result.error,
+        message: result.message
+      });
+      
+      return res.status(400).json({
+        ok: false,
+        error: result.error,
+        message: result.message
+      });
+    }
+    
+    logger.info('[TRIAGE RESCAN] ✅ Rescan complete', {
+      companyId,
+      totalScenarios: result.totalScenarios,
+      existingCards: result.existingCards,
+      newScenariosFound: result.newScenariosFound,
+      newCardsGenerated: result.newCardsGenerated,
+      errors: result.errors.length,
+      elapsedMs: Date.now() - startTime
+    });
+    
+    res.json({
+      ok: true,
+      ...result
+    });
+    
+  } catch (err) {
+    logger.error('[TRIAGE RESCAN] Fatal error', {
+      error: err.message,
+      stack: err.stack,
+      companyId: req.params.companyId
+    });
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUTO-SCAN: SAVE GENERATED CARDS (Batch save after review)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/admin/triage-builder/save-batch/:companyId
+ * 
+ * Save multiple generated cards at once (after admin review)
+ * 
+ * Body: {
+ *   cards: [{ card draft objects }],
+ *   activateAll: false
+ * }
+ */
+router.post('/save-batch/:companyId', async (req, res, next) => {
+  try {
+    const { companyId } = req.params;
+    const { cards, activateAll = false } = req.body;
+    
+    if (!Array.isArray(cards) || cards.length === 0) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Cards array is required and must not be empty'
+      });
+    }
+    
+    logger.info('[TRIAGE SAVE-BATCH] Saving generated cards', {
+      companyId,
+      cardCount: cards.length,
+      activateAll,
+      userId: req.user?._id
+    });
+    
+    const savedCards = [];
+    const errors = [];
+    
+    for (const cardDraft of cards) {
+      try {
+        // Ensure isActive is set correctly
+        cardDraft.isActive = activateAll;
+        cardDraft.createdBy = req.user?._id || null;
+        
+        // Create card in database
+        const card = await TriageCard.create(cardDraft);
+        savedCards.push(card);
+        
+        logger.debug('[TRIAGE SAVE-BATCH] Card saved', {
+          cardId: card._id,
+          triageLabel: card.triageLabel
+        });
+        
+      } catch (error) {
+        logger.error('[TRIAGE SAVE-BATCH] Failed to save card', {
+          triageLabel: cardDraft.triageLabel,
+          error: error.message
+        });
+        errors.push({
+          triageLabel: cardDraft.triageLabel,
+          error: error.message
+        });
+      }
+    }
+    
+    // Invalidate cache after batch save
+    const TriageService = require('../../services/TriageService');
+    await TriageService.invalidateCache(companyId);
+    
+    logger.info('[TRIAGE SAVE-BATCH] ✅ Batch save complete', {
+      companyId,
+      requested: cards.length,
+      saved: savedCards.length,
+      errors: errors.length
+    });
+    
+    res.json({
+      ok: true,
+      savedCount: savedCards.length,
+      savedCards: savedCards.map(c => c.toObject()),
+      errors: errors
+    });
+    
+  } catch (err) {
+    logger.error('[TRIAGE SAVE-BATCH] Fatal error', {
+      error: err.message,
+      companyId: req.params.companyId
+    });
+    next(err);
+  }
+});
+
 module.exports = router;
