@@ -1,5 +1,10 @@
 // routes/admin/triageBuilder.js
-// V22 Triage Builder Admin Routes - CRUD for TriageCards + LLM-A generation
+// V23 Triage Builder Admin Routes - CRUD for TriageCards + LLM-A generation
+// 
+// CRITICAL V23 ARCHITECTURE:
+// - The "Golden Rule": Build Brain 2 (Scenarios) BEFORE Brain 1 (Triage)
+// - LLM-A HARD STOPS if no scenarios are active
+// - Pre-flight check enforces this at API level
 
 const express = require('express');
 const router = express.Router();
@@ -8,6 +13,13 @@ const TriageCard = require('../../models/TriageCard');
 const TriageService = require('../../services/TriageService');
 const LLMA = require('../../services/LLMA_TriageCardGenerator');
 const logger = require('../../utils/logger');
+
+// V23: Active Scenarios Helper (Pre-flight check)
+const { 
+  getActiveScenariosForCompany, 
+  preFlightCheckForTriageBuilder,
+  getScenarioKeysForLLMA 
+} = require('../../services/ActiveScenariosHelper');
 
 // Import official UI contract transformers
 const {
@@ -99,6 +111,68 @@ router.post('/generate-card', async (req, res, next) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// V23: PRE-FLIGHT CHECK (THE "GOLDEN RULE" ENFORCEMENT)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/triage-builder/preflight/:companyId
+ * 
+ * V23 Pre-Flight Check - Verify Brain 2 is ready before Brain 1 creation
+ * 
+ * CRITICAL: If this returns canProceed: false, the UI MUST block the Triage Builder
+ * 
+ * Response: {
+ *   canProceed: boolean,
+ *   scenarioCount: number,
+ *   scenarios: Array<{ scenarioKey, name, categoryKey }>,
+ *   message: string,
+ *   companyName: string,
+ *   trade: string
+ * }
+ */
+router.get('/preflight/:companyId', async (req, res, next) => {
+  try {
+    const { companyId } = req.params;
+    
+    if (!mongoose.Types.ObjectId.isValid(companyId)) {
+      return res.status(400).json({
+        success: false,
+        canProceed: false,
+        error: 'Invalid company ID'
+      });
+    }
+    
+    logger.info('[TRIAGE BUILDER V23] Pre-flight check', { companyId });
+    
+    const preFlightResult = await preFlightCheckForTriageBuilder(companyId);
+    
+    if (!preFlightResult.canProceed) {
+      logger.warn('[TRIAGE BUILDER V23] Pre-flight FAILED - No scenarios', {
+        companyId,
+        scenarioCount: preFlightResult.scenarioCount
+      });
+    } else {
+      logger.info('[TRIAGE BUILDER V23] Pre-flight PASSED', {
+        companyId,
+        scenarioCount: preFlightResult.scenarioCount
+      });
+    }
+    
+    res.json({
+      success: true,
+      ...preFlightResult
+    });
+    
+  } catch (err) {
+    logger.error('[TRIAGE BUILDER V23] Pre-flight error', {
+      error: err.message,
+      companyId: req.params.companyId
+    });
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // V23: LLM-A TRIAGE ARCHITECT (STRUCTURED GENERATION WITH VALIDATION)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -108,6 +182,9 @@ const LLMAV23 = require('../../services/LLMA_TriageCardGeneratorV23');
  * POST /api/admin/triage-builder/generate-card-v23
  * 
  * V23 LLM-A Triage Architect - generates validated card draft
+ * 
+ * CRITICAL: This endpoint HARD STOPS if Brain 2 (scenarios) is empty.
+ * The "Golden Rule": Build Brain 2 first, then Brain 1.
  * 
  * Input: {
  *   companyId: string,
@@ -141,11 +218,47 @@ router.post('/generate-card-v23', async (req, res, next) => {
       userId: req.user?._id
     });
     
+    // ═══════════════════════════════════════════════════════════════════════
+    // V23 PRE-FLIGHT CHECK: Brain 2 must have scenarios
+    // This is the "Golden Rule" enforcement
+    // ═══════════════════════════════════════════════════════════════════════
+    const scenariosResult = await getActiveScenariosForCompany(companyId);
+    
+    if (!scenariosResult.success || scenariosResult.count === 0) {
+      logger.error('[TRIAGE BUILDER V23] ❌ HARD STOP - No scenarios loaded', {
+        companyId,
+        scenarioCount: scenariosResult.count,
+        message: scenariosResult.message
+      });
+      
+      return res.status(400).json({
+        success: false,
+        ok: false,
+        error: 'NO_SCENARIOS_LOADED',
+        message: 'Cannot generate triage cards. No AiCore scenarios are active for this company.',
+        action: 'Activate templates in AiCore → Live Scenarios before using the Triage Builder.',
+        activeScenarioCount: 0,
+        companyName: scenariosResult.companyName,
+        trade: scenariosResult.trade
+      });
+    }
+    
+    logger.info('[TRIAGE BUILDER V23] Pre-flight PASSED', {
+      companyId,
+      scenarioCount: scenariosResult.count
+    });
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // GENERATE with scenario injection
+    // ═══════════════════════════════════════════════════════════════════════
     const result = await LLMAV23.generateTriageCardV23({
       companyId,
-      tradeKey,
+      companyName: scenariosResult.companyName,
+      tradeKey: tradeKey || scenariosResult.trade,
       regionProfile,
-      triageIdea
+      triageIdea,
+      // V23: Inject active scenarios for LLM-A to map to
+      activeScenarios: scenariosResult.scenarios
     });
     
     if (!result.ok) {
@@ -158,11 +271,16 @@ router.post('/generate-card-v23', async (req, res, next) => {
     
     logger.info('[TRIAGE BUILDER V23] Generation success', {
       companyId,
-      cardLabel: result.draft?.triageLabel,
-      validationStatus: result.validationReport?.status
+      cardLabel: result.triageCardDraft?.triageLabel,
+      validationStatus: result.validationReport?.status,
+      scenarioCount: scenariosResult.count
     });
     
-    res.json(result);
+    // Include scenario count in response for UI
+    res.json({
+      ...result,
+      activeScenarioCount: scenariosResult.count
+    });
     
   } catch (err) {
     logger.error('[TRIAGE BUILDER V23] Error', {

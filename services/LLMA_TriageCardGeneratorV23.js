@@ -30,9 +30,20 @@ const openai = new OpenAI({
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SYSTEM PROMPT - V23 Guardrails (from authoritative spec)
+// WITH SCENARIO INJECTION for referential integrity
 // ═══════════════════════════════════════════════════════════════════════════
 
-const SYSTEM_PROMPT = `You are LLM-A, an OFFLINE TRIAGE ARCHITECT for a multi-tenant AI receptionist platform.
+/**
+ * Build the V23 System Prompt with injected active scenarios
+ * This enforces "referential integrity" - LLM-A can ONLY map to existing scenarios
+ */
+function buildSystemPromptV23(activeScenarios = []) {
+  // Format scenarios for injection
+  const scenarioList = activeScenarios.length > 0
+    ? activeScenarios.map(s => `  - ${s.scenarioKey}: "${s.name}" (${s.categoryKey || 'general'})`).join('\n')
+    : '  (No scenarios available - use null for scenarioKey)';
+
+  return `You are LLM-A, an OFFLINE TRIAGE ARCHITECT for a multi-tenant AI receptionist platform.
 
 Your job:
 - Generate CLEAN, MINIMAL routing rules (TriageCards) used ONLY for keyword routing.
@@ -43,7 +54,17 @@ Your job:
   - testPlan
   - guardrailFlags
 
-Critical rules:
+═══════════════════════════════════════════════════════════════════════════════
+AVAILABLE SCENARIOS (VALID DESTINATIONS - REFERENTIAL INTEGRITY)
+═══════════════════════════════════════════════════════════════════════════════
+You can ONLY map triage cards to these scenarios. Do NOT invent new scenario keys.
+If no scenario matches, set scenarioKey to null.
+
+${scenarioList}
+
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL RULES
+═══════════════════════════════════════════════════════════════════════════════
 1) You are generating routing metadata, not phone answers.
 2) mustHaveKeywords must be 1–3 short tokens, no sentences, no synonyms list.
 3) excludeKeywords must be short tokens that disqualify this card.
@@ -58,9 +79,8 @@ Critical rules:
 6) You must produce a testPlan with both:
    - positiveUtterances: 5+ variants that SHOULD match.
    - negativeUtterances: 5+ variants that SHOULD NOT match.
-7) threeTierLink is only a hint for humans:
-   - categoryKey and scenarioKey used by admins later.
-   - You are NOT creating 3-Tier scenarios.
+7) threeTierLink.scenarioKey MUST be one of the AVAILABLE SCENARIOS above or null.
+   - Do NOT invent scenario keys that don't exist.
 8) All outputs must be valid JSON and strictly follow the schema.
 
 OUTPUT SCHEMA (return exactly this structure):
@@ -78,7 +98,7 @@ OUTPUT SCHEMA (return exactly this structure):
     },
     "threeTierLink": {
       "categoryKey": "string or null",
-      "scenarioKey": "string or null"
+      "scenarioKey": "MUST be from AVAILABLE SCENARIOS above, or null"
     },
     "adminNotes": "string - optional notes for admin"
   },
@@ -88,6 +108,10 @@ OUTPUT SCHEMA (return exactly this structure):
   },
   "guardrailFlags": ["array of flag strings if any conflicts detected"]
 }`;
+}
+
+// Legacy constant for backward compatibility
+const SYSTEM_PROMPT = buildSystemPromptV23([]);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // BUILD USER PROMPT (matches V23 spec input contract)
@@ -242,9 +266,11 @@ function runAutoValidation(draft, testPlan, regionProfile) {
  * 
  * @param {Object} input - Input specification
  * @param {string} input.companyId - Company ID
+ * @param {string} input.companyName - Company name (for context)
  * @param {string} input.tradeKey - Trade key (HVAC, PLUMBING, etc.)
  * @param {Object} input.regionProfile - Company region profile
  * @param {Object} input.triageIdea - Admin's triage request
+ * @param {Array} input.activeScenarios - V23: Active scenarios from Brain 2 (for referential integrity)
  * @returns {Object} { ok, draft, validationReport, errors }
  */
 async function generateTriageCardV23(input) {
@@ -252,8 +278,10 @@ async function generateTriageCardV23(input) {
   
   logger.info('[LLM-A V23] Starting card generation', {
     companyId: input.companyId,
+    companyName: input.companyName,
     tradeKey: input.tradeKey,
-    adminTitle: input.triageIdea?.adminTitle
+    adminTitle: input.triageIdea?.adminTitle,
+    activeScenarioCount: input.activeScenarios?.length || 0
   });
   
   // 1. Validate input
@@ -268,20 +296,30 @@ async function generateTriageCardV23(input) {
     };
   }
   
-  // 2. Call OpenAI
+  // 2. Build dynamic system prompt with scenario injection (V23 Referential Integrity)
+  const activeScenarios = input.activeScenarios || [];
+  const systemPrompt = buildSystemPromptV23(activeScenarios);
+  
+  logger.info('[LLM-A V23] System prompt built', {
+    scenariosInjected: activeScenarios.length,
+    promptLength: systemPrompt.length
+  });
+  
+  // 3. Call OpenAI
   let llmOutput;
   try {
     const userPrompt = buildUserPrompt(input);
     
     logger.info('[LLM-A V23] Calling OpenAI', {
       model: 'gpt-4o',
-      promptLength: userPrompt.length
+      userPromptLength: userPrompt.length,
+      systemPromptLength: systemPrompt.length
     });
     
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
       temperature: 0.3,
@@ -300,6 +338,23 @@ async function generateTriageCardV23(input) {
       tokensUsed: response.usage?.total_tokens,
       hasTriageCardDraft: !!llmOutput?.triageCardDraft
     });
+    
+    // V23: Validate that scenarioKey is from the allowed list
+    const suggestedScenarioKey = llmOutput?.triageCardDraft?.threeTierLink?.scenarioKey;
+    if (suggestedScenarioKey && activeScenarios.length > 0) {
+      const validScenarioKeys = activeScenarios.map(s => s.scenarioKey);
+      if (!validScenarioKeys.includes(suggestedScenarioKey)) {
+        logger.warn('[LLM-A V23] Invalid scenario key suggested - not in allowed list', {
+          suggested: suggestedScenarioKey,
+          allowed: validScenarioKeys.slice(0, 10) // Log first 10
+        });
+        // Add guardrail flag instead of failing
+        llmOutput.guardrailFlags = llmOutput.guardrailFlags || [];
+        llmOutput.guardrailFlags.push(`INVALID_SCENARIO_KEY: "${suggestedScenarioKey}" not in active scenarios`);
+        // Set to null for safety
+        llmOutput.triageCardDraft.threeTierLink.scenarioKey = null;
+      }
+    }
     
   } catch (err) {
     logger.error('[LLM-A V23] OpenAI call failed', {
@@ -447,6 +502,7 @@ module.exports = {
   draftToTriageCard,
   validateInput,
   validateLLMOutput,
-  runAutoValidation
+  runAutoValidation,
+  buildSystemPromptV23  // V23: Export for testing/debugging
 };
 
