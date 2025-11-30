@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * PROMPT VERSION MODEL - ELITE FRONTLINE-INTEL V23
+ * PROMPT VERSION MODEL - PRECISION FRONTLINE-INTEL V23
  * ============================================================================
  * 
  * PURPOSE: Version control for Micro-LLM routing prompts

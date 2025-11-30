@@ -1,4 +1,4 @@
-# ELITE FRONTLINE-INTEL V23 — COMPLETE SPECIFICATION
+# PRECISION FRONTLINE-INTEL V23 — COMPLETE SPECIFICATION
 
 **Status:** Production-Ready  
 **Performance:** 97–99% accuracy, 380–500ms latency, $0.00011/call  
@@ -9,7 +9,7 @@
 
 ## 🎯 EXECUTIVE SUMMARY
 
-Elite Frontline-Intel V23 is a **world-class voice AI routing system** that replaces expensive, slow LLM-based orchestration with a **7-layer deterministic + Micro-LLM hybrid pipeline**.
+Precision Frontline-Intel V23 is a **world-class voice AI routing system** that replaces expensive, slow LLM-based orchestration with a **7-layer deterministic + Micro-LLM hybrid pipeline**.
 
 ### **Business Impact**
 
@@ -189,13 +189,13 @@ TOTAL COST: $0.00011 per turn
 ```javascript
 // In MongoDB or via admin UI
 await Company.findByIdAndUpdate(companyId, {
-  'aiAgentSettings.orchestrationMode': 'FRONTLINE_ELITE_V23'
+  'aiAgentSettings.orchestrationMode': 'FRONTLINE_PRECISION_V23'
 });
 ```
 
 ### **2. Verify Active Triage Cards**
 
-Elite Frontline V23 requires active Triage Cards to work. Check:
+Precision Frontline V23 requires active Triage Cards to work. Check:
 
 ```bash
 # MongoDB shell
@@ -209,14 +209,14 @@ If 0, use the Auto-Scan feature to generate cards from Brain 2 scenarios.
 Call the company's Twilio number and speak naturally. Monitor logs for:
 
 ```
-[ELITE FRONTLINE V23] ⚡ Processing turn
+[PRECISION FRONTLINE V23] ⚡ Processing turn
 [Layer 1] Pre-processing complete
 [Layer 2] Context hydrated
 [Layer 3] Emotion detected
 [Layer 4] Prompt compiled
 [Layer 5] Routing decision
 [Layer 6] Response assembled
-[ELITE FRONTLINE V23] ✅ Turn complete
+[PRECISION FRONTLINE V23] ✅ Turn complete
 ```
 
 ### **4. Review Routing Decisions**
@@ -309,10 +309,10 @@ New prompt version (v1.1) will auto-compile on next call.
 
 ## 🚀 API REFERENCE
 
-### **EliteFrontlineIntelV23.process()**
+### **PrecisionFrontlineIntelV23.process()**
 
 ```javascript
-const result = await EliteFrontlineIntelV23.process({
+const result = await PrecisionFrontlineIntelV23.process({
   companyId: '507f1f77bcf86cd799439011',
   callId: 'CA1234567890abcdef',
   userInput: 'My AC is sweating again lol',
@@ -326,7 +326,7 @@ const result = await EliteFrontlineIntelV23.process({
   action: 'HVAC_LEAK',
   priority: 'NORMAL',
   confidence: 0.92,
-  layer: 'ELITE_FRONTLINE_V23',
+  layer: 'PRECISION_FRONTLINE_V23',
   latency: 361,
   metadata: {
     emotion: 'HUMOROUS',

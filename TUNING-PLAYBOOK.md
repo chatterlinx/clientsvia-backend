@@ -1,4 +1,4 @@
-# ELITE FRONTLINE V23 — TUNING PLAYBOOK
+# PRECISION FRONTLINE V23 — TUNING PLAYBOOK
 
 **Purpose:** Step-by-step guide to tune routing accuracy from 85% → 99%  
 **Audience:** Developers, AI Engineers, System Admins  
@@ -59,7 +59,7 @@ Deploy v1.0 → Monitor 100 calls → Identify failures → Update triage rules 
 
 ```javascript
 await Company.findByIdAndUpdate(companyId, {
-  'aiAgentSettings.orchestrationMode': 'FRONTLINE_ELITE_V23'
+  'aiAgentSettings.orchestrationMode': 'FRONTLINE_PRECISION_V23'
 });
 ```
 
@@ -345,7 +345,7 @@ const testCases = [
 ];
 
 for (const test of testCases) {
-  const result = await EliteFrontlineIntelV23.process({
+  const result = await PrecisionFrontlineIntelV23.process({
     companyId,
     callId: 'test',
     userInput: test.input,

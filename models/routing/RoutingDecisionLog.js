@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * ROUTING DECISION LOG MODEL - ELITE FRONTLINE-INTEL V23
+ * ROUTING DECISION LOG MODEL - PRECISION FRONTLINE-INTEL V23
  * ============================================================================
  * 
  * PURPOSE: Log every routing decision for tuning and analysis

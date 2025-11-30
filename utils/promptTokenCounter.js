@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * PROMPT TOKEN COUNTER - ELITE FRONTLINE-INTEL V23
+ * PROMPT TOKEN COUNTER - PRECISION FRONTLINE-INTEL V23
  * ============================================================================
  * 
  * PURPOSE: Estimate token count for LLM prompts

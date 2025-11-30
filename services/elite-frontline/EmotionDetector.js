@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * EMOTION DETECTOR - ELITE FRONTLINE-INTEL V23
+ * EMOTION DETECTOR - PRECISION FRONTLINE-INTEL V23
  * ============================================================================
  * 
  * PURPOSE: Deterministic emotion analysis for voice AI calls

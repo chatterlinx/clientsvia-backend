@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * TRANSCRIPT NORMALIZER - ELITE FRONTLINE-INTEL V23
+ * TRANSCRIPT NORMALIZER - PRECISION FRONTLINE-INTEL V23
  * ============================================================================
  * 
  * PURPOSE: Clean and standardize transcripts from STT engines

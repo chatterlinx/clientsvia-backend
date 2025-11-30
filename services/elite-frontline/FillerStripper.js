@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FILLER STRIPPER - ELITE FRONTLINE-INTEL V23
+ * FILLER STRIPPER - PRECISION FRONTLINE-INTEL V23
  * ============================================================================
  * 
  * PURPOSE: Remove filler words from transcripts to reduce token count

@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * ELITE FRONTLINE-INTEL V23 - MAIN ORCHESTRATOR
+ * PRECISION FRONTLINE-INTEL V23 - MAIN ORCHESTRATOR
  * ============================================================================
  * 
  * PURPOSE: World-class voice AI routing (97–99% accuracy, <500ms latency)
@@ -33,7 +33,7 @@ const MemoryEngine = require('../MemoryEngine');
 // MAIN CLASS
 // ============================================================================
 
-class EliteFrontlineIntelV23 {
+class PrecisionFrontlineIntelV23 {
   
   /**
    * Process user input through elite routing pipeline
@@ -50,7 +50,7 @@ class EliteFrontlineIntelV23 {
     const startTime = Date.now();
     const turnNumber = (callState?.turnNumber || 0) + 1;
     
-    logger.info('[ELITE FRONTLINE V23] ⚡ Processing turn', {
+        logger.info('[PRECISION FRONTLINE V23] ⚡ Processing turn', {
       companyId,
       callId,
       turnNumber,
@@ -64,7 +64,7 @@ class EliteFrontlineIntelV23 {
       const cleaned = FillerStripper.clean(userInput);
       const normalized = TranscriptNormalizer.normalize(cleaned);
       
-      logger.debug('[ELITE FRONTLINE V23] [Layer 1] Pre-processing complete', {
+            logger.debug('[PRECISION FRONTLINE V23] [Layer 1] Pre-processing complete', {
         original: userInput.substring(0, 100),
         cleaned: normalized.substring(0, 100),
         reduction: ((userInput.length - normalized.length) / userInput.length * 100).toFixed(1) + '%'
@@ -82,7 +82,7 @@ class EliteFrontlineIntelV23 {
       
       await MemoryEngine.hydrateMemoryContext(context);
       
-      logger.debug('[ELITE FRONTLINE V23] [Layer 2] Context hydrated', {
+            logger.debug('[PRECISION FRONTLINE V23] [Layer 2] Context hydrated', {
         callerHistoryRecords: context.memory?.callerHistory?.length || 0,
         resolutionPaths: context.memory?.resolutionPaths?.length || 0
       });
@@ -92,7 +92,7 @@ class EliteFrontlineIntelV23 {
       // ========================================================================
       const emotion = EmotionDetector.analyze(normalized, context.memory);
       
-      logger.debug('[ELITE FRONTLINE V23] [Layer 3] Emotion detected', {
+            logger.debug('[PRECISION FRONTLINE V23] [Layer 3] Emotion detected', {
         primary: emotion.primary,
         intensity: emotion.intensity.toFixed(2),
         signals: emotion.signals.length
@@ -107,7 +107,7 @@ class EliteFrontlineIntelV23 {
         emotion
       });
       
-      logger.debug('[ELITE FRONTLINE V23] [Layer 4] Prompt compiled', {
+            logger.debug('[PRECISION FRONTLINE V23] [Layer 4] Prompt compiled', {
         version: promptData.version,
         versionHash: promptData.versionHash,
         cached: promptData.cached,
@@ -141,7 +141,7 @@ class EliteFrontlineIntelV23 {
         company
       });
       
-      logger.debug('[ELITE FRONTLINE V23] [Layer 6] Response assembled', {
+            logger.debug('[PRECISION FRONTLINE V23] [Layer 6] Response assembled', {
         responseLength: humanResponse.length,
         emotionMatched: emotion.primary
       });
@@ -173,7 +173,7 @@ class EliteFrontlineIntelV23 {
       // ========================================================================
       // FINAL RESULT
       // ========================================================================
-      logger.info('[ELITE FRONTLINE V23] ✅ Turn complete', {
+            logger.info('[PRECISION FRONTLINE V23] ✅ Turn complete', {
         companyId,
         callId,
         turnNumber,
@@ -195,7 +195,7 @@ class EliteFrontlineIntelV23 {
         action: routing.target,
         priority: routing.priority,
         confidence: routing.confidence,
-        layer: 'ELITE_FRONTLINE_V23',
+                layer: 'PRECISION_FRONTLINE_V23',
         latency: totalLatency,
         metadata: {
           emotion: emotion.primary,
@@ -207,7 +207,7 @@ class EliteFrontlineIntelV23 {
       };
       
     } catch (err) {
-      logger.error('[ELITE FRONTLINE V23] ❌ Pipeline failed', {
+            logger.error('[PRECISION FRONTLINE V23] ❌ Pipeline failed', {
         error: err.message,
         stack: err.stack,
         companyId,
@@ -229,7 +229,7 @@ class EliteFrontlineIntelV23 {
       await RoutingDecisionLog.create(data);
     } catch (err) {
       // Non-critical error, just log it
-      logger.error('[ELITE FRONTLINE V23] Failed to log decision', {
+        logger.error('[PRECISION FRONTLINE V23] Failed to log decision', {
         error: err.message,
         companyId: data.companyId,
         callId: data.callId
@@ -279,7 +279,7 @@ class EliteFrontlineIntelV23 {
       action: 'GENERAL_INQUIRY',
       priority: isEmergency ? 'EMERGENCY' : 'NORMAL',
       confidence: 0.3,
-      layer: 'ELITE_FRONTLINE_V23_FALLBACK',
+            layer: 'PRECISION_FRONTLINE_V23_FALLBACK',
       latency,
       metadata: {
         fallback: true,
@@ -318,5 +318,5 @@ class EliteFrontlineIntelV23 {
 // EXPORTS
 // ============================================================================
 
-module.exports = EliteFrontlineIntelV23;
+module.exports = PrecisionFrontlineIntelV23;
 

@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * COMPACT PROMPT COMPILER - ELITE FRONTLINE-INTEL V23
+ * COMPACT PROMPT COMPILER - PRECISION FRONTLINE-INTEL V23
  * ============================================================================
  * 
  * PURPOSE: On-demand compilation of Micro-LLM routing prompts

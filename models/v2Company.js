@@ -587,17 +587,17 @@ const companySchema = new mongoose.Schema({
         },
         
         // -------------------------------------------------------------------
-        // V23 ORCHESTRATION MODE - Elite Frontline-Intel vs Legacy LLM-0
+        // V23 ORCHESTRATION MODE - Precision Frontline-Intel vs Legacy LLM-0
         // -------------------------------------------------------------------
-        // PURPOSE: Allow A/B testing of Elite Frontline-Intel V23 vs legacy LLM-0
+        // PURPOSE: Allow A/B testing of Precision Frontline-Intel V23 vs legacy LLM-0
         // OPTIONS:
         //   - LLM0_FULL: Use existing LLM-0 orchestration (orchestrationEngine.js)
-        //   - FRONTLINE_ELITE_V23: Use Elite Frontline-Intel V23 (380ms, $0.00011/turn)
+        //   - FRONTLINE_PRECISION_V23: Use Precision Frontline-Intel V23 (380ms, $0.00011/turn)
         // DEFAULT: LLM0_FULL (backward compatible)
         // MIGRATION: Gradually roll out V23 to companies, monitor accuracy, rollback if needed
         orchestrationMode: {
             type: String,
-            enum: ['LLM0_FULL', 'FRONTLINE_ELITE_V23'],
+            enum: ['LLM0_FULL', 'FRONTLINE_PRECISION_V23'],
             default: 'LLM0_FULL',
             index: true
         },

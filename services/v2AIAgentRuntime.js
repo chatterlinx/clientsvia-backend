@@ -418,7 +418,7 @@ class V2AIAgentRuntime {
             }
             
             // ═════════════════════════════════════════════════════════════════
-            // ⚡ V23 ELITE FRONTLINE-INTEL - WORLD-CLASS ROUTING
+            // ⚡ V23 PRECISION FRONTLINE-INTEL - WORLD-CLASS ROUTING
             // ═════════════════════════════════════════════════════════════════
             // NEW: If orchestrationMode is FRONTLINE_ELITE_V23, use the new system
             // PERFORMANCE: 380–500ms total, $0.00011 per turn
@@ -426,16 +426,16 @@ class V2AIAgentRuntime {
             // ═════════════════════════════════════════════════════════════════
             const orchestrationMode = company.aiAgentSettings?.orchestrationMode || 'LLM0_FULL';
             
-            if (orchestrationMode === 'FRONTLINE_ELITE_V23') {
-                logger.info('[V2 AGENT] ⚡ Using Elite Frontline-Intel V23', {
+            if (orchestrationMode === 'FRONTLINE_PRECISION_V23') {
+                logger.info('[V2 AGENT] ⚡ Using Precision Frontline-Intel V23', {
                     companyId: companyID,
                     callId
                 });
                 
                 try {
-                    const EliteFrontlineIntelV23 = require('./elite-frontline/EliteFrontlineIntelV23');
+                    const PrecisionFrontlineIntelV23 = require('./elite-frontline/EliteFrontlineIntelV23');
                     
-                    const v23Result = await EliteFrontlineIntelV23.process({
+                    const v23Result = await PrecisionFrontlineIntelV23.process({
                         companyId: companyID,
                         callId,
                         userInput,
@@ -443,7 +443,7 @@ class V2AIAgentRuntime {
                         company
                     });
                     
-                    logger.info('[V2 AGENT] ✅ Elite Frontline V23 complete', {
+                    logger.info('[V2 AGENT] ✅ Precision Frontline V23 complete', {
                         callId,
                         action: v23Result.action,
                         confidence: v23Result.confidence,
@@ -460,13 +460,13 @@ class V2AIAgentRuntime {
                         callState: {
                             ...callState,
                             lastResponse: v23Result.say,
-                            eliteFrontlineV23: true,
+                            precisionFrontlineV23: true,
                             metadata: v23Result.metadata
                         }
                     };
                     
                 } catch (v23Error) {
-                    logger.error('[V2 AGENT] ❌ Elite Frontline V23 failed, falling back to LLM0', {
+                    logger.error('[V2 AGENT] ❌ Precision Frontline V23 failed, falling back to LLM0', {
                         callId,
                         error: v23Error.message,
                         stack: v23Error.stack

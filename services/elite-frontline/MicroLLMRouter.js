@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * MICRO-LLM ROUTER - ELITE FRONTLINE-INTEL V23
+ * MICRO-LLM ROUTER - PRECISION FRONTLINE-INTEL V23
  * ============================================================================
  * 
  * PURPOSE: Fast, cheap routing using gpt-4o-mini
