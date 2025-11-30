@@ -971,36 +971,31 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
   // The "Golden Rule": Build Brain 2 (Scenarios) BEFORE Brain 1 (Triage)
   // ═══════════════════════════════════════════════════════════════════
   
+  // ═════════════════════════════════════════════════════════════════════════
+  // V23 AUTO-SCAN TRIAGE BUILDER
+  // Replaces manual form with automated bulk card generation
+  // ═════════════════════════════════════════════════════════════════════════
+  
   async renderTriageBuilder() {
     const container = document.getElementById('triage-builder-section');
     if (!container) return;
     
-    // Get company data for context
-    const companyData = this.getCompanyContext();
+    console.log('[AUTO-SCAN V23] Initializing Triage Builder');
     
-    // ═══════════════════════════════════════════════════════════════════
-    // V23 PRE-FLIGHT CHECK: Verify Brain 2 is ready
-    // CRITICAL: We NEVER mask errors - all failures must be visible
-    // ═══════════════════════════════════════════════════════════════════
-    console.log('[TRIAGE BUILDER V23] ⏳ CHECKPOINT 1: Starting pre-flight check...');
-    
-    let preFlightResult = { canProceed: false, scenarioCount: 0, scenarios: [], error: null };
+    // Pre-flight check: Verify Brain 2 has scenarios
+    let preFlightResult = { canProceed: false, scenarioCount: 0, error: null };
     
     try {
       const token = localStorage.getItem('adminToken');
-      console.log('[TRIAGE BUILDER V23] 🔐 CHECKPOINT 2: Token present:', !!token);
       
       if (!token) {
-        console.error('[TRIAGE BUILDER V23] ❌ CHECKPOINT 2.1: NO AUTH TOKEN - User must be logged in');
         this.renderTriageBuilderError(container, {
           error: 'NO_AUTH_TOKEN',
-          message: 'Authentication required. Please log in again.',
-          details: 'No token found in localStorage'
+          message: 'Authentication required. Please log in again.'
         });
         return;
       }
       
-      console.log('[TRIAGE BUILDER V23] 📡 CHECKPOINT 3: Calling pre-flight API...');
       const response = await fetch(`/api/admin/triage-builder/preflight/${this.companyId}`, {
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -1008,57 +1003,16 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         }
       });
       
-      console.log('[TRIAGE BUILDER V23] 📥 CHECKPOINT 4: Response status:', response.status);
-      
       if (response.ok) {
         preFlightResult = await response.json();
-        console.log('[TRIAGE BUILDER V23] ✅ CHECKPOINT 5: Pre-flight SUCCESS', {
-          canProceed: preFlightResult.canProceed,
-          scenarioCount: preFlightResult.scenarioCount,
-          companyName: preFlightResult.companyName
-        });
       } else {
-        // DO NOT MASK ERRORS - Show them clearly
-        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-        console.error('[TRIAGE BUILDER V23] ❌ CHECKPOINT 5: Pre-flight FAILED', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorData
+        this.renderTriageBuilderError(container, {
+          error: 'API_ERROR',
+          message: `Pre-flight check failed (${response.status})`
         });
-        
-        // Show specific error UI based on status code
-        if (response.status === 401) {
-          this.renderTriageBuilderError(container, {
-            error: 'UNAUTHORIZED',
-            message: 'Authentication failed (401). Your session may have expired.',
-            details: 'Please refresh the page and log in again.',
-            status: 401
-          });
-          return;
-        } else if (response.status === 403) {
-          this.renderTriageBuilderError(container, {
-            error: 'FORBIDDEN',
-            message: 'Access denied (403). You may not have permission for this company.',
-            details: errorData.message || 'Contact your administrator.',
-            status: 403
-          });
-          return;
-        } else {
-          this.renderTriageBuilderError(container, {
-            error: 'API_ERROR',
-            message: `Pre-flight check failed (${response.status})`,
-            details: errorData.message || errorData.error || 'Unknown server error',
-            status: response.status
-          });
-          return;
-        }
+        return;
       }
     } catch (err) {
-      // Network/parsing errors - DO NOT MASK
-      console.error('[TRIAGE BUILDER V23] ❌ CHECKPOINT X: Network/Parse error', {
-        error: err.message,
-        stack: err.stack
-      });
       this.renderTriageBuilderError(container, {
         error: 'NETWORK_ERROR',
         message: 'Failed to connect to server',
@@ -1067,23 +1021,579 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       return;
     }
     
-    // CHECKPOINT 6: Check scenario count
-    console.log('[TRIAGE BUILDER V23] 📊 CHECKPOINT 6: Checking scenarios...', {
-      canProceed: preFlightResult.canProceed,
-      scenarioCount: preFlightResult.scenarioCount
-    });
-    
-    // If no scenarios loaded, show blocker UI (the Golden Rule)
+    // If no scenarios, show blocker
     if (!preFlightResult.canProceed || preFlightResult.scenarioCount === 0) {
-      console.warn('[TRIAGE BUILDER V23] ⚠️ CHECKPOINT 7: No scenarios - showing blocker');
       this.renderTriageBuilderBlocked(container, preFlightResult);
       return;
     }
     
-    // Store scenarios for later use in form
-    console.log('[TRIAGE BUILDER V23] ✅ CHECKPOINT 8: Pre-flight PASSED - rendering builder');
-    this.activeScenarios = preFlightResult.scenarios || [];
+    // Scenarios exist - render Auto-Scan UI
+    await this.renderAutoScanUI(container, preFlightResult);
+  }
+  
+  // ═════════════════════════════════════════════════════════════════════════
+  // AUTO-SCAN UI RENDERING
+  // ═════════════════════════════════════════════════════════════════════════
+  
+  async renderAutoScanUI(container, preFlightResult) {
+    console.log('[AUTO-SCAN V23] Rendering Auto-Scan UI', {
+      scenarioCount: preFlightResult.scenarioCount
+    });
     
+    // Load current triage cards count
+    let cardsCount = 0;
+    try {
+      const token = localStorage.getItem('adminToken');
+      const cardsResponse = await fetch(`/api/admin/triage-builder/cards/${this.companyId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (cardsResponse.ok) {
+        const cardsData = await cardsResponse.json();
+        cardsCount = cardsData.cards?.length || 0;
+      }
+    } catch (err) {
+      console.warn('[AUTO-SCAN V23] Failed to load cards count', err);
+    }
+    
+    const gap = Math.max(0, preFlightResult.scenarioCount - cardsCount);
+    const coverage = preFlightResult.scenarioCount > 0 
+      ? Math.round((cardsCount / preFlightResult.scenarioCount) * 100) 
+      : 0;
+    
+    container.innerHTML = `
+      <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+        
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-purple-600 to-indigo-600 border-b border-gray-200 px-6 py-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-lg font-bold text-white flex items-center">
+                <i class="fas fa-robot mr-2"></i>
+                AI Triage Builder - Auto-Scan
+                <span class="ml-3 px-2 py-1 text-xs font-semibold bg-white bg-opacity-20 text-white rounded-full">
+                  V23 ENTERPRISE
+                </span>
+              </h3>
+              <p class="text-sm text-purple-100 mt-1">
+                Automatically generate triage cards from your Brain 2 scenarios
+              </p>
+            </div>
+            <button 
+              onclick="cheatSheetManager.toggleTriageBuilder()" 
+              id="triage-builder-toggle-btn"
+              class="p-2 text-white hover:bg-white hover:bg-opacity-10 rounded transition-colors"
+              title="Expand/Collapse"
+            >
+              <i class="fas fa-chevron-down" id="triage-builder-toggle-icon"></i>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Collapsible Content -->
+        <div id="triage-builder-content" class="hidden">
+          
+          <!-- Status Dashboard -->
+          <div class="px-6 py-6 bg-gradient-to-r from-gray-50 to-gray-100">
+            <div class="grid grid-cols-4 gap-4">
+              
+              <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-4 text-white shadow-lg">
+                <div class="text-3xl font-bold mb-1">${preFlightResult.scenarioCount}</div>
+                <div class="text-sm text-purple-100 uppercase tracking-wide">Active Scenarios</div>
+              </div>
+              
+              <div class="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-4 text-white shadow-lg">
+                <div class="text-3xl font-bold mb-1">${cardsCount}</div>
+                <div class="text-sm text-indigo-100 uppercase tracking-wide">Triage Cards</div>
+              </div>
+              
+              <div class="bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl p-4 text-white shadow-lg">
+                <div class="text-3xl font-bold mb-1">${gap}</div>
+                <div class="text-sm text-pink-100 uppercase tracking-wide">Scenarios Missing Cards</div>
+              </div>
+              
+              <div class="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-4 text-white shadow-lg">
+                <div class="text-3xl font-bold mb-1">${coverage}%</div>
+                <div class="text-sm text-cyan-100 uppercase tracking-wide">Coverage</div>
+              </div>
+              
+            </div>
+          </div>
+          
+          <!-- Info Alert -->
+          <div class="px-6 py-4 bg-blue-50 border-b border-blue-100">
+            <div class="flex items-start space-x-3">
+              <i class="fas fa-info-circle text-blue-600 text-xl mt-1"></i>
+              <div class="flex-1">
+                <h4 class="text-sm font-semibold text-blue-900 mb-1">How Auto-Scan Works</h4>
+                <p class="text-sm text-blue-800">
+                  The system reads all active scenarios from Brain 2, uses LLM-A to generate keywords and routing rules, 
+                  and creates organized triage cards. You can review and edit before saving.
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Action Buttons -->
+          <div class="px-6 py-6">
+            <div class="space-y-4">
+              
+              <!-- Full Scan Button -->
+              <div class="border border-purple-200 rounded-lg p-4 bg-purple-50">
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex-1">
+                    <h4 class="font-semibold text-gray-900 mb-1">
+                      <i class="fas fa-search text-purple-600 mr-2"></i>
+                      Full Scan (First Time)
+                    </h4>
+                    <p class="text-sm text-gray-600">
+                      Scans ALL active scenarios and generates cards for each one. Organizes by category automatically.
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  id="full-scan-btn"
+                  onclick="cheatSheetManager.startAutoScanFull()"
+                  class="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center"
+                >
+                  <i class="fas fa-search mr-2"></i>
+                  Scan AiCore & Generate Cards
+                </button>
+                <p class="text-xs text-gray-500 mt-2 text-center">
+                  Estimated time: ~${Math.ceil(preFlightResult.scenarioCount / 30)} minute(s) for ${preFlightResult.scenarioCount} scenarios
+                </p>
+              </div>
+              
+              <!-- Rescan Button -->
+              <div class="border border-pink-200 rounded-lg p-4 bg-pink-50">
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex-1">
+                    <h4 class="font-semibold text-gray-900 mb-1">
+                      <i class="fas fa-sync-alt text-pink-600 mr-2"></i>
+                      Rescan (Check for New)
+                    </h4>
+                    <p class="text-sm text-gray-600">
+                      Checks for new scenarios added since last scan. Only generates cards for NEW scenarios.
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  id="rescan-btn"
+                  onclick="cheatSheetManager.startAutoScanRescan()"
+                  class="w-full px-6 py-3 bg-gradient-to-r from-pink-600 to-rose-600 text-white font-semibold rounded-lg hover:from-pink-700 hover:to-rose-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center"
+                >
+                  <i class="fas fa-sync-alt mr-2"></i>
+                  Rescan for New Scenarios
+                </button>
+                <p class="text-xs text-gray-500 mt-2 text-center">
+                  Last scan: <span id="last-scan-time">Never</span>
+                </p>
+              </div>
+              
+            </div>
+          </div>
+          
+          <!-- Progress Container (hidden by default) -->
+          <div id="auto-scan-progress" class="px-6 py-4 bg-gray-50 border-t border-gray-200" style="display: none;">
+            <div class="mb-2">
+              <div class="flex items-center justify-between text-sm mb-1">
+                <span class="font-medium text-gray-700" id="progress-label">Scanning...</span>
+                <span class="text-gray-600" id="progress-percent">0%</span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2.5">
+                <div id="progress-bar" class="bg-gradient-to-r from-purple-600 to-indigo-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+              </div>
+            </div>
+            <p class="text-xs text-gray-600 text-center" id="progress-text">Initializing...</p>
+          </div>
+          
+        </div>
+      </div>
+    `;
+    
+    // Auto-expand the content
+    const content = document.getElementById('triage-builder-content');
+    if (content) {
+      content.classList.remove('hidden');
+    }
+  }
+  
+  // ═════════════════════════════════════════════════════════════════════════
+  // AUTO-SCAN ACTIONS
+  // ═════════════════════════════════════════════════════════════════════════
+  
+  async startAutoScanFull() {
+    console.log('[AUTO-SCAN V23] Starting full scan');
+    
+    if (!confirm('This will generate cards for ALL active scenarios in Brain 2. Continue?')) {
+      return;
+    }
+    
+    const btn = document.getElementById('full-scan-btn');
+    const progressContainer = document.getElementById('auto-scan-progress');
+    const progressBar = document.getElementById('progress-bar');
+    const progressPercent = document.getElementById('progress-percent');
+    const progressLabel = document.getElementById('progress-label');
+    const progressText = document.getElementById('progress-text');
+    
+    // Disable button
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Scanning...';
+    
+    // Show progress
+    progressContainer.style.display = 'block';
+    progressLabel.textContent = 'Starting full scan...';
+    progressText.textContent = 'Connecting to Brain 2...';
+    progressBar.style.width = '10%';
+    progressPercent.textContent = '10%';
+    
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`/api/admin/triage-builder/auto-scan/${this.companyId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Scan failed (${response.status})`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.ok) {
+        throw new Error(data.message || 'Scan failed');
+      }
+      
+      // Success
+      progressBar.style.width = '100%';
+      progressPercent.textContent = '100%';
+      progressLabel.textContent = 'Scan complete!';
+      progressText.textContent = `Generated ${data.cardsGenerated} cards from ${data.totalScenarios} scenarios`;
+      
+      // Show review modal
+      setTimeout(() => {
+        this.showAutoScanReviewModal(data.categories || [], data.cards || []);
+        progressContainer.style.display = 'none';
+      }, 1000);
+      
+    } catch (err) {
+      console.error('[AUTO-SCAN V23] Full scan failed', err);
+      alert(`Scan failed: ${err.message}`);
+      progressContainer.style.display = 'none';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-search mr-2"></i> Scan AiCore & Generate Cards';
+    }
+  }
+  
+  async startAutoScanRescan() {
+    console.log('[AUTO-SCAN V23] Starting rescan');
+    
+    const btn = document.getElementById('rescan-btn');
+    const progressContainer = document.getElementById('auto-scan-progress');
+    const progressBar = document.getElementById('progress-bar');
+    const progressPercent = document.getElementById('progress-percent');
+    const progressLabel = document.getElementById('progress-label');
+    const progressText = document.getElementById('progress-text');
+    
+    // Disable button
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Rescanning...';
+    
+    // Show progress
+    progressContainer.style.display = 'block';
+    progressLabel.textContent = 'Checking for new scenarios...';
+    progressText.textContent = 'Comparing Brain 2 vs existing cards...';
+    progressBar.style.width = '30%';
+    progressPercent.textContent = '30%';
+    
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`/api/admin/triage-builder/rescan/${this.companyId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Rescan failed (${response.status})`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.ok) {
+        throw new Error(data.message || 'Rescan failed');
+      }
+      
+      progressBar.style.width = '100%';
+      progressPercent.textContent = '100%';
+      
+      if (data.newScenariosFound === 0) {
+        progressLabel.textContent = 'No new scenarios found';
+        progressText.textContent = 'All scenarios already have triage cards!';
+        setTimeout(() => {
+          alert('No new scenarios found. All scenarios already have triage cards!');
+          progressContainer.style.display = 'none';
+        }, 1500);
+      } else {
+        progressLabel.textContent = 'Rescan complete!';
+        progressText.textContent = `Found ${data.newScenariosFound} new scenarios, generated ${data.newCardsGenerated} cards`;
+        
+        // Show review modal
+        setTimeout(() => {
+          this.showAutoScanReviewModal(data.categories || [], data.newCards || []);
+          progressContainer.style.display = 'none';
+        }, 1000);
+      }
+      
+    } catch (err) {
+      console.error('[AUTO-SCAN V23] Rescan failed', err);
+      alert(`Rescan failed: ${err.message}`);
+      progressContainer.style.display = 'none';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i> Rescan for New Scenarios';
+    }
+  }
+  
+  showAutoScanReviewModal(categories, cards) {
+    console.log('[AUTO-SCAN V23] Showing review modal', {
+      categoriesCount: categories.length,
+      cardsCount: cards.length
+    });
+    
+    // Store cards for later save
+    this.autoScanGeneratedCards = cards;
+    this.autoScanSelectedIndices = new Set();
+    
+    // Select all by default
+    cards.forEach((_, index) => this.autoScanSelectedIndices.add(index));
+    
+    // Build modal HTML
+    let modalHTML = `
+      <div id="auto-scan-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px;">
+        <div style="background: white; border-radius: 16px; max-width: 1000px; width: 100%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;">
+          
+          <!-- Header -->
+          <div style="background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); color: white; padding: 24px; display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="margin: 0; font-size: 24px; font-weight: 800;">
+              <i class="fas fa-clipboard-check" style="margin-right: 8px;"></i>
+              Review Generated Cards
+            </h2>
+            <button 
+              onclick="cheatSheetManager.closeAutoScanModal()"
+              style="background: rgba(255,255,255,0.2); border: none; color: white; font-size: 24px; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; transition: all 0.2s;"
+              onmouseover="this.style.background='rgba(255,255,255,0.3)'; this.style.transform='rotate(90deg)';"
+              onmouseout="this.style.background='rgba(255,255,255,0.2)'; this.style.transform='rotate(0deg)';"
+            >
+              ×
+            </button>
+          </div>
+          
+          <!-- Body -->
+          <div style="padding: 24px; overflow-y: auto; flex: 1;">
+    `;
+    
+    // Add categories
+    categories.forEach(category => {
+      modalHTML += `
+        <div style="margin-bottom: 32px;">
+          <div style="background: #f9fafb; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-size: 18px; font-weight: 700; color: #111827;">
+              📁 ${this.escapeHtml(category.categoryName)}
+            </div>
+            <div style="background: #7c3aed; color: white; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700;">
+              ${category.cards.length} cards
+            </div>
+          </div>
+      `;
+      
+      category.cards.forEach(card => {
+        const cardIndex = cards.findIndex(c => c.triageLabel === card.triageLabel);
+        const isSelected = this.autoScanSelectedIndices.has(cardIndex);
+        
+        modalHTML += `
+          <div style="background: ${isSelected ? '#eef2ff' : 'white'}; border: 2px solid ${isSelected ? '#7c3aed' : '#e5e7eb'}; border-radius: 12px; padding: 20px; margin-bottom: 16px; transition: all 0.2s;">
+            <div style="font-size: 16px; font-weight: 700; color: #111827; margin-bottom: 8px;">
+              ${this.escapeHtml(card.displayName)}
+            </div>
+            
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
+              <span style="font-size: 12px; color: #6b7280; background: #f3f4f6; padding: 4px 10px; border-radius: 6px;">
+                <i class="fas fa-tag" style="font-size: 10px; margin-right: 4px;"></i>
+                ${this.escapeHtml(card.triageLabel)}
+              </span>
+              <span style="font-size: 12px; color: #6b7280; background: #f3f4f6; padding: 4px 10px; border-radius: 6px;">
+                <i class="fas fa-bullseye" style="font-size: 10px; margin-right: 4px;"></i>
+                Priority ${card.priority || 100}
+              </span>
+              <span style="font-size: 12px; color: #6b7280; background: #f3f4f6; padding: 4px 10px; border-radius: 6px;">
+                <i class="fas fa-link" style="font-size: 10px; margin-right: 4px;"></i>
+                ${this.escapeHtml(card.linkedScenario?.scenarioKey || 'N/A')}
+              </span>
+            </div>
+            
+            <div style="margin-top: 12px;">
+              <strong style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">Keywords:</strong>
+              ${(card.quickRuleConfig?.keywordsMustHave || []).map(kw => 
+                `<span style="display: inline-block; padding: 4px 10px; background: #dbeafe; color: #1e40af; border-radius: 999px; font-size: 11px; font-weight: 600; margin: 2px;">${this.escapeHtml(kw)}</span>`
+              ).join('')}
+            </div>
+            
+            ${(card.quickRuleConfig?.keywordsExclude || []).length > 0 ? `
+              <div style="margin-top: 12px;">
+                <strong style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">Negative Keywords:</strong>
+                ${card.quickRuleConfig.keywordsExclude.map(kw => 
+                  `<span style="display: inline-block; padding: 4px 10px; background: #fee2e2; color: #991b1b; border-radius: 999px; font-size: 11px; font-weight: 600; margin: 2px;">${this.escapeHtml(kw)}</span>`
+                ).join('')}
+              </div>
+            ` : ''}
+            
+            ${(card.generatedSynonyms || []).length > 0 ? `
+              <div style="margin-top: 12px;">
+                <strong style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">Synonyms:</strong>
+                ${card.generatedSynonyms.map(syn => 
+                  `<span style="display: inline-block; padding: 4px 10px; background: #d1fae5; color: #065f46; border-radius: 999px; font-size: 11px; font-weight: 600; margin: 2px;">${this.escapeHtml(syn)}</span>`
+                ).join('')}
+              </div>
+            ` : ''}
+            
+            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb; display: flex; align-items: center; gap: 8px;">
+              <input 
+                type="checkbox" 
+                id="card-${cardIndex}" 
+                ${isSelected ? 'checked' : ''}
+                onchange="cheatSheetManager.toggleAutoScanCard(${cardIndex})"
+                style="width: 20px; height: 20px; cursor: pointer;"
+              >
+              <label for="card-${cardIndex}" style="font-size: 14px; font-weight: 600; color: #111827; cursor: pointer;">
+                Include this card
+              </label>
+            </div>
+          </div>
+        `;
+      });
+      
+      modalHTML += `</div>`;
+    });
+    
+    modalHTML += `
+          </div>
+          
+          <!-- Footer -->
+          <div style="padding: 24px; border-top: 2px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+            <div style="font-size: 14px; color: #6b7280;">
+              <span id="auto-scan-selected-count">${this.autoScanSelectedIndices.size}</span> cards selected
+            </div>
+            <div style="display: flex; gap: 12px;">
+              <button 
+                onclick="cheatSheetManager.closeAutoScanModal()"
+                style="background: #e5e7eb; color: #374151; padding: 12px 32px; border: none; border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer;"
+              >
+                Cancel
+              </button>
+              <button 
+                onclick="cheatSheetManager.saveAutoScanCards()"
+                style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 12px 32px; border: none; border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);"
+              >
+                <i class="fas fa-save" style="margin-right: 8px;"></i>
+                Save Selected Cards
+              </button>
+            </div>
+          </div>
+          
+        </div>
+      </div>
+    `;
+    
+    // Insert modal into DOM
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+  }
+  
+  toggleAutoScanCard(index) {
+    if (this.autoScanSelectedIndices.has(index)) {
+      this.autoScanSelectedIndices.delete(index);
+    } else {
+      this.autoScanSelectedIndices.add(index);
+    }
+    
+    // Update count
+    const countEl = document.getElementById('auto-scan-selected-count');
+    if (countEl) {
+      countEl.textContent = this.autoScanSelectedIndices.size;
+    }
+  }
+  
+  closeAutoScanModal() {
+    const modal = document.getElementById('auto-scan-modal');
+    if (modal) {
+      modal.remove();
+    }
+    this.autoScanGeneratedCards = [];
+    this.autoScanSelectedIndices = new Set();
+  }
+  
+  async saveAutoScanCards() {
+    if (this.autoScanSelectedIndices.size === 0) {
+      alert('Please select at least one card to save.');
+      return;
+    }
+    
+    if (!confirm(`Save ${this.autoScanSelectedIndices.size} cards to the database?`)) {
+      return;
+    }
+    
+    try {
+      const selectedCards = this.autoScanGeneratedCards.filter((_, index) => 
+        this.autoScanSelectedIndices.has(index)
+      );
+      
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`/api/admin/triage-builder/save-batch/${this.companyId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          cards: selectedCards,
+          activateAll: false
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (!data.ok) {
+        throw new Error(data.error || 'Failed to save cards');
+      }
+      
+      alert(`Successfully saved ${data.savedCount} cards!`);
+      this.closeAutoScanModal();
+      
+      // Reload the UI to show updated counts
+      await this.renderTriageBuilder();
+      
+    } catch (err) {
+      console.error('[AUTO-SCAN V23] Save failed', err);
+      alert(`Failed to save cards: ${err.message}`);
+    }
+  }
+  
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text || '';
+    return div.innerHTML;
+  }
+  
+  // ═════════════════════════════════════════════════════════════════════════
+  // LEGACY V22 CODE (REMOVE BELOW)
+  // ═════════════════════════════════════════════════════════════════════════
+  
+  legacyRenderTriageBuilderManualForm() {
     // V22 HVAC Preset Pack definitions
     const hvacPresets = [
       { id: 'ac_not_cooling', label: 'AC not cooling', category: 'Cooling / No Cool', serviceTypes: ['REPAIR'], action: 'DIRECT_TO_3TIER', scenario: 'Customer reports AC is running but not cooling the house. Air is blowing but feels warm or room temperature. Needs proper repair diagnosis, not a tune-up.' },
