@@ -1375,7 +1375,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     
     // Build modal HTML
     let modalHTML = `
-      <div id="auto-scan-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px;">
+      <div id="auto-scan-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 20px;">
         <div style="background: white; border-radius: 16px; max-width: 1000px; width: 100%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;">
           
           <!-- Header -->
