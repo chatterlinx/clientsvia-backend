@@ -66,8 +66,12 @@ async function getActiveScenariosForCompany(companyId) {
     });
     
     // Step 2: Get activated template references
-    const templateReferences = company.aiAgentSettings?.templateReferences || [];
-    const scenarioControls = company.aiAgentSettings?.scenarioControls || {};
+    // CRITICAL: Filter by enabled !== false (matches v2aiLiveScenarios.js)
+    const templateReferences = (company.aiAgentSettings?.templateReferences || [])
+      .filter(ref => ref.enabled !== false);
+    
+    // scenarioControls is an ARRAY (matches v2aiLiveScenarios.js)
+    const scenarioControls = company.aiAgentSettings?.scenarioControls || [];
     
     logger.info('[ACTIVE-SCENARIOS] 📋 CHECKPOINT 3: Template references check', {
       templateReferencesCount: templateReferences.length,
@@ -92,14 +96,16 @@ async function getActiveScenariosForCompany(companyId) {
     }
     
     // Step 3: Load all activated templates
+    // CRITICAL: Do NOT filter by status - templates don't have a status field
+    // Same pattern as v2aiLiveScenarios.js which works correctly
     const templateIds = templateReferences.map(ref => ref.templateId);
     logger.info('[ACTIVE-SCENARIOS] 🔍 CHECKPOINT 4: Loading templates from GlobalInstantResponseTemplate...', {
       templateIds
     });
     
+    // Load templates by ID only - no status filter (matches v2aiLiveScenarios.js)
     const templates = await GlobalInstantResponseTemplate.find({
-      _id: { $in: templateIds },
-      status: 'active'
+      _id: { $in: templateIds }
     }).lean();
     
     logger.info('[ACTIVE-SCENARIOS] 📊 CHECKPOINT 4.1: Templates query result', {
@@ -109,15 +115,15 @@ async function getActiveScenariosForCompany(companyId) {
     });
     
     if (templates.length === 0) {
-      logger.warn('[ACTIVE-SCENARIOS] ⚠️ CHECKPOINT 4.2: No active templates found', { 
+      logger.warn('[ACTIVE-SCENARIOS] ⚠️ CHECKPOINT 4.2: No templates found in database', { 
         templateIds,
-        message: 'Templates may be inactive or deleted. Check GlobalInstantResponseTemplate collection.'
+        message: 'Templates may have been deleted. Check GlobalInstantResponseTemplate collection.'
       });
       return {
         success: true,
         scenarios: [],
         count: 0,
-        message: 'TEMPLATES_NOT_FOUND_OR_INACTIVE',
+        message: 'TEMPLATES_NOT_FOUND',
         companyName: company.businessName || company.companyName,
         trade: company.trade
       };
@@ -149,24 +155,42 @@ async function getActiveScenariosForCompany(companyId) {
         
         for (const scenario of scenarios) {
           totalScenariosScanned++;
-          const scenarioKey = scenario.key || scenario.scenarioKey || scenario.name;
           
-          // Check if scenario is enabled for this company
-          const controlKey = `${template._id}_${category.name || category.key}_${scenarioKey}`;
-          const isEnabled = scenarioControls[controlKey]?.enabled !== false; // Default to enabled
+          // CRITICAL: Use scenarioId field (matches v2aiLiveScenarios.js)
+          // Templates use scenario.scenarioId, NOT scenario.key
+          const scenarioKey = scenario.scenarioId || scenario.key || scenario.scenarioKey || scenario.name;
+          
+          // Skip scenarios without any identifier
+          if (!scenarioKey) {
+            logger.warn('[ACTIVE-SCENARIOS] ⚠️ Skipping scenario without scenarioId', {
+              templateName: template.name,
+              categoryName: category.name
+            });
+            continue;
+          }
+          
+          // Check if scenario is disabled for this company
+          // Match the same control pattern as v2aiLiveScenarios.js
+          const control = (scenarioControls || []).find?.(c => 
+            c.templateId === template._id.toString() && 
+            c.scenarioId === scenarioKey
+          );
+          const isEnabled = control ? control.isEnabled !== false : true; // Default to enabled
           
           if (isEnabled) {
             allScenarios.push({
               scenarioKey: scenarioKey,
+              scenarioId: scenarioKey,
               name: scenario.name || scenario.displayName || scenarioKey,
               description: scenario.description || '',
-              categoryKey: category.key || category.name,
+              categoryKey: category.categoryId || category.key || category.name,
               categoryName: category.name || category.displayName,
               templateId: template._id.toString(),
               templateName: template.name,
+              triggers: scenario.triggers || [],
               // Include quick replies for context
               hasQuickReplies: (scenario.quickReplies || []).length > 0,
-              hasFullReplies: (scenario.replies || scenario.fullReplies || []).length > 0
+              hasFullReplies: (scenario.fullReplies || scenario.replies || []).length > 0
             });
           } else {
             scenariosDisabledByControl++;
