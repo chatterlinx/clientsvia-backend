@@ -14,6 +14,12 @@ const TriageService = require('../../services/TriageService');
 const LLMA = require('../../services/LLMA_TriageCardGenerator');
 const logger = require('../../utils/logger');
 
+// Authentication middleware - required for all admin routes
+const { authenticateJWT } = require('../../middleware/auth');
+
+// Apply authentication to ALL routes in this router
+router.use(authenticateJWT);
+
 // V23: Active Scenarios Helper (Pre-flight check)
 const { 
   getActiveScenariosForCompany, 
