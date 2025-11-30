@@ -987,7 +987,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     let preFlightResult = { canProceed: false, scenarioCount: 0, scenarios: [], error: null };
     
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('adminToken');
       console.log('[TRIAGE BUILDER V23] 🔐 CHECKPOINT 2: Token present:', !!token);
       
       if (!token) {
