@@ -137,44 +137,76 @@ router.post('/generate-card', async (req, res, next) => {
  * }
  */
 router.get('/preflight/:companyId', async (req, res, next) => {
+  const startTime = Date.now();
+  
   try {
     const { companyId } = req.params;
     
+    // CHECKPOINT 1: Validate company ID format
+    logger.info('[TRIAGE PREFLIGHT] ⏳ CHECKPOINT 1: Starting pre-flight check', { 
+      companyId,
+      userId: req.user?.id || 'unknown',
+      userEmail: req.user?.email || 'unknown'
+    });
+    
     if (!mongoose.Types.ObjectId.isValid(companyId)) {
+      logger.error('[TRIAGE PREFLIGHT] ❌ CHECKPOINT 1.1: Invalid company ID format', { companyId });
       return res.status(400).json({
         success: false,
         canProceed: false,
-        error: 'Invalid company ID'
+        error: 'INVALID_COMPANY_ID',
+        message: 'Invalid company ID format'
       });
     }
     
-    logger.info('[TRIAGE BUILDER V23] Pre-flight check', { companyId });
-    
+    // CHECKPOINT 2: Call helper to get active scenarios
+    logger.info('[TRIAGE PREFLIGHT] 🔍 CHECKPOINT 2: Fetching scenarios from ActiveScenariosHelper');
     const preFlightResult = await preFlightCheckForTriageBuilder(companyId);
     
+    // CHECKPOINT 3: Log results
+    const elapsed = Date.now() - startTime;
+    
     if (!preFlightResult.canProceed) {
-      logger.warn('[TRIAGE BUILDER V23] Pre-flight FAILED - No scenarios', {
+      logger.warn('[TRIAGE PREFLIGHT] ⚠️ CHECKPOINT 3: Pre-flight FAILED - No scenarios loaded', {
         companyId,
-        scenarioCount: preFlightResult.scenarioCount
+        scenarioCount: preFlightResult.scenarioCount,
+        companyName: preFlightResult.companyName,
+        elapsedMs: elapsed
       });
     } else {
-      logger.info('[TRIAGE BUILDER V23] Pre-flight PASSED', {
+      logger.info('[TRIAGE PREFLIGHT] ✅ CHECKPOINT 3: Pre-flight PASSED', {
         companyId,
-        scenarioCount: preFlightResult.scenarioCount
+        scenarioCount: preFlightResult.scenarioCount,
+        companyName: preFlightResult.companyName,
+        elapsedMs: elapsed
       });
     }
     
+    // CHECKPOINT 4: Send response
     res.json({
       success: true,
       ...preFlightResult
     });
     
+    logger.info('[TRIAGE PREFLIGHT] ✅ CHECKPOINT 4: Response sent', { elapsedMs: Date.now() - startTime });
+    
   } catch (err) {
-    logger.error('[TRIAGE BUILDER V23] Pre-flight error', {
+    // NEVER mask errors - log everything
+    logger.error('[TRIAGE PREFLIGHT] ❌ CHECKPOINT X: Fatal error in pre-flight', {
       error: err.message,
-      companyId: req.params.companyId
+      stack: err.stack,
+      companyId: req.params.companyId,
+      elapsedMs: Date.now() - startTime
     });
-    next(err);
+    
+    // Return proper error response instead of passing to generic handler
+    res.status(500).json({
+      success: false,
+      canProceed: false,
+      error: 'INTERNAL_ERROR',
+      message: 'Pre-flight check failed due to server error',
+      details: err.message
+    });
   }
 });
 

@@ -980,12 +980,27 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     
     // ═══════════════════════════════════════════════════════════════════
     // V23 PRE-FLIGHT CHECK: Verify Brain 2 is ready
+    // CRITICAL: We NEVER mask errors - all failures must be visible
     // ═══════════════════════════════════════════════════════════════════
-    let preFlightResult = { canProceed: true, scenarioCount: 0, scenarios: [] };
-    let preFlightError = null;
+    console.log('[TRIAGE BUILDER V23] ⏳ CHECKPOINT 1: Starting pre-flight check...');
+    
+    let preFlightResult = { canProceed: false, scenarioCount: 0, scenarios: [], error: null };
     
     try {
       const token = localStorage.getItem('token');
+      console.log('[TRIAGE BUILDER V23] 🔐 CHECKPOINT 2: Token present:', !!token);
+      
+      if (!token) {
+        console.error('[TRIAGE BUILDER V23] ❌ CHECKPOINT 2.1: NO AUTH TOKEN - User must be logged in');
+        this.renderTriageBuilderError(container, {
+          error: 'NO_AUTH_TOKEN',
+          message: 'Authentication required. Please log in again.',
+          details: 'No token found in localStorage'
+        });
+        return;
+      }
+      
+      console.log('[TRIAGE BUILDER V23] 📡 CHECKPOINT 3: Calling pre-flight API...');
       const response = await fetch(`/api/admin/triage-builder/preflight/${this.companyId}`, {
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -993,37 +1008,80 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         }
       });
       
+      console.log('[TRIAGE BUILDER V23] 📥 CHECKPOINT 4: Response status:', response.status);
+      
       if (response.ok) {
         preFlightResult = await response.json();
-        console.log('[TRIAGE BUILDER V23] Pre-flight result:', preFlightResult);
-      } else if (response.status === 401) {
-        // Auth error - proceed with builder but show warning
-        console.warn('[TRIAGE BUILDER V23] Auth error on pre-flight check (401). Proceeding with legacy mode.');
-        preFlightError = 'AUTH_ERROR';
-        preFlightResult.canProceed = true; // Allow builder to render
+        console.log('[TRIAGE BUILDER V23] ✅ CHECKPOINT 5: Pre-flight SUCCESS', {
+          canProceed: preFlightResult.canProceed,
+          scenarioCount: preFlightResult.scenarioCount,
+          companyName: preFlightResult.companyName
+        });
       } else {
-        // Other error - try to get error message
-        const errorData = await response.json().catch(() => ({}));
-        console.warn('[TRIAGE BUILDER V23] Pre-flight check failed:', response.status, errorData);
-        preFlightError = errorData.error || 'UNKNOWN_ERROR';
-        // On error, proceed with caution - show builder but without scenario validation
-        preFlightResult.canProceed = true;
+        // DO NOT MASK ERRORS - Show them clearly
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        console.error('[TRIAGE BUILDER V23] ❌ CHECKPOINT 5: Pre-flight FAILED', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        });
+        
+        // Show specific error UI based on status code
+        if (response.status === 401) {
+          this.renderTriageBuilderError(container, {
+            error: 'UNAUTHORIZED',
+            message: 'Authentication failed (401). Your session may have expired.',
+            details: 'Please refresh the page and log in again.',
+            status: 401
+          });
+          return;
+        } else if (response.status === 403) {
+          this.renderTriageBuilderError(container, {
+            error: 'FORBIDDEN',
+            message: 'Access denied (403). You may not have permission for this company.',
+            details: errorData.message || 'Contact your administrator.',
+            status: 403
+          });
+          return;
+        } else {
+          this.renderTriageBuilderError(container, {
+            error: 'API_ERROR',
+            message: `Pre-flight check failed (${response.status})`,
+            details: errorData.message || errorData.error || 'Unknown server error',
+            status: response.status
+          });
+          return;
+        }
       }
     } catch (err) {
-      console.warn('[TRIAGE BUILDER V23] Pre-flight check network error, proceeding with legacy mode:', err);
-      preFlightError = 'NETWORK_ERROR';
-      preFlightResult.canProceed = true; // Allow builder on network errors
+      // Network/parsing errors - DO NOT MASK
+      console.error('[TRIAGE BUILDER V23] ❌ CHECKPOINT X: Network/Parse error', {
+        error: err.message,
+        stack: err.stack
+      });
+      this.renderTriageBuilderError(container, {
+        error: 'NETWORK_ERROR',
+        message: 'Failed to connect to server',
+        details: err.message
+      });
+      return;
     }
     
-    // Only show blocker if we got a SUCCESSFUL response with 0 scenarios
-    // Don't block on auth/network errors - let them use the builder
-    if (preFlightResult.canProceed === false || 
-        (preFlightResult.scenarioCount === 0 && !preFlightError)) {
+    // CHECKPOINT 6: Check scenario count
+    console.log('[TRIAGE BUILDER V23] 📊 CHECKPOINT 6: Checking scenarios...', {
+      canProceed: preFlightResult.canProceed,
+      scenarioCount: preFlightResult.scenarioCount
+    });
+    
+    // If no scenarios loaded, show blocker UI (the Golden Rule)
+    if (!preFlightResult.canProceed || preFlightResult.scenarioCount === 0) {
+      console.warn('[TRIAGE BUILDER V23] ⚠️ CHECKPOINT 7: No scenarios - showing blocker');
       this.renderTriageBuilderBlocked(container, preFlightResult);
       return;
     }
     
-    // Store scenarios for later use in form (may be empty if pre-flight failed)
+    // Store scenarios for later use in form
+    console.log('[TRIAGE BUILDER V23] ✅ CHECKPOINT 8: Pre-flight PASSED - rendering builder');
     this.activeScenarios = preFlightResult.scenarios || [];
     
     // V22 HVAC Preset Pack definitions
@@ -1463,6 +1521,90 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
               <strong>Current Status:</strong> ${preFlightResult.scenarioCount || 0} scenarios active
               ${preFlightResult.companyName ? ` for ${preFlightResult.companyName}` : ''}
             </p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  
+  /**
+   * V23: Render error state for Triage Builder
+   * CRITICAL: Never mask errors - display them clearly with debugging info
+   */
+  renderTriageBuilderError(container, errorInfo) {
+    console.error('[TRIAGE BUILDER V23] ❌ Rendering error state:', errorInfo);
+    
+    const statusColors = {
+      401: { bg: 'from-yellow-50 to-orange-50', border: 'border-yellow-200', icon: '🔐', title: 'text-yellow-900' },
+      403: { bg: 'from-red-50 to-orange-50', border: 'border-red-200', icon: '🚫', title: 'text-red-900' },
+      default: { bg: 'from-red-50 to-pink-50', border: 'border-red-200', icon: '⚠️', title: 'text-red-900' }
+    };
+    
+    const colors = statusColors[errorInfo.status] || statusColors.default;
+    
+    container.innerHTML = `
+      <div class="bg-white border-2 ${colors.border} rounded-lg shadow-sm overflow-hidden">
+        
+        <!-- Header -->
+        <div class="bg-gradient-to-r ${colors.bg} border-b ${colors.border} px-6 py-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-lg font-semibold ${colors.title} flex items-center">
+                <span class="mr-2">${colors.icon}</span>
+                AI Triage Builder
+                <span class="ml-3 px-2 py-1 text-xs font-semibold bg-red-100 text-red-700 rounded-full">
+                  ERROR
+                </span>
+              </h3>
+              <p class="text-sm text-red-700 mt-1">
+                ${errorInfo.error}: ${errorInfo.message}
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Error Content -->
+        <div class="p-8 text-center">
+          <div class="mx-auto w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mb-6">
+            <span class="text-5xl">${colors.icon}</span>
+          </div>
+          
+          <h2 class="text-2xl font-bold text-red-800 mb-4">${errorInfo.error}</h2>
+          
+          <p class="text-gray-700 mb-4 max-w-lg mx-auto">
+            ${errorInfo.message}
+          </p>
+          
+          ${errorInfo.details ? `
+            <div class="bg-gray-100 border border-gray-300 rounded-lg p-4 mb-6 max-w-lg mx-auto text-left">
+              <h4 class="font-semibold text-gray-800 mb-2">📋 Debug Details:</h4>
+              <pre class="text-xs text-gray-600 whitespace-pre-wrap font-mono">${errorInfo.details}</pre>
+            </div>
+          ` : ''}
+          
+          <div class="flex justify-center gap-4">
+            ${errorInfo.status === 401 ? `
+              <button 
+                onclick="window.location.reload()"
+                class="px-6 py-3 bg-yellow-600 text-white font-semibold rounded-lg hover:bg-yellow-700 transition-colors flex items-center"
+              >
+                <i class="fas fa-sync-alt mr-2"></i>
+                Refresh Page
+              </button>
+            ` : ''}
+            
+            <button 
+              onclick="cheatSheetManager.renderTriageBuilder()"
+              class="px-6 py-3 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors flex items-center"
+            >
+              <i class="fas fa-redo mr-2"></i>
+              Retry
+            </button>
+          </div>
+          
+          <div class="mt-6 text-sm text-gray-500">
+            <p>Error Code: <code class="bg-gray-200 px-2 py-1 rounded">${errorInfo.error}</code></p>
+            ${errorInfo.status ? `<p>HTTP Status: <code class="bg-gray-200 px-2 py-1 rounded">${errorInfo.status}</code></p>` : ''}
           </div>
         </div>
       </div>
