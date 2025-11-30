@@ -982,28 +982,48 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     // V23 PRE-FLIGHT CHECK: Verify Brain 2 is ready
     // ═══════════════════════════════════════════════════════════════════
     let preFlightResult = { canProceed: true, scenarioCount: 0, scenarios: [] };
+    let preFlightError = null;
     
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/admin/triage-builder/preflight/${this.companyId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
       
       if (response.ok) {
         preFlightResult = await response.json();
         console.log('[TRIAGE BUILDER V23] Pre-flight result:', preFlightResult);
+      } else if (response.status === 401) {
+        // Auth error - proceed with builder but show warning
+        console.warn('[TRIAGE BUILDER V23] Auth error on pre-flight check (401). Proceeding with legacy mode.');
+        preFlightError = 'AUTH_ERROR';
+        preFlightResult.canProceed = true; // Allow builder to render
+      } else {
+        // Other error - try to get error message
+        const errorData = await response.json().catch(() => ({}));
+        console.warn('[TRIAGE BUILDER V23] Pre-flight check failed:', response.status, errorData);
+        preFlightError = errorData.error || 'UNKNOWN_ERROR';
+        // On error, proceed with caution - show builder but without scenario validation
+        preFlightResult.canProceed = true;
       }
     } catch (err) {
-      console.warn('[TRIAGE BUILDER V23] Pre-flight check failed, proceeding with caution:', err);
+      console.warn('[TRIAGE BUILDER V23] Pre-flight check network error, proceeding with legacy mode:', err);
+      preFlightError = 'NETWORK_ERROR';
+      preFlightResult.canProceed = true; // Allow builder on network errors
     }
     
-    // If no scenarios loaded, show blocker UI
-    if (!preFlightResult.canProceed || preFlightResult.scenarioCount === 0) {
+    // Only show blocker if we got a SUCCESSFUL response with 0 scenarios
+    // Don't block on auth/network errors - let them use the builder
+    if (preFlightResult.canProceed === false || 
+        (preFlightResult.scenarioCount === 0 && !preFlightError)) {
       this.renderTriageBuilderBlocked(container, preFlightResult);
       return;
     }
     
-    // Store scenarios for later use in form
+    // Store scenarios for later use in form (may be empty if pre-flight failed)
     this.activeScenarios = preFlightResult.scenarios || [];
     
     // V22 HVAC Preset Pack definitions
