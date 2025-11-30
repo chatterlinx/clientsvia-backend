@@ -38,17 +38,18 @@ async function getActiveScenariosForCompany(companyId) {
   const startTime = Date.now();
   
   try {
-    logger.info('[ACTIVE-SCENARIOS] Fetching active scenarios for company', { companyId });
+    logger.info('[ACTIVE-SCENARIOS] ⏳ CHECKPOINT 1: Fetching active scenarios', { companyId });
     
     const { Company, GlobalInstantResponseTemplate } = getModels();
     
     // Step 1: Load company with template references
+    logger.info('[ACTIVE-SCENARIOS] 🔍 CHECKPOINT 2: Loading company from database...');
     const company = await Company.findById(companyId)
-      .select('aiAgentSettings.templateReferences aiAgentSettings.scenarioControls businessName trade')
+      .select('aiAgentSettings.templateReferences aiAgentSettings.scenarioControls businessName companyName trade')
       .lean();
     
     if (!company) {
-      logger.warn('[ACTIVE-SCENARIOS] Company not found', { companyId });
+      logger.error('[ACTIVE-SCENARIOS] ❌ CHECKPOINT 2.1: Company not found in database', { companyId });
       return {
         success: false,
         scenarios: [],
@@ -57,12 +58,29 @@ async function getActiveScenariosForCompany(companyId) {
       };
     }
     
+    logger.info('[ACTIVE-SCENARIOS] ✅ CHECKPOINT 2.2: Company loaded', {
+      companyId,
+      businessName: company.businessName || company.companyName,
+      trade: company.trade,
+      hasAiAgentSettings: !!company.aiAgentSettings
+    });
+    
     // Step 2: Get activated template references
     const templateReferences = company.aiAgentSettings?.templateReferences || [];
     const scenarioControls = company.aiAgentSettings?.scenarioControls || {};
     
+    logger.info('[ACTIVE-SCENARIOS] 📋 CHECKPOINT 3: Template references check', {
+      templateReferencesCount: templateReferences.length,
+      templateIds: templateReferences.map(ref => ref.templateId),
+      scenarioControlsCount: Object.keys(scenarioControls).length
+    });
+    
     if (templateReferences.length === 0) {
-      logger.info('[ACTIVE-SCENARIOS] No templates activated for company', { companyId });
+      logger.warn('[ACTIVE-SCENARIOS] ⚠️ CHECKPOINT 3.1: NO TEMPLATES ACTIVATED', {
+        companyId,
+        businessName: company.businessName || company.companyName,
+        message: 'Company has no templateReferences in aiAgentSettings. User must go to AiCore Templates and activate one.'
+      });
       return {
         success: true,
         scenarios: [],
@@ -75,13 +93,26 @@ async function getActiveScenariosForCompany(companyId) {
     
     // Step 3: Load all activated templates
     const templateIds = templateReferences.map(ref => ref.templateId);
+    logger.info('[ACTIVE-SCENARIOS] 🔍 CHECKPOINT 4: Loading templates from GlobalInstantResponseTemplate...', {
+      templateIds
+    });
+    
     const templates = await GlobalInstantResponseTemplate.find({
       _id: { $in: templateIds },
       status: 'active'
     }).lean();
     
+    logger.info('[ACTIVE-SCENARIOS] 📊 CHECKPOINT 4.1: Templates query result', {
+      requestedCount: templateIds.length,
+      foundCount: templates.length,
+      templateNames: templates.map(t => t.name)
+    });
+    
     if (templates.length === 0) {
-      logger.warn('[ACTIVE-SCENARIOS] No active templates found', { templateIds });
+      logger.warn('[ACTIVE-SCENARIOS] ⚠️ CHECKPOINT 4.2: No active templates found', { 
+        templateIds,
+        message: 'Templates may be inactive or deleted. Check GlobalInstantResponseTemplate collection.'
+      });
       return {
         success: true,
         scenarios: [],
@@ -93,15 +124,31 @@ async function getActiveScenariosForCompany(companyId) {
     }
     
     // Step 4: Extract and filter scenarios
+    logger.info('[ACTIVE-SCENARIOS] 🔍 CHECKPOINT 5: Extracting scenarios from templates...');
     const allScenarios = [];
+    let totalCategoriesScanned = 0;
+    let totalScenariosScanned = 0;
+    let scenariosDisabledByControl = 0;
     
     for (const template of templates) {
       const categories = template.categories || [];
+      logger.info('[ACTIVE-SCENARIOS] 📂 CHECKPOINT 5.1: Processing template', {
+        templateName: template.name,
+        templateId: template._id.toString(),
+        categoriesCount: categories.length
+      });
       
       for (const category of categories) {
+        totalCategoriesScanned++;
         const scenarios = category.scenarios || [];
         
+        logger.info('[ACTIVE-SCENARIOS] 📁 CHECKPOINT 5.2: Processing category', {
+          categoryName: category.name || category.key,
+          scenariosCount: scenarios.length
+        });
+        
         for (const scenario of scenarios) {
+          totalScenariosScanned++;
           const scenarioKey = scenario.key || scenario.scenarioKey || scenario.name;
           
           // Check if scenario is enabled for this company
@@ -121,18 +168,39 @@ async function getActiveScenariosForCompany(companyId) {
               hasQuickReplies: (scenario.quickReplies || []).length > 0,
               hasFullReplies: (scenario.replies || scenario.fullReplies || []).length > 0
             });
+          } else {
+            scenariosDisabledByControl++;
           }
         }
       }
     }
     
     const elapsed = Date.now() - startTime;
-    logger.info('[ACTIVE-SCENARIOS] Scenarios loaded', {
+    logger.info('[ACTIVE-SCENARIOS] ✅ CHECKPOINT 6: Extraction complete', {
       companyId,
-      count: allScenarios.length,
+      activeScenarios: allScenarios.length,
       templatesLoaded: templates.length,
+      totalCategoriesScanned,
+      totalScenariosScanned,
+      scenariosDisabledByControl,
+      scenarioKeys: allScenarios.slice(0, 10).map(s => s.scenarioKey), // First 10 for log readability
       elapsed
     });
+    
+    if (allScenarios.length === 0 && totalScenariosScanned > 0) {
+      logger.warn('[ACTIVE-SCENARIOS] ⚠️ CHECKPOINT 6.1: All scenarios were disabled by scenarioControls', {
+        totalScenariosScanned,
+        scenariosDisabledByControl
+      });
+    }
+    
+    if (totalScenariosScanned === 0) {
+      logger.warn('[ACTIVE-SCENARIOS] ⚠️ CHECKPOINT 6.2: Templates have no scenarios defined', {
+        templatesLoaded: templates.length,
+        templateNames: templates.map(t => t.name),
+        message: 'Check template structure: categories[].scenarios[] may be empty'
+      });
+    }
     
     return {
       success: true,
@@ -143,6 +211,9 @@ async function getActiveScenariosForCompany(companyId) {
       trade: company.trade,
       meta: {
         templatesLoaded: templates.length,
+        totalCategoriesScanned,
+        totalScenariosScanned,
+        scenariosDisabledByControl,
         elapsed
       }
     };
