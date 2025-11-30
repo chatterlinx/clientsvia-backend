@@ -33,11 +33,17 @@ const logger = require('../utils/logger');
 const { replacePlaceholders } = require('../utils/placeholderReplacer');
 const TriageCardService = require('./TriageCardService');
 
+// V23: Import the fixed template and scenario loader
+const { buildFrontlinePromptV23, buildMicroLLMPrompt } = require('../templates/FrontlineSystemPromptV23');
+const { getActiveScenariosForCompany } = require('./ActiveScenariosHelper');
+
 // Lazy-load to avoid circular dependencies
 let Contact;
+let TriageCard;
 const getModels = () => {
     if (!Contact) Contact = require('../models/v2Contact');
-    return { Contact };
+    if (!TriageCard) TriageCard = require('../models/TriageCard');
+    return { Contact, TriageCard };
 };
 
 class FrontlineIntel {
@@ -88,7 +94,29 @@ class FrontlineIntel {
             }
             
             // Step 2: Build system prompt with company-specific instructions
-            const systemPrompt = this.buildSystemPrompt(company);
+            // V23: Check if V23 mode is enabled for this company
+            const useV23 = config.params?.useV23Template || company?.aiAgentSettings?.useV23FrontlineTemplate || false;
+            
+            let systemPrompt;
+            let v23PromptData = null;
+            
+            if (useV23) {
+                // V23: Load triage rules and scenarios for dynamic injection
+                logger.info('🚀 [FRONTLINE-INTEL] V23 mode enabled - loading dynamic prompt data...');
+                v23PromptData = await this.loadV23PromptData(company._id);
+                
+                systemPrompt = this.buildSystemPrompt(company, {
+                    useV23Template: true,
+                    triageRules: v23PromptData.triageRules,
+                    activeScenarios: v23PromptData.activeScenarios,
+                    useMicroPrompt: config.params?.useMicroPrompt || false
+                });
+                
+                logger.info(`🚀 [FRONTLINE-INTEL V23] Prompt assembled with ${v23PromptData.triageRules.length} rules, ${v23PromptData.activeScenarios.length} scenarios`);
+            } else {
+                // Legacy mode
+                systemPrompt = this.buildSystemPrompt(company);
+            }
             
             // Step 3: Call OpenAI with timeout and retry logic
             const llmResult = await this.callLLMWithRetry(
@@ -181,7 +209,14 @@ class FrontlineIntel {
                 triageDecision,  // 🧠 THE BRAIN's decision
                 timeMs,
                 cost,
-                model: config.params?.model || 'gpt-4o-mini'
+                model: config.params?.model || 'gpt-4o-mini',
+                // V23 metadata
+                v23Mode: useV23,
+                v23PromptData: useV23 ? {
+                    triageRulesCount: v23PromptData?.triageRules?.length || 0,
+                    scenariosCount: v23PromptData?.activeScenarios?.length || 0,
+                    loadTimeMs: v23PromptData?.loadTimeMs || 0
+                } : null
             };
             
         } catch (error) {
@@ -209,19 +244,53 @@ class FrontlineIntel {
     
     /**
      * Build system prompt for Frontline-Intel LLM
-     * Now with VARIABLE REPLACEMENT! 🔥
+     * V23: Supports both legacy prompt and V23 fixed template with dynamic injection
+     * 
+     * @param {Object} company - Company document
+     * @param {Object} options - Options for prompt building
+     * @param {boolean} options.useV23Template - Use V23 fixed template (default: false for backward compat)
+     * @param {Array} options.triageRules - Compiled triage rules for V23 injection
+     * @param {Array} options.activeScenarios - Active scenarios for V23 injection
      */
-    static buildSystemPrompt(company) {
+    static buildSystemPrompt(company, options = {}) {
         const companyName = company?.businessName || company?.companyName || 'the company';
         const services = company?.services || ['HVAC services'];
+        const trade = company?.trade || 'SERVICE';
         
         // ═══════════════════════════════════════════════════════════
-        // VARIABLE REPLACEMENT 🎯
+        // V23: Use fixed template with dynamic injection
         // ═══════════════════════════════════════════════════════════
-        // Get raw Frontline-Intel text
+        if (options.useV23Template && options.triageRules && options.activeScenarios) {
+            logger.info('🚀 [FRONTLINE-INTEL V23] Using fixed template with dynamic injection');
+            logger.info(`   → Injecting ${options.triageRules.length} triage rules`);
+            logger.info(`   → Injecting ${options.activeScenarios.length} active scenarios`);
+            
+            // Use the micro-LLM prompt for speed, or full prompt for accuracy
+            const useMicroPrompt = options.useMicroPrompt || false;
+            
+            if (useMicroPrompt) {
+                return buildMicroLLMPrompt({
+                    companyName,
+                    triageRules: options.triageRules,
+                    activeScenarios: options.activeScenarios
+                });
+            }
+            
+            return buildFrontlinePromptV23({
+                companyName,
+                trade,
+                serviceAreas: company?.serviceAreas || [],
+                currentTime: new Date().toLocaleString(),
+                triageRules: options.triageRules,
+                activeScenarios: options.activeScenarios
+            });
+        }
+        
+        // ═══════════════════════════════════════════════════════════
+        // LEGACY: Variable replacement for backward compatibility
+        // ═══════════════════════════════════════════════════════════
         let frontlineIntel = company?.aiAgentSettings?.cheatSheet?.frontlineIntel || '';
         
-        // Replace all {variables} with actual values from Variables tab
         if (frontlineIntel) {
             logger.info('🔄 [FRONTLINE-INTEL] Replacing variables in Frontline-Intel text...');
             const originalLength = frontlineIntel.length;
@@ -321,6 +390,62 @@ Respond ONLY with valid JSON in this exact format:
 }
 
 CRITICAL: Return ONLY the JSON object, no other text before or after!`;
+    }
+    
+    /**
+     * V23: Load triage rules and scenarios for dynamic prompt injection
+     * Called once per call, results cached in call context
+     */
+    static async loadV23PromptData(companyId) {
+        const startTime = Date.now();
+        
+        try {
+            const { TriageCard } = getModels();
+            
+            // Load active triage cards
+            const triageCards = await TriageCard.find({
+                companyId,
+                active: true
+            }).sort({ priority: -1 }).lean();
+            
+            // Convert to prompt-friendly format
+            const triageRules = triageCards.map(card => ({
+                label: card.displayName || card.triageLabel,
+                mustHaveKeywords: card.quickRuleConfig?.mustHaveKeywords || [],
+                excludeKeywords: card.quickRuleConfig?.excludeKeywords || [],
+                action: card.quickRuleConfig?.action || 'DIRECT_TO_3TIER',
+                targetScenarioKey: card.threeTierLink?.scenarioKey || null,
+                priority: card.priority || 100
+            }));
+            
+            // Load active scenarios
+            const scenariosResult = await getActiveScenariosForCompany(companyId);
+            const activeScenarios = scenariosResult.scenarios || [];
+            
+            const elapsed = Date.now() - startTime;
+            logger.info(`[FRONTLINE-INTEL V23] Loaded prompt data in ${elapsed}ms`, {
+                triageRules: triageRules.length,
+                scenarios: activeScenarios.length
+            });
+            
+            return {
+                triageRules,
+                activeScenarios,
+                loadTimeMs: elapsed
+            };
+            
+        } catch (error) {
+            logger.error('[FRONTLINE-INTEL V23] Failed to load prompt data', {
+                error: error.message,
+                companyId
+            });
+            return {
+                triageRules: [],
+                activeScenarios: [],
+                loadTimeMs: Date.now() - startTime,
+                error: error.message
+            };
+        }
     }
     
     /**
