@@ -473,6 +473,29 @@ class DashboardManager {
         const { key, service } = this.currentServiceDebug;
         const troubleshoot = this.getServiceTroubleshooting(service.name, service);
         
+        // Build environment check section if available (comes from enhanced checkRedis)
+        let envCheckSection = '';
+        if (service.envCheck) {
+            envCheckSection = `
+═══════════════════════════════════════════════════════
+🔐 ENVIRONMENT VARIABLE CHECK (LIVE)
+═══════════════════════════════════════════════════════
+${Object.entries(service.envCheck).map(([k, v]) => `${k}: ${v}`).join('\n')}
+`;
+        }
+        
+        // Build root cause section if available
+        let rootCauseSection = '';
+        if (service.rootCause || service.fixAction) {
+            rootCauseSection = `
+═══════════════════════════════════════════════════════
+🎯 ROOT CAUSE ANALYSIS
+═══════════════════════════════════════════════════════
+${service.rootCause ? `Root Cause: ${service.rootCause}` : ''}
+${service.fixAction ? `Fix Action: ${service.fixAction}` : ''}
+`;
+        }
+        
         const debugReport = `
 ═══════════════════════════════════════════════════════
 🔧 SERVICE HEALTH DEBUG REPORT
@@ -499,13 +522,14 @@ ${service.message || 'No message'}
 ${service.error ? `
 ERROR DETAILS:
 ${service.error}
+${service.errorCode ? `Error Code: ${service.errorCode}` : ''}
 ` : ''}
 
 ═══════════════════════════════════════════════════════
 🔍 HEALTH CHECK CHECKPOINTS
 ═══════════════════════════════════════════════════════
 ${troubleshoot.checkpoints.map(cp => `${cp.passed ? '✓' : '✗'} ${cp.name}${cp.value ? ` (${cp.value})` : ''}`).join('\n')}
-
+${rootCauseSection}${envCheckSection}
 ═══════════════════════════════════════════════════════
 ⚠️ IMPACT
 ═══════════════════════════════════════════════════════
@@ -552,19 +576,34 @@ Paste this report to your AI assistant for instant troubleshooting!
     
     /**
      * Get service-specific troubleshooting information
+     * Uses LIVE checkpoints from backend if available, otherwise falls back to defaults
      */
     getServiceTroubleshooting(serviceName, service) {
+        // ====================================================================
+        // PRIORITY: Use LIVE checkpoints from backend if available
+        // This gives us real diagnostic data from the actual health check!
+        // ====================================================================
+        const liveCheckpoints = service.checkpoints ? 
+            service.checkpoints.map(cp => ({
+                name: cp.name,
+                passed: cp.status === 'passed' || cp.status === 'info',
+                value: cp.message
+            })) : null;
+        
+        // Use service-provided troubleshooting steps if available
+        const liveTroubleshooting = service.troubleshooting;
+        
         const troubleshootingData = {
             'MongoDB': {
                 sourceFile: 'services/DependencyHealthMonitor.js',
                 checkFunction: 'checkMongoDB()',
                 envVar: 'MONGODB_URI',
-                checkpoints: [
+                checkpoints: liveCheckpoints || [
                     { name: 'Mongoose connection state', passed: service.status === 'HEALTHY', value: service.details?.state || service.message },
                     { name: 'Database ping test', passed: service.status === 'HEALTHY', value: service.responseTime ? `${service.responseTime}ms` : 'Failed' },
                     { name: 'Response time < 500ms', passed: (service.responseTime || 9999) < 500, value: service.responseTime ? `${service.responseTime}ms` : 'N/A' }
                 ],
-                fixSteps: [
+                fixSteps: liveTroubleshooting || [
                     'Check MongoDB Atlas dashboard at https://cloud.mongodb.com',
                     'Verify MONGODB_URI environment variable in Render Dashboard',
                     'Ensure IP whitelist includes 0.0.0.0/0 (allow all) in Atlas Network Access',
@@ -577,13 +616,15 @@ Paste this report to your AI assistant for instant troubleshooting!
                 sourceFile: 'services/DependencyHealthMonitor.js',
                 checkFunction: 'checkRedis()',
                 envVar: 'REDIS_URL',
-                checkpoints: [
+                // USE LIVE CHECKPOINTS if available - these come from the enhanced checkRedis()
+                checkpoints: liveCheckpoints || [
                     { name: 'Redis client initialized', passed: !service.message?.includes('not initialized'), value: service.message?.includes('not initialized') ? 'NOT INITIALIZED' : 'OK' },
                     { name: 'Redis ping test', passed: service.status === 'HEALTHY', value: service.responseTime ? `${service.responseTime}ms` : 'Failed' },
                     { name: 'Response time < 150ms', passed: (service.responseTime || 9999) < 150, value: service.responseTime ? `${service.responseTime}ms` : 'N/A' },
                     { name: 'Response time < 250ms (critical)', passed: (service.responseTime || 9999) < 250, value: service.responseTime ? `${service.responseTime}ms` : 'N/A' }
                 ],
-                fixSteps: [
+                // USE LIVE TROUBLESHOOTING if available - these come from the enhanced checkRedis()
+                fixSteps: liveTroubleshooting || [
                     'Check Render Dashboard → Redis addon status',
                     'Verify REDIS_URL environment variable is set in Render',
                     'Ensure Redis addon is properly linked to your web service',

@@ -164,44 +164,164 @@ class DependencyHealthMonitor {
     }
 
     // ========================================================================
-    // REDIS HEALTH CHECK
+    // REDIS HEALTH CHECK (with inline diagnostics)
     // ========================================================================
     async checkRedis() {
         const startTime = Date.now();
+        
+        // ========================================================================
+        // INLINE DIAGNOSTIC CHECKPOINTS - These will appear in debug reports!
+        // ========================================================================
+        const checkpoints = [];
+        
+        // CHECKPOINT 1: Check REDIS_URL environment variable
+        const redisUrlExists = !!process.env.REDIS_URL;
+        const redisHostExists = !!process.env.REDIS_HOST;
+        
+        checkpoints.push({
+            name: 'REDIS_URL environment variable',
+            status: redisUrlExists ? 'passed' : 'failed',
+            message: redisUrlExists 
+                ? `Set (${process.env.REDIS_URL.length} chars)` 
+                : 'MISSING - This is the root cause!'
+        });
+        
+        if (redisUrlExists) {
+            // CHECKPOINT 1.5: Validate URL format
+            const url = process.env.REDIS_URL;
+            const validProtocol = url.startsWith('redis://') || url.startsWith('rediss://');
+            checkpoints.push({
+                name: 'REDIS_URL format',
+                status: validProtocol ? 'passed' : 'failed',
+                message: validProtocol 
+                    ? `Valid protocol (${url.startsWith('rediss://') ? 'rediss (TLS)' : 'redis (plain)'})` 
+                    : `Invalid - must start with redis:// or rediss://. Got: ${url.substring(0, 15)}...`
+            });
+            
+            // Show sanitized URL for debugging
+            const sanitizedUrl = url.replace(/:([^@]+)@/, ':***@');
+            checkpoints.push({
+                name: 'REDIS_URL (sanitized)',
+                status: 'info',
+                message: sanitizedUrl.substring(0, 50) + (sanitizedUrl.length > 50 ? '...' : '')
+            });
+        } else if (redisHostExists) {
+            checkpoints.push({
+                name: 'REDIS_HOST fallback',
+                status: 'warning',
+                message: `REDIS_URL missing, falling back to REDIS_HOST=${process.env.REDIS_HOST}:${process.env.REDIS_PORT || 6379}`
+            });
+        }
+        
+        // CHECKPOINT 2: Check if client was initialized
+        checkpoints.push({
+            name: 'Redis client initialized',
+            status: redisClient ? 'passed' : 'failed',
+            message: redisClient ? 'Client exists' : 'NOT INITIALIZED - Check server startup logs for init errors'
+        });
 
         try {
             if (!redisClient) {
+                // Provide detailed diagnostic information
+                const missingVars = [];
+                if (!process.env.REDIS_URL) missingVars.push('REDIS_URL');
+                
+                let rootCause = 'Unknown';
+                let fixAction = 'Check server startup logs for Redis initialization errors';
+                
+                if (!process.env.REDIS_URL && !process.env.REDIS_HOST) {
+                    rootCause = 'REDIS_URL environment variable is not set';
+                    fixAction = 'Set REDIS_URL in Render environment variables (Dashboard → Environment)';
+                } else if (process.env.REDIS_URL) {
+                    // URL exists but client is null - initialization failed
+                    rootCause = 'Redis client initialization failed at server startup';
+                    fixAction = 'Check Render server logs for "REDIS CHECKPOINT" messages to see where init failed';
+                }
+                
+                checkpoints.push({
+                    name: 'Redis ping test',
+                    status: 'failed',
+                    message: 'Cannot ping - client is null'
+                });
+                
                 return {
                     name: 'Redis',
                     status: 'DOWN',
                     critical: false,
                     message: 'Redis client not initialized',
                     responseTime: 0,
-                    impact: 'Sessions and caching unavailable'
+                    impact: 'Sessions and caching unavailable',
+                    rootCause,
+                    fixAction,
+                    missingVars: missingVars.length > 0 ? missingVars : undefined,
+                    checkpoints,
+                    envCheck: {
+                        REDIS_URL_set: redisUrlExists,
+                        REDIS_URL_length: redisUrlExists ? process.env.REDIS_URL.length : 0,
+                        REDIS_HOST_set: redisHostExists,
+                        NODE_ENV: process.env.NODE_ENV || 'development'
+                    },
+                    troubleshooting: [
+                        '1. Go to Render Dashboard → Your Service → Environment',
+                        '2. Verify REDIS_URL is listed and has a value',
+                        '3. Check if Redis addon is connected (should start with redis:// or rediss://)',
+                        '4. Go to Render Logs and search for "REDIS CHECKPOINT" to see startup diagnostics',
+                        '5. If URL exists but client is null: restart the service to re-attempt connection'
+                    ]
                 };
             }
 
-            // Test connection
+            // CHECKPOINT 3: Test connection with ping
+            checkpoints.push({
+                name: 'Redis ping test',
+                status: 'pending',
+                message: 'Testing connection...'
+            });
+            
             await redisClient.ping();
             const responseTime = Date.now() - startTime;
+            
+            // Update checkpoint after successful ping
+            checkpoints[checkpoints.length - 1] = {
+                name: 'Redis ping test',
+                status: 'passed',
+                message: `OK (${responseTime}ms)`
+            };
 
             // Get Redis info
             const info = await redisClient.info('server');
             const memoryInfo = await redisClient.info('memory');
 
+            // CHECKPOINT 4: Response time evaluation
+            let status = 'HEALTHY';
+            let message = 'Cache operational';
+
             // STRICT THRESHOLDS (NO FAKE GREEN):
             // < 150ms  = HEALTHY (same-region expected)
             // 150-250ms = DEGRADED (cross-region, borderline)
             // > 250ms  = DOWN (critical, user impact)
-            let status = 'HEALTHY';
-            let message = 'Cache operational';
-
             if (responseTime >= 250) {
                 status = 'DOWN';
                 message = `Critical latency: ${responseTime}ms (user impact likely)`;
+                checkpoints.push({
+                    name: 'Response time < 250ms (critical)',
+                    status: 'failed',
+                    message: `${responseTime}ms exceeds 250ms threshold - check region mismatch`
+                });
             } else if (responseTime >= 150) {
                 status = 'DEGRADED';
                 message = `High latency: ${responseTime}ms (region mismatch or saturation)`;
+                checkpoints.push({
+                    name: 'Response time < 150ms',
+                    status: 'warning',
+                    message: `${responseTime}ms - acceptable but not optimal`
+                });
+            } else {
+                checkpoints.push({
+                    name: 'Response time < 150ms',
+                    status: 'passed',
+                    message: `${responseTime}ms - excellent`
+                });
             }
 
             return {
@@ -210,6 +330,7 @@ class DependencyHealthMonitor {
                 critical: false,
                 message,
                 responseTime,
+                checkpoints,
                 details: {
                     connected: true,
                     version: this.parseRedisInfo(info, 'redis_version'),
@@ -219,6 +340,12 @@ class DependencyHealthMonitor {
             };
 
         } catch (error) {
+            checkpoints.push({
+                name: 'Redis operation',
+                status: 'failed',
+                message: error.message
+            });
+            
             return {
                 name: 'Redis',
                 status: 'DOWN',
@@ -226,7 +353,16 @@ class DependencyHealthMonitor {
                 message: `Redis check failed: ${error.message}`,
                 responseTime: Date.now() - startTime,
                 error: error.message,
-                impact: 'Sessions and caching degraded, some features may be slower'
+                errorCode: error.code,
+                checkpoints,
+                impact: 'Sessions and caching degraded, some features may be slower',
+                troubleshooting: [
+                    `Error: ${error.message}`,
+                    error.code ? `Code: ${error.code}` : '',
+                    '1. Check if Redis addon is running in Render dashboard',
+                    '2. Try restarting your Render service',
+                    '3. Check Redis addon subscription status'
+                ].filter(Boolean)
             };
         }
     }
