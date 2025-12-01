@@ -15,6 +15,7 @@
 const mongoose = require('mongoose');
 const { redisClient } = require('../db');
 const logger = require('../utils/logger.js');
+const OrchestrationHealthCheck = require('./OrchestrationHealthCheck');
 
 class DependencyHealthMonitor {
 
@@ -33,19 +34,21 @@ class DependencyHealthMonitor {
                 redisHealth,
                 twilioHealth,
                 elevenLabsHealth,
-                openAIHealth
+                openAIHealth,
+                orchestrationHealth
             ] = await Promise.all([
                 this.checkMongoDB(),
                 this.checkRedis(),
                 this.checkTwilio(),
                 this.checkElevenLabs(),
-                this.checkOpenAI()
+                this.checkOpenAI(),
+                this.checkOrchestration()
             ]);
 
             const totalDuration = Date.now() - startTime;
 
             // Calculate overall status
-            const allServices = [mongoHealth, redisHealth, twilioHealth, elevenLabsHealth, openAIHealth];
+            const allServices = [mongoHealth, redisHealth, twilioHealth, elevenLabsHealth, openAIHealth, orchestrationHealth];
             const criticalDown = allServices.filter(s => s.status === 'DOWN' && s.critical).length;
             const anyDown = allServices.filter(s => s.status === 'DOWN' && s.critical !== false).length; // Exclude NOT_CONFIGURED
             const anyDegraded = allServices.filter(s => s.status === 'DEGRADED').length;
@@ -631,6 +634,69 @@ class DependencyHealthMonitor {
     parseRedisInfo(info, key) {
         const match = info.match(new RegExp(`${key}:(.+)`));
         return match ? match[1].trim() : 'unknown';
+    }
+
+    // ========================================================================
+    // LLM-0 ORCHESTRATION PIPELINE HEALTH CHECK
+    // ========================================================================
+    async checkOrchestration() {
+        const startTime = Date.now();
+
+        try {
+            logger.info('🤖 [HEALTH MONITOR] Checking LLM-0 orchestration pipeline');
+
+            // Use OrchestrationHealthCheck service
+            const orchestrationStatus = await OrchestrationHealthCheck.checkOrchestrationPipeline();
+
+            // Map to DependencyHealthMonitor format
+            const components = Object.values(orchestrationStatus.components || {});
+            const criticalDown = components.filter(c => c.status === 'DOWN' && c.critical).length;
+            const anyDegraded = components.filter(c => c.status === 'DEGRADED').length;
+
+            let status = 'HEALTHY';
+            let message = 'LLM-0 orchestration pipeline operational';
+
+            if (criticalDown > 0) {
+                status = 'DOWN';
+                const downComponents = components.filter(c => c.status === 'DOWN').map(c => c.name).join(', ');
+                message = `LLM-0 components down: ${downComponents}`;
+            } else if (anyDegraded > 0) {
+                status = 'DEGRADED';
+                const degradedComponents = components.filter(c => c.status === 'DEGRADED').map(c => c.name).join(', ');
+                message = `LLM-0 components degraded: ${degradedComponents}`;
+            }
+
+            return {
+                name: 'LLM-0 Orchestration',
+                status,
+                critical: true, // CRITICAL - this is the core AI routing engine
+                message,
+                responseTime: orchestrationStatus.totalDuration || (Date.now() - startTime),
+                details: {
+                    overallStatus: orchestrationStatus.overallStatus,
+                    components: components.map(c => ({
+                        name: c.name,
+                        status: c.status,
+                        responseTime: c.responseTime
+                    })),
+                    note: 'Comprehensive check of all orchestration components'
+                },
+                impact: status === 'DOWN' ? 'CRITICAL - AI agent cannot route calls' : 
+                        status === 'DEGRADED' ? 'Performance degraded - may affect call quality' : 
+                        'None'
+            };
+
+        } catch (error) {
+            logger.error('❌ [HEALTH MONITOR] Orchestration check failed:', error);
+            return {
+                name: 'LLM-0 Orchestration',
+                status: 'DOWN',
+                critical: true,
+                message: `Orchestration check failed: ${error.message}`,
+                responseTime: Date.now() - startTime,
+                impact: 'CRITICAL - Cannot verify AI agent functionality'
+            };
+        }
     }
 }
 
