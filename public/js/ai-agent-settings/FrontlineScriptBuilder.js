@@ -94,9 +94,21 @@ class FrontlineScriptBuilder {
     
     /**
      * Get auth headers
+     * Handles popup window context where localStorage may not have the token
      */
     getAuthHeaders() {
-        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        // Try current window first
+        let token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        
+        // If in popup, try to get from opener (parent window)
+        if (!token && window.opener) {
+            try {
+                token = window.opener.localStorage.getItem('token') || 
+                        window.opener.sessionStorage.getItem('token');
+            } catch (e) {
+                console.warn('[SCRIPT BUILDER] Could not access parent window storage:', e.message);
+            }
+        }
         return {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
