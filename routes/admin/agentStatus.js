@@ -23,6 +23,11 @@ const RoutingDecisionLog = require('../../models/routing/RoutingDecisionLog');
 const PromptVersion = require('../../models/routing/PromptVersion');
 const redisClientModule = require('../../src/config/redisClient');
 
+// ✅ INTEGRATION: Leverage existing Notification Center health services
+const DependencyHealthMonitor = require('../../services/DependencyHealthMonitor');
+const HealthCheckLog = require('../../models/HealthCheckLog');
+const NotificationLog = require('../../models/NotificationLog');
+
 // ============================================================================
 // COMPONENT REGISTRY - Auto-discovery of all orchestration components
 // ============================================================================
@@ -291,6 +296,113 @@ router.get('/:companyId/health', async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Health check failed',
+      status: 'down'
+    });
+  }
+});
+
+// ============================================================================
+// GET /api/admin/agent-status/platform/health - Platform-Wide Health Check
+// ============================================================================
+// PURPOSE: Real-time health status for ALL companies (platform-wide)
+// INTEGRATION: Leverages Notification Center's DependencyHealthMonitor
+// ============================================================================
+
+router.get('/platform/health', async (req, res) => {
+  try {
+    logger.info('[AGENT STATUS] Running platform-wide health check');
+
+    // Use Notification Center's DependencyHealthMonitor
+    const healthMonitor = new DependencyHealthMonitor();
+    const healthStatus = await healthMonitor.getHealthStatus();
+
+    // Get latest platform health check from history
+    const latestHealthCheck = await HealthCheckLog.findOne()
+      .sort({ timestamp: -1 })
+      .limit(1)
+      .lean();
+
+    // Get unacknowledged alerts
+    const unacknowledgedAlerts = await NotificationLog.aggregate([
+      {
+        $match: {
+          'acknowledgment.isAcknowledged': false
+        }
+      },
+      {
+        $group: {
+          _id: '$severity',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const alertCounts = {
+      CRITICAL: unacknowledgedAlerts.find(a => a._id === 'CRITICAL')?.count || 0,
+      WARNING: unacknowledgedAlerts.find(a => a._id === 'WARNING')?.count || 0,
+      INFO: unacknowledgedAlerts.find(a => a._id === 'INFO')?.count || 0
+    };
+
+    // Map health status to standard format
+    const components = {};
+    healthStatus.services.forEach(svc => {
+      const key = svc.name.toLowerCase().replace(/\s+/g, '_');
+      components[key] = {
+        name: svc.name,
+        status: svc.status.toLowerCase(),
+        responseTime: svc.responseTime,
+        message: svc.message || svc.details || 'Operational',
+        critical: svc.critical || false
+      };
+    });
+
+    // Determine overall status
+    let overallStatus = 'healthy';
+    if (healthStatus.overallStatus === 'DOWN' || healthStatus.overallStatus === 'CRITICAL') {
+      overallStatus = 'down';
+    } else if (healthStatus.overallStatus === 'DEGRADED') {
+      overallStatus = 'degraded';
+    }
+
+    // Override to degraded if critical alerts exist
+    if (alertCounts.CRITICAL > 0 && overallStatus === 'healthy') {
+      overallStatus = 'degraded';
+    }
+
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      status: overallStatus,
+      components,
+      alerts: {
+        unacknowledged: alertCounts.CRITICAL + alertCounts.WARNING + alertCounts.INFO,
+        critical: alertCounts.CRITICAL,
+        warning: alertCounts.WARNING,
+        info: alertCounts.INFO
+      },
+      lastHealthCheck: latestHealthCheck ? {
+        timestamp: latestHealthCheck.timestamp,
+        status: latestHealthCheck.overallStatus,
+        duration: latestHealthCheck.totalDuration,
+        passed: latestHealthCheck.summary?.passed || 0,
+        failed: latestHealthCheck.summary?.failed || 0,
+        warnings: latestHealthCheck.summary?.warnings || 0
+      } : null,
+      system: {
+        uptime: process.uptime(),
+        nodeVersion: process.version,
+        platform: process.platform
+      }
+    });
+
+  } catch (error) {
+    logger.error('[AGENT STATUS] Platform health check failed', { 
+      error: error.message,
+      stack: error.stack 
+    });
+    res.status(500).json({ 
+      success: false, 
+      error: 'Platform health check failed',
       status: 'down'
     });
   }

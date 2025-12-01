@@ -20,9 +20,14 @@ class AgentStatusManager {
   constructor(companyId) {
     this.companyId = companyId;
     this.refreshInterval = null;
+    this.backgroundInterval = null; // NEW: Always-on background health check
     this.autoRefreshSeconds = 30;
+    this.backgroundRefreshSeconds = 60; // Check health every 60s even when tab is closed
     
     console.log('[AGENT STATUS] Manager initialized', { companyId });
+    
+    // Start background health monitoring immediately (runs even when tab is closed)
+    this.startBackgroundMonitoring();
   }
 
   /**
@@ -85,7 +90,7 @@ class AgentStatusManager {
   }
 
   /**
-   * Fetch system health
+   * Fetch system health (company-specific)
    */
   async fetchHealth() {
     const token = localStorage.getItem('adminToken');
@@ -95,6 +100,23 @@ class AgentStatusManager {
 
     if (!response.ok) {
       throw new Error(`Failed to fetch health: ${response.status}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Fetch platform-wide health (NEW: uses Notification Center integration)
+   * This endpoint is ALWAYS available and runs independently of UI state
+   */
+  async fetchPlatformHealth() {
+    const token = localStorage.getItem('adminToken');
+    const response = await fetch(`/api/admin/agent-status/platform/health`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch platform health: ${response.status}`);
     }
 
     return await response.json();
@@ -464,6 +486,54 @@ class AgentStatusManager {
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
       this.refreshInterval = null;
+    }
+  }
+
+  /**
+   * Start background health monitoring (runs even when tab is closed)
+   * This keeps the tab indicator always up-to-date
+   */
+  startBackgroundMonitoring() {
+    console.log('[AGENT STATUS] Starting background health monitoring (every 60s)');
+    
+    // Initial check
+    this.updateTabHealth();
+    
+    // Set up interval
+    if (this.backgroundInterval) {
+      clearInterval(this.backgroundInterval);
+    }
+    
+    this.backgroundInterval = setInterval(async () => {
+      await this.updateTabHealth();
+    }, this.backgroundRefreshSeconds * 1000);
+  }
+
+  /**
+   * Update tab health indicator in background
+   */
+  async updateTabHealth() {
+    try {
+      const health = await this.fetchPlatformHealth();
+      
+      // Update tab indicator with current health status
+      this.updateTabIndicator(health.status);
+      
+      console.log('[AGENT STATUS] Background health check:', health.status);
+    } catch (error) {
+      console.error('[AGENT STATUS] Background health check failed:', error);
+      // On error, mark as down
+      this.updateTabIndicator('down');
+    }
+  }
+
+  /**
+   * Stop background monitoring
+   */
+  stopBackgroundMonitoring() {
+    if (this.backgroundInterval) {
+      clearInterval(this.backgroundInterval);
+      this.backgroundInterval = null;
     }
   }
 
@@ -911,6 +981,7 @@ END OF REPORT
    */
   destroy() {
     this.stopAutoRefresh();
+    this.stopBackgroundMonitoring();
   }
 }
 
