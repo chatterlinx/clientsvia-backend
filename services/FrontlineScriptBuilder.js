@@ -77,6 +77,7 @@ class FrontlineScriptBuilder {
      * LOAD CONTEXT FOR SCRIPT BUILDER
      * ========================================================================
      * Gathers all company data needed to build an intelligent script.
+     * Tries multiple paths to find Brain-2 data.
      * 
      * @param {string} companyId
      * @returns {Promise<Object>}
@@ -90,52 +91,106 @@ class FrontlineScriptBuilder {
             throw new Error('Company not found');
         }
         
-        // Load Brain-2 data (categories and scenarios from template)
-        const templateId = company.configuration?.clonedFrom || 
-                          company.aiAgentSettings?.templateId;
-        
+        // ====================================================================
+        // LOAD BRAIN-2 DATA (multiple paths)
+        // ====================================================================
         let brain2 = { categories: [], scenarios: [] };
+        
+        // Path 1: Try clonedFrom template
+        const templateId = company.configuration?.clonedFrom || 
+                          company.aiAgentSettings?.templateId ||
+                          company.templateId;
         
         if (templateId) {
             const template = await GlobalInstantResponseTemplate.findById(templateId).lean();
             if (template) {
                 brain2 = this.extractBrain2Data(template);
+                logger.debug('[SCRIPT BUILDER] Found Brain-2 data from template', { templateId });
             }
         }
         
-        // Load Triage Cards
-        const triageCards = await TriageCard.find({
+        // Path 2: If no template, try embedded aiAgentLogic.categories
+        if (brain2.categories.length === 0 && company.aiAgentLogic?.categories) {
+            brain2 = this.extractBrain2FromEmbedded(company.aiAgentLogic);
+            logger.debug('[SCRIPT BUILDER] Found Brain-2 data from embedded aiAgentLogic');
+        }
+        
+        // Path 3: If still empty, try globalInstantResponseTemplates by trade
+        if (brain2.categories.length === 0 && company.trade) {
+            const tradeTemplate = await GlobalInstantResponseTemplate.findOne({
+                $or: [
+                    { trade: company.trade },
+                    { tradeName: company.trade },
+                    { name: { $regex: company.trade, $options: 'i' } }
+                ],
+                isActive: true
+            }).lean();
+            
+            if (tradeTemplate) {
+                brain2 = this.extractBrain2Data(tradeTemplate);
+                logger.debug('[SCRIPT BUILDER] Found Brain-2 data from trade template', { trade: company.trade });
+            }
+        }
+        
+        // ====================================================================
+        // LOAD TRIAGE CARDS (try multiple query patterns)
+        // ====================================================================
+        let triageCards = await TriageCard.find({
             companyId,
-            isActive: true
+            isActive: { $ne: false } // Include those without isActive field
         }).sort({ priority: -1 }).lean();
         
-        // Load Booking Rules from company config
-        const bookingRules = this.extractBookingRules(company);
+        // Also try company string match
+        if (triageCards.length === 0) {
+            triageCards = await TriageCard.find({
+                company: companyId,
+                isActive: { $ne: false }
+            }).sort({ priority: -1 }).lean();
+        }
         
-        // Load Transfer Rules from company config
+        // ====================================================================
+        // EXTRACT VARIABLES FROM COMPANY
+        // ====================================================================
+        const variables = company.configuration?.variables || 
+                         company.variables || 
+                         company.aiAgentSettings?.variables || {};
+        
+        // Handle Map vs Object
+        const getVar = (key, fallback = '') => {
+            if (variables instanceof Map) return variables.get(key) || fallback;
+            return variables[key] || fallback;
+        };
+        
+        // ====================================================================
+        // BUILD CONTEXT
+        // ====================================================================
+        const bookingRules = this.extractBookingRules(company);
         const transferRules = this.extractTransferRules(company);
         
         const context = {
             companyId: companyId.toString(),
             company: {
-                name: company.name || 'Company',
-                trade: company.trade || company.industry || 'Service',
-                mainPhone: company.twilioConfig?.phoneNumber || company.primaryPhone || '',
-                emergencyPhone: company.twilioConfig?.emergencyPhone || '',
-                serviceAreas: company.configuration?.variables?.get?.('serviceAreas') || 
-                             company.serviceAreas || [],
+                name: company.name || getVar('companyName', 'Company'),
+                trade: company.trade || company.industry || getVar('companyType', 'Service'),
+                mainPhone: company.twilioConfig?.phoneNumber || company.primaryPhone || getVar('companyPhone', ''),
+                emergencyPhone: company.twilioConfig?.emergencyPhone || getVar('emergencyPhone', ''),
+                billingPhone: getVar('billingPhone', ''),
+                techSupportPhone: getVar('techSupportPhone', ''),
+                serviceAreas: company.serviceAreas || getVar('serviceAreas', []),
                 businessHours: company.agentSetup?.operatingHours ? 
                     this.formatOperatingHours(company.agentSetup.operatingHours) : 
-                    'Please contact for hours'
+                    getVar('businessHours', 'Contact for hours'),
+                greeting: getVar('greeting', 'Thank you for calling. How can I help you today?'),
+                bookingUrl: getVar('bookingUrl', '')
             },
             brain2,
             triage: {
                 cards: triageCards.map(card => ({
                     id: card._id.toString(),
-                    title: card.displayName || card.triageLabel,
-                    action: card.quickRuleConfig?.action || 'DIRECT_TO_3TIER',
-                    intentTag: card.intent || card.triageLabel?.toUpperCase().replace(/\s+/g, '_'),
-                    mustHaveKeywords: card.quickRuleConfig?.keywordsMustHave || [],
+                    title: card.displayName || card.triageLabel || card.name,
+                    action: card.quickRuleConfig?.action || card.action || 'DIRECT_TO_3TIER',
+                    intentTag: card.intent || card.triageLabel?.toUpperCase().replace(/\s+/g, '_') || 'GENERAL',
+                    mustHaveKeywords: card.quickRuleConfig?.keywordsMustHave || card.keywords || [],
                     excludeKeywords: card.quickRuleConfig?.keywordsExclude || []
                 }))
             },
@@ -155,6 +210,37 @@ class FrontlineScriptBuilder {
         });
         
         return context;
+    }
+    
+    /**
+     * Extract Brain-2 data from embedded aiAgentLogic
+     */
+    static extractBrain2FromEmbedded(aiAgentLogic) {
+        const categories = [];
+        const scenarios = [];
+        
+        if (aiAgentLogic.categories && Array.isArray(aiAgentLogic.categories)) {
+            for (const cat of aiAgentLogic.categories) {
+                categories.push({
+                    id: cat._id?.toString() || cat.id || `cat_${categories.length}`,
+                    name: cat.name || cat.categoryName,
+                    description: cat.description || ''
+                });
+                
+                const catScenarios = cat.scenarios || cat.items || [];
+                for (const scn of catScenarios) {
+                    scenarios.push({
+                        id: scn._id?.toString() || scn.id || `scn_${scenarios.length}`,
+                        categoryId: cat._id?.toString() || cat.id,
+                        title: scn.name || scn.scenarioName || scn.title,
+                        goal: scn.objective || scn.goal || scn.description || '',
+                        keyPhrases: scn.triggerPhrases || scn.triggers || scn.keywords || []
+                    });
+                }
+            }
+        }
+        
+        return { categories, scenarios };
     }
     
     /**
@@ -362,71 +448,137 @@ class FrontlineScriptBuilder {
     }
     
     /**
-     * Build the LLM prompt
+     * Build the LLM prompt - Optimized for high-quality script output
      */
     static buildPrompt({ context, adminBrief, tonePreset, aggressiveness, includeExamples }) {
         const tone = TONE_PRESETS[tonePreset] || TONE_PRESETS.professional_warm;
         const aggro = AGGRESSIVENESS_LEVELS[aggressiveness] || AGGRESSIVENESS_LEVELS.medium;
         
-        const systemPrompt = `You are an AI assistant that generates receptionist behavior scripts for a multi-tenant voice AI platform.
+        const systemPrompt = `You are a senior conversation designer who creates receptionist behavior scripts for voice AI systems.
 
-Each company has:
-- Its own trade (e.g. HVAC, Real Estate, Accounting, Dental, Plumbing, Legal)
-- Its own AiCore categories, scenarios, triage cards, booking rules, and transfer rules.
+Your scripts are used by LLMs to guide phone conversations. They must be:
+- ACTIONABLE: Every line tells the AI exactly what to do
+- CONVERSATIONAL: Written like you're coaching a person, not documenting a process
+- VARIABLE-READY: Use {placeholders} that get replaced at runtime
 
-Your job is to generate a single Frontline-Intel script for ONE company, in the exact contract format shown.
-
-CRITICAL RULES:
-- Use ONLY the trade and scenarios provided for this companyId.
-- NEVER assume HVAC or any specific trade - use the provided data.
-- Reflect triage actions (DIRECT_TO_3TIER, DIRECT_TO_BOOKING, DIRECT_TO_TRANSFER, EDGE_CASE) in behavior guidelines.
-- Reflect booking rules and transfer rules in the appropriate sections.
-- Use placeholders: {companyName}, {serviceAreas}, {mainPhone}, {emergencyPhone}, {businessHours}
-- Return ONLY the script text. No JSON, no comments, no explanations.
-
-TONE: ${tone.name}
+TONE FOR THIS SCRIPT: ${tone.name}
 ${tone.style}
 
-LEAD CAPTURE STYLE: ${aggro.name}
-${aggro.style}`;
+LEAD CAPTURE LEVEL: ${aggro.name}
+${aggro.style}
 
-        const contextJson = JSON.stringify({
-            company: context.company,
-            brain2: {
-                categories: context.brain2.categories.slice(0, 15), // Limit for token size
-                scenarios: context.brain2.scenarios.slice(0, 30)
-            },
-            triage: {
-                cards: context.triage.cards.slice(0, 20)
-            },
-            bookingRules: context.bookingRules.slice(0, 5),
-            transferRules: context.transferRules.slice(0, 5)
-        }, null, 2);
+CRITICAL REQUIREMENTS:
+1. Use these exact placeholders: {companyName}, {companyType}, {serviceAreas}, {businessHours}, {mainPhone}, {emergencyPhone}, {billingPhone}, {greeting}, {bookingUrl}
+2. Base everything on the provided company data - NEVER assume HVAC or any default trade
+3. Make the script feel like natural guidance, not a robotic checklist
+4. Include specific phrases the AI should say (in quotes)
+5. Include things to AVOID saying (common mistakes)`;
 
-        const examplesSection = includeExamples ? `
-Include 2-3 example dialogues for the most important call types based on the triage cards.` : '';
+        // Build scenario summary for prompt
+        const scenarioSummary = context.brain2.scenarios.length > 0
+            ? context.brain2.scenarios.slice(0, 20).map(s => `• ${s.title}: ${s.goal || 'Handle this topic'}`).join('\n')
+            : '• No scenarios configured yet - use general best practices for ' + context.company.trade;
+        
+        // Build triage summary
+        const triageSummary = context.triage.cards.length > 0
+            ? context.triage.cards.slice(0, 15).map(c => `• "${c.title}" → ${c.action}`).join('\n')
+            : '• Route general inquiries to knowledge base\n• Route booking requests to booking flow\n• Route emergencies to transfer';
 
-        const userPrompt = `COMPANY CONTEXT:
-${contextJson}
+        const examplesInstruction = includeExamples 
+            ? `\n\nINCLUDE 3-4 EXAMPLE DIALOGUES showing:
+- How to handle the most common call type for this trade
+- How to handle an emergency/urgent situation
+- How to capture lead info naturally
+- How to handle a pricing question (deflect gracefully)
 
-ADMIN BUSINESS BRIEF:
-"${adminBrief || 'No specific instructions provided. Generate a standard professional script based on the company data.'}"
+Format dialogues like:
+CALLER: "..."
+AI: "..."`
+            : '';
 
-${examplesSection}
+        const userPrompt = `═══════════════════════════════════════════════════════════════════════════
+COMPANY DATA
+═══════════════════════════════════════════════════════════════════════════
+Company: ${context.company.name}
+Trade: ${context.company.trade}
+Service Areas: ${Array.isArray(context.company.serviceAreas) ? context.company.serviceAreas.join(', ') || 'See {serviceAreas}' : context.company.serviceAreas || 'See {serviceAreas}'}
+Business Hours: ${context.company.businessHours}
+Emergency Phone: ${context.company.emergencyPhone || '{emergencyPhone}'}
 
-GENERATE a complete Frontline-Intel script with these sections:
-1. HEADER: Company name, trade, service areas
-2. YOUR ROLE: What the AI receptionist does for this specific business
-3. CORE BEHAVIOR GUIDELINES: Tone, conversation style, dos and don'ts
-4. INTENT EXTRACTION: How to identify what the caller wants (based on triage cards)
-5. ENTITY COLLECTION: What info to gather (name, phone, address, specific to this trade)
-6. APPOINTMENT/BOOKING PROTOCOL: Based on booking rules provided
-7. TRANSFER PROTOCOL: When and how to transfer (based on transfer rules)
-8. EMERGENCY HANDLING: Based on trade-specific emergencies
-9. COMPANY INFORMATION: Hours, service areas, contact info
-10. CUSTOMIZATION NOTES: Trade-specific behaviors
+═══════════════════════════════════════════════════════════════════════════
+BRAIN-2 SCENARIOS (What topics this AI can discuss)
+═══════════════════════════════════════════════════════════════════════════
+${scenarioSummary}
 
-Remember: This is for "${context.company.trade}" - NOT HVAC unless that's the actual trade.`;
+═══════════════════════════════════════════════════════════════════════════
+TRIAGE ROUTING RULES
+═══════════════════════════════════════════════════════════════════════════
+${triageSummary}
+
+═══════════════════════════════════════════════════════════════════════════
+BOOKING RULES: ${context.bookingRules.length} configured
+TRANSFER RULES: ${context.transferRules.length} configured
+═══════════════════════════════════════════════════════════════════════════
+
+ADMIN INSTRUCTIONS:
+"${adminBrief || 'Generate a professional script optimized for this trade. Focus on common customer needs and efficient call handling.'}"
+${examplesInstruction}
+
+═══════════════════════════════════════════════════════════════════════════
+NOW GENERATE THE SCRIPT
+═══════════════════════════════════════════════════════════════════════════
+
+Create a Frontline-Intel script with these EXACT sections (use the headers as shown):
+
+═══════════════════════════════════════════════════════════════════════════
+FRONTLINE-INTEL: {companyName} AI RECEPTIONIST
+Trade: {companyType} | Service Areas: {serviceAreas}
+═══════════════════════════════════════════════════════════════════════════
+
+🎯 YOUR MISSION
+[2-3 sentences about what this AI does for callers of this specific business type]
+
+📋 BEHAVIOR RULES (Always Follow)
+[Bullet list of 5-7 core behaviors - be specific, use action verbs]
+• DO: ...
+• DO: ...
+• NEVER: ...
+• NEVER: ...
+
+🔍 INTENT DETECTION (What Callers Want)
+[List the main call types for this trade with detection cues]
+• EMERGENCY: [keywords and phrases that signal emergency for THIS trade]
+• SERVICE REQUEST: [what a typical service call sounds like]
+• BOOKING/SCHEDULING: [booking request signals]
+• PRICING INQUIRY: [how people ask about costs]
+• GENERAL QUESTION: [informational requests]
+
+📝 INFORMATION TO COLLECT
+[What data to gather, in order of importance]
+1. ...
+2. ...
+[Include trade-specific fields if relevant]
+
+📅 BOOKING PROTOCOL
+[Step-by-step booking flow]
+
+📞 TRANSFER RULES
+• IMMEDIATE TRANSFER: [emergencies] → {emergencyPhone}
+• [other transfer scenarios]
+
+⚠️ WHAT TO AVOID
+[5-6 specific things NOT to do - common mistakes]
+• Never say: "..."
+• Never promise: ...
+
+🏢 COMPANY INFO
+Business Hours: {businessHours}
+Main Line: {mainPhone}
+Emergency: {emergencyPhone}
+
+[If includeExamples: Add EXAMPLE DIALOGUES section]
+
+Return ONLY the script. No explanations before or after.`;
 
         return { system: systemPrompt, user: userPrompt };
     }
