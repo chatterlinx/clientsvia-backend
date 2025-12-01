@@ -192,22 +192,30 @@ class DashboardManager {
         const container = document.getElementById('service-health-widget');
         if (!container) return;
         
-        // Map service names to icons
+        // Map service names to icons (status-independent)
         const serviceIcons = {
             'MongoDB': '🍃',
-            'Redis': '🔴',
+            'Redis': '⚡',  // Lightning bolt - neutral icon, status shown separately
             'Twilio': '📞',
             'ElevenLabs': '🎙️',
             'OpenAI (GPT-4)': '🤖',
             'LLM-0 Orchestration': '🧠'
         };
         
+        // Status indicator emojis (colored circles)
         const statusEmoji = {
             'HEALTHY': '🟢',
             'DEGRADED': '🟡',
             'DOWN': '🔴',
             'CRITICAL': '🚨',
             'NOT_CONFIGURED': '⚪'
+        };
+        
+        // Function to get dynamic icon with status color
+        const getServiceIcon = (serviceName, status) => {
+            const baseIcon = serviceIcons[serviceName] || '🔧';
+            const statusDot = statusEmoji[status] || '⚪';
+            return `${statusDot}`;  // Show status dot as the main indicator
         };
         
         const statusColors = {
@@ -230,7 +238,7 @@ class DashboardManager {
                              onclick="dashboardManager.showServiceDetails('${service.key}')"
                              title="Click to see details">
                             <div class="flex items-center">
-                                <span class="text-xl mr-2">${serviceIcons[service.name] || '🔧'}</span>
+                                <span class="text-xl mr-2">${getServiceIcon(service.name, service.status)}</span>
                                 <span class="font-medium">${service.name}</span>
                             </div>
                             <div class="text-right flex items-center">
