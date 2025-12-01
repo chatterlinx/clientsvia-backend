@@ -110,6 +110,9 @@ class AgentStatusManager {
       return;
     }
 
+    // Update tab indicator color based on health status
+    this.updateTabIndicator(health.status);
+
     container.innerHTML = `
       <!-- System Status Overview -->
       ${this.renderStatusOverview(status, health)}
@@ -885,6 +888,22 @@ END OF REPORT
     }
 
     return analysis;
+  }
+
+  /**
+   * Update tab indicator color based on health status
+   */
+  updateTabIndicator(status) {
+    const indicator = document.getElementById('agent-status-indicator');
+    if (!indicator) return;
+
+    const statusMap = {
+      'healthy': '🟢',
+      'degraded': '🟡',
+      'down': '🔴'
+    };
+
+    indicator.textContent = statusMap[status] || '🔴';
   }
 
   /**
