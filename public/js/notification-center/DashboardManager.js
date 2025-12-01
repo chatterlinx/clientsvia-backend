@@ -174,8 +174,13 @@ class DashboardManager {
         try {
             const result = await this.nc.apiGet('/api/admin/notifications/dependency-health');
             if (result.success) {
-                // Convert services object to array
-                const servicesArray = Object.values(result.services || {});
+                // Store full service data for click-to-view details
+                this.serviceHealthData = result.services || {};
+                // Convert services object to array with keys
+                const servicesArray = Object.entries(result.services || {}).map(([key, value]) => ({
+                    ...value,
+                    key: key
+                }));
                 this.renderServiceHealth(servicesArray, result.overallStatus);
             }
         } catch (error) {
@@ -192,21 +197,25 @@ class DashboardManager {
             'MongoDB': '🍃',
             'Redis': '🔴',
             'Twilio': '📞',
-            'ElevenLabs': '🎙️'
+            'ElevenLabs': '🎙️',
+            'OpenAI (GPT-4)': '🤖',
+            'LLM-0 Orchestration': '🧠'
         };
         
         const statusEmoji = {
             'HEALTHY': '🟢',
             'DEGRADED': '🟡',
             'DOWN': '🔴',
-            'CRITICAL': '🚨'
+            'CRITICAL': '🚨',
+            'NOT_CONFIGURED': '⚪'
         };
         
         const statusColors = {
             'HEALTHY': 'text-green-600',
             'DEGRADED': 'text-yellow-600',
             'DOWN': 'text-red-600',
-            'CRITICAL': 'text-red-700 font-bold'
+            'CRITICAL': 'text-red-700 font-bold',
+            'NOT_CONFIGURED': 'text-gray-500'
         };
         
         const html = `
@@ -217,27 +226,225 @@ class DashboardManager {
                 </h3>
                 <div class="space-y-2">
                     ${services.map(service => `
-                        <div class="flex items-center justify-between p-2 rounded ${service.status === 'HEALTHY' ? 'bg-green-50' : service.status === 'DEGRADED' ? 'bg-yellow-50' : 'bg-red-50'}">
+                        <div class="flex items-center justify-between p-2 rounded cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all ${service.status === 'HEALTHY' ? 'bg-green-50 hover:bg-green-100' : service.status === 'DEGRADED' ? 'bg-yellow-50 hover:bg-yellow-100' : service.status === 'NOT_CONFIGURED' ? 'bg-gray-50 hover:bg-gray-100' : 'bg-red-50 hover:bg-red-100'}"
+                             onclick="dashboardManager.showServiceDetails('${service.key}')"
+                             title="Click to see details">
                             <div class="flex items-center">
                                 <span class="text-xl mr-2">${serviceIcons[service.name] || '🔧'}</span>
                                 <span class="font-medium">${service.name}</span>
                             </div>
-                            <div class="text-right">
-                                <span class="text-sm ${service.status === 'HEALTHY' ? 'text-green-700' : service.status === 'DEGRADED' ? 'text-yellow-700' : 'text-red-700'} font-semibold">
-                                    ${service.status === 'HEALTHY' ? '✓' : service.status === 'DEGRADED' ? '⚠' : '✗'} ${service.status}
+                            <div class="text-right flex items-center">
+                                <span class="text-sm ${service.status === 'HEALTHY' ? 'text-green-700' : service.status === 'DEGRADED' ? 'text-yellow-700' : service.status === 'NOT_CONFIGURED' ? 'text-gray-600' : 'text-red-700'} font-semibold">
+                                    ${service.status === 'HEALTHY' ? '✓' : service.status === 'DEGRADED' ? '⚠' : service.status === 'NOT_CONFIGURED' ? '✗' : '✗'} ${service.status}
                                 </span>
                                 ${service.responseTime ? `<span class="text-xs text-gray-500 ml-2">${service.responseTime}ms</span>` : ''}
+                                <span class="ml-2 text-gray-400 text-xs">▶</span>
                             </div>
                         </div>
                     `).join('')}
                 </div>
                 <div class="mt-3 text-xs text-gray-500 text-right">
-                    Auto-refreshes every 30s
+                    Auto-refreshes every 30s • Click any service for details
                 </div>
             </div>
         `;
         
         container.innerHTML = html;
+    }
+    
+    /**
+     * Show detailed information about a service when clicked
+     */
+    showServiceDetails(serviceKey) {
+        const service = this.serviceHealthData?.[serviceKey];
+        if (!service) {
+            this.nc.showError('Service details not available');
+            return;
+        }
+        
+        // Build status-specific styling
+        const isHealthy = service.status === 'HEALTHY';
+        const isDown = service.status === 'DOWN' || service.status === 'CRITICAL';
+        const isDegraded = service.status === 'DEGRADED';
+        const isNotConfigured = service.status === 'NOT_CONFIGURED';
+        
+        const statusBgClass = isHealthy ? 'bg-green-50 border-green-500' :
+                             isDegraded ? 'bg-yellow-50 border-yellow-500' :
+                             isNotConfigured ? 'bg-gray-50 border-gray-400' :
+                             'bg-red-50 border-red-500';
+        
+        const statusTextClass = isHealthy ? 'text-green-700' :
+                               isDegraded ? 'text-yellow-700' :
+                               isNotConfigured ? 'text-gray-600' :
+                               'text-red-700';
+        
+        // Build details HTML
+        let detailsHtml = `
+            <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onclick="this.remove()">
+                <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-auto" onclick="event.stopPropagation()">
+                    <div class="p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-xl font-bold flex items-center">
+                                <span class="mr-2">${this.getServiceIcon(service.name)}</span>
+                                ${service.name}
+                            </h2>
+                            <button onclick="this.closest('.fixed').remove()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                        </div>
+                        
+                        <div class="${statusBgClass} border-l-4 p-4 rounded mb-4">
+                            <div class="flex items-center justify-between">
+                                <span class="${statusTextClass} font-bold text-lg">${service.status}</span>
+                                ${service.responseTime ? `<span class="text-gray-500">${service.responseTime}ms</span>` : ''}
+                            </div>
+                            ${service.message ? `<p class="mt-2 ${statusTextClass}">${service.message}</p>` : ''}
+                        </div>
+        `;
+        
+        // Show error details if down
+        if (isDown && service.error) {
+            detailsHtml += `
+                <div class="bg-red-100 border border-red-300 rounded p-3 mb-4">
+                    <h4 class="font-semibold text-red-900 mb-1">❌ Error Details</h4>
+                    <p class="text-red-800 font-mono text-sm">${this.escapeHtml(service.error)}</p>
+                </div>
+            `;
+        }
+        
+        // Show impact if available
+        if (service.impact) {
+            detailsHtml += `
+                <div class="${isDown ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'} border rounded p-3 mb-4">
+                    <h4 class="font-semibold ${isDown ? 'text-red-900' : 'text-yellow-900'} mb-1">⚠️ Impact</h4>
+                    <p class="${isDown ? 'text-red-800' : 'text-yellow-800'}">${service.impact}</p>
+                </div>
+            `;
+        }
+        
+        // Show action if available
+        if (service.action) {
+            detailsHtml += `
+                <div class="bg-blue-50 border border-blue-200 rounded p-3 mb-4">
+                    <h4 class="font-semibold text-blue-900 mb-1">🔧 Recommended Action</h4>
+                    <p class="text-blue-800">${service.action}</p>
+                </div>
+            `;
+        }
+        
+        // Show missing vars if available
+        if (service.missingVars && service.missingVars.length > 0) {
+            detailsHtml += `
+                <div class="bg-orange-50 border border-orange-200 rounded p-3 mb-4">
+                    <h4 class="font-semibold text-orange-900 mb-1">📋 Missing Environment Variables</h4>
+                    <ul class="list-disc list-inside text-orange-800">
+                        ${service.missingVars.map(v => `<li><code class="font-mono bg-orange-100 px-1 rounded">${v}</code></li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+        
+        // Show details if available
+        if (service.details && Object.keys(service.details).length > 0) {
+            detailsHtml += `
+                <div class="bg-gray-50 border border-gray-200 rounded p-3 mb-4">
+                    <h4 class="font-semibold text-gray-900 mb-2">📊 Service Details</h4>
+                    <dl class="grid grid-cols-2 gap-2 text-sm">
+                        ${Object.entries(service.details).map(([key, value]) => `
+                            <dt class="text-gray-600">${this.formatDetailKey(key)}:</dt>
+                            <dd class="text-gray-900 font-mono">${this.formatDetailValue(value)}</dd>
+                        `).join('')}
+                    </dl>
+                </div>
+            `;
+        }
+        
+        // Show note if available
+        if (service.note) {
+            detailsHtml += `
+                <div class="bg-blue-50 border border-blue-200 rounded p-3 mb-4">
+                    <h4 class="font-semibold text-blue-900 mb-1">ℹ️ Note</h4>
+                    <p class="text-blue-800 text-sm">${service.note}</p>
+                </div>
+            `;
+        }
+        
+        // Add helpful links based on service
+        const helpLinks = this.getServiceHelpLinks(service.name);
+        if (helpLinks) {
+            detailsHtml += `
+                <div class="border-t pt-4 mt-4">
+                    <h4 class="font-semibold text-gray-700 mb-2">🔗 Helpful Links</h4>
+                    <div class="flex flex-wrap gap-2">
+                        ${helpLinks}
+                    </div>
+                </div>
+            `;
+        }
+        
+        detailsHtml += `
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Insert modal into DOM
+        document.body.insertAdjacentHTML('beforeend', detailsHtml);
+    }
+    
+    getServiceIcon(serviceName) {
+        const icons = {
+            'MongoDB': '🍃',
+            'Redis': '🔴',
+            'Twilio': '📞',
+            'ElevenLabs': '🎙️',
+            'OpenAI (GPT-4)': '🤖',
+            'LLM-0 Orchestration': '🧠'
+        };
+        return icons[serviceName] || '🔧';
+    }
+    
+    getServiceHelpLinks(serviceName) {
+        const links = {
+            'MongoDB': `
+                <a href="https://cloud.mongodb.com" target="_blank" class="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200">MongoDB Atlas Dashboard</a>
+                <a href="https://www.mongodb.com/docs/atlas/troubleshoot-connection/" target="_blank" class="px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">Troubleshoot Connection</a>
+            `,
+            'Redis': `
+                <a href="https://dashboard.render.com" target="_blank" class="px-3 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200">Render Dashboard</a>
+                <a href="https://redis.io/docs/troubleshooting/" target="_blank" class="px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">Redis Troubleshooting</a>
+            `,
+            'Twilio': `
+                <a href="https://console.twilio.com" target="_blank" class="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200">Twilio Console</a>
+                <a href="https://www.twilio.com/docs/usage/troubleshooting" target="_blank" class="px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">Twilio Troubleshooting</a>
+            `,
+            'ElevenLabs': `
+                <a href="https://elevenlabs.io/app" target="_blank" class="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200">ElevenLabs Dashboard</a>
+            `,
+            'OpenAI (GPT-4)': `
+                <a href="https://platform.openai.com" target="_blank" class="px-3 py-1 bg-emerald-100 text-emerald-700 rounded hover:bg-emerald-200">OpenAI Platform</a>
+                <a href="https://platform.openai.com/api-keys" target="_blank" class="px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">API Keys</a>
+                <a href="https://status.openai.com" target="_blank" class="px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">OpenAI Status</a>
+            `
+        };
+        return links[serviceName] || null;
+    }
+    
+    formatDetailKey(key) {
+        // Convert camelCase to Title Case with spaces
+        return key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+    }
+    
+    formatDetailValue(value) {
+        if (value === null || value === undefined) return 'N/A';
+        if (typeof value === 'object') return JSON.stringify(value);
+        if (typeof value === 'boolean') return value ? '✓ Yes' : '✗ No';
+        return String(value);
+    }
+    
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
     
     async loadRootCauseAnalysis() {
