@@ -45,6 +45,23 @@ try {
     LLM0TurnHandler = null;
 }
 // V2 DELETED: CompanyKnowledgeQnA model removed (AI Brain only)
+
+// ============================================================================
+// 📞 CALL CENTER MODULE V2 - Customer Recognition
+// ============================================================================
+// Identifies returning customers at call start for personalized experience.
+// Race-proof: 100 concurrent calls from same number = 1 customer
+// See: PROPOSAL-CALL-CENTER-MODULE-V2.md
+// ============================================================================
+let CallSummaryService;
+try {
+    CallSummaryService = require('../services/CallSummaryService');
+    logger.info('[V2TWILIO] ✅ Call Center Module loaded successfully');
+} catch (err) {
+    logger.warn('[V2TWILIO] ⚠️ Call Center Module not available', { error: err.message });
+    CallSummaryService = null;
+}
+
 const fs = require('fs');
 const path = require('path');
 const { synthesizeSpeech } = require('../services/v2elevenLabsService');
@@ -953,6 +970,45 @@ router.post('/voice', async (req, res) => {
     }
     
     logger.info(`[AI AGENT LOGIC] Using new AI Agent Logic system for company: ${company._id}`);
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // 📞 CALL CENTER MODULE V2: Customer Recognition
+    // ════════════════════════════════════════════════════════════════════════════
+    // Identify returning customers for personalized experience
+    // This is race-proof - 100 concurrent calls = 1 customer
+    // ════════════════════════════════════════════════════════════════════════════
+    let callContext = null;
+    if (CallSummaryService) {
+      try {
+        callContext = await CallSummaryService.startCall({
+          companyId: company._id.toString(),
+          phone: req.body.From,
+          twilioSid: req.body.CallSid,
+          direction: 'inbound'
+        });
+        
+        logger.info('[CALL CENTER] Customer recognized', {
+          callId: callContext.callId,
+          companyId: company._id.toString(),
+          isReturning: callContext.isReturning,
+          customerId: callContext.customerId,
+          customerName: callContext.customerContext?.name || null,
+          lookupTime: callContext.customerLookupTime
+        });
+        
+        // Store for later use in v2-agent-respond
+        req.callCenterContext = callContext;
+        
+      } catch (callCenterErr) {
+        // Non-blocking: Log but continue with call
+        logger.warn('[CALL CENTER] Customer recognition failed (non-blocking)', {
+          error: callCenterErr.message,
+          companyId: company._id.toString(),
+          phone: req.body.From
+        });
+      }
+    }
+    // ════════════════════════════════════════════════════════════════════════════
     
     // 🚀 USE NEW V2 AI AGENT SYSTEM
     try {
