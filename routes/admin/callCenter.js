@@ -46,6 +46,10 @@ const AnalyticsService = require('../../services/AnalyticsService');
 // Jobs (for status endpoints)
 const { getRollupStatus } = require('../../jobs/dailyStatsRollup');
 const { getArchiverStatus } = require('../../jobs/transcriptArchiver');
+const { getPurgeStatus } = require('../../jobs/dataPurge');
+
+// Compliance
+const ComplianceService = require('../../services/ComplianceService');
 
 // Models
 const CallSummary = require('../../models/CallSummary');
@@ -653,6 +657,187 @@ router.get('/:companyId/analytics/trend', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// COMPLIANCE ROUTES (Phase 4)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/call-center/:companyId/compliance/consent-requirements
+ * Get consent requirements based on caller state
+ */
+router.get('/:companyId/compliance/consent-requirements', async (req, res) => {
+  try {
+    const { state } = req.query;
+    const requirements = ComplianceService.getConsentRequirements(state);
+    res.json({ success: true, data: requirements });
+  } catch (error) {
+    logger.error('[CALL_CENTER] Error getting consent requirements', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/call-center/:companyId/compliance/record-consent
+ * Record consent for a call
+ */
+router.post('/:companyId/compliance/record-consent',
+  auditLog.logModification('consent.recorded'),
+  async (req, res) => {
+    try {
+      const { callId, consentType, callerState, method } = req.body;
+      
+      if (!callId || !consentType) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'callId and consentType are required' 
+        });
+      }
+      
+      const call = await ComplianceService.recordConsent(callId, {
+        consentType,
+        callerState,
+        method,
+        agentId: req.user?.email
+      });
+      
+      res.json({ success: true, data: call });
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error recording consent', { error: error.message });
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * POST /api/admin/call-center/:companyId/compliance/export/:customerId
+ * Export all customer data (GDPR/CCPA)
+ */
+router.post('/:companyId/compliance/export/:customerId',
+  auditLog.logAccess('customer.data_exported'),
+  async (req, res) => {
+    try {
+      const { companyId, customerId } = req.params;
+      const { format = 'json' } = req.body;
+      
+      const exportData = await ComplianceService.exportCustomerData(
+        companyId,
+        customerId,
+        format,
+        req.user?.email || 'admin'
+      );
+      
+      res.json({ success: true, data: exportData });
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error exporting customer data', { 
+        error: error.message,
+        customerId: req.params.customerId 
+      });
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * DELETE /api/admin/call-center/:companyId/compliance/delete/:customerId
+ * Delete all customer data (GDPR right to erasure)
+ */
+router.delete('/:companyId/compliance/delete/:customerId',
+  authorizeRole(['admin', 'super_admin']),
+  auditLog.logModification('customer.data_deleted'),
+  async (req, res) => {
+    try {
+      const { companyId, customerId } = req.params;
+      const { reason } = req.body;
+      
+      if (!reason) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Deletion reason is required' 
+        });
+      }
+      
+      const result = await ComplianceService.deleteCustomerData(
+        companyId,
+        customerId,
+        req.user?.email || 'admin',
+        reason
+      );
+      
+      res.json({ success: true, data: result });
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error deleting customer data', { 
+        error: error.message,
+        customerId: req.params.customerId 
+      });
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * POST /api/admin/call-center/:companyId/compliance/merge
+ * Merge duplicate customers
+ */
+router.post('/:companyId/compliance/merge',
+  authorizeRole(['admin', 'super_admin']),
+  auditLog.logModification('customer.merged'),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { primaryCustomerId, secondaryCustomerId } = req.body;
+      
+      if (!primaryCustomerId || !secondaryCustomerId) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'primaryCustomerId and secondaryCustomerId are required' 
+        });
+      }
+      
+      const result = await ComplianceService.mergeCustomers(
+        companyId,
+        primaryCustomerId,
+        secondaryCustomerId,
+        req.user?.email || 'admin'
+      );
+      
+      res.json({ success: true, data: result });
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error merging customers', { error: error.message });
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * GET /api/admin/call-center/:companyId/compliance/duplicates
+ * Find potential duplicate customers
+ */
+router.get('/:companyId/compliance/duplicates', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const duplicates = await ComplianceService.findDuplicates(companyId);
+    res.json({ success: true, data: duplicates });
+  } catch (error) {
+    logger.error('[CALL_CENTER] Error finding duplicates', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/call-center/:companyId/compliance/retention
+ * Get data retention status
+ */
+router.get('/:companyId/compliance/retention', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const status = await ComplianceService.getRetentionStatus(companyId);
+    res.json({ success: true, data: status });
+  } catch (error) {
+    logger.error('[CALL_CENTER] Error getting retention status', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // HEALTH CHECK
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -662,10 +847,11 @@ router.get('/:companyId/analytics/trend', async (req, res) => {
  */
 router.get('/health', async (req, res) => {
   try {
-    const [serviceHealth, rollupStatus, archiverStatus] = await Promise.all([
+    const [serviceHealth, rollupStatus, archiverStatus, purgeStatus] = await Promise.all([
       CallSummaryService.healthCheck(),
       getRollupStatus().catch(() => ({ status: 'UNKNOWN' })),
-      getArchiverStatus().catch(() => ({ status: 'UNKNOWN' }))
+      getArchiverStatus().catch(() => ({ status: 'UNKNOWN' })),
+      getPurgeStatus().catch(() => ({ status: 'UNKNOWN' }))
     ]);
     
     res.json({
@@ -676,7 +862,8 @@ router.get('/health', async (req, res) => {
         service: serviceHealth,
         jobs: {
           dailyRollup: rollupStatus,
-          transcriptArchiver: archiverStatus
+          transcriptArchiver: archiverStatus,
+          dataPurge: purgeStatus
         }
       }
     });
