@@ -47,9 +47,37 @@ async function initializeRedis() {
     
     console.log(`🔍 [REDIS] CHECKPOINT 2: Creating Redis client...`);
     
+    // Check if using TLS (rediss://)
+    const isTLS = redisUrl.startsWith('rediss://');
+    console.log(`🔍 [REDIS] CHECKPOINT 2: TLS enabled: ${isTLS}`);
+    
+    // ========================================================================
+    // PERFORMANCE OPTIMIZATIONS FOR PAID REDIS
+    // ========================================================================
+    // - keepAlive: Prevents connection drops, reduces reconnect overhead
+    // - noDelay: Disables Nagle's algorithm for faster small packets
+    // - connectTimeout: Fast failure detection
+    // - commandTimeout: Prevents hanging on slow commands
+    // ========================================================================
+    
     redisClient = redis.createClient({
       url: redisUrl,
       socket: {
+        // 🚀 PERFORMANCE: Keep connections alive (reduces reconnect latency)
+        keepAlive: 5000, // Send keepalive every 5 seconds
+        
+        // 🚀 PERFORMANCE: Disable Nagle's algorithm (faster small packets)
+        noDelay: true,
+        
+        // 🚀 PERFORMANCE: Connection timeout (fail fast, don't hang)
+        connectTimeout: 10000, // 10 seconds max to connect
+        
+        // 🚀 PERFORMANCE: TLS settings for rediss:// URLs
+        ...(isTLS && {
+          tls: true,
+          rejectUnauthorized: false // Render's Redis uses self-signed certs
+        }),
+        
         reconnectStrategy: (retries) => {
           retriesAttempted = retries;
           
@@ -76,9 +104,14 @@ async function initializeRedis() {
             
             return false; // Stop retrying
           }
+          // Exponential backoff: 100ms, 200ms, 400ms, max 3000ms
           return Math.min(retries * 100, 3000);
         }
-      }
+      },
+      
+      // 🚀 PERFORMANCE: Command queue settings
+      commandsQueueMaxLength: 1000, // Prevent memory issues under load
+      disableOfflineQueue: false // Queue commands while reconnecting
     });
 
     // ========================================================================

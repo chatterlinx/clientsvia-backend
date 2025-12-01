@@ -271,56 +271,117 @@ class DependencyHealthMonitor {
                 };
             }
 
-            // CHECKPOINT 3: Test connection with ping
+            // CHECKPOINT 3: Test connection with MULTIPLE pings
+            // This helps diagnose if high latency is TLS handshake (first ping slow) or consistent (network issue)
             checkpoints.push({
-                name: 'Redis ping test',
+                name: 'Redis ping test (3x)',
                 status: 'pending',
-                message: 'Testing connection...'
+                message: 'Testing connection with multiple pings...'
             });
             
+            // Ping 1 - May include TLS handshake overhead
+            const ping1Start = Date.now();
             await redisClient.ping();
-            const responseTime = Date.now() - startTime;
+            const ping1Time = Date.now() - ping1Start;
             
-            // Update checkpoint after successful ping
+            // Ping 2 - Should be faster (connection reused)
+            const ping2Start = Date.now();
+            await redisClient.ping();
+            const ping2Time = Date.now() - ping2Start;
+            
+            // Ping 3 - Confirms consistency
+            const ping3Start = Date.now();
+            await redisClient.ping();
+            const ping3Time = Date.now() - ping3Start;
+            
+            const responseTime = Date.now() - startTime;
+            const avgPingTime = Math.round((ping1Time + ping2Time + ping3Time) / 3);
+            const minPingTime = Math.min(ping1Time, ping2Time, ping3Time);
+            const maxPingTime = Math.max(ping1Time, ping2Time, ping3Time);
+            
+            // Diagnose latency pattern
+            let latencyDiagnosis = '';
+            if (ping1Time > ping2Time * 2 && ping2Time < 50) {
+                latencyDiagnosis = 'First ping slow (TLS handshake), subsequent fast - CONNECTION OK';
+            } else if (ping1Time > 100 && ping2Time > 100 && ping3Time > 100) {
+                latencyDiagnosis = 'All pings slow - NETWORK LATENCY ISSUE (region mismatch?)';
+            } else if (minPingTime < 30) {
+                latencyDiagnosis = 'Good latency - CONNECTION HEALTHY';
+            } else {
+                latencyDiagnosis = 'Moderate latency - CHECK REDIS TIER';
+            }
+            
+            // Update checkpoint after successful pings
             checkpoints[checkpoints.length - 1] = {
-                name: 'Redis ping test',
+                name: 'Redis ping test (3x)',
                 status: 'passed',
-                message: `OK (${responseTime}ms)`
+                message: `Ping 1: ${ping1Time}ms, Ping 2: ${ping2Time}ms, Ping 3: ${ping3Time}ms (avg: ${avgPingTime}ms)`
             };
+            
+            // Add latency diagnosis checkpoint
+            checkpoints.push({
+                name: 'Latency diagnosis',
+                status: avgPingTime < 50 ? 'passed' : avgPingTime < 150 ? 'warning' : 'failed',
+                message: latencyDiagnosis
+            });
+            
+            // Check if using TLS
+            const isTLS = process.env.REDIS_URL?.startsWith('rediss://');
+            if (isTLS) {
+                checkpoints.push({
+                    name: 'TLS/SSL encryption',
+                    status: 'info',
+                    message: 'Using rediss:// (TLS enabled) - adds ~10-30ms overhead'
+                });
+            }
 
             // Get Redis info
             const info = await redisClient.info('server');
             const memoryInfo = await redisClient.info('memory');
 
-            // CHECKPOINT 4: Response time evaluation
+            // CHECKPOINT 4: Response time evaluation (use average ping for accuracy)
             let status = 'HEALTHY';
             let message = 'Cache operational';
 
             // STRICT THRESHOLDS (NO FAKE GREEN):
-            // < 150ms  = HEALTHY (same-region expected)
-            // 150-250ms = DEGRADED (cross-region, borderline)
-            // > 250ms  = DOWN (critical, user impact)
-            if (responseTime >= 250) {
+            // Use minPingTime to check "best case" (after TLS handshake)
+            // If min ping is still high, it's a real network issue
+            // < 50ms  = HEALTHY (same-region, paid tier expected)
+            // 50-100ms = ACCEPTABLE (minor overhead)
+            // 100-200ms = DEGRADED (investigate)
+            // > 200ms  = DOWN (critical, user impact)
+            
+            const effectiveLatency = minPingTime; // Use best ping (excludes TLS handshake)
+            
+            if (effectiveLatency >= 200) {
                 status = 'DOWN';
-                message = `Critical latency: ${responseTime}ms (user impact likely)`;
+                message = `Critical latency: ${effectiveLatency}ms min (avg: ${avgPingTime}ms) - network issue`;
                 checkpoints.push({
-                    name: 'Response time < 250ms (critical)',
+                    name: 'Response time < 200ms (critical)',
                     status: 'failed',
-                    message: `${responseTime}ms exceeds 250ms threshold - check region mismatch`
+                    message: `Min ${effectiveLatency}ms, avg ${avgPingTime}ms - INVESTIGATE IMMEDIATELY`
                 });
-            } else if (responseTime >= 150) {
+            } else if (effectiveLatency >= 100) {
                 status = 'DEGRADED';
-                message = `High latency: ${responseTime}ms (region mismatch or saturation)`;
+                message = `High latency: ${effectiveLatency}ms min (avg: ${avgPingTime}ms) - check Redis tier`;
                 checkpoints.push({
-                    name: 'Response time < 150ms',
+                    name: 'Response time < 100ms',
                     status: 'warning',
-                    message: `${responseTime}ms - acceptable but not optimal`
+                    message: `Min ${effectiveLatency}ms - higher than expected for paid tier`
+                });
+            } else if (effectiveLatency >= 50) {
+                status = 'HEALTHY';
+                message = `Acceptable latency: ${effectiveLatency}ms min (avg: ${avgPingTime}ms)`;
+                checkpoints.push({
+                    name: 'Response time < 50ms',
+                    status: 'warning',
+                    message: `Min ${effectiveLatency}ms - acceptable but could improve`
                 });
             } else {
                 checkpoints.push({
-                    name: 'Response time < 150ms',
+                    name: 'Response time < 50ms',
                     status: 'passed',
-                    message: `${responseTime}ms - excellent`
+                    message: `Min ${effectiveLatency}ms, avg ${avgPingTime}ms - excellent`
                 });
             }
 
@@ -329,13 +390,22 @@ class DependencyHealthMonitor {
                 status,
                 critical: false,
                 message,
-                responseTime,
+                responseTime: avgPingTime, // Use average for display
                 checkpoints,
                 details: {
                     connected: true,
                     version: this.parseRedisInfo(info, 'redis_version'),
                     uptime: this.parseRedisInfo(info, 'uptime_in_seconds'),
-                    memory: this.parseRedisInfo(memoryInfo, 'used_memory_human')
+                    memory: this.parseRedisInfo(memoryInfo, 'used_memory_human'),
+                    // 🔍 LATENCY DIAGNOSTICS
+                    ping1: `${ping1Time}ms`,
+                    ping2: `${ping2Time}ms`,
+                    ping3: `${ping3Time}ms`,
+                    avgLatency: `${avgPingTime}ms`,
+                    minLatency: `${minPingTime}ms`,
+                    maxLatency: `${maxPingTime}ms`,
+                    latencyDiagnosis,
+                    tlsEnabled: isTLS
                 }
             };
 
