@@ -118,7 +118,7 @@ const EdgeCaseSchema = new mongoose.Schema({
   // IDENTITY
   // ═══════════════════════════════════════════════════════════════
   id: { type: String, required: false },  // Optional for backward compat, auto-generated if missing
-  name: { type: String, required: true },
+  name: { type: String, required: false, default: 'Unnamed Edge Case' },  // Made optional with default
   description: { type: String, default: '' },
   
   // ═══════════════════════════════════════════════════════════════
