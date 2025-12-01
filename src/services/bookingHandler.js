@@ -13,7 +13,7 @@
 const Contact = require('../../models/v2Contact'); // Use existing v2Contact model
 const Location = require('../../models/Location');
 const Appointment = require('../../models/Appointment');
-const Company = require('../../models/Company');
+const Company = require('../../models/v2Company'); // FIXED: Use v2Company, not legacy Company
 const logger = require('../../utils/logger');
 
 /**
