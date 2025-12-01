@@ -11,7 +11,7 @@
  * - GET  /api/admin/frontline-script/presets - Get tone/aggro presets
  * - GET  /api/admin/frontline-script/drafts/:companyId - Get recent drafts
  * 
- * SECURITY: Admin-only via authMiddleware
+ * SECURITY: Admin-only via authenticateJWT
  * 
  * ============================================================================
  */
@@ -21,13 +21,13 @@ const router = express.Router();
 const logger = require('../../utils/logger');
 const FrontlineScriptBuilder = require('../../services/FrontlineScriptBuilder');
 const FrontlineScriptDraft = require('../../models/FrontlineScriptDraft');
-const { authMiddleware } = require('../../middleware/authMiddleware');
+const { authenticateJWT } = require('../../middleware/auth');
 
 /**
  * GET /api/admin/frontline-script/context/:companyId
  * Load all context needed for the script builder UI
  */
-router.get('/context/:companyId', authMiddleware, async (req, res) => {
+router.get('/context/:companyId', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -67,7 +67,7 @@ router.get('/context/:companyId', authMiddleware, async (req, res) => {
  * POST /api/admin/frontline-script/generate
  * Generate a new script draft using LLM
  */
-router.post('/generate', authMiddleware, async (req, res) => {
+router.post('/generate', authenticateJWT, async (req, res) => {
     try {
         const {
             companyId,
@@ -127,7 +127,7 @@ router.post('/generate', authMiddleware, async (req, res) => {
  * GET /api/admin/frontline-script/presets
  * Get available tone and aggressiveness presets
  */
-router.get('/presets', authMiddleware, async (req, res) => {
+router.get('/presets', authenticateJWT, async (req, res) => {
     try {
         res.json({
             success: true,
@@ -151,7 +151,7 @@ router.get('/presets', authMiddleware, async (req, res) => {
  * GET /api/admin/frontline-script/drafts/:companyId
  * Get recent script drafts for a company
  */
-router.get('/drafts/:companyId', authMiddleware, async (req, res) => {
+router.get('/drafts/:companyId', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
         const limit = parseInt(req.query.limit) || 10;
@@ -195,7 +195,7 @@ router.get('/drafts/:companyId', authMiddleware, async (req, res) => {
  * GET /api/admin/frontline-script/draft/:draftId
  * Get full script draft by ID
  */
-router.get('/draft/:draftId', authMiddleware, async (req, res) => {
+router.get('/draft/:draftId', authenticateJWT, async (req, res) => {
     try {
         const { draftId } = req.params;
         
@@ -244,7 +244,7 @@ router.get('/draft/:draftId', authMiddleware, async (req, res) => {
  * POST /api/admin/frontline-script/draft/:draftId/apply
  * Mark a draft as applied (after user saves to cheatsheet)
  */
-router.post('/draft/:draftId/apply', authMiddleware, async (req, res) => {
+router.post('/draft/:draftId/apply', authenticateJWT, async (req, res) => {
     try {
         const { draftId } = req.params;
         const { appliedToVersionId } = req.body;
