@@ -138,7 +138,7 @@ describe('🔒 MULTI-TENANT ISOLATION TESTS', () => {
                     }
                 ]
             },
-            aiAgentLogic: {
+            aiAgentSettings: {
                 knowledgeManagement: {}
             },
             twilioConfig: {
@@ -186,7 +186,7 @@ describe('🔒 MULTI-TENANT ISOLATION TESTS', () => {
                     }
                 ]
             },
-            aiAgentLogic: {
+            aiAgentSettings: {
                 knowledgeManagement: {}
             },
             twilioConfig: {

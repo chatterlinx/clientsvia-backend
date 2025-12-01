@@ -36,7 +36,7 @@ describe('Twilio Integration Tests', () => {
         accountSid: 'test-account-sid',
         authToken: 'test-auth-token'
       },
-      aiAgentLogic: {
+      aiAgentSettings: {
         enabled: true,
         greeting: {
           default: 'Thank you for calling! How can I help you today?'
@@ -208,7 +208,7 @@ describe('Twilio Integration Tests', () => {
     it('should use company-specific greeting', async () => {
       // Update company greeting
       await Company.findByIdAndUpdate(testCompanyId, {
-        'aiAgentLogic.greeting.default': 'Welcome to our test company!'
+        'aiAgentSettings.greeting.default': 'Welcome to our test company!'
       });
 
       const response = await request(app)

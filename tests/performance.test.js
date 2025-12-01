@@ -31,7 +31,7 @@ describe('Performance Tests - Sub-25ms Target', () => {
         country: 'USA'
       },
       tradeCategories: ['HVAC', 'Plumbing'],
-      aiAgentLogic: {
+      aiAgentSettings: {
         enabled: true,
         thresholds: {
           companyQnA: 0.8,

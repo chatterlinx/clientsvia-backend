@@ -25,7 +25,7 @@ async function checkConnectionMessages(companyId) {
         console.log(`\n🎤 CONNECTION MESSAGES CHECK:`);
         console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
         
-        const aiLogic = company.aiAgentLogic || {};
+        const aiLogic = company.aiAgentSettings || {};
         
         // Check Connection Messages
         console.log(`\n1️⃣ NEW SYSTEM (connectionMessages):`);

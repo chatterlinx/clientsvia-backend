@@ -54,7 +54,7 @@ async function testLifecycle() {
                     }
                 ]
             },
-            aiAgentLogic: {
+            aiAgentSettings: {
                 voiceSettings: {
                     apiSource: 'clientsvia',
                     voiceId: 'test-voice-id',

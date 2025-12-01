@@ -28,10 +28,10 @@ async function inspectVoiceSettings() {
         
         companies.forEach((company, index) => {
             console.log(`\n${index + 1}. ${company.companyName} (${company._id})`);
-            console.log(`   Has aiAgentLogic: ${Boolean(company.aiAgentLogic)}`);
+            console.log(`   Has aiAgentSettings: ${Boolean(company.aiAgentSettings)}`);
             
-            if (company.aiAgentLogic) {
-                const vs = company.aiAgentLogic.voiceSettings;
+            if (company.aiAgentSettings) {
+                const vs = company.aiAgentSettings.voiceSettings;
                 console.log(`   voiceSettings type: ${typeof vs}`);
                 console.log(`   voiceSettings is null: ${vs === null}`);
                 console.log(`   voiceSettings is undefined: ${vs === undefined}`);
@@ -43,7 +43,7 @@ async function inspectVoiceSettings() {
                     console.log(`   voiceSettings value: ${vs}`);
                 }
             } else {
-                console.log(`   ⚠️ No aiAgentLogic field!`);
+                console.log(`   ⚠️ No aiAgentSettings field!`);
             }
         });
         
