@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Call Center | ClientsVia</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        /* ═══════════════════════════════════════════════════════════════════════════
+           CALL CENTER MODULE V2 - STYLES
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        :root {
+            /* Colors - Deep Navy Theme */
+            --bg-primary: #0a0f1a;
+            --bg-secondary: #111827;
+            --bg-card: #1a2332;
+            --bg-hover: #243044;
+            
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            
+            --accent-cyan: #22d3ee;
+            --accent-green: #22c55e;
+            --accent-yellow: #fbbf24;
+            --accent-red: #ef4444;
+            --accent-purple: #a855f7;
+            --accent-blue: #3b82f6;
+            
+            --border-color: #334155;
+            --border-light: rgba(255,255,255,0.1);
+            
+            /* Spacing */
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+            
+            /* Typography */
+            --font-sans: 'IBM Plex Sans', -apple-system, sans-serif;
+            --font-mono: 'IBM Plex Mono', monospace;
+            
+            /* Shadows */
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+            --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+            
+            /* Transitions */
+            --transition-fast: 150ms ease;
+            --transition-normal: 200ms ease;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════════════
+           LAYOUT
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        .sidebar {
+            width: 260px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            z-index: 100;
+        }
+        
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            padding: var(--space-lg);
+            overflow-y: auto;
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════════════
+           SIDEBAR
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        .sidebar-header {
+            padding: var(--space-lg);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--accent-cyan);
+        }
+        
+        .sidebar-logo svg {
+            width: 24px;
+            height: 24px;
+        }
+        
+        .company-selector {
+            margin-top: var(--space-md);
+        }
+        
+        .company-selector select {
+            width: 100%;
+            padding: var(--space-sm) var(--space-md);
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            font-size: 13px;
+            cursor: pointer;
+        }
+        
+        .company-selector select:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+        
+        .sidebar-nav {
+            flex: 1;
+            padding: var(--space-md);
+            overflow-y: auto;
+        }
+        
+        .nav-section {
+            margin-bottom: var(--space-lg);
+        }
+        
+        .nav-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            padding: var(--space-sm) var(--space-md);
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            padding: var(--space-sm) var(--space-md);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            cursor: pointer;
+            transition: var(--transition-fast);
+        }
+        
+        .nav-item:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        
+        .nav-item.active {
+            background: linear-gradient(135deg, rgba(34,211,238,0.15) 0%, rgba(59,130,246,0.15) 100%);
+            color: var(--accent-cyan);
+        }
+        
+        .nav-item-icon {
+            width: 18px;
+            height: 18px;
+            opacity: 0.7;
+        }
+        
+        .nav-item.active .nav-item-icon {
+            opacity: 1;
+        }
+        
+        .nav-item-badge {
+            margin-left: auto;
+            background: var(--accent-red);
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════════════
+           HEADER
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-lg);
+        }
+        
+        .page-title {
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-top: var(--space-xs);
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: var(--space-sm);
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-sm);
+            padding: var(--space-sm) var(--space-md);
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            border: none;
+            font-family: var(--font-sans);
+        }
+        
+        .btn-primary {
+            background: var(--accent-cyan);
+            color: var(--bg-primary);
+        }
+        
+        .btn-primary:hover {
+            background: #06b6d4;
+        }
+        
+        .btn-secondary {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--bg-hover);
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════════════
+           STATS CARDS
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: var(--space-md);
+            margin-bottom: var(--space-lg);
+        }
+        
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: var(--space-lg);
+            transition: var(--transition-normal);
+        }
+        
+        .stat-card:hover {
+            border-color: var(--accent-cyan);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .stat-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: var(--space-sm);
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+        }
+        
+        .stat-trend {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: var(--space-sm);
+            font-size: 13px;
+        }
+        
+        .stat-trend.up {
+            color: var(--accent-green);
+        }
+        
+        .stat-trend.down {
+            color: var(--accent-red);
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════════════
+           TABS
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        .tabs {
+            display: flex;
+            gap: var(--space-xs);
+            margin-bottom: var(--space-lg);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: var(--space-xs);
+        }
+        
+        .tab {
+            padding: var(--space-sm) var(--space-md);
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 6px 6px 0 0;
+            transition: var(--transition-fast);
+            font-family: var(--font-sans);
+        }
+        
+        .tab:hover {
+            color: var(--text-primary);
+            background: var(--bg-card);
+        }
+        
+        .tab.active {
+            color: var(--accent-cyan);
+            background: var(--bg-card);
+            border-bottom: 2px solid var(--accent-cyan);
+        }
+        
+        .tab-panel {
+            display: none;
+        }
+        
+        .tab-panel.active {
+            display: block;
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════════════
+           CALL CARDS
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        .calls-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+        
+        .call-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: var(--space-lg);
+            cursor: pointer;
+            transition: var(--transition-normal);
+        }
+        
+        .call-card:hover {
+            border-color: var(--accent-cyan);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .call-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: var(--space-md);
+        }
+        
+        .call-card-customer {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+        }
+        
+        .customer-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 600;
+            color: white;
+        }
+        
+        .customer-avatar.returning {
+            background: linear-gradient(135deg, var(--accent-green), #059669);
+        }
+        
+        .customer-info h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .customer-info p {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        
+        .call-card-meta {
+            text-align: right;
+        }
+        
+        .call-time {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+        
+        .call-duration {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+        
+        .call-card-body {
+            display: flex;
+            gap: var(--space-lg);
+        }
+        
+        .call-detail {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .call-detail-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+        }
+        
+        .call-detail-value {
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+        
+        .call-card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: var(--space-md);
+            padding-top: var(--space-md);
+            border-top: 1px solid var(--border-light);
+        }
+        
+        .call-tags {
+            display: flex;
+            gap: var(--space-sm);
+        }
+        
+        .call-tag {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .call-tag.outcome-completed {
+            background: rgba(34,197,94,0.15);
+            color: var(--accent-green);
+        }
+        
+        .call-tag.outcome-transferred {
+            background: rgba(168,85,247,0.15);
+            color: var(--accent-purple);
+        }
+        
+        .call-tag.outcome-booked {
+            background: rgba(59,130,246,0.15);
+            color: var(--accent-blue);
+        }
+        
+        .call-tag.outcome-abandoned {
+            background: rgba(239,68,68,0.15);
+            color: var(--accent-red);
+        }
+        
+        .call-tag.tier-1 {
+            background: rgba(34,211,238,0.15);
+            color: var(--accent-cyan);
+        }
+        
+        .call-tag.tier-2 {
+            background: rgba(251,191,36,0.15);
+            color: var(--accent-yellow);
+        }
+        
+        .call-tag.tier-3 {
+            background: rgba(239,68,68,0.15);
+            color: var(--accent-red);
+        }
+        
+        .call-actions {
+            display: flex;
+            gap: var(--space-sm);
+        }
+        
+        .call-action-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-secondary);
+        }
+        
+        .call-action-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════════════
+           SEARCH & FILTERS
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        .search-bar {
+            display: flex;
+            gap: var(--space-md);
+            margin-bottom: var(--space-lg);
+        }
+        
+        .search-input-wrapper {
+            flex: 1;
+            position: relative;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: var(--space-sm) var(--space-md);
+            padding-left: 40px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: var(--font-sans);
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+        
+        .filter-select {
+            padding: var(--space-sm) var(--space-md);
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: var(--font-sans);
+            cursor: pointer;
+            min-width: 140px;
+        }
+        
+        .filter-select:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════════════
+           LOADING & EMPTY STATES
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-xl);
+            color: var(--text-secondary);
+        }
+        
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent-cyan);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: var(--space-xl);
+            color: var(--text-secondary);
+        }
+        
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: var(--space-md);
+            opacity: 0.5;
+        }
+        
+        .empty-state h3 {
+            font-size: 18px;
+            margin-bottom: var(--space-sm);
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════════════
+           RESPONSIVE
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        @media (max-width: 1200px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+            
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/>
+                    </svg>
+                    Call Center
+                </div>
+                
+                <div class="company-selector">
+                    <select id="company-select">
+                        <option value="">Loading companies...</option>
+                    </select>
+                </div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Call Management</div>
+                    <a class="nav-item active" data-tab="calls">
+                        <span class="nav-item-icon">📞</span>
+                        Recent Calls
+                        <span class="nav-item-badge" id="flagged-count" style="display: none;">0</span>
+                    </a>
+                    <a class="nav-item" data-tab="customers">
+                        <span class="nav-item-icon">👥</span>
+                        Customers
+                    </a>
+                    <a class="nav-item" data-tab="search">
+                        <span class="nav-item-icon">🔍</span>
+                        Search
+                    </a>
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-section-title">Analytics</div>
+                    <a class="nav-item" data-tab="analytics">
+                        <span class="nav-item-icon">📊</span>
+                        Dashboard
+                    </a>
+                </div>
+            </nav>
+        </aside>
+        
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title">Call Center</h1>
+                    <p class="page-subtitle" id="page-subtitle">Loading...</p>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" id="refresh-btn">
+                        🔄 Refresh
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Stats Grid -->
+            <div class="stats-grid" id="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Today's Calls</div>
+                    <div class="stat-value" id="stat-total-calls">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Appointments Booked</div>
+                    <div class="stat-value" id="stat-booked">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Avg Duration</div>
+                    <div class="stat-value" id="stat-duration">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Tier 1 Rate</div>
+                    <div class="stat-value" id="stat-tier1">—</div>
+                </div>
+            </div>
+            
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" data-tab="calls">Recent Calls</button>
+                <button class="tab" data-tab="customers">Customers</button>
+                <button class="tab" data-tab="search">Search</button>
+                <button class="tab" data-tab="analytics">Analytics</button>
+            </div>
+            
+            <!-- Tab Panels -->
+            <div id="calls-panel" class="tab-panel active">
+                <!-- Search & Filters -->
+                <div class="search-bar">
+                    <div class="search-input-wrapper">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" class="search-input" id="calls-search" placeholder="Search by phone, name, or intent...">
+                    </div>
+                    <select class="filter-select" id="outcome-filter">
+                        <option value="">All Outcomes</option>
+                        <option value="completed">Completed</option>
+                        <option value="booked">Booked</option>
+                        <option value="transferred">Transferred</option>
+                        <option value="abandoned">Abandoned</option>
+                    </select>
+                    <select class="filter-select" id="tier-filter">
+                        <option value="">All Tiers</option>
+                        <option value="1">Tier 1</option>
+                        <option value="2">Tier 2</option>
+                        <option value="3">Tier 3</option>
+                    </select>
+                </div>
+                
+                <!-- Calls List -->
+                <div class="calls-container" id="calls-container">
+                    <div class="loading-container">
+                        <div class="loading-spinner"></div>
+                        <p style="margin-top: 16px;">Loading calls...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="customers-panel" class="tab-panel">
+                <div class="search-bar">
+                    <div class="search-input-wrapper">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" class="search-input" id="customers-search" placeholder="Search customers by name, phone, or email...">
+                    </div>
+                    <select class="filter-select" id="status-filter">
+                        <option value="">All Statuses</option>
+                        <option value="customer">Customer</option>
+                        <option value="lead">Lead</option>
+                        <option value="placeholder">New</option>
+                    </select>
+                </div>
+                
+                <div class="calls-container" id="customers-container">
+                    <div class="loading-container">
+                        <div class="loading-spinner"></div>
+                        <p style="margin-top: 16px;">Loading customers...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="search-panel" class="tab-panel">
+                <div class="empty-state">
+                    <div class="empty-state-icon">🔍</div>
+                    <h3>Search All Records</h3>
+                    <p>Search across calls, customers, and transcripts</p>
+                </div>
+            </div>
+            
+            <div id="analytics-panel" class="tab-panel">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📊</div>
+                    <h3>Analytics Dashboard</h3>
+                    <p>Coming in Phase 3</p>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Scripts -->
+    <script>
+        /**
+         * ═══════════════════════════════════════════════════════════════════════════
+         * CALL CENTER MODULE V2 - FRONTEND
+         * ═══════════════════════════════════════════════════════════════════════════
+         */
+        
+        // State
+        let currentCompanyId = null;
+        let currentTab = 'calls';
+        const token = localStorage.getItem('adminToken');
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // INITIALIZATION
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Check auth
+            if (!token) {
+                window.location.href = '/login.html';
+                return;
+            }
+            
+            // Get companyId from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            currentCompanyId = urlParams.get('companyId');
+            
+            if (!currentCompanyId) {
+                document.getElementById('page-subtitle').textContent = 'No company selected';
+                showEmptyState('calls-container', 'Please select a company from the Control Plane');
+                return;
+            }
+            
+            // Load company info
+            await loadCompanyInfo();
+            
+            // Load today's stats
+            await loadTodayStats();
+            
+            // Load initial calls
+            await loadCalls();
+            
+            // Set up event listeners
+            setupEventListeners();
+        });
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // API CALLS
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        async function apiCall(endpoint, options = {}) {
+            const response = await fetch(endpoint, {
+                ...options,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                    ...options.headers
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status}`);
+            }
+            
+            return response.json();
+        }
+        
+        async function loadCompanyInfo() {
+            try {
+                const res = await apiCall(`/api/company/${currentCompanyId}`);
+                const company = res.data || res;
+                
+                document.getElementById('page-subtitle').textContent = 
+                    company.businessName || company.companyName || 'Unknown Company';
+                    
+                // Update company selector
+                const select = document.getElementById('company-select');
+                select.innerHTML = `<option value="${currentCompanyId}">${company.businessName || company.companyName}</option>`;
+            } catch (err) {
+                console.error('Failed to load company:', err);
+                document.getElementById('page-subtitle').textContent = 'Error loading company';
+            }
+        }
+        
+        async function loadTodayStats() {
+            try {
+                const res = await apiCall(`/api/admin/call-center/${currentCompanyId}/stats/today`);
+                const stats = res.data;
+                
+                document.getElementById('stat-total-calls').textContent = stats.totalCalls || 0;
+                document.getElementById('stat-booked').textContent = stats.appointmentsBooked || 0;
+                document.getElementById('stat-duration').textContent = 
+                    stats.avgDuration ? `${Math.round(stats.avgDuration)}s` : '—';
+                document.getElementById('stat-tier1').textContent = 
+                    stats.totalCalls > 0 
+                        ? `${Math.round((stats.tier1Count / stats.totalCalls) * 100)}%`
+                        : '—';
+            } catch (err) {
+                console.error('Failed to load stats:', err);
+            }
+        }
+        
+        async function loadCalls(filters = {}) {
+            const container = document.getElementById('calls-container');
+            container.innerHTML = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <p style="margin-top: 16px;">Loading calls...</p>
+                </div>
+            `;
+            
+            try {
+                const params = new URLSearchParams({ limit: 50, ...filters });
+                const res = await apiCall(`/api/admin/call-center/${currentCompanyId}/calls?${params}`);
+                const calls = res.data || [];
+                
+                if (calls.length === 0) {
+                    showEmptyState('calls-container', 'No calls yet', 'Calls will appear here as they come in');
+                    return;
+                }
+                
+                container.innerHTML = calls.map(call => renderCallCard(call)).join('');
+                
+            } catch (err) {
+                console.error('Failed to load calls:', err);
+                showEmptyState('calls-container', 'Error loading calls', err.message);
+            }
+        }
+        
+        async function loadCustomers(filters = {}) {
+            const container = document.getElementById('customers-container');
+            container.innerHTML = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <p style="margin-top: 16px;">Loading customers...</p>
+                </div>
+            `;
+            
+            try {
+                const params = new URLSearchParams({ limit: 50, ...filters });
+                const res = await apiCall(`/api/admin/call-center/${currentCompanyId}/customers?${params}`);
+                const customers = res.data || [];
+                
+                if (customers.length === 0) {
+                    showEmptyState('customers-container', 'No customers yet', 'Customers will appear here as calls come in');
+                    return;
+                }
+                
+                container.innerHTML = customers.map(c => renderCustomerCard(c)).join('');
+                
+            } catch (err) {
+                console.error('Failed to load customers:', err);
+                showEmptyState('customers-container', 'Error loading customers', err.message);
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // RENDER FUNCTIONS
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        function renderCallCard(call) {
+            const initials = getInitials(call.callerName || call.phone);
+            const isReturning = call.isReturning;
+            const time = formatTime(call.startedAt);
+            const duration = formatDuration(call.durationSeconds);
+            
+            return `
+                <div class="call-card" data-call-id="${call.callId}">
+                    <div class="call-card-header">
+                        <div class="call-card-customer">
+                            <div class="customer-avatar ${isReturning ? 'returning' : ''}">${initials}</div>
+                            <div class="customer-info">
+                                <h3>${call.callerName || 'Unknown Caller'}</h3>
+                                <p>${formatPhone(call.phone)} ${isReturning ? '• Returning' : ''}</p>
+                            </div>
+                        </div>
+                        <div class="call-card-meta">
+                            <div class="call-time">${time}</div>
+                            <div class="call-duration">${duration}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="call-card-body">
+                        <div class="call-detail">
+                            <span class="call-detail-label">Intent</span>
+                            <span class="call-detail-value">${call.primaryIntent || 'Unknown'}</span>
+                        </div>
+                        ${call.scenarioMatched ? `
+                        <div class="call-detail">
+                            <span class="call-detail-label">Scenario</span>
+                            <span class="call-detail-value">${call.scenarioMatched}</span>
+                        </div>
+                        ` : ''}
+                        ${call.agentNote ? `
+                        <div class="call-detail">
+                            <span class="call-detail-label">Note</span>
+                            <span class="call-detail-value">${call.agentNote}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                    
+                    <div class="call-card-footer">
+                        <div class="call-tags">
+                            <span class="call-tag outcome-${call.outcome}">${call.outcome}</span>
+                            ${call.routingTier ? `<span class="call-tag tier-${call.routingTier}">Tier ${call.routingTier}</span>` : ''}
+                            ${call.flagged ? '<span class="call-tag" style="background: rgba(239,68,68,0.15); color: var(--accent-red);">🚩 Flagged</span>' : ''}
+                        </div>
+                        <div class="call-actions">
+                            <button class="call-action-btn" onclick="viewCall('${call.callId}')">View</button>
+                            <button class="call-action-btn" onclick="flagCall('${call.callId}')">Flag</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderCustomerCard(customer) {
+            const initials = getInitials(customer.fullName || customer.phone);
+            
+            return `
+                <div class="call-card" data-customer-id="${customer._id}">
+                    <div class="call-card-header">
+                        <div class="call-card-customer">
+                            <div class="customer-avatar ${customer.status === 'customer' ? 'returning' : ''}">${initials}</div>
+                            <div class="customer-info">
+                                <h3>${customer.fullName || 'Unknown'}</h3>
+                                <p>${formatPhone(customer.phone)}</p>
+                            </div>
+                        </div>
+                        <div class="call-card-meta">
+                            <div class="call-time">${customer.totalCalls || 0} calls</div>
+                            <div class="call-duration">${customer.lastContactAt ? formatRelativeTime(customer.lastContactAt) : 'Never'}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="call-card-footer">
+                        <div class="call-tags">
+                            <span class="call-tag outcome-${customer.status === 'customer' ? 'completed' : 'booked'}">${customer.status}</span>
+                            ${customer.tags?.map(tag => `<span class="call-tag tier-1">${tag}</span>`).join('') || ''}
+                        </div>
+                        <div class="call-actions">
+                            <button class="call-action-btn" onclick="viewCustomer('${customer._id}')">View</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function showEmptyState(containerId, title, message = '') {
+            document.getElementById(containerId).innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📭</div>
+                    <h3>${title}</h3>
+                    ${message ? `<p>${message}</p>` : ''}
+                </div>
+            `;
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // UTILITY FUNCTIONS
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        function getInitials(name) {
+            if (!name) return '?';
+            if (name.startsWith('+') || /^\d/.test(name)) {
+                return name.slice(-2);
+            }
+            return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+        }
+        
+        function formatPhone(phone) {
+            if (!phone) return 'Unknown';
+            // Format as (XXX) XXX-XXXX for US numbers
+            const cleaned = phone.replace(/\D/g, '');
+            if (cleaned.length === 11 && cleaned.startsWith('1')) {
+                return `(${cleaned.slice(1, 4)}) ${cleaned.slice(4, 7)}-${cleaned.slice(7)}`;
+            }
+            return phone;
+        }
+        
+        function formatTime(dateStr) {
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+            return date.toLocaleDateString();
+        }
+        
+        function formatRelativeTime(dateStr) {
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffDays = Math.floor(diffMs / 86400000);
+            
+            if (diffDays === 0) return 'Today';
+            if (diffDays === 1) return 'Yesterday';
+            if (diffDays < 7) return `${diffDays} days ago`;
+            if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+            return `${Math.floor(diffDays / 30)} months ago`;
+        }
+        
+        function formatDuration(seconds) {
+            if (!seconds) return '—';
+            if (seconds < 60) return `${seconds}s`;
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // EVENT HANDLERS
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        function setupEventListeners() {
+            // Tab navigation
+            document.querySelectorAll('.tab, .nav-item').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const tab = el.dataset.tab;
+                    if (tab) switchTab(tab);
+                });
+            });
+            
+            // Refresh button
+            document.getElementById('refresh-btn').addEventListener('click', async () => {
+                await loadTodayStats();
+                if (currentTab === 'calls') await loadCalls();
+                if (currentTab === 'customers') await loadCustomers();
+            });
+            
+            // Filters
+            document.getElementById('outcome-filter').addEventListener('change', async (e) => {
+                await loadCalls({ outcome: e.target.value });
+            });
+            
+            document.getElementById('tier-filter').addEventListener('change', async (e) => {
+                const tier = e.target.value;
+                await loadCalls(tier ? { routingTier: tier } : {});
+            });
+            
+            // Search (debounced)
+            let searchTimeout;
+            document.getElementById('calls-search').addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    loadCalls({ query: e.target.value });
+                }, 300);
+            });
+            
+            document.getElementById('customers-search').addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    loadCustomers({ query: e.target.value });
+                }, 300);
+            });
+        }
+        
+        function switchTab(tab) {
+            currentTab = tab;
+            
+            // Update nav items
+            document.querySelectorAll('.nav-item, .tab').forEach(el => {
+                el.classList.toggle('active', el.dataset.tab === tab);
+            });
+            
+            // Update panels
+            document.querySelectorAll('.tab-panel').forEach(el => {
+                el.classList.toggle('active', el.id === `${tab}-panel`);
+            });
+            
+            // Load data for the tab
+            if (tab === 'calls') loadCalls();
+            if (tab === 'customers') loadCustomers();
+        }
+        
+        function viewCall(callId) {
+            // TODO: Open call detail modal/page
+            alert(`View call: ${callId}`);
+        }
+        
+        function viewCustomer(customerId) {
+            // TODO: Open customer detail modal/page
+            alert(`View customer: ${customerId}`);
+        }
+        
+        async function flagCall(callId) {
+            const reason = prompt('Enter flag reason:');
+            if (!reason) return;
+            
+            try {
+                await apiCall(`/api/admin/call-center/${currentCompanyId}/calls/${callId}/flag`, {
+                    method: 'POST',
+                    body: JSON.stringify({ reason })
+                });
+                await loadCalls();
+            } catch (err) {
+                alert('Failed to flag call: ' + err.message);
+            }
+        }
+    </script>
+</body>
+</html>
+
