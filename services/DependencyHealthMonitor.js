@@ -488,61 +488,91 @@ class DependencyHealthMonitor {
                 };
             }
 
-            // Test OpenAI connectivity with minimal ping
+            // Test OpenAI connectivity with minimal API call
             try {
-                // Use Tier3LLMFallback's health check method
-                const Tier3LLMFallback = require('./Tier3LLMFallback');
-                const testResult = await Tier3LLMFallback.healthCheck();
+                const openai = require('../config/openai');
+                
+                if (!openai) {
+                    throw new Error('OpenAI client not initialized');
+                }
+                
+                // Make a minimal API call to verify connectivity
+                const completion = await openai.chat.completions.create({
+                    model: 'gpt-4o-mini',
+                    messages: [
+                        { role: 'system', content: 'You are a health check assistant.' },
+                        { role: 'user', content: 'Reply with OK' }
+                    ],
+                    max_tokens: 5,
+                    temperature: 0
+                });
                 
                 const responseTime = Date.now() - startTime;
-
-                if (testResult.status === 'healthy') {
-                    return {
-                        name: 'OpenAI (GPT-4)',
-                        status: 'HEALTHY',
-                        critical: true,
-                        message: 'OpenAI API connected and operational',
-                        responseTime,
-                        details: {
-                            apiKey: `${apiKey.substring(0, 10)}...`,
-                            model: testResult.model || 'gpt-3.5-turbo',
-                            tier: 'Tier 3 (LLM Fallback)',
-                            featureFlag: 'ENABLE_3_TIER_INTELLIGENCE=true'
-                        },
-                        note: '3-Tier Intelligence System fully operational'
-                    };
-                } else {
-                    return {
-                        name: 'OpenAI (GPT-4)',
-                        status: 'DOWN',
-                        critical: true,
-                        message: `OpenAI API test failed: ${testResult.error || 'Unknown error'}`,
-                        responseTime,
-                        error: testResult.error,
-                        impact: 'Tier 3 (LLM) unavailable - self-improvement cycle broken',
-                        action: 'Check OpenAI API key validity and account status'
-                    };
+                const responseText = completion.choices[0]?.message?.content || '';
+                
+                // Check response time for degraded status
+                let status = 'HEALTHY';
+                let message = 'OpenAI API connected and operational';
+                
+                if (responseTime > 5000) {
+                    status = 'DEGRADED';
+                    message = `OpenAI API slow (${responseTime}ms)`;
+                } else if (responseTime > 3000) {
+                    status = 'DEGRADED';
+                    message = `OpenAI elevated latency (${responseTime}ms)`;
                 }
+
+                return {
+                    name: 'OpenAI (GPT-4)',
+                    status,
+                    critical: true,
+                    message,
+                    responseTime,
+                    details: {
+                        apiKey: `${apiKey.substring(0, 10)}...`,
+                        model: 'gpt-4o-mini',
+                        tier: 'Tier 3 (LLM Fallback)',
+                        featureFlag: 'ENABLE_3_TIER_INTELLIGENCE=true',
+                        testResponse: responseText.substring(0, 20),
+                        tokensUsed: completion.usage?.total_tokens || 0
+                    },
+                    note: '3-Tier Intelligence System fully operational'
+                };
                 
             } catch (testError) {
                 const responseTime = Date.now() - startTime;
                 
                 // Check if it's an auth error vs network error
-                const isAuthError = testError.message?.includes('401') || testError.message?.includes('authentication');
+                const isAuthError = testError.message?.includes('401') || 
+                                   testError.message?.includes('authentication') ||
+                                   testError.message?.includes('invalid_api_key') ||
+                                   testError.code === 'invalid_api_key';
+                
+                const isRateLimit = testError.message?.includes('rate_limit') ||
+                                   testError.code === 'rate_limit_exceeded';
+                
+                let errorMessage, action;
+                if (isAuthError) {
+                    errorMessage = 'OpenAI authentication failed (invalid API key)';
+                    action = 'Verify OPENAI_API_KEY is valid and active at https://platform.openai.com/api-keys';
+                } else if (isRateLimit) {
+                    errorMessage = 'OpenAI rate limit exceeded';
+                    action = 'Check your OpenAI usage limits or upgrade your plan';
+                } else {
+                    errorMessage = `OpenAI connection failed: ${testError.message}`;
+                    action = 'Check network connectivity and OpenAI status at https://status.openai.com';
+                }
                 
                 return {
                     name: 'OpenAI (GPT-4)',
                     status: 'DOWN',
                     critical: true,
-                    message: isAuthError 
-                        ? 'OpenAI authentication failed (invalid API key)'
-                        : `OpenAI connection failed: ${testError.message}`,
+                    message: errorMessage,
                     responseTime,
                     error: testError.message,
-                    impact: 'Tier 3 (LLM) unavailable',
-                    action: isAuthError 
-                        ? 'Verify OPENAI_API_KEY is valid and active'
-                        : 'Check network connectivity to OpenAI API'
+                    errorCode: testError.code,
+                    impact: 'Tier 3 (LLM) unavailable - AI agent cannot use LLM fallback',
+                    action
                 };
             }
 
