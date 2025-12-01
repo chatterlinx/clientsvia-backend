@@ -432,7 +432,9 @@ async function checkRedis(companyId) {
     }
 
     const testKey = `health:check:${companyId}:${Date.now()}`;
-    await redis.setex(testKey, 10, 'test');
+    
+    // Redis v5+ uses set() with EX option instead of setex()
+    await redis.set(testKey, 'test', { EX: 10 });
     const value = await redis.get(testKey);
     await redis.del(testKey);
     

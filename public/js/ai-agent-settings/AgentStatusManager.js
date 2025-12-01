@@ -580,6 +580,7 @@ Token Preview: ${token ? token.substring(0, 20) + '...' : 'N/A'}
 `;
 
     // Test each API endpoint
+    const endpointResults = [];
     const endpoints = [
       { name: 'Status', url: `/api/admin/agent-status/${this.companyId}` },
       { name: 'Metrics', url: `/api/admin/agent-status/${this.companyId}/metrics?timeRange=24h` },
@@ -600,6 +601,15 @@ Token Preview: ${token ? token.substring(0, 20) + '...' : 'N/A'}
           responseData = responseText;
         }
 
+        // Store for analysis
+        endpointResults.push({
+          name: endpoint.name,
+          url: endpoint.url,
+          status: response.status,
+          data: responseData,
+          error: response.status >= 400 ? { status: response.status, statusText: response.statusText } : null
+        });
+
         diagnosticReport += `
 [${endpoint.name} Endpoint]
 URL: ${endpoint.url}
@@ -612,6 +622,13 @@ ${JSON.stringify(responseData, null, 2)}
 
 `;
       } catch (error) {
+        // Store error for analysis
+        endpointResults.push({
+          name: endpoint.name,
+          url: endpoint.url,
+          error: { message: error.message, stack: error.stack }
+        });
+
         diagnosticReport += `
 [${endpoint.name} Endpoint]
 URL: ${endpoint.url}
@@ -683,15 +700,20 @@ Local Storage Available: ${typeof localStorage !== 'undefined' ? 'YES' : 'NO'}
 ═══════════════════════════════════════════════════════════════════
 `;
 
-    if (!token) {
-      diagnosticReport += '❌ CRITICAL: No auth token found. User needs to log in again.\n';
-    }
-    if (!navigator.onLine) {
-      diagnosticReport += '❌ CRITICAL: Browser is offline. Check internet connection.\n';
-    }
+    // Analyze all collected data and provide intelligent recommendations
+    const analysis = this.analyzeErrors(endpointResults, token);
+    diagnosticReport += analysis;
 
     diagnosticReport += `
-📋 COPY THIS ENTIRE REPORT and send it to your developer for analysis.
+
+═══════════════════════════════════════════════════════════════════
+8. QUICK REFERENCE & LINKS
+═══════════════════════════════════════════════════════════════════
+📋 Copy Report: Use "Copy to Clipboard" button in modal
+🔗 Render Dashboard: https://dashboard.render.com/web/srv-cskr6r3v2p9s73el05p0
+🗄️ MongoDB Atlas: https://cloud.mongodb.com
+🔴 Redis: Check REDIS_URL in Render environment variables
+📧 Developer: Paste this report for instant diagnosis
 
 ═══════════════════════════════════════════════════════════════════
 END OF REPORT
@@ -699,6 +721,170 @@ END OF REPORT
 `;
 
     return diagnosticReport;
+  }
+
+  /**
+   * Analyze errors and provide intelligent fix recommendations
+   */
+  analyzeErrors(endpoints, token) {
+    let analysis = '\n';
+    let criticalIssues = [];
+    let warnings = [];
+    let suggestions = [];
+
+    // Check authentication
+    if (!token) {
+      criticalIssues.push({
+        issue: 'No Authentication Token',
+        impact: 'Cannot make API requests',
+        fix: 'Log out and log back in to get a fresh token'
+      });
+    }
+
+    // Check network
+    if (!navigator.onLine) {
+      criticalIssues.push({
+        issue: 'Browser Offline',
+        impact: 'No internet connectivity',
+        fix: 'Check your internet connection and try again'
+      });
+    }
+
+    // Analyze each endpoint response
+    endpoints.forEach(endpoint => {
+      if (endpoint.error) {
+        if (endpoint.error.status === 401) {
+          criticalIssues.push({
+            issue: `Authentication Failed (${endpoint.name})`,
+            impact: 'Token expired or invalid',
+            fix: 'Refresh the page or log out and log back in'
+          });
+        } else if (endpoint.error.status >= 500) {
+          criticalIssues.push({
+            issue: `Server Error (${endpoint.name})`,
+            impact: 'Backend service is down or malfunctioning',
+            fix: 'Check Render logs at https://dashboard.render.com'
+          });
+        } else if (endpoint.error.status === 404) {
+          warnings.push({
+            issue: `Endpoint Not Found (${endpoint.name})`,
+            impact: 'API route may not be registered',
+            fix: 'Check that the route is registered in index.js'
+          });
+        }
+      } else if (endpoint.data) {
+        // Analyze response data for specific issues
+        if (endpoint.data.checks) {
+          // Health endpoint analysis
+          if (endpoint.data.checks.redis && endpoint.data.checks.redis.status === 'down') {
+            const redisMsg = endpoint.data.checks.redis.message;
+            
+            if (redisMsg.includes('not initialized')) {
+              criticalIssues.push({
+                issue: 'Redis Not Initialized',
+                impact: 'Cache unavailable, performance degraded',
+                fix: 'Check REDIS_URL environment variable in Render dashboard'
+              });
+            } else if (redisMsg.includes('is not a function')) {
+              criticalIssues.push({
+                issue: 'Redis Method Mismatch',
+                impact: 'Using wrong Redis client API version',
+                fix: 'Update Redis client calls to use v5+ syntax (set with EX option)'
+              });
+            } else if (redisMsg.includes('ECONNREFUSED') || redisMsg.includes('connection')) {
+              criticalIssues.push({
+                issue: 'Redis Connection Failed',
+                impact: 'Cannot connect to Redis server',
+                fix: 'Verify REDIS_URL is correct and Redis service is running'
+              });
+            } else {
+              warnings.push({
+                issue: 'Redis Unhealthy',
+                impact: redisMsg,
+                fix: 'Check Render logs for Redis connection errors'
+              });
+            }
+          }
+
+          if (endpoint.data.checks.database && endpoint.data.checks.database.status !== 'healthy') {
+            criticalIssues.push({
+              issue: 'Database Connection Failed',
+              impact: 'Cannot access MongoDB',
+              fix: 'Check MONGODB_URI environment variable and MongoDB Atlas status'
+            });
+          }
+
+          if (endpoint.data.checks.llm && endpoint.data.checks.llm.status !== 'healthy') {
+            warnings.push({
+              issue: 'LLM Configuration Issue',
+              impact: endpoint.data.checks.llm.message,
+              fix: 'Add OPENAI_API_KEY to Render environment variables'
+            });
+          }
+        }
+
+        // Check metrics for anomalies
+        if (endpoint.data.metrics) {
+          if (endpoint.data.metrics.routing && endpoint.data.metrics.routing.status === 'critical') {
+            if (endpoint.data.metrics.calls.total === 0) {
+              suggestions.push({
+                issue: 'No Call Data Yet',
+                impact: 'Routing accuracy shows critical because no calls have been made',
+                fix: 'Make a test call to your Twilio number to populate metrics'
+              });
+            } else {
+              warnings.push({
+                issue: 'Low Routing Accuracy',
+                impact: `Only ${endpoint.data.metrics.routing.accuracy}% accuracy`,
+                fix: 'Review routing decision logs and tune prompts'
+              });
+            }
+          }
+        }
+      }
+    });
+
+    // Build the analysis section
+    if (criticalIssues.length > 0) {
+      analysis += '\n🚨 CRITICAL ISSUES (Fix These First):\n';
+      analysis += '─'.repeat(67) + '\n';
+      criticalIssues.forEach((item, i) => {
+        analysis += `\n${i + 1}. ${item.issue}\n`;
+        analysis += `   Impact: ${item.impact}\n`;
+        analysis += `   ✅ Fix: ${item.fix}\n`;
+      });
+    }
+
+    if (warnings.length > 0) {
+      analysis += '\n\n⚠️  WARNINGS (Should Fix Soon):\n';
+      analysis += '─'.repeat(67) + '\n';
+      warnings.forEach((item, i) => {
+        analysis += `\n${i + 1}. ${item.issue}\n`;
+        analysis += `   Impact: ${item.impact}\n`;
+        analysis += `   ✅ Fix: ${item.fix}\n`;
+      });
+    }
+
+    if (suggestions.length > 0) {
+      analysis += '\n\n💡 SUGGESTIONS (Optional Improvements):\n';
+      analysis += '─'.repeat(67) + '\n';
+      suggestions.forEach((item, i) => {
+        analysis += `\n${i + 1}. ${item.issue}\n`;
+        analysis += `   Impact: ${item.impact}\n`;
+        analysis += `   ✅ Fix: ${item.fix}\n`;
+      });
+    }
+
+    if (criticalIssues.length === 0 && warnings.length === 0) {
+      analysis += '\n✅ NO ISSUES DETECTED\n';
+      analysis += '─'.repeat(67) + '\n';
+      analysis += 'All systems appear to be functioning correctly.\n';
+      if (suggestions.length === 0) {
+        analysis += 'If you\'re still seeing errors, check the API endpoint responses above.\n';
+      }
+    }
+
+    return analysis;
   }
 
   /**
