@@ -414,6 +414,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/emergency', require('./routes/admin/emergency-repair')); // 🚨 Emergency database repair endpoints
     app.use('/api/admin/ai-costs', require('./routes/admin/aiCosts')); // 📊 AI Cost Tracking & Budget Monitoring
     app.use('/api/admin/agent-status', require('./routes/admin/agentStatus')); // 🔴 Live Agent Status & System Health (Enterprise Visibility)
+    app.use('/api/admin/call-center', require('./routes/admin/callCenter')); // 📞 Call Center Module V2 (Call History, Customers, Analytics)
     app.use('/api/v2global/admin', routes.v2GlobalAdminRoutes); // V2 Global Admin Dashboard
     // REMOVED: Legacy v2global/directory and v2global/addcompany routes - replaced with new versions
     app.use('/api/v2global/trade-categories', routes.v2GlobalTradeCategoriesRoutes); // V2 Global Trade Categories
