@@ -47,6 +47,16 @@ const GlobalInstantResponseTemplate = require('../../models/GlobalInstantRespons
 const V2Company = require('../../models/v2Company');
 const TraceLogger = require('../../services/TraceLogger');
 
+// ============================================================================
+// PRECISION V23 ENHANCEMENTS (Domain-Driven Design)
+// ============================================================================
+const {
+  preprocessing: { FillerStripper, TranscriptNormalizer },
+  intelligence: { EmotionDetector },
+  routing: { MicroLLMRouter, CompactPromptCompiler },
+  personality: { HumanLayerAssembler }
+} = require('./orchestration');
+
 /**
  * Process a single caller turn and return what to say next
  * @param {Object} params
@@ -144,10 +154,15 @@ async function processCallerTurn({ companyId, callId, speaker, text, rawSttMetad
     }
     
     // ========================================================================
-    // STEP 3: Strip filler words
+    // STEP 3: Preprocessing (Precision V23 Enhancement)
     // ========================================================================
     const rawText = text;
-    const cleanedText = stripFillerWords(text, config.fillerWords.active);
+    
+    // Step 3a: Strip filler words (upgraded to FillerStripper)
+    let cleanedText = FillerStripper.clean(text);
+    
+    // Step 3b: Normalize transcript (spelling, punctuation)
+    cleanedText = TranscriptNormalizer.normalize(cleanedText);
     
     if (debugOrchestrator) {
       logger.debug('[ORCHESTRATOR] Filler words stripped (DEBUG)', {
@@ -180,6 +195,20 @@ async function processCallerTurn({ companyId, callId, speaker, text, rawSttMetad
       confidence: intel.confidence,
       signals: intel.signals
     });
+    
+    // ========================================================================
+    // STEP 4.5: Emotion Detection (Precision V23 Enhancement)
+    // ========================================================================
+    const emotion = EmotionDetector.analyze(cleanedText, ctx.memory);
+    
+    logger.info('[ORCHESTRATOR] Emotion detected', {
+      primary: emotion.primary,
+      intensity: emotion.intensity.toFixed(2),
+      signalCount: emotion.signals.length
+    });
+    
+    // Attach emotion to context for downstream use
+    ctx.emotion = emotion;
     
     // Update intent if confidence is high and not spam/wrong_number
     if (intel.confidence > 0.7 && !['spam', 'wrong_number'].includes(intel.intent)) {
@@ -714,30 +743,7 @@ Respond ONLY with the natural dialogue (no JSON, no meta-commentary).`;
   }
 }
 
-/**
- * Strip filler words from text
- * @param {string} text - Original text
- * @param {string[]} fillerWords - Array of filler words to remove
- * @returns {string} Cleaned text
- */
-function stripFillerWords(text, fillerWords = []) {
-  if (!fillerWords || fillerWords.length === 0) {
-    return text;
-  }
-  
-  let cleaned = text.toLowerCase();
-  
-  // Remove each filler word (case-insensitive, word boundaries)
-  for (const filler of fillerWords) {
-    const regex = new RegExp(`\\b${filler}\\b`, 'gi');
-    cleaned = cleaned.replace(regex, ' ');
-  }
-  
-  // Collapse multiple spaces
-  cleaned = cleaned.replace(/\s+/g, ' ').trim();
-  
-  return cleaned;
-}
+// REMOVED: stripFillerWords() - replaced with FillerStripper.clean() + TranscriptNormalizer.normalize() (Precision V23)
 
 /**
  * Build LLM-0 orchestrator prompt
