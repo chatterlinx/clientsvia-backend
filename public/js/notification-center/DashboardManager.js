@@ -495,11 +495,18 @@ ${Object.entries(service.envCheck).map(([k, v]) => `${k}: ${v}`).join('\n')}
         // Build root cause section if available
         let rootCauseSection = '';
         if (service.rootCause || service.fixAction) {
+            // Properly format rootCause if it's an object
+            const rootCauseText = service.rootCause 
+                ? (typeof service.rootCause === 'object' 
+                    ? JSON.stringify(service.rootCause, null, 2) 
+                    : service.rootCause)
+                : '';
+            
             rootCauseSection = `
 ═══════════════════════════════════════════════════════
 🎯 ROOT CAUSE ANALYSIS
 ═══════════════════════════════════════════════════════
-${service.rootCause ? `Root Cause: ${service.rootCause}` : ''}
+${rootCauseText ? `Root Cause:\n${rootCauseText}` : ''}
 ${service.fixAction ? `Fix Action: ${service.fixAction}` : ''}
 `;
         }
