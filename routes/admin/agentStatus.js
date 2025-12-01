@@ -375,6 +375,141 @@ router.get('/:companyId/health', async (req, res) => {
 });
 
 // ============================================================================
+// GET /api/admin/agent-status/:companyId/llm-config - Get LLM Configuration
+// ============================================================================
+
+router.get('/:companyId/llm-config', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    
+    logger.info('[AGENT STATUS] Fetching LLM config', { companyId });
+    
+    const company = await V2Company.findById(companyId, 'aiAgentSettings.llmConfig companyName').lean();
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+    
+    // Default config if not set
+    const llmConfig = company.aiAgentSettings?.llmConfig || {
+      routingModel: 'gpt-4o-mini',
+      estimatedCostPer1000Calls: 0.08,
+      expectedLatencyMs: 500
+    };
+    
+    // Model info for UI
+    const modelOptions = [
+      {
+        id: 'gpt-4o-mini',
+        name: 'GPT-4o Mini',
+        description: 'Fast & affordable - Best for most companies',
+        speed: '~500ms',
+        cost: '$0.08 per 1,000 calls',
+        recommended: true
+      },
+      {
+        id: 'gpt-4o',
+        name: 'GPT-4o',
+        description: 'Premium accuracy - For complex routing decisions',
+        speed: '~1,200ms',
+        cost: '$2.50 per 1,000 calls',
+        recommended: false
+      },
+      {
+        id: 'gpt-4-turbo',
+        name: 'GPT-4 Turbo',
+        description: 'Legacy model - Not recommended for new setups',
+        speed: '~1,500ms',
+        cost: '$3.00 per 1,000 calls',
+        recommended: false,
+        deprecated: true
+      }
+    ];
+    
+    res.json({
+      success: true,
+      companyId,
+      companyName: company.companyName,
+      llmConfig,
+      modelOptions
+    });
+    
+  } catch (error) {
+    logger.error('[AGENT STATUS] Error fetching LLM config', { error: error.message });
+    res.status(500).json({ success: false, error: 'Failed to fetch LLM config' });
+  }
+});
+
+// ============================================================================
+// PUT /api/admin/agent-status/:companyId/llm-config - Update LLM Configuration
+// ============================================================================
+
+router.put('/:companyId/llm-config', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { routingModel } = req.body;
+    
+    logger.info('[AGENT STATUS] Updating LLM config', { companyId, routingModel });
+    
+    // Validate model
+    const validModels = ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo'];
+    if (!validModels.includes(routingModel)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: `Invalid model. Must be one of: ${validModels.join(', ')}` 
+      });
+    }
+    
+    // Get cost/latency for selected model
+    const modelConfig = {
+      'gpt-4o-mini': { cost: 0.08, latency: 500 },
+      'gpt-4o': { cost: 2.50, latency: 1200 },
+      'gpt-4-turbo': { cost: 3.00, latency: 1500 }
+    };
+    
+    const config = modelConfig[routingModel];
+    
+    // Update company
+    const company = await V2Company.findByIdAndUpdate(
+      companyId,
+      {
+        $set: {
+          'aiAgentSettings.llmConfig.routingModel': routingModel,
+          'aiAgentSettings.llmConfig.estimatedCostPer1000Calls': config.cost,
+          'aiAgentSettings.llmConfig.expectedLatencyMs': config.latency,
+          'aiAgentSettings.llmConfig.lastUpdatedAt': new Date(),
+          'aiAgentSettings.llmConfig.lastUpdatedBy': req.user?.email || 'admin'
+        }
+      },
+      { new: true }
+    );
+    
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+    
+    logger.info('[AGENT STATUS] ✅ LLM config updated', { 
+      companyId, 
+      routingModel,
+      estimatedCost: config.cost,
+      expectedLatency: config.latency
+    });
+    
+    res.json({
+      success: true,
+      message: `LLM model updated to ${routingModel}`,
+      llmConfig: company.aiAgentSettings?.llmConfig
+    });
+    
+  } catch (error) {
+    logger.error('[AGENT STATUS] Error updating LLM config', { 
+      error: error.message,
+      stack: error.stack 
+    });
+    res.status(500).json({ success: false, error: 'Failed to update LLM config' });
+  }
+});
+
+// ============================================================================
 // GET /api/admin/agent-status/platform/health - Platform-Wide Health Check
 // ============================================================================
 // PURPOSE: Real-time health status for ALL companies (platform-wide)

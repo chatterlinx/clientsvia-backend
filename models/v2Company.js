@@ -603,6 +603,35 @@ const companySchema = new mongoose.Schema({
         },
         
         // -------------------------------------------------------------------
+        // 🤖 LLM CONFIGURATION - Per-Company Model Selection
+        // -------------------------------------------------------------------
+        // PURPOSE: Allow companies to choose their LLM model for routing decisions
+        // DEFAULT: gpt-4o-mini (fast, cheap, sufficient for 95% of use cases)
+        // PREMIUM: gpt-4o (slower, expensive, better for complex trades)
+        // CONFIGURED VIA: Live Agent Status tab in Control Plane
+        // USED BY: MicroLLMRouter.js for Frontline-Intel routing
+        llmConfig: {
+            routingModel: {
+                type: String,
+                enum: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo'],
+                default: 'gpt-4o-mini'
+            },
+            // Cost tracking
+            estimatedCostPer1000Calls: {
+                type: Number,
+                default: 0.08  // $0.08 for gpt-4o-mini
+            },
+            // Performance expectations
+            expectedLatencyMs: {
+                type: Number,
+                default: 500  // 500ms for gpt-4o-mini
+            },
+            // Last changed
+            lastUpdatedAt: { type: Date, default: null },
+            lastUpdatedBy: { type: String, default: null }
+        },
+        
+        // -------------------------------------------------------------------
         // V22 MEMORY OPTIMIZATION - AI Maturity & Performance Tracking
         // -------------------------------------------------------------------
         // PURPOSE: Track company's AI learning progress and optimization stats

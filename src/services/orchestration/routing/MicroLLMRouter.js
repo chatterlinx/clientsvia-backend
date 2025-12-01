@@ -37,12 +37,18 @@ const openaiClient = require('../../../../config/openai');
 // ============================================================================
 
 const CONFIG = {
-  model: 'gpt-4o-mini',
+  defaultModel: 'gpt-4o-mini',  // Can be overridden per-company
   temperature: 0.1, // Low temp for consistent routing
   maxTokens: 150, // Small response (just JSON)
   timeout: 5000, // 5 second hard timeout
   retryAttempts: 2,
-  retryDelayMs: 500
+  retryDelayMs: 500,
+  // Model-specific configs for timeout adjustment
+  modelTimeouts: {
+    'gpt-4o-mini': 5000,   // Fast model
+    'gpt-4o': 10000,       // Premium model - slower
+    'gpt-4-turbo': 12000   // Legacy model - slowest
+  }
 };
 
 // ============================================================================
@@ -59,6 +65,7 @@ class MicroLLMRouter {
    * @param {string} params.userInput - User's spoken input (cleaned)
    * @param {string} params.companyId - For logging
    * @param {string} params.callId - For logging
+   * @param {string} [params.model] - LLM model to use (optional, from company config)
    * @returns {Promise<Object>} Routing decision
    * @returns {string} return.target - Target scenario key
    * @returns {string} return.thought - Routing thought process
@@ -74,7 +81,8 @@ class MicroLLMRouter {
    *   prompt: "You are Frontline-Intel...",
    *   userInput: "my heater is broken",
    *   companyId: "507f1f77bcf86cd799439011",
-   *   callId: "call_abc123"
+   *   callId: "call_abc123",
+   *   model: "gpt-4o-mini" // From company llmConfig
    * });
    * // Returns: {
    * //   target: "HVAC_NO_HEAT",
@@ -86,8 +94,19 @@ class MicroLLMRouter {
    * //   success: true
    * // }
    */
-  static async route({ prompt, userInput, companyId, callId }) {
+  static async route({ prompt, userInput, companyId, callId, model }) {
     const startTime = Date.now();
+    
+    // Use company-configured model or default
+    const selectedModel = model || CONFIG.defaultModel;
+    const timeout = CONFIG.modelTimeouts[selectedModel] || CONFIG.timeout;
+    
+    logger.debug('[MICRO-LLM ROUTER] Using model', { 
+      companyId, 
+      callId, 
+      model: selectedModel,
+      timeout 
+    });
     
     try {
       // Build user message
@@ -99,7 +118,7 @@ class MicroLLMRouter {
       
       while (attempt < CONFIG.retryAttempts) {
         try {
-          const decision = await this._callLLM(prompt, userMessage, companyId, callId);
+          const decision = await this._callLLM(prompt, userMessage, companyId, callId, selectedModel, timeout);
           
           // Validate decision
           if (this._isValidDecision(decision)) {
@@ -112,13 +131,14 @@ class MicroLLMRouter {
               confidence: decision.confidence,
               priority: decision.priority,
               latency,
+              model: selectedModel,
               attempt: attempt + 1
             });
             
             return {
               ...decision,
               latency,
-              model: CONFIG.model,
+              model: selectedModel,
               success: true
             };
           } else {
@@ -166,21 +186,23 @@ class MicroLLMRouter {
   }
   
   /**
-   * Call OpenAI gpt-4o-mini
+   * Call OpenAI with configurable model
    * @private
    * @param {string} systemPrompt - System prompt
    * @param {string} userMessage - User message
    * @param {string} companyId - For logging
    * @param {string} callId - For logging
+   * @param {string} model - LLM model to use (e.g., 'gpt-4o-mini', 'gpt-4o')
+   * @param {number} timeout - Request timeout in ms
    * @returns {Promise<Object>} LLM decision
    */
-  static async _callLLM(systemPrompt, userMessage, companyId, callId) {
+  static async _callLLM(systemPrompt, userMessage, companyId, callId, model, timeout) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), CONFIG.timeout);
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
     
     try {
       const completion = await openaiClient.chat.completions.create({
-        model: CONFIG.model,
+        model: model,  // Use company-configured model
         temperature: CONFIG.temperature,
         max_tokens: CONFIG.maxTokens,
         response_format: { type: 'json_object' }, // Force JSON output
@@ -201,6 +223,7 @@ class MicroLLMRouter {
       logger.debug('[MICRO-LLM ROUTER] LLM call complete', {
         companyId,
         callId,
+        model,
         tokensUsed: completion.usage.total_tokens,
         promptTokens: completion.usage.prompt_tokens,
         completionTokens: completion.usage.completion_tokens

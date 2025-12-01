@@ -125,7 +125,7 @@ class AgentStatusManager {
   /**
    * Render the complete dashboard
    */
-  render(status, metrics, health) {
+  async render(status, metrics, health) {
     const container = document.getElementById('agent-status-container');
     if (!container) {
       console.error('[AGENT STATUS] Container not found');
@@ -135,9 +135,15 @@ class AgentStatusManager {
     // Update tab indicator color based on health status
     this.updateTabIndicator(health.status);
 
+    // Render LLM config (async)
+    const llmConfigHtml = await this.renderLLMConfig();
+
     container.innerHTML = `
       <!-- System Status Overview -->
       ${this.renderStatusOverview(status, health)}
+
+      <!-- 🤖 LLM CONFIGURATION - THE HEART OF LLM-0 -->
+      ${llmConfigHtml}
 
       <!-- Performance Metrics -->
       ${this.renderMetrics(metrics)}
@@ -563,6 +569,217 @@ class AgentStatusManager {
         </div>
       </div>
     `;
+  }
+
+  /**
+   * Render LLM Configuration section - THE HEART OF LLM-0
+   */
+  async renderLLMConfig() {
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`/api/admin/agent-status/${this.companyId}/llm-config`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) {
+        console.warn('[AGENT STATUS] Failed to load LLM config');
+        return '';
+      }
+      
+      const data = await response.json();
+      const { llmConfig, modelOptions } = data;
+      const currentModel = modelOptions.find(m => m.id === llmConfig.routingModel) || modelOptions[0];
+      
+      return `
+        <div style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); border-radius: 12px; padding: 25px; margin-bottom: 25px; color: white; box-shadow: 0 4px 15px rgba(30, 27, 75, 0.3);">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 20px;">
+            <div>
+              <h3 style="margin: 0 0 8px 0; font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 10px;">
+                🤖 LLM Configuration
+                <span style="background: rgba(255,255,255,0.2); padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;">
+                  BRAIN POWER
+                </span>
+              </h3>
+              <p style="margin: 0; font-size: 14px; opacity: 0.8;">
+                The AI model powering your Frontline-Intel routing decisions
+              </p>
+            </div>
+            <button 
+              onclick="window.agentStatusManager.showLLMConfigModal()"
+              style="background: white; color: #1e1b4b; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: transform 0.2s;"
+              onmouseover="this.style.transform='scale(1.05)'"
+              onmouseout="this.style.transform='scale(1)'"
+            >
+              ⚙️ Configure
+            </button>
+          </div>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+            <div style="background: rgba(255,255,255,0.1); border-radius: 10px; padding: 18px;">
+              <div style="font-size: 12px; opacity: 0.7; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Current Model</div>
+              <div style="font-size: 20px; font-weight: 700;">${currentModel.name}</div>
+              ${currentModel.recommended ? '<div style="font-size: 11px; color: #86efac; margin-top: 4px;">✓ Recommended</div>' : ''}
+            </div>
+            <div style="background: rgba(255,255,255,0.1); border-radius: 10px; padding: 18px;">
+              <div style="font-size: 12px; opacity: 0.7; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Speed</div>
+              <div style="font-size: 20px; font-weight: 700;">${currentModel.speed}</div>
+              <div style="font-size: 11px; opacity: 0.7; margin-top: 4px;">avg response time</div>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); border-radius: 10px; padding: 18px;">
+              <div style="font-size: 12px; opacity: 0.7; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Cost</div>
+              <div style="font-size: 20px; font-weight: 700;">${currentModel.cost}</div>
+              <div style="font-size: 11px; opacity: 0.7; margin-top: 4px;">estimated usage</div>
+            </div>
+          </div>
+          
+          <div style="margin-top: 18px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.15); font-size: 13px; opacity: 0.8;">
+            💡 <strong>Tip:</strong> ${currentModel.description}
+          </div>
+        </div>
+      `;
+    } catch (error) {
+      console.error('[AGENT STATUS] Error rendering LLM config:', error);
+      return '';
+    }
+  }
+
+  /**
+   * Show LLM Configuration Modal
+   */
+  async showLLMConfigModal() {
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`/api/admin/agent-status/${this.companyId}/llm-config`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      const data = await response.json();
+      const { llmConfig, modelOptions } = data;
+      
+      const modal = document.createElement('div');
+      modal.id = 'llm-config-modal';
+      modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0, 0, 0, 0.7); display: flex;
+        align-items: center; justify-content: center;
+        z-index: 10000; padding: 20px;
+      `;
+      
+      modal.innerHTML = `
+        <div style="background: white; border-radius: 16px; max-width: 600px; width: 100%; max-height: 90vh; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+          <!-- Header -->
+          <div style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color: white; padding: 24px;">
+            <h2 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 700;">🤖 Configure LLM Model</h2>
+            <p style="margin: 0; opacity: 0.8; font-size: 14px;">Choose the AI model for Frontline-Intel routing</p>
+          </div>
+          
+          <!-- Content -->
+          <div style="padding: 24px; max-height: 400px; overflow-y: auto;">
+            ${modelOptions.map(model => `
+              <label 
+                style="display: block; padding: 18px; margin-bottom: 12px; border: 2px solid ${model.id === llmConfig.routingModel ? '#6366f1' : '#e5e7eb'}; border-radius: 12px; cursor: pointer; transition: all 0.2s; ${model.deprecated ? 'opacity: 0.6;' : ''}"
+                onmouseover="this.style.borderColor='#6366f1'"
+                onmouseout="this.style.borderColor='${model.id === llmConfig.routingModel ? '#6366f1' : '#e5e7eb'}'"
+              >
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <input 
+                      type="radio" 
+                      name="llm-model" 
+                      value="${model.id}" 
+                      ${model.id === llmConfig.routingModel ? 'checked' : ''}
+                      style="width: 20px; height: 20px; accent-color: #6366f1;"
+                    >
+                    <div>
+                      <div style="font-size: 16px; font-weight: 600; color: #1f2937; display: flex; align-items: center; gap: 8px;">
+                        ${model.name}
+                        ${model.recommended ? '<span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;">RECOMMENDED</span>' : ''}
+                        ${model.deprecated ? '<span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;">LEGACY</span>' : ''}
+                      </div>
+                      <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">${model.description}</div>
+                    </div>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 20px; margin-top: 12px; margin-left: 32px;">
+                  <div style="font-size: 12px; color: #6b7280;">
+                    <span style="font-weight: 600; color: #1f2937;">Speed:</span> ${model.speed}
+                  </div>
+                  <div style="font-size: 12px; color: #6b7280;">
+                    <span style="font-weight: 600; color: #1f2937;">Cost:</span> ${model.cost}
+                  </div>
+                </div>
+              </label>
+            `).join('')}
+          </div>
+          
+          <!-- Footer -->
+          <div style="padding: 20px 24px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; background: #f9fafb;">
+            <div style="font-size: 13px; color: #6b7280;">
+              💡 Changes take effect immediately
+            </div>
+            <div style="display: flex; gap: 12px;">
+              <button 
+                onclick="document.getElementById('llm-config-modal').remove()" 
+                style="background: #6b7280; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;"
+              >
+                Cancel
+              </button>
+              <button 
+                onclick="window.agentStatusManager.saveLLMConfig()" 
+                style="background: #6366f1; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+    } catch (error) {
+      console.error('[AGENT STATUS] Error showing LLM config modal:', error);
+      this.showNotification('Failed to load LLM configuration', 'error');
+    }
+  }
+
+  /**
+   * Save LLM Configuration
+   */
+  async saveLLMConfig() {
+    try {
+      const selectedModel = document.querySelector('input[name="llm-model"]:checked')?.value;
+      
+      if (!selectedModel) {
+        this.showNotification('Please select a model', 'warning');
+        return;
+      }
+      
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`/api/admin/agent-status/${this.companyId}/llm-config`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ routingModel: selectedModel })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        this.showNotification(`LLM model updated to ${selectedModel}`, 'success');
+        document.getElementById('llm-config-modal')?.remove();
+        // Refresh the dashboard to show new model
+        await this.init();
+      } else {
+        this.showNotification(data.error || 'Failed to update LLM config', 'error');
+      }
+      
+    } catch (error) {
+      console.error('[AGENT STATUS] Error saving LLM config:', error);
+      this.showNotification('Failed to save LLM configuration', 'error');
+    }
   }
 
   /**
