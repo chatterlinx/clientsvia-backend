@@ -34,7 +34,7 @@ const express = require('express');
 const router = express.Router();
 
 // Authentication & Authorization
-const { authenticateJWT, authorizeRole } = require('../../middleware/authMiddleware');
+const { authenticateJWT, authorizeRole } = require('../../middleware/auth');
 const authorizeCompanyAccess = require('../../middleware/authorizeCompanyAccess');
 const auditLog = require('../../middleware/auditLog');
 
