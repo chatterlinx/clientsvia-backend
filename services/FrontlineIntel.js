@@ -32,6 +32,7 @@ const openai = require('../config/openai');
 const logger = require('../utils/logger');
 const { replacePlaceholders } = require('../utils/placeholderReplacer');
 const TriageCardService = require('./TriageCardService');
+const { frontlineCircuitBreaker } = require('./OpenAICircuitBreaker');
 
 // V23: Import the fixed template and scenario loader
 const { buildFrontlinePromptV23, buildMicroLLMPrompt } = require('../templates/FrontlineSystemPromptV23');
@@ -449,7 +450,8 @@ CRITICAL: Return ONLY the JSON object, no other text before or after!`;
     }
     
     /**
-     * Call OpenAI LLM with retry logic
+     * Call OpenAI LLM with circuit breaker and retry logic
+     * Circuit breaker protects against OpenAI outages by failing fast
      */
     static async callLLMWithRetry(systemPrompt, userInput, params, startTime) {
         // Check if OpenAI client is available
@@ -458,18 +460,39 @@ CRITICAL: Return ONLY the JSON object, no other text before or after!`;
         }
         
         const model = params.model || 'gpt-4o-mini';
-        const timeout = params.timeout || 5000;
-        const retries = params.retries || 1;
         const maxCost = params.maxCostPerCall || 0.01;
+        const context = { model, userInputLength: userInput.length };
         
-        for (let attempt = 1; attempt <= retries + 1; attempt++) {
-            try {
-                // Check timeout
-                if (Date.now() - startTime > timeout) {
-                    throw new Error(`Timeout exceeded (${timeout}ms)`);
-                }
-                
-                logger.info(`🤖 [FRONTLINE-INTEL] LLM call (attempt ${attempt}/${retries + 1}), model: ${model}`);
+        // ═══════════════════════════════════════════════════════════════════
+        // CIRCUIT BREAKER: Protect against OpenAI outages
+        // When circuit is OPEN, we fail fast with a safe fallback
+        // ═══════════════════════════════════════════════════════════════════
+        
+        const fallbackResponse = () => {
+            logger.warn('[FRONTLINE-INTEL] Using circuit breaker fallback response');
+            return {
+                cleanedInput: userInput,
+                detectedIntent: 'other',
+                keywords: [],
+                urgency: 'normal',
+                tone: 'neutral',
+                customer: { name: null, phone: null, shouldLookup: false },
+                callValidation: { correctCompany: true, correctService: true, reasoning: null },
+                shouldShortCircuit: false,
+                shortCircuitResponse: null,
+                entities: {},
+                context: { customerStory: null, impossibleRequests: null, shouldHandle: null },
+                suggestedScenario: null,
+                confidence: 0.5,
+                tokens: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+                circuitBreakerFallback: true
+            };
+        };
+        
+        return await frontlineCircuitBreaker.execute(
+            // Main function: the OpenAI call
+            async () => {
+                logger.info(`🤖 [FRONTLINE-INTEL] LLM call via circuit breaker, model: ${model}`);
                 
                 const completion = await openai.chat.completions.create({
                     model: model,
@@ -495,18 +518,12 @@ CRITICAL: Return ONLY the JSON object, no other text before or after!`;
                 }
                 
                 return result;
-                
-            } catch (error) {
-                logger.error(`❌ [FRONTLINE-INTEL] LLM call failed (attempt ${attempt}):`, error.message);
-                
-                if (attempt >= retries + 1) {
-                    throw error;
-                }
-                
-                // Wait before retry (exponential backoff)
-                await new Promise(resolve => setTimeout(resolve, 500 * attempt));
-            }
-        }
+            },
+            // Fallback function: safe default when circuit is open
+            fallbackResponse,
+            // Context for logging
+            context
+        );
     }
     
     /**

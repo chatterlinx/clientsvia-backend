@@ -77,8 +77,46 @@ class CallFlowExecutor {
             // Execute step
             const stepResult = await this.executeStep(step, context, generateV2Response);
             
-            // Merge step results into context
-            Object.assign(context, stepResult);
+            // ═══════════════════════════════════════════════════════════════════
+            // EXPLICIT FIELD MAPPING - Only merge known fields from step results
+            // This prevents pollution from unexpected keys and makes debugging easier
+            // ═══════════════════════════════════════════════════════════════════
+            if (stepResult) {
+                // Frontline-Intel outputs
+                if (stepResult.frontlineIntelResult !== undefined) {
+                    context.frontlineIntelResult = stepResult.frontlineIntelResult;
+                }
+                if (stepResult.processedInput !== undefined) {
+                    context.processedInput = stepResult.processedInput;
+                }
+                
+                // Response outputs
+                if (stepResult.baseResponse !== undefined) {
+                    context.baseResponse = stepResult.baseResponse;
+                }
+                if (stepResult.finalResponse !== undefined) {
+                    context.finalResponse = stepResult.finalResponse;
+                }
+                if (stepResult.finalAction !== undefined) {
+                    context.finalAction = stepResult.finalAction;
+                }
+                
+                // Flow control
+                if (stepResult.shortCircuit !== undefined) {
+                    context.shortCircuit = stepResult.shortCircuit;
+                }
+                if (stepResult.edgeCaseTriggered !== undefined) {
+                    context.edgeCaseTriggered = stepResult.edgeCaseTriggered;
+                }
+                
+                // Metadata outputs
+                if (stepResult.cheatSheetMeta !== undefined) {
+                    context.cheatSheetMeta = stepResult.cheatSheetMeta;
+                }
+                if (stepResult.behaviorMeta !== undefined) {
+                    context.behaviorMeta = stepResult.behaviorMeta;
+                }
+            }
             
             // Check for short-circuit (early exit)
             if (context.shortCircuit) {

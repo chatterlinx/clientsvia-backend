@@ -32,6 +32,38 @@ const SessionManager = require('./SessionManager');
 const FrontlineIntel = require('./FrontlineIntel');
 const CallFlowExecutor = require('./CallFlowExecutor');
 
+// ═══════════════════════════════════════════════════════════════════
+// LAZY-LOADED SERVICES (moved from inline requires to top-level)
+// These were previously require()'d inside functions. Moved here for:
+// - Clear dependency graph
+// - Easier testing/mocking
+// - Consistent initialization
+// ═══════════════════════════════════════════════════════════════════
+const CheatSheetRuntimeService = require('./cheatsheet/CheatSheetRuntimeService');
+const intelligentFallbackHandler = require('./intelligentFallbackHandler');
+const MemoryEngine = require('./MemoryEngine');
+const TriageService = require('./TriageService');
+const PostCallLearningService = require('./PostCallLearningService');
+const AIBrain3tierllm = require('./AIBrain3tierllm');
+const { replacePlaceholders } = require('../utils/placeholderReplacer');
+
+// ═══════════════════════════════════════════════════════════════════
+// ERROR MESSAGES - Internal vs Caller-facing
+// Internal messages for logs, caller messages for TTS
+// ═══════════════════════════════════════════════════════════════════
+const ERROR_MESSAGES = {
+    internal: {
+        companyNotFound: 'Company not found in V2 system',
+        agentDisabled: 'AI Agent explicitly disabled for company',
+        initFailure: 'AI Agent failed to initialize call',
+        processingFailure: 'AI Agent failed to process user input'
+    },
+    caller: {
+        technicalDifficulties: "We're experiencing technical difficulties. Please call back shortly, or press zero to speak with someone directly.",
+        agentUnavailable: "Our automated assistant is currently unavailable. Please hold while I connect you with a team member."
+    }
+};
+
 class V2AIAgentRuntime {
     
     /**
@@ -52,9 +84,9 @@ class V2AIAgentRuntime {
             // Load company with V2 configuration
             const company = await Company.findById(companyID);
             if (!company) {
-                logger.error(`❌ V2 AGENT: Company ${companyID} not found`);
+                logger.error(`❌ V2 AGENT: ${ERROR_MESSAGES.internal.companyNotFound}`, { companyID });
                 return {
-                    greeting: "Configuration error: Company not found in V2 system",
+                    greeting: ERROR_MESSAGES.caller.technicalDifficulties,
                     callState: { callId, from, to, stage: 'error' }
                 };
             }
@@ -74,9 +106,9 @@ class V2AIAgentRuntime {
             
             // Check if explicitly disabled
             if (company.aiAgentSettings.enabled === false) {
-                logger.error(`❌ V2 AGENT: Company ${companyID} has AI Agent explicitly disabled`);
+                logger.error(`❌ V2 AGENT: ${ERROR_MESSAGES.internal.agentDisabled}`, { companyID });
                 return {
-                    greeting: "AI Agent is currently disabled for this company",
+                    greeting: ERROR_MESSAGES.caller.agentUnavailable,
                     callState: { callId, from, to, stage: 'disabled' }
                 };
             }
@@ -92,7 +124,6 @@ class V2AIAgentRuntime {
             // ─────────────────────────────────────────────────────────────
             // 🧠 CHEAT SHEET V2: Load live config from CheatSheetVersion
             // ─────────────────────────────────────────────────────────────
-            const CheatSheetRuntimeService = require('./cheatsheet/CheatSheetRuntimeService');
             const liveCheatSheet = await CheatSheetRuntimeService.getLiveConfig(companyID);
             
             if (!liveCheatSheet) {
@@ -286,7 +317,7 @@ class V2AIAgentRuntime {
 
         // Queue async fallback actions (SMS + Critical admin alert)
         this.executeFallbackActions(company, reason, fallbackConfig).catch(error => {
-            logger.error(`❌ FALLBACK ACTIONS: Error:`, error);
+            logger.error('[FALLBACK ACTIONS] Error executing fallback', { error: error.message });
         });
 
         // 🔥 NO GENERIC TEXT - Return transfer action immediately
@@ -306,8 +337,6 @@ class V2AIAgentRuntime {
      */
     static async executeFallbackActions(company, reason, fallbackConfig) {
         try {
-            const intelligentFallbackHandler = require('./intelligentFallbackHandler');
-            
             await intelligentFallbackHandler.executeFallback({
                 company,
                 companyId: company._id,
@@ -317,7 +346,7 @@ class V2AIAgentRuntime {
                 fallbackConfig
             });
         } catch (error) {
-            logger.error(`❌ FALLBACK ACTIONS: Error:`, error);
+            logger.error('[FALLBACK ACTIONS] Error executing fallback', { error: error.message });
         }
     }
 
@@ -333,9 +362,7 @@ class V2AIAgentRuntime {
      * @returns {string} Response with placeholders replaced
      */
     static buildPureResponse(text, company) {
-        if (!text) {return text;}
-        
-        const { replacePlaceholders } = require('../utils/placeholderReplacer');
+        if (!text) { return text; }
         return replacePlaceholders(text, company).trim();
     }
 
@@ -348,7 +375,29 @@ class V2AIAgentRuntime {
      * @returns {Object} Response and updated call state
      */
     static async processUserInput(companyID, callId, userInput, callState) {
-        logger.debug(`[V2 AGENT] 🗣️ Processing user input for call ${callId}: "${userInput}"`);
+        // ═══════════════════════════════════════════════════════════════════
+        // INPUT VALIDATION - Protect against null, non-string, or huge inputs
+        // ═══════════════════════════════════════════════════════════════════
+        if (!userInput || typeof userInput !== 'string') {
+            logger.warn('[V2 AGENT] Invalid userInput, using empty string', { 
+                companyID, 
+                callId, 
+                type: typeof userInput,
+                value: userInput === null ? 'null' : userInput === undefined ? 'undefined' : 'other'
+            });
+            userInput = '';
+        }
+        
+        if (userInput.length > 5000) {
+            logger.warn('[V2 AGENT] Truncating excessive input', { 
+                companyID, 
+                callId, 
+                originalLength: userInput.length 
+            });
+            userInput = userInput.substring(0, 5000);
+        }
+        
+        logger.debug(`[V2 AGENT] 🗣️ Processing user input for call ${callId}: "${userInput.substring(0, 100)}${userInput.length > 100 ? '...' : ''}"`);
         
         try {
             // Load company V2 configuration
@@ -392,7 +441,6 @@ class V2AIAgentRuntime {
             // ═════════════════════════════════════════════════════════════════
             // 🧠 BRAIN-4: MEMORY ENGINE - Hydrate caller history & resolution paths
             // ═════════════════════════════════════════════════════════════════
-            const MemoryEngine = require('./MemoryEngine');
             const executionContext = {
                 userInput,
                 company,
@@ -414,7 +462,8 @@ class V2AIAgentRuntime {
                     callId,
                     error: memErr.message
                 });
-                // Continue without memory (graceful degradation)
+                // Explicitly set safe default so downstream code has predictable state
+                executionContext.memory = { callerHistory: [], resolutionPaths: [] };
             }
             
             // ═════════════════════════════════════════════════════════════════
@@ -432,7 +481,6 @@ class V2AIAgentRuntime {
             // 🎯 V22 TRIAGE: QUICK RULES (Brain-1 Tier-0 pre-check)
             // Uses TriageCard quickRuleConfig as fast-path before 3-Tier Router
             // ═════════════════════════════════════════════════════════════════
-            const TriageService = require('./TriageService');
             
             try {
                 const quickTriageResult = await TriageService.applyQuickTriageRules(
@@ -585,7 +633,7 @@ class V2AIAgentRuntime {
 
                 // Fire-and-forget logging (never blocks the call)
                 TraceLogger.logTurn(turnTrace).catch(err => {
-                    console.error('[TRACE LOGGER] Failed to log short-circuit turn', {
+                    logger.error('[TRACE LOGGER] Failed to log short-circuit turn', {
                         error: err.message,
                         callId,
                         companyId: companyID,
@@ -672,7 +720,6 @@ class V2AIAgentRuntime {
             // ═════════════════════════════════════════════════════════════════
             // 📚 BRAIN-5: POST-CALL LEARNING - Update memory after successful turn
             // ═════════════════════════════════════════════════════════════════
-            const PostCallLearningService = require('./PostCallLearningService');
             
             try {
                 await PostCallLearningService.learnFromCall({
@@ -788,7 +835,7 @@ class V2AIAgentRuntime {
 
             // Fire-and-forget logging (never blocks the call)
             TraceLogger.logTurn(turnTrace).catch(err => {
-                console.error('[TRACE LOGGER] Failed to log turn from v2AIAgentRuntime', {
+                logger.error('[TRACE LOGGER] Failed to log turn from v2AIAgentRuntime', {
                     error: err.message,
                     callId,
                     companyId: companyID,
@@ -898,7 +945,7 @@ class V2AIAgentRuntime {
 
             // Fire-and-forget logging (never blocks the call)
             TraceLogger.logTurn(turnTrace).catch(err => {
-                console.error('[TRACE LOGGER] Failed to log error turn', {
+                logger.error('[TRACE LOGGER] Failed to log error turn', {
                     error: err.message,
                     callId,
                     companyId: companyID,
@@ -949,7 +996,6 @@ class V2AIAgentRuntime {
         
         // 🚀 V2 ENHANCED: Use AI Brain 3-Tier Intelligence for all responses
         try {
-            const AIBrain3tierllm = require('./AIBrain3tierllm');
             
             // 🎯 TASK 3.1: Pass callSource and intelligenceConfig into router context
             const context = {
@@ -984,21 +1030,20 @@ class V2AIAgentRuntime {
             logger.info(`🎯 [AI BRAIN] Routing with callSource: ${context.callSource} | Test: ${context.isTest}`);
             
             // 🔍 DIAGNOSTIC: About to call AI Brain
-            console.log('═'.repeat(80));
-            console.log('[🔍 AI BRAIN] About to query 3-Tier Intelligence System');
-            console.log('CompanyID:', company._id.toString());
-            console.log('User input:', userInput);
-            console.log('═'.repeat(80));
+            logger.debug('[AI BRAIN] About to query 3-Tier Intelligence System', {
+                companyId: company._id.toString(),
+                userInputLength: userInput.length,
+                userInputPreview: userInput.substring(0, 100)
+            });
             
             const routingResult = await AIBrain3tierllm.query(company._id.toString(), userInput, context);
             
             // 🔍 DIAGNOSTIC: AI Brain returned
-            console.log('═'.repeat(80));
-            console.log('[🔍 AI BRAIN] 3-Tier Intelligence returned');
-            console.log('Success:', Boolean(routingResult));
-            console.log('Response:', routingResult?.response?.substring(0, 50));
-            console.log('Confidence:', routingResult?.confidence);
-            console.log('═'.repeat(80));
+            logger.debug('[AI BRAIN] 3-Tier Intelligence returned', {
+                success: Boolean(routingResult),
+                responsePreview: routingResult?.response?.substring(0, 50),
+                confidence: routingResult?.confidence
+            });
             
             if (routingResult && routingResult.response && routingResult.confidence >= 0.5) {
                 logger.info(`[V2 KNOWLEDGE] ✅ Found answer from ${routingResult.source} (confidence: ${routingResult.confidence})`);
@@ -1038,11 +1083,10 @@ class V2AIAgentRuntime {
             }
         } catch (knowledgeError) {
             // 🔍 DIAGNOSTIC: Full error details
-            console.log('═'.repeat(80));
-            console.log('[❌ AI BRAIN ERROR] Knowledge routing threw error:');
-            console.log('Error message:', knowledgeError.message);
-            console.log('Error stack:', knowledgeError.stack);
-            console.log('═'.repeat(80));
+            logger.error('[AI BRAIN ERROR] Knowledge routing threw error', {
+                error: knowledgeError.message,
+                stack: knowledgeError.stack
+            });
             
             logger.warn(`[V2 KNOWLEDGE] ⚠️ Knowledge routing failed, using fallback:`, knowledgeError.message);
             logger.error(`[V2 KNOWLEDGE] Full error:`, knowledgeError);
