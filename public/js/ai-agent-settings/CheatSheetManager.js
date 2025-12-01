@@ -8578,8 +8578,11 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     const left = (window.screen.availWidth - width) / 2;
     const top = (window.screen.availHeight - height) / 2;
     
+    // Get auth token to pass to popup (popups can't reliably access parent localStorage)
+    const authToken = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    
     const editorWindow = window.open(
-      `/frontline-intel-editor.html?companyId=${this.companyId}${versionId ? `&versionId=${versionId}` : ''}`,
+      `/frontline-intel-editor.html?companyId=${this.companyId}${versionId ? `&versionId=${versionId}` : ''}&token=${encodeURIComponent(authToken)}`,
       'FrontlineIntelEditor',
       `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
     );

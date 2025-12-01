@@ -23,8 +23,53 @@ class FrontlineScriptBuilder {
         this.context = null;
         this.presets = null;
         this.isLoading = false;
+        this.authToken = null;
+        
+        // Try to get token immediately
+        this.authToken = this.findAuthToken();
         
         console.log('[SCRIPT BUILDER] Initialized for company:', companyId);
+        console.log('[SCRIPT BUILDER] Auth token found:', !!this.authToken);
+    }
+    
+    /**
+     * Find auth token from various sources
+     */
+    findAuthToken() {
+        // 1. Try current window localStorage/sessionStorage
+        let token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        if (token) {
+            console.log('[SCRIPT BUILDER] Token found in current window storage');
+            return token;
+        }
+        
+        // 2. Try parent window (opener) - for popup windows
+        if (window.opener) {
+            try {
+                token = window.opener.localStorage.getItem('token') || 
+                        window.opener.sessionStorage.getItem('token');
+                if (token) {
+                    console.log('[SCRIPT BUILDER] Token found in parent window storage');
+                    // Also store locally for future use
+                    sessionStorage.setItem('token', token);
+                    return token;
+                }
+            } catch (e) {
+                console.warn('[SCRIPT BUILDER] Could not access parent storage (cross-origin?):', e.message);
+            }
+        }
+        
+        // 3. Try URL parameter (fallback)
+        const urlParams = new URLSearchParams(window.location.search);
+        token = urlParams.get('token');
+        if (token) {
+            console.log('[SCRIPT BUILDER] Token found in URL');
+            sessionStorage.setItem('token', token);
+            return token;
+        }
+        
+        console.warn('[SCRIPT BUILDER] No auth token found!');
+        return null;
     }
     
     /**
@@ -94,24 +139,20 @@ class FrontlineScriptBuilder {
     
     /**
      * Get auth headers
-     * Handles popup window context where localStorage may not have the token
      */
     getAuthHeaders() {
-        // Try current window first
-        let token = localStorage.getItem('token') || sessionStorage.getItem('token');
-        
-        // If in popup, try to get from opener (parent window)
-        if (!token && window.opener) {
-            try {
-                token = window.opener.localStorage.getItem('token') || 
-                        window.opener.sessionStorage.getItem('token');
-            } catch (e) {
-                console.warn('[SCRIPT BUILDER] Could not access parent window storage:', e.message);
-            }
+        // Use cached token or try to find it again
+        if (!this.authToken) {
+            this.authToken = this.findAuthToken();
         }
+        
+        if (!this.authToken) {
+            console.error('[SCRIPT BUILDER] No auth token available for API call!');
+        }
+        
         return {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${this.authToken || ''}`
         };
     }
     
