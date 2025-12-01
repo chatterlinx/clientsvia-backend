@@ -19,7 +19,6 @@
  * ============================================================================
  */
 
-const { OpenAI } = require('openai');
 const Company = require('../models/v2Company');
 // V22 NUKED: CostLog removed (AI Gateway legacy)
 // Stub to prevent crashes - warmup cost tracking disabled
@@ -30,10 +29,8 @@ const CostLog = {
 };
 const redisClient = require('../db').redisClient;
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
-});
+// Use centralized OpenAI client (handles missing API key gracefully)
+const openai = require('../config/openai');
 
 class SmartWarmupService {
     constructor() {

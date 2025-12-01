@@ -9,20 +9,14 @@
 //
 // ═══════════════════════════════════════════════════════════════════════════
 
-const OpenAI = require('openai');
 const logger = require('../utils/logger');
 const {
   validateAgainstTestPlan,
   checkRegionConflicts
 } = require('./TriageValidatorHelper');
 
-// ═══════════════════════════════════════════════════════════════════════════
-// OPENAI CLIENT
-// ═══════════════════════════════════════════════════════════════════════════
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Use centralized OpenAI client (handles missing API key gracefully)
+const openai = require('../config/openai');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SYSTEM PROMPT - Enforces V23 Output Contract

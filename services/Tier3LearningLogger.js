@@ -16,12 +16,10 @@
  */
 
 const ProductionLLMSuggestion = require('../models/ProductionLLMSuggestion');
-const OpenAI = require('openai');
 const logger = require('../utils/logger');
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Use centralized OpenAI client (handles missing API key gracefully)
+const openai = require('../config/openai');
 
 /**
  * Fire-and-forget logger for Tier 3 calls.

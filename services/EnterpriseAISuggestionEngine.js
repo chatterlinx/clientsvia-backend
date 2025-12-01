@@ -38,16 +38,13 @@
  * ============================================================================
  */
 
-const { OpenAI } = require('openai');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const TestPilotAnalysis = require('../models/TestPilotAnalysis');
 const { getPreset } = require('./IntelligenceModePresets');
 const { ulid } = require('ulid');
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
-});
+// Use centralized OpenAI client (handles missing API key gracefully)
+const openai = require('../config/openai');
 
 class EnterpriseAISuggestionEngine {
     constructor() {

@@ -36,7 +36,9 @@ const logger = require('../utils/logger');
 const v2AIAgentCallLog = require('../models/v2AIAgentCallLog');
 const SuggestionKnowledgeBase = require('../models/SuggestionKnowledgeBase');
 const AdminNotificationService = require('./AdminNotificationService');
-const OpenAI = require('openai');
+
+// Use centralized OpenAI client (handles missing API key gracefully)
+const openaiClient = require('../config/openai');
 
 // ============================================================================
 // CONFIGURATION
@@ -60,18 +62,8 @@ const CONFIG = {
     highConfidenceThreshold: 0.9
 };
 
-// ============================================================================
-// OPENAI CLIENT
-// ============================================================================
-
-let openaiClient = null;
-
+// Helper to get OpenAI client (returns null if not configured)
 function getOpenAIClient() {
-    if (!openaiClient && process.env.OPENAI_API_KEY) {
-        openaiClient = new OpenAI({
-            apiKey: process.env.OPENAI_API_KEY
-        });
-    }
     return openaiClient;
 }
 

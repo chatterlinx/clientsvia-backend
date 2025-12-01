@@ -17,17 +17,17 @@
  * ============================================================================
  */
 
-const OpenAI = require('openai');
 const logger = require('../utils/logger');
 const LLMCallLog = require('../models/v2AIAgentCallLog');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const AdminNotificationService = require('./AdminNotificationService');
 
+// Use centralized OpenAI client (handles missing API key gracefully)
+const openaiClient = require('../config/openai');
+
 class OpenAICostSync {
     constructor() {
-        this.openai = new OpenAI({
-            apiKey: process.env.OPENAI_API_KEY || ''
-        });
+        this.openai = openaiClient;
         
         // Cache for recent cost data
         this.costCache = {

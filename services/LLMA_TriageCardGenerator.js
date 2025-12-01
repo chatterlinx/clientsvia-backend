@@ -2,13 +2,10 @@
 // V22 LLM-A: Admin-only triage card draft generator
 // This service is NEVER called during live calls - only from admin UI
 
-const { OpenAI } = require('openai');
 const logger = require('../utils/logger');
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Use centralized OpenAI client (handles missing API key gracefully)
+const openai = require('../config/openai');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SYSTEM PROMPT

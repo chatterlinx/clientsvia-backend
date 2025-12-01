@@ -9,14 +9,11 @@
 //   - LLM-A generates keywords, negative keywords, and synonyms
 // ═════════════════════════════════════════════════════════════════════════════
 
-const OpenAI = require('openai');
 const TriageCard = require('../models/TriageCard');
 const logger = require('../utils/logger');
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Use centralized OpenAI client (handles missing API key gracefully)
+const openai = require('../config/openai');
 
 // Import ActiveScenariosHelper for Brain 2 access
 const { getActiveScenariosForCompany } = require('./ActiveScenariosHelper');
