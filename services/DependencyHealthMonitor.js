@@ -75,7 +75,8 @@ class DependencyHealthMonitor {
                     redis: redisHealth,
                     twilio: twilioHealth,
                     elevenLabs: elevenLabsHealth,
-                    openai: openAIHealth
+                    openai: openAIHealth,
+                    orchestration: orchestrationHealth  // Include in UI - was missing!
                 },
                 summary: {
                     total: allServices.length,
