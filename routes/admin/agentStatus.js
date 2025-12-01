@@ -21,7 +21,7 @@ const logger = require('../../utils/logger');
 const V2Company = require('../../models/v2Company');
 const RoutingDecisionLog = require('../../models/routing/RoutingDecisionLog');
 const PromptVersion = require('../../models/routing/PromptVersion');
-const redisClient = require('../../src/config/redisClient');
+const { redisClient } = require('../../src/config/redisClient');
 
 // ============================================================================
 // COMPONENT REGISTRY - Auto-discovery of all orchestration components
