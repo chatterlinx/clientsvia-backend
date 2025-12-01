@@ -1935,6 +1935,8 @@ const companySchema = new mongoose.Schema({
         },
         // LLM-0 Orchestration (Brain 1) - Per-company override
         llm0Enabled: { type: Boolean, default: false },
+        // Brain-1 Runtime (New Architecture) - Per-company override
+        brain1Enabled: { type: Boolean, default: false },
         memoryMode: { 
             type: String, 
             enum: ['short', 'conversation'], 

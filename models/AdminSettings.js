@@ -752,11 +752,18 @@ const adminSettingsSchema = new mongoose.Schema({
             description: 'Enable 3-tier intelligence system platform-wide'
         },
         
-        // LLM-0 ORCHESTRATION (BRAIN 1)
+        // LLM-0 ORCHESTRATION (BRAIN 1) - Legacy flag
         llm0Enabled: {
             type: Boolean,
             default: false,
             description: 'Enable LLM-0 Orchestration (Brain 1). When enabled, LLM-0 decides actions before routing to 3-Tier.'
+        },
+        
+        // BRAIN-1 RUNTIME - New Clean Architecture
+        brain1Enabled: {
+            type: Boolean,
+            default: false,
+            description: 'Enable Brain-1 Runtime (new architecture). Brain-1 is the mandatory gateway for all caller turns.'
         },
         
         // THRESHOLDS

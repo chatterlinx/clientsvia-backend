@@ -1,18 +1,33 @@
 // ============================================================================
-// AI BRAIN 3-TIER LLM SERVICE
+// ██████╗ ██████╗  █████╗ ██╗███╗   ██╗    ██████╗ 
+// ██╔══██╗██╔══██╗██╔══██╗██║████╗  ██║    ╚════██╗
+// ██████╔╝██████╔╝███████║██║██╔██╗ ██║     █████╔╝
+// ██╔══██╗██╔══██╗██╔══██║██║██║╚██╗██║    ██╔═══╝ 
+// ██████╔╝██║  ██║██║  ██║██║██║ ╚████║    ███████╗
+// ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝    ╚══════╝
+// 
+// AI BRAIN 3-TIER LLM SERVICE - SCENARIO ENGINE
+// ============================================================================
+// 
+// POSITION IN ARCHITECTURE:
+//   Brain-1 (FrontlineIntelEngine) → Triage → [BRAIN-2] → Response
+// 
+// CALLED BY: Brain-1 when decision.action === 'ROUTE_TO_SCENARIO'
+// NEVER CALLED DIRECTLY: Always flows through Brain-1 first
+// 
 // 📋 DESCRIPTION: Clean interface to AI Brain with 3-Tier Intelligence System
-// 🎯 PURPOSE: Single source of truth for all AI responses
-// 🔧 FEATURES: 
+// 🎯 PURPOSE: Match caller input to scenarios and return factual responses
+// 🔧 TIERS: 
 //     - Tier 1: Rule-Based matching (FREE - 80% of calls)
 //     - Tier 2: Semantic matching (FREE - 14% of calls)
 //     - Tier 3: LLM Fallback (GPT-4o-mini - 6% of calls, $0.04 each)
+// 
+// ⚠️  CRITICAL ARCHITECTURE:
+//     - Brain-2 does NOT decide actions (Brain-1 does)
+//     - Brain-2 ONLY provides knowledge/scenario responses
+//     - Brain-2 returns factual content; Brain-1 decides how to deliver it
 //     - Redis caching for sub-50ms performance
-//     - Comprehensive logging and performance tracking
-// ⚠️  CRITICAL NOTES:
-//     - This is the ONLY knowledge source in the system
-//     - All responses come from AI Brain (Scenario Pool + 3-Tier Intelligence)
-//     - Production UI intelligence settings control the tiers
-//     - Always provides a response (Tier 3 LLM never fails)
+// 
 // ============================================================================
 
 const Company = require('../models/v2Company');

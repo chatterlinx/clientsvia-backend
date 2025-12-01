@@ -33,6 +33,15 @@ const FrontlineIntel = require('./FrontlineIntel');
 const CallFlowExecutor = require('./CallFlowExecutor');
 
 // ═══════════════════════════════════════════════════════════════════
+// BRAIN-1 RUNTIME - New Clean Architecture
+// ═══════════════════════════════════════════════════════════════════
+// Brain-1 is the mandatory gateway for all caller turns.
+// Every utterance flows through Brain-1 before anything else.
+// Brain-1 decides actions, Brain-2 (3-Tier) provides knowledge.
+// ═══════════════════════════════════════════════════════════════════
+const { processTurn: brain1ProcessTurn } = require('../src/services/brain1');
+
+// ═══════════════════════════════════════════════════════════════════
 // LAZY-LOADED SERVICES (moved from inline requires to top-level)
 // These were previously require()'d inside functions. Moved here for:
 // - Clear dependency graph
@@ -467,15 +476,68 @@ class V2AIAgentRuntime {
             }
             
             // ═════════════════════════════════════════════════════════════════
-            // 🧠 LLM-0 ORCHESTRATION ENGINE (Enhanced with Precision V23 Components)
+            // 🧠 BRAIN-1 RUNTIME - NEW CLEAN ARCHITECTURE
             // ═════════════════════════════════════════════════════════════════
-            // ENHANCEMENTS: FillerStripper, TranscriptNormalizer, EmotionDetector
-            // integrated directly into orchestrationEngine.js for all companies
+            // Brain-1 is the MANDATORY GATEWAY for all caller turns.
+            // Every utterance flows through Brain-1 before anything else.
+            // Brain-1 decides actions, Brain-2 (3-Tier) provides knowledge.
+            // 
+            // To enable: AdminSettings.globalProductionIntelligence.brain1Enabled
+            //        OR: company.agentSettings.brain1Enabled
             // ═════════════════════════════════════════════════════════════════
-            logger.info('[V2 AGENT] 🧠 Using LLM-0 orchestration with Precision enhancements', {
-                companyId: companyID,
-                callId
-            });
+            
+            const adminSettings = await AdminSettings.findOne({}).lean();
+            const brain1Enabled = adminSettings?.globalProductionIntelligence?.brain1Enabled === true ||
+                                  company?.agentSettings?.brain1Enabled === true;
+            
+            if (brain1Enabled) {
+                logger.info('[V2 AGENT] 🧠 Using Brain-1 Runtime (new architecture)', {
+                    companyId: companyID,
+                    callId,
+                    turn: (callState?.turnCount || 0) + 1
+                });
+                
+                try {
+                    const brain1Result = await brain1ProcessTurn(
+                        companyID,
+                        callId,
+                        userInput,
+                        callState
+                    );
+                    
+                    logger.info('[V2 AGENT] ✅ Brain-1 turn complete', {
+                        companyId: companyID,
+                        callId,
+                        action: brain1Result.action,
+                        shouldTransfer: brain1Result.shouldTransfer,
+                        shouldHangup: brain1Result.shouldHangup,
+                        responseLength: brain1Result.text?.length
+                    });
+                    
+                    // Return Brain-1 result directly
+                    return {
+                        text: brain1Result.text,
+                        response: brain1Result.text,
+                        action: brain1Result.action,
+                        shouldTransfer: brain1Result.shouldTransfer,
+                        shouldHangup: brain1Result.shouldHangup,
+                        callState: brain1Result.callState
+                    };
+                    
+                } catch (brain1Error) {
+                    logger.error('[V2 AGENT] ❌ Brain-1 failed, falling back to legacy', {
+                        companyId: companyID,
+                        callId,
+                        error: brain1Error.message
+                    });
+                    // Fall through to legacy path
+                }
+            } else {
+                logger.info('[V2 AGENT] 🧠 Using legacy orchestration (Brain-1 disabled)', {
+                    companyId: companyID,
+                    callId
+                });
+            }
             
             // ═════════════════════════════════════════════════════════════════
             // 🎯 V22 TRIAGE: QUICK RULES (Brain-1 Tier-0 pre-check)
