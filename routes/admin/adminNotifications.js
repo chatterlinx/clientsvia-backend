@@ -1452,6 +1452,7 @@ router.get('/error-trends',
 // ----------------------------------------------------------------------------
 // GET /api/admin/notifications/dependency-health
 // Real-time monitoring of all external services
+// Smart alerting: Only alerts on status CHANGES, auto-resolves when fixed
 // ----------------------------------------------------------------------------
 router.get('/dependency-health', 
     authenticateJWT, 
@@ -1463,37 +1464,107 @@ router.get('/dependency-health',
         const dependencyHealthMonitor = DependencyHealthMonitorModule.getInstance();
         const healthStatus = await dependencyHealthMonitor.getHealthStatus();
         
-        // Send alert if any critical services are down
-        if (healthStatus.overallStatus === 'CRITICAL' || healthStatus.overallStatus === 'DOWN') {
-            await AdminNotificationService.sendAlert({
-                code: "DEPENDENCY_HEALTH_CRITICAL",
-                severity: 'CRITICAL',
-                message: `Dependency health check failed: ${healthStatus.overallStatus}`,
-                companyId: null,
-                requestId: req.headers['x-request-id'] || null,
-                feature: 'notification-center',
-                tab: 'NOTIFICATION_CENTER',
-                module: 'DEPENDENCY_HEALTH_MONITOR',
-                eventType: 'failure',
-                meta: { 
-                    route: `${req.method} ${req.originalUrl}`,
-                    downServices: Object.entries(healthStatus.services || {})
-                        .filter(([_, service]) => service.status === 'DOWN')
-                        .map(([name]) => name)
-                }
+        // Extract down services with their error messages
+        const downServicesDetails = Object.entries(healthStatus.services || {})
+            .filter(([_, service]) => service.status === 'DOWN')
+            .map(([name, service]) => ({
+                name: name,
+                message: service.message || 'Unknown error',
+                critical: service.critical,
+                impact: service.impact || 'Unknown impact'
+            }));
+        
+        const downServiceNames = downServicesDetails.map(s => s.name).sort().join(', ');
+        const criticalServices = downServicesDetails.filter(s => s.critical).map(s => s.name).sort().join(', ');
+        
+        // Check for existing unresolved DEPENDENCY_HEALTH_CRITICAL alerts
+        const existingAlert = await NotificationLog.findOne({
+            code: 'DEPENDENCY_HEALTH_CRITICAL',
+            companyId: null, // Platform-wide
+            'resolution.isResolved': false
+        }).sort({ createdAt: -1 });
+        
+        const isCurrentlyDown = healthStatus.overallStatus === 'CRITICAL' || healthStatus.overallStatus === 'DOWN';
+        
+        // SMART ALERTING: Only send alert if status CHANGED or services CHANGED
+        if (isCurrentlyDown) {
+            // Build detailed message showing exactly what's broken
+            let detailedMessage = `Dependency health check failed: ${healthStatus.overallStatus}\n\n`;
+            detailedMessage += `🔴 DOWN SERVICES: ${downServiceNames || 'None detected'}\n`;
+            if (criticalServices) {
+                detailedMessage += `⚠️ CRITICAL: ${criticalServices}\n`;
+            }
+            detailedMessage += '\n--- Service Details ---\n';
+            downServicesDetails.forEach(svc => {
+                detailedMessage += `\n• ${svc.name.toUpperCase()}: ${svc.message}`;
+                if (svc.impact) detailedMessage += `\n  Impact: ${svc.impact}`;
             });
+            
+            // Check if the down services have changed since last alert
+            const existingDownServices = existingAlert?.meta?.downServices?.sort().join(', ') || '';
+            const servicesChanged = existingDownServices !== downServiceNames;
+            
+            if (!existingAlert || servicesChanged) {
+                // New issue or services changed - send alert
+                logger.info(`🚨 [DEPENDENCY API] ${!existingAlert ? 'New' : 'Changed'} health issue detected: ${downServiceNames}`);
+                
+                await AdminNotificationService.sendAlert({
+                    code: "DEPENDENCY_HEALTH_CRITICAL",
+                    severity: 'CRITICAL',
+                    message: detailedMessage,
+                    companyId: null,
+                    requestId: req.headers['x-request-id'] || null,
+                    feature: 'notification-center',
+                    tab: 'NOTIFICATION_CENTER',
+                    module: 'DEPENDENCY_HEALTH_MONITOR',
+                    eventType: 'failure',
+                    meta: { 
+                        route: `${req.method} ${req.originalUrl}`,
+                        downServices: downServiceNames.split(', ').filter(Boolean),
+                        criticalServices: criticalServices.split(', ').filter(Boolean),
+                        servicesDetails: downServicesDetails,
+                        healthSummary: healthStatus.summary
+                    }
+                });
+            } else {
+                // Same services still down - just log, don't spam alerts
+                logger.info(`🔄 [DEPENDENCY API] Health issue persists (${existingAlert.alertId}): ${downServiceNames} - no new alert`);
+            }
         } else {
-            await AdminNotificationService.sendAlert({
-                code: "NOTIF_DEPENDENCY_HEALTH_OK",
-                severity: 'INFO',
-                message: 'ok',
-                companyId: null,
-                requestId: req.headers['x-request-id'] || null,
-                feature: 'notification-center',
-                tab: 'NOTIFICATION_CENTER',
-                module: 'DEPENDENCY_HEALTH_MONITOR',
-                eventType: 'important_event'
-            });
+            // All services healthy - AUTO-RESOLVE any existing alerts
+            if (existingAlert) {
+                logger.info(`✅ [DEPENDENCY API] All services healthy - auto-resolving alert ${existingAlert.alertId}`);
+                
+                await NotificationLog.findByIdAndUpdate(existingAlert._id, {
+                    $set: {
+                        'resolution.isResolved': true,
+                        'resolution.resolvedAt': new Date(),
+                        'resolution.resolvedBy': req.user?.username || req.user?.email || 'system-auto',
+                        'resolution.resolutionNotes': 'Auto-resolved: All dependency health checks passed',
+                        status: 'resolved',
+                        updatedAt: new Date()
+                    }
+                });
+                
+                // Send a brief INFO notification that services are back up
+                await AdminNotificationService.sendAlert({
+                    code: "DEPENDENCY_HEALTH_RECOVERED",
+                    severity: 'INFO',
+                    message: `✅ All services recovered! Previous issue (${existingAlert.alertId}) auto-resolved.\n\nAll ${healthStatus.summary?.total || 0} services are now HEALTHY.`,
+                    companyId: null,
+                    requestId: req.headers['x-request-id'] || null,
+                    feature: 'notification-center',
+                    tab: 'NOTIFICATION_CENTER',
+                    module: 'DEPENDENCY_HEALTH_MONITOR',
+                    eventType: 'important_event',
+                    meta: { 
+                        resolvedAlertId: existingAlert.alertId,
+                        healthSummary: healthStatus.summary
+                    }
+                });
+            }
+            // Don't log "ok" alerts on every healthy check - too noisy
+            logger.debug('🏥 [DEPENDENCY API] All services healthy');
         }
         
         res.json({
@@ -1507,14 +1578,18 @@ router.get('/dependency-health',
         await AdminNotificationService.sendAlert({
             code: "NOTIF_DEPENDENCY_HEALTH_FAILURE",
             severity: 'CRITICAL',
-            message: 'Dependency health monitor failed',
+            message: `Dependency health monitor failed: ${error.message}`,
             companyId: null,
             requestId: req.headers['x-request-id'] || null,
             feature: 'notification-center',
             tab: 'NOTIFICATION_CENTER',
             module: 'DEPENDENCY_HEALTH_MONITOR',
             eventType: 'failure',
-            meta: { route: `${req.method} ${req.originalUrl}` }
+            meta: { 
+                route: `${req.method} ${req.originalUrl}`,
+                error: error.message,
+                stack: error.stack?.substring(0, 500)
+            }
         });
         
         res.status(500).json({

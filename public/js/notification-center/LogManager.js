@@ -449,6 +449,19 @@ class LogManager {
             return log.intelligence.fix.reproduceSteps.join(' ');
         }
         
+        // Special handling for DEPENDENCY_HEALTH_CRITICAL - include meta data
+        if (log.code === 'DEPENDENCY_HEALTH_CRITICAL' && log.meta) {
+            const downServices = log.meta.downServices || [];
+            const criticalServices = log.meta.criticalServices || [];
+            let action = 'DOWN SERVICES: ' + (downServices.length > 0 ? downServices.join(', ') : 'Unknown') + '. ';
+            if (criticalServices.length > 0) {
+                action += 'CRITICAL: ' + criticalServices.join(', ') + '. ';
+            }
+            action += 'Go to Notification Center → Dashboard → Run Health Check to see current status. ';
+            action += 'Check each down service: MongoDB (Atlas dashboard), Redis (Render addon), Twilio (console.twilio.com), OpenAI (platform.openai.com).';
+            return action;
+        }
+        
         // Fallback to hardcoded actions for backward compatibility
         const actions = {
             'NOTIFICATION_SYSTEM_FAILURE': '1. Check Settings tab for Twilio credentials. 2. Verify SMS client is configured. 3. Check Render logs for detailed error.',
@@ -458,7 +471,8 @@ class LogManager {
             'DB_CONNECTION_ERROR': '1. Check MongoDB Atlas connection. 2. Verify MONGODB_URI environment variable. 3. Check database cluster status.',
             'REDIS_CONNECTION_ERROR': '1. Check Redis connection. 2. Verify REDIS_URL environment variable. 3. Check Redis server status.',
             'SMS_DELIVERY_FAILURE': '1. Check Twilio credentials. 2. Verify phone number format (+1234567890). 3. Check Twilio Console for delivery logs.',
-            'EMAIL_DELIVERY_FAILURE': '1. Check email service credentials. 2. Verify email addresses. 3. Check spam filters.'
+            'EMAIL_DELIVERY_FAILURE': '1. Check email service credentials. 2. Verify email addresses. 3. Check spam filters.',
+            'DEPENDENCY_HEALTH_CRITICAL': '1. Go to Notification Center → Dashboard. 2. Click "Run Health Check" to see current status. 3. Check each service: MongoDB (Atlas), Redis (Render), Twilio (console.twilio.com), OpenAI (platform.openai.com). 4. Fix the down services and re-run health check.'
         };
         
         return actions[log.code] || null;
@@ -626,6 +640,27 @@ ESCALATION:
 ${log.details ? `
 DETAILS:
 ${log.details}
+` : ''}
+
+${log.meta && Object.keys(log.meta).length > 0 ? `
+═══════════════════════════════════════════════════════
+📊 ALERT METADATA
+═══════════════════════════════════════════════════════
+${log.meta.downServices?.length > 0 ? `DOWN SERVICES: ${log.meta.downServices.join(', ')}` : ''}
+${log.meta.criticalServices?.length > 0 ? `CRITICAL SERVICES: ${log.meta.criticalServices.join(', ')}` : ''}
+${log.meta.servicesDetails?.length > 0 ? `
+SERVICE DETAILS:
+${log.meta.servicesDetails.map(s => `  • ${s.name}: ${s.message}${s.impact ? ` (${s.impact})` : ''}`).join('\n')}
+` : ''}
+${log.meta.healthSummary ? `
+HEALTH SUMMARY:
+  - Total Services: ${log.meta.healthSummary.total || 'N/A'}
+  - Healthy: ${log.meta.healthSummary.healthy || 0}
+  - Degraded: ${log.meta.healthSummary.degraded || 0}
+  - Down: ${log.meta.healthSummary.down || 0}
+  - Critical: ${log.meta.healthSummary.critical || 0}
+` : ''}
+${log.meta.route ? `Route: ${log.meta.route}` : ''}
 ` : ''}
 
 ${log.stackTrace ? `
