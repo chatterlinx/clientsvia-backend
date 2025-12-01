@@ -18,13 +18,13 @@ const express = require('express');
 const router = express.Router();
 const logger = require('../utils/logger');
 const Brain1Trace = require('../models/Brain1Trace');
-const { authMiddleware } = require('../middleware/authMiddleware');
+const { authenticateToken } = require('../middleware/auth');
 
 /**
  * GET /api/llm0/trace/:callId
  * Get all turn traces for a call
  */
-router.get('/trace/:callId', authMiddleware, async (req, res) => {
+router.get('/trace/:callId', authenticateToken, async (req, res) => {
     try {
         const { callId } = req.params;
         
@@ -75,7 +75,7 @@ router.get('/trace/:callId', authMiddleware, async (req, res) => {
  * GET /api/llm0/trace/:callId/:turn
  * Get specific turn trace
  */
-router.get('/trace/:callId/:turn', authMiddleware, async (req, res) => {
+router.get('/trace/:callId/:turn', authenticateToken, async (req, res) => {
     try {
         const { callId, turn } = req.params;
         
@@ -124,7 +124,7 @@ router.get('/trace/:callId/:turn', authMiddleware, async (req, res) => {
  * GET /api/llm0/traces/recent
  * Get recent traces for a company
  */
-router.get('/traces/recent', authMiddleware, async (req, res) => {
+router.get('/traces/recent', authenticateToken, async (req, res) => {
     try {
         const { companyId, limit = 50 } = req.query;
         
@@ -191,7 +191,7 @@ router.get('/traces/recent', authMiddleware, async (req, res) => {
  * GET /api/llm0/stats
  * Get Brain-1 statistics for AI Performance Monitor
  */
-router.get('/stats', authMiddleware, async (req, res) => {
+router.get('/stats', authenticateToken, async (req, res) => {
     try {
         const { companyId, hours = 24 } = req.query;
         
