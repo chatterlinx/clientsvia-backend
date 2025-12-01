@@ -27,7 +27,7 @@
  * ============================================================================
  */
 
-const logger = require('../../../utils/logger');
+const logger = require('../../../../utils/logger');
 
 // ============================================================================
 // EMOTION PATTERN DEFINITIONS (Carefully Curated)

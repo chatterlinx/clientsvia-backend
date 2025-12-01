@@ -26,7 +26,7 @@
  * ============================================================================
  */
 
-const logger = require('../../../utils/logger');
+const logger = require('../../../../utils/logger');
 
 // ============================================================================
 // FILLER WORD PATTERNS
@@ -160,7 +160,7 @@ class FillerStripper {
    */
   static _isProtected(word) {
     const lower = word.toLowerCase();
-    return PROTECTED_EMOTIONAL.some(protected => protected.toLowerCase() === lower);
+    return PROTECTED_EMOTIONAL.some(protectedWord => protectedWord.toLowerCase() === lower);
   }
   
   /**

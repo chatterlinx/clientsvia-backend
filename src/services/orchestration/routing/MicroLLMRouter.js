@@ -29,8 +29,8 @@
  * ============================================================================
  */
 
-const logger = require('../../../utils/logger');
-const openaiClient = require('../../../config/openai');
+const logger = require('../../../../utils/logger');
+const openaiClient = require('../../../../config/openai');
 
 // ============================================================================
 // CONFIGURATION
