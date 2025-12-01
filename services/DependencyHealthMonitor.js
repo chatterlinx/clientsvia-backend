@@ -13,7 +13,9 @@
 // ============================================================================
 
 const mongoose = require('mongoose');
-const { redisClient } = require('../db');
+// IMPORTANT: Don't destructure redisClient! It's null at module load time.
+// Access via db.redisClient to get the live value after initialization.
+const db = require('../db');
 const logger = require('../utils/logger.js');
 const OrchestrationHealthCheck = require('./OrchestrationHealthCheck');
 
@@ -214,6 +216,9 @@ class DependencyHealthMonitor {
         }
         
         // CHECKPOINT 2: Check if client was initialized
+        // IMPORTANT: Access db.redisClient dynamically (not destructured at load time)
+        const redisClient = db.redisClient;
+        
         checkpoints.push({
             name: 'Redis client initialized',
             status: redisClient ? 'passed' : 'failed',
