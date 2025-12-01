@@ -84,7 +84,8 @@ class NotificationCenterManager {
             this.logManager = new LogManager(this);
             this.settingsManager = new SettingsManager(this);
             
-            // Expose logManager globally for onclick handlers
+            // Expose managers globally for onclick handlers
+            window.dashboardManager = this.dashboardManager;
             window.logManager = this.logManager;
             
             // Load initial tab
