@@ -216,6 +216,7 @@ async function loadAllRoutes() {
         routes.enterpriseSuggestionsRoutes = await loadRouteWithTimeout('./routes/admin/enterpriseSuggestions', 'enterpriseSuggestionsRoutes'); // ADMIN: Enterprise Test Pilot (deep analysis, suggestions, trends, conflicts, cost)
         routes.healthRoutes = await loadRouteWithTimeout('./routes/health', 'healthRoutes');
         routes.llm0TraceRoutes = await loadRouteWithTimeout('./routes/llm0-trace', 'llm0TraceRoutes'); // LLM-0 Cortex-Intel: Brain-1 trace API
+        routes.frontlineScriptBuilderRoutes = await loadRouteWithTimeout('./routes/admin/frontlineScriptBuilder', 'frontlineScriptBuilderRoutes'); // Frontline Script Builder: LLM-powered script generation
         
         // REMOVED: Legacy V2 AI Intelligence routes - archived to prevent external LLM dependencies
         
@@ -442,6 +443,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/suggestions', routes.enterpriseSuggestionsRoutes); // ADMIN: Enterprise Test Pilot (deep analysis, suggestions, trends, conflicts, cost projections)
     app.use('/api', routes.healthRoutes); // SYSTEM: Health check endpoint for systems (Call Archives, Spam Filter)
     app.use('/api/llm0', routes.llm0TraceRoutes); // LLM-0 Cortex-Intel: Brain-1 trace API for debugging
+    app.use('/api/admin/frontline-script', routes.frontlineScriptBuilderRoutes); // Frontline Script Builder: LLM-powered script generation
     // app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     // V2 DELETED: Legacy enhancedAgentSettings route mount - used external LLMs, violates in-house AI system
 

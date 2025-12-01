@@ -255,12 +255,26 @@
 
     <!-- Editor Container -->
     <div class="editor-container">
+        <!-- Script Builder Panel (Admin-Only) -->
+        <div id="frontline-script-builder-panel">
+            <!-- Will be populated by FrontlineScriptBuilder.js -->
+        </div>
+        
         <!-- Info Box -->
         <div class="info-box">
-            <h2>💡 Full Screen Editor</h2>
+            <h2>💡 What is Frontline-Intel?</h2>
             <p>
-                Edit your Frontline-Intel protocols with more space and better visibility.
-                Click "Save & Close" when done, or press <kbd>Cmd/Ctrl + S</kbd>.
+                Frontline-Intel is your AI receptionist - an intelligent gatekeeper that extracts intent, looks up customers, 
+                validates company/service, and normalizes input before routing. Acts like a human front desk, but smarter!
+            </p>
+            <ul style="margin-top: 8px; font-size: 13px; color: #1e3a8a;">
+                <li><strong>Conversational Tone:</strong> "Never interrupt the caller", "Always say 'Ok' instead of 'Got it!'"</li>
+                <li><strong>Booking Protocols:</strong> "Round appointment times to next hour + 2 hour buffer"</li>
+                <li><strong>Transfer Rules:</strong> "Before transferring, collect name, phone, and reason for call"</li>
+                <li><strong>Emergency Handling:</strong> "If caller says 'emergency', connect immediately"</li>
+            </ul>
+            <p style="margin-top: 8px; font-size: 12px; color: #3b82f6;">
+                ✏️ Fully customizable • 🔄 Resettable to default template • 📋 Works alongside structured rules
             </p>
         </div>
 
@@ -636,6 +650,41 @@ CUSTOMIZATION NOTES:
         } else {
             console.log('[FRONTLINE EDITOR] Waiting for parent window to send data (editing draft)');
         }
+        
+        // ================================================================
+        // SCRIPT BUILDER INITIALIZATION
+        // ================================================================
+        
+        // Listen for script generated events from the Script Builder
+        window.addEventListener('frontlineScriptGenerated', (e) => {
+            if (e.detail?.scriptText) {
+                console.log('[FRONTLINE EDITOR] Received generated script');
+                textarea.value = e.detail.scriptText;
+                updateCharCount();
+                showStatus('✅ Script generated! Review and save when ready.', 'success');
+            }
+        });
+    </script>
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Script Builder UI -->
+    <script src="/js/ai-agent-settings/FrontlineScriptBuilder.js"></script>
+    <script>
+        // Initialize Script Builder after page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            if (companyId) {
+                console.log('[FRONTLINE EDITOR] Initializing Script Builder');
+                const builder = new FrontlineScriptBuilder(companyId);
+                window.scriptBuilder = builder; // For draft loading
+                
+                const container = document.getElementById('frontline-script-builder-panel');
+                if (container) {
+                    builder.render(container.parentElement);
+                }
+            }
+        });
     </script>
 
 </body>
