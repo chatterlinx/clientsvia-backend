@@ -139,7 +139,8 @@ function captureMessage(message, level = 'info', context = {}) {
 // Security-specific error capture
 function captureSecurityEvent(event, details = {}) {
   if (!process.env.SENTRY_DSN) {
-    logger.warn(`[SECURITY] Security Event (Sentry disabled): ${event}`, { details, category: 'security' });
+    // Don't log here - the caller (logger.security) already logged it
+    // This prevents duplicate log entries
     return;
   }
 
