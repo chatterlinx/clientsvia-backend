@@ -169,43 +169,52 @@ class FrontlineScriptBuilder {
     }
     
     /**
-     * Get default brief template for admin to customize
+     * Get default brief template using {variable} placeholders
+     * These are replaced at runtime by the Variables tab configuration
      */
     getDefaultBrief(company) {
-        const trade = company?.trade || 'Service';
-        const companyName = company?.name || '[Company Name]';
-        const serviceAreas = company?.serviceAreas?.join(', ') || '[Service Areas]';
-        
         return `BUSINESS OVERVIEW:
-${companyName} is a ${trade} company serving ${serviceAreas}.
+{companyName} is a {companyType} company serving {serviceAreas}.
+Business Hours: {businessHours}
+Main Phone: {companyPhone}
 
 CALL PRIORITIES (in order):
-1. EMERGENCY CALLS - Gas leaks, flooding, safety issues → Immediate transfer to on-call technician
+1. EMERGENCY CALLS - Gas leaks, flooding, safety issues → Immediate transfer to {emergencyPhone}
 2. URGENT SERVICE - System down, no heat/AC → Same-day or next-day booking priority
 3. MAINTENANCE/TUNE-UP - Seasonal checkups → Schedule within the week
 4. PRICING/ESTIMATES - Quote requests → Collect details, offer to schedule estimate visit
 5. GENERAL QUESTIONS - Hours, service areas → Answer directly from knowledge base
 
 KEY BEHAVIORS:
-- Always greet warmly and ask "How can I help you today?"
+- Always greet warmly: "{greeting}"
 - Listen completely before responding - don't interrupt
 - If caller tells a long story, acknowledge briefly then focus on the actionable need
 - Never say "I don't know" - always offer to find out or connect them with someone who can help
 - Confirm all appointment details: address, phone, gate codes, who will be present
-- Always mention they'll receive a text confirmation
+- Always mention they'll receive a text confirmation at their number
 
 LEAD CAPTURE REQUIREMENTS:
 - Full name (first and last)
-- Best callback phone number
+- Best callback phone number  
 - Service address with zip code
 - Email for appointment confirmation
 - Brief description of the issue
 
+APPOINTMENT BOOKING:
+- Booking URL: {bookingUrl}
+- Available time slots follow the booking rules configured in the system
+- Round to nearest 2-hour windows (e.g., "between 2-4 PM")
+
 WHAT TO AVOID:
 - Never quote exact prices over the phone (say "pricing depends on the specific situation")
-- Never promise specific arrival times (use windows like "between 2-4 PM")
+- Never promise specific arrival times (use time windows)
 - Never make guarantees about outcomes
-- Never argue or get defensive with frustrated callers`;
+- Never argue or get defensive with frustrated callers
+
+TRANSFER RULES:
+- Emergency situations → Transfer to {emergencyPhone}
+- Billing/accounting questions → Transfer to {billingPhone}
+- Complex technical issues → Transfer to {techSupportPhone}`;
     }
     
     /**
