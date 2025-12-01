@@ -139,7 +139,7 @@ class AgentStatusManager {
     const statusIcon = health.status === 'healthy' ? '✅' : health.status === 'degraded' ? '⚠️' : '❌';
 
     return `
-      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+      <div style="background: linear-gradient(135deg, ${health.status === 'healthy' ? '#667eea 0%, #764ba2' : health.status === 'degraded' ? '#f59e0b 0%, #d97706' : '#dc2626 0%, #991b1b'} 100%); color: white; padding: 30px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div>
             <h2 style="margin: 0 0 10px 0; font-size: 28px; font-weight: 700;">
@@ -148,6 +148,11 @@ class AgentStatusManager {
             <p style="margin: 0; font-size: 16px; opacity: 0.9;">
               Real-time visibility into ${status.companyName}'s AI agent configuration
             </p>
+            ${health.status !== 'healthy' ? `
+              <button onclick="window.agentStatusManager.showTroubleshootingModal()" style="margin-top: 15px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border: 2px solid rgba(255,255,255,0.3); color: white; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                🔧 View Troubleshooting Details
+              </button>
+            ` : ''}
           </div>
           <div style="text-align: right;">
             <div style="font-size: 48px; line-height: 1;">${statusIcon}</div>
@@ -415,9 +420,14 @@ class AgentStatusManager {
       <div style="background: #fee2e2; border-radius: 12px; padding: 30px; border-left: 4px solid #ef4444;">
         <div style="font-size: 20px; font-weight: 600; color: #991b1b; margin-bottom: 10px;">❌ Failed to Load Agent Status</div>
         <div style="font-size: 14px; color: #7f1d1d;">${message}</div>
-        <button onclick="window.agentStatusManager.init()" style="margin-top: 20px; background: #ef4444; color: white; border: none; padding: 10px 24px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;">
-          Retry
-        </button>
+        <div style="display: flex; gap: 12px; margin-top: 20px;">
+          <button onclick="window.agentStatusManager.init()" style="background: #ef4444; color: white; border: none; padding: 10px 24px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;">
+            Retry
+          </button>
+          <button onclick="window.agentStatusManager.showTroubleshootingModal()" style="background: #1f2937; color: white; border: none; padding: 10px 24px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;">
+            🔧 Troubleshooting Details
+          </button>
+        </div>
       </div>
     `;
   }
@@ -465,6 +475,230 @@ class AgentStatusManager {
       }
     }
     return count;
+  }
+
+  /**
+   * Show troubleshooting modal with full diagnostic details
+   */
+  async showTroubleshootingModal() {
+    console.log('[AGENT STATUS] Opening troubleshooting modal');
+
+    // Collect comprehensive diagnostic data
+    const diagnostics = await this.collectDiagnostics();
+
+    // Create modal
+    const modal = document.createElement('div');
+    modal.id = 'troubleshooting-modal';
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      padding: 20px;
+    `;
+
+    modal.innerHTML = `
+      <div style="background: white; border-radius: 16px; max-width: 900px; width: 100%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); color: white; padding: 24px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h2 style="margin: 0; font-size: 24px; font-weight: 700;">🔧 Troubleshooting Diagnostics</h2>
+            <p style="margin: 8px 0 0 0; font-size: 14px; opacity: 0.9;">Copy and paste this to your developer for analysis</p>
+          </div>
+          <button onclick="document.getElementById('troubleshooting-modal').remove()" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 20px; line-height: 1;">
+            ×
+          </button>
+        </div>
+
+        <!-- Content -->
+        <div style="flex: 1; overflow-y: auto; padding: 24px;">
+          <div style="background: #f9fafb; border-radius: 8px; padding: 20px; font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; color: #1f2937; border: 1px solid #e5e7eb;">
+${diagnostics}
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="padding: 20px 24px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; background: #f9fafb;">
+          <div style="font-size: 13px; color: #6b7280;">
+            💡 Share this entire report with your developer
+          </div>
+          <div style="display: flex; gap: 12px;">
+            <button onclick="navigator.clipboard.writeText(document.querySelector('#troubleshooting-modal pre').textContent); this.innerHTML='✅ Copied!'; setTimeout(() => this.innerHTML='📋 Copy to Clipboard', 2000);" style="background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;">
+              📋 Copy to Clipboard
+            </button>
+            <button onclick="document.getElementById('troubleshooting-modal').remove()" style="background: #6b7280; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Wrap content in <pre> for clipboard copying
+    const contentDiv = modal.querySelector('div[style*="font-family"]');
+    const pre = document.createElement('pre');
+    pre.textContent = diagnostics;
+    pre.style.cssText = 'margin: 0; white-space: pre-wrap; word-wrap: break-word;';
+    contentDiv.innerHTML = '';
+    contentDiv.appendChild(pre);
+
+    document.body.appendChild(modal);
+  }
+
+  /**
+   * Collect comprehensive diagnostic information
+   */
+  async collectDiagnostics() {
+    const timestamp = new Date().toISOString();
+    const token = localStorage.getItem('adminToken');
+    
+    let diagnosticReport = `
+═══════════════════════════════════════════════════════════════════
+AGENT STATUS TROUBLESHOOTING REPORT
+═══════════════════════════════════════════════════════════════════
+Generated: ${timestamp}
+Company ID: ${this.companyId}
+Browser: ${navigator.userAgent}
+URL: ${window.location.href}
+
+═══════════════════════════════════════════════════════════════════
+1. AUTHENTICATION CHECK
+═══════════════════════════════════════════════════════════════════
+Auth Token Present: ${token ? 'YES' : 'NO'}
+Token Length: ${token ? token.length + ' characters' : 'N/A'}
+Token Preview: ${token ? token.substring(0, 20) + '...' : 'N/A'}
+
+═══════════════════════════════════════════════════════════════════
+2. API ENDPOINT TESTS
+═══════════════════════════════════════════════════════════════════
+`;
+
+    // Test each API endpoint
+    const endpoints = [
+      { name: 'Status', url: `/api/admin/agent-status/${this.companyId}` },
+      { name: 'Metrics', url: `/api/admin/agent-status/${this.companyId}/metrics?timeRange=24h` },
+      { name: 'Health', url: `/api/admin/agent-status/${this.companyId}/health` }
+    ];
+
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(endpoint.url, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const responseText = await response.text();
+        let responseData;
+        try {
+          responseData = JSON.parse(responseText);
+        } catch {
+          responseData = responseText;
+        }
+
+        diagnosticReport += `
+[${endpoint.name} Endpoint]
+URL: ${endpoint.url}
+Status: ${response.status} ${response.statusText}
+Response Headers:
+${Array.from(response.headers.entries()).map(([k, v]) => `  ${k}: ${v}`).join('\n')}
+
+Response Body:
+${JSON.stringify(responseData, null, 2)}
+
+`;
+      } catch (error) {
+        diagnosticReport += `
+[${endpoint.name} Endpoint]
+URL: ${endpoint.url}
+❌ ERROR: ${error.message}
+Stack: ${error.stack}
+
+`;
+      }
+    }
+
+    diagnosticReport += `
+═══════════════════════════════════════════════════════════════════
+3. BROWSER CONSOLE LOGS (Last 50)
+═══════════════════════════════════════════════════════════════════
+`;
+
+    // Capture console logs if available
+    if (window.consoleHistory && window.consoleHistory.length > 0) {
+      diagnosticReport += window.consoleHistory.slice(-50).join('\n');
+    } else {
+      diagnosticReport += '(Console logging not captured - check browser console manually)';
+    }
+
+    diagnosticReport += `
+
+═══════════════════════════════════════════════════════════════════
+4. NETWORK ERRORS
+═══════════════════════════════════════════════════════════════════
+`;
+
+    // Check for network errors in Performance API
+    if (window.performance && window.performance.getEntriesByType) {
+      const resources = window.performance.getEntriesByType('resource');
+      const failedResources = resources.filter(r => r.name.includes('agent-status'));
+      
+      if (failedResources.length > 0) {
+        failedResources.forEach(r => {
+          diagnosticReport += `
+Failed Resource: ${r.name}
+Duration: ${r.duration}ms
+Transfer Size: ${r.transferSize} bytes
+`;
+        });
+      } else {
+        diagnosticReport += 'No failed agent-status resources detected';
+      }
+    }
+
+    diagnosticReport += `
+
+═══════════════════════════════════════════════════════════════════
+5. COMPONENT LOAD STATUS
+═══════════════════════════════════════════════════════════════════
+AgentStatusManager Class: ${typeof window.AgentStatusManager !== 'undefined' ? 'LOADED ✓' : 'MISSING ✗'}
+Manager Instance: ${window.agentStatusManager ? 'EXISTS ✓' : 'MISSING ✗'}
+Auto-Refresh Active: ${this.refreshInterval ? 'YES' : 'NO'}
+
+═══════════════════════════════════════════════════════════════════
+6. BROWSER ENVIRONMENT
+═══════════════════════════════════════════════════════════════════
+Window Width: ${window.innerWidth}px
+Window Height: ${window.innerHeight}px
+Online Status: ${navigator.onLine ? 'ONLINE' : 'OFFLINE'}
+Cookies Enabled: ${navigator.cookieEnabled ? 'YES' : 'NO'}
+Local Storage Available: ${typeof localStorage !== 'undefined' ? 'YES' : 'NO'}
+
+═══════════════════════════════════════════════════════════════════
+7. RECOMMENDED ACTIONS
+═══════════════════════════════════════════════════════════════════
+`;
+
+    if (!token) {
+      diagnosticReport += '❌ CRITICAL: No auth token found. User needs to log in again.\n';
+    }
+    if (!navigator.onLine) {
+      diagnosticReport += '❌ CRITICAL: Browser is offline. Check internet connection.\n';
+    }
+
+    diagnosticReport += `
+📋 COPY THIS ENTIRE REPORT and send it to your developer for analysis.
+
+═══════════════════════════════════════════════════════════════════
+END OF REPORT
+═══════════════════════════════════════════════════════════════════
+`;
+
+    return diagnosticReport;
   }
 
   /**
