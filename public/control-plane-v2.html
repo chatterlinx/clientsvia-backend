@@ -111,7 +111,7 @@
     <button class="js-aicore-tab" data-aicore-target="observability">Observability (AI Metrics)</button>
     <button class="js-aicore-tab" data-aicore-target="llm-cortex-intel">LLM-0 Cortex-Intel</button>
     <button class="js-aicore-tab" id="agent-status-tab" data-aicore-target="agent-status">
-      <span id="agent-status-indicator">🔴</span> Live Agent Status
+      <span id="agent-status-indicator">⚪</span> Live Agent Status
     </button>
   </nav>
 
@@ -1272,7 +1272,65 @@
           }
         }, 100);
       }
+      
+      // ═══════════════════════════════════════════════════════════════════
+      // BACKGROUND HEALTH MONITORING - Runs immediately on page load
+      // Updates the Live Agent Status indicator without needing to open the tab
+      // ═══════════════════════════════════════════════════════════════════
+      startBackgroundHealthMonitor();
     });
+    
+    /**
+     * Lightweight background health monitor
+     * Updates the tab indicator without loading the full AgentStatusManager
+     */
+    let backgroundHealthInterval = null;
+    
+    async function checkAgentHealth() {
+      if (!currentCompanyId) return;
+      
+      const indicator = document.getElementById('agent-status-indicator');
+      if (!indicator) return;
+      
+      try {
+        const token = localStorage.getItem('adminToken');
+        const response = await fetch(`/api/admin/agent-status/${currentCompanyId}/health`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const status = data.status || 'unknown';
+          
+          // Update indicator based on status
+          const statusEmoji = {
+            'healthy': '🟢',
+            'degraded': '🟡', 
+            'down': '🔴',
+            'unknown': '⚪'
+          };
+          
+          indicator.textContent = statusEmoji[status] || '⚪';
+          console.log('[BACKGROUND HEALTH] Status:', status);
+        } else {
+          indicator.textContent = '🟡'; // API error = degraded
+        }
+      } catch (error) {
+        console.error('[BACKGROUND HEALTH] Check failed:', error.message);
+        indicator.textContent = '🔴'; // Network error = down
+      }
+    }
+    
+    function startBackgroundHealthMonitor() {
+      console.log('[BACKGROUND HEALTH] Starting monitor (checks every 60s)');
+      
+      // Initial check immediately
+      checkAgentHealth();
+      
+      // Then every 60 seconds
+      if (backgroundHealthInterval) clearInterval(backgroundHealthInterval);
+      backgroundHealthInterval = setInterval(checkAgentHealth, 60000);
+    }
   </script>
 
   <!-- ═══════════════════════════════════════════════════════════════════════ -->
