@@ -22,6 +22,17 @@ const { initializeCall, processUserInput } = require('../services/v2AIAgentRunti
 // V2 DELETED: Legacy aiAgentRuntime - replaced with v2AIAgentRuntime
 // const aiAgentRuntime = require('../services/aiAgentRuntime');
 // V2: AI responses come from AIBrain3tierllm (3-Tier Intelligence System)
+
+// ============================================================================
+// 🧠 LLM-0 ORCHESTRATION LAYER (BRAIN 1)
+// ============================================================================
+// LLM-0 is the master orchestrator that sits BEFORE the 3-Tier system.
+// It decides: ask question, run scenario, book appointment, transfer, etc.
+// The 3-Tier system (Brain 2) only runs when LLM-0 says "RUN_SCENARIO".
+// Feature flag: AdminSettings.globalProductionIntelligence.llm0Enabled
+// ============================================================================
+const { decideNextStep } = require('../services/orchestration/LLM0OrchestratorService');
+const LLM0TurnHandler = require('../services/LLM0TurnHandler');
 // V2 DELETED: CompanyKnowledgeQnA model removed (AI Brain only)
 const fs = require('fs');
 const path = require('path');
@@ -1830,16 +1841,92 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     
     perfCheckpoints.callStateInit = Date.now() - perfStart;
     
-    logger.debug('🎯 CHECKPOINT 14: Calling V2 AI Agent Runtime processUserInput');
-    // Process the call turn through V2 AI Agent Runtime
+    // ========================================================================
+    // 🧠 LLM-0 ORCHESTRATION LAYER (NEW - BRAIN 1)
+    // ========================================================================
+    // Check if LLM-0 is enabled for this company/globally
+    // LLM-0 decides the ACTION, then routes to 3-Tier (Brain 2) if needed
+    // ========================================================================
+    
     const aiProcessStart = Date.now();
-    const { processUserInput } = require('../services/v2AIAgentRuntime');
-    const result = await processUserInput(
-      companyID,
-      callSid,
-      speechResult,
-      callState
-    );
+    let result;
+    
+    try {
+      // Load company and check LLM-0 feature flag
+      const company = await Company.findById(companyID).lean();
+      const adminSettings = await AdminSettings.findOne({}).lean();
+      
+      const llm0Enabled = adminSettings?.globalProductionIntelligence?.llm0Enabled === true ||
+                         company?.agentSettings?.llm0Enabled === true;
+      
+      if (llm0Enabled && company) {
+        logger.debug('🧠 CHECKPOINT 14: LLM-0 ORCHESTRATION (Brain 1)');
+        logger.info('[LLM-0] Using LLM-0 as entry point', {
+          companyId: companyID,
+          callSid,
+          speechLength: speechResult?.length
+        });
+        
+        // STEP 1: LLM-0 decides what to do
+        const llm0Decision = await decideNextStep({
+          companyId: companyID,
+          callId: callSid,
+          userInput: speechResult,
+          callState,
+          turnHistory: callState.turnHistory || []
+        });
+        
+        logger.info('[LLM-0] Decision received', {
+          companyId: companyID,
+          callSid,
+          action: llm0Decision.action,
+          intentTag: llm0Decision.intentTag,
+          flags: llm0Decision.flags
+        });
+        
+        // STEP 2: Route through Triage and execute
+        result = await LLM0TurnHandler.handle({
+          decision: llm0Decision,
+          company,
+          callState,
+          userInput: speechResult
+        });
+        
+        logger.info('[LLM-0] Turn complete', {
+          companyId: companyID,
+          callSid,
+          finalAction: result.action,
+          shouldTransfer: result.shouldTransfer,
+          shouldHangup: result.shouldHangup
+        });
+        
+      } else {
+        // Legacy path: Use V2 AI Agent Runtime directly
+        logger.debug('🎯 CHECKPOINT 14: Calling V2 AI Agent Runtime processUserInput (legacy)');
+        result = await processUserInput(
+          companyID,
+          callSid,
+          speechResult,
+          callState
+        );
+      }
+      
+    } catch (llm0Error) {
+      // If LLM-0 fails, fall back to legacy system
+      logger.error('[LLM-0] LLM-0 processing failed, using legacy fallback', {
+        companyId: companyID,
+        callSid,
+        error: llm0Error.message
+      });
+      
+      result = await processUserInput(
+        companyID,
+        callSid,
+        speechResult,
+        callState
+      );
+    }
+    
     perfCheckpoints.aiProcessing = Date.now() - aiProcessStart;
     
     logger.security('🎯 CHECKPOINT 15: AI Agent Runtime response received');
