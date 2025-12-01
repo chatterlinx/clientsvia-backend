@@ -344,7 +344,7 @@ class AgentStatusManager {
   }
 
   /**
-   * Render prompt configuration section
+   * Render prompt configuration section with clickable troubleshooting
    */
   renderPromptConfig(activePrompt) {
     if (!activePrompt) {
@@ -364,6 +364,48 @@ class AgentStatusManager {
     const sourceLabel = activePrompt.source === 'CheatSheetVersion' ? '📋 Live CheatSheet' : '📝 Prompt Version';
     const sourceBadgeColor = activePrompt.source === 'CheatSheetVersion' ? '#10b981' : '#6b7280';
 
+    // Build config items array for clickable list
+    const configItems = [];
+    
+    if (activePrompt.source === 'CheatSheetVersion') {
+      // Triage Cards
+      configItems.push({
+        name: 'Triage Cards',
+        icon: activePrompt.hasTriageCards ? '✅' : '❌',
+        status: activePrompt.triageStatus || (activePrompt.hasTriageCards ? 'ACTIVE' : 'MISSING'),
+        count: activePrompt.triageCardsCount || 0,
+        activeCount: activePrompt.activeTriageCardsCount,
+        details: activePrompt.triageCardsCount > 0 
+          ? `${activePrompt.activeTriageCardsCount || 0} active / ${activePrompt.triageCardsCount} total`
+          : 'No cards configured',
+        troubleshooting: activePrompt.triageTroubleshooting,
+        tabId: 'triage-cards-tab',
+        color: activePrompt.triageStatus === 'ACTIVE' ? '#10b981' : activePrompt.triageStatus === 'INACTIVE' ? '#f59e0b' : '#ef4444'
+      });
+      
+      // Frontline-Intel
+      configItems.push({
+        name: 'Frontline-Intel',
+        icon: activePrompt.hasFrontlineIntel ? '✅' : '❌',
+        status: activePrompt.frontlineStatus || (activePrompt.hasFrontlineIntel ? 'CONFIGURED' : 'MISSING'),
+        details: activePrompt.hasFrontlineIntel ? 'Script configured' : 'No script configured',
+        troubleshooting: activePrompt.frontlineTroubleshooting,
+        tabId: 'frontline-intel-tab',
+        color: activePrompt.hasFrontlineIntel ? '#10b981' : '#ef4444'
+      });
+      
+      // Booking Rules
+      configItems.push({
+        name: 'Booking Rules',
+        icon: activePrompt.hasBookingRules ? '✅' : '❌',
+        status: activePrompt.bookingStatus || (activePrompt.hasBookingRules ? 'CONFIGURED' : 'MISSING'),
+        details: activePrompt.hasBookingRules ? 'Rules configured' : 'No rules configured',
+        troubleshooting: activePrompt.bookingTroubleshooting,
+        tabId: 'booking-rules-tab',
+        color: activePrompt.hasBookingRules ? '#10b981' : '#ef4444'
+      });
+    }
+
     return `
       <div style="background: white; border-radius: 12px; padding: 25px; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -375,7 +417,7 @@ class AgentStatusManager {
           </span>
         </div>
         
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 20px;">
           <div>
             <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Version</div>
             <div style="font-size: 18px; font-weight: 700; color: #1f2937;">${activePrompt.version || 'N/A'}</div>
@@ -385,31 +427,109 @@ class AgentStatusManager {
             <div style="font-size: 14px; font-weight: 700; color: #1f2937; font-family: monospace;">${activePrompt.versionHash || activePrompt.versionId?.substring(0, 12) || 'N/A'}</div>
           </div>
           <div>
-            <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Triage Cards</div>
-            <div style="font-size: 18px; font-weight: 700; color: #1f2937;">${activePrompt.triageCardsCount || 0} cards</div>
+            <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Published At</div>
+            <div style="font-size: 14px; font-weight: 700; color: #1f2937;">${activePrompt.deployedAt ? new Date(activePrompt.deployedAt).toLocaleString() : 'Unknown'}</div>
           </div>
         </div>
         
         ${activePrompt.source === 'CheatSheetVersion' ? `
-        <div style="margin-top: 15px; display: flex; gap: 10px;">
-          <span style="background: ${activePrompt.hasTriageCards ? '#d1fae5' : '#fee2e2'}; color: ${activePrompt.hasTriageCards ? '#065f46' : '#991b1b'}; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600;">
-            ${activePrompt.hasTriageCards ? '✅' : '❌'} Triage
-          </span>
-          <span style="background: ${activePrompt.hasFrontlineIntel ? '#d1fae5' : '#fee2e2'}; color: ${activePrompt.hasFrontlineIntel ? '#065f46' : '#991b1b'}; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600;">
-            ${activePrompt.hasFrontlineIntel ? '✅' : '❌'} Frontline-Intel
-          </span>
-          <span style="background: ${activePrompt.hasBookingRules ? '#d1fae5' : '#fee2e2'}; color: ${activePrompt.hasBookingRules ? '#065f46' : '#991b1b'}; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600;">
-            ${activePrompt.hasBookingRules ? '✅' : '❌'} Booking Rules
-          </span>
+        <!-- Clickable Configuration Items -->
+        <div style="border-top: 1px solid #e5e7eb; padding-top: 20px;">
+          <h4 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">
+            🔧 Configuration Status (Click to fix)
+          </h4>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            ${configItems.map(item => `
+              <div 
+                onclick="window.agentStatusManager.navigateToTab('${item.tabId}')" 
+                style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; background: ${item.status === 'ACTIVE' || item.status === 'CONFIGURED' ? '#f0fdf4' : item.status === 'INACTIVE' ? '#fefce8' : '#fef2f2'}; border-radius: 8px; cursor: pointer; transition: all 0.2s; border-left: 4px solid ${item.color};"
+                onmouseover="this.style.transform='translateX(5px)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)';"
+                onmouseout="this.style.transform='translateX(0)'; this.style.boxShadow='none';"
+              >
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <span style="font-size: 24px;">${item.icon}</span>
+                  <div>
+                    <div style="font-size: 15px; font-weight: 600; color: #1f2937;">${item.name}</div>
+                    <div style="font-size: 13px; color: #6b7280;">${item.details}</div>
+                    ${item.troubleshooting ? `
+                      <div style="font-size: 12px; color: ${item.color}; margin-top: 4px; font-weight: 500;">
+                        💡 ${item.troubleshooting}
+                      </div>
+                    ` : ''}
+                  </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="background: ${item.color}; color: white; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase;">
+                    ${item.status}
+                  </span>
+                  <span style="font-size: 18px; color: #9ca3af;">▶</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
         </div>
         ` : ''}
-        
-        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
-          <div style="font-size: 12px; color: #6b7280; margin-bottom: 5px;">Published At</div>
-          <div style="font-size: 14px; color: #1f2937;">${activePrompt.deployedAt ? new Date(activePrompt.deployedAt).toLocaleString() : 'Unknown'}</div>
-        </div>
       </div>
     `;
+  }
+
+  /**
+   * Navigate to a specific tab in the Control Plane
+   */
+  navigateToTab(tabId) {
+    console.log('[AGENT STATUS] Navigating to tab:', tabId);
+    
+    // Try to find and click the tab
+    const tab = document.getElementById(tabId);
+    if (tab) {
+      tab.click();
+      // Scroll to the tab content
+      setTimeout(() => {
+        const tabContent = document.querySelector(`[data-tab-content="${tabId}"]`);
+        if (tabContent) {
+          tabContent.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
+    } else {
+      console.warn('[AGENT STATUS] Tab not found:', tabId);
+      // Show a toast notification
+      this.showNotification(`Navigate to "${tabId.replace('-tab', '').replace(/-/g, ' ')}" tab to configure`, 'info');
+    }
+  }
+
+  /**
+   * Show notification toast
+   */
+  showNotification(message, type = 'info') {
+    const colors = {
+      info: '#3b82f6',
+      success: '#10b981',
+      warning: '#f59e0b',
+      error: '#ef4444'
+    };
+    
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: ${colors[type]};
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 10000;
+      animation: slideIn 0.3s ease;
+    `;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+      toast.style.animation = 'slideOut 0.3s ease';
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
   }
 
   /**

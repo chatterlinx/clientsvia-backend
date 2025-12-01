@@ -22,6 +22,7 @@ const V2Company = require('../../models/v2Company');
 const RoutingDecisionLog = require('../../models/routing/RoutingDecisionLog');
 const PromptVersion = require('../../models/routing/PromptVersion');
 const CheatSheetVersion = require('../../models/cheatsheet/CheatSheetVersion');
+const TriageCard = require('../../models/TriageCard');
 const redisClientModule = require('../../src/config/redisClient');
 
 // ✅ INTEGRATION: Leverage existing Notification Center health services
@@ -130,10 +131,28 @@ router.get('/:companyId', async (req, res) => {
       status: 'live'
     }).lean();
 
+    // Get ACTUAL triage cards count from TriageCard collection (not embedded in config)
+    const triageCardsCount = await TriageCard.countDocuments({ companyId });
+    const activeTriageCardsCount = await TriageCard.countDocuments({ companyId, isActive: true });
+
+    // Check for Frontline-Intel
+    const hasFrontlineIntel = !!(
+      activeCheatSheet?.config?.frontlineIntel ||
+      company.aiAgentSettings?.frontlineIntelScript ||
+      company.configuration?.frontlineIntelScript
+    );
+
+    // Check for Booking Rules
+    const hasBookingRules = !!(
+      activeCheatSheet?.config?.bookingRules?.length > 0 ||
+      company.aiAgentSettings?.bookingRules?.length > 0 ||
+      company.configuration?.bookingRules?.length > 0
+    );
+
     // Get cache status
     const cacheStatus = await getCacheStatus(companyId);
 
-    // Build active configuration info (prefer CheatSheetVersion over legacy PromptVersion)
+    // Build active configuration info with troubleshooting guidance
     let activeConfig = null;
     
     if (activeCheatSheet) {
@@ -144,10 +163,31 @@ router.get('/:companyId', async (req, res) => {
         versionId: activeCheatSheet.versionId,
         versionHash: activeCheatSheet.versionId?.substring(0, 8) || 'N/A',
         deployedAt: activeCheatSheet.activatedAt || activeCheatSheet.updatedAt,
-        triageCardsCount: activeCheatSheet.config?.triage?.cards?.length || 0,
-        hasTriageCards: !!(activeCheatSheet.config?.triage?.cards?.length > 0),
-        hasFrontlineIntel: !!(activeCheatSheet.config?.frontlineIntel),
-        hasBookingRules: !!(activeCheatSheet.config?.bookingRules?.length > 0)
+        
+        // Triage Cards - use actual collection count
+        triageCardsCount,
+        activeTriageCardsCount,
+        hasTriageCards: triageCardsCount > 0,
+        triageStatus: activeTriageCardsCount > 0 ? 'ACTIVE' : triageCardsCount > 0 ? 'INACTIVE' : 'MISSING',
+        triageTroubleshooting: triageCardsCount === 0 
+          ? 'Go to Triage Cards tab → Click "Auto-Generate from Brain 2" or create cards manually'
+          : activeTriageCardsCount === 0 
+          ? 'Triage cards exist but all are disabled. Click "Enable All" in Triage Cards tab'
+          : null,
+        
+        // Frontline-Intel
+        hasFrontlineIntel,
+        frontlineStatus: hasFrontlineIntel ? 'CONFIGURED' : 'MISSING',
+        frontlineTroubleshooting: !hasFrontlineIntel 
+          ? 'Go to Frontline-Intel tab → Use Script Builder or paste your script → Save as Live'
+          : null,
+        
+        // Booking Rules
+        hasBookingRules,
+        bookingStatus: hasBookingRules ? 'CONFIGURED' : 'MISSING',
+        bookingTroubleshooting: !hasBookingRules 
+          ? 'Go to Booking Rules tab → Add booking rules for how appointments should be handled'
+          : null
       };
     } else if (activePrompt) {
       // Legacy PromptVersion

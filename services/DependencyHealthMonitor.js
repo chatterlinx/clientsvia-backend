@@ -910,41 +910,82 @@ class DependencyHealthMonitor {
             const orchestrationStatus = await OrchestrationHealthCheck.checkOrchestrationPipeline();
 
             // Map to DependencyHealthMonitor format
-            const components = Object.values(orchestrationStatus.components || {});
-            const criticalDown = components.filter(c => c.status === 'DOWN' && c.critical).length;
+            const components = orchestrationStatus.components || [];
+            
+            // Count different states
+            const criticalDown = components.filter(c => c.status === 'DOWN' && c.critical === true).length;
+            const nonCriticalDown = components.filter(c => c.status === 'DOWN' && c.critical !== true).length;
             const anyDegraded = components.filter(c => c.status === 'DEGRADED').length;
+            const healthyCount = components.filter(c => c.status === 'HEALTHY').length;
 
             let status = 'HEALTHY';
-            let message = 'LLM-0 orchestration pipeline operational';
+            let message = `LLM-0 orchestration pipeline operational (${healthyCount}/${components.length} healthy)`;
+            let troubleshooting = [];
 
+            // Only DOWN if CRITICAL components are down
             if (criticalDown > 0) {
                 status = 'DOWN';
-                const downComponents = components.filter(c => c.status === 'DOWN').map(c => c.name).join(', ');
-                message = `LLM-0 components down: ${downComponents}`;
-            } else if (anyDegraded > 0) {
+                const downComponents = components.filter(c => c.status === 'DOWN' && c.critical).map(c => c.name);
+                message = `CRITICAL components down: ${downComponents.join(', ')}`;
+                
+                // Build troubleshooting for each failed component
+                components.filter(c => c.status === 'DOWN' && c.critical).forEach(c => {
+                    troubleshooting.push({
+                        component: c.name,
+                        reason: c.statusReason || c.message || 'Unknown failure',
+                        checkpoints: c.checkpoints?.filter(cp => cp.status === 'FAILED' || cp.status === 'WARNING'),
+                        fix: this.getComponentFix(c.name)
+                    });
+                });
+            } else if (nonCriticalDown > 0 || anyDegraded > 0) {
+                // Non-critical issues = DEGRADED, not DOWN
                 status = 'DEGRADED';
-                const degradedComponents = components.filter(c => c.status === 'DEGRADED').map(c => c.name).join(', ');
-                message = `LLM-0 components degraded: ${degradedComponents}`;
+                const issues = [
+                    ...components.filter(c => c.status === 'DOWN' && !c.critical).map(c => c.name),
+                    ...components.filter(c => c.status === 'DEGRADED').map(c => c.name)
+                ];
+                message = `LLM-0 components degraded: ${issues.join(', ')}`;
+                
+                // Build troubleshooting
+                [...components.filter(c => c.status === 'DOWN' && !c.critical),
+                 ...components.filter(c => c.status === 'DEGRADED')].forEach(c => {
+                    troubleshooting.push({
+                        component: c.name,
+                        reason: c.statusReason || c.message || 'Performance issue',
+                        checkpoints: c.checkpoints?.filter(cp => cp.status === 'FAILED' || cp.status === 'WARNING'),
+                        fix: this.getComponentFix(c.name)
+                    });
+                });
             }
 
             return {
                 name: 'LLM-0 Orchestration',
                 status,
-                critical: true, // CRITICAL - this is the core AI routing engine
+                critical: status === 'DOWN', // Only mark critical if actually DOWN
                 message,
                 responseTime: orchestrationStatus.totalDuration || (Date.now() - startTime),
                 details: {
                     overallStatus: orchestrationStatus.overallStatus,
+                    summary: {
+                        total: components.length,
+                        healthy: healthyCount,
+                        degraded: anyDegraded,
+                        down: criticalDown + nonCriticalDown
+                    },
                     components: components.map(c => ({
                         name: c.name,
                         status: c.status,
-                        responseTime: c.responseTime
+                        critical: c.critical || false,
+                        responseTime: c.responseTime,
+                        reason: c.statusReason || c.message
                     })),
+                    troubleshooting: troubleshooting.length > 0 ? troubleshooting : null,
                     note: 'Comprehensive check of all orchestration components'
                 },
                 impact: status === 'DOWN' ? 'CRITICAL - AI agent cannot route calls' : 
                         status === 'DEGRADED' ? 'Performance degraded - may affect call quality' : 
-                        'None'
+                        'None',
+                rootCause: orchestrationStatus.rootCause
             };
 
         } catch (error) {
@@ -955,9 +996,31 @@ class DependencyHealthMonitor {
                 critical: true,
                 message: `Orchestration check failed: ${error.message}`,
                 responseTime: Date.now() - startTime,
-                impact: 'CRITICAL - Cannot verify AI agent functionality'
+                impact: 'CRITICAL - Cannot verify AI agent functionality',
+                details: {
+                    error: error.message,
+                    troubleshooting: [{
+                        component: 'OrchestrationHealthCheck',
+                        reason: error.message,
+                        fix: 'Check server logs for OrchestrationHealthCheck errors'
+                    }]
+                }
             };
         }
+    }
+
+    /**
+     * Get fix suggestion for a failed orchestration component
+     */
+    getComponentFix(componentName) {
+        const fixes = {
+            'Preprocessing': 'Check src/services/orchestration/preprocessing/ files exist and export correctly',
+            'Intelligence': 'Check src/services/orchestration/intelligence/EmotionDetector.js exists',
+            'Routing': 'Check src/services/orchestration/routing/ MicroLLMRouter.js and CompactPromptCompiler.js exist with route() and compile() methods',
+            'Personality': 'Check src/services/orchestration/personality/HumanLayerAssembler.js exists with build() method',
+            'Micro-LLM (gpt-4o-mini)': 'Verify OPENAI_API_KEY is set in environment variables and is valid'
+        };
+        return fixes[componentName] || 'Check server logs for detailed error information';
     }
 }
 
