@@ -13,6 +13,9 @@ class SettingsManager {
     async load() {
         console.log('⚙️ [SETTINGS] Loading settings...');
         
+        // Check setup status first
+        await this.checkSetupStatus();
+        
         await Promise.all([
             this.loadTwilioCredentials(),
             this.loadTestCallConfig(),
@@ -27,6 +30,114 @@ class SettingsManager {
         // CRITICAL: Auto-run ER Triage Monitor on page load (no button press)
         // This populates Redis status banner and critical failure card immediately
         await this.testThresholdConnection();
+    }
+    
+    // ========================================================================
+    // QUICK SETUP - NOTIFICATION CENTER INITIALIZATION
+    // ========================================================================
+    
+    async checkSetupStatus() {
+        try {
+            console.log('🔍 [SETTINGS] Checking setup status...');
+            
+            // Check settings API for current status
+            const response = await this.nc.apiGet('/api/admin/notifications/settings');
+            
+            // Update status indicators
+            const companyCheck = document.getElementById('setup-check-company');
+            const contactsCheck = document.getElementById('setup-check-contacts');
+            const twilioCheck = document.getElementById('setup-check-twilio');
+            const setupSection = document.getElementById('setup-section');
+            
+            if (!companyCheck || !contactsCheck || !twilioCheck) return;
+            
+            let allConfigured = true;
+            
+            // Check Twilio
+            if (response.success && response.data?.twilio?.accountSid && response.data?.twilio?.authToken) {
+                twilioCheck.innerHTML = '<span class="text-green-600">✅</span><span class="text-green-700 font-medium">Twilio SMS</span>';
+            } else {
+                twilioCheck.innerHTML = '<span class="text-red-500">❌</span><span class="text-red-600">Twilio SMS</span>';
+                allConfigured = false;
+            }
+            
+            // Check Admin Contacts
+            if (response.success && response.data?.adminContacts?.length > 0) {
+                contactsCheck.innerHTML = `<span class="text-green-600">✅</span><span class="text-green-700 font-medium">Admin Contacts (${response.data.adminContacts.length})</span>`;
+            } else {
+                contactsCheck.innerHTML = '<span class="text-red-500">❌</span><span class="text-red-600">Admin Contacts</span>';
+                allConfigured = false;
+            }
+            
+            // Check Notification Center Company (try the registry validation)
+            try {
+                const registryResp = await this.nc.apiGet('/api/admin/notifications/registry');
+                if (registryResp.success && registryResp.data?.summary?.valid > 0) {
+                    companyCheck.innerHTML = '<span class="text-green-600">✅</span><span class="text-green-700 font-medium">Notification Center Company</span>';
+                } else {
+                    companyCheck.innerHTML = '<span class="text-red-500">❌</span><span class="text-red-600">Notification Center Company</span>';
+                    allConfigured = false;
+                }
+            } catch (e) {
+                companyCheck.innerHTML = '<span class="text-red-500">❌</span><span class="text-red-600">Notification Center Company</span>';
+                allConfigured = false;
+            }
+            
+            // Hide setup section if all configured
+            if (allConfigured && setupSection) {
+                setupSection.classList.remove('border-amber-400', 'bg-gradient-to-r', 'from-amber-50', 'to-orange-50');
+                setupSection.classList.add('border-green-400', 'bg-gradient-to-r', 'from-green-50', 'to-emerald-50');
+                setupSection.querySelector('h3').innerHTML = '<i class="fas fa-check-circle mr-2"></i>Setup Complete';
+                setupSection.querySelector('h3').className = 'text-xl font-semibold text-green-800 mb-4';
+                document.getElementById('run-setup-btn').style.display = 'none';
+                setupSection.querySelector('p').textContent = '✅ All notification systems are configured and ready!';
+            }
+            
+        } catch (error) {
+            console.error('❌ [SETTINGS] Setup status check failed:', error);
+        }
+    }
+    
+    async runNotificationCenterSetup() {
+        const btn = document.getElementById('run-setup-btn');
+        
+        try {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Initializing...';
+            
+            console.log('🚀 [SETTINGS] Running Notification Center setup...');
+            
+            // Call setup endpoint
+            const response = await this.nc.apiPost('/api/admin/setup-notification-center', {});
+            
+            if (response.success) {
+                console.log('✅ [SETTINGS] Setup response:', response);
+                
+                this.nc.showSuccess(
+                    `✅ Notification Center initialized!\n\n` +
+                    `Action: ${response.action}\n` +
+                    `Company ID: ${response.companyId}\n\n` +
+                    `Now configure Twilio credentials and add admin contacts below.`
+                );
+                
+                // Refresh setup status
+                await this.checkSetupStatus();
+                
+                // Reload registry if we're on that tab
+                if (window.registryManager) {
+                    window.registryManager.load();
+                }
+            } else {
+                throw new Error(response.error || 'Setup failed');
+            }
+            
+        } catch (error) {
+            console.error('❌ [SETTINGS] Setup failed:', error);
+            this.nc.showError(`Setup failed: ${error.message}`);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-rocket mr-2"></i>Initialize Notification Center';
+        }
     }
     
     // ========================================================================

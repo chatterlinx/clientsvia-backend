@@ -458,6 +458,45 @@
         <!-- SETTINGS TAB -->
         <div id="settings-tab" class="subtab-content hidden">
             
+            <!-- QUICK SETUP - NOTIFICATION CENTER INITIALIZATION -->
+            <div id="setup-section" class="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-400 rounded-lg shadow-md p-6 mb-6">
+                <h3 class="text-xl font-semibold text-amber-800 mb-4">
+                    <i class="fas fa-magic mr-2"></i>
+                    Quick Setup (One-Time)
+                </h3>
+                <div id="setup-status" class="mb-4">
+                    <!-- Status will be populated by JS -->
+                    <div class="flex items-center gap-4">
+                        <div id="setup-check-company" class="flex items-center gap-2">
+                            <span class="text-gray-500">⏳</span>
+                            <span>Notification Center Company</span>
+                        </div>
+                        <div id="setup-check-contacts" class="flex items-center gap-2">
+                            <span class="text-gray-500">⏳</span>
+                            <span>Admin Contacts</span>
+                        </div>
+                        <div id="setup-check-twilio" class="flex items-center gap-2">
+                            <span class="text-gray-500">⏳</span>
+                            <span>Twilio SMS</span>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-gray-700 mb-4">
+                    If you see "Invalid" in the Alert Registry, click this button to initialize the Notification Center:
+                </p>
+                <button 
+                    id="run-setup-btn" 
+                    onclick="window.settingsManager.runNotificationCenterSetup()"
+                    class="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 px-6 rounded-lg transition transform hover:scale-105 shadow-md">
+                    <i class="fas fa-rocket mr-2"></i>
+                    Initialize Notification Center
+                </button>
+                <p class="text-sm text-gray-600 mt-3">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    This creates the Notification Center company in the database. Run once, then configure Twilio and contacts below.
+                </p>
+            </div>
+            
             <!-- TWILIO CREDENTIALS -->
             <div class="bg-white rounded-lg shadow-md p-6 mb-6">
                 <h3 class="text-xl font-semibold text-gray-700 mb-6">
