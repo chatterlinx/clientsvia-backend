@@ -56,7 +56,7 @@ router.get('/inspect-company/:companyId', async (req, res) => {
             voiceSettingsIsNull: company.aiAgentSettings?.voiceSettings === null,
             voiceSettingsValue: company.aiAgentSettings?.voiceSettings,
             rawDocument: {
-                aiAgentLogic: company.aiAgentSettings             }
+                aiAgentSettings: company.aiAgentSettings             }
         };
         
         logger.info('📊 Analysis:', JSON.stringify(analysis, null, 2));

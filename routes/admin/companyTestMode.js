@@ -288,7 +288,7 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
         console.log('🔍🔍🔍 [TEST PILOT LOAD] ========== LOADING COMPANY ==========');
         console.log('🔍🔍🔍 [TEST PILOT LOAD] Company ID:', id);
         console.log('🔍🔍🔍 [TEST PILOT LOAD] Intelligence Mode:', company?.intelligenceMode || 'global (default)');
-        console.log('🔍🔍🔍 [TEST PILOT LOAD] Has aiAgentLogic:', !!company?.aiAgentSettings);
+        console.log('🔍🔍🔍 [TEST PILOT LOAD] Has aiAgentSettings:', !!company?.aiAgentSettings);
         console.log('🔍🔍🔍 [TEST PILOT LOAD] Has productionIntelligence:', !!company?.aiAgentSettings?.productionIntelligence);
         console.log('🔍🔍🔍 [TEST PILOT LOAD] Has smartWarmup:', !!company?.aiAgentSettings?.productionIntelligence?.smartWarmup);
         console.log('🔍🔍🔍 [TEST PILOT LOAD] smartWarmup.enabled:', company?.aiAgentSettings?.productionIntelligence?.smartWarmup?.enabled);
@@ -454,7 +454,7 @@ router.get('/test-pilot/companies/:id', async (req, res) => {
                 }
             },
             // ✅ FIX: Include aiAgentSettings so frontend can load productionIntelligence settings
-            aiAgentLogic: company.aiAgentSettings         };
+            aiAgentSettings: company.aiAgentSettings         };
         
         logger.info(`✅ [TEST PILOT] Company details loaded: ${companyInfo.name}`);
         

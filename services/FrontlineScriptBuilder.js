@@ -109,10 +109,10 @@ class FrontlineScriptBuilder {
             }
         }
         
-        // Path 2: If no template, try embedded aiAgentLogic.categories
-        if (brain2.categories.length === 0 && company.aiAgentLogic?.categories) {
-            brain2 = this.extractBrain2FromEmbedded(company.aiAgentLogic);
-            logger.debug('[SCRIPT BUILDER] Found Brain-2 data from embedded aiAgentLogic');
+        // Path 2: If no template, try embedded aiAgentSettings.categories
+        if (brain2.categories.length === 0 && company.aiAgentSettings?.categories) {
+            brain2 = this.extractBrain2FromEmbedded(company.aiAgentSettings);
+            logger.debug('[SCRIPT BUILDER] Found Brain-2 data from embedded aiAgentSettings');
         }
         
         // Path 3: If still empty, try globalInstantResponseTemplates by trade
@@ -213,14 +213,14 @@ class FrontlineScriptBuilder {
     }
     
     /**
-     * Extract Brain-2 data from embedded aiAgentLogic
+     * Extract Brain-2 data from embedded aiAgentSettings
      */
-    static extractBrain2FromEmbedded(aiAgentLogic) {
+    static extractBrain2FromEmbedded(aiAgentSettings) {
         const categories = [];
         const scenarios = [];
         
-        if (aiAgentLogic.categories && Array.isArray(aiAgentLogic.categories)) {
-            for (const cat of aiAgentLogic.categories) {
+        if (aiAgentSettings.categories && Array.isArray(aiAgentSettings.categories)) {
+            for (const cat of aiAgentSettings.categories) {
                 categories.push({
                     id: cat._id?.toString() || cat.id || `cat_${categories.length}`,
                     name: cat.name || cat.categoryName,
