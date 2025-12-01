@@ -450,7 +450,26 @@ class DependencyHealthMonitor {
             let phoneNumber = process.env.TWILIO_PHONE_NUMBER;
             let credentialSource = 'global';
 
-            // If no global credentials, check if ANY company has Twilio configured
+            // If no global credentials, check AdminSettings (Notification Center config)
+            if (!accountSid || !authToken) {
+                try {
+                    const AdminSettings = require('../models/AdminSettings');
+                    const adminSettings = await AdminSettings.findOne({});
+                    
+                    if (adminSettings?.notificationCenter?.twilio?.accountSid && 
+                        adminSettings?.notificationCenter?.twilio?.authToken) {
+                        accountSid = adminSettings.notificationCenter.twilio.accountSid;
+                        authToken = adminSettings.notificationCenter.twilio.authToken;
+                        phoneNumber = adminSettings.notificationCenter.twilio.phoneNumber;
+                        credentialSource = 'AdminSettings (Notification Center)';
+                        logger.debug('🔍 [TWILIO CHECK] Found credentials in AdminSettings');
+                    }
+                } catch (adminSettingsErr) {
+                    logger.debug('🔍 [TWILIO CHECK] AdminSettings not available:', adminSettingsErr.message);
+                }
+            }
+
+            // If still no credentials, check if ANY company has Twilio configured
             if (!accountSid || !authToken) {
                 const v2Company = require('../models/v2Company');
                 const companyWithTwilio = await v2Company.findOne({
@@ -475,7 +494,7 @@ class DependencyHealthMonitor {
                     message: 'Twilio not configured (per-company credentials system)',
                     responseTime: Date.now() - startTime,
                     details: {
-                        note: 'Configure Twilio per-company in Company Profile → Configuration tab'
+                        note: 'Configure Twilio in Notification Center → Settings tab, or per-company in Company Profile'
                     }
                 };
             }
