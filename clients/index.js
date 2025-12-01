@@ -23,10 +23,29 @@ async function initializeRedis() {
   const connectionStartTime = Date.now();
   let retriesAttempted = 0;
 
+  // ========================================================================
+  // CHECKPOINT 1: Check if REDIS_URL is set
+  // ========================================================================
+  const redisUrlFromEnv = process.env.REDIS_URL;
+  console.log(`🔍 [REDIS] CHECKPOINT 1: REDIS_URL environment variable ${redisUrlFromEnv ? 'EXISTS' : 'MISSING'}`);
+  
+  if (redisUrlFromEnv) {
+    // Log sanitized URL (hide password)
+    const sanitizedUrl = redisUrlFromEnv.replace(/:([^@]+)@/, ':***@');
+    console.log(`🔍 [REDIS] CHECKPOINT 1: URL format: ${sanitizedUrl}`);
+    console.log(`🔍 [REDIS] CHECKPOINT 1: URL length: ${redisUrlFromEnv.length} chars`);
+    console.log(`🔍 [REDIS] CHECKPOINT 1: Starts with redis:// or rediss://: ${redisUrlFromEnv.startsWith('redis://') || redisUrlFromEnv.startsWith('rediss://')}`);
+  } else {
+    console.error('❌ [REDIS] CHECKPOINT 1 FAILED: REDIS_URL is not set!');
+    console.log('🔍 [REDIS] Fallback: Will try localhost:6379');
+  }
+
   try {
     // Redis v5+ URL-based connection format
     const redisUrl = process.env.REDIS_URL || 
       `redis://${process.env.REDIS_PASSWORD ? `:${process.env.REDIS_PASSWORD}@` : ''}${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || 6379}`;
+    
+    console.log(`🔍 [REDIS] CHECKPOINT 2: Creating Redis client...`);
     
     redisClient = redis.createClient({
       url: redisUrl,
@@ -137,11 +156,17 @@ async function initializeRedis() {
     });
 
     // Connect to Redis (required in v5+)
+    console.log('🔍 [REDIS] CHECKPOINT 3: Attempting to connect...');
     await redisClient.connect();
+    console.log('🔍 [REDIS] CHECKPOINT 3: connect() completed');
     
     // Test connection
-    await redisClient.ping();
+    console.log('🔍 [REDIS] CHECKPOINT 4: Testing with ping...');
+    const pingResult = await redisClient.ping();
+    console.log(`🔍 [REDIS] CHECKPOINT 4: Ping result: ${pingResult}`);
+    
     const connectionTime = Date.now() - connectionStartTime;
+    console.log(`✅ [REDIS] ALL CHECKPOINTS PASSED - Connected in ${connectionTime}ms`);
     logger.debug('🚀 Redis client initialized successfully', { connectionTimeMs: connectionTime });
     
     return redisClient;
