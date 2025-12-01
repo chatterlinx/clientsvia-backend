@@ -21,6 +21,7 @@ const logger = require('../../utils/logger');
 const V2Company = require('../../models/v2Company');
 const RoutingDecisionLog = require('../../models/routing/RoutingDecisionLog');
 const PromptVersion = require('../../models/routing/PromptVersion');
+const CheatSheetVersion = require('../../models/cheatsheet/CheatSheetVersion');
 const redisClientModule = require('../../src/config/redisClient');
 
 // ✅ INTEGRATION: Leverage existing Notification Center health services
@@ -113,29 +114,61 @@ router.get('/:companyId', async (req, res) => {
     // Build component status
     const componentStatus = buildComponentStatus(company);
 
-    // Get active prompt version
-    const activePrompt = await PromptVersion.findOne({
+    // Get active configuration - check both PromptVersion and CheatSheetVersion
+    let activePrompt = null;
+    let activeCheatSheet = null;
+    
+    // Try PromptVersion first (legacy)
+    activePrompt = await PromptVersion.findOne({
       companyId,
       status: 'active'
+    }).lean();
+    
+    // Also check CheatSheetVersion (current system)
+    activeCheatSheet = await CheatSheetVersion.findOne({
+      companyId,
+      status: 'live'
     }).lean();
 
     // Get cache status
     const cacheStatus = await getCacheStatus(companyId);
 
-    // Response
-    res.json({
-      success: true,
-      companyId,
-      companyName: company.companyName,
-      timestamp: new Date().toISOString(),
-      orchestrationMode: 'LLM-0 Enhanced', // All companies now use enhanced LLM-0
-      components: componentStatus,
-      activePrompt: activePrompt ? {
+    // Build active configuration info (prefer CheatSheetVersion over legacy PromptVersion)
+    let activeConfig = null;
+    
+    if (activeCheatSheet) {
+      // CheatSheetVersion is the current system
+      activeConfig = {
+        source: 'CheatSheetVersion',
+        version: activeCheatSheet.name || activeCheatSheet.versionId,
+        versionId: activeCheatSheet.versionId,
+        versionHash: activeCheatSheet.versionId?.substring(0, 8) || 'N/A',
+        deployedAt: activeCheatSheet.activatedAt || activeCheatSheet.updatedAt,
+        triageCardsCount: activeCheatSheet.config?.triage?.cards?.length || 0,
+        hasTriageCards: !!(activeCheatSheet.config?.triage?.cards?.length > 0),
+        hasFrontlineIntel: !!(activeCheatSheet.config?.frontlineIntel),
+        hasBookingRules: !!(activeCheatSheet.config?.bookingRules?.length > 0)
+      };
+    } else if (activePrompt) {
+      // Legacy PromptVersion
+      activeConfig = {
+        source: 'PromptVersion',
         version: activePrompt.version,
         versionHash: activePrompt.versionHash,
         deployedAt: activePrompt.deployedAt,
         triageCardsCount: activePrompt.triageCardsSnapshot?.length || 0
-      } : null,
+      };
+    }
+
+    // Response
+    res.json({
+      success: true,
+      companyId,
+      companyName: company.companyName || company.name,
+      timestamp: new Date().toISOString(),
+      orchestrationMode: 'LLM-0 Enhanced', // All companies now use enhanced LLM-0
+      components: componentStatus,
+      activePrompt: activeConfig, // Now includes CheatSheetVersion info
       cache: cacheStatus,
       status: 'operational' // Can be: operational, degraded, down
     });

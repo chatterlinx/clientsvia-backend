@@ -349,37 +349,64 @@ class AgentStatusManager {
   renderPromptConfig(activePrompt) {
     if (!activePrompt) {
       return `
-        <div style="background: #fef3c7; border-radius: 12px; padding: 25px; margin-bottom: 25px; border-left: 4px solid #f59e0b;">
-          <div style="font-size: 16px; font-weight: 600; color: #92400e; margin-bottom: 8px;">⚠️ No Active Prompt</div>
-          <div style="font-size: 14px; color: #78350f;">No prompt version is currently deployed. The agent is using default configuration.</div>
+        <div style="background: #e0f2fe; border-radius: 12px; padding: 25px; margin-bottom: 25px; border-left: 4px solid #0284c7;">
+          <div style="font-size: 16px; font-weight: 600; color: #0369a1; margin-bottom: 8px;">ℹ️ No Live Version Published</div>
+          <div style="font-size: 14px; color: #075985;">
+            Go to <strong>Cheat Sheet → Version Console</strong> to publish a draft version as live.
+            <br><br>
+            The agent can still operate using template defaults, but for customized behavior, publish your configuration.
+          </div>
         </div>
       `;
     }
 
+    // Determine the source label
+    const sourceLabel = activePrompt.source === 'CheatSheetVersion' ? '📋 Live CheatSheet' : '📝 Prompt Version';
+    const sourceBadgeColor = activePrompt.source === 'CheatSheetVersion' ? '#10b981' : '#6b7280';
+
     return `
       <div style="background: white; border-radius: 12px; padding: 25px; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-        <h3 style="margin: 0 0 20px 0; font-size: 20px; font-weight: 700; color: #1f2937;">
-          📝 Active Prompt Configuration
-        </h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h3 style="margin: 0; font-size: 20px; font-weight: 700; color: #1f2937;">
+            ${sourceLabel} Configuration
+          </h3>
+          <span style="background: ${sourceBadgeColor}; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+            LIVE
+          </span>
+        </div>
         
         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
           <div>
             <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Version</div>
-            <div style="font-size: 18px; font-weight: 700; color: #1f2937;">${activePrompt.version}</div>
+            <div style="font-size: 18px; font-weight: 700; color: #1f2937;">${activePrompt.version || 'N/A'}</div>
           </div>
           <div>
-            <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Version Hash</div>
-            <div style="font-size: 18px; font-weight: 700; color: #1f2937; font-family: monospace;">${activePrompt.versionHash.substring(0, 8)}</div>
+            <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Version ID</div>
+            <div style="font-size: 14px; font-weight: 700; color: #1f2937; font-family: monospace;">${activePrompt.versionHash || activePrompt.versionId?.substring(0, 12) || 'N/A'}</div>
           </div>
           <div>
             <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Triage Cards</div>
-            <div style="font-size: 18px; font-weight: 700; color: #1f2937;">${activePrompt.triageCardsCount} cards</div>
+            <div style="font-size: 18px; font-weight: 700; color: #1f2937;">${activePrompt.triageCardsCount || 0} cards</div>
           </div>
         </div>
         
+        ${activePrompt.source === 'CheatSheetVersion' ? `
+        <div style="margin-top: 15px; display: flex; gap: 10px;">
+          <span style="background: ${activePrompt.hasTriageCards ? '#d1fae5' : '#fee2e2'}; color: ${activePrompt.hasTriageCards ? '#065f46' : '#991b1b'}; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+            ${activePrompt.hasTriageCards ? '✅' : '❌'} Triage
+          </span>
+          <span style="background: ${activePrompt.hasFrontlineIntel ? '#d1fae5' : '#fee2e2'}; color: ${activePrompt.hasFrontlineIntel ? '#065f46' : '#991b1b'}; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+            ${activePrompt.hasFrontlineIntel ? '✅' : '❌'} Frontline-Intel
+          </span>
+          <span style="background: ${activePrompt.hasBookingRules ? '#d1fae5' : '#fee2e2'}; color: ${activePrompt.hasBookingRules ? '#065f46' : '#991b1b'}; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+            ${activePrompt.hasBookingRules ? '✅' : '❌'} Booking Rules
+          </span>
+        </div>
+        ` : ''}
+        
         <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
-          <div style="font-size: 12px; color: #6b7280; margin-bottom: 5px;">Deployed At</div>
-          <div style="font-size: 14px; color: #1f2937;">${new Date(activePrompt.deployedAt).toLocaleString()}</div>
+          <div style="font-size: 12px; color: #6b7280; margin-bottom: 5px;">Published At</div>
+          <div style="font-size: 14px; color: #1f2937;">${activePrompt.deployedAt ? new Date(activePrompt.deployedAt).toLocaleString() : 'Unknown'}</div>
         </div>
       </div>
     `;
@@ -989,4 +1016,5 @@ END OF REPORT
 window.AgentStatusManager = AgentStatusManager;
 
 console.log('✅ [AGENT STATUS MANAGER] Loaded and available globally');
+
 
