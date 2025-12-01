@@ -41,6 +41,11 @@ const auditLog = require('../../middleware/auditLog');
 // Services
 const CallSummaryService = require('../../services/CallSummaryService');
 const CustomerLookup = require('../../services/CustomerLookup');
+const AnalyticsService = require('../../services/AnalyticsService');
+
+// Jobs (for status endpoints)
+const { getRollupStatus } = require('../../jobs/dailyStatsRollup');
+const { getArchiverStatus } = require('../../jobs/transcriptArchiver');
 
 // Models
 const CallSummary = require('../../models/CallSummary');
@@ -527,6 +532,127 @@ router.get('/:companyId/stats/dashboard', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ANALYTICS ROUTES (Phase 3)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/call-center/:companyId/analytics/report
+ * Get detailed analytics report for a date range
+ */
+router.get('/:companyId/analytics/report', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { startDate, endDate } = req.query;
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'startDate and endDate are required' 
+      });
+    }
+    
+    const report = await AnalyticsService.getReport(companyId, startDate, endDate);
+    res.json({ success: true, data: report });
+    
+  } catch (error) {
+    logger.error('[CALL_CENTER] Error fetching analytics report', {
+      error: error.message,
+      companyId: req.params.companyId
+    });
+    res.status(500).json({ success: false, error: 'Failed to fetch report' });
+  }
+});
+
+/**
+ * GET /api/admin/call-center/:companyId/analytics/intents
+ * Get top intents
+ */
+router.get('/:companyId/analytics/intents', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { days = 30, limit = 10 } = req.query;
+    
+    const intents = await AnalyticsService.getTopIntents(
+      companyId, 
+      parseInt(days), 
+      parseInt(limit)
+    );
+    
+    res.json({ success: true, data: intents });
+    
+  } catch (error) {
+    logger.error('[CALL_CENTER] Error fetching top intents', {
+      error: error.message,
+      companyId: req.params.companyId
+    });
+    res.status(500).json({ success: false, error: 'Failed to fetch intents' });
+  }
+});
+
+/**
+ * GET /api/admin/call-center/:companyId/analytics/tiers
+ * Get tier usage breakdown
+ */
+router.get('/:companyId/analytics/tiers', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { days = 30 } = req.query;
+    
+    const tiers = await AnalyticsService.getTierUsage(companyId, parseInt(days));
+    res.json({ success: true, data: tiers });
+    
+  } catch (error) {
+    logger.error('[CALL_CENTER] Error fetching tier usage', {
+      error: error.message,
+      companyId: req.params.companyId
+    });
+    res.status(500).json({ success: false, error: 'Failed to fetch tier usage' });
+  }
+});
+
+/**
+ * GET /api/admin/call-center/:companyId/analytics/peak-hours
+ * Get peak hours analysis
+ */
+router.get('/:companyId/analytics/peak-hours', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { days = 30 } = req.query;
+    
+    const peakHours = await AnalyticsService.getPeakHours(companyId, parseInt(days));
+    res.json({ success: true, data: peakHours });
+    
+  } catch (error) {
+    logger.error('[CALL_CENTER] Error fetching peak hours', {
+      error: error.message,
+      companyId: req.params.companyId
+    });
+    res.status(500).json({ success: false, error: 'Failed to fetch peak hours' });
+  }
+});
+
+/**
+ * GET /api/admin/call-center/:companyId/analytics/trend
+ * Get call volume trend (for charts)
+ */
+router.get('/:companyId/analytics/trend', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { days = 30 } = req.query;
+    
+    const trend = await AnalyticsService.getCallVolumeTrend(companyId, parseInt(days));
+    res.json({ success: true, data: trend });
+    
+  } catch (error) {
+    logger.error('[CALL_CENTER] Error fetching call trend', {
+      error: error.message,
+      companyId: req.params.companyId
+    });
+    res.status(500).json({ success: false, error: 'Failed to fetch trend' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // HEALTH CHECK
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -536,14 +662,22 @@ router.get('/:companyId/stats/dashboard', async (req, res) => {
  */
 router.get('/health', async (req, res) => {
   try {
-    const health = await CallSummaryService.healthCheck();
+    const [serviceHealth, rollupStatus, archiverStatus] = await Promise.all([
+      CallSummaryService.healthCheck(),
+      getRollupStatus().catch(() => ({ status: 'UNKNOWN' })),
+      getArchiverStatus().catch(() => ({ status: 'UNKNOWN' }))
+    ]);
     
     res.json({
       success: true,
       data: {
         module: 'Call Center',
         version: '2.0.0',
-        ...health
+        service: serviceHealth,
+        jobs: {
+          dailyRollup: rollupStatus,
+          transcriptArchiver: archiverStatus
+        }
       }
     });
     
