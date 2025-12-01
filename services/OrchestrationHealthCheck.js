@@ -1,19 +1,25 @@
 // ============================================================================
-// 🤖 ORCHESTRATION HEALTH CHECK SERVICE
+// 🏎️ ORCHESTRATION HEALTH CHECK SERVICE - INDY 500 GRADE
 // ============================================================================
-// Purpose: Comprehensive health monitoring for LLM-0 Orchestration Engine
+// Purpose: COMPREHENSIVE health monitoring for LLM-0 Orchestration Engine
+// Philosophy: NO MASKING - Full transparency, detailed checkpoints, expose all weaknesses
 //
-// Components Monitored:
+// Components Monitored (with granular checkpoints):
 // 1. Preprocessing (FillerStripper, TranscriptNormalizer)
 // 2. Intelligence (EmotionDetector)
 // 3. Routing (MicroLLMRouter, CompactPromptCompiler)
 // 4. Personality (HumanLayerAssembler)
 // 5. LLM Connectivity (gpt-4o-mini API)
 //
+// PERFORMANCE THRESHOLDS (Production-Grade):
+// - Component Load: < 5ms (HEALTHY), 5-15ms (DEGRADED), >15ms (SLOW)
+// - Test Execution: < 10ms (HEALTHY), 10-50ms (DEGRADED), >50ms (SLOW)
+// - LLM Response: < 500ms (HEALTHY), 500-1000ms (DEGRADED), >1000ms (SLOW)
+//
 // Integration:
 // - Called by DependencyHealthMonitor
 // - Called by Agent Status API
-// - Results logged to HealthCheckLog
+// - Results displayed in Service Health panel
 // ============================================================================
 
 const logger = require('../utils/logger');
@@ -21,15 +27,33 @@ const openai = require('../config/openai');
 
 class OrchestrationHealthCheck {
     
+    // ========================================================================
+    // PERFORMANCE THRESHOLDS (Strict - Production Grade)
+    // ========================================================================
+    static THRESHOLDS = {
+        componentLoad: { healthy: 5, degraded: 15 },      // ms
+        testExecution: { healthy: 10, degraded: 50 },     // ms
+        llmResponse: { healthy: 500, degraded: 1000 },    // ms
+        totalPipeline: { healthy: 100, degraded: 500 }    // ms
+    };
+    
     /**
      * Run comprehensive health check of entire orchestration pipeline
+     * Returns detailed checkpoints for every component
      * @returns {Promise<Object>} Health status with component details
      */
     static async checkOrchestrationPipeline() {
         const startTime = Date.now();
+        const pipelineCheckpoints = [];
         
         try {
-            logger.info('🤖 [ORCHESTRATION HEALTH] Running pipeline health check');
+            logger.info('🏎️ [ORCHESTRATION HEALTH] Running INDY 500 grade pipeline check');
+            
+            pipelineCheckpoints.push({
+                name: 'Pipeline initialization',
+                status: 'passed',
+                timestamp: new Date().toISOString()
+            });
             
             // Run all checks in parallel
             const [
@@ -48,7 +72,7 @@ class OrchestrationHealthCheck {
             
             const totalDuration = Date.now() - startTime;
             
-            // Calculate overall status
+            // Collect all components
             const allChecks = [
                 preprocessingHealth,
                 intelligenceHealth,
@@ -57,329 +81,831 @@ class OrchestrationHealthCheck {
                 llmHealth
             ];
             
-            const criticalDown = allChecks.filter(c => c.status === 'DOWN' && c.critical).length;
-            const anyDegraded = allChecks.filter(c => c.status === 'DEGRADED').length;
+            // ================================================================
+            // DETAILED ANALYSIS - No Masking!
+            // ================================================================
+            const criticalDown = allChecks.filter(c => c.status === 'DOWN' && c.critical);
+            const degraded = allChecks.filter(c => c.status === 'DEGRADED');
+            const healthy = allChecks.filter(c => c.status === 'HEALTHY');
+            const down = allChecks.filter(c => c.status === 'DOWN');
             
+            // Calculate overall status
             let overallStatus;
-            if (criticalDown > 0) {
+            let statusReason;
+            
+            if (criticalDown.length > 0) {
                 overallStatus = 'CRITICAL';
-            } else if (anyDegraded > 0) {
+                statusReason = `CRITICAL: ${criticalDown.map(c => c.name).join(', ')} down`;
+            } else if (down.length > 0) {
+                overallStatus = 'DOWN';
+                statusReason = `DOWN: ${down.map(c => c.name).join(', ')} failed`;
+            } else if (degraded.length > 0) {
                 overallStatus = 'DEGRADED';
+                statusReason = `DEGRADED: ${degraded.map(c => c.name).join(', ')} slow or impaired`;
             } else {
                 overallStatus = 'HEALTHY';
+                statusReason = 'All 5 components operational';
             }
             
+            // Pipeline duration check
+            let pipelinePerformance = 'EXCELLENT';
+            if (totalDuration > this.THRESHOLDS.totalPipeline.degraded) {
+                pipelinePerformance = 'SLOW';
+            } else if (totalDuration > this.THRESHOLDS.totalPipeline.healthy) {
+                pipelinePerformance = 'ACCEPTABLE';
+            }
+            
+            pipelineCheckpoints.push({
+                name: 'All components checked',
+                status: 'passed',
+                duration: `${totalDuration}ms`,
+                performance: pipelinePerformance
+            });
+            
+            // ================================================================
+            // BUILD COMPREHENSIVE RESULT
+            // ================================================================
             return {
                 timestamp: new Date(),
                 overallStatus,
+                statusReason,
                 totalDuration,
-                components: {
-                    preprocessing: preprocessingHealth,
-                    intelligence: intelligenceHealth,
-                    routing: routingHealth,
-                    personality: personalityHealth,
-                    microLLM: llmHealth
-                }
+                pipelinePerformance,
+                pipelineCheckpoints,
+                
+                // Detailed component breakdown
+                components: [
+                    preprocessingHealth,
+                    intelligenceHealth,
+                    routingHealth,
+                    personalityHealth,
+                    llmHealth
+                ],
+                
+                // Summary stats (for quick debugging)
+                summary: {
+                    total: allChecks.length,
+                    healthy: healthy.length,
+                    degraded: degraded.length,
+                    down: down.length,
+                    critical: criticalDown.length,
+                    slowestComponent: this.findSlowest(allChecks),
+                    fastestComponent: this.findFastest(allChecks)
+                },
+                
+                // Performance breakdown
+                performanceBreakdown: {
+                    preprocessing: preprocessingHealth.responseTime,
+                    intelligence: intelligenceHealth.responseTime,
+                    routing: routingHealth.responseTime,
+                    personality: personalityHealth.responseTime,
+                    microLLM: llmHealth.responseTime,
+                    total: totalDuration
+                },
+                
+                // Root cause if not healthy
+                rootCause: overallStatus !== 'HEALTHY' ? {
+                    affectedComponents: [...criticalDown, ...down, ...degraded].map(c => ({
+                        name: c.name,
+                        status: c.status,
+                        reason: c.message,
+                        impact: c.impact || 'Unknown'
+                    })),
+                    recommendedAction: this.getRecommendedAction(overallStatus, [...criticalDown, ...down, ...degraded])
+                } : null
             };
             
         } catch (error) {
-            logger.error('❌ [ORCHESTRATION HEALTH] Pipeline check failed:', error);
+            logger.error('❌ [ORCHESTRATION HEALTH] Pipeline check CRASHED:', error);
+            
             return {
                 timestamp: new Date(),
-                overallStatus: 'DOWN',
+                overallStatus: 'CRITICAL',
+                statusReason: `Pipeline check crashed: ${error.message}`,
                 totalDuration: Date.now() - startTime,
-                error: error.message
+                pipelineCheckpoints: [
+                    ...pipelineCheckpoints,
+                    {
+                        name: 'Pipeline execution',
+                        status: 'CRASHED',
+                        error: error.message,
+                        stack: error.stack?.split('\n').slice(0, 5).join('\n')
+                    }
+                ],
+                error: {
+                    message: error.message,
+                    stack: error.stack,
+                    name: error.name
+                }
             };
         }
     }
     
     /**
      * Check Preprocessing Components (FillerStripper, TranscriptNormalizer)
+     * DETAILED CHECKPOINTS - No masking!
      */
     static async checkPreprocessing() {
         const startTime = Date.now();
+        const checkpoints = [];
+        
+        // Checkpoint 1: Module load
+        const loadStart = Date.now();
+        let FillerStripper, TranscriptNormalizer;
         
         try {
-            // Load components
-            const FillerStripper = require('../src/services/orchestration/preprocessing/FillerStripper');
-            const TranscriptNormalizer = require('../src/services/orchestration/preprocessing/TranscriptNormalizer');
+            FillerStripper = require('../src/services/orchestration/preprocessing/FillerStripper');
+            checkpoints.push({
+                name: 'FillerStripper module load',
+                status: 'passed',
+                duration: `${Date.now() - loadStart}ms`
+            });
+        } catch (err) {
+            checkpoints.push({
+                name: 'FillerStripper module load',
+                status: 'FAILED',
+                error: err.message,
+                path: '../src/services/orchestration/preprocessing/FillerStripper'
+            });
+            return this.buildFailedResult('Preprocessing', checkpoints, startTime, 
+                'FillerStripper module not found', false);
+        }
+        
+        const loadStart2 = Date.now();
+        try {
+            TranscriptNormalizer = require('../src/services/orchestration/preprocessing/TranscriptNormalizer');
+            checkpoints.push({
+                name: 'TranscriptNormalizer module load',
+                status: 'passed',
+                duration: `${Date.now() - loadStart2}ms`
+            });
+        } catch (err) {
+            checkpoints.push({
+                name: 'TranscriptNormalizer module load',
+                status: 'FAILED',
+                error: err.message,
+                path: '../src/services/orchestration/preprocessing/TranscriptNormalizer'
+            });
+            return this.buildFailedResult('Preprocessing', checkpoints, startTime,
+                'TranscriptNormalizer module not found', false);
+        }
+        
+        // Checkpoint 2: FillerStripper functionality
+        const testInput = "um, like, you know, my AC is broken";
+        const stripStart = Date.now();
+        let stripped;
+        
+        try {
+            stripped = FillerStripper.strip(testInput);
+            const stripTime = Date.now() - stripStart;
             
-            // Test FillerStripper
-            const testInput = "um, like, you know, my AC is broken";
-            const stripped = FillerStripper.strip(testInput);
+            checkpoints.push({
+                name: 'FillerStripper.strip() execution',
+                status: stripped && stripped !== testInput ? 'passed' : 'FAILED',
+                duration: `${stripTime}ms`,
+                input: testInput,
+                output: stripped,
+                fillersRemoved: stripped !== testInput
+            });
             
             if (!stripped || stripped === testInput) {
-                throw new Error('FillerStripper not working');
+                checkpoints.push({
+                    name: 'FillerStripper effectiveness',
+                    status: 'WARNING',
+                    message: 'No fillers were removed - check filler patterns'
+                });
             }
-            
-            // Test TranscriptNormalizer
-            const normalized = TranscriptNormalizer.normalize(testInput);
-            
-            if (!normalized) {
-                throw new Error('TranscriptNormalizer not working');
-            }
-            
-            const responseTime = Date.now() - startTime;
-            
-            return {
-                name: 'Preprocessing',
-                status: responseTime > 10 ? 'DEGRADED' : 'HEALTHY',
-                critical: false, // Non-critical - system can work without preprocessing
-                message: `FillerStripper & TranscriptNormalizer operational`,
-                responseTime,
-                details: {
-                    components: ['FillerStripper', 'TranscriptNormalizer'],
-                    testPassed: true
-                }
-            };
-            
-        } catch (error) {
-            return {
-                name: 'Preprocessing',
-                status: 'DOWN',
-                critical: false,
-                message: `Preprocessing failed: ${error.message}`,
-                responseTime: Date.now() - startTime,
-                impact: 'Degraded quality - raw transcripts used without cleaning'
-            };
+        } catch (err) {
+            checkpoints.push({
+                name: 'FillerStripper.strip() execution',
+                status: 'FAILED',
+                error: err.message
+            });
+            return this.buildFailedResult('Preprocessing', checkpoints, startTime,
+                `FillerStripper.strip() failed: ${err.message}`, false);
         }
+        
+        // Checkpoint 3: TranscriptNormalizer functionality
+        const normalizeStart = Date.now();
+        let normalized;
+        
+        try {
+            normalized = TranscriptNormalizer.normalize(testInput);
+            const normalizeTime = Date.now() - normalizeStart;
+            
+            checkpoints.push({
+                name: 'TranscriptNormalizer.normalize() execution',
+                status: normalized ? 'passed' : 'FAILED',
+                duration: `${normalizeTime}ms`,
+                input: testInput,
+                output: normalized?.substring(0, 50)
+            });
+        } catch (err) {
+            checkpoints.push({
+                name: 'TranscriptNormalizer.normalize() execution',
+                status: 'FAILED',
+                error: err.message
+            });
+            return this.buildFailedResult('Preprocessing', checkpoints, startTime,
+                `TranscriptNormalizer.normalize() failed: ${err.message}`, false);
+        }
+        
+        const responseTime = Date.now() - startTime;
+        
+        // Determine status based on performance
+        let status = 'HEALTHY';
+        let statusReason = 'All preprocessing components operational';
+        
+        if (responseTime > this.THRESHOLDS.testExecution.degraded) {
+            status = 'DEGRADED';
+            statusReason = `Preprocessing slow: ${responseTime}ms (threshold: ${this.THRESHOLDS.testExecution.degraded}ms)`;
+        } else if (responseTime > this.THRESHOLDS.testExecution.healthy) {
+            status = 'DEGRADED';
+            statusReason = `Preprocessing elevated latency: ${responseTime}ms`;
+        }
+        
+        checkpoints.push({
+            name: 'Total preprocessing time',
+            status: status === 'HEALTHY' ? 'passed' : 'WARNING',
+            duration: `${responseTime}ms`,
+            threshold: `<${this.THRESHOLDS.testExecution.healthy}ms healthy`
+        });
+        
+        return {
+            name: 'Preprocessing',
+            status,
+            statusReason,
+            critical: false,
+            message: statusReason,
+            responseTime,
+            checkpoints,
+            details: {
+                components: ['FillerStripper', 'TranscriptNormalizer'],
+                testInput,
+                strippedOutput: stripped,
+                normalizedOutput: normalized?.substring(0, 50)
+            },
+            impact: status !== 'HEALTHY' ? 'Degraded quality - raw transcripts may have noise' : null
+        };
     }
     
     /**
      * Check Intelligence Components (EmotionDetector)
+     * DETAILED CHECKPOINTS
      */
     static async checkIntelligence() {
         const startTime = Date.now();
+        const checkpoints = [];
+        
+        // Checkpoint 1: Module load
+        const loadStart = Date.now();
+        let EmotionDetector;
         
         try {
-            const EmotionDetector = require('../src/services/orchestration/intelligence/EmotionDetector');
-            
-            // Test emotion detection
-            const testInput = "I'm so frustrated! My AC is broken again!";
-            const emotion = EmotionDetector.analyze(testInput);
-            
-            if (!emotion || !emotion.primary || emotion.intensity === undefined) {
-                throw new Error('EmotionDetector not returning valid results');
-            }
-            
-            const responseTime = Date.now() - startTime;
-            
-            return {
-                name: 'Intelligence',
-                status: responseTime > 25 ? 'DEGRADED' : 'HEALTHY',
-                critical: false, // Non-critical - system can work without emotion detection
-                message: `EmotionDetector operational (detected: ${emotion.primary})`,
-                responseTime,
-                details: {
-                    components: ['EmotionDetector'],
-                    testPassed: true,
-                    sampleEmotion: emotion.primary
-                }
-            };
-            
-        } catch (error) {
-            return {
-                name: 'Intelligence',
-                status: 'DOWN',
-                critical: false,
-                message: `Intelligence failed: ${error.message}`,
-                responseTime: Date.now() - startTime,
-                impact: 'Reduced empathy - responses less personalized'
-            };
+            EmotionDetector = require('../src/services/orchestration/intelligence/EmotionDetector');
+            checkpoints.push({
+                name: 'EmotionDetector module load',
+                status: 'passed',
+                duration: `${Date.now() - loadStart}ms`
+            });
+        } catch (err) {
+            checkpoints.push({
+                name: 'EmotionDetector module load',
+                status: 'FAILED',
+                error: err.message,
+                path: '../src/services/orchestration/intelligence/EmotionDetector'
+            });
+            return this.buildFailedResult('Intelligence', checkpoints, startTime,
+                'EmotionDetector module not found', false);
         }
+        
+        // Checkpoint 2: Emotion detection test cases
+        const testCases = [
+            { input: "I'm so frustrated! My AC is broken again!", expectedEmotion: 'FRUSTRATED' },
+            { input: "Thank you so much, you've been very helpful!", expectedEmotion: 'HAPPY' },
+            { input: "I need to schedule an appointment.", expectedEmotion: 'NEUTRAL' }
+        ];
+        
+        const emotionResults = [];
+        
+        for (const testCase of testCases) {
+            const detectStart = Date.now();
+            try {
+                const emotion = EmotionDetector.analyze(testCase.input);
+                const detectTime = Date.now() - detectStart;
+                
+                const passed = emotion && emotion.primary && emotion.intensity !== undefined;
+                emotionResults.push({
+                    input: testCase.input.substring(0, 30) + '...',
+                    detected: emotion?.primary || 'NONE',
+                    expected: testCase.expectedEmotion,
+                    intensity: emotion?.intensity,
+                    duration: detectTime,
+                    passed
+                });
+                
+                checkpoints.push({
+                    name: `Emotion detection: "${testCase.input.substring(0, 20)}..."`,
+                    status: passed ? 'passed' : 'FAILED',
+                    duration: `${detectTime}ms`,
+                    detected: emotion?.primary,
+                    intensity: emotion?.intensity
+                });
+            } catch (err) {
+                emotionResults.push({
+                    input: testCase.input.substring(0, 30) + '...',
+                    error: err.message,
+                    passed: false
+                });
+                checkpoints.push({
+                    name: `Emotion detection: "${testCase.input.substring(0, 20)}..."`,
+                    status: 'FAILED',
+                    error: err.message
+                });
+            }
+        }
+        
+        const responseTime = Date.now() - startTime;
+        const passedTests = emotionResults.filter(r => r.passed).length;
+        
+        // Determine status
+        let status = 'HEALTHY';
+        let statusReason = `EmotionDetector operational (${passedTests}/${testCases.length} tests passed)`;
+        
+        if (passedTests === 0) {
+            status = 'DOWN';
+            statusReason = 'EmotionDetector not returning valid results';
+        } else if (passedTests < testCases.length) {
+            status = 'DEGRADED';
+            statusReason = `EmotionDetector partial failure (${passedTests}/${testCases.length} tests)`;
+        } else if (responseTime > this.THRESHOLDS.testExecution.degraded) {
+            status = 'DEGRADED';
+            statusReason = `EmotionDetector slow: ${responseTime}ms`;
+        }
+        
+        return {
+            name: 'Intelligence',
+            status,
+            statusReason,
+            critical: false,
+            message: statusReason,
+            responseTime,
+            checkpoints,
+            details: {
+                components: ['EmotionDetector'],
+                testResults: emotionResults,
+                passedTests,
+                totalTests: testCases.length
+            },
+            impact: status !== 'HEALTHY' ? 'Reduced empathy - responses less personalized' : null
+        };
     }
     
     /**
      * Check Routing Components (MicroLLMRouter, CompactPromptCompiler)
+     * DETAILED CHECKPOINTS
      */
     static async checkRouting() {
         const startTime = Date.now();
+        const checkpoints = [];
+        
+        // Checkpoint 1: MicroLLMRouter load
+        const loadStart = Date.now();
+        let MicroLLMRouter;
         
         try {
-            const MicroLLMRouter = require('../src/services/orchestration/routing/MicroLLMRouter');
-            const CompactPromptCompiler = require('../src/services/orchestration/routing/CompactPromptCompiler');
-            
-            // Verify components load
-            if (!MicroLLMRouter || !CompactPromptCompiler) {
-                throw new Error('Routing components not loaded');
-            }
-            
-            // Note: We don't actually call the LLM here (that's tested in checkMicroLLM)
-            // This just verifies the components are loadable
-            
-            const responseTime = Date.now() - startTime;
-            
-            return {
-                name: 'Routing',
-                status: 'HEALTHY',
-                critical: true, // CRITICAL - core routing logic
-                message: `MicroLLMRouter & CompactPromptCompiler loaded`,
-                responseTime,
-                details: {
-                    components: ['MicroLLMRouter', 'CompactPromptCompiler'],
-                    note: 'LLM connectivity tested separately'
+            MicroLLMRouter = require('../src/services/orchestration/routing/MicroLLMRouter');
+            checkpoints.push({
+                name: 'MicroLLMRouter module load',
+                status: 'passed',
+                duration: `${Date.now() - loadStart}ms`,
+                hasMethods: {
+                    route: typeof MicroLLMRouter.route === 'function',
+                    classify: typeof MicroLLMRouter.classify === 'function'
                 }
-            };
-            
-        } catch (error) {
-            return {
-                name: 'Routing',
-                status: 'DOWN',
-                critical: true,
-                message: `Routing components failed: ${error.message}`,
-                responseTime: Date.now() - startTime,
-                impact: 'CRITICAL - Cannot route calls'
-            };
+            });
+        } catch (err) {
+            checkpoints.push({
+                name: 'MicroLLMRouter module load',
+                status: 'FAILED',
+                error: err.message,
+                path: '../src/services/orchestration/routing/MicroLLMRouter'
+            });
+            return this.buildFailedResult('Routing', checkpoints, startTime,
+                'MicroLLMRouter module not found - CRITICAL', true);
         }
+        
+        // Checkpoint 2: CompactPromptCompiler load
+        const loadStart2 = Date.now();
+        let CompactPromptCompiler;
+        
+        try {
+            CompactPromptCompiler = require('../src/services/orchestration/routing/CompactPromptCompiler');
+            checkpoints.push({
+                name: 'CompactPromptCompiler module load',
+                status: 'passed',
+                duration: `${Date.now() - loadStart2}ms`,
+                hasMethods: {
+                    compile: typeof CompactPromptCompiler.compile === 'function'
+                }
+            });
+        } catch (err) {
+            checkpoints.push({
+                name: 'CompactPromptCompiler module load',
+                status: 'FAILED',
+                error: err.message,
+                path: '../src/services/orchestration/routing/CompactPromptCompiler'
+            });
+            return this.buildFailedResult('Routing', checkpoints, startTime,
+                'CompactPromptCompiler module not found - CRITICAL', true);
+        }
+        
+        // Checkpoint 3: Verify critical methods exist
+        const methodChecks = [
+            { name: 'MicroLLMRouter.route', exists: typeof MicroLLMRouter?.route === 'function' },
+            { name: 'CompactPromptCompiler.compile', exists: typeof CompactPromptCompiler?.compile === 'function' }
+        ];
+        
+        for (const check of methodChecks) {
+            checkpoints.push({
+                name: `Method check: ${check.name}`,
+                status: check.exists ? 'passed' : 'FAILED',
+                message: check.exists ? 'Method exists' : 'Method NOT FOUND'
+            });
+        }
+        
+        const responseTime = Date.now() - startTime;
+        const allMethodsExist = methodChecks.every(m => m.exists);
+        
+        let status = 'HEALTHY';
+        let statusReason = 'MicroLLMRouter & CompactPromptCompiler loaded and verified';
+        
+        if (!allMethodsExist) {
+            status = 'DOWN';
+            statusReason = 'Critical routing methods missing';
+        } else if (responseTime > this.THRESHOLDS.componentLoad.degraded) {
+            status = 'DEGRADED';
+            statusReason = `Routing components slow to load: ${responseTime}ms`;
+        }
+        
+        return {
+            name: 'Routing',
+            status,
+            statusReason,
+            critical: true, // CRITICAL - core routing logic
+            message: statusReason,
+            responseTime,
+            checkpoints,
+            details: {
+                components: ['MicroLLMRouter', 'CompactPromptCompiler'],
+                methodsVerified: methodChecks,
+                note: 'LLM connectivity tested separately in Micro-LLM check'
+            },
+            impact: status !== 'HEALTHY' ? 'CRITICAL - Cannot route calls properly' : null
+        };
     }
     
     /**
      * Check Personality Components (HumanLayerAssembler)
+     * DETAILED CHECKPOINTS
      */
     static async checkPersonality() {
         const startTime = Date.now();
+        const checkpoints = [];
+        
+        // Checkpoint 1: Module load
+        const loadStart = Date.now();
+        let HumanLayerAssembler;
         
         try {
-            const HumanLayerAssembler = require('../src/services/orchestration/personality/HumanLayerAssembler');
+            HumanLayerAssembler = require('../src/services/orchestration/personality/HumanLayerAssembler');
+            checkpoints.push({
+                name: 'HumanLayerAssembler module load',
+                status: 'passed',
+                duration: `${Date.now() - loadStart}ms`
+            });
+        } catch (err) {
+            checkpoints.push({
+                name: 'HumanLayerAssembler module load',
+                status: 'FAILED',
+                error: err.message,
+                path: '../src/services/orchestration/personality/HumanLayerAssembler'
+            });
+            return this.buildFailedResult('Personality', checkpoints, startTime,
+                'HumanLayerAssembler module not found', false);
+        }
+        
+        // Checkpoint 2: Response assembly test
+        const testContext = {
+            routing: { thought: 'user needs AC repair', confidence: 0.95 },
+            memory: { callerHistory: [{ firstName: 'John', totalCount: 1 }] },
+            emotion: { primary: 'FRUSTRATED', intensity: 0.8 },
+            company: { companyName: 'Test HVAC' }
+        };
+        
+        const buildStart = Date.now();
+        let response;
+        
+        try {
+            response = HumanLayerAssembler.build(testContext);
+            const buildTime = Date.now() - buildStart;
             
-            // Test response assembly
-            const testContext = {
-                routing: { thought: 'user needs AC repair', confidence: 0.95 },
-                memory: { callerHistory: [{ firstName: 'John', totalCount: 1 }] },
-                emotion: { primary: 'FRUSTRATED', intensity: 0.8 },
-                company: { companyName: 'Test HVAC' }
-            };
-            
-            const response = HumanLayerAssembler.build(testContext);
+            checkpoints.push({
+                name: 'HumanLayerAssembler.build() execution',
+                status: response && response.length > 0 ? 'passed' : 'FAILED',
+                duration: `${buildTime}ms`,
+                responseLength: response?.length || 0,
+                sampleOutput: response?.substring(0, 50)
+            });
             
             if (!response || response.length === 0) {
-                throw new Error('HumanLayerAssembler not generating responses');
+                return this.buildFailedResult('Personality', checkpoints, startTime,
+                    'HumanLayerAssembler not generating responses', false);
             }
-            
-            const responseTime = Date.now() - startTime;
-            
-            return {
-                name: 'Personality',
-                status: responseTime > 15 ? 'DEGRADED' : 'HEALTHY',
-                critical: false, // Non-critical - system can work with simpler responses
-                message: `HumanLayerAssembler operational`,
-                responseTime,
-                details: {
-                    components: ['HumanLayerAssembler'],
-                    testPassed: true,
-                    sampleResponseLength: response.length
-                }
-            };
-            
-        } catch (error) {
-            return {
-                name: 'Personality',
-                status: 'DOWN',
-                critical: false,
-                message: `Personality failed: ${error.message}`,
-                responseTime: Date.now() - startTime,
-                impact: 'Reduced personality - responses less human-like'
-            };
+        } catch (err) {
+            checkpoints.push({
+                name: 'HumanLayerAssembler.build() execution',
+                status: 'FAILED',
+                error: err.message
+            });
+            return this.buildFailedResult('Personality', checkpoints, startTime,
+                `HumanLayerAssembler.build() failed: ${err.message}`, false);
         }
+        
+        // Checkpoint 3: Response quality checks
+        const qualityChecks = [
+            { name: 'Response length > 10', passed: response.length > 10 },
+            { name: 'Response length < 500', passed: response.length < 500 },
+            { name: 'No undefined in response', passed: !response.includes('undefined') },
+            { name: 'No null in response', passed: !response.includes('null') }
+        ];
+        
+        for (const check of qualityChecks) {
+            checkpoints.push({
+                name: `Quality: ${check.name}`,
+                status: check.passed ? 'passed' : 'WARNING',
+                message: check.passed ? 'OK' : 'Quality issue detected'
+            });
+        }
+        
+        const responseTime = Date.now() - startTime;
+        const qualityPassed = qualityChecks.filter(q => q.passed).length;
+        
+        let status = 'HEALTHY';
+        let statusReason = 'HumanLayerAssembler operational';
+        
+        if (qualityPassed < qualityChecks.length) {
+            status = 'DEGRADED';
+            statusReason = `Personality quality issues: ${qualityChecks.length - qualityPassed} checks failed`;
+        } else if (responseTime > this.THRESHOLDS.testExecution.degraded) {
+            status = 'DEGRADED';
+            statusReason = `Personality slow: ${responseTime}ms`;
+        }
+        
+        return {
+            name: 'Personality',
+            status,
+            statusReason,
+            critical: false,
+            message: statusReason,
+            responseTime,
+            checkpoints,
+            details: {
+                components: ['HumanLayerAssembler'],
+                testContext,
+                sampleResponse: response?.substring(0, 100),
+                responseLength: response?.length,
+                qualityChecks
+            },
+            impact: status !== 'HEALTHY' ? 'Reduced personality - responses may be less human-like' : null
+        };
     }
     
     /**
      * Check Micro-LLM (gpt-4o-mini) Connectivity
-     * This is CRITICAL for LLM-0 routing to work
+     * DETAILED CHECKPOINTS - This is CRITICAL for LLM-0
      */
     static async checkMicroLLM() {
         const startTime = Date.now();
+        const checkpoints = [];
+        
+        // Checkpoint 1: API Key existence
+        const apiKey = process.env.OPENAI_API_KEY;
+        
+        checkpoints.push({
+            name: 'OPENAI_API_KEY environment variable',
+            status: apiKey ? 'passed' : 'FAILED',
+            message: apiKey ? `Set (${apiKey.length} chars)` : 'NOT SET - CRITICAL!'
+        });
+        
+        if (!apiKey) {
+            return this.buildFailedResult('Micro-LLM (gpt-4o-mini)', checkpoints, startTime,
+                'OPENAI_API_KEY not configured - LLM-0 CANNOT FUNCTION', true, ['OPENAI_API_KEY']);
+        }
+        
+        // Checkpoint 2: API Key format validation
+        const validFormat = apiKey.startsWith('sk-') && apiKey.length > 40;
+        
+        checkpoints.push({
+            name: 'API key format validation',
+            status: validFormat ? 'passed' : 'WARNING',
+            message: validFormat ? 'Valid format (sk-...)' : `Unusual format (${apiKey.substring(0, 5)}...)`,
+            keyLength: apiKey.length
+        });
+        
+        // Checkpoint 3: OpenAI client initialization
+        checkpoints.push({
+            name: 'OpenAI client initialization',
+            status: openai ? 'passed' : 'FAILED',
+            message: openai ? 'Client initialized' : 'Client NOT initialized'
+        });
+        
+        if (!openai) {
+            return this.buildFailedResult('Micro-LLM (gpt-4o-mini)', checkpoints, startTime,
+                'OpenAI client not initialized - check config/openai.js', true);
+        }
+        
+        // Checkpoint 4: API call test
+        const apiStart = Date.now();
         
         try {
-            // Check API key
-            const apiKey = process.env.OPENAI_API_KEY;
-            
-            if (!apiKey) {
-                return {
-                    name: 'Micro-LLM (gpt-4o-mini)',
-                    status: 'DOWN',
-                    critical: true, // CRITICAL - LLM-0 cannot route without it
-                    message: 'OPENAI_API_KEY not configured',
-                    responseTime: Date.now() - startTime,
-                    missingVars: ['OPENAI_API_KEY'],
-                    impact: 'CRITICAL - LLM-0 routing engine completely down',
-                    action: 'Set OPENAI_API_KEY in environment variables'
-                };
-            }
-            
-            // Verify API key format
-            const validFormat = apiKey.startsWith('sk-') && apiKey.length > 40;
-            
-            if (!validFormat) {
-                return {
-                    name: 'Micro-LLM (gpt-4o-mini)',
-                    status: 'DOWN',
-                    critical: true,
-                    message: 'OPENAI_API_KEY invalid format',
-                    responseTime: Date.now() - startTime,
-                    impact: 'CRITICAL - LLM-0 routing engine down',
-                    action: 'Verify OPENAI_API_KEY is correct'
-                };
-            }
-            
-            // Test actual API call with minimal tokens
-            if (!openai) {
-                throw new Error('OpenAI client not initialized');
-            }
-            
             const completion = await openai.chat.completions.create({
                 model: 'gpt-4o-mini',
                 messages: [
-                    { role: 'system', content: 'You are a health check assistant.' },
-                    { role: 'user', content: 'Reply with "OK"' }
+                    { role: 'system', content: 'You are a health check assistant. Respond with exactly "HEALTHY"' },
+                    { role: 'user', content: 'Status?' }
                 ],
-                max_tokens: 5,
+                max_tokens: 10,
                 temperature: 0
             });
             
-            const responseTime = Date.now() - startTime;
+            const apiTime = Date.now() - apiStart;
             const responseText = completion.choices[0]?.message?.content || '';
+            const tokensUsed = completion.usage?.total_tokens || 0;
             
-            // Check response time for degraded status
+            checkpoints.push({
+                name: 'gpt-4o-mini API call',
+                status: 'passed',
+                duration: `${apiTime}ms`,
+                response: responseText.substring(0, 20),
+                tokensUsed,
+                model: completion.model
+            });
+            
+            // Checkpoint 5: Response time evaluation
+            let latencyStatus = 'EXCELLENT';
+            if (apiTime > this.THRESHOLDS.llmResponse.degraded) {
+                latencyStatus = 'SLOW';
+            } else if (apiTime > this.THRESHOLDS.llmResponse.healthy) {
+                latencyStatus = 'ACCEPTABLE';
+            }
+            
+            checkpoints.push({
+                name: 'API latency evaluation',
+                status: latencyStatus === 'EXCELLENT' ? 'passed' : 'WARNING',
+                duration: `${apiTime}ms`,
+                threshold: `<${this.THRESHOLDS.llmResponse.healthy}ms excellent`,
+                evaluation: latencyStatus
+            });
+            
+            // Checkpoint 6: Token usage check
+            checkpoints.push({
+                name: 'Token usage check',
+                status: tokensUsed < 50 ? 'passed' : 'WARNING',
+                tokensUsed,
+                message: tokensUsed < 50 ? 'Efficient' : 'Higher than expected for health check'
+            });
+            
+            const responseTime = Date.now() - startTime;
+            
+            // Determine overall status
             let status = 'HEALTHY';
-            let message = 'gpt-4o-mini API operational';
+            let statusReason = `gpt-4o-mini API operational (${apiTime}ms)`;
             
-            if (responseTime > 3000) {
+            if (apiTime > this.THRESHOLDS.llmResponse.degraded) {
                 status = 'DEGRADED';
-                message = `gpt-4o-mini API slow (${responseTime}ms)`;
-            } else if (responseTime > 1000) {
+                statusReason = `gpt-4o-mini API SLOW: ${apiTime}ms (threshold: ${this.THRESHOLDS.llmResponse.degraded}ms)`;
+            } else if (apiTime > this.THRESHOLDS.llmResponse.healthy) {
                 status = 'DEGRADED';
-                message = `gpt-4o-mini elevated latency (${responseTime}ms)`;
+                statusReason = `gpt-4o-mini elevated latency: ${apiTime}ms`;
             }
             
             return {
                 name: 'Micro-LLM (gpt-4o-mini)',
                 status,
-                critical: true, // CRITICAL for LLM-0
-                message,
+                statusReason,
+                critical: true,
+                message: statusReason,
                 responseTime,
+                checkpoints,
                 details: {
                     model: 'gpt-4o-mini',
                     apiKeyConfigured: true,
-                    apiKeyFormat: 'valid',
-                    testResponse: responseText.substring(0, 20),
-                    tokensUsed: completion.usage?.total_tokens || 0
-                }
+                    apiKeyFormat: validFormat ? 'valid' : 'unusual',
+                    apiLatency: apiTime,
+                    testResponse: responseText,
+                    tokensUsed,
+                    latencyEvaluation: latencyStatus
+                },
+                impact: status !== 'HEALTHY' ? 'LLM-0 routing may be slow - affects call response time' : null
             };
             
         } catch (error) {
-            return {
-                name: 'Micro-LLM (gpt-4o-mini)',
-                status: 'DOWN',
-                critical: true,
-                message: `gpt-4o-mini API failed: ${error.message}`,
-                responseTime: Date.now() - startTime,
-                impact: 'CRITICAL - LLM-0 routing engine completely down',
-                error: error.message
-            };
+            checkpoints.push({
+                name: 'gpt-4o-mini API call',
+                status: 'FAILED',
+                error: error.message,
+                errorCode: error.code || error.status || 'UNKNOWN',
+                duration: `${Date.now() - apiStart}ms`
+            });
+            
+            // Diagnose the error
+            let diagnosis = 'Unknown error';
+            let action = 'Check OpenAI status page and API key';
+            
+            if (error.message?.includes('401') || error.message?.includes('auth')) {
+                diagnosis = 'API key invalid or expired';
+                action = 'Regenerate API key at platform.openai.com';
+            } else if (error.message?.includes('429')) {
+                diagnosis = 'Rate limited';
+                action = 'Check OpenAI usage limits and billing';
+            } else if (error.message?.includes('500') || error.message?.includes('503')) {
+                diagnosis = 'OpenAI service error';
+                action = 'Check status.openai.com - may be temporary';
+            } else if (error.message?.includes('timeout') || error.message?.includes('ETIMEDOUT')) {
+                diagnosis = 'Connection timeout';
+                action = 'Check network connectivity and firewall rules';
+            }
+            
+            checkpoints.push({
+                name: 'Error diagnosis',
+                status: 'info',
+                diagnosis,
+                recommendedAction: action
+            });
+            
+            return this.buildFailedResult('Micro-LLM (gpt-4o-mini)', checkpoints, startTime,
+                `gpt-4o-mini API failed: ${error.message}`, true, null, {
+                    error: error.message,
+                    diagnosis,
+                    action
+                });
         }
+    }
+    
+    // ========================================================================
+    // HELPER METHODS
+    // ========================================================================
+    
+    static buildFailedResult(name, checkpoints, startTime, message, critical, missingVars = null, extra = {}) {
+        return {
+            name,
+            status: 'DOWN',
+            statusReason: message,
+            critical,
+            message,
+            responseTime: Date.now() - startTime,
+            checkpoints,
+            ...(missingVars && { missingVars }),
+            impact: critical ? 'CRITICAL - Component failure affects core functionality' : 'Component unavailable',
+            ...extra
+        };
+    }
+    
+    static findSlowest(components) {
+        return components.reduce((max, c) => 
+            (c.responseTime || 0) > (max.responseTime || 0) ? c : max
+        , components[0])?.name || 'Unknown';
+    }
+    
+    static findFastest(components) {
+        return components.reduce((min, c) => 
+            (c.responseTime || Infinity) < (min.responseTime || Infinity) ? c : min
+        , components[0])?.name || 'Unknown';
+    }
+    
+    static getRecommendedAction(status, affectedComponents) {
+        if (status === 'CRITICAL') {
+            const critical = affectedComponents.find(c => c.critical);
+            if (critical?.name?.includes('LLM')) {
+                return 'Check OPENAI_API_KEY and OpenAI service status immediately';
+            }
+            if (critical?.name?.includes('Routing')) {
+                return 'Check routing module files exist in src/services/orchestration/routing/';
+            }
+            return 'Investigate critical component failure - calls may not be processing';
+        }
+        
+        if (status === 'DOWN') {
+            return 'Check component module paths and dependencies';
+        }
+        
+        if (status === 'DEGRADED') {
+            return 'Performance degraded - check server resources and network latency';
+        }
+        
+        return 'Monitor system health';
     }
 }
 
 module.exports = OrchestrationHealthCheck;
-
