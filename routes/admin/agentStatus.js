@@ -21,7 +21,7 @@ const logger = require('../../utils/logger');
 const V2Company = require('../../models/v2Company');
 const RoutingDecisionLog = require('../../models/routing/RoutingDecisionLog');
 const PromptVersion = require('../../models/routing/PromptVersion');
-const { redisClient } = require('../../src/config/redisClient');
+const redisClientModule = require('../../src/config/redisClient');
 
 // ============================================================================
 // COMPONENT REGISTRY - Auto-discovery of all orchestration components
@@ -320,11 +320,19 @@ function buildComponentStatus(company) {
 
 async function getCacheStatus(companyId) {
   try {
+    const redis = redisClientModule.redisClient;
+    if (!redis) {
+      return {
+        status: 'unavailable',
+        error: 'Redis client not initialized'
+      };
+    }
+
     const promptCacheKey = `prompt:compiled:${companyId}`;
-    const promptCached = await redisClient.exists(promptCacheKey);
+    const promptCached = await redis.exists(promptCacheKey);
     
     const policyCacheKey = `policy:${companyId}:active`;
-    const policyCached = await redisClient.exists(policyCacheKey);
+    const policyCached = await redis.exists(policyCacheKey);
     
     return {
       promptCompiler: {
@@ -414,10 +422,19 @@ async function checkDatabase(companyId) {
 
 async function checkRedis(companyId) {
   try {
+    const redis = redisClientModule.redisClient;
+    if (!redis) {
+      return {
+        status: 'down',
+        message: 'Redis client not initialized',
+        responseTime: 0
+      };
+    }
+
     const testKey = `health:check:${companyId}:${Date.now()}`;
-    await redisClient.setex(testKey, 10, 'test');
-    const value = await redisClient.get(testKey);
-    await redisClient.del(testKey);
+    await redis.setex(testKey, 10, 'test');
+    const value = await redis.get(testKey);
+    await redis.del(testKey);
     
     return {
       status: value === 'test' ? 'healthy' : 'degraded',
