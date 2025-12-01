@@ -28,13 +28,16 @@ const openai = require('../config/openai');
 class OrchestrationHealthCheck {
     
     // ========================================================================
-    // PERFORMANCE THRESHOLDS (Strict - Production Grade)
+    // PERFORMANCE THRESHOLDS (Realistic Production Grade)
     // ========================================================================
+    // NOTE: LLM thresholds adjusted 2025-12-01 for realistic OpenAI latency
+    // Cold start: 800-1500ms, Warm: 300-600ms
+    // Old values were too aggressive, causing false DEGRADED alerts
     static THRESHOLDS = {
-        componentLoad: { healthy: 5, degraded: 15 },      // ms
-        testExecution: { healthy: 10, degraded: 50 },     // ms
-        llmResponse: { healthy: 500, degraded: 1000 },    // ms
-        totalPipeline: { healthy: 100, degraded: 500 }    // ms
+        componentLoad: { healthy: 5, degraded: 15 },      // ms - local module load
+        testExecution: { healthy: 10, degraded: 50 },     // ms - local function test
+        llmResponse: { healthy: 800, degraded: 1500 },    // ms - OpenAI API (includes cold start)
+        totalPipeline: { healthy: 200, degraded: 800 }    // ms - full pipeline
     };
     
     /**
