@@ -8579,7 +8579,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     const top = (window.screen.availHeight - height) / 2;
     
     // Get auth token to pass to popup (popups can't reliably access parent localStorage)
-    const authToken = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    const authToken = localStorage.getItem('adminToken') || '';
     
     const editorWindow = window.open(
       `/frontline-intel-editor.html?companyId=${this.companyId}${versionId ? `&versionId=${versionId}` : ''}&token=${encodeURIComponent(authToken)}`,

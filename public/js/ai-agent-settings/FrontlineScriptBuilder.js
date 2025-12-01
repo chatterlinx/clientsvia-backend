@@ -36,36 +36,34 @@ class FrontlineScriptBuilder {
      * Find auth token from various sources
      */
     findAuthToken() {
-        // 1. Try current window localStorage/sessionStorage
-        let token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        // 1. Try URL parameter first (most reliable for popups)
+        const urlParams = new URLSearchParams(window.location.search);
+        let token = urlParams.get('token');
+        if (token) {
+            console.log('[SCRIPT BUILDER] Token found in URL');
+            sessionStorage.setItem('adminToken', token);
+            return token;
+        }
+        
+        // 2. Try current window localStorage (adminToken is the key used in this app)
+        token = localStorage.getItem('adminToken') || sessionStorage.getItem('adminToken');
         if (token) {
             console.log('[SCRIPT BUILDER] Token found in current window storage');
             return token;
         }
         
-        // 2. Try parent window (opener) - for popup windows
+        // 3. Try parent window (opener) - for popup windows
         if (window.opener) {
             try {
-                token = window.opener.localStorage.getItem('token') || 
-                        window.opener.sessionStorage.getItem('token');
+                token = window.opener.localStorage.getItem('adminToken');
                 if (token) {
                     console.log('[SCRIPT BUILDER] Token found in parent window storage');
-                    // Also store locally for future use
-                    sessionStorage.setItem('token', token);
+                    sessionStorage.setItem('adminToken', token);
                     return token;
                 }
             } catch (e) {
                 console.warn('[SCRIPT BUILDER] Could not access parent storage (cross-origin?):', e.message);
             }
-        }
-        
-        // 3. Try URL parameter (fallback)
-        const urlParams = new URLSearchParams(window.location.search);
-        token = urlParams.get('token');
-        if (token) {
-            console.log('[SCRIPT BUILDER] Token found in URL');
-            sessionStorage.setItem('token', token);
-            return token;
         }
         
         console.warn('[SCRIPT BUILDER] No auth token found!');
