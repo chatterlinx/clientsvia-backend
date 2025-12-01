@@ -1,11 +1,12 @@
 /**
  * ============================================================================
- * COMPACT PROMPT COMPILER - PRECISION FRONTLINE-INTEL V23
+ * COMPACT PROMPT COMPILER - ORCHESTRATION ROUTING
  * ============================================================================
  * 
  * PURPOSE: On-demand compilation of Micro-LLM routing prompts
  * ARCHITECTURE: MongoDB (Triage Cards) → Compiled Prompt → Redis Cache
  * PERFORMANCE: <80ms first compile, <3ms cached
+ * DOMAIN: Routing
  * 
  * TOKEN BUDGET: <600 tokens total
  * - Fixed system (100 tokens)
@@ -18,15 +19,24 @@
  * - TTL: 1 hour
  * - Invalidate on Triage Card changes
  * 
+ * USED BY: OrchestrationEngine.js (Step 5: Prompt Compilation)
+ * 
+ * @example
+ * const { prompt, versionHash } = await CompactPromptCompiler.getPrompt(
+ *   companyId,
+ *   { callerContext, emotion }
+ * );
+ * // Returns compiled prompt with routing rules
+ * 
  * ============================================================================
  */
 
-const logger = require('../../utils/logger');
-const TriageCard = require('../../models/TriageCard');
-const PromptVersion = require('../../models/routing/PromptVersion');
-const { murmurhashObject } = require('../../utils/murmurhash');
-const { estimateTokenCount, checkTokenLimit } = require('../../utils/promptTokenCounter');
-const redisClient = require('../../config/redis');
+const logger = require('../../../utils/logger');
+const TriageCard = require('../../../models/TriageCard');
+const PromptVersion = require('../../../models/routing/PromptVersion');
+const { murmurhashObject } = require('../../../utils/murmurhash');
+const { estimateTokenCount, checkTokenLimit } = require('../../../utils/promptTokenCounter');
+const redisClient = require('../../../config/redis');
 
 // ============================================================================
 // FIXED TEMPLATE (100 tokens)
@@ -66,8 +76,24 @@ class CompactPromptCompiler {
    * Get compiled prompt for a company (cached)
    * 
    * @param {string} companyId - Company ObjectId
-   * @param {Object} context - { callerContext, emotion }
-   * @returns {Promise<Object>} { prompt, version, versionHash }
+   * @param {Object} [context={}] - Contextual data
+   * @param {Object} [context.callerContext] - Caller history from MemoryEngine
+   * @param {Object} [context.emotion] - Emotion from EmotionDetector
+   * @param {string} [context.companyName] - Company name
+   * @returns {Promise<Object>} Compiled prompt result
+   * @returns {string} return.prompt - Full compiled prompt
+   * @returns {string} return.version - Version identifier
+   * @returns {string} return.versionHash - Hash for caching
+   * @returns {boolean} return.cached - Whether result was cached
+   * @returns {number} [return.tokenCount] - Estimated token count
+   * 
+   * @example
+   * const result = await CompactPromptCompiler.getPrompt(companyId, {
+   *   callerContext: { callerHistory: [...] },
+   *   emotion: { primary: "FRUSTRATED", intensity: 0.75 },
+   *   companyName: "ABC HVAC"
+   * });
+   * // Returns: { prompt: "You are Frontline-Intel...", versionHash: "abc123", ... }
    */
   static async getPrompt(companyId, context = {}) {
     const startTime = Date.now();
@@ -163,6 +189,10 @@ class CompactPromptCompiler {
   /**
    * Compile prompt from Triage Cards
    * @private
+   * @param {string} companyId - Company ID
+   * @param {Array} triageCards - Active Triage Cards
+   * @param {Object} context - Contextual data
+   * @returns {Promise<Object>} Compiled prompt components
    */
   static async _compile(companyId, triageCards, context) {
     const companyName = context.companyName || 'this company';
@@ -203,6 +233,8 @@ class CompactPromptCompiler {
   /**
    * Build triage rules section from cards
    * @private
+   * @param {Array} triageCards - Triage cards
+   * @returns {string} Formatted routing rules
    */
   static _buildTriageRulesSection(triageCards) {
     const rules = [];
@@ -225,6 +257,8 @@ class CompactPromptCompiler {
   /**
    * Build caller context section
    * @private
+   * @param {Object} callerContext - Caller context from MemoryEngine
+   * @returns {string|null} Formatted caller context or null
    */
   static _buildCallerContextSection(callerContext) {
     if (!callerContext || !callerContext.callerHistory) {
@@ -246,6 +280,8 @@ Call Count: ${caller.totalCount || 1}`;
   /**
    * Build emotion hints section
    * @private
+   * @param {Object} emotion - Emotion from EmotionDetector
+   * @returns {string|null} Formatted emotion hints or null
    */
   static _buildEmotionHintsSection(emotion) {
     if (!emotion || !emotion.primary) {
@@ -259,6 +295,9 @@ Adjust urgency/priority accordingly.`;
   /**
    * Truncate triage rules if token limit exceeded
    * @private
+   * @param {Object} compiled - Compiled prompt components
+   * @param {number} tokenLimit - Token limit
+   * @returns {string} Truncated prompt
    */
   static _truncateTriageRules(compiled, tokenLimit) {
     // Simple truncation: remove lowest priority rules
@@ -273,6 +312,9 @@ Adjust urgency/priority accordingly.`;
   /**
    * Build fallback prompt (when no cards exist)
    * @private
+   * @param {string} companyId - Company ID
+   * @param {Object} context - Contextual data
+   * @returns {Object} Fallback prompt result
    */
   static _buildFallbackPrompt(companyId, context) {
     const fallback = `You are Frontline-Intel. Route caller to appropriate scenario.
@@ -297,6 +339,8 @@ OUTPUT FORMAT:
   /**
    * Get from Redis cache
    * @private
+   * @param {string} cacheKey - Redis cache key
+   * @returns {Promise<Object|null>} Cached data or null
    */
   static async _getFromCache(cacheKey) {
     try {
@@ -314,6 +358,9 @@ OUTPUT FORMAT:
   /**
    * Save to Redis cache
    * @private
+   * @param {string} cacheKey - Redis cache key
+   * @param {Object} compiled - Compiled prompt data
+   * @returns {Promise<void>}
    */
   static async _saveToCache(cacheKey, compiled) {
     try {
@@ -333,6 +380,11 @@ OUTPUT FORMAT:
   /**
    * Save prompt version to MongoDB
    * @private
+   * @param {string} companyId - Company ID
+   * @param {string} versionHash - Version hash
+   * @param {Object} compiled - Compiled prompt data
+   * @param {Array} triageCards - Triage cards
+   * @returns {Promise<void>}
    */
   static async _saveVersion(companyId, versionHash, compiled, triageCards) {
     try {
@@ -381,6 +433,8 @@ OUTPUT FORMAT:
   /**
    * Increment version number (v1.0 → v1.1 → v2.0)
    * @private
+   * @param {string} currentVersion - Current version string
+   * @returns {string} Incremented version
    */
   static _incrementVersion(currentVersion) {
     const match = currentVersion.match(/v(\d+)\.(\d+)/);
@@ -396,7 +450,12 @@ OUTPUT FORMAT:
   /**
    * Invalidate cache for a company (call when Triage Cards change)
    * 
-   * @param {string} companyId
+   * @param {string} companyId - Company ID
+   * @returns {Promise<void>}
+   * 
+   * @example
+   * // Call this after saving/updating Triage Cards
+   * await CompactPromptCompiler.invalidateCache(companyId);
    */
   static async invalidateCache(companyId) {
     try {

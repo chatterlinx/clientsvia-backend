@@ -1,25 +1,15 @@
 /**
  * ============================================================================
- * HUMAN LAYER ASSEMBLER - PRECISION FRONTLINE-INTEL V23
+ * HUMAN LAYER ASSEMBLER - ORCHESTRATION PERSONALITY
  * ============================================================================
  * 
  * PURPOSE: Deterministic human-like response generator (NO LLM)
  * ARCHITECTURE: Pure code assembly from templates + context + emotion
  * PERFORMANCE: <8ms execution, 100% consistent, zero API cost
+ * DOMAIN: Personality
  * 
  * WHAT THIS DOES:
  * Takes routing decision + caller memory + emotion → assembles natural response
- * 
- * EXAMPLE:
- *   Input: { 
- *     routing: { target: "HVAC_LEAK", thought: "detected leak keywords" },
- *     memory: { callerHistory: [{ firstName: "Walter", lastIntent: "AC_REPAIR" }] },
- *     emotion: { primary: "HUMOROUS", intensity: 0.6 }
- *   }
- *   
- *   Output: "Haha, hey Walter! I feel that! How's the AC treating you since 
- *            last time? Sounds like it might be leaking. Let me get someone 
- *            out there right away."
  * 
  * ASSEMBLY COMPONENTS:
  * 1. Greeting (personalized for returning callers)
@@ -28,10 +18,23 @@
  * 4. Issue acknowledgment (mirrors what caller said)
  * 5. Natural closer (urgency-based)
  * 
+ * USED BY: OrchestrationEngine.js (Step 6: Response Generation)
+ * 
+ * @example
+ * const response = HumanLayerAssembler.build({ 
+ *   routing: { target: "HVAC_LEAK", thought: "detected leak keywords" },
+ *   memory: { callerHistory: [{ firstName: "Walter", lastIntent: "AC_REPAIR" }] },
+ *   emotion: { primary: "HUMOROUS", intensity: 0.6 },
+ *   company: { name: "Elite HVAC" }
+ * });
+ * // Returns: "Haha, hey Walter! I feel that! How's the AC treating you since 
+ * //           last time? Sounds like it might be leaking. Let me get someone 
+ * //           out there right away."
+ * 
  * ============================================================================
  */
 
-const logger = require('../../utils/logger');
+const logger = require('../../../utils/logger');
 
 // ============================================================================
 // GREETING TEMPLATES (First Impression)
@@ -253,12 +256,31 @@ class HumanLayerAssembler {
   /**
    * Build human-like response from routing + context + emotion
    * 
-   * @param {Object} params
-   * @param {Object} params.routing - { target, thought, confidence, priority }
-   * @param {Object} params.memory - From MemoryEngine (caller history)
-   * @param {Object} params.emotion - From EmotionDetector
-   * @param {Object} params.company - Company config
+   * @param {Object} params - Assembly parameters
+   * @param {Object} params.routing - Routing decision
+   * @param {string} params.routing.target - Target scenario key
+   * @param {string} params.routing.thought - Routing thought process
+   * @param {number} params.routing.confidence - Confidence score
+   * @param {string} [params.routing.priority] - Priority level (NORMAL, HIGH, EMERGENCY)
+   * @param {string} [params.routing.action] - Action type (TRANSFER, INFO_ONLY, etc.)
+   * @param {Object} [params.memory] - Caller history from MemoryEngine
+   * @param {Array} [params.memory.callerHistory] - Previous calls
+   * @param {Object} [params.emotion] - Emotion analysis from EmotionDetector
+   * @param {string} [params.emotion.primary] - Primary emotion type
+   * @param {number} [params.emotion.intensity] - Emotion intensity 0.0-1.0
+   * @param {Object} [params.company] - Company configuration
    * @returns {string} Natural human response
+   * 
+   * @example
+   * const response = HumanLayerAssembler.build({ 
+   *   routing: { target: "HVAC_LEAK", thought: "leak detected", priority: "HIGH" },
+   *   memory: { callerHistory: [{ firstName: "Walter", totalCount: 3 }] },
+   *   emotion: { primary: "FRUSTRATED", intensity: 0.75 },
+   *   company: { name: "ABC HVAC" }
+   * });
+   * // Returns: "Walter, I'm so sorry you're dealing with this again. That sounds 
+   * //           really frustrating. Sounds like a leak. Let me get someone out 
+   * //           there right away."
    */
   static build({ routing, memory, emotion, company }) {
     const startTime = Date.now();
@@ -330,6 +352,10 @@ class HumanLayerAssembler {
   /**
    * Select appropriate greeting
    * @private
+   * @param {string} emotionType - Primary emotion
+   * @param {boolean} isReturning - Is returning caller
+   * @param {Object} caller - Caller history object
+   * @returns {string} Greeting text
    */
   static _selectGreeting(emotionType, isReturning, caller) {
     const greetingSet = isReturning 
@@ -350,6 +376,8 @@ class HumanLayerAssembler {
   /**
    * Select empathy phrase
    * @private
+   * @param {string} emotionType - Primary emotion
+   * @returns {string} Empathy text
    */
   static _selectEmpathy(emotionType) {
     const empathySet = EMPATHY[emotionType] || EMPATHY.NEUTRAL;
@@ -359,6 +387,11 @@ class HumanLayerAssembler {
   /**
    * Build context reference for returning callers
    * @private
+   * @param {string} emotionType - Primary emotion
+   * @param {boolean} isReturning - Is returning caller
+   * @param {Object} caller - Caller history object
+   * @param {Object} routing - Routing decision
+   * @returns {string|null} Context reference or null
    */
   static _buildContextReference(emotionType, isReturning, caller, routing) {
     if (!isReturning || !caller.lastIntent) {
@@ -383,6 +416,8 @@ class HumanLayerAssembler {
   /**
    * Build issue acknowledgment
    * @private
+   * @param {Object} routing - Routing decision
+   * @returns {string} Issue acknowledgment
    */
   static _buildIssueAcknowledgment(routing) {
     const issue = this._humanizeIntent(routing.target);
@@ -401,6 +436,9 @@ class HumanLayerAssembler {
   /**
    * Select closer based on urgency
    * @private
+   * @param {Object} routing - Routing decision
+   * @param {number} emotionIntensity - Emotion intensity
+   * @returns {string} Closer text
    */
   static _selectCloser(routing, emotionIntensity) {
     const priority = routing.priority || 'NORMAL';
@@ -425,6 +463,8 @@ class HumanLayerAssembler {
   /**
    * Convert intent key to human-readable phrase
    * @private
+   * @param {string} intentKey - Intent key (e.g., "HVAC_REPAIR")
+   * @returns {string} Human-readable phrase
    */
   static _humanizeIntent(intentKey) {
     if (!intentKey) return 'that';
@@ -451,6 +491,7 @@ class HumanLayerAssembler {
   /**
    * Get time of day greeting
    * @private
+   * @returns {string} Time of day (morning, afternoon, evening)
    */
   static _getTimeOfDay() {
     const hour = new Date().getHours();
@@ -463,6 +504,8 @@ class HumanLayerAssembler {
   /**
    * Random picker (for natural variation)
    * @private
+   * @param {Array} array - Array to pick from
+   * @returns {*} Random element
    */
   static _randomPick(array) {
     return array[Math.floor(Math.random() * array.length)];

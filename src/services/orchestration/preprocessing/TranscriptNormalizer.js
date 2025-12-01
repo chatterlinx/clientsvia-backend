@@ -1,23 +1,26 @@
 /**
  * ============================================================================
- * TRANSCRIPT NORMALIZER - PRECISION FRONTLINE-INTEL V23
+ * TRANSCRIPT NORMALIZER - ORCHESTRATION PREPROCESSING
  * ============================================================================
  * 
  * PURPOSE: Clean and standardize transcripts from STT engines
  * ARCHITECTURE: Pattern-based normalization
  * PERFORMANCE: <2ms execution
+ * DOMAIN: Preprocessing
  * 
  * WHAT IT DOES:
  * - Normalize spelling variations ("AC" vs "A/C" vs "air conditioning")
  * - Fix common STT errors ("their" when meant "there")
  * - Standardize punctuation
  * - Trim whitespace
- * - Lowercase for consistency
+ * - Preserve important capitalization (AC, HVAC, ASAP)
+ * 
+ * USED BY: OrchestrationEngine.js (Step 3: Preprocessing)
  * 
  * ============================================================================
  */
 
-const logger = require('../../utils/logger');
+const logger = require('../../../utils/logger');
 
 // ============================================================================
 // NORMALIZATION RULES
@@ -58,10 +61,14 @@ class TranscriptNormalizer {
   /**
    * Normalize transcript text
    * 
-   * @param {string} text - Raw transcript
-   * @param {Object} options - Configuration
-   * @param {boolean} options.preserveCase - Don't lowercase (default: false)
+   * @param {string} text - Raw transcript from STT
+   * @param {Object} [options] - Configuration options
+   * @param {boolean} [options.preserveCase=false] - Don't lowercase
    * @returns {string} Normalized text
+   * 
+   * @example
+   * const normalized = TranscriptNormalizer.normalize("my a/c is broken");
+   * // Returns: "my AC is broken"
    */
   static normalize(text, options = {}) {
     if (!text || typeof text !== 'string') {
@@ -145,6 +152,8 @@ class TranscriptNormalizer {
   /**
    * Escape special regex characters
    * @private
+   * @param {string} str - String to escape
+   * @returns {string} Escaped string
    */
   static _escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -153,9 +162,16 @@ class TranscriptNormalizer {
   /**
    * Batch normalize multiple texts
    * 
-   * @param {Array<string>} texts
-   * @param {Object} options
-   * @returns {Array<string>}
+   * @param {Array<string>} texts - Array of texts to normalize
+   * @param {Object} [options] - Configuration options
+   * @returns {Array<string>} Array of normalized texts
+   * 
+   * @example
+   * const normalized = TranscriptNormalizer.normalizeBatch([
+   *   "my a/c is broken",
+   *   "I need help asap"
+   * ]);
+   * // Returns: ["my AC is broken", "I need help ASAP"]
    */
   static normalizeBatch(texts, options = {}) {
     return texts.map(text => this.normalize(text, options));

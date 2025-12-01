@@ -1,11 +1,12 @@
 /**
  * ============================================================================
- * FILLER STRIPPER - PRECISION FRONTLINE-INTEL V23
+ * FILLER STRIPPER - ORCHESTRATION PREPROCESSING
  * ============================================================================
  * 
  * PURPOSE: Remove filler words from transcripts to reduce token count
  * ARCHITECTURE: Pattern-based removal (preserves emotional signals)
  * PERFORMANCE: <3ms execution
+ * DOMAIN: Preprocessing
  * 
  * WHAT IT REMOVES:
  * - Filler words: "um", "uh", "like", "you know", "I mean"
@@ -20,10 +21,12 @@
  * 
  * TOKEN SAVINGS: ~15% reduction in LLM input cost
  * 
+ * USED BY: OrchestrationEngine.js (Step 3: Preprocessing)
+ * 
  * ============================================================================
  */
 
-const logger = require('../../utils/logger');
+const logger = require('../../../utils/logger');
 
 // ============================================================================
 // FILLER WORD PATTERNS
@@ -75,11 +78,15 @@ class FillerStripper {
   /**
    * Remove filler words from text
    * 
-   * @param {string} text - Raw transcript
-   * @param {Object} options - Configuration
-   * @param {boolean} options.aggressive - Remove more aggressively (default: false)
-   * @param {Array} options.customFillers - Additional filler words to remove
-   * @returns {string} Cleaned text
+   * @param {string} text - Raw transcript from STT
+   * @param {Object} [options] - Configuration options
+   * @param {boolean} [options.aggressive=false] - Remove more aggressively
+   * @param {Array<string>} [options.customFillers] - Additional filler words to remove
+   * @returns {string} Cleaned text with fillers removed
+   * 
+   * @example
+   * const cleaned = FillerStripper.clean("uh my like AC is um broken");
+   * // Returns: "my AC is broken"
    */
   static clean(text, options = {}) {
     if (!text || typeof text !== 'string') {
@@ -148,6 +155,8 @@ class FillerStripper {
   /**
    * Check if a word should be protected from removal
    * @private
+   * @param {string} word - Word to check
+   * @returns {boolean} True if word should be protected
    */
   static _isProtected(word) {
     const lower = word.toLowerCase();
@@ -157,19 +166,34 @@ class FillerStripper {
   /**
    * Batch clean multiple texts (for efficiency)
    * 
-   * @param {Array<string>} texts
-   * @param {Object} options
-   * @returns {Array<string>}
+   * @param {Array<string>} texts - Array of texts to clean
+   * @param {Object} [options] - Configuration options
+   * @returns {Array<string>} Array of cleaned texts
+   * 
+   * @example
+   * const cleaned = FillerStripper.cleanBatch([
+   *   "uh hello",
+   *   "um my AC is broken"
+   * ]);
+   * // Returns: ["hello", "my AC is broken"]
    */
   static cleanBatch(texts, options = {}) {
     return texts.map(text => this.clean(text, options));
   }
   
   /**
-   * Get statistics about potential savings
+   * Get statistics about potential token savings
    * 
-   * @param {string} text
-   * @returns {Object} { originalTokens, cleanedTokens, savings }
+   * @param {string} text - Text to analyze
+   * @returns {Object} Savings statistics
+   * @returns {number} return.originalTokens - Estimated tokens before cleaning
+   * @returns {number} return.cleanedTokens - Estimated tokens after cleaning
+   * @returns {number} return.savings - Token count saved
+   * @returns {string} return.savingsPercent - Percentage saved
+   * 
+   * @example
+   * const stats = FillerStripper.analyzeSavings("uh my like AC is um broken");
+   * // Returns: { originalTokens: 7, cleanedTokens: 4, savings: 3, savingsPercent: "42.9" }
    */
   static analyzeSavings(text) {
     const original = text;

@@ -1,11 +1,12 @@
 /**
  * ============================================================================
- * MICRO-LLM ROUTER - PRECISION FRONTLINE-INTEL V23
+ * MICRO-LLM ROUTER - ORCHESTRATION ROUTING
  * ============================================================================
  * 
  * PURPOSE: Fast, cheap routing using gpt-4o-mini
  * ARCHITECTURE: OpenAI API → Structured JSON output
  * PERFORMANCE: ~280ms average latency, $0.00008 per call
+ * DOMAIN: Routing
  * 
  * FEATURES:
  * - Structured output enforcement (JSON mode)
@@ -14,11 +15,22 @@
  * - Timeout protection (5 second hard limit)
  * - Confidence calibration
  * 
+ * USED BY: OrchestrationEngine.js (Step 5: Routing Decision)
+ * 
+ * @example
+ * const decision = await MicroLLMRouter.route({
+ *   prompt: compiledPrompt,
+ *   userInput: "my AC is broken",
+ *   companyId: "123",
+ *   callId: "call-456"
+ * });
+ * // Returns: { target: "HVAC_REPAIR", thought: "AC repair keywords", confidence: 0.92 }
+ * 
  * ============================================================================
  */
 
-const logger = require('../../utils/logger');
-const openaiClient = require('../../config/openai');
+const logger = require('../../../utils/logger');
+const openaiClient = require('../../../config/openai');
 
 // ============================================================================
 // CONFIGURATION
@@ -42,12 +54,37 @@ class MicroLLMRouter {
   /**
    * Route user input to scenario using Micro-LLM
    * 
-   * @param {Object} params
+   * @param {Object} params - Routing parameters
    * @param {string} params.prompt - Compiled prompt from CompactPromptCompiler
    * @param {string} params.userInput - User's spoken input (cleaned)
    * @param {string} params.companyId - For logging
    * @param {string} params.callId - For logging
-   * @returns {Promise<Object>} { target, thought, confidence, priority }
+   * @returns {Promise<Object>} Routing decision
+   * @returns {string} return.target - Target scenario key
+   * @returns {string} return.thought - Routing thought process
+   * @returns {number} return.confidence - Confidence score 0.0-1.0
+   * @returns {string} return.priority - Priority level (NORMAL, HIGH, EMERGENCY)
+   * @returns {number} return.latency - Routing latency in ms
+   * @returns {string} return.model - LLM model used
+   * @returns {boolean} return.success - Whether routing succeeded
+   * @returns {boolean} [return.fallback] - Whether fallback was used
+   * 
+   * @example
+   * const decision = await MicroLLMRouter.route({
+   *   prompt: "You are Frontline-Intel...",
+   *   userInput: "my heater is broken",
+   *   companyId: "507f1f77bcf86cd799439011",
+   *   callId: "call_abc123"
+   * });
+   * // Returns: {
+   * //   target: "HVAC_NO_HEAT",
+   * //   thought: "Detected heating issue keywords",
+   * //   confidence: 0.89,
+   * //   priority: "NORMAL",
+   * //   latency: 285,
+   * //   model: "gpt-4o-mini",
+   * //   success: true
+   * // }
    */
   static async route({ prompt, userInput, companyId, callId }) {
     const startTime = Date.now();
@@ -131,6 +168,11 @@ class MicroLLMRouter {
   /**
    * Call OpenAI gpt-4o-mini
    * @private
+   * @param {string} systemPrompt - System prompt
+   * @param {string} userMessage - User message
+   * @param {string} companyId - For logging
+   * @param {string} callId - For logging
+   * @returns {Promise<Object>} LLM decision
    */
   static async _callLLM(systemPrompt, userMessage, companyId, callId) {
     const controller = new AbortController();
@@ -183,6 +225,8 @@ class MicroLLMRouter {
   /**
    * Validate LLM decision structure
    * @private
+   * @param {Object} decision - LLM decision object
+   * @returns {boolean} Whether decision is valid
    */
   static _isValidDecision(decision) {
     return (
@@ -198,6 +242,11 @@ class MicroLLMRouter {
   /**
    * Fallback routing using keyword matching
    * @private
+   * @param {string} userInput - User input
+   * @param {string} prompt - Compiled prompt
+   * @param {string} companyId - For logging
+   * @param {string} callId - For logging
+   * @returns {Object} Fallback routing decision
    */
   static _fallbackRouting(userInput, prompt, companyId, callId) {
     logger.info('[MICRO-LLM ROUTER] Using keyword fallback', {
@@ -270,6 +319,8 @@ class MicroLLMRouter {
   /**
    * Emergency fallback (when everything fails)
    * @private
+   * @param {string} userInput - User input
+   * @returns {Object} Emergency fallback decision
    */
   static _emergencyFallback(userInput) {
     // Detect emergency keywords
@@ -292,6 +343,8 @@ class MicroLLMRouter {
   /**
    * Sleep utility for retry backoff
    * @private
+   * @param {number} ms - Milliseconds to sleep
+   * @returns {Promise<void>}
    */
   static _sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -300,8 +353,15 @@ class MicroLLMRouter {
   /**
    * Batch route multiple inputs (for testing/analysis)
    * 
-   * @param {Array} inputs - Array of { prompt, userInput, companyId, callId }
-   * @returns {Promise<Array>} Array of routing decisions
+   * @param {Array<Object>} inputs - Array of { prompt, userInput, companyId, callId }
+   * @returns {Promise<Array<Object>>} Array of routing decisions
+   * 
+   * @example
+   * const results = await MicroLLMRouter.routeBatch([
+   *   { prompt: "...", userInput: "AC broken", companyId: "123", callId: "1" },
+   *   { prompt: "...", userInput: "need quote", companyId: "123", callId: "2" }
+   * ]);
+   * // Returns array of routing decisions
    */
   static async routeBatch(inputs) {
     const results = [];

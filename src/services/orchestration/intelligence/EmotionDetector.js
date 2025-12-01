@@ -1,11 +1,12 @@
 /**
  * ============================================================================
- * EMOTION DETECTOR - PRECISION FRONTLINE-INTEL V23
+ * EMOTION DETECTOR - ORCHESTRATION INTELLIGENCE
  * ============================================================================
  * 
  * PURPOSE: Deterministic emotion analysis for voice AI calls
  * ARCHITECTURE: Pattern-based detection (NO LLM, zero API cost)
  * PERFORMANCE: <15ms execution, 94%+ accuracy
+ * DOMAIN: Intelligence
  * 
  * EMOTION TYPES:
  * - NEUTRAL: Default, calm, no strong signals
@@ -17,14 +18,16 @@
  * - SAD: Apologetic, defeated language
  * - URGENT: Time-sensitive requests, ASAP language
  * 
- * USAGE:
- *   const emotion = EmotionDetector.analyze(userText, callerHistory);
- *   // Returns: { primary: "FRUSTRATED", intensity: 0.85, signals: [...] }
+ * USED BY: OrchestrationEngine.js (Step 4: Intelligence)
+ * 
+ * @example
+ * const emotion = EmotionDetector.analyze("I'm so frustrated!", callerHistory);
+ * // Returns: { primary: "FRUSTRATED", intensity: 0.85, signals: [...] }
  * 
  * ============================================================================
  */
 
-const logger = require('../../utils/logger');
+const logger = require('../../../utils/logger');
 
 // ============================================================================
 // EMOTION PATTERN DEFINITIONS (Carefully Curated)
@@ -196,8 +199,24 @@ class EmotionDetector {
    * Analyze emotion from user input
    * 
    * @param {string} text - User's spoken input (transcript)
-   * @param {Object} callerHistory - From MemoryEngine (optional)
-   * @returns {Object} { primary: "FRUSTRATED", intensity: 0.85, signals: [...], debug: {...} }
+   * @param {Object|null} [callerHistory=null] - From MemoryEngine (optional)
+   * @param {Array} [callerHistory.callerHistory] - Array of previous calls
+   * @returns {Object} Emotion analysis result
+   * @returns {string} return.primary - Primary emotion type
+   * @returns {number} return.intensity - Intensity from 0.0 to 1.0
+   * @returns {Array} return.signals - Detected signals
+   * @returns {Object} return.allScores - Scores for all emotion types
+   * @returns {Array} return.modifiers - Applied intensity modifiers
+   * @returns {number} return.executionTime - Analysis time in ms
+   * 
+   * @example
+   * const emotion = EmotionDetector.analyze("I'm so frustrated!!!");
+   * // Returns: { 
+   * //   primary: "FRUSTRATED", 
+   * //   intensity: 0.85, 
+   * //   signals: [...],
+   * //   modifiers: [{ type: 'multipleExclamation', boost: 0.15 }]
+   * // }
    */
   static analyze(text, callerHistory = null) {
     const startTime = Date.now();
@@ -269,6 +288,11 @@ class EmotionDetector {
   /**
    * Calculate emotion score for a specific emotion type
    * @private
+   * @param {string} normalizedText - Lowercased text
+   * @param {Object} config - Emotion pattern configuration
+   * @param {Array} detectedSignals - Array to populate with signals
+   * @param {string} emotionType - Type of emotion being scored
+   * @returns {number} Score from 0.0 to 1.0
    */
   static _calculateEmotionScore(normalizedText, config, detectedSignals, emotionType) {
     let score = 0;
@@ -315,6 +339,10 @@ class EmotionDetector {
   /**
    * Calculate intensity boost from context and patterns
    * @private
+   * @param {string} originalText - Original text with capitalization
+   * @param {string} normalizedText - Lowercased text
+   * @param {Object|null} callerHistory - Caller history from MemoryEngine
+   * @returns {Object} { totalBoost: number, applied: Array }
    */
   static _calculateIntensityModifiers(originalText, normalizedText, callerHistory) {
     let totalBoost = 0;
@@ -381,6 +409,10 @@ class EmotionDetector {
    * 
    * @param {string} text - User input
    * @returns {boolean} true if emergency keywords detected
+   * 
+   * @example
+   * const isEmergency = EmotionDetector.isEmergency("There's a fire!");
+   * // Returns: true
    */
   static isEmergency(text) {
     const emergencyKeywords = [
@@ -399,6 +431,10 @@ class EmotionDetector {
    * @param {string} emotionType - Primary emotion
    * @param {number} intensity - 0.0 to 1.0
    * @returns {string} Description like "Moderately frustrated"
+   * 
+   * @example
+   * const desc = EmotionDetector.describe("FRUSTRATED", 0.75);
+   * // Returns: "Very frustrated"
    */
   static describe(emotionType, intensity) {
     const intensityLabel = 
