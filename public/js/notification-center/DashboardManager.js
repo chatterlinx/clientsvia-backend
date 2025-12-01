@@ -262,6 +262,9 @@ class DashboardManager {
             return;
         }
         
+        // Store for copy function
+        this.currentServiceDebug = { key: serviceKey, service };
+        
         // Build status-specific styling
         const isHealthy = service.status === 'HEALTHY';
         const isDown = service.status === 'DOWN' || service.status === 'CRITICAL';
@@ -278,19 +281,30 @@ class DashboardManager {
                                isNotConfigured ? 'text-gray-600' :
                                'text-red-700';
         
+        // Get troubleshooting info for this service
+        const troubleshoot = this.getServiceTroubleshooting(service.name, service);
+        
         // Build details HTML
         let detailsHtml = `
-            <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onclick="this.remove()">
-                <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-auto" onclick="event.stopPropagation()">
+            <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" id="service-detail-modal" onclick="this.remove()">
+                <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-auto" onclick="event.stopPropagation()">
                     <div class="p-6">
+                        <!-- Header with Copy Button -->
                         <div class="flex items-center justify-between mb-4">
                             <h2 class="text-xl font-bold flex items-center">
                                 <span class="mr-2">${this.getServiceIcon(service.name)}</span>
                                 ${service.name}
                             </h2>
-                            <button onclick="this.closest('.fixed').remove()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                            <div class="flex items-center gap-2">
+                                <button onclick="dashboardManager.copyServiceDebugInfo()" 
+                                        class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm flex items-center gap-1">
+                                    📋 Copy Debug Info
+                                </button>
+                                <button onclick="this.closest('.fixed').remove()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                            </div>
                         </div>
                         
+                        <!-- Status Banner -->
                         <div class="${statusBgClass} border-l-4 p-4 rounded mb-4">
                             <div class="flex items-center justify-between">
                                 <span class="${statusTextClass} font-bold text-lg">${service.status}</span>
@@ -300,12 +314,49 @@ class DashboardManager {
                         </div>
         `;
         
+        // CHECKPOINTS SECTION - Show what was checked
+        detailsHtml += `
+            <div class="bg-gray-50 border border-gray-200 rounded p-3 mb-4">
+                <h4 class="font-semibold text-gray-900 mb-2">🔍 Health Check Checkpoints</h4>
+                <div class="space-y-1 text-sm">
+                    ${troubleshoot.checkpoints.map(cp => `
+                        <div class="flex items-center gap-2">
+                            <span class="${cp.passed ? 'text-green-600' : 'text-red-600'}">${cp.passed ? '✓' : '✗'}</span>
+                            <span class="${cp.passed ? 'text-gray-600' : 'text-red-700 font-medium'}">${cp.name}</span>
+                            ${cp.value ? `<span class="text-gray-400 font-mono text-xs ml-auto">${cp.value}</span>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+        
+        // ERROR ORIGIN - Where the error came from
+        detailsHtml += `
+            <div class="bg-slate-50 border border-slate-200 rounded p-3 mb-4">
+                <h4 class="font-semibold text-slate-900 mb-2">📍 Error Origin</h4>
+                <dl class="text-sm space-y-1">
+                    <div class="flex justify-between">
+                        <dt class="text-slate-600">Source File:</dt>
+                        <dd class="font-mono text-slate-900">${troubleshoot.sourceFile}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-600">Check Function:</dt>
+                        <dd class="font-mono text-slate-900">${troubleshoot.checkFunction}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-600">Environment Variable:</dt>
+                        <dd class="font-mono text-slate-900">${troubleshoot.envVar || 'N/A'}</dd>
+                    </div>
+                </dl>
+            </div>
+        `;
+        
         // Show error details if down
-        if (isDown && service.error) {
+        if ((isDown || isNotConfigured) && service.error) {
             detailsHtml += `
                 <div class="bg-red-100 border border-red-300 rounded p-3 mb-4">
                     <h4 class="font-semibold text-red-900 mb-1">❌ Error Details</h4>
-                    <p class="text-red-800 font-mono text-sm">${this.escapeHtml(service.error)}</p>
+                    <p class="text-red-800 font-mono text-sm break-all">${this.escapeHtml(service.error)}</p>
                 </div>
             `;
         }
@@ -320,15 +371,15 @@ class DashboardManager {
             `;
         }
         
-        // Show action if available
-        if (service.action) {
-            detailsHtml += `
-                <div class="bg-blue-50 border border-blue-200 rounded p-3 mb-4">
-                    <h4 class="font-semibold text-blue-900 mb-1">🔧 Recommended Action</h4>
-                    <p class="text-blue-800">${service.action}</p>
-                </div>
-            `;
-        }
+        // FIX INSTRUCTIONS - Step by step
+        detailsHtml += `
+            <div class="bg-emerald-50 border border-emerald-200 rounded p-3 mb-4">
+                <h4 class="font-semibold text-emerald-900 mb-2">🔧 How to Fix</h4>
+                <ol class="list-decimal list-inside text-emerald-800 space-y-2 text-sm">
+                    ${troubleshoot.fixSteps.map(step => `<li>${step}</li>`).join('')}
+                </ol>
+            </div>
+        `;
         
         // Show missing vars if available
         if (service.missingVars && service.missingVars.length > 0) {
@@ -338,6 +389,7 @@ class DashboardManager {
                     <ul class="list-disc list-inside text-orange-800">
                         ${service.missingVars.map(v => `<li><code class="font-mono bg-orange-100 px-1 rounded">${v}</code></li>`).join('')}
                     </ul>
+                    <p class="text-xs text-orange-600 mt-2">Set these in Render Dashboard → Environment Variables</p>
                 </div>
             `;
         }
@@ -350,7 +402,7 @@ class DashboardManager {
                     <dl class="grid grid-cols-2 gap-2 text-sm">
                         ${Object.entries(service.details).map(([key, value]) => `
                             <dt class="text-gray-600">${this.formatDetailKey(key)}:</dt>
-                            <dd class="text-gray-900 font-mono">${this.formatDetailValue(value)}</dd>
+                            <dd class="text-gray-900 font-mono text-xs break-all">${this.formatDetailValue(value)}</dd>
                         `).join('')}
                     </dl>
                 </div>
@@ -363,6 +415,16 @@ class DashboardManager {
                 <div class="bg-blue-50 border border-blue-200 rounded p-3 mb-4">
                     <h4 class="font-semibold text-blue-900 mb-1">ℹ️ Note</h4>
                     <p class="text-blue-800 text-sm">${service.note}</p>
+                </div>
+            `;
+        }
+        
+        // Show action if available
+        if (service.action) {
+            detailsHtml += `
+                <div class="bg-blue-50 border border-blue-200 rounded p-3 mb-4">
+                    <h4 class="font-semibold text-blue-900 mb-1">💡 Recommended Action</h4>
+                    <p class="text-blue-800">${service.action}</p>
                 </div>
             `;
         }
@@ -380,6 +442,15 @@ class DashboardManager {
             `;
         }
         
+        // Copy Debug Info reminder
+        detailsHtml += `
+            <div class="border-t pt-4 mt-4 bg-blue-50 -mx-6 -mb-6 px-6 py-4 rounded-b-lg">
+                <p class="text-sm text-blue-800">
+                    <strong>💡 Need help?</strong> Click "Copy Debug Info" above and paste to your AI assistant for instant troubleshooting!
+                </p>
+            </div>
+        `;
+        
         detailsHtml += `
                     </div>
                 </div>
@@ -388,6 +459,234 @@ class DashboardManager {
         
         // Insert modal into DOM
         document.body.insertAdjacentHTML('beforeend', detailsHtml);
+    }
+    
+    /**
+     * Copy comprehensive debug info for the current service
+     */
+    async copyServiceDebugInfo() {
+        if (!this.currentServiceDebug) {
+            this.nc.showError('No service data to copy');
+            return;
+        }
+        
+        const { key, service } = this.currentServiceDebug;
+        const troubleshoot = this.getServiceTroubleshooting(service.name, service);
+        
+        const debugReport = `
+═══════════════════════════════════════════════════════
+🔧 SERVICE HEALTH DEBUG REPORT
+═══════════════════════════════════════════════════════
+
+SERVICE: ${service.name}
+STATUS: ${service.status}
+RESPONSE TIME: ${service.responseTime || 'N/A'}ms
+CRITICAL: ${service.critical ? 'YES' : 'NO'}
+TIMESTAMP: ${new Date().toISOString()}
+
+═══════════════════════════════════════════════════════
+📍 ERROR ORIGIN
+═══════════════════════════════════════════════════════
+Source File: ${troubleshoot.sourceFile}
+Check Function: ${troubleshoot.checkFunction}
+Environment Variable: ${troubleshoot.envVar || 'N/A'}
+
+═══════════════════════════════════════════════════════
+❌ ERROR MESSAGE
+═══════════════════════════════════════════════════════
+${service.message || 'No message'}
+
+${service.error ? `
+ERROR DETAILS:
+${service.error}
+` : ''}
+
+═══════════════════════════════════════════════════════
+🔍 HEALTH CHECK CHECKPOINTS
+═══════════════════════════════════════════════════════
+${troubleshoot.checkpoints.map(cp => `${cp.passed ? '✓' : '✗'} ${cp.name}${cp.value ? ` (${cp.value})` : ''}`).join('\n')}
+
+═══════════════════════════════════════════════════════
+⚠️ IMPACT
+═══════════════════════════════════════════════════════
+${service.impact || 'No impact information available'}
+
+═══════════════════════════════════════════════════════
+📋 MISSING ENVIRONMENT VARIABLES
+═══════════════════════════════════════════════════════
+${service.missingVars?.length > 0 ? service.missingVars.join('\n') : 'None'}
+
+═══════════════════════════════════════════════════════
+📊 SERVICE DETAILS
+═══════════════════════════════════════════════════════
+${service.details ? Object.entries(service.details).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join('\n') : 'No details available'}
+
+═══════════════════════════════════════════════════════
+🔧 RECOMMENDED FIX STEPS
+═══════════════════════════════════════════════════════
+${troubleshoot.fixSteps.map((step, i) => `${i + 1}. ${step}`).join('\n')}
+
+═══════════════════════════════════════════════════════
+💡 NOTES
+═══════════════════════════════════════════════════════
+${service.note || 'None'}
+${service.action ? `\nAction: ${service.action}` : ''}
+
+═══════════════════════════════════════════════════════
+Generated: ${new Date().toISOString()}
+Platform: ClientsVia Multi-Tenant Backend
+Dashboard: /admin-notification-center.html#dashboard
+═══════════════════════════════════════════════════════
+
+Paste this report to your AI assistant for instant troubleshooting!
+        `.trim();
+        
+        try {
+            await navigator.clipboard.writeText(debugReport);
+            this.nc.showSuccess('✅ Debug info copied! Paste to AI assistant for help.');
+        } catch (error) {
+            console.error('Copy failed:', error);
+            this.nc.showError('Failed to copy debug info');
+        }
+    }
+    
+    /**
+     * Get service-specific troubleshooting information
+     */
+    getServiceTroubleshooting(serviceName, service) {
+        const troubleshootingData = {
+            'MongoDB': {
+                sourceFile: 'services/DependencyHealthMonitor.js',
+                checkFunction: 'checkMongoDB()',
+                envVar: 'MONGODB_URI',
+                checkpoints: [
+                    { name: 'Mongoose connection state', passed: service.status === 'HEALTHY', value: service.details?.state || service.message },
+                    { name: 'Database ping test', passed: service.status === 'HEALTHY', value: service.responseTime ? `${service.responseTime}ms` : 'Failed' },
+                    { name: 'Response time < 500ms', passed: (service.responseTime || 9999) < 500, value: service.responseTime ? `${service.responseTime}ms` : 'N/A' }
+                ],
+                fixSteps: [
+                    'Check MongoDB Atlas dashboard at https://cloud.mongodb.com',
+                    'Verify MONGODB_URI environment variable in Render Dashboard',
+                    'Ensure IP whitelist includes 0.0.0.0/0 (allow all) in Atlas Network Access',
+                    'Check if Atlas cluster is paused (free tier pauses after 7 days inactive)',
+                    'Verify credentials in connection string are correct',
+                    'Try restarting the Render service'
+                ]
+            },
+            'Redis': {
+                sourceFile: 'services/DependencyHealthMonitor.js',
+                checkFunction: 'checkRedis()',
+                envVar: 'REDIS_URL',
+                checkpoints: [
+                    { name: 'Redis client initialized', passed: !service.message?.includes('not initialized'), value: service.message?.includes('not initialized') ? 'NOT INITIALIZED' : 'OK' },
+                    { name: 'Redis ping test', passed: service.status === 'HEALTHY', value: service.responseTime ? `${service.responseTime}ms` : 'Failed' },
+                    { name: 'Response time < 150ms', passed: (service.responseTime || 9999) < 150, value: service.responseTime ? `${service.responseTime}ms` : 'N/A' },
+                    { name: 'Response time < 250ms (critical)', passed: (service.responseTime || 9999) < 250, value: service.responseTime ? `${service.responseTime}ms` : 'N/A' }
+                ],
+                fixSteps: [
+                    'Check Render Dashboard → Redis addon status',
+                    'Verify REDIS_URL environment variable is set in Render',
+                    'Ensure Redis addon is properly linked to your web service',
+                    'Check if Redis addon subscription is active (not expired)',
+                    'Look for "Redis client not initialized" → means REDIS_URL is missing or invalid',
+                    'If latency > 250ms, check if Redis and Web Service are in same region',
+                    'Try restarting the Render service to re-establish connection'
+                ]
+            },
+            'Twilio': {
+                sourceFile: 'services/DependencyHealthMonitor.js',
+                checkFunction: 'checkTwilio()',
+                envVar: 'TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN',
+                checkpoints: [
+                    { name: 'Twilio credentials configured', passed: service.status !== 'NOT_CONFIGURED', value: service.status === 'NOT_CONFIGURED' ? 'MISSING' : 'OK' },
+                    { name: 'Account SID format valid (AC...)', passed: service.status !== 'DOWN' || !service.message?.includes('format'), value: service.details?.accountSid || 'N/A' },
+                    { name: 'API authentication', passed: service.status === 'HEALTHY', value: service.error?.includes('auth') ? 'FAILED' : 'OK' },
+                    { name: 'Account status active', passed: service.status === 'HEALTHY', value: service.details?.accountStatus || 'Unknown' }
+                ],
+                fixSteps: [
+                    'Go to https://console.twilio.com → Dashboard',
+                    'Copy Account SID (starts with AC) and Auth Token',
+                    'Set TWILIO_ACCOUNT_SID in Render Environment Variables',
+                    'Set TWILIO_AUTH_TOKEN in Render Environment Variables',
+                    'Set TWILIO_PHONE_NUMBER with your Twilio phone (format: +1234567890)',
+                    'Verify your Twilio account is active and has credits',
+                    'Check if account is in trial mode (may have restrictions)'
+                ]
+            },
+            'ElevenLabs': {
+                sourceFile: 'services/DependencyHealthMonitor.js',
+                checkFunction: 'checkElevenLabs()',
+                envVar: 'ELEVENLABS_API_KEY',
+                checkpoints: [
+                    { name: 'API key configured', passed: service.status !== 'DOWN' || !service.message?.includes('not configured'), value: service.message?.includes('not configured') ? 'MISSING' : 'OK' },
+                    { name: 'API key format valid (>20 chars)', passed: service.status === 'HEALTHY', value: service.details?.apiKey || 'N/A' }
+                ],
+                fixSteps: [
+                    'Go to https://elevenlabs.io/app → Profile → API Keys',
+                    'Generate or copy your API key',
+                    'Set ELEVENLABS_API_KEY in Render Environment Variables',
+                    'Verify your ElevenLabs subscription has available quota'
+                ]
+            },
+            'OpenAI (GPT-4)': {
+                sourceFile: 'services/DependencyHealthMonitor.js',
+                checkFunction: 'checkOpenAI()',
+                envVar: 'OPENAI_API_KEY, ENABLE_3_TIER_INTELLIGENCE',
+                checkpoints: [
+                    { name: '3-Tier Intelligence enabled', passed: service.status !== 'NOT_CONFIGURED', value: service.details?.featureFlag || 'Unknown' },
+                    { name: 'API key configured', passed: !service.message?.includes('not configured'), value: service.missingVars?.includes('OPENAI_API_KEY') ? 'MISSING' : 'OK' },
+                    { name: 'API key format valid (sk-...)', passed: !service.message?.includes('format'), value: service.details?.apiKey || 'N/A' },
+                    { name: 'API connection test', passed: service.status === 'HEALTHY', value: service.error || 'OK' }
+                ],
+                fixSteps: [
+                    'Check if ENABLE_3_TIER_INTELLIGENCE=true (if false, OpenAI is not needed)',
+                    'Go to https://platform.openai.com/api-keys',
+                    'Create new API key or copy existing one',
+                    'Set OPENAI_API_KEY in Render Environment Variables (must start with sk-)',
+                    'Verify OpenAI account has available credits/quota',
+                    'Check https://status.openai.com for service outages',
+                    'If using Tier 3 LLM, ensure billing is set up on OpenAI'
+                ]
+            },
+            'LLM-0 Orchestration': {
+                sourceFile: 'services/OrchestrationHealthCheck.js',
+                checkFunction: 'checkOrchestrationPipeline()',
+                envVar: 'OPENAI_API_KEY (for Micro-LLM)',
+                checkpoints: [
+                    { name: 'Preprocessing (FillerStripper)', passed: service.status === 'HEALTHY', value: service.details?.components?.[0]?.status || 'Unknown' },
+                    { name: 'Intelligence (EmotionDetector)', passed: service.status === 'HEALTHY', value: service.details?.components?.[1]?.status || 'Unknown' },
+                    { name: 'Routing (MicroLLMRouter)', passed: service.status === 'HEALTHY', value: service.details?.components?.[2]?.status || 'Unknown' },
+                    { name: 'Personality (HumanLayerAssembler)', passed: service.status === 'HEALTHY', value: service.details?.components?.[3]?.status || 'Unknown' },
+                    { name: 'Micro-LLM (gpt-4o-mini)', passed: service.status === 'HEALTHY', value: service.details?.components?.[4]?.status || 'Unknown' }
+                ],
+                fixSteps: [
+                    'LLM-0 requires OpenAI API for gpt-4o-mini routing',
+                    'First fix OpenAI (GPT-4) connection if it is DOWN',
+                    'Verify OPENAI_API_KEY is set and valid in Render',
+                    'Check if any orchestration component files are missing',
+                    'Review Render logs for specific component errors',
+                    'Restart service after fixing OpenAI connection'
+                ]
+            }
+        };
+        
+        // Default fallback for unknown services
+        const defaultTroubleshoot = {
+            sourceFile: 'services/DependencyHealthMonitor.js',
+            checkFunction: 'getDependencyStatus()',
+            envVar: 'Unknown',
+            checkpoints: [
+                { name: 'Service check completed', passed: service.status === 'HEALTHY', value: service.status }
+            ],
+            fixSteps: [
+                'Check Render logs for specific error messages',
+                'Verify all required environment variables are set',
+                'Try restarting the service',
+                'Contact support if issue persists'
+            ]
+        };
+        
+        return troubleshootingData[serviceName] || defaultTroubleshoot;
     }
     
     getServiceIcon(serviceName) {
