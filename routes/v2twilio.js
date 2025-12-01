@@ -31,8 +31,19 @@ const { initializeCall, processUserInput } = require('../services/v2AIAgentRunti
 // The 3-Tier system (Brain 2) only runs when LLM-0 says "RUN_SCENARIO".
 // Feature flag: AdminSettings.globalProductionIntelligence.llm0Enabled
 // ============================================================================
-const { decideNextStep } = require('../services/orchestration/LLM0OrchestratorService');
-const LLM0TurnHandler = require('../services/LLM0TurnHandler');
+// SAFE IMPORT: Wrap in try/catch to prevent startup crash if dependencies fail
+let decideNextStep, LLM0TurnHandler;
+try {
+    const LLM0Service = require('../services/orchestration/LLM0OrchestratorService');
+    decideNextStep = LLM0Service.decideNextStep;
+    LLM0TurnHandler = require('../services/LLM0TurnHandler');
+    logger.info('[V2TWILIO] ✅ LLM-0 Orchestration loaded successfully');
+} catch (err) {
+    logger.warn('[V2TWILIO] ⚠️ LLM-0 Orchestration failed to load - using fallback', { error: err.message });
+    // Provide fallback that skips LLM-0
+    decideNextStep = async () => null;
+    LLM0TurnHandler = null;
+}
 // V2 DELETED: CompanyKnowledgeQnA model removed (AI Brain only)
 const fs = require('fs');
 const path = require('path');
