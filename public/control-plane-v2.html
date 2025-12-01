@@ -110,6 +110,7 @@
     <button class="js-aicore-tab" data-aicore-target="knowledgebase">AiCore Knowledgebase</button>
     <button class="js-aicore-tab" data-aicore-target="observability">Observability (AI Metrics)</button>
     <button class="js-aicore-tab" data-aicore-target="llm-cortex-intel">LLM-0 Cortex-Intel</button>
+    <button class="js-aicore-tab" data-aicore-target="agent-status">🔴 Live Agent Status</button>
   </nav>
 
   <!-- TERTIARY NAV (ONLY WHEN CHEAT SHEET ACTIVE) -->
@@ -259,6 +260,17 @@
       <!-- AICORE: LLM-0 CORTEX-INTEL -->
       <div class="panel" data-aicore-panel="llm-cortex-intel">
         <div id="llm-cortex-intel-panel"></div>
+      </div>
+
+      <!-- AICORE: LIVE AGENT STATUS -->
+      <div class="panel" data-aicore-panel="agent-status">
+        <div id="agent-status-container" style="padding: 20px;">
+          <div style="text-align: center; padding: 60px; color: #6b7280;">
+            <i class="fas fa-spinner fa-spin" style="font-size: 48px; margin-bottom: 20px; color: #667eea;"></i>
+            <p style="font-size: 18px; font-weight: 600;">Loading Live Agent Status...</p>
+            <p style="font-size: 14px; margin-top: 10px;">Fetching real-time configuration and performance metrics</p>
+          </div>
+        </div>
       </div>
 
     </section>
@@ -669,6 +681,20 @@
       }
     }
 
+    // Initialize Agent Status Manager
+    async function initAgentStatus() {
+      if (!currentCompanyId) return;
+      if (!window.agentStatusManager) {
+        console.log('🎯 [CONTROL PLANE] Initializing AgentStatusManager');
+        await loadScript('/js/ai-agent-settings/AgentStatusManager.js');
+        window.agentStatusManager = new window.AgentStatusManager(currentCompanyId);
+        await window.agentStatusManager.init();
+      } else {
+        console.log('🎯 [CONTROL PLANE] AgentStatusManager already loaded');
+        await window.agentStatusManager.init(); // Refresh
+      }
+    }
+
     async function apiCall(endpoint, method = 'GET', body = null) {
       const options = {
         method,
@@ -772,6 +798,8 @@
         } else if (target === 'llm-cortex-intel' && !window.llmCortexIntelInitialized) {
           initLlmCortexIntel();
           window.llmCortexIntelInitialized = true;
+        } else if (target === 'agent-status') {
+          initAgentStatus(); // Always refresh on tab click
         }
       });
     });
