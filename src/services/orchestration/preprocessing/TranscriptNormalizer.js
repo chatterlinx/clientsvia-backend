@@ -102,29 +102,9 @@ class TranscriptNormalizer {
       // Step 5: Remove multiple spaces
       normalized = normalized.replace(/\s{2,}/g, ' ');
       
-      // Step 6: Lowercase (unless preserveCase is true)
-      if (!options.preserveCase) {
-        // Preserve certain all-caps words (AC, HVAC, ASAP)
-        const preservedWords = ['AC', 'HVAC', 'ASAP'];
-        const placeholder = '___PRESERVED___';
-        const preserved = [];
-        
-        preservedWords.forEach(word => {
-          const pattern = new RegExp(`\\b${word}\\b`, 'g');
-          normalized = normalized.replace(pattern, (match) => {
-            preserved.push(match);
-            return `${placeholder}${preserved.length - 1}`;
-          });
-        });
-        
-        // Lowercase everything
-        normalized = normalized.toLowerCase();
-        
-        // Restore preserved words
-        preserved.forEach((word, idx) => {
-          normalized = normalized.replace(`${placeholder}${idx}`, word);
-        });
-      }
+      // Step 6: Preserve case (we don't lowercase by default)
+      // The original case is important for natural conversation flow
+      // We only normalize specific technical terms (AC, HVAC) which is already done in Step 2
       
       // Step 7: Final trim
       normalized = normalized.trim();

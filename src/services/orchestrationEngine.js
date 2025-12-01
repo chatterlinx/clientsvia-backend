@@ -157,6 +157,7 @@ async function processCallerTurn({ companyId, callId, speaker, text, rawSttMetad
     // STEP 3: Preprocessing (Precision V23 Enhancement)
     // ========================================================================
     const rawText = text;
+    const preprocessStart = Date.now();
     
     // Step 3a: Strip filler words (upgraded to FillerStripper)
     let cleanedText = FillerStripper.clean(text);
@@ -164,13 +165,32 @@ async function processCallerTurn({ companyId, callId, speaker, text, rawSttMetad
     // Step 3b: Normalize transcript (spelling, punctuation)
     cleanedText = TranscriptNormalizer.normalize(cleanedText);
     
+    const preprocessDuration = Date.now() - preprocessStart;
+    
+    // ✅ CHECKPOINT 1: Preprocessing validation
+    if (preprocessDuration > 10) {
+      logger.warn('[ORCHESTRATOR] ⚠️ Preprocessing slow', {
+        companyId,
+        callId,
+        duration: preprocessDuration,
+        targetMs: 5
+      });
+    }
+    
+    logger.info('[ORCHESTRATOR] ✅ Preprocessing complete', {
+      companyId,
+      callId,
+      duration: preprocessDuration,
+      tokenReduction: ((rawText.length - cleanedText.length) / rawText.length * 100).toFixed(1) + '%',
+      originalLength: rawText.length,
+      cleanedLength: cleanedText.length
+    });
+    
     if (debugOrchestrator) {
-      logger.debug('[ORCHESTRATOR] Filler words stripped (DEBUG)', {
-        originalLength: rawText.length,
-        cleanedLength: cleanedText.length,
-        fillerWordsCount: config.fillerWords.active.length,
+      logger.debug('[ORCHESTRATOR] Preprocessing details (DEBUG)', {
         rawText: rawText.substring(0, 100),
-        cleanedText: cleanedText.substring(0, 100)
+        cleanedText: cleanedText.substring(0, 100),
+        normalized: cleanedText !== FillerStripper.clean(text)
       });
     }
     
@@ -199,16 +219,70 @@ async function processCallerTurn({ companyId, callId, speaker, text, rawSttMetad
     // ========================================================================
     // STEP 4.5: Emotion Detection (Precision V23 Enhancement)
     // ========================================================================
+    const emotionStart = Date.now();
     const emotion = EmotionDetector.analyze(cleanedText, ctx.memory);
+    const emotionDuration = Date.now() - emotionStart;
     
-    logger.info('[ORCHESTRATOR] Emotion detected', {
-      primary: emotion.primary,
-      intensity: emotion.intensity.toFixed(2),
-      signalCount: emotion.signals.length
-    });
+    // ✅ CHECKPOINT 2: Emotion detection validation
+    if (emotionDuration > 20) {
+      logger.warn('[ORCHESTRATOR] ⚠️ Emotion detection slow', {
+        companyId,
+        callId,
+        duration: emotionDuration,
+        targetMs: 15
+      });
+    }
     
-    // Attach emotion to context for downstream use
-    ctx.emotion = emotion;
+    // ✅ CHECKPOINT 3: Emotion enrichment validation
+    if (!emotion || !emotion.primary) {
+      logger.error('[ORCHESTRATOR] ❌ Emotion detection failed', {
+        companyId,
+        callId,
+        emotion
+      });
+      // Safe fallback
+      ctx.emotion = {
+        primary: 'NEUTRAL',
+        intensity: 0,
+        signals: [],
+        error: true
+      };
+    } else {
+      ctx.emotion = emotion;
+      
+      logger.info('[ORCHESTRATOR] ✅ Emotion detected', {
+        companyId,
+        callId,
+        primary: emotion.primary,
+        intensity: emotion.intensity.toFixed(2),
+        signalCount: emotion.signals.length,
+        duration: emotionDuration,
+        hasModifiers: emotion.modifiers?.length > 0
+      });
+      
+      // Log high-intensity emotions for monitoring
+      if (emotion.intensity > 0.8) {
+        logger.warn('[ORCHESTRATOR] 🔥 High-intensity emotion detected', {
+          companyId,
+          callId,
+          emotion: emotion.primary,
+          intensity: emotion.intensity.toFixed(2),
+          signals: emotion.signals.map(s => s.emotion)
+        });
+      }
+      
+      // Emergency detection
+      if (EmotionDetector.isEmergency(cleanedText)) {
+        logger.warn('[ORCHESTRATOR] 🚨 EMERGENCY DETECTED', {
+          companyId,
+          callId,
+          text: cleanedText.substring(0, 100),
+          emotion: emotion.primary
+        });
+        ctx.flags = ctx.flags || {};
+        ctx.flags.emergency = true;
+      }
+    }
     
     // Update intent if confidence is high and not spam/wrong_number
     if (intel.confidence > 0.7 && !['spam', 'wrong_number'].includes(intel.intent)) {

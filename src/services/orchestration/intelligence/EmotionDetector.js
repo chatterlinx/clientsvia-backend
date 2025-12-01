@@ -308,7 +308,7 @@ class EmotionDetector {
     // Check keywords
     for (const keyword of config.keywords) {
       if (normalizedText.includes(keyword.toLowerCase())) {
-        score += 0.15;
+        score += 0.25; // Increased from 0.15
         matches.push({ type: 'keyword', value: keyword });
       }
     }
@@ -316,7 +316,7 @@ class EmotionDetector {
     // Check phrases (weighted higher)
     for (const phrase of config.phrases) {
       if (normalizedText.includes(phrase.toLowerCase())) {
-        score += 0.25;
+        score += 0.35; // Increased from 0.25
         matches.push({ type: 'phrase', value: phrase });
       }
     }
@@ -418,7 +418,7 @@ class EmotionDetector {
     const emergencyKeywords = [
       'fire', 'smoke', 'flood', 'gas smell', 'sparking', 'electrocuted',
       'can\'t breathe', 'chest pain', 'bleeding', 'unconscious', 'dying',
-      'call 911', 'ambulance'
+      'call 911', 'ambulance', 'emergency', 'water everywhere'
     ];
     
     const normalized = text.toLowerCase();
