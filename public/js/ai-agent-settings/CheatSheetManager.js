@@ -8693,10 +8693,26 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
                 <span class="ml-3 px-2 py-1 text-xs font-semibold bg-indigo-100 text-indigo-700 rounded-full">
                   ${cards.length} CARDS
                 </span>
+                <span class="ml-2 px-2 py-1 text-xs font-semibold bg-green-100 text-green-700 rounded-full">
+                  ${cards.filter(c => c.isActive).length} ACTIVE
+                </span>
               </h3>
               <p class="text-sm text-gray-600 mt-1">
                 Atomic source of truth for Frontline-Intel call distribution
               </p>
+            </div>
+            <!-- Bulk Actions -->
+            <div class="flex items-center space-x-2">
+              <button onclick="cheatSheetManager.bulkEnableTriageCards(true)" 
+                      class="px-3 py-1.5 text-xs font-medium bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors shadow-sm"
+                      title="Enable all triage cards">
+                ✅ Enable All
+              </button>
+              <button onclick="cheatSheetManager.bulkEnableTriageCards(false)" 
+                      class="px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors shadow-sm"
+                      title="Disable all triage cards">
+                ❌ Disable All
+              </button>
             </div>
           </div>
         </div>
@@ -9537,6 +9553,50 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       this.showNotification('❌ Failed to toggle card', 'error');
       // Reload to reset checkbox state
       this.renderTriageCardsList();
+    }
+  }
+  
+  /**
+   * Bulk enable/disable all triage cards for this company
+   * @param {boolean} enable - true to enable all, false to disable all
+   */
+  async bulkEnableTriageCards(enable) {
+    const action = enable ? 'enable' : 'disable';
+    const confirmed = confirm(
+      `${enable ? '✅' : '❌'} ${enable ? 'ENABLE' : 'DISABLE'} ALL Triage Cards?\n\n` +
+      `This will ${enable ? 'activate' : 'deactivate'} all ${enable ? 'inactive' : 'active'} cards.\n\n` +
+      `${enable ? 'All cards will start handling live calls.' : 'No cards will handle calls until re-enabled.'}\n\n` +
+      'Continue?'
+    );
+    
+    if (!confirmed) return;
+    
+    console.log(`[TRIAGE CARDS] Bulk ${action} all cards`);
+    
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`/api/company/${this.companyId}/triage-cards/bulk-${action}`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Bulk ${action} failed`);
+      }
+      
+      const data = await response.json();
+      const count = data.modifiedCount || data.count || 'all';
+      
+      this.showNotification(`✅ ${count} Triage Cards ${enable ? 'enabled' : 'disabled'}`, 'success');
+      this.renderTriageCardsList(); // Reload to show updated state
+      
+    } catch (error) {
+      console.error(`[TRIAGE CARDS] Bulk ${action} failed:`, error);
+      this.showNotification(`❌ Failed to ${action} cards: ${error.message}`, 'error');
     }
   }
   

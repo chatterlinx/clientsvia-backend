@@ -10,6 +10,7 @@ const express = require('express');
 const router = express.Router({ mergeParams: true }); // Inherit :companyId from parent
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const TriageCardService = require('../../services/TriageCardService');
+const TriageCard = require('../../models/TriageCard');
 const logger = require('../../utils/logger');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -310,6 +311,88 @@ router.post('/:cardId/deactivate', async (req, res) => {
       });
     }
 
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BULK ENABLE ALL TRIAGE CARDS
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/company/:companyId/triage-cards/bulk-enable
+// Purpose: Enable all triage cards for this company at once
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/bulk-enable', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+
+    logger.info('[TRIAGE CARDS API] Bulk enable all cards', { companyId });
+
+    const result = await TriageCard.updateMany(
+      { companyId, isActive: false },
+      { $set: { isActive: true, updatedAt: new Date() } }
+    );
+
+    // Invalidate cache so THE BRAIN picks up the changes
+    await TriageCardService.invalidateCache(companyId);
+
+    logger.info('[TRIAGE CARDS API] Bulk enable complete', { 
+      companyId, 
+      modifiedCount: result.modifiedCount 
+    });
+
+    res.json({
+      success: true,
+      modifiedCount: result.modifiedCount,
+      message: `${result.modifiedCount} Triage Cards enabled`
+    });
+
+  } catch (error) {
+    logger.error('[TRIAGE CARDS API] Bulk enable failed', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BULK DISABLE ALL TRIAGE CARDS
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/company/:companyId/triage-cards/bulk-disable
+// Purpose: Disable all triage cards for this company at once
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/bulk-disable', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+
+    logger.info('[TRIAGE CARDS API] Bulk disable all cards', { companyId });
+
+    const result = await TriageCard.updateMany(
+      { companyId, isActive: true },
+      { $set: { isActive: false, updatedAt: new Date() } }
+    );
+
+    // Invalidate cache so THE BRAIN picks up the changes
+    await TriageCardService.invalidateCache(companyId);
+
+    logger.info('[TRIAGE CARDS API] Bulk disable complete', { 
+      companyId, 
+      modifiedCount: result.modifiedCount 
+    });
+
+    res.json({
+      success: true,
+      modifiedCount: result.modifiedCount,
+      message: `${result.modifiedCount} Triage Cards disabled`
+    });
+
+  } catch (error) {
+    logger.error('[TRIAGE CARDS API] Bulk disable failed', { error: error.message });
     res.status(500).json({
       success: false,
       error: error.message
