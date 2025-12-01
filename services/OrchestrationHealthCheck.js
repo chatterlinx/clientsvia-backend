@@ -251,16 +251,17 @@ class OrchestrationHealthCheck {
         }
         
         // Checkpoint 2: FillerStripper functionality
+        // NOTE: Method is .clean() not .strip() - fixed 2025-12-01
         const testInput = "um, like, you know, my AC is broken";
         const stripStart = Date.now();
         let stripped;
         
         try {
-            stripped = FillerStripper.strip(testInput);
+            stripped = FillerStripper.clean(testInput);
             const stripTime = Date.now() - stripStart;
             
             checkpoints.push({
-                name: 'FillerStripper.strip() execution',
+                name: 'FillerStripper.clean() execution',
                 status: stripped && stripped !== testInput ? 'passed' : 'FAILED',
                 duration: `${stripTime}ms`,
                 input: testInput,
@@ -277,12 +278,12 @@ class OrchestrationHealthCheck {
             }
         } catch (err) {
             checkpoints.push({
-                name: 'FillerStripper.strip() execution',
+                name: 'FillerStripper.clean() execution',
                 status: 'FAILED',
                 error: err.message
             });
             return this.buildFailedResult('Preprocessing', checkpoints, startTime,
-                `FillerStripper.strip() failed: ${err.message}`, false);
+                `FillerStripper.clean() failed: ${err.message}`, false);
         }
         
         // Checkpoint 3: TranscriptNormalizer functionality
@@ -521,9 +522,10 @@ class OrchestrationHealthCheck {
         }
         
         // Checkpoint 3: Verify critical methods exist
+        // NOTE: CompactPromptCompiler uses getPrompt() not compile() - fixed 2025-12-01
         const methodChecks = [
             { name: 'MicroLLMRouter.route', exists: typeof MicroLLMRouter?.route === 'function' },
-            { name: 'CompactPromptCompiler.compile', exists: typeof CompactPromptCompiler?.compile === 'function' }
+            { name: 'CompactPromptCompiler.getPrompt', exists: typeof CompactPromptCompiler?.getPrompt === 'function' }
         ];
         
         for (const check of methodChecks) {
