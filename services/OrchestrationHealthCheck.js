@@ -17,7 +17,7 @@
 // ============================================================================
 
 const logger = require('../utils/logger');
-const openai = require('../clients/openaiClient');
+const openai = require('../config/openai');
 
 class OrchestrationHealthCheck {
     
