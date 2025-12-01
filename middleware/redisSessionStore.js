@@ -1,6 +1,11 @@
 /**
  * V2 Redis Session Store
  * Replaces in-memory storage with persistent, scalable Redis
+ * 
+ * GRACEFUL DEGRADATION:
+ * - If REDIS_URL is not configured, operates in memory-only mode
+ * - All methods safely handle the null client case
+ * - Sessions won't persist across restarts without Redis
  */
 
 const redis = require('redis');
@@ -8,10 +13,25 @@ const logger = require('../utils/logger.js');
 
 const crypto = require('crypto');
 
+// Check if Redis is configured
+const REDIS_ENABLED = !!process.env.REDIS_URL;
+
 class RedisSessionStore {
     constructor() {
+        this.enabled = REDIS_ENABLED;
+        this.client = null;
+        
+        // In-memory fallback when Redis is not configured
+        this.memoryStore = new Map();
+        
+        if (!REDIS_ENABLED) {
+            logger.warn('[REDIS SESSION STORE] ⚠️ REDIS_URL not configured - using MEMORY-ONLY mode');
+            logger.warn('[REDIS SESSION STORE] Sessions will NOT persist across restarts');
+            return;
+        }
+        
         this.client = redis.createClient({ 
-            url: process.env.REDIS_URL || 'redis://localhost:6379',
+            url: process.env.REDIS_URL,
             socket: {
                 connectTimeout: 60000,
                 lazyConnect: true,
@@ -40,6 +60,9 @@ class RedisSessionStore {
     }
 
     async connect() {
+        // Skip if Redis not configured
+        if (!this.client) return;
+        
         try {
             if (!this.client.isOpen) {
                 await this.client.connect();
@@ -51,27 +74,64 @@ class RedisSessionStore {
 
     /**
      * Store session with TTL
+     * Falls back to memory store if Redis not configured
      */
     async setSession(sessionId, sessionData, ttlSeconds = 3600) {
+        const key = `session:${sessionId}`;
+        
+        // Memory-only mode
+        if (!this.client) {
+            this.memoryStore.set(key, {
+                data: sessionData,
+                expiresAt: Date.now() + (ttlSeconds * 1000)
+            });
+            logger.security(`💾 Session stored in MEMORY: ${sessionId} (TTL: ${ttlSeconds}s)`);
+            return true;
+        }
+        
+        // Redis mode
         try {
             await this.connect();
-            const key = `session:${sessionId}`;
             await this.client.setEx(key, ttlSeconds, JSON.stringify(sessionData));
             logger.security(`💾 Session stored in Redis: ${sessionId} (TTL: ${ttlSeconds}s)`);
             return true;
         } catch (error) {
             logger.security('Redis setSession error:', error);
-            return false;
+            // Fallback to memory on Redis error
+            this.memoryStore.set(key, {
+                data: sessionData,
+                expiresAt: Date.now() + (ttlSeconds * 1000)
+            });
+            return true;
         }
     }
 
     /**
      * Get session from Redis
+     * Falls back to memory store if Redis not configured
      */
     async getSession(sessionId) {
+        const key = `session:${sessionId}`;
+        
+        // Memory-only mode
+        if (!this.client) {
+            const cached = this.memoryStore.get(key);
+            if (!cached) return null;
+            
+            // Check expiration
+            if (Date.now() > cached.expiresAt) {
+                this.memoryStore.delete(key);
+                return null;
+            }
+            
+            const session = cached.data;
+            session.lastActivity = new Date();
+            return session;
+        }
+        
+        // Redis mode
         try {
             await this.connect();
-            const key = `session:${sessionId}`;
             const data = await this.client.get(key);
             
             if (!data) {return null;}
@@ -90,11 +150,22 @@ class RedisSessionStore {
 
     /**
      * Delete session from Redis
+     * Falls back to memory store if Redis not configured
      */
     async deleteSession(sessionId) {
+        const key = `session:${sessionId}`;
+        
+        // Memory-only mode
+        if (!this.client) {
+            const existed = this.memoryStore.has(key);
+            this.memoryStore.delete(key);
+            logger.security(`🗑️ Session deleted from MEMORY: ${sessionId}`);
+            return existed;
+        }
+        
+        // Redis mode
         try {
             await this.connect();
-            const key = `session:${sessionId}`;
             const result = await this.client.del(key);
             logger.security(`🗑️ Session deleted from Redis: ${sessionId}`);
             return result > 0;
@@ -106,8 +177,23 @@ class RedisSessionStore {
 
     /**
      * Kill all sessions for a user
+     * Falls back to memory store if Redis not configured
      */
     async killAllUserSessions(userId) {
+        // Memory-only mode
+        if (!this.client) {
+            let killedCount = 0;
+            for (const [key, cached] of this.memoryStore.entries()) {
+                if (key.startsWith('session:') && cached.data.userId === userId) {
+                    this.memoryStore.delete(key);
+                    killedCount++;
+                    logger.security(`💀 Killed memory session: ${key} for user ${userId}`);
+                }
+            }
+            return killedCount;
+        }
+        
+        // Redis mode
         try {
             await this.connect();
             const pattern = `session:*`;
@@ -135,8 +221,31 @@ class RedisSessionStore {
 
     /**
      * Get all active sessions
+     * Falls back to memory store if Redis not configured
      */
     async getAllActiveSessions() {
+        // Memory-only mode
+        if (!this.client) {
+            const sessions = [];
+            const now = Date.now();
+            
+            for (const [key, cached] of this.memoryStore.entries()) {
+                if (key.startsWith('session:') && now < cached.expiresAt) {
+                    const session = cached.data;
+                    sessions.push({
+                        sessionId: key.replace('session:', ''),
+                        userId: session.userId,
+                        location: session.location,
+                        lastActivity: session.lastActivity,
+                        ttl: Math.floor((cached.expiresAt - now) / 1000),
+                        age: session.createdAt ? Date.now() - new Date(session.createdAt).getTime() : 0
+                    });
+                }
+            }
+            return sessions;
+        }
+        
+        // Redis mode
         try {
             await this.connect();
             const pattern = `session:*`;
@@ -168,18 +277,30 @@ class RedisSessionStore {
 
     /**
      * Store audit log in Redis
+     * Falls back to memory store if Redis not configured
      */
     async logSecurityEvent(event, data) {
+        const logKey = `security_log:${Date.now()}:${crypto.randomUUID()}`;
+        const logData = {
+            event,
+            data,
+            timestamp: new Date().toISOString(),
+            ip: data.ip || 'unknown'
+        };
+        
+        // Memory-only mode - limited retention (auto-cleanup older than 1 hour)
+        if (!this.client) {
+            this.memoryStore.set(logKey, {
+                data: logData,
+                expiresAt: Date.now() + (60 * 60 * 1000) // 1 hour in memory
+            });
+            logger.security(`🔍 Security event logged (memory): ${event}`);
+            return;
+        }
+        
+        // Redis mode
         try {
             await this.connect();
-            const logKey = `security_log:${Date.now()}:${crypto.randomUUID()}`;
-            const logData = {
-                event,
-                data,
-                timestamp: new Date().toISOString(),
-                ip: data.ip || 'unknown'
-            };
-            
             // Store log with 30-day TTL
             await this.client.setEx(logKey, 30 * 24 * 60 * 60, JSON.stringify(logData));
             logger.security(`🔍 Security event logged: ${event}`);
@@ -190,15 +311,44 @@ class RedisSessionStore {
 
     /**
      * Check for suspicious activity patterns
+     * Falls back to memory store if Redis not configured
      */
     async checkSuspiciousActivity(userId, currentIP) {
+        const oneHourAgo = Date.now() - (60 * 60 * 1000);
+        
+        // Memory-only mode
+        if (!this.client) {
+            const recentLogins = [];
+            
+            for (const [key, cached] of this.memoryStore.entries()) {
+                if (key.startsWith('security_log:') && Date.now() < cached.expiresAt) {
+                    const log = cached.data;
+                    if (log.data.userId === userId && 
+                        new Date(log.timestamp).getTime() > oneHourAgo &&
+                        log.event === 'login') {
+                        recentLogins.push(log);
+                    }
+                }
+            }
+            
+            const uniqueIPs = [...new Set(recentLogins.map(l => l.data.ip))];
+            if (uniqueIPs.length > 3) {
+                return {
+                    suspicious: true,
+                    reason: 'Multiple IP addresses in short time',
+                    details: { uniqueIPs, loginCount: recentLogins.length }
+                };
+            }
+            return { suspicious: false };
+        }
+        
+        // Redis mode
         try {
             await this.connect();
             const pattern = `security_log:*`;
             const keys = await this.client.keys(pattern);
             
             const recentLogins = [];
-            const oneHourAgo = Date.now() - (60 * 60 * 1000);
 
             for (const key of keys) {
                 const data = await this.client.get(key);
@@ -227,6 +377,13 @@ class RedisSessionStore {
             logger.security('Suspicious activity check error:', error);
             return { suspicious: false };
         }
+    }
+    
+    /**
+     * Check if Redis is enabled
+     */
+    isEnabled() {
+        return this.enabled;
     }
 }
 

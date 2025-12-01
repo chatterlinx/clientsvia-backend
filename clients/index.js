@@ -9,6 +9,11 @@ let AdminNotificationService; // Lazy load to avoid circular dependency
 
 /**
  * Initialize Redis client with v5+ compatible configuration
+ * 
+ * GRACEFUL DEGRADATION:
+ * - If no Redis configuration is provided, skips Redis entirely
+ * - Does NOT fall back to localhost (which would always fail on cloud platforms)
+ * - Returns null to indicate Redis is not available
  */
 async function initializeRedis() {
   // Lazy load AdminNotificationService to avoid circular dependency
@@ -24,10 +29,28 @@ async function initializeRedis() {
   let retriesAttempted = 0;
 
   // ========================================================================
-  // CHECKPOINT 1: Check if REDIS_URL is set
+  // CHECKPOINT 1: Check if Redis is configured
   // ========================================================================
   const redisUrlFromEnv = process.env.REDIS_URL;
-  console.log(`🔍 [REDIS] CHECKPOINT 1: REDIS_URL environment variable ${redisUrlFromEnv ? 'EXISTS' : 'MISSING'}`);
+  const redisHostFromEnv = process.env.REDIS_HOST;
+  const redisConfigured = !!(redisUrlFromEnv || redisHostFromEnv);
+  
+  console.log(`🔍 [REDIS] CHECKPOINT 1: Redis configured: ${redisConfigured}`);
+  console.log(`🔍 [REDIS] CHECKPOINT 1: REDIS_URL ${redisUrlFromEnv ? 'EXISTS' : 'NOT SET'}`);
+  console.log(`🔍 [REDIS] CHECKPOINT 1: REDIS_HOST ${redisHostFromEnv ? 'EXISTS' : 'NOT SET'}`);
+  
+  // ========================================================================
+  // GRACEFUL SKIP: No Redis configuration provided
+  // ========================================================================
+  if (!redisConfigured) {
+    console.log('⚠️ [REDIS] No Redis configuration found - SKIPPING Redis initialization');
+    console.log('⚠️ [REDIS] Platform will operate without Redis caching');
+    console.log('⚠️ [REDIS] To enable Redis, set REDIS_URL environment variable');
+    logger.warn('[REDIS] ⚠️ Redis NOT configured - operating in MEMORY-ONLY mode');
+    logger.warn('[REDIS] Sessions and cache will NOT persist across restarts');
+    redisClient = null;
+    return null;
+  }
   
   if (redisUrlFromEnv) {
     // Log sanitized URL (hide password)
@@ -35,15 +58,13 @@ async function initializeRedis() {
     console.log(`🔍 [REDIS] CHECKPOINT 1: URL format: ${sanitizedUrl}`);
     console.log(`🔍 [REDIS] CHECKPOINT 1: URL length: ${redisUrlFromEnv.length} chars`);
     console.log(`🔍 [REDIS] CHECKPOINT 1: Starts with redis:// or rediss://: ${redisUrlFromEnv.startsWith('redis://') || redisUrlFromEnv.startsWith('rediss://')}`);
-  } else {
-    console.error('❌ [REDIS] CHECKPOINT 1 FAILED: REDIS_URL is not set!');
-    console.log('🔍 [REDIS] Fallback: Will try localhost:6379');
   }
 
   try {
     // Redis v5+ URL-based connection format
+    // Only use REDIS_URL or build from REDIS_HOST - never default to localhost
     const redisUrl = process.env.REDIS_URL || 
-      `redis://${process.env.REDIS_PASSWORD ? `:${process.env.REDIS_PASSWORD}@` : ''}${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || 6379}`;
+      `redis://${process.env.REDIS_PASSWORD ? `:${process.env.REDIS_PASSWORD}@` : ''}${process.env.REDIS_HOST}:${process.env.REDIS_PORT || 6379}`;
     
     console.log(`🔍 [REDIS] CHECKPOINT 2: Creating Redis client...`);
     

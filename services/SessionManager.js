@@ -17,26 +17,53 @@ const LRU_MAX_SIZE = 50; // Keep 50 most recent sessions in memory
 const lruCache = new Map();
 const lruOrder = []; // Track access order for LRU eviction
 
-// L1: Redis Client
-const redis = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379', 10),
-  password: process.env.REDIS_PASSWORD,
-  db: parseInt(process.env.REDIS_DB || '0', 10),
-  retryStrategy: (times) => {
-    const delay = Math.min(times * 50, 2000);
-    logger.warn('[SESSION MANAGER] Redis retry', { attempt: times, delayMs: delay });
-    return delay;
+// ═══════════════════════════════════════════════════════════════════
+// L1: Redis Client - GRACEFUL DEGRADATION
+// ═══════════════════════════════════════════════════════════════════
+// Only connect to Redis if REDIS_URL or REDIS_HOST is configured
+// Otherwise, operate in memory-only mode (L0 cache only)
+// ═══════════════════════════════════════════════════════════════════
+
+const REDIS_ENABLED = !!(process.env.REDIS_URL || process.env.REDIS_HOST);
+
+let redis = null;
+
+if (REDIS_ENABLED) {
+  const redisConfig = {
+    db: parseInt(process.env.REDIS_DB || '0', 10),
+    retryStrategy: (times) => {
+      const delay = Math.min(times * 50, 2000);
+      logger.warn('[SESSION MANAGER] Redis retry', { attempt: times, delayMs: delay });
+      return delay;
+    },
+    maxRetriesPerRequest: 3,
+    enableOfflineQueue: false
+  };
+
+  // Use REDIS_URL if provided (full connection string)
+  if (process.env.REDIS_URL) {
+    redis = new Redis(process.env.REDIS_URL, redisConfig);
+  } else {
+    // Use individual host/port/password
+    redis = new Redis({
+      ...redisConfig,
+      host: process.env.REDIS_HOST,
+      port: parseInt(process.env.REDIS_PORT || '6379', 10),
+      password: process.env.REDIS_PASSWORD
+    });
   }
-});
 
-redis.on('error', (err) => {
-  logger.error('[SESSION MANAGER] Redis connection error', { error: err.message });
-});
+  redis.on('error', (err) => {
+    logger.error('[SESSION MANAGER] Redis connection error', { error: err.message });
+  });
 
-redis.on('connect', () => {
-  logger.info('[SESSION MANAGER] Redis connected');
-});
+  redis.on('connect', () => {
+    logger.info('[SESSION MANAGER] Redis connected');
+  });
+} else {
+  logger.warn('[SESSION MANAGER] ⚠️ Redis NOT configured - running in MEMORY-ONLY mode (L0 cache only)');
+  logger.warn('[SESSION MANAGER] Sessions will NOT persist across restarts. Set REDIS_URL to enable persistence.');
+}
 
 // L3: Write Buffer (batched MongoDB writes)
 const writeBuffer = new Map();
@@ -83,34 +110,36 @@ class SessionManager {
     }
     
     // ────────────────────────────────────────────────────────────────
-    // L1: Redis Session Store (FAST)
+    // L1: Redis Session Store (FAST) - Skip if Redis not configured
     // ────────────────────────────────────────────────────────────────
     
-    try {
-      const redisKey = `session:${callId}`;
-      const cached = await redis.get(redisKey);
-      
-      if (cached) {
-        const session = JSON.parse(cached);
+    if (redis) {
+      try {
+        const redisKey = `session:${callId}`;
+        const cached = await redis.get(redisKey);
         
-        // Warm L0 cache
-        this.setLRU(callId, session);
-        
-        const elapsed = Date.now() - startTime;
-        
-        logger.debug('[SESSION MANAGER] L1 cache hit', {
+        if (cached) {
+          const session = JSON.parse(cached);
+          
+          // Warm L0 cache
+          this.setLRU(callId, session);
+          
+          const elapsed = Date.now() - startTime;
+          
+          logger.debug('[SESSION MANAGER] L1 cache hit', {
+            callId,
+            timeMs: elapsed
+          });
+          
+          return { ...session, _cacheLayer: 'L1', _timeMs: elapsed };
+        }
+      } catch (err) {
+        logger.error('[SESSION MANAGER] Redis read error', {
           callId,
-          timeMs: elapsed
+          error: err.message
         });
-        
-        return { ...session, _cacheLayer: 'L1', _timeMs: elapsed };
+        // Continue to L2 on Redis failure
       }
-    } catch (err) {
-      logger.error('[SESSION MANAGER] Redis read error', {
-        callId,
-        error: err.message
-      });
-      // Continue to L2 on Redis failure
     }
     
     // ────────────────────────────────────────────────────────────────
@@ -154,23 +183,25 @@ class SessionManager {
     this.setLRU(callId, session);
     
     // ────────────────────────────────────────────────────────────────
-    // L1: Redis Session Store (IMMEDIATE)
+    // L1: Redis Session Store (IMMEDIATE) - Skip if Redis not configured
     // ────────────────────────────────────────────────────────────────
     
-    try {
-      const redisKey = `session:${callId}`;
-      await redis.setex(redisKey, 3600, JSON.stringify(session)); // 1 hour TTL
-      
-      logger.debug('[SESSION MANAGER] L1 written', {
-        callId,
-        timeMs: Date.now() - startTime
-      });
-    } catch (err) {
-      logger.error('[SESSION MANAGER] Redis write error', {
-        callId,
-        error: err.message
-      });
-      // Continue - L0 cache still works
+    if (redis) {
+      try {
+        const redisKey = `session:${callId}`;
+        await redis.setex(redisKey, 3600, JSON.stringify(session)); // 1 hour TTL
+        
+        logger.debug('[SESSION MANAGER] L1 written', {
+          callId,
+          timeMs: Date.now() - startTime
+        });
+      } catch (err) {
+        logger.error('[SESSION MANAGER] Redis write error', {
+          callId,
+          error: err.message
+        });
+        // Continue - L0 cache still works
+      }
     }
     
     // ────────────────────────────────────────────────────────────────
@@ -202,15 +233,17 @@ class SessionManager {
       }
     }
     
-    // L1: Redis
-    try {
-      const redisKey = `session:${callId}`;
-      await redis.del(redisKey);
-    } catch (err) {
-      logger.error('[SESSION MANAGER] Redis delete error', {
-        callId,
-        error: err.message
-      });
+    // L1: Redis - Skip if Redis not configured
+    if (redis) {
+      try {
+        const redisKey = `session:${callId}`;
+        await redis.del(redisKey);
+      } catch (err) {
+        logger.error('[SESSION MANAGER] Redis delete error', {
+          callId,
+          error: err.message
+        });
+      }
     }
     
     // L3: Remove from write buffer (won't be written)
@@ -431,8 +464,10 @@ class SessionManager {
     // Flush remaining writes
     await this.flushWriteBuffer();
     
-    // Close Redis connection
-    await redis.quit();
+    // Close Redis connection (if configured)
+    if (redis) {
+      await redis.quit();
+    }
     
     logger.info('[SESSION MANAGER] Shutdown complete');
   }
