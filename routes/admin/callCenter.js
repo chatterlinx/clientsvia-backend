@@ -441,6 +441,239 @@ router.patch('/:companyId/customers/:customerId',
   }
 );
 
+/**
+ * POST /api/admin/call-center/:companyId/customers/:customerId/properties
+ * Add a new service address (property) to customer
+ */
+router.post('/:companyId/customers/:customerId/properties',
+  auditLog.logModification('customer.property_added'),
+  async (req, res) => {
+    try {
+      const { companyId, customerId } = req.params;
+      const propertyData = req.body;
+      
+      if (!propertyData.nickname || !propertyData.street) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'nickname and street are required' 
+        });
+      }
+      
+      const customer = await Customer.addServiceAddress(customerId, propertyData);
+      
+      if (!customer) {
+        return res.status(404).json({ success: false, error: 'Customer not found' });
+      }
+      
+      // Invalidate cache
+      await CustomerLookup.invalidateCache(companyId, customer.phone);
+      
+      logger.info('[CALL_CENTER] Property added', {
+        companyId,
+        customerId,
+        nickname: propertyData.nickname
+      });
+      
+      res.json({ success: true, data: customer });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error adding property', {
+        error: error.message,
+        customerId: req.params.customerId
+      });
+      res.status(500).json({ success: false, error: 'Failed to add property' });
+    }
+  }
+);
+
+/**
+ * POST /api/admin/call-center/:companyId/customers/:customerId/household
+ * Add a household member to customer
+ */
+router.post('/:companyId/customers/:customerId/household',
+  auditLog.logModification('customer.household_member_added'),
+  async (req, res) => {
+    try {
+      const { companyId, customerId } = req.params;
+      const memberData = req.body;
+      
+      if (!memberData.name) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'name is required' 
+        });
+      }
+      
+      const customer = await CustomerLookup.addHouseholdMember(companyId, customerId, memberData);
+      
+      if (!customer) {
+        return res.status(404).json({ success: false, error: 'Customer not found' });
+      }
+      
+      logger.info('[CALL_CENTER] Household member added', {
+        companyId,
+        customerId,
+        memberName: memberData.name
+      });
+      
+      res.json({ success: true, data: customer });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error adding household member', {
+        error: error.message,
+        customerId: req.params.customerId
+      });
+      res.status(500).json({ success: false, error: 'Failed to add household member' });
+    }
+  }
+);
+
+/**
+ * POST /api/admin/call-center/:companyId/customers/:customerId/convert-commercial
+ * Convert a customer to a commercial account
+ */
+router.post('/:companyId/customers/:customerId/convert-commercial',
+  auditLog.logModification('customer.converted_to_commercial'),
+  async (req, res) => {
+    try {
+      const { companyId, customerId } = req.params;
+      const commercialData = req.body;
+      
+      if (!commercialData.businessName) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'businessName is required' 
+        });
+      }
+      
+      // Find and update customer
+      const customer = await Customer.findOneAndUpdate(
+        { _id: customerId, companyId },
+        {
+          $set: {
+            accountType: 'commercial',
+            'commercial.businessName': commercialData.businessName,
+            'commercial.industryType': commercialData.industryType,
+            'commercial.serviceEntrance': commercialData.serviceEntrance,
+            'commercial.unitLocation': commercialData.unitLocation,
+            'commercial.siteContact': commercialData.siteContact,
+            'commercial.billingAddress': commercialData.billingAddress,
+            'commercial.billingContact': commercialData.billingContact
+          }
+        },
+        { new: true }
+      );
+      
+      if (!customer) {
+        return res.status(404).json({ success: false, error: 'Customer not found' });
+      }
+      
+      // Invalidate cache
+      await CustomerLookup.invalidateCache(companyId, customer.phone);
+      
+      logger.info('[CALL_CENTER] Customer converted to commercial', {
+        companyId,
+        customerId,
+        businessName: commercialData.businessName
+      });
+      
+      res.json({ success: true, data: customer });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error converting to commercial', {
+        error: error.message,
+        customerId: req.params.customerId
+      });
+      res.status(500).json({ success: false, error: 'Failed to convert to commercial' });
+    }
+  }
+);
+
+/**
+ * POST /api/admin/call-center/:companyId/customers/:customerId/link
+ * Link this customer to another account
+ */
+router.post('/:companyId/customers/:customerId/link',
+  auditLog.logModification('customer.account_linked'),
+  async (req, res) => {
+    try {
+      const { companyId, customerId } = req.params;
+      const { accountId, relationship, note } = req.body;
+      
+      if (!accountId) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'accountId is required' 
+        });
+      }
+      
+      // Find the target account to get its details
+      const targetAccount = await Customer.findOne({
+        companyId,
+        $or: [
+          { customerId: accountId },
+          { _id: accountId.match(/^[0-9a-fA-F]{24}$/) ? accountId : null }
+        ]
+      }).lean();
+      
+      if (!targetAccount) {
+        return res.status(404).json({ success: false, error: 'Target account not found' });
+      }
+      
+      // Add to relatedAccounts
+      const customer = await Customer.findOneAndUpdate(
+        { _id: customerId, companyId },
+        {
+          $push: {
+            relatedAccounts: {
+              accountId: targetAccount.customerId,
+              accountType: targetAccount.accountType || 'residential',
+              relationship,
+              businessName: targetAccount.commercial?.businessName || targetAccount.fullName,
+              note
+            }
+          }
+        },
+        { new: true }
+      );
+      
+      if (!customer) {
+        return res.status(404).json({ success: false, error: 'Customer not found' });
+      }
+      
+      // Optionally, create reverse link on target
+      await Customer.findByIdAndUpdate(targetAccount._id, {
+        $push: {
+          relatedAccounts: {
+            accountId: customer.customerId,
+            accountType: customer.accountType || 'residential',
+            relationship: `Linked from ${customer.fullName || customer.customerId}`,
+            businessName: customer.commercial?.businessName || customer.fullName
+          }
+        }
+      });
+      
+      // Invalidate cache
+      await CustomerLookup.invalidateCache(companyId, customer.phone);
+      
+      logger.info('[CALL_CENTER] Accounts linked', {
+        companyId,
+        customerId: customer.customerId,
+        linkedTo: targetAccount.customerId
+      });
+      
+      res.json({ success: true, data: customer });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error linking accounts', {
+        error: error.message,
+        customerId: req.params.customerId
+      });
+      res.status(500).json({ success: false, error: 'Failed to link accounts' });
+    }
+  }
+);
+
 // ═══════════════════════════════════════════════════════════════════════════
 // STATS ROUTES
 // ═══════════════════════════════════════════════════════════════════════════

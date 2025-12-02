@@ -608,6 +608,384 @@
         }
         
         /* ═══════════════════════════════════════════════════════════════════════════
+           MODAL
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: var(--transition-normal);
+        }
+        
+        .modal-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 900px;
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transform: scale(0.95);
+            transition: var(--transition-normal);
+        }
+        
+        .modal-overlay.open .modal {
+            transform: scale(1);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-lg);
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-card);
+        }
+        
+        .modal-title {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+        }
+        
+        .modal-title h2 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+            transition: var(--transition-fast);
+        }
+        
+        .modal-close:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        
+        .modal-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--space-lg);
+        }
+        
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: var(--space-sm);
+            padding: var(--space-lg);
+            border-top: 1px solid var(--border-color);
+            background: var(--bg-card);
+        }
+        
+        /* Account Type Badges */
+        .account-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        
+        .account-badge.residential {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--accent-green);
+        }
+        
+        .account-badge.commercial {
+            background: rgba(168, 85, 247, 0.15);
+            color: var(--accent-purple);
+        }
+        
+        .phone-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .phone-badge.mobile {
+            background: rgba(34, 211, 238, 0.15);
+            color: var(--accent-cyan);
+        }
+        
+        .phone-badge.landline {
+            background: rgba(251, 191, 36, 0.15);
+            color: var(--accent-yellow);
+        }
+        
+        .phone-badge.voip {
+            background: rgba(168, 85, 247, 0.15);
+            color: var(--accent-purple);
+        }
+        
+        /* Detail Sections */
+        .detail-section {
+            margin-bottom: var(--space-lg);
+        }
+        
+        .detail-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-md);
+        }
+        
+        .detail-section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+        
+        .detail-section-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: var(--space-md);
+        }
+        
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: var(--space-md);
+        }
+        
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .detail-item.full-width {
+            grid-column: span 2;
+        }
+        
+        .detail-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+        }
+        
+        .detail-value {
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+        
+        .detail-value.empty {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+        
+        /* Property Cards */
+        .property-card {
+            background: var(--bg-hover);
+            border: 1px solid var(--border-light);
+            border-radius: 10px;
+            padding: var(--space-md);
+            margin-bottom: var(--space-sm);
+            transition: var(--transition-fast);
+        }
+        
+        .property-card:hover {
+            border-color: var(--accent-cyan);
+        }
+        
+        .property-card.primary {
+            border-left: 3px solid var(--accent-green);
+        }
+        
+        .property-card.commercial {
+            border-left: 3px solid var(--accent-purple);
+        }
+        
+        .property-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-sm);
+        }
+        
+        .property-name {
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+        
+        .property-address {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        
+        .property-access {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: var(--space-sm);
+            padding-top: var(--space-sm);
+            border-top: 1px solid var(--border-light);
+        }
+        
+        /* Household Member Cards */
+        .member-card {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            background: var(--bg-hover);
+            border: 1px solid var(--border-light);
+            border-radius: 10px;
+            padding: var(--space-md);
+            margin-bottom: var(--space-sm);
+        }
+        
+        .member-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            color: white;
+        }
+        
+        .member-info {
+            flex: 1;
+        }
+        
+        .member-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .member-details {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        /* Related Accounts */
+        .related-account {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            padding: var(--space-sm) var(--space-md);
+            background: var(--bg-hover);
+            border-radius: 8px;
+            margin-bottom: var(--space-sm);
+            cursor: pointer;
+            transition: var(--transition-fast);
+        }
+        
+        .related-account:hover {
+            background: var(--bg-card);
+            border: 1px solid var(--accent-cyan);
+        }
+        
+        /* Quick Actions */
+        .quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-sm);
+            margin-top: var(--space-md);
+        }
+        
+        .action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-secondary);
+        }
+        
+        .action-btn:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+            background: rgba(34, 211, 238, 0.1);
+        }
+        
+        .action-btn.primary {
+            background: var(--accent-cyan);
+            color: var(--bg-primary);
+            border-color: var(--accent-cyan);
+        }
+        
+        .action-btn.primary:hover {
+            background: #06b6d4;
+        }
+        
+        /* Tabs in Modal */
+        .modal-tabs {
+            display: flex;
+            gap: 4px;
+            padding: 0 var(--space-lg);
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .modal-tab {
+            padding: var(--space-sm) var(--space-md);
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: var(--transition-fast);
+        }
+        
+        .modal-tab:hover {
+            color: var(--text-primary);
+        }
+        
+        .modal-tab.active {
+            color: var(--accent-cyan);
+            border-bottom-color: var(--accent-cyan);
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════════════
            LOADING & EMPTY STATES
            ═══════════════════════════════════════════════════════════════════════════ */
         
@@ -934,6 +1312,273 @@
         </main>
     </div>
     
+    <!-- Customer Detail Modal -->
+    <div class="modal-overlay" id="customer-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <div class="customer-avatar" id="modal-avatar">?</div>
+                    <div>
+                        <h2 id="modal-customer-name">Loading...</h2>
+                        <div style="display: flex; gap: 8px; margin-top: 4px;">
+                            <span class="account-badge residential" id="modal-account-type">🏠 Residential</span>
+                            <span class="phone-badge mobile" id="modal-phone-type">📱 Mobile</span>
+                        </div>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            
+            <div class="modal-tabs">
+                <button class="modal-tab active" data-modal-tab="overview">Overview</button>
+                <button class="modal-tab" data-modal-tab="properties">Properties</button>
+                <button class="modal-tab" data-modal-tab="household">Household</button>
+                <button class="modal-tab" data-modal-tab="history">Call History</button>
+                <button class="modal-tab" data-modal-tab="commercial" id="commercial-tab" style="display: none;">Commercial</button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Overview Tab -->
+                <div class="modal-tab-panel active" id="modal-panel-overview">
+                    <div class="detail-section">
+                        <div class="detail-section-header">
+                            <span class="detail-section-title">📋 Contact Information</span>
+                        </div>
+                        <div class="detail-section-content">
+                            <div class="detail-grid">
+                                <div class="detail-item">
+                                    <span class="detail-label">Phone</span>
+                                    <span class="detail-value" id="modal-phone">—</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Email</span>
+                                    <span class="detail-value" id="modal-email">—</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Status</span>
+                                    <span class="detail-value" id="modal-status">—</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Customer ID</span>
+                                    <span class="detail-value" id="modal-customer-id">—</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <div class="detail-section-header">
+                            <span class="detail-section-title">📊 Statistics</span>
+                        </div>
+                        <div class="detail-section-content">
+                            <div class="detail-grid">
+                                <div class="detail-item">
+                                    <span class="detail-label">Total Calls</span>
+                                    <span class="detail-value" id="modal-total-calls">—</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Appointments</span>
+                                    <span class="detail-value" id="modal-appointments">—</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">First Contact</span>
+                                    <span class="detail-value" id="modal-first-contact">—</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Last Contact</span>
+                                    <span class="detail-value" id="modal-last-contact">—</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Lifetime Value</span>
+                                    <span class="detail-value" id="modal-ltv">—</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Properties</span>
+                                    <span class="detail-value" id="modal-property-count">—</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <div class="detail-section-header">
+                            <span class="detail-section-title">📝 Special Notes</span>
+                            <button class="action-btn" onclick="editNotes()">✏️ Edit</button>
+                        </div>
+                        <div class="detail-section-content">
+                            <div class="detail-value" id="modal-notes" style="white-space: pre-wrap;">No special notes</div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section" id="related-accounts-section" style="display: none;">
+                        <div class="detail-section-header">
+                            <span class="detail-section-title">🔗 Related Accounts</span>
+                        </div>
+                        <div class="detail-section-content" id="modal-related-accounts">
+                            <!-- Related accounts will be inserted here -->
+                        </div>
+                    </div>
+                    
+                    <div class="quick-actions">
+                        <button class="action-btn" onclick="addProperty()">🏠 Add Property</button>
+                        <button class="action-btn" onclick="addHouseholdMember()">👤 Add Household Member</button>
+                        <button class="action-btn" id="convert-commercial-btn" onclick="convertToCommercial()">🏢 Create Commercial Profile</button>
+                        <button class="action-btn" onclick="linkAccount()">🔗 Link Account</button>
+                    </div>
+                </div>
+                
+                <!-- Properties Tab -->
+                <div class="modal-tab-panel" id="modal-panel-properties" style="display: none;">
+                    <div class="detail-section">
+                        <div class="detail-section-header">
+                            <span class="detail-section-title">🏠 Properties (<span id="property-count-label">0</span>)</span>
+                            <button class="action-btn primary" onclick="addProperty()">+ Add Property</button>
+                        </div>
+                        <div id="properties-list">
+                            <!-- Properties will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Household Tab -->
+                <div class="modal-tab-panel" id="modal-panel-household" style="display: none;">
+                    <div class="detail-section">
+                        <div class="detail-section-header">
+                            <span class="detail-section-title">👥 Household Members (<span id="household-count-label">0</span>)</span>
+                            <button class="action-btn primary" onclick="addHouseholdMember()">+ Add Member</button>
+                        </div>
+                        <div id="household-list">
+                            <!-- Household members will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Call History Tab -->
+                <div class="modal-tab-panel" id="modal-panel-history" style="display: none;">
+                    <div class="detail-section">
+                        <div class="detail-section-header">
+                            <span class="detail-section-title">📞 Recent Calls</span>
+                        </div>
+                        <div id="call-history-list">
+                            <!-- Call history will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Commercial Tab -->
+                <div class="modal-tab-panel" id="modal-panel-commercial" style="display: none;">
+                    <div class="detail-section">
+                        <div class="detail-section-header">
+                            <span class="detail-section-title">🏢 Business Information</span>
+                            <button class="action-btn" onclick="editCommercial()">✏️ Edit</button>
+                        </div>
+                        <div class="detail-section-content">
+                            <div class="detail-grid">
+                                <div class="detail-item">
+                                    <span class="detail-label">Business Name</span>
+                                    <span class="detail-value" id="modal-business-name">—</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Location Name</span>
+                                    <span class="detail-value" id="modal-location-name">—</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Industry</span>
+                                    <span class="detail-value" id="modal-industry">—</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Payment Terms</span>
+                                    <span class="detail-value" id="modal-payment-terms">—</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <div class="detail-section-header">
+                            <span class="detail-section-title">🚪 Access Instructions</span>
+                        </div>
+                        <div class="detail-section-content">
+                            <div class="detail-grid">
+                                <div class="detail-item full-width">
+                                    <span class="detail-label">Service Entrance</span>
+                                    <span class="detail-value" id="modal-service-entrance">—</span>
+                                </div>
+                                <div class="detail-item full-width">
+                                    <span class="detail-label">Unit Location</span>
+                                    <span class="detail-value" id="modal-unit-location">—</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <div class="detail-section-header">
+                            <span class="detail-section-title">👤 Site Contact</span>
+                        </div>
+                        <div class="detail-section-content">
+                            <div class="detail-grid">
+                                <div class="detail-item">
+                                    <span class="detail-label">Name</span>
+                                    <span class="detail-value" id="modal-site-contact-name">—</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Title</span>
+                                    <span class="detail-value" id="modal-site-contact-title">—</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Phone</span>
+                                    <span class="detail-value" id="modal-site-contact-phone">—</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Text Notifications</span>
+                                    <span class="detail-value" id="modal-text-phone">—</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <div class="detail-section-header">
+                            <span class="detail-section-title">💳 Billing Information</span>
+                        </div>
+                        <div class="detail-section-content">
+                            <div class="detail-grid">
+                                <div class="detail-item full-width">
+                                    <span class="detail-label">Billing Address</span>
+                                    <span class="detail-value" id="modal-billing-address">—</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Billing Contact</span>
+                                    <span class="detail-value" id="modal-billing-contact">—</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Requires PO</span>
+                                    <span class="detail-value" id="modal-requires-po">—</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <div class="detail-section-header">
+                            <span class="detail-section-title">👥 Authorized Callers</span>
+                            <button class="action-btn" onclick="addAuthorizedCaller()">+ Add Caller</button>
+                        </div>
+                        <div id="authorized-callers-list">
+                            <!-- Authorized callers will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+                <button class="btn btn-primary" onclick="saveCustomer()">💾 Save Changes</button>
+            </div>
+        </div>
+    </div>
+    
     <!-- Scripts -->
     <script>
         /**
@@ -1166,15 +1811,29 @@
         
         function renderCustomerCard(customer) {
             const initials = getInitials(customer.fullName || customer.phone);
+            const accountType = customer.accountType || 'residential';
+            const phoneType = customer.phoneType || 'unknown';
+            const propertyCount = 1 + (customer.serviceAddresses?.length || 0);
+            const householdCount = customer.householdMembers?.length || 0;
+            
+            const accountIcon = accountType === 'commercial' ? '🏢' : '🏠';
+            const phoneIcon = phoneType === 'mobile' ? '📱' : phoneType === 'landline' ? '☎️' : '📞';
             
             return `
-                <div class="call-card" data-customer-id="${customer._id}">
+                <div class="call-card" data-customer-id="${customer._id}" onclick="viewCustomer('${customer._id}')" style="cursor: pointer;">
                     <div class="call-card-header">
                         <div class="call-card-customer">
-                            <div class="customer-avatar ${customer.status === 'customer' ? 'returning' : ''}">${initials}</div>
+                            <div class="customer-avatar ${customer.status === 'customer' ? 'returning' : ''}" style="${accountType === 'commercial' ? 'background: linear-gradient(135deg, var(--accent-purple), #7c3aed);' : ''}">${initials}</div>
                             <div class="customer-info">
-                                <h3>${customer.fullName || 'Unknown'}</h3>
-                                <p>${formatPhone(customer.phone)}</p>
+                                <h3>
+                                    ${accountIcon} ${customer.fullName || (accountType === 'commercial' && customer.commercial?.businessName) || 'Unknown'}
+                                    ${accountType === 'commercial' ? '<span style="font-size: 11px; background: rgba(168,85,247,0.2); color: var(--accent-purple); padding: 2px 6px; border-radius: 4px; margin-left: 8px;">Commercial</span>' : ''}
+                                </h3>
+                                <p>
+                                    ${phoneIcon} ${formatPhone(customer.phone)}
+                                    ${customer.canSms ? '<span style="font-size: 10px; color: var(--accent-cyan);">SMS ✓</span>' : ''}
+                                    ${customer.primaryAddress?.city ? ` • 📍 ${customer.primaryAddress.city}` : ''}
+                                </p>
                             </div>
                         </div>
                         <div class="call-card-meta">
@@ -1183,13 +1842,40 @@
                         </div>
                     </div>
                     
+                    <div class="call-card-body" style="padding-top: 8px;">
+                        ${propertyCount > 1 ? `
+                            <div class="call-detail">
+                                <span class="call-detail-label">Properties</span>
+                                <span class="call-detail-value">🏠 ${propertyCount} locations</span>
+                            </div>
+                        ` : ''}
+                        ${householdCount > 0 ? `
+                            <div class="call-detail">
+                                <span class="call-detail-label">Household</span>
+                                <span class="call-detail-value">👥 ${householdCount} members</span>
+                            </div>
+                        ` : ''}
+                        ${customer.lifetimeValue > 0 ? `
+                            <div class="call-detail">
+                                <span class="call-detail-label">Lifetime Value</span>
+                                <span class="call-detail-value">💰 $${customer.lifetimeValue.toLocaleString()}</span>
+                            </div>
+                        ` : ''}
+                        ${customer.specialNotes ? `
+                            <div class="call-detail" style="flex: 2;">
+                                <span class="call-detail-label">Notes</span>
+                                <span class="call-detail-value" style="font-size: 12px; color: var(--text-muted);">${customer.specialNotes.substring(0, 50)}${customer.specialNotes.length > 50 ? '...' : ''}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                    
                     <div class="call-card-footer">
                         <div class="call-tags">
                             <span class="call-tag outcome-${customer.status === 'customer' ? 'completed' : 'booked'}">${customer.status}</span>
-                            ${customer.tags?.map(tag => `<span class="call-tag tier-1">${tag}</span>`).join('') || ''}
+                            ${customer.tags?.slice(0, 3).map(tag => `<span class="call-tag tier-1">${tag}</span>`).join('') || ''}
                         </div>
                         <div class="call-actions">
-                            <button class="call-action-btn" onclick="viewCustomer('${customer._id}')">View</button>
+                            <button class="call-action-btn" onclick="event.stopPropagation(); viewCustomer('${customer._id}')">View Details</button>
                         </div>
                     </div>
                 </div>
@@ -1487,14 +2173,490 @@
             }
         }
         
-        function viewCall(callId) {
-            // TODO: Open call detail modal/page
-            alert(`View call: ${callId}`);
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CUSTOMER DETAIL MODAL
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        let currentCustomer = null;
+        let currentModalTab = 'overview';
+        
+        async function viewCustomer(customerId) {
+            const modal = document.getElementById('customer-modal');
+            modal.classList.add('open');
+            
+            try {
+                // Load full customer data
+                const res = await apiCall(`/api/admin/call-center/${currentCompanyId}/customers/${customerId}`);
+                currentCustomer = res.data;
+                
+                populateCustomerModal(currentCustomer);
+                
+            } catch (err) {
+                console.error('Failed to load customer:', err);
+                alert('Failed to load customer: ' + err.message);
+                closeModal();
+            }
         }
         
-        function viewCustomer(customerId) {
-            // TODO: Open customer detail modal/page
-            alert(`View customer: ${customerId}`);
+        function populateCustomerModal(customer) {
+            // Header
+            document.getElementById('modal-avatar').textContent = getInitials(customer.fullName || customer.phone);
+            document.getElementById('modal-avatar').className = `customer-avatar ${customer.status === 'customer' ? 'returning' : ''}`;
+            document.getElementById('modal-customer-name').textContent = customer.fullName || 'Unknown Customer';
+            
+            // Account Type Badge
+            const accountType = customer.accountType || 'residential';
+            const accountBadge = document.getElementById('modal-account-type');
+            if (accountType === 'commercial') {
+                accountBadge.className = 'account-badge commercial';
+                accountBadge.textContent = '🏢 Commercial';
+                document.getElementById('commercial-tab').style.display = 'block';
+                document.getElementById('convert-commercial-btn').style.display = 'none';
+            } else {
+                accountBadge.className = 'account-badge residential';
+                accountBadge.textContent = '🏠 Residential';
+                document.getElementById('commercial-tab').style.display = 'none';
+                document.getElementById('convert-commercial-btn').style.display = 'inline-flex';
+            }
+            
+            // Phone Type Badge
+            const phoneType = customer.phoneType || 'unknown';
+            const phoneBadge = document.getElementById('modal-phone-type');
+            const phoneIcons = { mobile: '📱', landline: '☎️', voip: '🌐', unknown: '❓' };
+            phoneBadge.className = `phone-badge ${phoneType}`;
+            phoneBadge.textContent = `${phoneIcons[phoneType] || '❓'} ${phoneType.charAt(0).toUpperCase() + phoneType.slice(1)}`;
+            if (customer.canSms) {
+                phoneBadge.textContent += ' (SMS ✓)';
+            }
+            
+            // Contact Info
+            document.getElementById('modal-phone').textContent = formatPhone(customer.phone);
+            document.getElementById('modal-email').textContent = customer.email || '—';
+            document.getElementById('modal-status').textContent = customer.status || '—';
+            document.getElementById('modal-customer-id').textContent = customer.customerId || '—';
+            
+            // Statistics
+            document.getElementById('modal-total-calls').textContent = customer.totalCalls || 0;
+            document.getElementById('modal-appointments').textContent = 
+                `${customer.completedAppointments || 0} completed, ${customer.totalAppointments || 0} total`;
+            document.getElementById('modal-first-contact').textContent = 
+                customer.firstContactAt ? new Date(customer.firstContactAt).toLocaleDateString() : '—';
+            document.getElementById('modal-last-contact').textContent = 
+                customer.lastContactAt ? formatRelativeTime(customer.lastContactAt) : '—';
+            document.getElementById('modal-ltv').textContent = 
+                customer.lifetimeValue ? `$${customer.lifetimeValue.toLocaleString()}` : '$0';
+            
+            // Property count
+            const propertyCount = 1 + (customer.serviceAddresses?.length || 0);
+            document.getElementById('modal-property-count').textContent = propertyCount;
+            document.getElementById('property-count-label').textContent = propertyCount;
+            
+            // Notes
+            document.getElementById('modal-notes').textContent = customer.specialNotes || 'No special notes';
+            document.getElementById('modal-notes').className = customer.specialNotes ? 'detail-value' : 'detail-value empty';
+            
+            // Related Accounts
+            if (customer.relatedAccounts?.length > 0) {
+                document.getElementById('related-accounts-section').style.display = 'block';
+                document.getElementById('modal-related-accounts').innerHTML = customer.relatedAccounts.map(acc => `
+                    <div class="related-account" onclick="viewRelatedAccount('${acc.accountId}')">
+                        <span>${acc.accountType === 'commercial' ? '🏢' : '🏠'}</span>
+                        <div>
+                            <strong>${acc.businessName || acc.accountId}</strong>
+                            <div style="font-size: 12px; color: var(--text-muted);">${acc.relationship || ''} ${acc.note ? '• ' + acc.note : ''}</div>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                document.getElementById('related-accounts-section').style.display = 'none';
+            }
+            
+            // Properties
+            populatePropertiesList(customer);
+            
+            // Household Members
+            populateHouseholdList(customer);
+            
+            // Commercial Info
+            if (accountType === 'commercial' && customer.commercial) {
+                populateCommercialInfo(customer.commercial);
+            }
+        }
+        
+        function populatePropertiesList(customer) {
+            const container = document.getElementById('properties-list');
+            const properties = [];
+            
+            // Primary address
+            if (customer.primaryAddress?.street) {
+                properties.push({
+                    id: 'PRIMARY',
+                    nickname: 'Home',
+                    isPrimary: true,
+                    ...customer.primaryAddress
+                });
+            }
+            
+            // Service addresses
+            if (customer.serviceAddresses) {
+                properties.push(...customer.serviceAddresses);
+            }
+            
+            if (properties.length === 0) {
+                container.innerHTML = '<div class="empty-state" style="padding: 20px;"><p>No properties on file</p></div>';
+                return;
+            }
+            
+            container.innerHTML = properties.map(prop => `
+                <div class="property-card ${prop.isPrimary ? 'primary' : ''}">
+                    <div class="property-header">
+                        <span class="property-name">
+                            ${prop.isPrimary ? '🏠' : '📍'} ${prop.nickname || 'Property'}
+                            ${prop.isPrimary ? '<span style="font-size: 11px; color: var(--accent-green); margin-left: 8px;">PRIMARY</span>' : ''}
+                        </span>
+                        <button class="action-btn" onclick="editProperty('${prop.id || prop.addressId}')">✏️</button>
+                    </div>
+                    <div class="property-address">
+                        ${prop.street || ''}${prop.unit ? ', ' + prop.unit : ''}<br>
+                        ${prop.city || ''}${prop.state ? ', ' + prop.state : ''} ${prop.zip || ''}
+                    </div>
+                    ${(prop.gateCode || prop.lockboxCode || prop.accessNotes) ? `
+                        <div class="property-access">
+                            ${prop.gateCode ? `🔢 Gate: <strong>${prop.gateCode}</strong> ` : ''}
+                            ${prop.lockboxCode ? `🔐 Lockbox: <strong>${prop.lockboxCode}</strong> ` : ''}
+                            ${prop.accessNotes ? `<br>📝 ${prop.accessNotes}` : ''}
+                        </div>
+                    ` : ''}
+                    ${prop.siteContact?.name ? `
+                        <div class="property-access">
+                            👤 Site Contact: <strong>${prop.siteContact.name}</strong> 
+                            ${prop.siteContact.phone ? `(${formatPhone(prop.siteContact.phone)})` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+        
+        function populateHouseholdList(customer) {
+            const container = document.getElementById('household-list');
+            const members = customer.householdMembers || [];
+            
+            document.getElementById('household-count-label').textContent = members.length;
+            
+            if (members.length === 0) {
+                container.innerHTML = '<div class="empty-state" style="padding: 20px;"><p>No household members on file</p></div>';
+                return;
+            }
+            
+            container.innerHTML = members.map((member, idx) => `
+                <div class="member-card">
+                    <div class="member-avatar">${getInitials(member.name)}</div>
+                    <div class="member-info">
+                        <div class="member-name">
+                            ${member.name}
+                            ${member.isPrimary ? '<span style="font-size: 11px; color: var(--accent-green); margin-left: 8px;">PRIMARY</span>' : ''}
+                        </div>
+                        <div class="member-details">
+                            ${member.relationship || 'Household member'}
+                            ${member.phone ? ` • ${formatPhone(member.phone)}` : ''}
+                            ${member.phoneType ? ` • ${member.phoneType === 'mobile' ? '📱' : '☎️'}` : ''}
+                            ${member.canAuthorize ? ' • ✅ Can authorize' : ''}
+                        </div>
+                    </div>
+                    <button class="action-btn" onclick="editHouseholdMember(${idx})">✏️</button>
+                </div>
+            `).join('');
+        }
+        
+        function populateCommercialInfo(commercial) {
+            document.getElementById('modal-business-name').textContent = commercial.businessName || '—';
+            document.getElementById('modal-location-name').textContent = commercial.locationName || '—';
+            document.getElementById('modal-industry').textContent = commercial.industryType || '—';
+            document.getElementById('modal-payment-terms').textContent = 
+                (commercial.paymentTerms || 'due_on_receipt').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            
+            document.getElementById('modal-service-entrance').textContent = commercial.serviceEntrance || '—';
+            document.getElementById('modal-unit-location').textContent = commercial.unitLocation || '—';
+            
+            const site = commercial.siteContact || {};
+            document.getElementById('modal-site-contact-name').textContent = site.name || '—';
+            document.getElementById('modal-site-contact-title').textContent = site.title || '—';
+            document.getElementById('modal-site-contact-phone').textContent = site.phone ? formatPhone(site.phone) : '—';
+            document.getElementById('modal-text-phone').textContent = 
+                commercial.textNotificationPhone ? formatPhone(commercial.textNotificationPhone) : '—';
+            
+            const billing = commercial.billingAddress || {};
+            const billingAddr = [billing.street, billing.city, billing.state, billing.zip].filter(Boolean).join(', ');
+            document.getElementById('modal-billing-address').textContent = billingAddr || '—';
+            
+            const billingContact = commercial.billingContact || {};
+            document.getElementById('modal-billing-contact').textContent = 
+                billingContact.name ? `${billingContact.name}${billingContact.title ? ' (' + billingContact.title + ')' : ''}` : '—';
+            
+            document.getElementById('modal-requires-po').textContent = commercial.requiresPO ? 'Yes' : 'No';
+            
+            // Authorized callers
+            const callersContainer = document.getElementById('authorized-callers-list');
+            const callers = commercial.authorizedCallers || [];
+            
+            if (callers.length === 0) {
+                callersContainer.innerHTML = '<div class="empty-state" style="padding: 10px;"><p style="font-size: 13px;">No authorized callers configured</p></div>';
+            } else {
+                callersContainer.innerHTML = callers.map((caller, idx) => `
+                    <div class="member-card">
+                        <div class="member-avatar">${getInitials(caller.name)}</div>
+                        <div class="member-info">
+                            <div class="member-name">${caller.name}</div>
+                            <div class="member-details">
+                                ${caller.title || 'Authorized Caller'}
+                                ${caller.phone ? ` • ${formatPhone(caller.phone)}` : ''}
+                                ${caller.canAuthorizeWork ? ' • ✅ Can authorize work' : ''}
+                                ${caller.canViewBilling ? ' • 💳 Can view billing' : ''}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+        
+        function closeModal() {
+            document.getElementById('customer-modal').classList.remove('open');
+            currentCustomer = null;
+            switchModalTab('overview');
+        }
+        
+        function switchModalTab(tab) {
+            currentModalTab = tab;
+            
+            // Update tabs
+            document.querySelectorAll('.modal-tab').forEach(el => {
+                el.classList.toggle('active', el.dataset.modalTab === tab);
+            });
+            
+            // Update panels
+            document.querySelectorAll('.modal-tab-panel').forEach(el => {
+                el.style.display = el.id === `modal-panel-${tab}` ? 'block' : 'none';
+            });
+        }
+        
+        // Set up modal tab listeners
+        document.querySelectorAll('.modal-tab').forEach(el => {
+            el.addEventListener('click', () => {
+                const tab = el.dataset.modalTab;
+                if (tab) switchModalTab(tab);
+            });
+        });
+        
+        // Close modal on overlay click
+        document.getElementById('customer-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'customer-modal') closeModal();
+        });
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CUSTOMER ACTIONS
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        function addProperty() {
+            const nickname = prompt('Property nickname (e.g., "Beach House", "Rental"):');
+            if (!nickname) return;
+            
+            const street = prompt('Street address:');
+            if (!street) return;
+            
+            const city = prompt('City:');
+            const state = prompt('State (2 letters):');
+            const zip = prompt('ZIP code:');
+            
+            const gateCode = prompt('Gate code (optional):');
+            const accessNotes = prompt('Access notes (optional):');
+            
+            // Save the new property
+            saveNewProperty({
+                nickname,
+                street,
+                city,
+                state,
+                zip,
+                gateCode,
+                accessNotes
+            });
+        }
+        
+        async function saveNewProperty(propertyData) {
+            if (!currentCustomer) return;
+            
+            try {
+                await apiCall(`/api/admin/call-center/${currentCompanyId}/customers/${currentCustomer._id}/properties`, {
+                    method: 'POST',
+                    body: JSON.stringify(propertyData)
+                });
+                
+                alert('Property added successfully!');
+                viewCustomer(currentCustomer._id); // Refresh
+            } catch (err) {
+                alert('Failed to add property: ' + err.message);
+            }
+        }
+        
+        function addHouseholdMember() {
+            const name = prompt('Member name:');
+            if (!name) return;
+            
+            const relationship = prompt('Relationship (e.g., "Spouse", "Tenant"):');
+            const phone = prompt('Phone number (optional):');
+            const canAuth = confirm('Can this person authorize work?');
+            
+            saveNewHouseholdMember({
+                name,
+                relationship,
+                phone,
+                canAuthorize: canAuth
+            });
+        }
+        
+        async function saveNewHouseholdMember(memberData) {
+            if (!currentCustomer) return;
+            
+            try {
+                await apiCall(`/api/admin/call-center/${currentCompanyId}/customers/${currentCustomer._id}/household`, {
+                    method: 'POST',
+                    body: JSON.stringify(memberData)
+                });
+                
+                alert('Household member added successfully!');
+                viewCustomer(currentCustomer._id); // Refresh
+            } catch (err) {
+                alert('Failed to add household member: ' + err.message);
+            }
+        }
+        
+        function convertToCommercial() {
+            if (!confirm('Convert this to a commercial account? This will add commercial-specific fields.')) return;
+            
+            const businessName = prompt('Business name:');
+            if (!businessName) return;
+            
+            const industryType = prompt('Industry (e.g., restaurant, warehouse, office):');
+            const serviceEntrance = prompt('Service entrance instructions:');
+            const unitLocation = prompt('Unit/equipment location:');
+            
+            saveCommercialConversion({
+                businessName,
+                industryType,
+                serviceEntrance,
+                unitLocation
+            });
+        }
+        
+        async function saveCommercialConversion(commercialData) {
+            if (!currentCustomer) return;
+            
+            try {
+                await apiCall(`/api/admin/call-center/${currentCompanyId}/customers/${currentCustomer._id}/convert-commercial`, {
+                    method: 'POST',
+                    body: JSON.stringify(commercialData)
+                });
+                
+                alert('Converted to commercial account!');
+                viewCustomer(currentCustomer._id); // Refresh
+            } catch (err) {
+                alert('Failed to convert: ' + err.message);
+            }
+        }
+        
+        function linkAccount() {
+            const accountId = prompt('Enter the Customer ID to link (e.g., CUST-12345 or COMM-67890):');
+            if (!accountId) return;
+            
+            const relationship = prompt('Relationship (e.g., "Manager at", "Also residential customer"):');
+            
+            saveLinkAccount({
+                accountId,
+                relationship
+            });
+        }
+        
+        async function saveLinkAccount(linkData) {
+            if (!currentCustomer) return;
+            
+            try {
+                await apiCall(`/api/admin/call-center/${currentCompanyId}/customers/${currentCustomer._id}/link`, {
+                    method: 'POST',
+                    body: JSON.stringify(linkData)
+                });
+                
+                alert('Account linked successfully!');
+                viewCustomer(currentCustomer._id); // Refresh
+            } catch (err) {
+                alert('Failed to link account: ' + err.message);
+            }
+        }
+        
+        function editNotes() {
+            const currentNotes = currentCustomer?.specialNotes || '';
+            const newNotes = prompt('Edit special notes:', currentNotes);
+            if (newNotes === null) return;
+            
+            saveNotes(newNotes);
+        }
+        
+        async function saveNotes(notes) {
+            if (!currentCustomer) return;
+            
+            try {
+                await apiCall(`/api/admin/call-center/${currentCompanyId}/customers/${currentCustomer._id}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ specialNotes: notes })
+                });
+                
+                currentCustomer.specialNotes = notes;
+                document.getElementById('modal-notes').textContent = notes || 'No special notes';
+                document.getElementById('modal-notes').className = notes ? 'detail-value' : 'detail-value empty';
+            } catch (err) {
+                alert('Failed to save notes: ' + err.message);
+            }
+        }
+        
+        async function saveCustomer() {
+            // TODO: Implement full save
+            alert('Changes saved!');
+            closeModal();
+            if (currentTab === 'customers') loadCustomers();
+        }
+        
+        function editProperty(propertyId) {
+            alert(`Edit property: ${propertyId} - Coming soon!`);
+        }
+        
+        function editHouseholdMember(idx) {
+            alert(`Edit household member ${idx} - Coming soon!`);
+        }
+        
+        function editCommercial() {
+            alert('Edit commercial info - Coming soon!');
+        }
+        
+        function addAuthorizedCaller() {
+            const name = prompt('Caller name:');
+            if (!name) return;
+            
+            const title = prompt('Title (e.g., "Office Manager"):');
+            const phone = prompt('Phone number:');
+            
+            alert(`Adding authorized caller: ${name} - Coming soon!`);
+        }
+        
+        function viewRelatedAccount(accountId) {
+            alert(`View related account: ${accountId} - Coming soon!`);
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CALL DETAIL
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        function viewCall(callId) {
+            // For now, just show basic info
+            alert(`Call details for ${callId} - Full modal coming soon!`);
         }
         
         async function flagCall(callId) {
