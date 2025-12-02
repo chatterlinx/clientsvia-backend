@@ -820,7 +820,7 @@ router.post('/card/:cardId/deactivate', async (req, res, next) => {
  */
 router.post('/test-rules', async (req, res, next) => {
   try {
-    const { companyId, trade, testInput } = req.body;
+    const { companyId, trade, testInput, cardId } = req.body;
 
     if (!companyId || !testInput) {
       return res.status(400).json({
@@ -829,6 +829,94 @@ router.post('/test-rules', async (req, res, next) => {
       });
     }
 
+    // If testing a specific card, test that card directly (even if not active)
+    if (cardId) {
+      const card = await TriageCard.findById(cardId).lean();
+      if (!card) {
+        return res.status(404).json({
+          ok: false,
+          error: 'Card not found'
+        });
+      }
+      
+      // Test this specific card's keywords
+      const normalized = TriageService.normalizeText(testInput);
+      const cfg = card.quickRuleConfig || {};
+      const mustKeywords = (cfg.keywordsMustHave || []).map(k => TriageService.normalizeText(k)).filter(Boolean);
+      const excludeKeywords = (cfg.keywordsExclude || []).map(k => TriageService.normalizeText(k)).filter(Boolean);
+      
+      // Check if all must keywords are present
+      let allMustPresent = true;
+      const matchedKeywords = [];
+      const missingKeywords = [];
+      
+      for (const keyword of mustKeywords) {
+        if (normalized.includes(keyword)) {
+          matchedKeywords.push(keyword);
+        } else {
+          allMustPresent = false;
+          missingKeywords.push(keyword);
+        }
+      }
+      
+      // Check if any exclude keywords are present
+      let hasExcluded = false;
+      const foundExcluded = [];
+      for (const keyword of excludeKeywords) {
+        if (normalized.includes(keyword)) {
+          hasExcluded = true;
+          foundExcluded.push(keyword);
+        }
+      }
+      
+      const matched = allMustPresent && !hasExcluded && mustKeywords.length > 0;
+      
+      return res.json({
+        ok: true,
+        testInput,
+        normalizedInput: normalized,
+        cardTested: {
+          id: card._id,
+          triageLabel: card.triageLabel,
+          displayName: card.displayName,
+          isActive: card.isActive
+        },
+        result: matched ? {
+          matched: true,
+          source: 'SPECIFIC_CARD_TEST',
+          triageCardId: card._id.toString(),
+          triageLabel: card.triageLabel,
+          displayName: card.displayName,
+          intent: card.intent,
+          serviceType: card.serviceType,
+          action: cfg.action,
+          confidence: 1.0
+        } : {
+          matched: false
+        },
+        debug: {
+          mustKeywords,
+          matchedKeywords,
+          missingKeywords,
+          excludeKeywords,
+          foundExcluded,
+          reason: !matched ? (
+            missingKeywords.length > 0 
+              ? `Missing keywords: ${missingKeywords.join(', ')}`
+              : foundExcluded.length > 0
+                ? `Excluded by: ${foundExcluded.join(', ')}`
+                : mustKeywords.length === 0
+                  ? 'No must-have keywords configured'
+                  : 'Unknown'
+          ) : 'All keywords matched'
+        },
+        warning: !card.isActive 
+          ? '⚠️ This card is NOT ACTIVE. Enable it for production use.' 
+          : null
+      });
+    }
+
+    // Default: Test against all active rules
     const result = await TriageService.applyQuickTriageRules(testInput, companyId, trade);
 
     res.json({

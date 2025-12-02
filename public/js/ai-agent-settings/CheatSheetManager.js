@@ -9248,6 +9248,10 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
               <span class="px-2 py-1 text-xs font-medium ${usesStyle} rounded transition-all" title="Total Uses">
                 ${uses}
               </span>
+              <!-- Edit -->
+              <button onclick="cheatSheetManager.editTriageCard('${card._id}')" class="px-2 py-1 text-xs bg-blue-100 text-blue-700 border border-blue-300 rounded hover:bg-blue-200 transition-colors" title="Edit Card">
+                ✏️
+              </button>
               <!-- Delete -->
               <button onclick="cheatSheetManager.deleteTriageCard('${card._id}')" class="px-2 py-1 text-xs bg-red-100 text-red-700 border border-red-300 rounded hover:bg-red-200 transition-colors" title="Delete Card">
                 🗑️
@@ -9625,6 +9629,205 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
   }
   
   /**
+   * V22: Edit triage card - opens modal with card data for editing
+   */
+  async editTriageCard(cardId) {
+    console.log('[TRIAGE CARDS] Opening edit modal for card:', cardId);
+    
+    try {
+      const token = localStorage.getItem('adminToken');
+      
+      // Fetch the card data
+      const response = await fetch(`/api/company/${this.companyId}/triage-cards/${cardId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) throw new Error('Failed to load card');
+      
+      const data = await response.json();
+      const card = data.card || data;
+      
+      // Show edit modal
+      this.showEditTriageCardModal(card);
+      
+    } catch (error) {
+      console.error('[TRIAGE CARDS] Failed to load card for editing:', error);
+      this.showNotification('❌ Failed to load card', 'error');
+    }
+  }
+  
+  /**
+   * Show the edit modal for a triage card
+   */
+  showEditTriageCardModal(card) {
+    const keywords = card.quickRuleConfig?.keywordsMustHave || [];
+    const excludeKeywords = card.quickRuleConfig?.keywordsExclude || [];
+    const action = card.quickRuleConfig?.action || 'DIRECT_TO_3TIER';
+    const explanation = card.quickRuleConfig?.explanation || '';
+    const qnaCardRef = card.quickRuleConfig?.qnaCardRef || '';
+    
+    const modalHtml = `
+      <div id="edit-triage-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div class="p-6">
+            <div class="flex items-center justify-between mb-6">
+              <h3 class="text-xl font-bold text-gray-900">✏️ Edit Triage Card</h3>
+              <button onclick="cheatSheetManager.closeEditModal()" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times text-xl"></i>
+              </button>
+            </div>
+            
+            <form id="edit-triage-form" class="space-y-4">
+              <input type="hidden" id="edit-card-id" value="${card._id}">
+              
+              <!-- Display Name -->
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Display Name</label>
+                <input type="text" id="edit-display-name" value="${this.escapeHtml(card.displayName || '')}" 
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              </div>
+              
+              <!-- Must Have Keywords -->
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Must Have Keywords (comma separated)</label>
+                <textarea id="edit-keywords" rows="2"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g. not cooling, ac broken, no cold air">${keywords.join(', ')}</textarea>
+                <p class="text-xs text-gray-500 mt-1">All keywords must be present for a match</p>
+              </div>
+              
+              <!-- Exclude Keywords -->
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Exclude Keywords (comma separated)</label>
+                <textarea id="edit-exclude-keywords" rows="2"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g. maintenance, $89, schedule">${excludeKeywords.join(', ')}</textarea>
+                <p class="text-xs text-gray-500 mt-1">Match will fail if any of these keywords are present</p>
+              </div>
+              
+              <!-- Action -->
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Action</label>
+                <select id="edit-action" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                  <option value="DIRECT_TO_3TIER" ${action === 'DIRECT_TO_3TIER' ? 'selected' : ''}>🔵 DIRECT_TO_3TIER - Route to Brain-2 scenarios</option>
+                  <option value="EXPLAIN_AND_PUSH" ${action === 'EXPLAIN_AND_PUSH' ? 'selected' : ''}>🟣 EXPLAIN_AND_PUSH - Explain then push to booking</option>
+                  <option value="ESCALATE_TO_HUMAN" ${action === 'ESCALATE_TO_HUMAN' ? 'selected' : ''}>🔴 ESCALATE_TO_HUMAN - Transfer to human immediately</option>
+                  <option value="TAKE_MESSAGE" ${action === 'TAKE_MESSAGE' ? 'selected' : ''}>🟠 TAKE_MESSAGE - Collect info and take message</option>
+                  <option value="END_CALL_POLITE" ${action === 'END_CALL_POLITE' ? 'selected' : ''}>⚫ END_CALL_POLITE - End call politely</option>
+                </select>
+              </div>
+              
+              <!-- Service Type -->
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Service Type</label>
+                <select id="edit-service-type" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                  <option value="REPAIR" ${card.serviceType === 'REPAIR' ? 'selected' : ''}>REPAIR</option>
+                  <option value="MAINTENANCE" ${card.serviceType === 'MAINTENANCE' ? 'selected' : ''}>MAINTENANCE</option>
+                  <option value="EMERGENCY" ${card.serviceType === 'EMERGENCY' ? 'selected' : ''}>EMERGENCY</option>
+                  <option value="OTHER" ${card.serviceType === 'OTHER' ? 'selected' : ''}>OTHER</option>
+                </select>
+              </div>
+              
+              <!-- Priority -->
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Priority (higher = checked first)</label>
+                <input type="number" id="edit-priority" value="${card.priority || 100}" min="1" max="1000"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              </div>
+              
+              <!-- Explanation -->
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Explanation / Reason</label>
+                <input type="text" id="edit-explanation" value="${this.escapeHtml(explanation)}"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g. Service call needed for repair">
+              </div>
+              
+              <!-- Buttons -->
+              <div class="flex justify-end space-x-3 pt-4 border-t">
+                <button type="button" onclick="cheatSheetManager.closeEditModal()" 
+                  class="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" 
+                  class="px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors">
+                  💾 Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Add submit handler
+    document.getElementById('edit-triage-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.saveTriageCardEdit();
+    });
+  }
+  
+  closeEditModal() {
+    const modal = document.getElementById('edit-triage-modal');
+    if (modal) modal.remove();
+  }
+  
+  async saveTriageCardEdit() {
+    const cardId = document.getElementById('edit-card-id').value;
+    const displayName = document.getElementById('edit-display-name').value.trim();
+    const keywordsRaw = document.getElementById('edit-keywords').value;
+    const excludeKeywordsRaw = document.getElementById('edit-exclude-keywords').value;
+    const action = document.getElementById('edit-action').value;
+    const serviceType = document.getElementById('edit-service-type').value;
+    const priority = parseInt(document.getElementById('edit-priority').value) || 100;
+    const explanation = document.getElementById('edit-explanation').value.trim();
+    
+    // Parse keywords (comma-separated)
+    const keywordsMustHave = keywordsRaw.split(',').map(k => k.trim()).filter(Boolean);
+    const keywordsExclude = excludeKeywordsRaw.split(',').map(k => k.trim()).filter(Boolean);
+    
+    console.log('[TRIAGE CARDS] Saving edit:', { cardId, displayName, keywordsMustHave, keywordsExclude, action });
+    
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`/api/company/${this.companyId}/triage-cards/${cardId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          displayName,
+          serviceType,
+          priority,
+          quickRuleConfig: {
+            keywordsMustHave,
+            keywordsExclude,
+            action,
+            explanation
+          }
+        })
+      });
+      
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Update failed');
+      }
+      
+      this.closeEditModal();
+      this.showNotification('✅ Triage Card updated', 'success');
+      this.renderTriageCardsList(); // Reload list
+      
+    } catch (error) {
+      console.error('[TRIAGE CARDS] Save failed:', error);
+      this.showNotification('❌ Failed to save: ' + error.message, 'error');
+    }
+  }
+  
+  /**
    * V22: Test triage card using backend TriageService (same as production)
    * Calls POST /api/admin/triage-builder/test-rules
    */
@@ -9645,7 +9848,7 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     try {
       const token = localStorage.getItem('adminToken');
       
-      // V22: Call backend test endpoint (uses same TriageService as production)
+      // V22: Call backend test endpoint with specific cardId for accurate testing
       const response = await fetch('/api/admin/triage-builder/test-rules', {
         method: 'POST',
         headers: {
@@ -9654,7 +9857,8 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
         },
         body: JSON.stringify({
           companyId: this.companyId,
-          testInput: testText
+          testInput: testText,
+          cardId: cardId  // Test THIS specific card's keywords
         })
       });
       
@@ -9722,20 +9926,50 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
           </div>
         `;
       } else {
+        // Show detailed debug info for no-match cases
+        const debug = data.debug || {};
+        const warning = data.warning || null;
+        const cardTested = data.cardTested || null;
+        
         resultContainer.innerHTML = `
           <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
             <div class="flex items-start space-x-3">
               <i class="fas fa-times-circle text-red-600 text-xl mt-0.5"></i>
               <div class="flex-1">
                 <h5 class="text-sm font-semibold text-red-900 mb-1">❌ No Match</h5>
-                <p class="text-xs text-red-700">
-                  None of the active triage rules matched this input.
-                </p>
+                
+                ${warning ? `
+                <div class="mb-3 p-2 bg-yellow-100 border border-yellow-300 rounded text-xs text-yellow-800">
+                  ${warning}
+                </div>` : ''}
+                
+                ${debug.reason ? `
+                <p class="text-xs text-red-700 mb-2">
+                  <strong>Reason:</strong> ${this.escapeHtml(debug.reason)}
+                </p>` : ''}
+                
                 ${data.normalizedInput ? `
-                <p class="text-xs text-red-600 mt-2">
+                <p class="text-xs text-red-600 mb-2">
                   <strong>Normalized:</strong> <code>${this.escapeHtml(data.normalizedInput)}</code>
                 </p>` : ''}
-                <p class="text-xs text-red-500 mt-2 italic">
+                
+                ${debug.mustKeywords && debug.mustKeywords.length > 0 ? `
+                <div class="text-xs text-gray-700 mb-2">
+                  <strong>Keywords checked:</strong>
+                  <div class="flex flex-wrap gap-1 mt-1">
+                    ${debug.mustKeywords.map(k => {
+                      const matched = debug.matchedKeywords?.includes(k);
+                      return `<span class="px-2 py-0.5 rounded ${matched ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${this.escapeHtml(k)} ${matched ? '✓' : '✗'}</span>`;
+                    }).join('')}
+                  </div>
+                </div>` : ''}
+                
+                ${debug.foundExcluded && debug.foundExcluded.length > 0 ? `
+                <div class="text-xs text-orange-700 mb-2">
+                  <strong>Blocked by exclude keywords:</strong> ${debug.foundExcluded.join(', ')}
+                </div>` : ''}
+                
+                <p class="text-xs text-gray-500 mt-2 italic">
                   In production, this would fall back to Frontline-Intel / 3-Tier Router.
                 </p>
               </div>
