@@ -468,11 +468,14 @@ LEAD CAPTURE LEVEL: ${aggro.name}
 ${aggro.style}
 
 CRITICAL REQUIREMENTS:
-1. Use these exact placeholders: {companyName}, {companyType}, {serviceAreas}, {businessHours}, {mainPhone}, {emergencyPhone}, {billingPhone}, {greeting}, {bookingUrl}
+1. Use these exact placeholders: 
+   - Company: {companyName}, {companyType}, {serviceAreas}, {businessHours}, {mainPhone}, {emergencyPhone}, {billingPhone}, {greeting}, {bookingUrl}
+   - Customer: {isReturning}, {customerName}, {customerFirstName}, {totalCalls}, {city}, {state}, {hasAddress}, {accessNotes}, {alternateContact}
 2. Base everything on the provided company data - NEVER assume HVAC or any default trade
 3. Make the script feel like natural guidance, not a robotic checklist
 4. Include specific phrases the AI should say (in quotes)
-5. Include things to AVOID saying (common mistakes)`;
+5. Include things to AVOID saying (common mistakes)
+6. ALWAYS include the 👤 CUSTOMER RECOGNITION section - this is critical for personalization`;
 
         // Build scenario summary for prompt
         const scenarioSummary = context.brain2.scenarios.length > 0
@@ -559,8 +562,49 @@ Trade: {companyType} | Service Areas: {serviceAreas}
 2. ...
 [Include trade-specific fields if relevant]
 
+👤 CUSTOMER RECOGNITION (Memory System)
+[IMPORTANT: The system automatically recognizes returning callers by phone number]
+
+IF {isReturning} = true AND {customerName} exists:
+• Greet by name: "Hi {customerName}! Welcome back to {companyName}."
+• Reference their history: "I see you've called us {totalCalls} times before."
+• If they have an address on file, confirm: "Is this still for your {city} location?"
+• Skip re-collecting info you already have - get to their need faster
+
+IF {isReturning} = false (New caller):
+• Use standard greeting: "{greeting}"
+• Prioritize capturing: Name, Phone (confirm), Address
+• Ask naturally: "And who am I speaking with today?"
+
+APPOINTMENT ACCESS INFORMATION:
+When booking or updating appointments, capture:
+• Gate codes / Lockbox codes: "Is there a gate code the technician will need?"
+• Key location: "Will you leave a key somewhere, or does someone need to be home?"
+• Pet information: "Any pets the technician should know about?"
+• Alternate contact: "If we can't reach you, is there someone else we should call?"
+• Special instructions: "Anything else the technician should know when arriving?"
+
+Store these in the customer profile - they persist across all future appointments.
+
 📅 BOOKING PROTOCOL
 [Step-by-step booking flow]
+
+📅 APPOINTMENT MODIFICATIONS
+[When caller has existing appointment and wants to change something]
+
+COMMON MODIFICATION REQUESTS:
+• Reschedule: "I need to change my appointment" → Check availability, confirm new time
+• Cancel: "I need to cancel" → Confirm, ask reason (for improvement), offer rebooking
+• Update access: "I want to update the gate code" → Capture new code, confirm it's saved
+• Add instructions: "Tell the technician to call my neighbor" → Capture neighbor name + phone
+• Add alternate contact: "My wife will be home, call her instead" → Capture name + phone
+
+HANDLING:
+1. Acknowledge: "No problem, I can help with that."
+2. Confirm existing appointment details (date, time, service type)
+3. Make the requested change
+4. Summarize what was changed: "I've updated your appointment to [new time] and added the note about [instruction]."
+5. Ask: "Is there anything else you'd like to update?"
 
 📞 TRANSFER RULES
 • IMMEDIATE TRANSFER: [emergencies] → {emergencyPhone}
