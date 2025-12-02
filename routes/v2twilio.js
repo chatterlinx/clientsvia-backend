@@ -3392,5 +3392,150 @@ router.all('*', (req, res) => {
   res.type('text/xml').status(200).send(twiml.toString());
 });
 
+// ============================================================================
+// 📞 CALL STATUS CALLBACK - CALL CENTER V2 INTEGRATION
+// ============================================================================
+// Purpose: Handle Twilio status callbacks when calls end
+// This is the ONLY reliable way to know a call has completed
+// Configure this URL as the StatusCallback in your Twilio webhook settings
+// ============================================================================
+
+router.post('/status-callback', async (req, res) => {
+  const {
+    CallSid,
+    CallStatus,
+    CallDuration,
+    From,
+    To,
+    Direction,
+    AnsweredBy,
+    Timestamp
+  } = req.body;
+  
+  logger.info('[CALL STATUS] Status callback received', {
+    callSid: CallSid,
+    status: CallStatus,
+    duration: CallDuration,
+    from: From,
+    to: To
+  });
+  
+  try {
+    // Only process completed calls
+    if (['completed', 'busy', 'no-answer', 'canceled', 'failed'].includes(CallStatus)) {
+      
+      // ────────────────────────────────────────────────────────────────
+      // CALL CENTER V2: End the call and update CallSummary
+      // ────────────────────────────────────────────────────────────────
+      if (CallSummaryService) {
+        try {
+          // Find the call by Twilio SID
+          const CallSummary = require('../models/CallSummary');
+          const callSummary = await CallSummary.findOne({ twilioSid: CallSid });
+          
+          if (callSummary) {
+            // Map Twilio status to our outcome
+            const outcomeMap = {
+              'completed': 'completed',
+              'busy': 'abandoned',
+              'no-answer': 'abandoned',
+              'canceled': 'abandoned',
+              'failed': 'error'
+            };
+            
+            // Update the call summary
+            await CallSummaryService.endCall(callSummary.callId, {
+              outcome: outcomeMap[CallStatus] || 'completed',
+              durationSeconds: parseInt(CallDuration) || 0,
+              answeredBy: AnsweredBy,
+              endedAt: new Date(Timestamp) || new Date()
+            });
+            
+            logger.info('[CALL STATUS] CallSummary updated', {
+              callId: callSummary.callId,
+              outcome: outcomeMap[CallStatus],
+              duration: CallDuration
+            });
+          } else {
+            logger.debug('[CALL STATUS] No CallSummary found for this call (may be test/spam)', {
+              twilioSid: CallSid
+            });
+          }
+        } catch (callCenterErr) {
+          // Non-blocking: Log but don't fail the webhook
+          logger.warn('[CALL STATUS] Failed to update CallSummary', {
+            error: callCenterErr.message,
+            twilioSid: CallSid
+          });
+        }
+      }
+      // ────────────────────────────────────────────────────────────────
+    }
+    
+    // Always return 200 to Twilio
+    res.status(200).send('OK');
+    
+  } catch (error) {
+    logger.error('[CALL STATUS] Status callback error', {
+      error: error.message,
+      callSid: CallSid
+    });
+    // Still return 200 to prevent Twilio retries
+    res.status(200).send('OK');
+  }
+});
+
+// Status callback for calls made TO customers (outbound)
+router.post('/status-callback/:companyId', async (req, res) => {
+  const { companyId } = req.params;
+  const { CallSid, CallStatus, CallDuration, From, To } = req.body;
+  
+  logger.info('[CALL STATUS] Company-specific status callback', {
+    companyId,
+    callSid: CallSid,
+    status: CallStatus,
+    duration: CallDuration
+  });
+  
+  // Handle same as generic callback
+  try {
+    if (CallSummaryService && ['completed', 'busy', 'no-answer', 'canceled', 'failed'].includes(CallStatus)) {
+      const CallSummary = require('../models/CallSummary');
+      const callSummary = await CallSummary.findOne({ twilioSid: CallSid, companyId });
+      
+      if (callSummary) {
+        const outcomeMap = {
+          'completed': 'completed',
+          'busy': 'abandoned',
+          'no-answer': 'abandoned', 
+          'canceled': 'abandoned',
+          'failed': 'error'
+        };
+        
+        await CallSummaryService.endCall(callSummary.callId, {
+          outcome: outcomeMap[CallStatus] || 'completed',
+          durationSeconds: parseInt(CallDuration) || 0,
+          endedAt: new Date()
+        });
+        
+        logger.info('[CALL STATUS] Company CallSummary updated', {
+          companyId,
+          callId: callSummary.callId,
+          outcome: outcomeMap[CallStatus]
+        });
+      }
+    }
+    
+    res.status(200).send('OK');
+    
+  } catch (error) {
+    logger.error('[CALL STATUS] Company callback error', {
+      companyId,
+      error: error.message
+    });
+    res.status(200).send('OK');
+  }
+});
+
 logger.info('🚀 [V2TWILIO] ========== EXPORTING ROUTER (FILE LOADED SUCCESSFULLY) ==========');
 module.exports = router;
