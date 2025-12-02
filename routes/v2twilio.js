@@ -996,8 +996,9 @@ router.post('/voice', async (req, res) => {
           lookupTime: callContext.customerLookupTime
         });
         
-        // Store for later use in v2-agent-respond
-        req.callCenterContext = callContext;
+        // Store in session for v2-agent-respond to access (survives between requests)
+        req.session = req.session || {};
+        req.session.callCenterContext = callContext;
         
       } catch (callCenterErr) {
         // Non-blocking: Log but continue with call
@@ -1903,6 +1904,25 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       logger.debug('[SPAM BRIDGE] Spam context attached to callState', {
         spamScore: callState.spamContext.spamScore,
         spamReason: callState.spamContext.spamReason
+      });
+    }
+    
+    // ────────────────────────────────────────────────────────────────
+    // 👤 CALL CENTER V2: Pass customer context to AI Brain
+    // ────────────────────────────────────────────────────────────────
+    // This enables personalized responses: "Hi John, welcome back!"
+    // And smart data collection: Skip address if we already have it.
+    if (req.session?.callCenterContext?.customerContext) {
+      callState.customerContext = req.session.callCenterContext.customerContext;
+      callState.customerId = req.session.callCenterContext.customerId;
+      callState.isReturning = req.session.callCenterContext.isReturning;
+      callState.callSummaryId = req.session.callCenterContext.callId;
+      
+      logger.info('[CALL CENTER] Customer context attached to callState', {
+        callSid,
+        isReturning: callState.isReturning,
+        customerName: callState.customerContext?.customerName || null,
+        customerId: callState.customerId
       });
     }
     

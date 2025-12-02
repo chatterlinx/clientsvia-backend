@@ -394,6 +394,57 @@ function buildBrain1Prompt({ normalizedText, callState, config, emotion }) {
     const companyName = config?.name || 'the company';
     const trade = config?.trade || 'service';
     
+    // ════════════════════════════════════════════════════════════════════════════
+    // CALL CENTER V2: Build customer context section
+    // ════════════════════════════════════════════════════════════════════════════
+    const customerContext = callState.customerContext || {};
+    let customerSection = '';
+    
+    if (customerContext.isReturning && customerContext.customerName) {
+        // Known returning customer
+        customerSection = `
+CUSTOMER RECOGNITION:
+- RETURNING CUSTOMER: ${customerContext.customerName}
+- Total Calls: ${customerContext.totalCalls || 1}
+- Customer Type: ${customerContext.customerType || 'residential'}
+- Phone Type: ${customerContext.phoneType || 'unknown'} ${customerContext.canSms ? '(SMS OK)' : ''}
+${customerContext.city ? `- Location: ${customerContext.city}, ${customerContext.state}` : ''}
+${customerContext.specialNotes ? `- Notes: ${customerContext.specialNotes}` : ''}
+${customerContext.hasMultipleProperties ? `- Multiple Properties: ${customerContext.propertyNicknames}` : ''}
+
+PERSONALIZATION TIPS:
+- Greet by name: "Hi ${customerContext.firstName || customerContext.customerName}!"
+- Reference history if relevant
+- Skip info collection if we have it (address, phone)
+- Be warm and familiar
+`;
+    } else if (customerContext.isHouseholdMember) {
+        // Household member recognized by address
+        customerSection = `
+CUSTOMER RECOGNITION:
+- HOUSEHOLD MEMBER (Different phone, same address)
+- Primary Account: ${customerContext.householdPrimaryName || 'on file'}
+
+PERSONALIZATION TIPS:
+- Ask for their name
+- Confirm relationship to primary account holder
+- Add them to the account
+`;
+    } else {
+        // New or unrecognized caller
+        customerSection = `
+CUSTOMER RECOGNITION:
+- NEW CALLER (First time or unrecognized)
+- Phone Type: ${customerContext.phoneType || 'unknown'}
+
+COLLECTION PRIORITIES:
+- Ask if they've used your services before
+- Collect: Name, Phone (verify), Address, Service need
+- Be welcoming but efficient
+`;
+    }
+    // ════════════════════════════════════════════════════════════════════════════
+    
     const systemPrompt = `You are Brain-1, the frontline AI for ${companyName}, a ${trade} company.
 
 YOUR ROLE: Decide what ACTION to take and extract STRUCTURED DATA. You do NOT generate conversational responses yet.
@@ -405,7 +456,7 @@ ACTIONS YOU CAN TAKE:
 - ASK_FOLLOWUP: Need more information before deciding. Ask a clarifying question.
 - MESSAGE_ONLY: Simple acknowledgment, greeting, or small talk. No routing needed.
 - END: Wrong number, spam, or call resolution. Politely close.
-
+${customerSection}
 CURRENT CALL STATE:
 - Turn: ${callState.turnCount || 1}
 - Current Intent: ${callState.currentIntent || 'unknown'}
@@ -430,7 +481,8 @@ RESPOND WITH ONLY VALID JSON:
   "flags": {
     "needsKnowledgeSearch": true/false,
     "readyToBook": true/false,
-    "wantsHuman": true/false
+    "wantsHuman": true/false,
+    "isReturning": ${customerContext.isReturning || false}
   }
 }`;
 
