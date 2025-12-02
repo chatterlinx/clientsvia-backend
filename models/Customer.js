@@ -182,7 +182,24 @@ const CustomerSchema = new mongoose.Schema({
   },
   
   /**
-   * Customer type
+   * Account type - CRITICAL for routing and data capture
+   * 
+   * - residential: Home/personal service (default)
+   * - commercial: Business/commercial account (standalone per location)
+   * - property_manager: Manages multiple properties (residential or commercial)
+   */
+  accountType: { 
+    type: String, 
+    enum: {
+      values: ['residential', 'commercial', 'property_manager'],
+      message: '{VALUE} is not a valid account type'
+    },
+    default: 'residential',
+    index: true
+  },
+  
+  /**
+   * @deprecated Use accountType instead
    */
   customerType: { 
     type: String, 
@@ -192,6 +209,193 @@ const CustomerSchema = new mongoose.Schema({
     },
     default: 'residential'
   },
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // COMMERCIAL ACCOUNT FIELDS (Only used when accountType = 'commercial')
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  /**
+   * Commercial-specific information
+   * These fields are only populated for commercial accounts
+   */
+  commercial: {
+    /**
+     * Business name (required for commercial)
+     * e.g., "ABC Distributors", "Miami General Hospital"
+     */
+    businessName: { 
+      type: String, 
+      trim: true,
+      maxLength: 200
+    },
+    
+    /**
+     * Location identifier for multi-location businesses
+     * e.g., "Warehouse A", "Building 3", "Downtown Branch"
+     */
+    locationName: { 
+      type: String, 
+      trim: true,
+      maxLength: 100
+    },
+    
+    /**
+     * Industry type for specialized service knowledge
+     */
+    industryType: {
+      type: String,
+      enum: [
+        'retail', 'restaurant', 'warehouse', 'office', 'medical',
+        'manufacturing', 'hospitality', 'education', 'government',
+        'religious', 'automotive', 'fitness', 'salon', 'other'
+      ]
+    },
+    
+    /**
+     * Service entrance instructions
+     * e.g., "Use back loading dock, Door #7"
+     */
+    serviceEntrance: { 
+      type: String, 
+      maxLength: 500 
+    },
+    
+    /**
+     * Specific unit/equipment location
+     * e.g., "Roof facing street, Unit #9 is not cooling"
+     */
+    unitLocation: { 
+      type: String, 
+      maxLength: 500 
+    },
+    
+    /**
+     * Site contact - person physically at the location
+     */
+    siteContact: {
+      name: { type: String, maxLength: 100 },
+      title: { type: String, maxLength: 100 },  // "Facilities Manager"
+      phone: { type: String },
+      email: { type: String, lowercase: true },
+      canAuthorizeWork: { type: Boolean, default: true }
+    },
+    
+    /**
+     * Cell phone that can receive text notifications
+     * May be different from site contact phone
+     */
+    textNotificationPhone: { 
+      type: String 
+    },
+    
+    /**
+     * Billing address (often different from service address)
+     */
+    billingAddress: {
+      street: { type: String, trim: true },
+      unit: { type: String, trim: true },
+      city: { type: String, trim: true },
+      state: { type: String, trim: true, uppercase: true, maxLength: 2 },
+      zip: { type: String, trim: true },
+      attention: { type: String, maxLength: 100 }  // "Attn: Accounts Payable"
+    },
+    
+    /**
+     * Billing contact (often different from site contact)
+     */
+    billingContact: {
+      name: { type: String, maxLength: 100 },
+      title: { type: String, maxLength: 100 },  // "Accounts Payable"
+      phone: { type: String },
+      email: { type: String, lowercase: true }
+    },
+    
+    /**
+     * Authorized callers - people who can call on behalf of this business
+     * e.g., Alex (Manager), Maria (Assistant), Corporate Office
+     */
+    authorizedCallers: [{
+      name: { type: String, maxLength: 100 },
+      title: { type: String, maxLength: 100 },
+      phone: { type: String },
+      canAuthorizeWork: { type: Boolean, default: false },
+      canViewBilling: { type: Boolean, default: false },
+      addedAt: { type: Date, default: Date.now }
+    }],
+    
+    /**
+     * For multi-location businesses managed by a corporate office
+     * Reference to the managing account (by customerId string, not ObjectId)
+     */
+    managedBy: {
+      accountId: { type: String },  // "CUST-ABC123" or "COMM-00001"
+      name: { type: String },       // "ABC Corporate Office"
+      phone: { type: String }       // For quick reference
+    },
+    
+    /**
+     * Operating hours (for scheduling)
+     */
+    operatingHours: {
+      monday: { open: String, close: String },
+      tuesday: { open: String, close: String },
+      wednesday: { open: String, close: String },
+      thursday: { open: String, close: String },
+      friday: { open: String, close: String },
+      saturday: { open: String, close: String },
+      sunday: { open: String, close: String },
+      notes: { type: String, maxLength: 200 }  // "Closed for lunch 12-1pm"
+    },
+    
+    /**
+     * Purchase order required before service?
+     */
+    requiresPO: { type: Boolean, default: false },
+    
+    /**
+     * Net payment terms
+     */
+    paymentTerms: {
+      type: String,
+      enum: ['due_on_receipt', 'net_15', 'net_30', 'net_45', 'net_60'],
+      default: 'due_on_receipt'
+    },
+    
+    /**
+     * Tax exempt?
+     */
+    taxExempt: { type: Boolean, default: false },
+    taxExemptId: { type: String, maxLength: 50 }
+  },
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // CROSS-REFERENCE NOTES (Soft links between accounts)
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  /**
+   * Special notes including cross-references to related accounts
+   * 
+   * Examples:
+   * - "Alex is also manager at ABC Distributors (COMM-12345). VIP!"
+   * - "This location managed by ABC Corporate (COMM-00001)"
+   * - "Residential customer who also works at Miami Hospital (COMM-99999)"
+   */
+  specialNotes: {
+    type: String,
+    maxLength: 2000
+  },
+  
+  /**
+   * Related accounts (soft references by customerId string)
+   * For quick lookup without embedding full data
+   */
+  relatedAccounts: [{
+    accountId: { type: String },  // "CUST-67890" or "COMM-12345"
+    accountType: { type: String, enum: ['residential', 'commercial'] },
+    relationship: { type: String, maxLength: 100 },  // "Manager at", "Also residential customer"
+    businessName: { type: String },  // For commercial references
+    note: { type: String, maxLength: 200 }
+  }],
   
   /**
    * Lifecycle timestamps
