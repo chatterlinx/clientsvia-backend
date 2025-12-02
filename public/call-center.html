@@ -820,18 +820,105 @@
             </div>
             
             <div id="search-panel" class="tab-panel">
-                <div class="empty-state">
-                    <div class="empty-state-icon">🔍</div>
-                    <h3>Search All Records</h3>
-                    <p>Search across calls, customers, and transcripts</p>
+                <!-- Global Search -->
+                <div class="search-bar">
+                    <div class="search-input-wrapper">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" class="search-input" id="global-search" placeholder="Search by phone, name, intent, or keyword...">
+                    </div>
+                    <select class="filter-select" id="search-type-filter">
+                        <option value="all">All Records</option>
+                        <option value="calls">Calls Only</option>
+                        <option value="customers">Customers Only</option>
+                    </select>
+                    <input type="date" class="filter-select" id="search-start-date" style="width: 160px;">
+                    <input type="date" class="filter-select" id="search-end-date" style="width: 160px;">
+                </div>
+                
+                <div class="calls-container" id="search-results-container">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🔍</div>
+                        <h3>Search All Records</h3>
+                        <p>Enter a search term to find calls, customers, or transcripts</p>
+                    </div>
                 </div>
             </div>
             
             <div id="analytics-panel" class="tab-panel">
-                <div class="empty-state">
-                    <div class="empty-state-icon">📊</div>
-                    <h3>Analytics Dashboard</h3>
-                    <p>Coming in Phase 3</p>
+                <!-- Analytics Dashboard -->
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-lg);">
+                    <!-- Tier Usage Card -->
+                    <div class="stat-card" style="grid-column: 1;">
+                        <div class="stat-label">Tier Usage (30 days)</div>
+                        <div id="tier-usage-chart" style="padding: 20px 0;">
+                            <div style="display: flex; gap: 10px; align-items: flex-end; height: 100px;">
+                                <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
+                                    <div id="tier1-bar" style="width: 100%; background: var(--accent-cyan); border-radius: 4px 4px 0 0; height: 0%; transition: height 0.3s;"></div>
+                                    <span style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Tier 1</span>
+                                    <span id="tier1-percent" style="font-size: 14px; font-weight: 600;">—</span>
+                                </div>
+                                <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
+                                    <div id="tier2-bar" style="width: 100%; background: var(--accent-yellow); border-radius: 4px 4px 0 0; height: 0%; transition: height 0.3s;"></div>
+                                    <span style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Tier 2</span>
+                                    <span id="tier2-percent" style="font-size: 14px; font-weight: 600;">—</span>
+                                </div>
+                                <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
+                                    <div id="tier3-bar" style="width: 100%; background: var(--accent-red); border-radius: 4px 4px 0 0; height: 0%; transition: height 0.3s;"></div>
+                                    <span style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Tier 3</span>
+                                    <span id="tier3-percent" style="font-size: 14px; font-weight: 600;">—</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="font-size: 13px; color: var(--text-secondary); border-top: 1px solid var(--border-light); padding-top: 10px;">
+                            Estimated LLM cost: <span id="llm-cost" style="font-weight: 600; color: var(--accent-green);">$0.00</span>/month
+                        </div>
+                    </div>
+                    
+                    <!-- Top Intents Card -->
+                    <div class="stat-card" style="grid-column: 2;">
+                        <div class="stat-label">Top Intents (30 days)</div>
+                        <div id="top-intents" style="padding: 10px 0;">
+                            <div class="loading-container" style="padding: 20px;">
+                                <div class="loading-spinner" style="width: 24px; height: 24px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Peak Hours Card -->
+                    <div class="stat-card" style="grid-column: span 2;">
+                        <div class="stat-label">Peak Hours (30 days)</div>
+                        <div id="peak-hours-chart" style="display: flex; gap: 4px; padding: 20px 0; align-items: flex-end; height: 120px;">
+                            <!-- Hourly bars will be inserted here -->
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted);">
+                            <span>12 AM</span>
+                            <span>6 AM</span>
+                            <span>12 PM</span>
+                            <span>6 PM</span>
+                            <span>11 PM</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Compliance Status Card -->
+                    <div class="stat-card" style="grid-column: span 2;">
+                        <div class="stat-label">Compliance Status</div>
+                        <div id="compliance-status" style="padding: 15px 0;">
+                            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                                <div style="flex: 1; min-width: 200px; background: var(--bg-hover); padding: 15px; border-radius: 8px;">
+                                    <div style="font-size: 12px; color: var(--text-muted);">Data Retention</div>
+                                    <div id="retention-status" style="font-size: 16px; font-weight: 600; color: var(--accent-green); margin-top: 5px;">—</div>
+                                </div>
+                                <div style="flex: 1; min-width: 200px; background: var(--bg-hover); padding: 15px; border-radius: 8px;">
+                                    <div style="font-size: 12px; color: var(--text-muted);">Pending Purge</div>
+                                    <div id="pending-purge" style="font-size: 16px; font-weight: 600; margin-top: 5px;">—</div>
+                                </div>
+                                <div style="flex: 1; min-width: 200px; background: var(--bg-hover); padding: 15px; border-radius: 8px;">
+                                    <div style="font-size: 12px; color: var(--text-muted);">Duplicate Customers</div>
+                                    <div id="duplicate-count" style="font-size: 16px; font-weight: 600; margin-top: 5px;">—</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
@@ -1196,6 +1283,17 @@
                     loadCustomers({ query: e.target.value });
                 }, 300);
             });
+            
+            // Global search
+            let globalSearchTimeout;
+            document.getElementById('global-search').addEventListener('input', () => {
+                clearTimeout(globalSearchTimeout);
+                globalSearchTimeout = setTimeout(performGlobalSearch, 500);
+            });
+            
+            document.getElementById('search-type-filter').addEventListener('change', performGlobalSearch);
+            document.getElementById('search-start-date').addEventListener('change', performGlobalSearch);
+            document.getElementById('search-end-date').addEventListener('change', performGlobalSearch);
         }
         
         function switchTab(tab) {
@@ -1214,6 +1312,156 @@
             // Load data for the tab
             if (tab === 'calls') loadCalls();
             if (tab === 'customers') loadCustomers();
+            if (tab === 'analytics') loadAnalytics();
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // ANALYTICS FUNCTIONS
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        async function loadAnalytics() {
+            try {
+                // Load tier usage
+                const tierRes = await apiCall(`/api/admin/call-center/${currentCompanyId}/analytics/tiers?days=30`);
+                const tiers = tierRes.data;
+                
+                document.getElementById('tier1-bar').style.height = `${tiers.tier1.percentage}%`;
+                document.getElementById('tier2-bar').style.height = `${tiers.tier2.percentage}%`;
+                document.getElementById('tier3-bar').style.height = `${tiers.tier3.percentage}%`;
+                document.getElementById('tier1-percent').textContent = `${tiers.tier1.percentage}%`;
+                document.getElementById('tier2-percent').textContent = `${tiers.tier2.percentage}%`;
+                document.getElementById('tier3-percent').textContent = `${tiers.tier3.percentage}%`;
+                document.getElementById('llm-cost').textContent = `$${tiers.estimatedMonthlyCost?.toFixed(2) || '0.00'}`;
+                
+                // Load top intents
+                const intentsRes = await apiCall(`/api/admin/call-center/${currentCompanyId}/analytics/intents?days=30&limit=5`);
+                const intents = intentsRes.data || [];
+                
+                if (intents.length === 0) {
+                    document.getElementById('top-intents').innerHTML = '<div style="color: var(--text-muted); padding: 20px;">No intent data yet</div>';
+                } else {
+                    const maxCount = Math.max(...intents.map(i => i.count));
+                    document.getElementById('top-intents').innerHTML = intents.map(intent => `
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                            <div style="width: 100px; font-size: 13px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${intent.intent}</div>
+                            <div style="flex: 1; height: 8px; background: var(--bg-hover); border-radius: 4px; overflow: hidden;">
+                                <div style="height: 100%; width: ${(intent.count / maxCount) * 100}%; background: var(--accent-cyan); border-radius: 4px;"></div>
+                            </div>
+                            <div style="width: 50px; text-align: right; font-size: 13px; font-weight: 600;">${intent.count}</div>
+                        </div>
+                    `).join('');
+                }
+                
+                // Load peak hours
+                const peakRes = await apiCall(`/api/admin/call-center/${currentCompanyId}/analytics/peak-hours?days=30`);
+                const peak = peakRes.data;
+                
+                if (peak.hourly) {
+                    const maxHourly = Math.max(...peak.hourly.map(h => h.count)) || 1;
+                    document.getElementById('peak-hours-chart').innerHTML = peak.hourly.map((h, i) => `
+                        <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
+                            <div style="width: 100%; max-width: 20px; background: ${i === peak.peakHour ? 'var(--accent-cyan)' : 'var(--bg-hover)'}; border-radius: 2px 2px 0 0; height: ${(h.count / maxHourly) * 80}px; min-height: 2px;"></div>
+                        </div>
+                    `).join('');
+                }
+                
+                // Load compliance status
+                const complianceRes = await apiCall(`/api/admin/call-center/${currentCompanyId}/compliance/retention`);
+                const compliance = complianceRes.data;
+                
+                document.getElementById('retention-status').textContent = compliance.status === 'COMPLIANT' ? '✅ Compliant' : '⚠️ Needs Attention';
+                document.getElementById('retention-status').style.color = compliance.status === 'COMPLIANT' ? 'var(--accent-green)' : 'var(--accent-yellow)';
+                document.getElementById('pending-purge').textContent = `${compliance.pendingPurge?.calls || 0} calls, ${compliance.pendingPurge?.transcripts || 0} transcripts`;
+                
+                // Load duplicate count
+                const dupRes = await apiCall(`/api/admin/call-center/${currentCompanyId}/compliance/duplicates`);
+                const dups = dupRes.data;
+                const totalDups = (dups.byPhone?.length || 0) + (dups.byEmail?.length || 0);
+                document.getElementById('duplicate-count').textContent = totalDups === 0 ? '✅ None' : `⚠️ ${totalDups} found`;
+                document.getElementById('duplicate-count').style.color = totalDups === 0 ? 'var(--accent-green)' : 'var(--accent-yellow)';
+                
+            } catch (err) {
+                console.error('Failed to load analytics:', err);
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // GLOBAL SEARCH FUNCTIONS
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        async function performGlobalSearch() {
+            const query = document.getElementById('global-search').value;
+            const type = document.getElementById('search-type-filter').value;
+            const startDate = document.getElementById('search-start-date').value;
+            const endDate = document.getElementById('search-end-date').value;
+            
+            if (!query && !startDate && !endDate) {
+                document.getElementById('search-results-container').innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🔍</div>
+                        <h3>Search All Records</h3>
+                        <p>Enter a search term or select dates to find calls and customers</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            document.getElementById('search-results-container').innerHTML = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <p style="margin-top: 16px;">Searching...</p>
+                </div>
+            `;
+            
+            try {
+                const results = [];
+                
+                // Search calls
+                if (type === 'all' || type === 'calls') {
+                    const params = new URLSearchParams({ limit: 25 });
+                    if (query) params.set('query', query);
+                    if (startDate) params.set('startDate', startDate);
+                    if (endDate) params.set('endDate', endDate);
+                    
+                    const callsRes = await apiCall(`/api/admin/call-center/${currentCompanyId}/calls?${params}`);
+                    (callsRes.data || []).forEach(call => results.push({ type: 'call', data: call }));
+                }
+                
+                // Search customers
+                if (type === 'all' || type === 'customers') {
+                    const params = new URLSearchParams({ limit: 25 });
+                    if (query) params.set('query', query);
+                    
+                    const customersRes = await apiCall(`/api/admin/call-center/${currentCompanyId}/customers?${params}`);
+                    (customersRes.data || []).forEach(c => results.push({ type: 'customer', data: c }));
+                }
+                
+                if (results.length === 0) {
+                    document.getElementById('search-results-container').innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">🔍</div>
+                            <h3>No Results Found</h3>
+                            <p>Try a different search term or date range</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                document.getElementById('search-results-container').innerHTML = results.map(r => {
+                    if (r.type === 'call') return renderCallCard(r.data);
+                    return renderCustomerCard(r.data);
+                }).join('');
+                
+            } catch (err) {
+                console.error('Search failed:', err);
+                document.getElementById('search-results-container').innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">❌</div>
+                        <h3>Search Failed</h3>
+                        <p>${err.message}</p>
+                    </div>
+                `;
+            }
         }
         
         function viewCall(callId) {
