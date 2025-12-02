@@ -1156,6 +1156,199 @@ class CustomerLookup {
   
   /**
    * ═══════════════════════════════════════════════════════════════════════════
+   * ENRICH CUSTOMER (Capture data during call)
+   * ═══════════════════════════════════════════════════════════════════════════
+   * 
+   * Called during a call when the AI captures new customer information.
+   * Updates the customer record with extracted entities.
+   * 
+   * WHAT CAN BE ENRICHED:
+   * - Name (from "My name is John")
+   * - Address (from "I'm at 123 Main St")
+   * - Email (from "my email is john@example.com")
+   * - Problem description (from conversation)
+   * - Access notes (gate code, key location, pets)
+   * - Preferences (preferred time, days)
+   * 
+   * @param {string} companyId - Company ID
+   * @param {string} customerId - Customer document ID or customerId string
+   * @param {Object} data - Data to enrich { name, firstName, lastName, address, email, ... }
+   * @returns {Promise<Object>} - Updated customer
+   */
+  static async enrichCustomer(companyId, customerId, data) {
+    if (!companyId || !customerId || !data) {
+      throw new Error('[CUSTOMER_LOOKUP] companyId, customerId, and data are required');
+    }
+    
+    logger.info('[CUSTOMER_LOOKUP] Enriching customer', {
+      companyId,
+      customerId,
+      fields: Object.keys(data)
+    });
+    
+    // Build update object
+    const $set = {};
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // NAME
+    // ─────────────────────────────────────────────────────────────────────────
+    if (data.name || data.fullName) {
+      const fullName = data.name || data.fullName;
+      $set.fullName = fullName;
+      
+      // Try to extract first/last
+      const parts = fullName.trim().split(/\s+/);
+      if (parts.length >= 2) {
+        $set.firstName = parts[0];
+        $set.lastName = parts.slice(1).join(' ');
+      } else if (parts.length === 1) {
+        $set.firstName = parts[0];
+      }
+    }
+    
+    if (data.firstName) $set.firstName = data.firstName;
+    if (data.lastName) $set.lastName = data.lastName;
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // CONTACT
+    // ─────────────────────────────────────────────────────────────────────────
+    if (data.email) $set.email = data.email.toLowerCase().trim();
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // ADDRESS
+    // ─────────────────────────────────────────────────────────────────────────
+    if (data.address) {
+      // Can be object { street, city, state, zip } or string
+      if (typeof data.address === 'string') {
+        $set['primaryAddress.street'] = data.address;
+      } else if (typeof data.address === 'object') {
+        if (data.address.street) $set['primaryAddress.street'] = data.address.street;
+        if (data.address.unit) $set['primaryAddress.unit'] = data.address.unit;
+        if (data.address.city) $set['primaryAddress.city'] = data.address.city;
+        if (data.address.state) $set['primaryAddress.state'] = data.address.state?.toUpperCase();
+        if (data.address.zip) $set['primaryAddress.zip'] = data.address.zip;
+      }
+      
+      // Generate addressKey if we have street + city + state
+      if ($set['primaryAddress.street'] && 
+          ($set['primaryAddress.city'] || data.address?.city) && 
+          ($set['primaryAddress.state'] || data.address?.state)) {
+        try {
+          const addressForKey = {
+            street: $set['primaryAddress.street'] || data.address?.street,
+            city: $set['primaryAddress.city'] || data.address?.city,
+            state: $set['primaryAddress.state'] || data.address?.state,
+            zip: $set['primaryAddress.zip'] || data.address?.zip
+          };
+          
+          if (generateAddressKey) {
+            $set.addressKey = generateAddressKey(addressForKey);
+          }
+        } catch (err) {
+          logger.warn('[CUSTOMER_LOOKUP] Failed to generate addressKey during enrichment', { error: err.message });
+        }
+      }
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // ACCESS INFORMATION
+    // ─────────────────────────────────────────────────────────────────────────
+    if (data.gateCode) $set['primaryAddress.gateCode'] = data.gateCode;
+    if (data.lockboxCode) $set['primaryAddress.lockboxCode'] = data.lockboxCode;
+    if (data.keyLocation) $set['primaryAddress.keyLocation'] = data.keyLocation;
+    if (data.accessNotes) $set['primaryAddress.accessNotes'] = data.accessNotes;
+    if (data.petInfo) $set['primaryAddress.petInfo'] = data.petInfo;
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // ALTERNATE CONTACT
+    // ─────────────────────────────────────────────────────────────────────────
+    if (data.alternateContact) {
+      if (data.alternateContact.name) $set['primaryAddress.alternateContact.name'] = data.alternateContact.name;
+      if (data.alternateContact.phone) $set['primaryAddress.alternateContact.phone'] = data.alternateContact.phone;
+      if (data.alternateContact.relationship) $set['primaryAddress.alternateContact.relationship'] = data.alternateContact.relationship;
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // PREFERENCES
+    // ─────────────────────────────────────────────────────────────────────────
+    if (data.preferredTimeOfDay) $set['preferences.preferredTimeOfDay'] = data.preferredTimeOfDay;
+    if (data.preferredDays && Array.isArray(data.preferredDays)) {
+      $set['preferences.preferredDays'] = data.preferredDays;
+    }
+    if (data.communicationMethod) $set['preferences.communicationMethod'] = data.communicationMethod;
+    if (data.specialInstructions) $set['preferences.specialInstructions'] = data.specialInstructions;
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // NOTES
+    // ─────────────────────────────────────────────────────────────────────────
+    if (data.specialNotes) $set.specialNotes = data.specialNotes;
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // STATUS UPGRADE
+    // ─────────────────────────────────────────────────────────────────────────
+    // If we now have a name and address, upgrade from placeholder to lead
+    if (Object.keys($set).length > 0) {
+      // Check current status
+      const current = await Customer.findById(customerId).select('status').lean();
+      if (current?.status === 'placeholder' && ($set.fullName || $set.firstName)) {
+        $set.status = 'lead';
+      }
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // EXECUTE UPDATE
+    // ─────────────────────────────────────────────────────────────────────────
+    if (Object.keys($set).length === 0) {
+      logger.debug('[CUSTOMER_LOOKUP] No enrichment data provided');
+      return await Customer.findById(customerId).lean();
+    }
+    
+    $set.lastContactAt = new Date();
+    
+    const updatedCustomer = await Customer.findByIdAndUpdate(
+      customerId,
+      { $set },
+      { new: true, runValidators: true }
+    ).lean();
+    
+    if (!updatedCustomer) {
+      throw new Error('Customer not found for enrichment');
+    }
+    
+    // Log the enrichment event
+    try {
+      await CustomerEvent.create({
+        companyId,
+        customerId: updatedCustomer._id,
+        eventType: 'CUSTOMER_UPDATED',
+        details: {
+          fieldsUpdated: Object.keys($set),
+          source: 'call_enrichment'
+        },
+        triggeredBy: 'system'
+      });
+    } catch (eventErr) {
+      logger.warn('[CUSTOMER_LOOKUP] Failed to log enrichment event', { error: eventErr.message });
+    }
+    
+    // Invalidate cache
+    if (redisClient) {
+      const cacheKey = getCacheKey(companyId, updatedCustomer.phone);
+      await redisClient.del(cacheKey);
+    }
+    
+    logger.info('[CUSTOMER_LOOKUP] Customer enriched', {
+      companyId,
+      customerId: updatedCustomer.customerId,
+      fieldsUpdated: Object.keys($set).length,
+      newStatus: updatedCustomer.status
+    });
+    
+    return updatedCustomer;
+  }
+  
+  /**
+   * ═══════════════════════════════════════════════════════════════════════════
    * HEALTH CHECK
    * ═══════════════════════════════════════════════════════════════════════════
    * 

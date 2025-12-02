@@ -152,6 +152,15 @@ async function processTurn(companyId, callId, userInput, callState) {
         result.text = applyGuardrails(result.text, company);
         
         // ====================================================================
+        // STEP 5.5: VARIABLE SUBSTITUTION (Call Center V2)
+        // ====================================================================
+        // Replace {customerName}, {companyName}, etc. with actual values
+        // Combines: company placeholders + customer context variables
+        const { fullSubstitution, buildSubstitutionContext } = require('../../../utils/responseVariableSubstitution');
+        const substitutionContext = buildSubstitutionContext(updatedCallState, company);
+        result.text = fullSubstitution(result.text, substitutionContext);
+        
+        // ====================================================================
         // STEP 6: UPDATE TRACE AND PERSIST
         // ====================================================================
         trace.output = {
