@@ -99,6 +99,34 @@ const CustomerSchema = new mongoose.Schema({
   },
   
   /**
+   * Phone type detection
+   * Used for: SMS capability, callback prioritization, shared line detection
+   */
+  phoneType: {
+    type: String,
+    enum: ['mobile', 'landline', 'voip', 'unknown'],
+    default: 'unknown',
+    index: true
+  },
+  
+  /**
+   * Can this phone receive SMS?
+   * null = not yet determined
+   */
+  canSms: {
+    type: Boolean,
+    default: null
+  },
+  
+  /**
+   * Carrier name (if known from Twilio lookup)
+   */
+  carrier: {
+    type: String,
+    maxLength: 100
+  },
+  
+  /**
    * Email address
    */
   email: { 
@@ -271,6 +299,50 @@ const CustomerSchema = new mongoose.Schema({
     petInfo: { type: String, maxLength: 200 }
   },
   
+  /**
+   * Normalized address key for deduplication
+   * Format: "123 MAIN ST|MIAMI|FL|33101"
+   * Used to find other household members at same address
+   * Auto-generated from primaryAddress on save
+   */
+  addressKey: {
+    type: String,
+    index: true,
+    sparse: true
+  },
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // HOUSEHOLD MEMBERS (Limited to 10 to keep document small)
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  /**
+   * Other contacts at this household/property
+   * Used for: husband/wife, property manager, tenant, etc.
+   * When another person calls from this address, we link them here
+   * 
+   * IMPORTANT: This is bounded to 10 to prevent document bloat
+   * Additional contacts go to CustomerEvent
+   */
+  householdMembers: {
+    type: [{
+      name: { type: String, maxLength: 100, required: true },
+      phone: { type: String },  // E.164 format if known
+      phoneType: { type: String, enum: ['mobile', 'landline', 'voip', 'unknown'] },
+      relationship: { type: String, maxLength: 50 },  // "Spouse", "Tenant", "Property Manager"
+      isPrimary: { type: Boolean, default: false },  // Who is the primary decision maker?
+      canAuthorize: { type: Boolean, default: true },  // Can approve work?
+      preferredContact: { type: Boolean, default: false },  // Who to call first?
+      addedAt: { type: Date, default: Date.now }
+    }],
+    validate: [
+      {
+        validator: function(v) { return v.length <= 10; },
+        message: 'Maximum 10 household members allowed (use CustomerEvent for more)'
+      }
+    ],
+    default: []
+  },
+  
   // ─────────────────────────────────────────────────────────────────────────
   // PREFERENCES (Small, fixed structure)
   // ─────────────────────────────────────────────────────────────────────────
@@ -425,13 +497,31 @@ CustomerSchema.index(
   { name: 'idx_text_search', weights: { fullName: 10, firstName: 5, lastName: 5, email: 3 } }
 );
 
+/**
+ * Address key lookup for deduplication
+ * Finds customers at the same address (household matching)
+ */
+CustomerSchema.index(
+  { companyId: 1, addressKey: 1 },
+  { sparse: true, name: 'idx_company_address_key' }
+);
+
+/**
+ * Household member phone lookup
+ * Find customer by any household member's phone
+ */
+CustomerSchema.index(
+  { companyId: 1, 'householdMembers.phone': 1 },
+  { sparse: true, name: 'idx_company_household_phones' }
+);
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PRE-SAVE HOOKS
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Auto-generate customerId and fullName before save
+ * Auto-generate customerId, fullName, and addressKey before save
  */
 CustomerSchema.pre('save', function(next) {
   // Generate customerId if not set
@@ -454,6 +544,21 @@ CustomerSchema.pre('save', function(next) {
       this.phone = `+1${digits}`;
     } else if (digits.length === 11 && digits.startsWith('1')) {
       this.phone = `+${digits}`;
+    }
+  }
+  
+  // Generate addressKey for deduplication
+  if (this.primaryAddress && this.primaryAddress.street) {
+    try {
+      const { generateAddressKey } = require('../utils/addressNormalizer');
+      this.addressKey = generateAddressKey(this.primaryAddress);
+      logger.debug('[CUSTOMER] Generated addressKey:', { 
+        customerId: this.customerId, 
+        addressKey: this.addressKey 
+      });
+    } catch (err) {
+      logger.warn('[CUSTOMER] Failed to generate addressKey:', { error: err.message });
+      // Continue without addressKey - not critical
     }
   }
   
@@ -609,6 +714,206 @@ CustomerSchema.statics.incrementStats = async function(customerId, increments) {
   logger.debug('[CUSTOMER] Stats incremented', { customerId, increments: $inc });
   
   return result;
+};
+
+/**
+ * Find customers at the same address (household matching)
+ * Used to prevent duplicates when different household members call
+ * 
+ * @param {ObjectId} companyId - Company ID
+ * @param {Object} address - Address to match { street, city, state, zip }
+ * @returns {Promise<Customer[]>} - Array of customers at this address
+ */
+CustomerSchema.statics.findByAddress = async function(companyId, address) {
+  if (!companyId || !address || !address.street) {
+    return [];
+  }
+  
+  try {
+    const { generateAddressKey } = require('../utils/addressNormalizer');
+    const addressKey = generateAddressKey(address);
+    
+    if (!addressKey) {
+      return [];
+    }
+    
+    const customers = await this.find({
+      companyId,
+      addressKey: addressKey
+    }).lean();
+    
+    logger.debug('[CUSTOMER] findByAddress', { 
+      companyId: companyId.toString(), 
+      addressKey, 
+      matchCount: customers.length 
+    });
+    
+    return customers;
+  } catch (err) {
+    logger.error('[CUSTOMER] findByAddress error:', { error: err.message });
+    return [];
+  }
+};
+
+/**
+ * Comprehensive customer lookup with multiple matching strategies
+ * 
+ * Priority:
+ * 1. Primary phone exact match
+ * 2. Secondary phones match
+ * 3. Household member phone match
+ * 4. Address match (if provided)
+ * 
+ * @param {ObjectId} companyId - Company ID
+ * @param {Object} criteria - Lookup criteria { phone, address }
+ * @returns {Promise<{customer: Customer|null, matchType: string, confidence: number}>}
+ */
+CustomerSchema.statics.comprehensiveLookup = async function(companyId, criteria) {
+  const { phone, address, name } = criteria || {};
+  
+  if (!companyId) {
+    return { customer: null, matchType: 'none', confidence: 0 };
+  }
+  
+  // Normalize phone if provided
+  let normalizedPhone = null;
+  if (phone) {
+    normalizedPhone = phone;
+    if (!phone.startsWith('+')) {
+      const digits = phone.replace(/\D/g, '');
+      if (digits.length === 10) {
+        normalizedPhone = `+1${digits}`;
+      } else if (digits.length === 11 && digits.startsWith('1')) {
+        normalizedPhone = `+${digits}`;
+      }
+    }
+  }
+  
+  // Strategy 1: Primary phone match (highest confidence)
+  if (normalizedPhone) {
+    const primaryMatch = await this.findOne({ companyId, phone: normalizedPhone }).lean();
+    if (primaryMatch) {
+      return { 
+        customer: primaryMatch, 
+        matchType: 'primary_phone', 
+        confidence: 1.0 
+      };
+    }
+    
+    // Strategy 2: Secondary phone match
+    const secondaryMatch = await this.findOne({ 
+      companyId, 
+      secondaryPhones: normalizedPhone 
+    }).lean();
+    if (secondaryMatch) {
+      return { 
+        customer: secondaryMatch, 
+        matchType: 'secondary_phone', 
+        confidence: 0.95 
+      };
+    }
+    
+    // Strategy 3: Household member phone match
+    const householdMatch = await this.findOne({
+      companyId,
+      'householdMembers.phone': normalizedPhone
+    }).lean();
+    if (householdMatch) {
+      return { 
+        customer: householdMatch, 
+        matchType: 'household_phone', 
+        confidence: 0.90 
+      };
+    }
+  }
+  
+  // Strategy 4: Address match (if no phone match or no phone provided)
+  if (address && address.street) {
+    try {
+      const { generateAddressKey } = require('../utils/addressNormalizer');
+      const addressKey = generateAddressKey(address);
+      
+      if (addressKey) {
+        const addressMatches = await this.find({
+          companyId,
+          addressKey: addressKey
+        }).lean();
+        
+        if (addressMatches.length > 0) {
+          // If multiple matches (different household members), prefer the primary
+          const primaryContact = addressMatches.find(c => 
+            c.householdMembers?.some(m => m.isPrimary)
+          ) || addressMatches[0];
+          
+          return {
+            customer: primaryContact,
+            matchType: 'address',
+            confidence: 0.80,
+            allMatches: addressMatches  // Include all for UI to show
+          };
+        }
+      }
+    } catch (err) {
+      logger.error('[CUSTOMER] Address matching error:', { error: err.message });
+    }
+  }
+  
+  // No match found
+  return { customer: null, matchType: 'none', confidence: 0 };
+};
+
+/**
+ * Add a new household member to an existing customer
+ * 
+ * @param {ObjectId} customerId - Customer document ID
+ * @param {Object} member - New household member { name, phone, relationship, ... }
+ * @returns {Promise<Customer>} - Updated customer
+ */
+CustomerSchema.statics.addHouseholdMember = async function(customerId, member) {
+  if (!customerId || !member || !member.name) {
+    throw new Error('customerId and member.name are required');
+  }
+  
+  // Normalize phone if provided
+  if (member.phone && !member.phone.startsWith('+')) {
+    const digits = member.phone.replace(/\D/g, '');
+    if (digits.length === 10) {
+      member.phone = `+1${digits}`;
+    } else if (digits.length === 11 && digits.startsWith('1')) {
+      member.phone = `+${digits}`;
+    }
+  }
+  
+  // Also add to secondaryPhones if phone provided
+  const updateQuery = {
+    $push: {
+      householdMembers: {
+        ...member,
+        addedAt: new Date()
+      }
+    }
+  };
+  
+  if (member.phone) {
+    updateQuery.$addToSet = { secondaryPhones: member.phone };
+  }
+  
+  const customer = await this.findByIdAndUpdate(
+    customerId,
+    updateQuery,
+    { new: true }
+  );
+  
+  if (customer) {
+    logger.info('[CUSTOMER] Added household member', { 
+      customerId: customer.customerId,
+      memberName: member.name,
+      memberPhone: member.phone,
+      relationship: member.relationship
+    });
+  }
+  
+  return customer;
 };
 
 

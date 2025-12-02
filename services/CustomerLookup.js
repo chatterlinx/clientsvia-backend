@@ -35,6 +35,8 @@
 const Customer = require('../models/Customer');
 const CustomerEvent = require('../models/CustomerEvent');
 const logger = require('../utils/logger');
+const { detectPhoneType, PHONE_TYPES } = require('../utils/phoneTypeDetector');
+const { generateAddressKey, addressesMatch } = require('../utils/addressNormalizer');
 
 // Try to get Redis client (may not be available in all environments)
 let redisClient = null;
@@ -316,10 +318,38 @@ class CustomerLookup {
    * 
    * @param {string} companyId - Company ID
    * @param {string} phone - Phone number
+   * @param {Object} options - { address } - optional address for household matching
    * @returns {Promise<Object>} - AI-ready context object
    */
-  static async getAIContext(companyId, phone) {
-    const { customer, isNew } = await this.getOrCreatePlaceholder(companyId, phone);
+  static async getAIContext(companyId, phone, options = {}) {
+    const { address } = options;
+    
+    // Use smart lookup if we have address for household matching
+    let customer, isNew, matchType, addedToHousehold;
+    
+    if (address && address.street) {
+      const result = await this.smartGetOrCreate(companyId, { phone, address });
+      customer = result.customer;
+      isNew = result.isNew;
+      matchType = result.matchType;
+      addedToHousehold = result.addedToHousehold;
+    } else {
+      const result = await this.getOrCreatePlaceholder(companyId, phone);
+      customer = result.customer;
+      isNew = result.isNew;
+      matchType = 'phone';
+      addedToHousehold = false;
+    }
+    
+    // Determine if this is a household member (matched by address, different phone)
+    const isHouseholdMember = matchType === 'address_household' || addedToHousehold;
+    
+    // Find primary household member name if this is a household member
+    let householdPrimaryName = null;
+    if (isHouseholdMember) {
+      const primaryMember = customer.householdMembers?.find(m => m.isPrimary);
+      householdPrimaryName = primaryMember?.name || customer.fullName || 'the account holder';
+    }
     
     // Build context for AI
     const context = {
@@ -328,9 +358,21 @@ class CustomerLookup {
       isReturning: !isNew && customer.status !== 'placeholder',
       isPlaceholder: customer.status === 'placeholder',
       
+      // Household matching (NEW)
+      isHouseholdMember,
+      householdPrimaryName,
+      matchType,  // 'primary_phone', 'secondary_phone', 'household_phone', 'address_household', 'new'
+      
       // Personal info (if known)
       name: customer.fullName || null,
       firstName: customer.firstName || null,
+      customerName: customer.fullName || null,  // Alias for template compatibility
+      customerFirstName: customer.firstName || null,  // Alias for template compatibility
+      
+      // Phone type (NEW)
+      phoneType: customer.phoneType || 'unknown',
+      canSms: customer.canSms !== null ? customer.canSms : (customer.phoneType === 'mobile'),
+      carrier: customer.carrier || null,
       
       // History
       totalCalls: customer.totalCalls,
@@ -351,12 +393,21 @@ class CustomerLookup {
       hasAddress: !!customer.primaryAddress?.street,
       city: customer.primaryAddress?.city || null,
       state: customer.primaryAddress?.state || null,
+      fullAddress: customer.primaryAddress?.street 
+        ? `${customer.primaryAddress.street}, ${customer.primaryAddress.city || ''} ${customer.primaryAddress.state || ''}`.trim()
+        : null,
       
       // Access notes (critical for appointments)
       accessNotes: customer.primaryAddress?.accessNotes || null,
       keyLocation: customer.primaryAddress?.keyLocation || null,
       gateCode: customer.primaryAddress?.gateCode || null,
+      lockboxCode: customer.primaryAddress?.lockboxCode || null,
+      petInfo: customer.primaryAddress?.petInfo || null,
       alternateContact: customer.primaryAddress?.alternateContact || null,
+      
+      // Household members (NEW)
+      householdMembers: customer.householdMembers || [],
+      householdMemberCount: customer.householdMembers?.length || 0,
       
       // Tags for routing
       tags: customer.tags || []
@@ -365,10 +416,21 @@ class CustomerLookup {
     // Add greeting suggestion
     if (context.isReturning && context.name) {
       context.suggestedGreeting = `Hi ${context.firstName || context.name}! Welcome back.`;
+    } else if (context.isHouseholdMember) {
+      context.suggestedGreeting = `Hi! I see we have your address on file.`;
     } else if (context.isReturning) {
       context.suggestedGreeting = 'Welcome back!';
     } else {
       context.suggestedGreeting = null;  // Use default company greeting
+    }
+    
+    // Add SMS suggestion based on phone type
+    if (context.canSms) {
+      context.canOfferTextConfirmation = true;
+      context.textSuggestion = 'Would you like a text confirmation when your appointment is booked?';
+    } else {
+      context.canOfferTextConfirmation = false;
+      context.textSuggestion = null;
     }
     
     return context;
@@ -637,6 +699,366 @@ class CustomerLookup {
         ...addresses
       ].filter(Boolean),
       equipment
+    };
+  }
+  
+  /**
+   * ═══════════════════════════════════════════════════════════════════════════
+   * COMPREHENSIVE LOOKUP (Phone + Address + Household)
+   * ═══════════════════════════════════════════════════════════════════════════
+   * 
+   * Multi-layer customer matching to prevent duplicates.
+   * Used when caller provides address or name (not just phone).
+   * 
+   * MATCHING PRIORITY:
+   * 1. Primary phone exact match (confidence: 1.0)
+   * 2. Secondary phone match (confidence: 0.95)
+   * 3. Household member phone match (confidence: 0.90)
+   * 4. Address match (confidence: 0.80) - PREVENTS HOUSEHOLD DUPLICATES
+   * 
+   * @param {string} companyId - Company ID
+   * @param {Object} criteria - { phone, address, name }
+   * @returns {Promise<Object>} - { customer, matchType, confidence, isNew, possibleHousehold }
+   */
+  static async comprehensiveLookup(companyId, criteria) {
+    const startTime = Date.now();
+    const { phone, address, name } = criteria || {};
+    
+    logger.debug('[CUSTOMER_LOOKUP] Comprehensive lookup started', {
+      companyId,
+      hasPhone: !!phone,
+      hasAddress: !!address?.street,
+      hasName: !!name
+    });
+    
+    // Use the model's comprehensive lookup
+    const result = await Customer.comprehensiveLookup(companyId, criteria);
+    
+    if (result.customer) {
+      logger.info('[CUSTOMER_LOOKUP] Match found', {
+        companyId,
+        matchType: result.matchType,
+        confidence: result.confidence,
+        customerId: result.customer.customerId,
+        duration: Date.now() - startTime
+      });
+      
+      return {
+        customer: result.customer,
+        matchType: result.matchType,
+        confidence: result.confidence,
+        isNew: false,
+        possibleHousehold: result.allMatches?.length > 1 ? result.allMatches : null
+      };
+    }
+    
+    // No match - will need to create new customer
+    return {
+      customer: null,
+      matchType: 'none',
+      confidence: 0,
+      isNew: true,
+      possibleHousehold: null
+    };
+  }
+  
+  /**
+   * ═══════════════════════════════════════════════════════════════════════════
+   * SMART LOOKUP OR CREATE (Prevents Household Duplicates)
+   * ═══════════════════════════════════════════════════════════════════════════
+   * 
+   * The SMART version of getOrCreatePlaceholder.
+   * Checks address matching BEFORE creating a new customer.
+   * 
+   * Flow:
+   * 1. Try phone match first (fast path)
+   * 2. If no match and we have address, check for address matches
+   * 3. If address match found → add as household member, not new customer
+   * 4. If still no match → create new customer
+   * 
+   * @param {string} companyId - Company ID
+   * @param {Object} callerInfo - { phone, name, address }
+   * @returns {Promise<Object>} - { customer, isNew, matchType, addedToHousehold }
+   */
+  static async smartGetOrCreate(companyId, callerInfo) {
+    const { phone, name, address } = callerInfo;
+    const startTime = Date.now();
+    
+    if (!companyId || !phone) {
+      throw new Error('[CUSTOMER_LOOKUP] companyId and phone are required');
+    }
+    
+    let normalizedPhone;
+    try {
+      normalizedPhone = normalizePhone(phone);
+    } catch (err) {
+      throw err;
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 1: Check if phone already exists (fast path)
+    // ─────────────────────────────────────────────────────────────────────────
+    const existingByPhone = await Customer.findByPhone(companyId, normalizedPhone);
+    if (existingByPhone) {
+      logger.info('[CUSTOMER_LOOKUP] Found by phone', {
+        companyId,
+        phone: normalizedPhone,
+        customerId: existingByPhone.customerId,
+        duration: Date.now() - startTime
+      });
+      
+      // Update lastContactAt in background
+      this._updateLastContact(existingByPhone._id, companyId).catch(err => {
+        logger.warn('[CUSTOMER_LOOKUP] Background update failed', { error: err.message });
+      });
+      
+      return {
+        customer: existingByPhone,
+        isNew: false,
+        matchType: 'primary_phone',
+        addedToHousehold: false
+      };
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 2: Check address matching (PREVENT DUPLICATES)
+    // ─────────────────────────────────────────────────────────────────────────
+    if (address && address.street) {
+      const addressMatches = await Customer.findByAddress(companyId, address);
+      
+      if (addressMatches.length > 0) {
+        // Found customers at this address - this is likely a household member
+        const primaryCustomer = addressMatches[0];  // Use first match as primary
+        
+        logger.info('[CUSTOMER_LOOKUP] Address match found - adding as household member', {
+          companyId,
+          phone: normalizedPhone,
+          name,
+          existingCustomerId: primaryCustomer.customerId,
+          existingName: primaryCustomer.fullName
+        });
+        
+        // Add as household member instead of creating duplicate
+        const householdMember = {
+          name: name || 'Unknown',
+          phone: normalizedPhone,
+          relationship: 'Household Member',
+          isPrimary: false,
+          canAuthorize: true,
+          preferredContact: false
+        };
+        
+        // Detect phone type for the new phone
+        try {
+          const phoneInfo = await detectPhoneType(normalizedPhone);
+          householdMember.phoneType = phoneInfo.type;
+        } catch (err) {
+          householdMember.phoneType = PHONE_TYPES.UNKNOWN;
+        }
+        
+        const updatedCustomer = await Customer.addHouseholdMember(
+          primaryCustomer._id,
+          householdMember
+        );
+        
+        // Log event
+        try {
+          await CustomerEvent.create({
+            companyId,
+            customerId: primaryCustomer._id,
+            eventType: 'PHONE_ADDED',
+            details: {
+              phone: normalizedPhone,
+              name,
+              relationship: 'Household Member',
+              reason: 'address_match'
+            },
+            triggeredBy: 'system'
+          });
+        } catch (err) {
+          logger.warn('[CUSTOMER_LOOKUP] Failed to log event', { error: err.message });
+        }
+        
+        return {
+          customer: updatedCustomer,
+          isNew: false,
+          matchType: 'address_household',
+          addedToHousehold: true,
+          householdNote: `Added ${name || 'caller'} as household member (same address as ${primaryCustomer.fullName || 'existing customer'})`
+        };
+      }
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 3: No match - create new customer
+    // ─────────────────────────────────────────────────────────────────────────
+    logger.info('[CUSTOMER_LOOKUP] No match found - creating new customer', {
+      companyId,
+      phone: normalizedPhone
+    });
+    
+    const { customer, isNew } = await this.getOrCreatePlaceholder(companyId, normalizedPhone);
+    
+    // Detect phone type for new customer
+    try {
+      const phoneInfo = await detectPhoneType(normalizedPhone);
+      await Customer.findByIdAndUpdate(customer._id, {
+        $set: {
+          phoneType: phoneInfo.type,
+          canSms: phoneInfo.canSms,
+          carrier: phoneInfo.carrier
+        }
+      });
+      customer.phoneType = phoneInfo.type;
+      customer.canSms = phoneInfo.canSms;
+    } catch (err) {
+      logger.warn('[CUSTOMER_LOOKUP] Phone type detection failed', { error: err.message });
+    }
+    
+    // If we have a name, update it
+    if (name) {
+      await this.enrichCustomer(customer._id, { fullName: name, companyId });
+      customer.fullName = name;
+    }
+    
+    return {
+      customer,
+      isNew,
+      matchType: 'new',
+      addedToHousehold: false
+    };
+  }
+  
+  /**
+   * ═══════════════════════════════════════════════════════════════════════════
+   * ADD HOUSEHOLD MEMBER
+   * ═══════════════════════════════════════════════════════════════════════════
+   * 
+   * Manually add a household member to an existing customer.
+   * 
+   * @param {string} companyId - Company ID
+   * @param {string} customerId - Existing customer ID
+   * @param {Object} member - { name, phone, relationship, isPrimary, canAuthorize }
+   * @returns {Promise<Customer>}
+   */
+  static async addHouseholdMember(companyId, customerId, member) {
+    if (!companyId || !customerId || !member?.name) {
+      throw new Error('companyId, customerId, and member.name are required');
+    }
+    
+    // Verify customer belongs to company
+    const customer = await Customer.findOne({
+      _id: customerId,
+      companyId
+    });
+    
+    if (!customer) {
+      throw new Error(`Customer not found or does not belong to company`);
+    }
+    
+    // Detect phone type if phone provided
+    if (member.phone) {
+      try {
+        const phoneInfo = await detectPhoneType(member.phone);
+        member.phoneType = phoneInfo.type;
+      } catch (err) {
+        member.phoneType = PHONE_TYPES.UNKNOWN;
+      }
+    }
+    
+    const updatedCustomer = await Customer.addHouseholdMember(customerId, member);
+    
+    // Invalidate cache
+    if (redisClient) {
+      const cacheKey = getCacheKey(companyId, customer.phone);
+      await redisClient.del(cacheKey);
+    }
+    
+    // Log event
+    try {
+      await CustomerEvent.create({
+        companyId,
+        customerId: customer._id,
+        eventType: 'PHONE_ADDED',
+        details: {
+          phone: member.phone,
+          name: member.name,
+          relationship: member.relationship,
+          reason: 'manual_add'
+        },
+        triggeredBy: 'system'
+      });
+    } catch (err) {
+      logger.warn('[CUSTOMER_LOOKUP] Failed to log event', { error: err.message });
+    }
+    
+    logger.info('[CUSTOMER_LOOKUP] Household member added', {
+      customerId: customer.customerId,
+      memberName: member.name,
+      memberPhone: member.phone
+    });
+    
+    return updatedCustomer;
+  }
+  
+  /**
+   * ═══════════════════════════════════════════════════════════════════════════
+   * DETECT AND UPDATE PHONE TYPE
+   * ═══════════════════════════════════════════════════════════════════════════
+   * 
+   * Detect phone type (mobile/landline/voip) and update customer.
+   * 
+   * @param {string} companyId - Company ID
+   * @param {string} customerId - Customer ID
+   * @param {boolean} force - Force re-detection even if already known
+   * @returns {Promise<Object>} - Phone type info
+   */
+  static async detectAndUpdatePhoneType(companyId, customerId, force = false) {
+    const customer = await Customer.findOne({ _id: customerId, companyId });
+    
+    if (!customer) {
+      throw new Error('Customer not found');
+    }
+    
+    // Skip if already detected and not forcing
+    if (!force && customer.phoneType && customer.phoneType !== PHONE_TYPES.UNKNOWN) {
+      return {
+        phone: customer.phone,
+        type: customer.phoneType,
+        canSms: customer.canSms,
+        carrier: customer.carrier,
+        cached: true
+      };
+    }
+    
+    // Detect phone type
+    const phoneInfo = await detectPhoneType(customer.phone);
+    
+    // Update customer
+    await Customer.findByIdAndUpdate(customerId, {
+      $set: {
+        phoneType: phoneInfo.type,
+        canSms: phoneInfo.canSms,
+        carrier: phoneInfo.carrier
+      }
+    });
+    
+    // Invalidate cache
+    if (redisClient) {
+      const cacheKey = getCacheKey(companyId, customer.phone);
+      await redisClient.del(cacheKey);
+    }
+    
+    logger.info('[CUSTOMER_LOOKUP] Phone type detected', {
+      customerId: customer.customerId,
+      phone: customer.phone,
+      type: phoneInfo.type,
+      canSms: phoneInfo.canSms
+    });
+    
+    return {
+      ...phoneInfo,
+      cached: false
     };
   }
   
