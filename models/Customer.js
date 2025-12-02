@@ -344,6 +344,88 @@ const CustomerSchema = new mongoose.Schema({
   },
   
   // ─────────────────────────────────────────────────────────────────────────
+  // SERVICE ADDRESSES (Multi-Property Support)
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  /**
+   * Additional service addresses for customers with multiple properties
+   * Examples: vacation home, rental property, parent's house
+   * 
+   * NOTE: primaryAddress is still the "home" address
+   * serviceAddresses are OTHER locations this customer needs service at
+   * 
+   * BOUNDED: Max 10 addresses per customer (covers 99.9% of cases)
+   * For property managers with 100+ properties, use separate customer records
+   */
+  serviceAddresses: {
+    type: [{
+      // Unique ID for this address (auto-generated)
+      addressId: { 
+        type: String,
+        default: function() {
+          return `ADDR-${Date.now().toString(36).toUpperCase()}`;
+        }
+      },
+      
+      // Friendly name for quick reference
+      nickname: { 
+        type: String, 
+        maxLength: 50,
+        required: true
+      },  // "Beach House", "Mom's Place", "Rental Property"
+      
+      // Address details
+      street: { type: String, trim: true, required: true },
+      unit: { type: String, trim: true },
+      city: { type: String, trim: true },
+      state: { type: String, trim: true, uppercase: true, maxLength: 2 },
+      zip: { type: String, trim: true },
+      
+      // Normalized key for matching
+      addressKey: { type: String },
+      
+      // Property type for context
+      propertyType: {
+        type: String,
+        enum: ['vacation_home', 'rental', 'family_member', 'investment', 'business', 'other'],
+        default: 'other'
+      },
+      
+      // Access information (same structure as primaryAddress)
+      accessNotes: { type: String, maxLength: 500 },
+      keyLocation: { type: String, maxLength: 200 },
+      gateCode: { type: String, maxLength: 50 },
+      lockboxCode: { type: String, maxLength: 50 },
+      
+      // Contact for this specific address
+      siteContact: {
+        name: { type: String, maxLength: 100 },
+        phone: { type: String },
+        relationship: { type: String, maxLength: 50 }  // "Tenant", "Property Manager", "Mom"
+      },
+      
+      // Pet information at this address
+      petInfo: { type: String, maxLength: 200 },
+      
+      // Is this address currently active?
+      isActive: { type: Boolean, default: true },
+      
+      // When was this address added?
+      addedAt: { type: Date, default: Date.now },
+      
+      // Last service at this address
+      lastServiceAt: { type: Date }
+    }],
+    validate: [
+      {
+        validator: function(v) { return v.length <= 10; },
+        message: 'Maximum 10 service addresses allowed per customer'
+      }
+    ],
+    default: []
+  },
+  
+  // ─────────────────────────────────────────────────────────────────────────
   // PREFERENCES (Small, fixed structure)
   // ─────────────────────────────────────────────────────────────────────────
   
@@ -916,6 +998,209 @@ CustomerSchema.statics.addHouseholdMember = async function(customerId, member) {
   return customer;
 };
 
+/**
+ * Add a service address (multi-property support)
+ * 
+ * @param {ObjectId} customerId - Customer document ID
+ * @param {Object} addressData - Address details
+ * @returns {Promise<Customer>} - Updated customer
+ */
+CustomerSchema.statics.addServiceAddress = async function(customerId, addressData) {
+  if (!customerId || !addressData || !addressData.street || !addressData.nickname) {
+    throw new Error('customerId, street, and nickname are required');
+  }
+  
+  // Generate addressKey for this address
+  let addressKey = null;
+  try {
+    const { generateAddressKey } = require('../utils/addressNormalizer');
+    addressKey = generateAddressKey(addressData);
+  } catch (err) {
+    logger.warn('[CUSTOMER] Failed to generate addressKey for service address', { error: err.message });
+  }
+  
+  const newAddress = {
+    ...addressData,
+    addressKey,
+    addressId: `ADDR-${Date.now().toString(36).toUpperCase()}`,
+    addedAt: new Date()
+  };
+  
+  const customer = await this.findByIdAndUpdate(
+    customerId,
+    {
+      $push: { serviceAddresses: newAddress }
+    },
+    { new: true }
+  );
+  
+  if (customer) {
+    logger.info('[CUSTOMER] Added service address', { 
+      customerId: customer.customerId,
+      nickname: addressData.nickname,
+      street: addressData.street,
+      totalAddresses: customer.serviceAddresses.length + 1  // +1 for primary
+    });
+  }
+  
+  return customer;
+};
+
+/**
+ * Get all addresses for a customer (primary + service addresses)
+ * 
+ * @param {ObjectId} customerId - Customer document ID
+ * @returns {Promise<Array>} - All addresses with labels
+ */
+CustomerSchema.statics.getAllAddresses = async function(customerId) {
+  const customer = await this.findById(customerId).lean();
+  
+  if (!customer) {
+    return [];
+  }
+  
+  const addresses = [];
+  
+  // Primary address first
+  if (customer.primaryAddress?.street) {
+    addresses.push({
+      ...customer.primaryAddress,
+      addressId: 'PRIMARY',
+      nickname: 'Home',
+      isPrimary: true,
+      propertyType: 'primary'
+    });
+  }
+  
+  // Then service addresses
+  if (customer.serviceAddresses?.length > 0) {
+    for (const addr of customer.serviceAddresses) {
+      addresses.push({
+        ...addr,
+        isPrimary: false
+      });
+    }
+  }
+  
+  return addresses;
+};
+
+/**
+ * Find customer by any address (primary or service)
+ * Used when caller mentions an address that might be a secondary property
+ * 
+ * @param {ObjectId} companyId - Company ID
+ * @param {Object} address - Address to match
+ * @returns {Promise<{customer: Customer, addressMatch: Object}|null>}
+ */
+CustomerSchema.statics.findByAnyAddress = async function(companyId, address) {
+  if (!companyId || !address || !address.street) {
+    return null;
+  }
+  
+  try {
+    const { generateAddressKey } = require('../utils/addressNormalizer');
+    const addressKey = generateAddressKey(address);
+    
+    if (!addressKey) {
+      return null;
+    }
+    
+    // Check primary addresses
+    let customer = await this.findOne({
+      companyId,
+      addressKey: addressKey
+    }).lean();
+    
+    if (customer) {
+      return {
+        customer,
+        addressMatch: {
+          ...customer.primaryAddress,
+          addressId: 'PRIMARY',
+          nickname: 'Home',
+          isPrimary: true
+        }
+      };
+    }
+    
+    // Check service addresses
+    customer = await this.findOne({
+      companyId,
+      'serviceAddresses.addressKey': addressKey
+    }).lean();
+    
+    if (customer) {
+      const matchedAddress = customer.serviceAddresses.find(a => a.addressKey === addressKey);
+      return {
+        customer,
+        addressMatch: {
+          ...matchedAddress,
+          isPrimary: false
+        }
+      };
+    }
+    
+    return null;
+  } catch (err) {
+    logger.error('[CUSTOMER] findByAnyAddress error:', { error: err.message });
+    return null;
+  }
+};
+
+/**
+ * Update a specific service address
+ * 
+ * @param {ObjectId} customerId - Customer document ID
+ * @param {string} addressId - Address ID to update
+ * @param {Object} updates - Fields to update
+ * @returns {Promise<Customer>}
+ */
+CustomerSchema.statics.updateServiceAddress = async function(customerId, addressId, updates) {
+  if (!customerId || !addressId) {
+    throw new Error('customerId and addressId are required');
+  }
+  
+  // Build update query for nested array
+  const setFields = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (['street', 'unit', 'city', 'state', 'zip', 'nickname', 'propertyType',
+         'accessNotes', 'keyLocation', 'gateCode', 'lockboxCode', 'petInfo',
+         'siteContact', 'isActive'].includes(key)) {
+      setFields[`serviceAddresses.$.${key}`] = value;
+    }
+  }
+  
+  // Regenerate addressKey if address changed
+  if (updates.street || updates.city || updates.state || updates.zip) {
+    try {
+      const { generateAddressKey } = require('../utils/addressNormalizer');
+      const addressKey = generateAddressKey(updates);
+      if (addressKey) {
+        setFields['serviceAddresses.$.addressKey'] = addressKey;
+      }
+    } catch (err) {
+      // Continue without updating addressKey
+    }
+  }
+  
+  const customer = await this.findOneAndUpdate(
+    { _id: customerId, 'serviceAddresses.addressId': addressId },
+    { $set: setFields },
+    { new: true }
+  );
+  
+  if (customer) {
+    logger.info('[CUSTOMER] Updated service address', { 
+      customerId: customer.customerId,
+      addressId,
+      updatedFields: Object.keys(updates)
+    });
+  }
+  
+  return customer;
+};
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // INSTANCE METHODS
@@ -939,6 +1224,19 @@ CustomerSchema.methods.isReturning = function() {
  * Get brief context for AI (used in LLM-0 prompts)
  */
 CustomerSchema.methods.getAIContext = function() {
+  // Build list of property nicknames for quick reference
+  const propertyList = [];
+  if (this.primaryAddress?.street) {
+    propertyList.push({ id: 'PRIMARY', nickname: 'Home', city: this.primaryAddress.city });
+  }
+  if (this.serviceAddresses?.length > 0) {
+    for (const addr of this.serviceAddresses) {
+      if (addr.isActive !== false) {
+        propertyList.push({ id: addr.addressId, nickname: addr.nickname, city: addr.city });
+      }
+    }
+  }
+  
   return {
     customerId: this.customerId,
     name: this.fullName || null,
@@ -947,13 +1245,23 @@ CustomerSchema.methods.getAIContext = function() {
     status: this.status,
     lastContactAt: this.lastContactAt,
     preferences: this.preferences || {},
+    
+    // Primary address
     primaryAddress: this.primaryAddress ? {
       city: this.primaryAddress.city,
       state: this.primaryAddress.state,
       accessNotes: this.primaryAddress.accessNotes,
       keyLocation: this.primaryAddress.keyLocation,
       alternateContact: this.primaryAddress.alternateContact
-    } : null
+    } : null,
+    
+    // Multi-property support
+    hasMultipleProperties: propertyList.length > 1,
+    propertyCount: propertyList.length,
+    properties: propertyList,
+    
+    // Quick reference for AI
+    propertyNicknames: propertyList.map(p => p.nickname).join(', ')
   };
 };
 

@@ -413,9 +413,50 @@ class CustomerLookup {
       tags: customer.tags || []
     };
     
+    // ─────────────────────────────────────────────────────────────────────────
+    // MULTI-PROPERTY SUPPORT
+    // ─────────────────────────────────────────────────────────────────────────
+    const properties = [];
+    
+    // Add primary address
+    if (customer.primaryAddress?.street) {
+      properties.push({
+        id: 'PRIMARY',
+        nickname: 'Home',
+        city: customer.primaryAddress.city,
+        state: customer.primaryAddress.state,
+        isPrimary: true
+      });
+    }
+    
+    // Add service addresses
+    if (customer.serviceAddresses?.length > 0) {
+      for (const addr of customer.serviceAddresses) {
+        if (addr.isActive !== false) {
+          properties.push({
+            id: addr.addressId,
+            nickname: addr.nickname,
+            city: addr.city,
+            state: addr.state,
+            isPrimary: false,
+            propertyType: addr.propertyType
+          });
+        }
+      }
+    }
+    
+    context.hasMultipleProperties = properties.length > 1;
+    context.propertyCount = properties.length;
+    context.properties = properties;
+    context.propertyNicknames = properties.map(p => p.nickname).join(', ');
+    
     // Add greeting suggestion
     if (context.isReturning && context.name) {
-      context.suggestedGreeting = `Hi ${context.firstName || context.name}! Welcome back.`;
+      if (context.hasMultipleProperties) {
+        context.suggestedGreeting = `Hi ${context.firstName || context.name}! Welcome back. Which property is this call about?`;
+      } else {
+        context.suggestedGreeting = `Hi ${context.firstName || context.name}! Welcome back.`;
+      }
     } else if (context.isHouseholdMember) {
       context.suggestedGreeting = `Hi! I see we have your address on file.`;
     } else if (context.isReturning) {
