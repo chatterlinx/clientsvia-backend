@@ -68,11 +68,17 @@ class TriageCommandCenter {
         });
         const cardsData = cardsRes.ok ? await cardsRes.json() : { cards: [] };
         
-        // Fetch booking rules
-        const bookingRes = await fetch(`/api/company/${this.companyId}/cheatsheet/booking-rules`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const bookingData = bookingRes.ok ? await bookingRes.json() : { rules: [] };
+        // Extract booking rules from cheatSheets if available
+        let bookingRules = [];
+        if (company.cheatSheets && company.cheatSheets.length > 0) {
+          // Get booking rules from the first (or live) cheatsheet
+          const cheatsheet = company.cheatSheets[0];
+          if (cheatsheet.config?.bookingRules) {
+            bookingRules = cheatsheet.config.bookingRules;
+          } else if (cheatsheet.bookingRules) {
+            bookingRules = cheatsheet.bookingRules;
+          }
+        }
 
         this.companyContext = {
           name: company.companyName || company.businessName || 'Your Company',
@@ -81,7 +87,7 @@ class TriageCommandCenter {
           businessHours: company.businessHours || company.schedule || '',
           emergencyPhone: company.emergencyPhone || '',
           cards: cardsData.cards || [],
-          bookingRules: bookingData.rules || bookingData.bookingRules || []
+          bookingRules: bookingRules
         };
         
         console.log('[TCC] Company context loaded:', this.companyContext);
