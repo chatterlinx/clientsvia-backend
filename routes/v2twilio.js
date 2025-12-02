@@ -1031,6 +1031,32 @@ router.post('/voice', async (req, res) => {
       logger.debug(`🔍 [CALL-2] Greeting from initializeCall:`, initResult.greeting);
       logger.debug(`🔍 [CALL-3] Voice settings from initializeCall:`, JSON.stringify(initResult.voiceSettings, null, 2));
       
+      // ════════════════════════════════════════════════════════════════════════════
+      // 👋 CALL CENTER V2: Personalize Initial Greeting
+      // ════════════════════════════════════════════════════════════════════════════
+      // If we recognized a returning customer, personalize the greeting
+      let personalizedGreeting = initResult.greeting;
+      if (callContext?.isReturning && callContext?.customerContext?.customerFirstName) {
+        const { personalizeGreeting } = require('../utils/responseVariableSubstitution');
+        personalizedGreeting = personalizeGreeting(initResult.greeting, callContext.customerContext, company);
+        
+        // If greeting doesn't already include their name, add a personal touch
+        const firstName = callContext.customerContext.customerFirstName;
+        if (!personalizedGreeting.toLowerCase().includes(firstName.toLowerCase())) {
+          // Inject personalization at the start
+          const companyName = company.companyName || company.businessName || 'us';
+          personalizedGreeting = `Hi ${firstName}! Welcome back to ${companyName}. ${personalizedGreeting}`;
+        }
+        
+        logger.info('[GREETING] Personalized for returning customer', {
+          customerName: firstName,
+          isReturning: true,
+          totalCalls: callContext.customerContext.totalCalls
+        });
+      }
+      initResult.greeting = personalizedGreeting;
+      // ════════════════════════════════════════════════════════════════════════════
+      
       // 📊 STRUCTURED LOG: Greeting initialized
       logger.info('[GREETING] initialized', {
         companyId: company._id.toString(),

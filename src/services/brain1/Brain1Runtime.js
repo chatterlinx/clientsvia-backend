@@ -181,6 +181,49 @@ async function processTurn(companyId, callId, userInput, callState) {
         // ====================================================================
         // STEP 7: RETURN RESULT
         // ====================================================================
+        // ====================================================================
+        // STEP 7: ENRICH CUSTOMER WITH EXTRACTED DATA (Call Center V2)
+        // ====================================================================
+        // If Brain-1 extracted entities (name, address, etc.), save them
+        if (updatedCallState.customerId && decision.entities) {
+            const hasExtractedData = 
+                decision.entities.contact?.name ||
+                decision.entities.location?.addressLine1 ||
+                decision.entities.contact?.email;
+            
+            if (hasExtractedData) {
+                try {
+                    const CustomerLookup = require('../../../services/CustomerLookup');
+                    await CustomerLookup.enrichCustomer(companyId, updatedCallState.customerId, {
+                        name: decision.entities.contact?.name,
+                        firstName: decision.entities.contact?.firstName,
+                        address: decision.entities.location ? {
+                            street: decision.entities.location.addressLine1,
+                            city: decision.entities.location.city,
+                            state: decision.entities.location.state,
+                            zip: decision.entities.location.zip
+                        } : undefined,
+                        email: decision.entities.contact?.email,
+                        preferredTimeOfDay: decision.entities.scheduling?.preferredWindow,
+                        specialInstructions: decision.entities.problem?.summary
+                    });
+                    
+                    logger.info('[BRAIN-1 RUNTIME] Customer enriched with extracted data', {
+                        companyId,
+                        callId,
+                        customerId: updatedCallState.customerId,
+                        extractedFields: Object.keys(decision.entities)
+                    });
+                } catch (enrichErr) {
+                    // Non-blocking: Don't fail the call if enrichment fails
+                    logger.warn('[BRAIN-1 RUNTIME] Customer enrichment failed (non-blocking)', {
+                        error: enrichErr.message,
+                        customerId: updatedCallState.customerId
+                    });
+                }
+            }
+        }
+        
         logger.info('[BRAIN-1 RUNTIME] ✅ Turn complete', {
             companyId,
             callId,
