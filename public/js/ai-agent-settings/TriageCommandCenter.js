@@ -17,6 +17,7 @@ class TriageCommandCenter {
     this.currentTab = 'overview';
     this.isLoading = false;
     this.versions = [];
+    this.companyContext = null;
   }
 
   /**
@@ -35,8 +36,139 @@ class TriageCommandCenter {
     // Bind events
     this.bindEvents();
 
-    // Load quick stats immediately
-    await this.loadQuickStats();
+    // Load company context and quick stats in parallel
+    await Promise.all([
+      this.loadCompanyContext(),
+      this.loadQuickStats()
+    ]);
+
+    // Pre-populate the business description template
+    this.populateBusinessTemplate();
+  }
+
+  /**
+   * Load company context for template generation
+   */
+  async loadCompanyContext() {
+    try {
+      const token = localStorage.getItem('adminToken');
+      
+      // Fetch company data
+      const companyRes = await fetch(`/api/company/${this.companyId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (companyRes.ok) {
+        const companyData = await companyRes.json();
+        const company = companyData.company || companyData;
+        
+        // Fetch triage cards for service detection
+        const cardsRes = await fetch(`/api/company/${this.companyId}/triage-cards`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const cardsData = cardsRes.ok ? await cardsRes.json() : { cards: [] };
+        
+        // Fetch booking rules
+        const bookingRes = await fetch(`/api/company/${this.companyId}/cheatsheet/booking-rules`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const bookingData = bookingRes.ok ? await bookingRes.json() : { rules: [] };
+
+        this.companyContext = {
+          name: company.companyName || company.businessName || 'Your Company',
+          trade: company.trade || company.industry || 'Service',
+          serviceAreas: company.serviceAreas || company.serviceArea || [],
+          businessHours: company.businessHours || company.schedule || '',
+          emergencyPhone: company.emergencyPhone || '',
+          cards: cardsData.cards || [],
+          bookingRules: bookingData.rules || bookingData.bookingRules || []
+        };
+        
+        console.log('[TCC] Company context loaded:', this.companyContext);
+      }
+    } catch (error) {
+      console.error('[TCC] Failed to load company context:', error);
+      this.companyContext = {
+        name: 'Your Company',
+        trade: 'Service',
+        serviceAreas: [],
+        cards: [],
+        bookingRules: []
+      };
+    }
+  }
+
+  /**
+   * Generate and populate the business description template
+   */
+  populateBusinessTemplate() {
+    const textarea = document.getElementById('tcc-business-description');
+    if (!textarea || !this.companyContext) return;
+
+    const ctx = this.companyContext;
+    
+    // Extract services from triage cards
+    const services = [...new Set(ctx.cards
+      .filter(c => c.serviceType || c.triageCategory)
+      .map(c => c.displayName || c.triageLabel)
+      .slice(0, 8)
+    )];
+    
+    // Extract common caller questions from card labels
+    const questions = ctx.cards
+      .filter(c => c.displayName)
+      .slice(0, 6)
+      .map(c => `"${c.displayName}"`);
+    
+    // Build service areas string
+    const areas = Array.isArray(ctx.serviceAreas) 
+      ? ctx.serviceAreas.join(', ') 
+      : ctx.serviceAreas || '[Your service area]';
+    
+    // Get emergency cards
+    const emergencyCards = ctx.cards.filter(c => 
+      c.action === 'ESCALATE_TO_HUMAN' || 
+      c.action === 'TRANSFER_TO_HUMAN' ||
+      c.triageLabel?.includes('EMERGENCY') ||
+      c.triageLabel?.includes('GAS')
+    );
+    
+    const emergencies = emergencyCards.length > 0
+      ? emergencyCards.map(c => `• ${c.displayName || c.triageLabel}`).join('\n')
+      : `• Gas smell near equipment\n• Sparking or smoking unit\n• Complete system failure in extreme weather\n• Safety hazards`;
+    
+    // Build booking rules section
+    const bookingSection = ctx.bookingRules.length > 0
+      ? ctx.bookingRules.map(r => `• ${r.name || r.serviceName}: ${r.description || 'Available for booking'}`).join('\n')
+      : `• Same-day service when available\n• Service call fee: $XX (waived with repair)\n• Free estimates on installations`;
+
+    const template = `═══════════════════════════════════════════════════════════════════════════
+BUSINESS DESCRIPTION (Edit as needed)
+═══════════════════════════════════════════════════════════════════════════
+
+COMPANY: ${ctx.name}
+TRADE: ${ctx.trade}
+LOCATION: ${areas}
+
+SERVICES WE OFFER:
+${services.length > 0 ? services.map(s => `• ${s}`).join('\n') : `• [Service 1]\n• [Service 2]\n• [Service 3]`}
+
+WHAT CALLERS TYPICALLY ASK ABOUT:
+${questions.length > 0 ? questions.map(q => `• ${q}`).join('\n') : `• "How much does a service call cost?"\n• "Can you come out today?"\n• "Do you work weekends?"\n• "I need a quote"`}
+
+EMERGENCIES (Immediate escalation):
+${emergencies}
+
+BOOKING RULES:
+${bookingSection}
+
+WHAT WE DON'T DO:
+• [Services you refer out]
+• [Outside your trade]
+
+═══════════════════════════════════════════════════════════════════════════`;
+
+    textarea.value = template;
   }
 
   /**
@@ -91,13 +223,19 @@ class TriageCommandCenter {
 
           <!-- Business Description Input -->
           <div class="tcc-description-panel">
-            <label>📝 Describe your business for better analysis:</label>
-            <textarea id="tcc-business-description" placeholder="Example: We are an HVAC company serving Miami-Dade County. We handle AC repair, heating, maintenance, and installations. 24/7 emergency service available. We want to book appointments, answer pricing questions, and only transfer for true emergencies like gas leaks."></textarea>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <label style="margin: 0;">📝 Business Description (auto-populated from your settings):</label>
+              <button class="tcc-btn-small" onclick="window.triageCommandCenter.populateBusinessTemplate()" title="Reset to template with your company data">
+                🔄 Reset Template
+              </button>
+            </div>
+            <textarea id="tcc-business-description" placeholder="Loading your company data..."></textarea>
             <div class="tcc-action-row">
               <button class="tcc-btn tcc-btn-primary" onclick="window.triageCommandCenter.runEvaluation()" id="tcc-run-btn">
                 🚀 Run Full Evaluation
               </button>
               <span class="tcc-estimate">Estimated time: ~30 seconds</span>
+              <span class="tcc-tip">💡 Tip: Edit the template above to add details the LLM should know</span>
             </div>
           </div>
 
@@ -283,6 +421,29 @@ class TriageCommandCenter {
         .tcc-estimate {
           color: #6b7280;
           font-size: 13px;
+        }
+
+        .tcc-tip {
+          color: #9ca3af;
+          font-size: 12px;
+          font-style: italic;
+          margin-left: auto;
+        }
+
+        .tcc-btn-small {
+          background: #2d2d44;
+          color: #9ca3af;
+          border: 1px solid #3d3d54;
+          padding: 6px 12px;
+          border-radius: 6px;
+          font-size: 12px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .tcc-btn-small:hover {
+          background: #3d3d54;
+          color: white;
         }
 
         .tcc-content {
