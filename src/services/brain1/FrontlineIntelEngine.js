@@ -455,7 +455,21 @@ ACTIONS YOU CAN TAKE:
 - BOOK: Caller wants to schedule appointment. Have enough info OR need to collect it.
 - ASK_FOLLOWUP: Need more information before deciding. Ask a clarifying question.
 - MESSAGE_ONLY: Simple acknowledgment, greeting, or small talk. No routing needed.
+- ROUTE_TO_VENDOR: Caller is a VENDOR/SUPPLIER (not a customer). Route to vendor handling.
 - END: Wrong number, spam, or call resolution. Politely close.
+
+VENDOR DETECTION (IMPORTANT):
+Identify if caller is a VENDOR, not a customer. Listen for:
+- "I'm calling from [Supply House/Company Name]"
+- "This is a delivery driver"
+- "Your parts order is ready"
+- "Calling about your account with us"
+- "I'm with [Manufacturer] support"
+- "Invoice/billing inquiry from vendor"
+- Business-to-business language
+
+If vendor detected: action = "ROUTE_TO_VENDOR", intentTag = "vendor"
+Capture: vendor company name, contact name, reason, reference numbers
 ${customerSection}
 CURRENT CALL STATE:
 - Turn: ${callState.turnCount || 1}
@@ -467,22 +481,25 @@ CALLER SAID: "${normalizedText}"
 
 RESPOND WITH ONLY VALID JSON:
 {
-  "action": "ROUTE_TO_SCENARIO|TRANSFER|BOOK|ASK_FOLLOWUP|MESSAGE_ONLY|END",
-  "triageTag": "SMELL_OF_GAS|NO_COOL|NO_HEAT|MAINTENANCE|PRICING|HOURS|...",
-  "intentTag": "emergency|booking|troubleshooting|info|billing|greeting|other",
+  "action": "ROUTE_TO_SCENARIO|TRANSFER|BOOK|ASK_FOLLOWUP|MESSAGE_ONLY|ROUTE_TO_VENDOR|END",
+  "triageTag": "SMELL_OF_GAS|NO_COOL|NO_HEAT|MAINTENANCE|PRICING|HOURS|VENDOR_CALL|...",
+  "intentTag": "emergency|booking|troubleshooting|info|billing|greeting|vendor|callback|other",
   "confidence": 0.0-1.0,
   "reasoning": "brief explanation",
   "entities": {
     "contact": { "name": "...", "phone": "..." },
     "location": { "addressLine1": "...", "city": "...", "state": "...", "zip": "..." },
     "problem": { "summary": "...", "category": "cooling|heating|plumbing|electrical", "urgency": "normal|urgent|emergency" },
-    "scheduling": { "preferredDate": "...", "preferredWindow": "morning|afternoon|evening|asap" }
+    "scheduling": { "preferredDate": "...", "preferredWindow": "morning|afternoon|evening|asap" },
+    "vendor": { "companyName": "...", "contactName": "...", "reason": "...", "referenceNumber": "...", "urgency": "urgent|normal|low" }
   },
   "flags": {
     "needsKnowledgeSearch": true/false,
     "readyToBook": true/false,
     "wantsHuman": true/false,
-    "isReturning": ${customerContext.isReturning || false}
+    "isReturning": ${customerContext.isReturning || false},
+    "isVendor": true/false,
+    "isCallback": true/false
   }
 }`;
 

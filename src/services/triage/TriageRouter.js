@@ -75,6 +75,7 @@ async function route(decision, company) {
         'BOOK': 'BOOKING_FLOW',
         'ASK_FOLLOWUP': 'MESSAGE_ONLY',
         'MESSAGE_ONLY': 'MESSAGE_ONLY',
+        'ROUTE_TO_VENDOR': 'VENDOR_HANDLING',
         'END': 'END_CALL'
     };
     

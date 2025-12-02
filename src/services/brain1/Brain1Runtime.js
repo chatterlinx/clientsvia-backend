@@ -136,6 +136,15 @@ async function processTurn(companyId, callId, userInput, callState) {
                     callState: updatedCallState
                 });
                 break;
+            
+            case 'VENDOR_HANDLING':
+                result = await handleVendorCall({
+                    company,
+                    callState: updatedCallState,
+                    decision,
+                    trace
+                });
+                break;
                 
             case 'MESSAGE_ONLY':
             default:
@@ -561,6 +570,117 @@ function applyGuardrails(text, company) {
     }
     
     return safeText;
+}
+
+/**
+ * ============================================================================
+ * VENDOR CALL HANDLING
+ * ============================================================================
+ * Handles calls from vendors, suppliers, delivery drivers, etc.
+ * These are B2B calls, not customer service calls.
+ */
+async function handleVendorCall({ company, callState, decision, trace }) {
+    const companyId = company._id.toString();
+    const vendorInfo = decision.entities?.vendor || {};
+    
+    logger.info('[BRAIN-1 RUNTIME] Handling vendor call', {
+        companyId,
+        vendorCompany: vendorInfo.companyName,
+        reason: vendorInfo.reason,
+        urgency: vendorInfo.urgency
+    });
+    
+    // Try to load Vendor models
+    let Vendor, VendorCall;
+    try {
+        Vendor = require('../../../models/Vendor');
+        VendorCall = require('../../../models/VendorCall');
+    } catch (err) {
+        logger.warn('[BRAIN-1 RUNTIME] Vendor models not available');
+    }
+    
+    // Check if this vendor is already on file
+    let existingVendor = null;
+    if (Vendor && vendorInfo.companyName) {
+        existingVendor = await Vendor.findOne({
+            companyId,
+            businessName: { $regex: new RegExp(vendorInfo.companyName, 'i') }
+        }).lean();
+    }
+    
+    // Log the vendor call
+    if (VendorCall) {
+        try {
+            await VendorCall.create({
+                companyId,
+                vendorId: existingVendor?._id || null,
+                vendorName: vendorInfo.companyName || 'Unknown Vendor',
+                contactName: vendorInfo.contactName || null,
+                phone: callState.from,
+                callSid: callState.callId,
+                reason: vendorInfo.reason || 'general inquiry',
+                referenceNumber: vendorInfo.referenceNumber || null,
+                urgency: vendorInfo.urgency || 'normal',
+                status: 'pending',
+                handledBy: 'ai_agent',
+                notes: `Auto-detected vendor call. Reason: ${vendorInfo.reason || 'not specified'}`
+            });
+        } catch (err) {
+            logger.warn('[BRAIN-1 RUNTIME] Failed to log vendor call', { error: err.message });
+        }
+    }
+    
+    // Update trace
+    if (trace) {
+        trace.vendor = {
+            detected: true,
+            companyName: vendorInfo.companyName,
+            isKnownVendor: !!existingVendor,
+            urgency: vendorInfo.urgency
+        };
+    }
+    
+    // Generate response based on urgency
+    let responseText;
+    
+    if (vendorInfo.urgency === 'urgent') {
+        // Urgent vendor call - offer to transfer
+        responseText = `I understand this is urgent. Let me connect you with someone who can help right away. One moment please.`;
+        
+        return {
+            text: responseText,
+            action: 'transfer',
+            shouldTransfer: true,
+            shouldHangup: false,
+            transferTarget: company.configuration?.vendorPhone || company.phoneNumber,
+            callState: {
+                ...callState,
+                isVendorCall: true,
+                vendorInfo
+            }
+        };
+    } else {
+        // Non-urgent - take message
+        const vendorName = vendorInfo.companyName || 'your company';
+        const contactName = vendorInfo.contactName ? `, ${vendorInfo.contactName}` : '';
+        
+        responseText = `Thank you for calling from ${vendorName}${contactName}. ` +
+            `I've made a note about your call regarding ${vendorInfo.reason || 'your inquiry'}. ` +
+            `Someone from our team will get back to you. Is there a reference number I should include?`;
+        
+        return {
+            text: responseText,
+            action: 'continue',
+            shouldTransfer: false,
+            shouldHangup: false,
+            callState: {
+                ...callState,
+                isVendorCall: true,
+                vendorInfo,
+                awaitingReferenceNumber: !vendorInfo.referenceNumber
+            }
+        };
+    }
 }
 
 module.exports = {
