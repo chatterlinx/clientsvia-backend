@@ -35,8 +35,24 @@
 const Customer = require('../models/Customer');
 const CustomerEvent = require('../models/CustomerEvent');
 const logger = require('../utils/logger');
-const { detectPhoneType, PHONE_TYPES } = require('../utils/phoneTypeDetector');
-const { generateAddressKey, addressesMatch } = require('../utils/addressNormalizer');
+// Phone type detection (mobile/landline/voip)
+let detectPhoneType = null;
+try {
+  detectPhoneType = require('../utils/phoneTypeDetector').detectPhoneType;
+} catch (err) {
+  logger.debug('[CUSTOMER_LOOKUP] phoneTypeDetector not available, phone type detection disabled');
+}
+
+// Address normalization for deduplication
+let generateAddressKey = null;
+let compareAddresses = null;
+try {
+  const addressNormalizer = require('../utils/addressNormalizer');
+  generateAddressKey = addressNormalizer.generateAddressKey;
+  compareAddresses = addressNormalizer.compareAddresses;
+} catch (err) {
+  logger.debug('[CUSTOMER_LOOKUP] addressNormalizer not available, address dedup disabled');
+}
 
 // Try to get Redis client (may not be available in all environments)
 let redisClient = null;
@@ -891,10 +907,12 @@ class CustomerLookup {
         
         // Detect phone type for the new phone
         try {
-          const phoneInfo = await detectPhoneType(normalizedPhone);
-          householdMember.phoneType = phoneInfo.type;
+          if (detectPhoneType) {
+            const phoneInfo = await detectPhoneType(normalizedPhone);
+            householdMember.phoneType = phoneInfo.phoneType;
+          }
         } catch (err) {
-          householdMember.phoneType = PHONE_TYPES.UNKNOWN;
+          householdMember.phoneType = 'unknown';
         }
         
         const updatedCustomer = await Customer.addHouseholdMember(
@@ -941,19 +959,21 @@ class CustomerLookup {
     const { customer, isNew } = await this.getOrCreatePlaceholder(companyId, normalizedPhone);
     
     // Detect phone type for new customer
-    try {
-      const phoneInfo = await detectPhoneType(normalizedPhone);
-      await Customer.findByIdAndUpdate(customer._id, {
-        $set: {
-          phoneType: phoneInfo.type,
-          canSms: phoneInfo.canSms,
-          carrier: phoneInfo.carrier
-        }
-      });
-      customer.phoneType = phoneInfo.type;
-      customer.canSms = phoneInfo.canSms;
-    } catch (err) {
-      logger.warn('[CUSTOMER_LOOKUP] Phone type detection failed', { error: err.message });
+    if (detectPhoneType) {
+      try {
+        const phoneInfo = await detectPhoneType(normalizedPhone);
+        await Customer.findByIdAndUpdate(customer._id, {
+          $set: {
+            phoneType: phoneInfo.phoneType,
+            canSms: phoneInfo.canSms,
+            carrier: phoneInfo.carrier
+          }
+        });
+        customer.phoneType = phoneInfo.phoneType;
+        customer.canSms = phoneInfo.canSms;
+      } catch (err) {
+        logger.warn('[CUSTOMER_LOOKUP] Phone type detection failed', { error: err.message });
+      }
     }
     
     // If we have a name, update it
@@ -998,12 +1018,12 @@ class CustomerLookup {
     }
     
     // Detect phone type if phone provided
-    if (member.phone) {
+    if (member.phone && detectPhoneType) {
       try {
         const phoneInfo = await detectPhoneType(member.phone);
-        member.phoneType = phoneInfo.type;
+        member.phoneType = phoneInfo.phoneType;
       } catch (err) {
-        member.phoneType = PHONE_TYPES.UNKNOWN;
+        member.phoneType = 'unknown';
       }
     }
     
@@ -1062,13 +1082,25 @@ class CustomerLookup {
     }
     
     // Skip if already detected and not forcing
-    if (!force && customer.phoneType && customer.phoneType !== PHONE_TYPES.UNKNOWN) {
+    if (!force && customer.phoneType && customer.phoneType !== 'unknown') {
       return {
         phone: customer.phone,
-        type: customer.phoneType,
+        phoneType: customer.phoneType,
         canSms: customer.canSms,
         carrier: customer.carrier,
         cached: true
+      };
+    }
+    
+    // Check if detector is available
+    if (!detectPhoneType) {
+      return {
+        phone: customer.phone,
+        phoneType: 'unknown',
+        canSms: false,
+        carrier: null,
+        cached: false,
+        error: 'Phone type detection not available'
       };
     }
     
@@ -1078,7 +1110,7 @@ class CustomerLookup {
     // Update customer
     await Customer.findByIdAndUpdate(customerId, {
       $set: {
-        phoneType: phoneInfo.type,
+        phoneType: phoneInfo.phoneType,
         canSms: phoneInfo.canSms,
         carrier: phoneInfo.carrier
       }
@@ -1093,7 +1125,7 @@ class CustomerLookup {
     logger.info('[CUSTOMER_LOOKUP] Phone type detected', {
       customerId: customer.customerId,
       phone: customer.phone,
-      type: phoneInfo.type,
+      phoneType: phoneInfo.phoneType,
       canSms: phoneInfo.canSms
     });
     
