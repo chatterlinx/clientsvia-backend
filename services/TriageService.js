@@ -374,17 +374,21 @@ async function applyQuickTriageRules(userText, companyId, trade) {
   }
 
   for (const rule of quickRules) {
-    let ok = true;
+    let ok = false;  // Start false, set to true if ANY keyword matches
 
-    // Check all "must have" keywords are present
+    // Check if ANY of the "must have" keywords is present (OR logic)
+    // This is how triage cards work: "smell gas" OR "gas odor" OR "gas leak" etc.
     if (rule.must && rule.must.length) {
       for (const phrase of rule.must) {
         if (!phrase) continue;
-        if (!normalized.includes(phrase)) {
-          ok = false;
+        if (normalized.includes(phrase)) {
+          ok = true;  // At least one keyword matched!
           break;
         }
       }
+    } else {
+      // No keywords configured = no match possible
+      ok = false;
     }
 
     if (!ok) continue;

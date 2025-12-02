@@ -9955,13 +9955,14 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
                 
                 ${debug.mustKeywords && debug.mustKeywords.length > 0 ? `
                 <div class="text-xs text-gray-700 mb-2">
-                  <strong>Keywords checked:</strong>
+                  <strong>Keywords (OR - any one matches):</strong>
                   <div class="flex flex-wrap gap-1 mt-1">
                     ${debug.mustKeywords.map(k => {
                       const matched = debug.matchedKeywords?.includes(k);
-                      return `<span class="px-2 py-0.5 rounded ${matched ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${this.escapeHtml(k)} ${matched ? '✓' : '✗'}</span>`;
+                      return `<span class="px-2 py-0.5 rounded ${matched ? 'bg-green-500 text-white font-bold' : 'bg-gray-100 text-gray-500'}">${this.escapeHtml(k)} ${matched ? '✓ MATCHED' : ''}</span>`;
                     }).join('')}
                   </div>
+                  <p class="text-xs text-gray-500 mt-1 italic">Caller needs to say <strong>any one</strong> of these keywords</p>
                 </div>` : ''}
                 
                 ${debug.foundExcluded && debug.foundExcluded.length > 0 ? `

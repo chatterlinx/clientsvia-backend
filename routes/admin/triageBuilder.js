@@ -845,21 +845,22 @@ router.post('/test-rules', async (req, res, next) => {
       const mustKeywords = (cfg.keywordsMustHave || []).map(k => TriageService.normalizeText(k)).filter(Boolean);
       const excludeKeywords = (cfg.keywordsExclude || []).map(k => TriageService.normalizeText(k)).filter(Boolean);
       
-      // Check if all must keywords are present
-      let allMustPresent = true;
+      // Check if ANY of the must keywords are present (OR logic)
+      // Triage cards use alternatives: "smell gas" OR "gas odor" OR "gas leak"
+      let anyMustPresent = false;
       const matchedKeywords = [];
-      const missingKeywords = [];
+      const unmatchedKeywords = [];
       
       for (const keyword of mustKeywords) {
         if (normalized.includes(keyword)) {
           matchedKeywords.push(keyword);
+          anyMustPresent = true;  // At least one matched!
         } else {
-          allMustPresent = false;
-          missingKeywords.push(keyword);
+          unmatchedKeywords.push(keyword);
         }
       }
       
-      // Check if any exclude keywords are present
+      // Check if any exclude keywords are present (blocks the match)
       let hasExcluded = false;
       const foundExcluded = [];
       for (const keyword of excludeKeywords) {
@@ -869,7 +870,8 @@ router.post('/test-rules', async (req, res, next) => {
         }
       }
       
-      const matched = allMustPresent && !hasExcluded && mustKeywords.length > 0;
+      // Match if: ANY keyword matched AND no exclude keywords found
+      const matched = anyMustPresent && !hasExcluded;
       
       return res.json({
         ok: true,
@@ -897,18 +899,19 @@ router.post('/test-rules', async (req, res, next) => {
         debug: {
           mustKeywords,
           matchedKeywords,
-          missingKeywords,
+          unmatchedKeywords,
           excludeKeywords,
           foundExcluded,
+          matchLogic: 'OR (any keyword matches)',
           reason: !matched ? (
-            missingKeywords.length > 0 
-              ? `Missing keywords: ${missingKeywords.join(', ')}`
-              : foundExcluded.length > 0
-                ? `Excluded by: ${foundExcluded.join(', ')}`
+            foundExcluded.length > 0
+              ? `Blocked by exclude keyword: ${foundExcluded.join(', ')}`
+              : matchedKeywords.length === 0
+                ? `No keywords matched. Caller must say one of: ${mustKeywords.join(' OR ')}`
                 : mustKeywords.length === 0
-                  ? 'No must-have keywords configured'
+                  ? 'No keywords configured on this card'
                   : 'Unknown'
-          ) : 'All keywords matched'
+          ) : `Matched keyword: "${matchedKeywords[0]}"`
         },
         warning: !card.isActive 
           ? '⚠️ This card is NOT ACTIVE. Enable it for production use.' 
