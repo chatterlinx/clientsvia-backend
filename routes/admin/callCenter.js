@@ -34,7 +34,8 @@ const express = require('express');
 const router = express.Router();
 
 // Authentication & Authorization
-const { authenticateJWT, authorizeRole } = require('../../middleware/auth');
+const { authenticateJWT, requireRole } = require('../../middleware/auth');
+const authorizeRole = requireRole; // Alias for consistency
 const authorizeCompanyAccess = require('../../middleware/authorizeCompanyAccess');
 const auditLog = require('../../middleware/auditLog');
 
