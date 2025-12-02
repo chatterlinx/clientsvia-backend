@@ -157,7 +157,7 @@ router.get('/:companyId/suggestions', async (req, res) => {
  * POST /api/admin/agent-excellence/:companyId/generate-suggestions
  * Manually trigger LLM analysis (admin only)
  */
-router.post('/:companyId/generate-suggestions', requireRole(['admin']), async (req, res) => {
+router.post('/:companyId/generate-suggestions', requireRole('admin'), async (req, res) => {
   try {
     const { companyId } = req.params;
     
@@ -195,7 +195,7 @@ router.post('/:companyId/generate-suggestions', requireRole(['admin']), async (r
  * POST /api/admin/agent-excellence/:companyId/apply-suggestion
  * Apply a single suggestion (requires human approval - no auto-apply)
  */
-router.post('/:companyId/apply-suggestion', requireRole(['admin', 'company_admin']), async (req, res) => {
+router.post('/:companyId/apply-suggestion', requireRole('admin', 'company_admin'), async (req, res) => {
   try {
     const { companyId } = req.params;
     const { suggestionIndex } = req.body;

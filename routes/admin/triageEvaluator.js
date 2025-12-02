@@ -30,7 +30,7 @@ router.use(authenticateJWT);
  * POST /api/admin/triage-evaluator/:companyId/evaluate
  * Run a full evaluation of triage cards
  */
-router.post('/:companyId/evaluate', requireRole(['admin', 'company_admin']), async (req, res) => {
+router.post('/:companyId/evaluate', requireRole('admin', 'company_admin'), async (req, res) => {
   try {
     const { companyId } = req.params;
     const { businessDescription } = req.body;
@@ -194,7 +194,7 @@ router.get('/:companyId/versions/:version', async (req, res) => {
  * POST /api/admin/triage-evaluator/:companyId/versions/:version/rollback
  * Rollback to a specific version
  */
-router.post('/:companyId/versions/:version/rollback', requireRole(['admin', 'company_admin']), async (req, res) => {
+router.post('/:companyId/versions/:version/rollback', requireRole('admin', 'company_admin'), async (req, res) => {
   try {
     const { companyId, version } = req.params;
     
@@ -279,7 +279,7 @@ router.get('/:companyId/versions/compare', async (req, res) => {
  * POST /api/admin/triage-evaluator/:companyId/apply-recommendation
  * Apply a single recommendation
  */
-router.post('/:companyId/apply-recommendation', requireRole(['admin', 'company_admin']), async (req, res) => {
+router.post('/:companyId/apply-recommendation', requireRole('admin', 'company_admin'), async (req, res) => {
   try {
     const { companyId } = req.params;
     const { recommendation } = req.body;
@@ -327,7 +327,7 @@ router.post('/:companyId/apply-recommendation', requireRole(['admin', 'company_a
  * POST /api/admin/triage-evaluator/:companyId/apply-all
  * Apply all high-priority recommendations at once
  */
-router.post('/:companyId/apply-all', requireRole(['admin', 'company_admin']), async (req, res) => {
+router.post('/:companyId/apply-all', requireRole('admin', 'company_admin'), async (req, res) => {
   try {
     const { companyId } = req.params;
     const { recommendations, priority = 'high' } = req.body;
@@ -451,7 +451,7 @@ router.get('/:companyId/unmatched-phrases', async (req, res) => {
  * POST /api/admin/triage-evaluator/:companyId/mark-false-positive
  * Mark a card match as false positive
  */
-router.post('/:companyId/mark-false-positive', requireRole(['admin', 'company_admin']), async (req, res) => {
+router.post('/:companyId/mark-false-positive', requireRole('admin', 'company_admin'), async (req, res) => {
   try {
     const { companyId } = req.params;
     const { cardId, phrase, expectedCard, callId } = req.body;
@@ -492,7 +492,7 @@ router.post('/:companyId/mark-false-positive', requireRole(['admin', 'company_ad
  * POST /api/admin/triage-evaluator/:companyId/mark-missed-match
  * Mark a phrase that should have matched a card
  */
-router.post('/:companyId/mark-missed-match', requireRole(['admin', 'company_admin']), async (req, res) => {
+router.post('/:companyId/mark-missed-match', requireRole('admin', 'company_admin'), async (req, res) => {
   try {
     const { companyId } = req.params;
     const { cardId, triageLabel, phrase, matchedCard, callId } = req.body;
@@ -538,7 +538,7 @@ router.post('/:companyId/mark-missed-match', requireRole(['admin', 'company_admi
  * POST /api/admin/triage-evaluator/:companyId/create-version
  * Create a named version snapshot
  */
-router.post('/:companyId/create-version', requireRole(['admin', 'company_admin']), async (req, res) => {
+router.post('/:companyId/create-version', requireRole('admin', 'company_admin'), async (req, res) => {
   try {
     const { companyId } = req.params;
     const { versionName, changeSummary } = req.body;
