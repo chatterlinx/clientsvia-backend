@@ -8701,8 +8701,14 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
                 Atomic source of truth for Frontline-Intel call distribution
               </p>
             </div>
-            <!-- Bulk Actions -->
+            <!-- Actions -->
             <div class="flex items-center space-x-2">
+              <!-- 🎯 Triage Command Center Button -->
+              <button onclick="cheatSheetManager.openTriageCommandCenter()" 
+                      class="px-4 py-2 text-sm font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg flex items-center gap-2"
+                      title="Open Triage Command Center - Full evaluation with real call data">
+                🎯 Evaluate & Optimize
+              </button>
               <button onclick="cheatSheetManager.bulkEnableTriageCards(true)" 
                       class="px-3 py-1.5 text-xs font-medium bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors shadow-sm"
                       title="Enable all triage cards">
@@ -9557,6 +9563,35 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
       this.showNotification('❌ Failed to toggle card', 'error');
       // Reload to reset checkbox state
       this.renderTriageCardsList();
+    }
+  }
+  
+  /**
+   * Open the Triage Command Center full-screen modal
+   * Provides comprehensive evaluation with real call data analysis
+   */
+  async openTriageCommandCenter() {
+    try {
+      // Dynamically load the TriageCommandCenter module if not already loaded
+      if (!window.TriageCommandCenter) {
+        const script = document.createElement('script');
+        script.src = '/js/ai-agent-settings/TriageCommandCenter.js';
+        document.head.appendChild(script);
+        
+        // Wait for script to load
+        await new Promise((resolve, reject) => {
+          script.onload = resolve;
+          script.onerror = reject;
+        });
+      }
+      
+      // Create and open the command center
+      window.triageCommandCenter = new window.TriageCommandCenter(this.companyId);
+      await window.triageCommandCenter.open();
+      
+    } catch (error) {
+      console.error('[CHEAT SHEET] Failed to open Triage Command Center:', error);
+      this.showNotification('❌ Failed to open Triage Command Center: ' + error.message, 'error');
     }
   }
   

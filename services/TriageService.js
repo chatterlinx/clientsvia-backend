@@ -2,6 +2,7 @@
 // V22 Triage Service - Runtime matcher for quick rules (Brain-1 Tier-0)
 
 const TriageCard = require('../models/TriageCard');
+const TriageCardMetrics = require('../models/TriageCardMetrics');
 const Company = require('../models/v2Company');
 const logger = require('../utils/logger');
 
@@ -408,6 +409,15 @@ async function applyQuickTriageRules(userText, companyId, trade) {
 
     // First hit wins (already priority-sorted)
     recordMatchSample(rule.cardId, normalized).catch(() => {});
+    
+    // 📊 Record to new metrics system for Command Center analytics
+    TriageCardMetrics.recordMatch({
+      companyId,
+      cardId: rule.cardId,
+      triageLabel: rule.triageLabel,
+      phrase: normalized,
+      callId: null // Will be set by caller if available
+    }).catch(err => logger.debug('[TRIAGE] Metrics recording failed (non-blocking):', err.message));
 
     logger.info('[TRIAGE] ✅ Quick rule matched', {
       companyId: String(companyId),
