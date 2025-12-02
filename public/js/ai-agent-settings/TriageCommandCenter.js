@@ -67,6 +67,11 @@ class TriageCommandCenter {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const cardsData = cardsRes.ok ? await cardsRes.json() : { cards: [] };
+        console.log('[TCC] Raw cards response:', { ok: cardsRes.ok, cardsData });
+        
+        // Handle both array and object response formats
+        const cards = Array.isArray(cardsData) ? cardsData : (cardsData.cards || []);
+        console.log('[TCC] Extracted cards count:', cards.length);
         
         // Extract booking rules from cheatSheets if available
         let bookingRules = [];
@@ -81,16 +86,20 @@ class TriageCommandCenter {
         }
 
         this.companyContext = {
-          name: company.companyName || company.businessName || 'Your Company',
+          name: company.companyName || company.businessName || company.name || 'Your Company',
           trade: company.trade || company.industry || 'Service',
           serviceAreas: company.serviceAreas || company.serviceArea || [],
           businessHours: company.businessHours || company.schedule || '',
           emergencyPhone: company.emergencyPhone || '',
-          cards: cardsData.cards || [],
+          cards: cards,
           bookingRules: bookingRules
         };
         
+        // Store raw cards for Card Analysis quick view
+        this.existingCards = cards;
+        
         console.log('[TCC] Company context loaded:', this.companyContext);
+        console.log('[TCC] Cards found:', cards.length, 'samples:', cards.slice(0, 3).map(c => c.triageLabel || c.displayName));
       }
     } catch (error) {
       console.error('[TCC] Failed to load company context:', error);
@@ -1079,26 +1088,146 @@ WHAT WE DON'T DO:
   }
 
   /**
-   * Render Cards tab
+   * Render Cards tab - shows existing cards even before LLM evaluation
    */
   renderCardsTab() {
-    const cards = this.evaluation.cardAnalysis?.cardAnalysis || [];
-
-    if (cards.length === 0) {
-      return '<p style="color: #9ca3af; text-align: center;">No card analysis available. Run evaluation first.</p>';
+    const llmAnalysis = this.evaluation.cardAnalysis?.cardAnalysis || [];
+    
+    // If we have LLM analysis, show that
+    if (llmAnalysis.length > 0) {
+      return `
+        <div class="tcc-filters">
+          <button class="tcc-filter-btn active" onclick="window.triageCommandCenter.filterCards('all')">All (${llmAnalysis.length})</button>
+          <button class="tcc-filter-btn" onclick="window.triageCommandCenter.filterCards('needs-improvement')">Needs Work (${llmAnalysis.filter(c => c.currentGrade === 'C' || c.currentGrade === 'D' || c.currentGrade === 'F').length})</button>
+          <button class="tcc-filter-btn" onclick="window.triageCommandCenter.filterCards('good')">Good (${llmAnalysis.filter(c => c.currentGrade === 'A' || c.currentGrade === 'B').length})</button>
+        </div>
+        <div id="tcc-cards-list">
+          ${llmAnalysis.map((card, idx) => this.renderCardItem(card, idx)).join('')}
+        </div>
+      `;
     }
-
+    
+    // Show existing cards WITHOUT LLM analysis (quick view)
+    const existingCards = this.existingCards || [];
+    
+    if (existingCards.length === 0) {
+      return `
+        <div style="text-align: center; padding: 40px; color: #9ca3af;">
+          <p style="font-size: 48px; margin: 0;">📭</p>
+          <p style="font-size: 18px; margin: 15px 0 5px;">No triage cards found</p>
+          <p style="font-size: 14px;">Create triage cards first, then come back for evaluation.</p>
+        </div>
+      `;
+    }
+    
+    // Show existing cards in a basic view
+    const activeCards = existingCards.filter(c => c.isActive);
+    const inactiveCards = existingCards.filter(c => !c.isActive);
+    
     return `
-      <div class="tcc-filters">
-        <button class="tcc-filter-btn active" onclick="window.triageCommandCenter.filterCards('all')">All (${cards.length})</button>
-        <button class="tcc-filter-btn" onclick="window.triageCommandCenter.filterCards('needs-improvement')">Needs Work (${cards.filter(c => c.currentGrade === 'C' || c.currentGrade === 'D' || c.currentGrade === 'F').length})</button>
-        <button class="tcc-filter-btn" onclick="window.triageCommandCenter.filterCards('good')">Good (${cards.filter(c => c.currentGrade === 'A' || c.currentGrade === 'B').length})</button>
+      <div style="margin-bottom: 20px; padding: 15px; background: #3d3d5c; border-radius: 10px; border: 1px solid #667eea;">
+        <p style="margin: 0 0 10px 0; color: #e0e0ff;">
+          <strong>📊 ${existingCards.length} Triage Cards Found</strong>
+          <span style="color: #22c55e; margin-left: 15px;">✓ ${activeCards.length} Active</span>
+          ${inactiveCards.length > 0 ? `<span style="color: #f59e0b; margin-left: 10px;">⏸️ ${inactiveCards.length} Disabled</span>` : ''}
+        </p>
+        <p style="margin: 0; color: #9ca3af; font-size: 13px;">
+          💡 Run Full Evaluation above to get AI-powered suggestions for each card
+        </p>
       </div>
-
+      
+      <div class="tcc-filters">
+        <button class="tcc-filter-btn active" onclick="window.triageCommandCenter.filterExistingCards('all')">All (${existingCards.length})</button>
+        <button class="tcc-filter-btn" onclick="window.triageCommandCenter.filterExistingCards('active')">Active (${activeCards.length})</button>
+        <button class="tcc-filter-btn" onclick="window.triageCommandCenter.filterExistingCards('inactive')">Disabled (${inactiveCards.length})</button>
+      </div>
+      
       <div id="tcc-cards-list">
-        ${cards.map((card, idx) => this.renderCardItem(card, idx)).join('')}
+        ${existingCards.map((card, idx) => this.renderExistingCardItem(card, idx)).join('')}
       </div>
     `;
+  }
+  
+  /**
+   * Render existing card (before LLM evaluation)
+   */
+  renderExistingCardItem(card, idx) {
+    const status = card.isActive ? 
+      '<span style="color: #22c55e; font-size: 12px;">✓ ACTIVE</span>' : 
+      '<span style="color: #f59e0b; font-size: 12px;">⏸️ DISABLED</span>';
+    
+    const keywords = card.must || card.mustHaveKeywords || [];
+    const excludeKeywords = card.exclude || card.excludeKeywords || [];
+    const action = card.action || 'Unknown';
+    
+    return `
+      <div class="tcc-card-item" data-active="${card.isActive}">
+        <div class="tcc-card-header" onclick="window.triageCommandCenter.toggleCard(${idx})">
+          <div class="tcc-card-title">
+            ${status}
+            <span style="color: white; font-weight: 600; margin-left: 10px;">${card.displayName || card.triageLabel}</span>
+            <span style="color: #667eea; font-size: 12px; margin-left: 10px;">${action}</span>
+          </div>
+          <span style="color: #6b7280;">▼</span>
+        </div>
+        <div class="tcc-card-details" id="tcc-card-${idx}">
+          ${keywords.length > 0 ? `
+            <div class="tcc-keyword-section">
+              <div class="tcc-keyword-label">Must Have Keywords (${keywords.length})</div>
+              <div class="tcc-keyword-list">
+                ${keywords.map(k => `<span class="tcc-keyword">${k}</span>`).join('')}
+              </div>
+            </div>
+          ` : '<p style="color: #9ca3af; font-size: 13px;">No keywords defined</p>'}
+          
+          ${excludeKeywords.length > 0 ? `
+            <div class="tcc-keyword-section">
+              <div class="tcc-keyword-label">Exclude Keywords (${excludeKeywords.length})</div>
+              <div class="tcc-keyword-list">
+                ${excludeKeywords.map(k => `<span class="tcc-keyword remove">${k}</span>`).join('')}
+              </div>
+            </div>
+          ` : ''}
+          
+          <div style="margin-top: 15px; padding: 15px; background: #2d2d44; border-radius: 8px;">
+            <p style="margin: 0; color: white; font-size: 13px;">
+              <strong>Action:</strong> ${action}
+            </p>
+            ${card.linkedScenarioName ? `
+              <p style="margin: 5px 0 0 0; color: #9ca3af; font-size: 13px;">
+                <strong>Linked Scenario:</strong> ${card.linkedScenarioName}
+              </p>
+            ` : ''}
+            ${card.triageCategory ? `
+              <p style="margin: 5px 0 0 0; color: #9ca3af; font-size: 13px;">
+                <strong>Category:</strong> ${card.triageCategory}
+              </p>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  
+  /**
+   * Filter existing cards (before LLM evaluation)
+   */
+  filterExistingCards(filter) {
+    const cards = document.querySelectorAll('#tcc-cards-list .tcc-card-item');
+    cards.forEach(card => {
+      const isActive = card.getAttribute('data-active') === 'true';
+      if (filter === 'all') {
+        card.style.display = '';
+      } else if (filter === 'active') {
+        card.style.display = isActive ? '' : 'none';
+      } else if (filter === 'inactive') {
+        card.style.display = isActive ? 'none' : '';
+      }
+    });
+    
+    // Update active filter button
+    document.querySelectorAll('.tcc-filter-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
   }
 
   /**
