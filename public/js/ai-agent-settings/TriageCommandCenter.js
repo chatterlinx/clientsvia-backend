@@ -118,15 +118,26 @@ class TriageCommandCenter {
    */
   populateBusinessTemplate() {
     const textarea = document.getElementById('tcc-business-description');
-    if (!textarea || !this.companyContext) return;
+    if (!textarea || !this.companyContext) {
+      console.log('[TCC] populateBusinessTemplate: textarea or context missing', { 
+        textarea: !!textarea, 
+        context: !!this.companyContext 
+      });
+      return;
+    }
 
     const ctx = this.companyContext;
+    console.log('[TCC] Populating template with context:', { 
+      name: ctx.name, 
+      trade: ctx.trade, 
+      cardsCount: ctx.cards?.length 
+    });
     
-    // Extract services from triage cards
+    // Extract services from triage cards (use displayName or triageLabel)
     const services = [...new Set(ctx.cards
-      .filter(c => c.serviceType || c.triageCategory)
+      .filter(c => c.displayName || c.triageLabel)
       .map(c => c.displayName || c.triageLabel)
-      .slice(0, 8)
+      .slice(0, 10)
     )];
     
     // Extract common caller questions from card labels
@@ -136,25 +147,27 @@ class TriageCommandCenter {
       .map(c => `"${c.displayName}"`);
     
     // Build service areas string
-    const areas = Array.isArray(ctx.serviceAreas) 
+    const areas = Array.isArray(ctx.serviceAreas) && ctx.serviceAreas.length > 0
       ? ctx.serviceAreas.join(', ') 
-      : ctx.serviceAreas || '[Your service area]';
+      : '[Your service area]';
     
-    // Get emergency cards
-    const emergencyCards = ctx.cards.filter(c => 
-      c.action === 'ESCALATE_TO_HUMAN' || 
-      c.action === 'TRANSFER_TO_HUMAN' ||
-      c.triageLabel?.includes('EMERGENCY') ||
-      c.triageLabel?.includes('GAS')
-    );
+    // Get emergency cards (check quickRuleConfig.action)
+    const emergencyCards = ctx.cards.filter(c => {
+      const action = c.quickRuleConfig?.action || c.action;
+      return action === 'ESCALATE_TO_HUMAN' || 
+             action === 'TRANSFER_TO_HUMAN' ||
+             c.triageLabel?.toLowerCase().includes('emergency') ||
+             c.triageLabel?.toLowerCase().includes('gas') ||
+             c.serviceType === 'EMERGENCY';
+    });
     
     const emergencies = emergencyCards.length > 0
       ? emergencyCards.map(c => `• ${c.displayName || c.triageLabel}`).join('\n')
       : `• Gas smell near equipment\n• Sparking or smoking unit\n• Complete system failure in extreme weather\n• Safety hazards`;
     
     // Build booking rules section
-    const bookingSection = ctx.bookingRules.length > 0
-      ? ctx.bookingRules.map(r => `• ${r.name || r.serviceName}: ${r.description || 'Available for booking'}`).join('\n')
+    const bookingSection = ctx.bookingRules && ctx.bookingRules.length > 0
+      ? ctx.bookingRules.map(r => `• ${r.name || r.serviceName || r.serviceType}: ${r.description || 'Available for booking'}`).join('\n')
       : `• Same-day service when available\n• Service call fee: $XX (waived with repair)\n• Free estimates on installations`;
 
     const template = `═══════════════════════════════════════════════════════════════════════════
@@ -183,6 +196,7 @@ WHAT WE DON'T DO:
 
 ═══════════════════════════════════════════════════════════════════════════`;
 
+    console.log('[TCC] Setting template, first 200 chars:', template.substring(0, 200));
     textarea.value = template;
   }
 
@@ -1156,9 +1170,22 @@ WHAT WE DON'T DO:
       '<span style="color: #22c55e; font-size: 12px;">✓ ACTIVE</span>' : 
       '<span style="color: #f59e0b; font-size: 12px;">⏸️ DISABLED</span>';
     
-    const keywords = card.must || card.mustHaveKeywords || [];
-    const excludeKeywords = card.exclude || card.excludeKeywords || [];
-    const action = card.action || 'Unknown';
+    // Keywords are in quickRuleConfig (per TriageCard schema)
+    const qrc = card.quickRuleConfig || {};
+    const keywords = qrc.keywordsMustHave || [];
+    const excludeKeywords = qrc.keywordsExclude || [];
+    const action = qrc.action || card.action || 'Unknown';
+    const linkedScenario = card.linkedScenario?.scenarioName || '';
+    
+    // Format action for display
+    const actionDisplay = action.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim();
+    const actionColor = {
+      'ESCALATE_TO_HUMAN': '#ef4444',
+      'DIRECT_TO_3TIER': '#22c55e',
+      'EXPLAIN_AND_PUSH': '#3b82f6',
+      'TAKE_MESSAGE': '#f59e0b',
+      'END_CALL_POLITE': '#6b7280'
+    }[action] || '#667eea';
     
     return `
       <div class="tcc-card-item" data-active="${card.isActive}">
@@ -1166,23 +1193,23 @@ WHAT WE DON'T DO:
           <div class="tcc-card-title">
             ${status}
             <span style="color: white; font-weight: 600; margin-left: 10px;">${card.displayName || card.triageLabel}</span>
-            <span style="color: #667eea; font-size: 12px; margin-left: 10px;">${action}</span>
+            <span style="color: ${actionColor}; font-size: 12px; margin-left: 10px; font-weight: 600;">${actionDisplay}</span>
           </div>
           <span style="color: #6b7280;">▼</span>
         </div>
         <div class="tcc-card-details" id="tcc-card-${idx}">
           ${keywords.length > 0 ? `
             <div class="tcc-keyword-section">
-              <div class="tcc-keyword-label">Must Have Keywords (${keywords.length})</div>
+              <div class="tcc-keyword-label">🔑 Must Have Keywords (${keywords.length})</div>
               <div class="tcc-keyword-list">
                 ${keywords.map(k => `<span class="tcc-keyword">${k}</span>`).join('')}
               </div>
             </div>
-          ` : '<p style="color: #9ca3af; font-size: 13px;">No keywords defined</p>'}
+          ` : '<p style="color: #f59e0b; font-size: 13px;">⚠️ No keywords defined - this card may not match any calls</p>'}
           
           ${excludeKeywords.length > 0 ? `
             <div class="tcc-keyword-section">
-              <div class="tcc-keyword-label">Exclude Keywords (${excludeKeywords.length})</div>
+              <div class="tcc-keyword-label">🚫 Exclude Keywords (${excludeKeywords.length})</div>
               <div class="tcc-keyword-list">
                 ${excludeKeywords.map(k => `<span class="tcc-keyword remove">${k}</span>`).join('')}
               </div>
@@ -1191,16 +1218,21 @@ WHAT WE DON'T DO:
           
           <div style="margin-top: 15px; padding: 15px; background: #2d2d44; border-radius: 8px;">
             <p style="margin: 0; color: white; font-size: 13px;">
-              <strong>Action:</strong> ${action}
+              <strong>Action:</strong> <span style="color: ${actionColor};">${actionDisplay}</span>
             </p>
-            ${card.linkedScenarioName ? `
+            ${linkedScenario ? `
               <p style="margin: 5px 0 0 0; color: #9ca3af; font-size: 13px;">
-                <strong>Linked Scenario:</strong> ${card.linkedScenarioName}
+                <strong>Linked Scenario:</strong> ${linkedScenario}
               </p>
             ` : ''}
             ${card.triageCategory ? `
               <p style="margin: 5px 0 0 0; color: #9ca3af; font-size: 13px;">
                 <strong>Category:</strong> ${card.triageCategory}
+              </p>
+            ` : ''}
+            ${card.serviceType ? `
+              <p style="margin: 5px 0 0 0; color: #9ca3af; font-size: 13px;">
+                <strong>Service Type:</strong> ${card.serviceType}
               </p>
             ` : ''}
           </div>
