@@ -169,14 +169,14 @@ class TriageCardService {
         }
       });
 
-      card.incrementVersion();
+      // Track who modified and when
       card.lastModifiedBy = modifiedBy;
+      card.updatedAt = new Date();
 
       await card.save();
 
       logger.info('[TRIAGE CARD SERVICE] ✅ Card updated', { 
-        cardId: card._id,
-        version: card.version 
+        cardId: card._id
       });
 
       // Auto-sync category if status is ACTIVE
