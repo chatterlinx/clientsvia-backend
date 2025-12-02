@@ -1072,6 +1072,462 @@ router.get('/:companyId/compliance/retention', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// VENDOR ROUTES
+// ═══════════════════════════════════════════════════════════════════════════
+
+const Vendor = require('../../models/Vendor');
+const VendorCall = require('../../models/VendorCall');
+
+/**
+ * GET /api/admin/call-center/:companyId/vendors
+ * List all vendors
+ */
+router.get('/:companyId/vendors',
+  auditLog.logAccess('vendor.list_viewed'),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const {
+        query,
+        vendorType,
+        isActive,
+        page = 1,
+        limit = 50
+      } = req.query;
+      
+      const result = await Vendor.search(
+        companyId,
+        { 
+          query, 
+          vendorType, 
+          isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined 
+        },
+        { page: parseInt(page), limit: Math.min(parseInt(limit), 100) }
+      );
+      
+      res.json({
+        success: true,
+        data: result.vendors,
+        pagination: {
+          page: result.page,
+          limit: result.limit,
+          total: result.total,
+          pages: result.pages
+        }
+      });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error listing vendors', {
+        error: error.message,
+        companyId: req.params.companyId
+      });
+      res.status(500).json({ success: false, error: 'Failed to list vendors' });
+    }
+  }
+);
+
+/**
+ * GET /api/admin/call-center/:companyId/vendors/:vendorId
+ * Get single vendor with recent calls
+ */
+router.get('/:companyId/vendors/:vendorId',
+  auditLog.logAccess('vendor.viewed'),
+  async (req, res) => {
+    try {
+      const { companyId, vendorId } = req.params;
+      
+      // Get vendor
+      const vendor = await Vendor.findOne({ 
+        _id: vendorId, 
+        companyId 
+      }).lean();
+      
+      if (!vendor) {
+        return res.status(404).json({ success: false, error: 'Vendor not found' });
+      }
+      
+      // Get recent calls from this vendor
+      const recentCalls = await VendorCall.find({ 
+        companyId, 
+        vendorId: vendor._id 
+      })
+        .sort({ calledAt: -1 })
+        .limit(20)
+        .lean();
+      
+      res.json({ 
+        success: true, 
+        data: { 
+          ...vendor, 
+          recentCalls 
+        } 
+      });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error fetching vendor', {
+        error: error.message,
+        vendorId: req.params.vendorId
+      });
+      res.status(500).json({ success: false, error: 'Failed to fetch vendor' });
+    }
+  }
+);
+
+/**
+ * POST /api/admin/call-center/:companyId/vendors
+ * Create a new vendor
+ */
+router.post('/:companyId/vendors',
+  auditLog.logModification('vendor.created'),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const vendorData = req.body;
+      
+      if (!vendorData.businessName) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'businessName is required' 
+        });
+      }
+      
+      const vendor = await Vendor.create({
+        ...vendorData,
+        companyId
+      });
+      
+      logger.info('[CALL_CENTER] Vendor created', {
+        companyId,
+        vendorId: vendor.vendorId,
+        businessName: vendor.businessName
+      });
+      
+      res.status(201).json({ success: true, data: vendor });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error creating vendor', {
+        error: error.message,
+        companyId: req.params.companyId
+      });
+      res.status(500).json({ success: false, error: 'Failed to create vendor' });
+    }
+  }
+);
+
+/**
+ * PATCH /api/admin/call-center/:companyId/vendors/:vendorId
+ * Update vendor
+ */
+router.patch('/:companyId/vendors/:vendorId',
+  auditLog.logModification('vendor.updated'),
+  async (req, res) => {
+    try {
+      const { companyId, vendorId } = req.params;
+      const updateData = req.body;
+      
+      // Prevent changing identity fields
+      delete updateData.companyId;
+      delete updateData._id;
+      delete updateData.vendorId;
+      
+      const vendor = await Vendor.findOneAndUpdate(
+        { _id: vendorId, companyId },
+        { $set: updateData },
+        { new: true }
+      );
+      
+      if (!vendor) {
+        return res.status(404).json({ success: false, error: 'Vendor not found' });
+      }
+      
+      res.json({ success: true, data: vendor });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error updating vendor', {
+        error: error.message,
+        vendorId: req.params.vendorId
+      });
+      res.status(500).json({ success: false, error: 'Failed to update vendor' });
+    }
+  }
+);
+
+/**
+ * POST /api/admin/call-center/:companyId/vendors/:vendorId/contacts
+ * Add a contact to vendor
+ */
+router.post('/:companyId/vendors/:vendorId/contacts',
+  auditLog.logModification('vendor.contact_added'),
+  async (req, res) => {
+    try {
+      const { companyId, vendorId } = req.params;
+      const contactData = req.body;
+      
+      if (!contactData.name) {
+        return res.status(400).json({ success: false, error: 'name is required' });
+      }
+      
+      const vendor = await Vendor.findOneAndUpdate(
+        { _id: vendorId, companyId },
+        { $push: { contacts: contactData } },
+        { new: true }
+      );
+      
+      if (!vendor) {
+        return res.status(404).json({ success: false, error: 'Vendor not found' });
+      }
+      
+      res.json({ success: true, data: vendor });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error adding vendor contact', {
+        error: error.message,
+        vendorId: req.params.vendorId
+      });
+      res.status(500).json({ success: false, error: 'Failed to add contact' });
+    }
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VENDOR CALL ROUTES
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/call-center/:companyId/vendor-calls
+ * List vendor calls
+ */
+router.get('/:companyId/vendor-calls',
+  auditLog.logAccess('vendor_call.list_viewed'),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const {
+        vendorId,
+        reason,
+        actionStatus,
+        urgency,
+        page = 1,
+        limit = 50
+      } = req.query;
+      
+      const result = await VendorCall.getRecentCalls(companyId, {
+        vendorId,
+        reason,
+        actionStatus,
+        urgency,
+        page: parseInt(page),
+        limit: Math.min(parseInt(limit), 100)
+      });
+      
+      res.json({
+        success: true,
+        data: result.calls,
+        pagination: {
+          page: result.page,
+          limit: result.limit,
+          total: result.total,
+          pages: result.pages
+        }
+      });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error listing vendor calls', {
+        error: error.message,
+        companyId: req.params.companyId
+      });
+      res.status(500).json({ success: false, error: 'Failed to list vendor calls' });
+    }
+  }
+);
+
+/**
+ * GET /api/admin/call-center/:companyId/vendor-calls/pending
+ * Get pending actions from vendor calls
+ */
+router.get('/:companyId/vendor-calls/pending',
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { urgency } = req.query;
+      
+      const pendingActions = await VendorCall.getPendingActions(companyId, { urgency });
+      
+      res.json({ 
+        success: true, 
+        data: pendingActions,
+        count: pendingActions.length
+      });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error fetching pending vendor actions', {
+        error: error.message,
+        companyId: req.params.companyId
+      });
+      res.status(500).json({ success: false, error: 'Failed to fetch pending actions' });
+    }
+  }
+);
+
+/**
+ * POST /api/admin/call-center/:companyId/vendor-calls
+ * Log a new vendor call
+ */
+router.post('/:companyId/vendor-calls',
+  auditLog.logModification('vendor_call.created'),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const callData = req.body;
+      
+      if (!callData.vendorName || !callData.summary) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'vendorName and summary are required' 
+        });
+      }
+      
+      // If vendorId not provided, try to find by phone
+      if (!callData.vendorId && callData.phone) {
+        const vendor = await Vendor.findByPhone(companyId, callData.phone);
+        if (vendor) {
+          callData.vendorId = vendor._id;
+        }
+      }
+      
+      const call = await VendorCall.createCall({
+        ...callData,
+        companyId,
+        handledBy: req.user.email
+      });
+      
+      res.status(201).json({ success: true, data: call });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error logging vendor call', {
+        error: error.message,
+        companyId: req.params.companyId
+      });
+      res.status(500).json({ success: false, error: 'Failed to log vendor call' });
+    }
+  }
+);
+
+/**
+ * POST /api/admin/call-center/:companyId/vendor-calls/:callId/complete
+ * Mark vendor call action as complete
+ */
+router.post('/:companyId/vendor-calls/:callId/complete',
+  auditLog.logModification('vendor_call.completed'),
+  async (req, res) => {
+    try {
+      const { callId } = req.params;
+      const { notes } = req.body;
+      
+      const call = await VendorCall.completeAction(callId, {
+        completedBy: req.user.email,
+        notes
+      });
+      
+      if (!call) {
+        return res.status(404).json({ success: false, error: 'Vendor call not found' });
+      }
+      
+      res.json({ success: true, data: call });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error completing vendor call action', {
+        error: error.message,
+        callId: req.params.callId
+      });
+      res.status(500).json({ success: false, error: 'Failed to complete action' });
+    }
+  }
+);
+
+/**
+ * PATCH /api/admin/call-center/:companyId/vendor-calls/:callId
+ * Update vendor call
+ */
+router.patch('/:companyId/vendor-calls/:callId',
+  auditLog.logModification('vendor_call.updated'),
+  async (req, res) => {
+    try {
+      const { companyId, callId } = req.params;
+      const updateData = req.body;
+      
+      // Prevent changing identity fields
+      delete updateData.companyId;
+      delete updateData.callId;
+      
+      const call = await VendorCall.findOneAndUpdate(
+        { callId, companyId },
+        { $set: updateData },
+        { new: true }
+      );
+      
+      if (!call) {
+        return res.status(404).json({ success: false, error: 'Vendor call not found' });
+      }
+      
+      res.json({ success: true, data: call });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error updating vendor call', {
+        error: error.message,
+        callId: req.params.callId
+      });
+      res.status(500).json({ success: false, error: 'Failed to update vendor call' });
+    }
+  }
+);
+
+/**
+ * GET /api/admin/call-center/:companyId/vendor-stats
+ * Get vendor call statistics
+ */
+router.get('/:companyId/vendor-stats', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    
+    const [vendorCount, pendingCount, todayCalls, topVendors] = await Promise.all([
+      Vendor.countDocuments({ companyId, isActive: true }),
+      VendorCall.countDocuments({ 
+        companyId, 
+        actionStatus: { $in: ['pending', 'in_progress'] }
+      }),
+      VendorCall.countDocuments({ 
+        companyId,
+        calledAt: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) }
+      }),
+      VendorCall.aggregate([
+        { $match: { companyId: require('mongoose').Types.ObjectId.createFromHexString(companyId) } },
+        { $group: { _id: '$vendorName', count: { $sum: 1 }, lastCall: { $max: '$calledAt' } } },
+        { $sort: { count: -1 } },
+        { $limit: 5 }
+      ])
+    ]);
+    
+    res.json({
+      success: true,
+      data: {
+        totalVendors: vendorCount,
+        pendingActions: pendingCount,
+        callsToday: todayCalls,
+        topVendors
+      }
+    });
+    
+  } catch (error) {
+    logger.error('[CALL_CENTER] Error fetching vendor stats', {
+      error: error.message,
+      companyId: req.params.companyId
+    });
+    res.status(500).json({ success: false, error: 'Failed to fetch vendor stats' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // HEALTH CHECK
 // ═══════════════════════════════════════════════════════════════════════════
 

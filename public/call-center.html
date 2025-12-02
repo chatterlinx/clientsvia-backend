@@ -986,6 +986,195 @@
         }
         
         /* ═══════════════════════════════════════════════════════════════════════════
+           VENDOR SUBTABS
+           ═══════════════════════════════════════════════════════════════════════════ */
+        
+        .vendor-subtab {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition-fast);
+        }
+        
+        .vendor-subtab:hover {
+            border-color: var(--accent-cyan);
+            color: var(--text-primary);
+        }
+        
+        .vendor-subtab.active {
+            background: var(--accent-cyan);
+            color: var(--bg-primary);
+            border-color: var(--accent-cyan);
+        }
+        
+        .vendor-subpanel {
+            display: none;
+        }
+        
+        .vendor-subpanel.active {
+            display: block;
+        }
+        
+        .stat-card.mini {
+            padding: var(--space-md);
+            text-align: center;
+        }
+        
+        /* Vendor Card */
+        .vendor-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: var(--space-lg);
+            margin-bottom: var(--space-md);
+            transition: var(--transition-fast);
+            cursor: pointer;
+        }
+        
+        .vendor-card:hover {
+            border-color: var(--accent-cyan);
+            transform: translateY(-2px);
+        }
+        
+        .vendor-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: var(--space-md);
+        }
+        
+        .vendor-info h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .vendor-info p {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        
+        .vendor-type-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .vendor-type-badge.supply_house {
+            background: rgba(34, 211, 238, 0.15);
+            color: var(--accent-cyan);
+        }
+        
+        .vendor-type-badge.parts_distributor {
+            background: rgba(168, 85, 247, 0.15);
+            color: var(--accent-purple);
+        }
+        
+        .vendor-type-badge.delivery_service {
+            background: rgba(251, 191, 36, 0.15);
+            color: var(--accent-yellow);
+        }
+        
+        .vendor-type-badge.equipment_manufacturer {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--accent-green);
+        }
+        
+        /* Vendor Call Card */
+        .vendor-call-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--accent-cyan);
+            border-radius: 0 12px 12px 0;
+            padding: var(--space-lg);
+            margin-bottom: var(--space-md);
+            transition: var(--transition-fast);
+        }
+        
+        .vendor-call-card:hover {
+            border-color: var(--accent-cyan);
+        }
+        
+        .vendor-call-card.urgent {
+            border-left-color: var(--accent-red);
+            background: rgba(239, 68, 68, 0.05);
+        }
+        
+        .vendor-call-card.high {
+            border-left-color: var(--accent-yellow);
+        }
+        
+        .vendor-call-card.pending {
+            border-left-color: var(--accent-yellow);
+        }
+        
+        .vendor-call-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: var(--space-sm);
+        }
+        
+        .vendor-call-vendor {
+            font-weight: 600;
+            font-size: 15px;
+        }
+        
+        .vendor-call-time {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        
+        .vendor-call-summary {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: var(--space-md);
+        }
+        
+        .vendor-call-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-sm);
+            align-items: center;
+        }
+        
+        .vendor-call-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            background: var(--bg-hover);
+            color: var(--text-secondary);
+        }
+        
+        .vendor-call-tag.order {
+            background: rgba(34, 211, 238, 0.15);
+            color: var(--accent-cyan);
+        }
+        
+        .vendor-call-tag.customer {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--accent-green);
+        }
+        
+        .vendor-call-tag.action {
+            background: rgba(251, 191, 36, 0.15);
+            color: var(--accent-yellow);
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════════════
            LOADING & EMPTY STATES
            ═══════════════════════════════════════════════════════════════════════════ */
         
@@ -1147,10 +1336,11 @@
             
             <!-- Tabs -->
             <div class="tabs">
-                <button class="tab active" data-tab="calls">Recent Calls</button>
-                <button class="tab" data-tab="customers">Customers</button>
-                <button class="tab" data-tab="search">Search</button>
-                <button class="tab" data-tab="analytics">Analytics</button>
+                <button class="tab active" data-tab="calls">📞 Recent Calls</button>
+                <button class="tab" data-tab="customers">👥 Customers</button>
+                <button class="tab" data-tab="vendors">🏪 Vendors</button>
+                <button class="tab" data-tab="search">🔍 Search</button>
+                <button class="tab" data-tab="analytics">📊 Analytics</button>
             </div>
             
             <!-- Tab Panels -->
@@ -1203,6 +1393,101 @@
                     <div class="loading-container">
                         <div class="loading-spinner"></div>
                         <p style="margin-top: 16px;">Loading customers...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- VENDORS TAB -->
+            <div id="vendors-panel" class="tab-panel">
+                <!-- Vendor Stats Bar -->
+                <div class="stats-bar" id="vendor-stats-bar" style="margin-bottom: var(--space-lg);">
+                    <div class="stat-card mini">
+                        <div class="stat-value" id="total-vendors-stat">—</div>
+                        <div class="stat-label">Total Vendors</div>
+                    </div>
+                    <div class="stat-card mini">
+                        <div class="stat-value" id="pending-vendor-actions-stat" style="color: var(--accent-yellow);">—</div>
+                        <div class="stat-label">Pending Actions</div>
+                    </div>
+                    <div class="stat-card mini">
+                        <div class="stat-value" id="vendor-calls-today-stat">—</div>
+                        <div class="stat-label">Calls Today</div>
+                    </div>
+                </div>
+                
+                <!-- Vendor Subtabs -->
+                <div style="display: flex; gap: 8px; margin-bottom: var(--space-lg);">
+                    <button class="vendor-subtab active" data-vendor-tab="calls" onclick="switchVendorTab('calls')">📞 Vendor Calls</button>
+                    <button class="vendor-subtab" data-vendor-tab="directory" onclick="switchVendorTab('directory')">📇 Vendor Directory</button>
+                    <button class="vendor-subtab" data-vendor-tab="pending" onclick="switchVendorTab('pending')">⚠️ Pending Actions</button>
+                </div>
+                
+                <!-- Vendor Calls Sub-Panel -->
+                <div id="vendor-calls-subpanel" class="vendor-subpanel active">
+                    <div class="search-bar">
+                        <div class="search-input-wrapper">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" class="search-input" id="vendor-calls-search" placeholder="Search vendor calls...">
+                        </div>
+                        <select class="filter-select" id="vendor-reason-filter">
+                            <option value="">All Reasons</option>
+                            <option value="order_ready">Order Ready</option>
+                            <option value="order_shipped">Order Shipped</option>
+                            <option value="order_backordered">Backordered</option>
+                            <option value="delivery_attempt">Delivery Attempt</option>
+                            <option value="account_invoice">Invoice</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="showNewVendorCallModal()">+ Log Vendor Call</button>
+                    </div>
+                    
+                    <div class="calls-container" id="vendor-calls-container">
+                        <div class="loading-container">
+                            <div class="loading-spinner"></div>
+                            <p style="margin-top: 16px;">Loading vendor calls...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Vendor Directory Sub-Panel -->
+                <div id="vendor-directory-subpanel" class="vendor-subpanel" style="display: none;">
+                    <div class="search-bar">
+                        <div class="search-input-wrapper">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" class="search-input" id="vendor-search" placeholder="Search vendors by name or phone...">
+                        </div>
+                        <select class="filter-select" id="vendor-type-filter">
+                            <option value="">All Types</option>
+                            <option value="supply_house">Supply House</option>
+                            <option value="parts_distributor">Parts Distributor</option>
+                            <option value="equipment_manufacturer">Manufacturer</option>
+                            <option value="delivery_service">Delivery Service</option>
+                            <option value="wholesaler">Wholesaler</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="showNewVendorModal()">+ Add Vendor</button>
+                    </div>
+                    
+                    <div class="calls-container" id="vendors-container">
+                        <div class="loading-container">
+                            <div class="loading-spinner"></div>
+                            <p style="margin-top: 16px;">Loading vendors...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Pending Actions Sub-Panel -->
+                <div id="vendor-pending-subpanel" class="vendor-subpanel" style="display: none;">
+                    <div style="padding: var(--space-md); background: rgba(251, 191, 36, 0.1); border: 1px solid var(--accent-yellow); border-radius: 8px; margin-bottom: var(--space-lg);">
+                        <strong style="color: var(--accent-yellow);">⚠️ Pending Actions</strong>
+                        <p style="margin: 8px 0 0; font-size: 13px; color: var(--text-secondary);">
+                            These vendor calls require follow-up. Parts to pick up, orders to confirm, etc.
+                        </p>
+                    </div>
+                    
+                    <div class="calls-container" id="pending-actions-container">
+                        <div class="loading-container">
+                            <div class="loading-spinner"></div>
+                            <p style="margin-top: 16px;">Loading pending actions...</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1965,6 +2250,10 @@
                 await loadTodayStats();
                 if (currentTab === 'calls') await loadCalls();
                 if (currentTab === 'customers') await loadCustomers();
+                if (currentTab === 'vendors') {
+                    await loadVendorStats();
+                    await switchVendorTab(currentVendorSubtab);
+                }
             });
             
             // Filters
@@ -2021,6 +2310,10 @@
             // Load data for the tab
             if (tab === 'calls') loadCalls();
             if (tab === 'customers') loadCustomers();
+            if (tab === 'vendors') {
+                loadVendorStats();
+                switchVendorTab(currentVendorSubtab);
+            }
             if (tab === 'analytics') loadAnalytics();
         }
         
@@ -2171,6 +2464,334 @@
                     </div>
                 `;
             }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // VENDOR FUNCTIONS
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        let currentVendorSubtab = 'calls';
+        
+        function switchVendorTab(tab) {
+            currentVendorSubtab = tab;
+            
+            // Update subtab buttons
+            document.querySelectorAll('.vendor-subtab').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.vendorTab === tab);
+            });
+            
+            // Update subpanels
+            document.getElementById('vendor-calls-subpanel').classList.toggle('active', tab === 'calls');
+            document.getElementById('vendor-directory-subpanel').classList.toggle('active', tab === 'directory');
+            document.getElementById('vendor-pending-subpanel').classList.toggle('active', tab === 'pending');
+            
+            // Load data
+            if (tab === 'calls') loadVendorCalls();
+            else if (tab === 'directory') loadVendorDirectory();
+            else if (tab === 'pending') loadPendingActions();
+        }
+        
+        async function loadVendorStats() {
+            try {
+                const res = await apiCall(`/api/admin/call-center/${currentCompanyId}/vendor-stats`);
+                const stats = res.data;
+                
+                document.getElementById('total-vendors-stat').textContent = stats.totalVendors;
+                document.getElementById('pending-vendor-actions-stat').textContent = stats.pendingActions;
+                document.getElementById('vendor-calls-today-stat').textContent = stats.callsToday;
+                
+            } catch (err) {
+                console.error('Failed to load vendor stats:', err);
+            }
+        }
+        
+        async function loadVendorCalls() {
+            const container = document.getElementById('vendor-calls-container');
+            container.innerHTML = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <p style="margin-top: 16px;">Loading vendor calls...</p>
+                </div>
+            `;
+            
+            try {
+                const res = await apiCall(`/api/admin/call-center/${currentCompanyId}/vendor-calls`);
+                const calls = res.data;
+                
+                if (calls.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📦</div>
+                            <h3>No Vendor Calls Yet</h3>
+                            <p>When vendors call about orders, parts, or deliveries, they'll appear here.</p>
+                            <button class="btn btn-primary" onclick="showNewVendorCallModal()">+ Log First Vendor Call</button>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                container.innerHTML = calls.map(call => renderVendorCallCard(call)).join('');
+                
+            } catch (err) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">❌</div>
+                        <h3>Error Loading Vendor Calls</h3>
+                        <p>${err.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function loadVendorDirectory() {
+            const container = document.getElementById('vendors-container');
+            container.innerHTML = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <p style="margin-top: 16px;">Loading vendors...</p>
+                </div>
+            `;
+            
+            try {
+                const res = await apiCall(`/api/admin/call-center/${currentCompanyId}/vendors`);
+                const vendors = res.data;
+                
+                if (vendors.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📇</div>
+                            <h3>No Vendors Yet</h3>
+                            <p>Add your suppliers, parts distributors, and delivery contacts.</p>
+                            <button class="btn btn-primary" onclick="showNewVendorModal()">+ Add First Vendor</button>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                container.innerHTML = vendors.map(vendor => renderVendorCard(vendor)).join('');
+                
+            } catch (err) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">❌</div>
+                        <h3>Error Loading Vendors</h3>
+                        <p>${err.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function loadPendingActions() {
+            const container = document.getElementById('pending-actions-container');
+            container.innerHTML = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <p style="margin-top: 16px;">Loading pending actions...</p>
+                </div>
+            `;
+            
+            try {
+                const res = await apiCall(`/api/admin/call-center/${currentCompanyId}/vendor-calls/pending`);
+                const pendingCalls = res.data;
+                
+                if (pendingCalls.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">✅</div>
+                            <h3>All Caught Up!</h3>
+                            <p>No pending vendor actions. All parts picked up, orders confirmed.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                container.innerHTML = pendingCalls.map(call => renderVendorCallCard(call, true)).join('');
+                
+            } catch (err) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">❌</div>
+                        <h3>Error Loading Pending Actions</h3>
+                        <p>${err.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function renderVendorCallCard(call, showCompleteBtn = false) {
+            const reasonLabels = {
+                order_ready: '📦 Order Ready',
+                order_shipped: '🚚 Shipped',
+                order_backordered: '⏳ Backordered',
+                order_delivered: '✅ Delivered',
+                delivery_attempt: '🚪 Delivery Attempt',
+                delivery_schedule: '📅 Delivery Schedule',
+                account_invoice: '📄 Invoice',
+                general_inquiry: '💬 Inquiry',
+                other: '📝 Other'
+            };
+            
+            const urgencyClass = call.urgency === 'urgent' ? 'urgent' : 
+                                 call.urgency === 'high' ? 'high' : 
+                                 call.actionStatus === 'pending' ? 'pending' : '';
+            
+            return `
+                <div class="vendor-call-card ${urgencyClass}">
+                    <div class="vendor-call-header">
+                        <div>
+                            <span class="vendor-call-vendor">🏪 ${call.vendorName || 'Unknown Vendor'}</span>
+                            ${call.callerName ? `<span style="color: var(--text-muted); font-size: 12px;"> • ${call.callerName}</span>` : ''}
+                        </div>
+                        <span class="vendor-call-time">${formatRelativeTime(call.calledAt)}</span>
+                    </div>
+                    
+                    <div class="vendor-call-summary">${call.summary}</div>
+                    
+                    <div class="vendor-call-meta">
+                        <span class="vendor-call-tag">${reasonLabels[call.reason] || call.reason}</span>
+                        ${call.orderNumber ? `<span class="vendor-call-tag order">📋 ${call.orderNumber}</span>` : ''}
+                        ${call.relatedCustomerName ? `<span class="vendor-call-tag customer">👤 ${call.relatedCustomerName}</span>` : ''}
+                        ${call.actionRequired ? `<span class="vendor-call-tag action">⚡ ${call.actionRequired}</span>` : ''}
+                        ${call.trackingNumber ? `<span class="vendor-call-tag">📦 ${call.trackingNumber}</span>` : ''}
+                        
+                        ${showCompleteBtn && call.actionStatus !== 'completed' ? `
+                            <button class="action-btn primary" onclick="completeVendorAction('${call.callId}')" style="margin-left: auto;">
+                                ✅ Mark Complete
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderVendorCard(vendor) {
+            const typeLabels = {
+                supply_house: '🏭 Supply House',
+                parts_distributor: '⚙️ Parts Distributor',
+                equipment_manufacturer: '🔧 Manufacturer',
+                delivery_service: '🚚 Delivery',
+                wholesaler: '📦 Wholesaler',
+                other: '🏢 Vendor'
+            };
+            
+            return `
+                <div class="vendor-card" onclick="viewVendor('${vendor._id}')">
+                    <div class="vendor-card-header">
+                        <div class="vendor-info">
+                            <h3>${vendor.businessName}</h3>
+                            <p>${vendor.phone ? formatPhone(vendor.phone) : 'No phone'} ${vendor.email ? `• ${vendor.email}` : ''}</p>
+                        </div>
+                        <span class="vendor-type-badge ${vendor.vendorType}">${typeLabels[vendor.vendorType] || vendor.vendorType}</span>
+                    </div>
+                    
+                    <div style="display: flex; gap: var(--space-lg); font-size: 13px; color: var(--text-secondary);">
+                        ${vendor.accountNumber ? `<span>📋 Acct: ${vendor.accountNumber}</span>` : ''}
+                        <span>📞 ${vendor.totalCalls || 0} calls</span>
+                        ${vendor.lastCallAt ? `<span>🕐 Last: ${formatRelativeTime(vendor.lastCallAt)}</span>` : ''}
+                    </div>
+                    
+                    ${vendor.contacts?.length > 0 ? `
+                        <div style="margin-top: var(--space-md); padding-top: var(--space-md); border-top: 1px solid var(--border-light); font-size: 12px; color: var(--text-muted);">
+                            👤 Contacts: ${vendor.contacts.map(c => c.name).join(', ')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        function showNewVendorCallModal() {
+            const vendorName = prompt('Vendor name (e.g., "Johnstone Supply"):');
+            if (!vendorName) return;
+            
+            const summary = prompt('What did they call about?');
+            if (!summary) return;
+            
+            const reason = prompt('Reason: order_ready, order_shipped, order_backordered, delivery_attempt, account_invoice, other') || 'other';
+            
+            const orderNumber = prompt('Order/PO number (optional):');
+            const customerName = prompt('Related customer name (optional, e.g., "Mrs. Johnson"):');
+            const actionRequired = prompt('Action required (optional, e.g., "Pick up motor by 5pm"):');
+            
+            logVendorCall({
+                vendorName,
+                summary,
+                reason,
+                orderNumber,
+                relatedCustomerName: customerName,
+                actionRequired,
+                urgency: actionRequired ? 'high' : 'normal'
+            });
+        }
+        
+        async function logVendorCall(callData) {
+            try {
+                await apiCall(`/api/admin/call-center/${currentCompanyId}/vendor-calls`, {
+                    method: 'POST',
+                    body: JSON.stringify(callData)
+                });
+                
+                alert('Vendor call logged!');
+                loadVendorCalls();
+                loadVendorStats();
+                
+            } catch (err) {
+                alert('Failed to log vendor call: ' + err.message);
+            }
+        }
+        
+        function showNewVendorModal() {
+            const businessName = prompt('Vendor/Company name:');
+            if (!businessName) return;
+            
+            const phone = prompt('Phone number:');
+            const vendorType = prompt('Type: supply_house, parts_distributor, equipment_manufacturer, delivery_service, wholesaler, other') || 'other';
+            const accountNumber = prompt('Your account number with them (optional):');
+            
+            createVendor({
+                businessName,
+                phone,
+                vendorType,
+                accountNumber
+            });
+        }
+        
+        async function createVendor(vendorData) {
+            try {
+                await apiCall(`/api/admin/call-center/${currentCompanyId}/vendors`, {
+                    method: 'POST',
+                    body: JSON.stringify(vendorData)
+                });
+                
+                alert('Vendor added!');
+                loadVendorDirectory();
+                loadVendorStats();
+                
+            } catch (err) {
+                alert('Failed to add vendor: ' + err.message);
+            }
+        }
+        
+        async function completeVendorAction(callId) {
+            const notes = prompt('Completion notes (optional):');
+            
+            try {
+                await apiCall(`/api/admin/call-center/${currentCompanyId}/vendor-calls/${callId}/complete`, {
+                    method: 'POST',
+                    body: JSON.stringify({ notes })
+                });
+                
+                alert('Action marked as complete!');
+                loadPendingActions();
+                loadVendorStats();
+                
+            } catch (err) {
+                alert('Failed to complete action: ' + err.message);
+            }
+        }
+        
+        function viewVendor(vendorId) {
+            // TODO: Full vendor detail modal
+            alert(`View vendor: ${vendorId} - Full detail modal coming soon!`);
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
