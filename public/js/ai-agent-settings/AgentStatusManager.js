@@ -142,6 +142,28 @@ class AgentStatusManager {
       <!-- System Status Overview -->
       ${this.renderStatusOverview(status, health)}
 
+      <!-- 🧠 AI AGENT EXCELLENCE CENTER - Quick Access -->
+      <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 12px; padding: 20px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #334155;">
+        <div>
+          <h3 style="margin: 0 0 5px 0; font-size: 18px; font-weight: 700; color: white; display: flex; align-items: center; gap: 10px;">
+            🧠 AI Agent Excellence Center
+            <span style="background: linear-gradient(135deg, #7c3aed, #a855f7); padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;">
+              NEW
+            </span>
+          </h3>
+          <p style="margin: 0; font-size: 13px; color: #94a3b8;">
+            Performance intelligence, improvement suggestions, and revenue tracking
+          </p>
+        </div>
+        <button 
+          onclick="window.agentStatusManager.openExcellenceCenter()"
+          style="background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;"
+          onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 15px rgba(124,58,237,0.4)';"
+          onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+          📊 View Excellence Score
+        </button>
+      </div>
+
       <!-- 🤖 LLM CONFIGURATION - THE HEART OF LLM-0 -->
       ${llmConfigHtml}
 
@@ -640,6 +662,34 @@ class AgentStatusManager {
     } catch (error) {
       console.error('[AGENT STATUS] Error rendering LLM config:', error);
       return '';
+    }
+  }
+
+  /**
+   * Open the AI Agent Excellence Center
+   */
+  async openExcellenceCenter() {
+    try {
+      // Dynamically load the AgentExcellenceCenter module if not already loaded
+      if (!window.AgentExcellenceCenter) {
+        const script = document.createElement('script');
+        script.src = '/js/ai-agent-settings/AgentExcellenceCenter.js';
+        document.head.appendChild(script);
+        
+        // Wait for script to load
+        await new Promise((resolve, reject) => {
+          script.onload = resolve;
+          script.onerror = reject;
+        });
+      }
+      
+      // Create and open the excellence center
+      window.agentExcellenceCenter = new window.AgentExcellenceCenter(this.companyId);
+      await window.agentExcellenceCenter.open();
+      
+    } catch (error) {
+      console.error('[AGENT STATUS] Failed to open Excellence Center:', error);
+      this.showNotification('Failed to open Excellence Center: ' + error.message, 'error');
     }
   }
 
