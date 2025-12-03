@@ -38,6 +38,77 @@ class VariableSyncService {
     }
     
     /**
+     * Helper: Convert camelCase to Human Readable
+     */
+    static humanize(key) {
+        if (!key || typeof key !== 'string') return 'Unknown';
+        return key
+            .replace(/([A-Z])/g, ' $1')
+            .replace(/^./, str => str.toUpperCase())
+            .trim();
+    }
+    
+    /**
+     * Helper: Categorize variable based on name
+     */
+    static categorizeVariable(key) {
+        if (!key || typeof key !== 'string') return 'General';
+        const lowerKey = key.toLowerCase();
+        
+        if (lowerKey.includes('company') || lowerKey.includes('business') || lowerKey.includes('name')) {
+            return 'Company Info';
+        }
+        if (lowerKey.includes('price') || lowerKey.includes('cost') || lowerKey.includes('fee') || lowerKey.includes('rate')) {
+            return 'Pricing';
+        }
+        if (lowerKey.includes('phone') || lowerKey.includes('email') || lowerKey.includes('address') || lowerKey.includes('contact')) {
+            return 'Contact';
+        }
+        if (lowerKey.includes('hour') || lowerKey.includes('schedule') || lowerKey.includes('time') || lowerKey.includes('appointment')) {
+            return 'Scheduling';
+        }
+        if (lowerKey.includes('service') || lowerKey.includes('repair') || lowerKey.includes('install')) {
+            return 'Services';
+        }
+        return 'General';
+    }
+    
+    /**
+     * Helper: Infer variable type from name
+     */
+    static inferType(key) {
+        if (!key || typeof key !== 'string') return 'text';
+        const lowerKey = key.toLowerCase();
+        
+        if (lowerKey.includes('email')) return 'email';
+        if (lowerKey.includes('phone')) return 'phone';
+        if (lowerKey.includes('url') || lowerKey.includes('website') || lowerKey.includes('booking')) return 'url';
+        if (lowerKey.includes('price') || lowerKey.includes('cost') || lowerKey.includes('fee')) return 'currency';
+        if (lowerKey.includes('count') || lowerKey.includes('number') || lowerKey.includes('year')) return 'number';
+        return 'text';
+    }
+    
+    /**
+     * Helper: Get example value for variable
+     */
+    static getExample(key) {
+        if (!key || typeof key !== 'string') return 'Enter value';
+        const lowerKey = key.toLowerCase();
+        
+        if (lowerKey.includes('company') || lowerKey.includes('business')) return 'e.g., Atlas Air Conditioning';
+        if (lowerKey.includes('phone')) return 'e.g., (239) 555-0100';
+        if (lowerKey.includes('email')) return 'e.g., info@company.com';
+        if (lowerKey.includes('address')) return 'e.g., 123 Main St, Naples, FL';
+        if (lowerKey.includes('hour')) return 'e.g., Mon-Fri 8AM-5PM';
+        if (lowerKey.includes('price') || lowerKey.includes('cost')) return 'e.g., $89';
+        if (lowerKey.includes('website') || lowerKey.includes('booking') || lowerKey.includes('url')) return 'e.g., https://company.com';
+        if (lowerKey.includes('greeting')) return 'e.g., Thanks for calling!';
+        if (lowerKey.includes('area')) return 'e.g., Naples, Fort Myers, Bonita Springs';
+        if (lowerKey.includes('type') || lowerKey.includes('trade')) return 'e.g., HVAC, Plumbing, Electrical';
+        return `Enter ${this.humanize(key)}`;
+    }
+    
+    /**
      * Extract all {variable} placeholders from text
      * @param {string} text - Text containing {variables}
      * @returns {string[]} Array of unique variable names (without braces)
@@ -255,9 +326,11 @@ class VariableSyncService {
             logger.debug(`🔄 [VARIABLE SYNC] Links: ${linkVars.length} variables`);
             
             // ═══════════════════════════════════════════════════════════════
-            // UPDATE VARIABLES TABLE
+            // UPDATE VARIABLES TABLE (BOTH variables AND variableDefinitions)
             // ═══════════════════════════════════════════════════════════════
             const uniqueVariables = [...variablesBySource.keys()];
+            
+            logger.info(`🔄 [VARIABLE SYNC] Found ${uniqueVariables.length} unique variables: ${uniqueVariables.join(', ')}`);
             
             if (uniqueVariables.length === 0) {
                 logger.info(`🔄 [VARIABLE SYNC] No variables found in CheatSheet`);
@@ -271,37 +344,67 @@ class VariableSyncService {
                 return { synced: 0, error: 'Company not found' };
             }
             
-            // Initialize variables object if needed
+            // Initialize aiAgentSettings if needed
             if (!company.aiAgentSettings) {
                 company.aiAgentSettings = {};
             }
             if (!company.aiAgentSettings.variables) {
                 company.aiAgentSettings.variables = {};
             }
+            if (!company.aiAgentSettings.variableDefinitions) {
+                company.aiAgentSettings.variableDefinitions = [];
+            }
             
-            // Current variables
+            // Current variables (key-value pairs for user to fill)
             const existingVars = company.aiAgentSettings.variables || {};
+            // Current definitions (array with metadata for UI display)
+            const existingDefs = company.aiAgentSettings.variableDefinitions || [];
+            const existingDefKeys = new Set(existingDefs.map(d => (d.key || '').toLowerCase()));
+            
             let addedCount = 0;
             let updatedCount = 0;
             
-            // Merge new variables
+            // Merge new variables into BOTH structures
             for (const [varName, data] of variablesBySource.entries()) {
                 const normalizedKey = varName.toLowerCase();
                 
+                // 1. Update variables object (for value storage)
                 if (!existingVars[varName]) {
-                    // New variable - add with empty value (user must fill)
                     existingVars[varName] = '';
                     addedCount++;
-                    logger.debug(`🔄 [VARIABLE SYNC] Added new variable: ${varName}`);
+                    logger.info(`🔄 [VARIABLE SYNC] ➕ Added new variable: {${varName}}`);
                 } else {
                     updatedCount++;
                 }
+                
+                // 2. Update variableDefinitions array (for UI display)
+                if (!existingDefKeys.has(normalizedKey)) {
+                    const newDef = {
+                        key: varName,
+                        normalizedKey: normalizedKey,
+                        label: this.humanize(varName),
+                        category: this.categorizeVariable(varName),
+                        usageCount: data.count || 1,
+                        required: false,
+                        type: this.inferType(varName),
+                        example: this.getExample(varName),
+                        source: data.sources.join(', ') || 'Cheat Sheet',
+                        locations: data.sources.map(s => ({ source: s, category: 'Cheat Sheet' }))
+                    };
+                    existingDefs.push(newDef);
+                    existingDefKeys.add(normalizedKey);
+                    logger.info(`🔄 [VARIABLE SYNC] ➕ Added definition for: {${varName}} (category: ${newDef.category})`);
+                }
             }
             
-            // Save
+            // Save BOTH structures
             company.aiAgentSettings.variables = existingVars;
+            company.aiAgentSettings.variableDefinitions = existingDefs;
             company.markModified('aiAgentSettings.variables');
+            company.markModified('aiAgentSettings.variableDefinitions');
             await company.save();
+            
+            logger.info(`✅ [VARIABLE SYNC] Saved ${existingDefs.length} definitions and ${Object.keys(existingVars).length} variables`);
             
             const duration = Date.now() - startTime;
             
