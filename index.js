@@ -710,25 +710,37 @@ async function startServer() {
         // ────────────────────────────────────────────────────────────────────────
         // STEP 3.5: CRITICAL - INITIALIZE REDIS BEFORE ANY HEALTH CHECKS
         // ────────────────────────────────────────────────────────────────────────
+        console.log('════════════════════════════════════════════════════════════════════');
         console.log('[Server] Step 3.5/7: Initializing Redis client...');
+        console.log('════════════════════════════════════════════════════════════════════');
         const redisStart = Date.now();
         try {
-            const { initializeRedis } = require('./clients');
+            // Use warmupRedis for visible testing at startup
+            const { warmupRedis, isRedisConfigured } = require('./services/redisClientFactory');
             
-            // Add 10-second timeout to prevent blocking server startup
-            await Promise.race([
-                initializeRedis(),
-                new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Redis initialization timeout after 10s')), 10000)
-                )
-            ]);
-            
-            console.log(`[Server] ✅ Step 3.5 COMPLETE: Redis initialized in ${Date.now() - redisStart}ms`);
+            if (!isRedisConfigured()) {
+                console.log('[Server] ⚠️ REDIS_URL not set - skipping Redis');
+            } else {
+                // Add 10-second timeout to prevent blocking server startup
+                const warmupResult = await Promise.race([
+                    warmupRedis(),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Redis warmup timeout after 10s')), 10000)
+                    )
+                ]);
+                
+                if (warmupResult) {
+                    console.log(`[Server] ✅ Step 3.5 COMPLETE: Redis initialized in ${Date.now() - redisStart}ms`);
+                } else {
+                    console.warn('[Server] ⚠️ Step 3.5: Redis warmup returned false');
+                }
+            }
         } catch (redisError) {
             console.error('[Server] ❌ Redis initialization failed:', redisError.message);
             console.warn('[Server] ⚠️ Server will continue without Redis caching (degraded mode)');
             // Non-blocking: continue server startup even if Redis fails
         }
+        console.log('════════════════════════════════════════════════════════════════════');
         
         // 🔧 FIX: Ensure v2TradeCategory indexes are correct for multi-tenancy
         console.log('[Server] Step 2.5/7: Checking v2TradeCategory indexes...');

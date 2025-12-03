@@ -9,7 +9,7 @@
 // ============================================================================
 
 const logger = require('../utils/logger.js');
-const { createNodeRedisClient, isRedisConfigured, getSanitizedRedisUrl } = require('../services/redisClientFactory');
+const { createNodeRedisClient, isRedisConfigured, getSanitizedRedisUrl, warmupRedis } = require('../services/redisClientFactory');
 
 let redisClient = null;
 let AdminNotificationService; // Lazy load to avoid circular dependency
@@ -24,10 +24,10 @@ let AdminNotificationService; // Lazy load to avoid circular dependency
  */
 async function initializeRedis() {
   console.log('═══════════════════════════════════════════════════════════════════════');
-  console.log('🔧 [REDIS] INITIALIZATION STARTED (using redisClientFactory)');
+  console.log('🔧 [REDIS INIT] STARTING');
   console.log('═══════════════════════════════════════════════════════════════════════');
-  console.log(`🔍 [REDIS] Node.js version: ${process.version}`);
-  console.log(`🔍 [REDIS] Platform: ${process.platform}`);
+  console.log(`🔍 [REDIS INIT] Node.js version: ${process.version}`);
+  console.log(`🔍 [REDIS INIT] Platform: ${process.platform}`);
   
   // Lazy load AdminNotificationService to avoid circular dependency
   if (!AdminNotificationService) {

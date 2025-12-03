@@ -219,6 +219,61 @@ function getSanitizedRedisUrl() {
 }
 
 // ============================================================================
+// WARMUP FUNCTION - Call at startup to verify Redis works
+// ============================================================================
+
+/**
+ * Warmup Redis connection - call during server startup
+ * Connects, runs SET/GET test, then closes
+ * @returns {Promise<boolean>} - true if Redis is healthy
+ */
+async function warmupRedis() {
+  if (!REDIS_URL) {
+    console.log('[REDIS] ⚠️ Warmup skipped - REDIS_URL not set');
+    return false;
+  }
+  
+  console.log('[REDIS] 🔄 Warmup: connecting and running SET/GET test...');
+  
+  const client = createNodeRedisClient();
+  if (!client) {
+    console.error('[REDIS] ❌ Warmup failed - could not create client');
+    return false;
+  }
+  
+  try {
+    await client.connect();
+    console.log('[REDIS] ✅ Warmup: connected');
+    
+    // Test SET
+    await client.set('cv:startup:test', 'ok', { EX: 30 });
+    console.log('[REDIS] ✅ Warmup: SET test passed');
+    
+    // Test GET
+    const value = await client.get('cv:startup:test');
+    if (value === 'ok') {
+      console.log('[REDIS] ✅ Warmup: GET test passed');
+    } else {
+      console.warn('[REDIS] ⚠️ Warmup: GET returned unexpected value:', value);
+    }
+    
+    // Test DEL
+    await client.del('cv:startup:test');
+    console.log('[REDIS] ✅ Warmup: DEL test passed');
+    
+    await client.quit();
+    console.log('[REDIS] ✅ Warmup COMPLETE - Redis is healthy');
+    return true;
+    
+  } catch (err) {
+    console.error('[REDIS] ❌ Warmup FAILED:', err.message);
+    console.error('[REDIS] ❌ Error code:', err.code || 'N/A');
+    try { await client.quit(); } catch (e) { /* ignore */ }
+    return false;
+  }
+}
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -227,6 +282,7 @@ module.exports = {
   createNodeRedisClient,
   isRedisConfigured,
   getSanitizedRedisUrl,
+  warmupRedis,
   REDIS_URL,
 };
 
