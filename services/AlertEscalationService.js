@@ -97,13 +97,15 @@ class AlertEscalationService {
             const settings = await AdminSettings.findOne({});
             
             if (!settings) {
-                throw new Error('AdminSettings not found - initialize first');
+                logger.warn('[ESCALATION] AdminSettings not found - skipping escalation');
+                return { skipped: true, reason: 'AdminSettings not initialized' };
             }
             
             const adminContacts = settings.notificationCenter?.adminContacts || [];
             
             if (adminContacts.length === 0) {
-                throw new Error('No admin contacts configured in Settings tab');
+                logger.warn('[ESCALATION] No admin contacts configured - skipping escalation (configure in Settings tab)');
+                return { skipped: true, reason: 'No admin contacts configured' };
             }
             
             // Create new delivery attempt
