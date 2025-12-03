@@ -168,26 +168,30 @@ async function updateVariablesForCompany(companyId, updates) {
         company.aiAgentSettings.variables = new Map();
     }
     
-    // Write validated values to canonical Map
+    // Build the variables object for update
+    const currentVars = company.aiAgentSettings?.variables || {};
+    const updatedVars = { ...currentVars };
+    
     Object.entries(validation.formatted).forEach(([key, value]) => {
         const v = (value == null) ? '' : String(value).trim();
         
         if (v === '') {
             // Remove empty values
-            company.aiAgentSettings.variables.delete(key);
+            delete updatedVars[key];
             logger.debug(`[VARIABLES SERVICE] Removed empty value for key: ${key}`);
         } else {
             // Set validated value
-            company.aiAgentSettings.variables.set(key, v);
+            updatedVars[key] = v;
             logger.debug(`[VARIABLES SERVICE] Set ${key} = ${v}`);
         }
     });
     
-    // Mark as modified (required for Mongoose Map)
-    company.markModified('aiAgentSettings.variables');
-    
-    // Save to MongoDB
-    await company.save();
+    // Use findByIdAndUpdate to avoid validating entire document
+    await Company.findByIdAndUpdate(
+        companyId,
+        { $set: { 'aiAgentSettings.variables': updatedVars } },
+        { runValidators: false }
+    );
     
     logger.info(`[VARIABLES SERVICE] ✅ Saved variables for company: ${companyId}`);
     logger.debug(`[VARIABLES SERVICE] Variables saved to MongoDB - no Redis cache clearing (MongoDB-only architecture)`);

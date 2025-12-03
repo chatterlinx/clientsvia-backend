@@ -279,12 +279,14 @@ router.patch('/:companyId/configuration/variables', async (req, res) => {
                         preferredFormat: def.preferredFormat
                     }));
                     
-                    logger.info(`📋 [COMPANY CONFIG PATCH] Cleaned definitions, setting to company.aiAgentSettings.variableDefinitions`);
-                    company.aiAgentSettings.variableDefinitions = cleanedDefinitions;
-                    company.markModified('aiAgentSettings.variableDefinitions');
-                    logger.info(`📋 [COMPANY CONFIG PATCH] Marked as modified, calling save()...`);
+                    logger.info(`📋 [COMPANY CONFIG PATCH] Cleaned definitions, using findByIdAndUpdate...`);
                     
-                    await company.save();
+                    // Use findByIdAndUpdate to avoid validating entire document
+                    await Company.findByIdAndUpdate(
+                        req.params.companyId,
+                        { $set: { 'aiAgentSettings.variableDefinitions': cleanedDefinitions } },
+                        { runValidators: false }
+                    );
                     logger.info(`✅ [COMPANY CONFIG PATCH] ✅✅✅ Variable definitions SAVED to database for company: ${req.params.companyId}`);
                     logger.info(`✅ [COMPANY CONFIG PATCH] Saved ${cleanedDefinitions.length} definitions`);
                 } else {
