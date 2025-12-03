@@ -169,14 +169,25 @@ router.patch(
       // AUTO-SYNC VARIABLES: Extract {variables} from saved config
       // Non-blocking - runs in background after response sent
       // ═══════════════════════════════════════════════════════════════════════
+      logger.info(`🔄 [VARIABLE SYNC] Starting sync for draft save...`);
+      logger.info(`🔄 [VARIABLE SYNC] Config keys: ${Object.keys(config || {}).join(', ')}`);
+      logger.info(`🔄 [VARIABLE SYNC] frontlineIntel type: ${typeof config?.frontlineIntel}`);
+      logger.info(`🔄 [VARIABLE SYNC] frontlineIntel preview: ${JSON.stringify(config?.frontlineIntel)?.substring(0, 200)}`);
+      
       VariableSyncService.syncFromCheatSheet(companyId, config)
         .then(syncResult => {
-          if (syncResult.added > 0) {
-            logger.info(`🔄 [VARIABLE SYNC] Auto-synced ${syncResult.added} new variables on CheatSheet save`);
-          }
+          logger.info(`🔄 [VARIABLE SYNC] Sync complete:`, {
+            synced: syncResult.synced,
+            added: syncResult.added,
+            variables: syncResult.variables,
+            error: syncResult.error
+          });
         })
         .catch(syncErr => {
-          logger.warn(`🔄 [VARIABLE SYNC] Background sync failed (non-critical): ${syncErr.message}`);
+          logger.error(`🔄 [VARIABLE SYNC] Background sync FAILED:`, {
+            error: syncErr.message,
+            stack: syncErr.stack
+          });
         });
       
       res.json({

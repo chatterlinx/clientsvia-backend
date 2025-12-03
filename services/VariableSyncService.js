@@ -110,8 +110,12 @@ class VariableSyncService {
             // SCAN 1: Frontline-Intel
             // ═══════════════════════════════════════════════════════════════
             // Handle both string and object {instructions: "text"} formats
+            logger.info(`🔄 [VARIABLE SYNC] Raw frontlineIntel type: ${typeof config.frontlineIntel}`);
+            logger.info(`🔄 [VARIABLE SYNC] Raw frontlineIntel: ${JSON.stringify(config.frontlineIntel)?.substring(0, 300)}`);
+            
             const frontlineText = this.normalizeFrontlineIntel(config.frontlineIntel);
-            logger.debug(`🔄 [VARIABLE SYNC] Frontline-Intel text length: ${frontlineText.length}`);
+            logger.info(`🔄 [VARIABLE SYNC] Normalized frontlineIntel length: ${frontlineText.length}`);
+            logger.info(`🔄 [VARIABLE SYNC] Normalized preview: ${frontlineText.substring(0, 200)}`);
             const frontlineVars = this.extractVariables(frontlineText);
             if (frontlineVars.length > 0) {
                 frontlineVars.forEach(v => {
