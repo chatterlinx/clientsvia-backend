@@ -1,7 +1,9 @@
 // ============================================================================
 // ADMIN: Setup Notification Center Endpoint
 // ============================================================================
-// One-time endpoint to create the Notification Center company in production
+// DEPRECATED: Notification Center no longer uses v2Company
+// Settings are stored in AdminSettings.notificationCenter
+// This endpoint now just ensures AdminSettings exists
 // ============================================================================
 
 const express = require('express');
@@ -10,84 +12,37 @@ const logger = require('../../utils/logger.js');
 const router = express.Router();
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const v2Company = require('../../models/v2Company');
+const AdminSettings = require('../../models/AdminSettings');
 
 router.post('/admin/setup-notification-center', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
-        logger.security('🔔 [SETUP] Setting up Notification Center...');
+        logger.security('🔔 [SETUP] Setting up Notification Center (AdminSettings only)...');
         
-        // Check if exists - look for metadata flag OR name pattern
-        let company = await v2Company.findOne({ 
-            $or: [
-                { 'metadata.isNotificationCenter': true },
-                { companyName: { $regex: /notification center/i } }
-            ]
-        });
+        // Notification Center uses AdminSettings, NOT v2Company
+        let settings = await AdminSettings.findOne({});
         
-        if (company) {
-            logger.info('📋 [SETUP] Notification Center already exists:', company._id);
-            
-            // Update twilioConfig if missing
-            if (!company.twilioConfig?.phoneNumber) {
-                logger.security('🔧 [SETUP] Fixing twilioConfig...');
-                
-                company.twilioConfig = {
-                    accountSid: process.env.TWILIO_ACCOUNT_SID || '',
-                    authToken: process.env.TWILIO_AUTH_TOKEN || '',
-                    phoneNumber: '+18885222241'
-                };
-                
-                await company.save();
-                logger.security('✅ [SETUP] twilioConfig updated');
-                
-                return res.json({
-                    success: true,
-                    action: 'updated',
-                    companyId: company._id,
-                    message: 'Notification Center twilioConfig updated'
-                });
-            }
-            
-            return res.json({
-                success: true,
-                action: 'already_exists',
-                companyId: company._id,
-                message: 'Notification Center already properly configured'
+        if (!settings) {
+            settings = await AdminSettings.create({
+                notificationCenter: {
+                    adminContacts: [],
+                    twilio: {}
+                }
             });
+            logger.info('✅ [SETUP] AdminSettings created');
         }
         
-        // Create new
-        logger.info('📝 [SETUP] Creating new Notification Center...');
-        
-        company = await v2Company.create({
-            companyName: '🔔 Admin Notification Center',
-            businessName: 'Notification Center',
-            businessPhone: '+18885222241',
-            email: 'notifications@clientsvia.com',
-            status: 'LIVE',
-            
-            // CRITICAL: Set twilioConfig so getCompanyByPhoneNumber finds it
-            twilioConfig: {
-                accountSid: process.env.TWILIO_ACCOUNT_SID || '',
-                authToken: process.env.TWILIO_AUTH_TOKEN || '',
-                phoneNumber: '+18885222241'
-            },
-            
-            metadata: {
-                isNotificationCenter: true,
-                purpose: 'Platform-wide admin test calls and system verification',
-                createdBy: 'setup-endpoint',
-                setupAt: new Date()
-            }
-        });
-        
-        logger.info('✅ [SETUP] Notification Center created:', company._id);
+        // Ensure notificationCenter object exists
+        if (!settings.notificationCenter) {
+            settings.notificationCenter = { adminContacts: [], twilio: {} };
+            await settings.save();
+        }
         
         res.json({
             success: true,
-            action: 'created',
-            companyId: company._id,
-            message: 'Notification Center created successfully',
-            instructions: 'Call +18885222241 to test'
+            action: settings.notificationCenter?.adminContacts?.length > 0 ? 'already_configured' : 'initialized',
+            message: 'Notification Center ready. Configure Twilio and admin contacts in Settings tab.',
+            hasAdminContacts: (settings.notificationCenter?.adminContacts?.length || 0) > 0,
+            hasTwilio: !!(settings.notificationCenter?.twilio?.accountSid)
         });
         
     } catch (error) {
@@ -100,56 +55,42 @@ router.post('/admin/setup-notification-center', authenticateJWT, requireRole('ad
 });
 
 // ============================================================================
-// CLEANUP: Remove duplicate Notification Center companies
+// CLEANUP: Remove ALL fake Notification Center "companies"
+// ============================================================================
+// These should never have been created - Notification Center is NOT a company
 // ============================================================================
 router.delete('/admin/setup-notification-center/cleanup', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
-        logger.security('🧹 [CLEANUP] Removing duplicate Notification Centers...');
+        logger.security('🧹 [CLEANUP] Removing ALL Notification Center fake companies...');
         
-        // Find all Notification Center companies
-        const allNotificationCenters = await v2Company.find({
+        // Find all Notification Center "companies" (they shouldn't exist)
+        const fakeCompanies = await v2Company.find({
             $or: [
                 { 'metadata.isNotificationCenter': true },
                 { companyName: { $regex: /notification center/i } }
             ]
-        }).sort({ createdAt: 1 }); // Oldest first
+        });
         
-        if (allNotificationCenters.length <= 1) {
+        if (fakeCompanies.length === 0) {
             return res.json({
                 success: true,
-                message: 'No duplicates found',
-                count: allNotificationCenters.length
+                message: 'No fake Notification Center companies found. Good!',
+                deleted: 0
             });
         }
         
-        // Keep the first one (oldest), delete the rest
-        const keepCompany = allNotificationCenters[0];
-        const duplicates = allNotificationCenters.slice(1);
+        logger.info(`🧹 [CLEANUP] Found ${fakeCompanies.length} fake companies to delete`);
         
-        logger.info(`🧹 [CLEANUP] Keeping: ${keepCompany._id} (${keepCompany.companyName})`);
-        logger.info(`🧹 [CLEANUP] Deleting ${duplicates.length} duplicates...`);
-        
-        const deleteIds = duplicates.map(c => c._id);
+        const deleteIds = fakeCompanies.map(c => c._id);
         const result = await v2Company.deleteMany({ _id: { $in: deleteIds } });
         
-        // Ensure the kept one has the proper metadata flag
-        if (!keepCompany.metadata?.isNotificationCenter) {
-            keepCompany.metadata = keepCompany.metadata || {};
-            keepCompany.metadata.isNotificationCenter = true;
-            await keepCompany.save();
-            logger.info('✅ [CLEANUP] Added isNotificationCenter flag to kept company');
-        }
-        
-        logger.info(`✅ [CLEANUP] Deleted ${result.deletedCount} duplicate Notification Centers`);
+        logger.info(`✅ [CLEANUP] Deleted ${result.deletedCount} fake Notification Center companies`);
         
         res.json({
             success: true,
-            message: `Cleaned up ${result.deletedCount} duplicate Notification Centers`,
-            kept: {
-                id: keepCompany._id,
-                name: keepCompany.companyName
-            },
-            deleted: deleteIds
+            message: `Deleted ${result.deletedCount} fake Notification Center companies. They should never have existed.`,
+            deleted: result.deletedCount,
+            deletedIds: deleteIds
         });
         
     } catch (error) {
