@@ -12,17 +12,12 @@
 // ============================================================================
 
 const mongoose = require('mongoose');
-const Redis = require('ioredis');
 const PolicyCompiler = require('../services/PolicyCompiler');
 const Company = require('../models/v2Company');
+const { createIORedisClient, isRedisConfigured } = require('../services/redisClientFactory');
 
 // Test configuration
 const TEST_MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/clientsvia_test';
-const TEST_REDIS_CONFIG = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: process.env.REDIS_PORT || 6379,
-  db: 15 // Use separate DB for tests
-};
 
 let redis;
 
@@ -36,8 +31,12 @@ beforeAll(async () => {
     await mongoose.connect(TEST_MONGODB_URI);
   }
   
-  // Connect to test Redis
-  redis = new Redis(TEST_REDIS_CONFIG);
+  // Connect to Redis using factory (requires REDIS_URL)
+  if (isRedisConfigured()) {
+    redis = createIORedisClient({ db: 15 }); // Use separate DB for tests
+  } else {
+    console.warn('⚠️ REDIS_URL not configured - Redis tests will be skipped');
+  }
   
   console.log('✅ Test environment ready');
 });

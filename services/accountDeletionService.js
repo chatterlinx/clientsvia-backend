@@ -31,10 +31,10 @@
  */
 
 const mongoose = require('mongoose');
-const Redis = require('ioredis');
 const fs = require('fs').promises;
 const path = require('path');
 const logger = require('../utils/logger');
+const { createIORedisClient, isRedisConfigured } = require('./redisClientFactory');
 
 // Import all models that reference companyId
 const Company = require('../models/v2Company');
@@ -48,16 +48,15 @@ const NotificationLog = require('../models/v2NotificationLog');
 
 class AccountDeletionService {
     constructor() {
-        // Redis connection for cache cleanup
-        this.redis = new Redis({
-            host: process.env.REDIS_HOST || 'localhost',
-            port: process.env.REDIS_PORT || 6379,
-            password: process.env.REDIS_PASSWORD || null,
-            db: process.env.REDIS_DB || 0,
-            retryDelayOnFailover: 100,
+        // Redis connection for cache cleanup - via factory (REDIS_URL only, no localhost)
+        this.redis = isRedisConfigured() ? createIORedisClient({
             maxRetriesPerRequest: 3,
             lazyConnect: true
-        });
+        }) : null;
+        
+        if (!this.redis) {
+            logger.warn('[ACCOUNT DELETION] ⚠️ Redis not configured - cache cleanup will be skipped');
+        }
 
         // Deletion status tracking
         this.deletionStatus = new Map();

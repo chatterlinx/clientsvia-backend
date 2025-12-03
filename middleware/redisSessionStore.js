@@ -2,19 +2,24 @@
  * V2 Redis Session Store
  * Replaces in-memory storage with persistent, scalable Redis
  * 
+ * STANDARDIZED CONNECTION:
+ * - Uses redisClientFactory for consistent Redis connections
+ * - REDIS_URL only - no HOST/PORT/PASSWORD fallbacks
+ * - Never falls back to localhost
+ * 
  * GRACEFUL DEGRADATION:
  * - If REDIS_URL is not configured, operates in memory-only mode
  * - All methods safely handle the null client case
  * - Sessions won't persist across restarts without Redis
  */
 
-const redis = require('redis');
 const logger = require('../utils/logger.js');
+const { createNodeRedisClient, isRedisConfigured } = require('../services/redisClientFactory');
 
 const crypto = require('crypto');
 
-// Check if Redis is configured
-const REDIS_ENABLED = !!process.env.REDIS_URL;
+// Check if Redis is configured via factory
+const REDIS_ENABLED = isRedisConfigured();
 
 class RedisSessionStore {
     constructor() {
@@ -30,30 +35,19 @@ class RedisSessionStore {
             return;
         }
         
-        this.client = redis.createClient({ 
-            url: process.env.REDIS_URL,
+        // Use centralized factory for consistent connection
+        this.client = createNodeRedisClient({
             socket: {
                 connectTimeout: 60000,
                 lazyConnect: true,
-                reconnectDelay: 1000,
-                reconnectAttempts: 10,
-                keepAlive: 30000,
-            },
-            retry_unfulfilled_commands: true,
-            enable_offline_queue: false
+            }
         });
 
-        this.client.on('error', (err) => {
-            logger.security('Redis Session Store Error:', err);
-        });
-
-        this.client.on('connect', () => {
-            logger.security('✅ Redis Session Store connected');
-        });
-
-        this.client.on('ready', () => {
-            logger.security('🔥 Redis Session Store ready for v2 operations');
-        });
+        if (!this.client) {
+            logger.warn('[REDIS SESSION STORE] ⚠️ Factory returned null - using MEMORY-ONLY mode');
+            this.enabled = false;
+            return;
+        }
 
         // Connect to Redis
         this.connect();

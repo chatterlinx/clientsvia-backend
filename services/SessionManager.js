@@ -7,10 +7,15 @@
 // PERFORMANCE: Sub-1ms reads (L0), 1-2ms (L1), 10-20ms (L2 cold start only)
 // DURABILITY: Async batched MongoDB writes every 5s
 // EVICTION: LRU eviction on L0, TTL on L1/MongoDB
+// 
+// STANDARDIZED CONNECTION:
+// - Uses redisClientFactory for consistent Redis connections
+// - REDIS_URL only - no HOST/PORT/PASSWORD fallbacks
+// - Never falls back to localhost
 // ============================================================================
 
-const Redis = require('ioredis');
 const logger = require('../utils/logger');
+const { createIORedisClient, isRedisConfigured } = require('./redisClientFactory');
 
 // L0: In-Process LRU Cache (ultra-fast, volatile)
 const LRU_MAX_SIZE = 50; // Keep 50 most recent sessions in memory
@@ -18,50 +23,37 @@ const lruCache = new Map();
 const lruOrder = []; // Track access order for LRU eviction
 
 // ═══════════════════════════════════════════════════════════════════
-// L1: Redis Client - GRACEFUL DEGRADATION
+// L1: Redis Client - GRACEFUL DEGRADATION via Factory
 // ═══════════════════════════════════════════════════════════════════
-// Only connect to Redis if REDIS_URL or REDIS_HOST is configured
-// Otherwise, operate in memory-only mode (L0 cache only)
+// Only connect to Redis if REDIS_URL is configured
+// Uses centralized factory - no localhost fallback
 // ═══════════════════════════════════════════════════════════════════
 
-const REDIS_ENABLED = !!(process.env.REDIS_URL || process.env.REDIS_HOST);
+const REDIS_ENABLED = isRedisConfigured();
 
 let redis = null;
 
 if (REDIS_ENABLED) {
-  const redisConfig = {
+  // Use centralized factory for consistent connection
+  redis = createIORedisClient({
     db: parseInt(process.env.REDIS_DB || '0', 10),
-    retryStrategy: (times) => {
-      const delay = Math.min(times * 50, 2000);
-      logger.warn('[SESSION MANAGER] Redis retry', { attempt: times, delayMs: delay });
-      return delay;
-    },
     maxRetriesPerRequest: 3,
     enableOfflineQueue: false
-  };
+  });
 
-  // Use REDIS_URL if provided (full connection string)
-  if (process.env.REDIS_URL) {
-    redis = new Redis(process.env.REDIS_URL, redisConfig);
-  } else {
-    // Use individual host/port/password
-    redis = new Redis({
-      ...redisConfig,
-      host: process.env.REDIS_HOST,
-      port: parseInt(process.env.REDIS_PORT || '6379', 10),
-      password: process.env.REDIS_PASSWORD
+  if (redis) {
+    redis.on('error', (err) => {
+      logger.error('[SESSION MANAGER] Redis connection error', { error: err.message });
     });
+
+    redis.on('connect', () => {
+      logger.info('[SESSION MANAGER] Redis connected');
+    });
+  } else {
+    logger.warn('[SESSION MANAGER] ⚠️ Factory returned null - running in MEMORY-ONLY mode');
   }
-
-  redis.on('error', (err) => {
-    logger.error('[SESSION MANAGER] Redis connection error', { error: err.message });
-  });
-
-  redis.on('connect', () => {
-    logger.info('[SESSION MANAGER] Redis connected');
-  });
 } else {
-  logger.warn('[SESSION MANAGER] ⚠️ Redis NOT configured - running in MEMORY-ONLY mode (L0 cache only)');
+  logger.warn('[SESSION MANAGER] ⚠️ REDIS_URL NOT configured - running in MEMORY-ONLY mode (L0 cache only)');
   logger.warn('[SESSION MANAGER] Sessions will NOT persist across restarts. Set REDIS_URL to enable persistence.');
 }
 

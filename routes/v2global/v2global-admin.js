@@ -28,7 +28,7 @@ const router = express.Router();
 const User = require('../../models/v2User');
 const Company = require('../../models/v2Company');
 const { authenticateJWT } = require('../../middleware/auth');
-const redis = require('redis');
+const { createNodeRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
 
 /**
  * 🚨 EMERGENCY: Fix User-Company Association
@@ -171,10 +171,14 @@ router.post('/clear-cache/:companyId', authenticateJWT, async (req, res) => {
         logger.security('🚨 EMERGENCY: Clearing company cache');
         logger.security('🔍 Target company ID:', companyId);
         
-        const client = redis.createClient({
-            url: process.env.REDIS_URL || 'redis://localhost:6379'
-        });
-
+        if (!isRedisConfigured()) {
+            return res.status(503).json({
+                success: false,
+                error: 'Redis not configured - REDIS_URL not set'
+            });
+        }
+        
+        const client = createNodeRedisClient();
         await client.connect();
         logger.debug('✅ Connected to Redis');
 

@@ -14,39 +14,22 @@ const TriageCard = require('../models/TriageCard');
 // Category/Scenario management is handled differently in v2Company model
 // const Category = require('../models/Category');
 const logger = require('../utils/logger');
-const Redis = require('ioredis');
+const { createIORedisClient, isRedisConfigured } = require('./redisClientFactory');
 
-// Redis client (lazy initialization)
+// Redis client (lazy initialization via factory)
 let redisClient = null;
 function getRedisClient() {
-  if (!redisClient) {
-    // Parse REDIS_URL if available, otherwise use individual env vars
-    const redisUrl = process.env.REDIS_URL;
-    if (redisUrl) {
-      redisClient = new Redis(redisUrl, {
-        retryDelayOnFailover: 100,
-        retryStrategy(times) {
-          const delay = Math.min(times * 50, 2000);
-          return delay;
-        }
-      });
-    } else {
-      redisClient = new Redis({
-        host: process.env.REDIS_HOST || 'localhost',
-        port: process.env.REDIS_PORT || 6379,
-        password: process.env.REDIS_PASSWORD || null,
-        db: process.env.REDIS_DB || 0,
-        retryDelayOnFailover: 100,
-        retryStrategy(times) {
-          const delay = Math.min(times * 50, 2000);
-          return delay;
-        }
+  if (!redisClient && isRedisConfigured()) {
+    // Use centralized factory - REDIS_URL only, no localhost fallback
+    redisClient = createIORedisClient({
+      retryDelayOnFailover: 100,
+    });
+    
+    if (redisClient) {
+      redisClient.on('error', (err) => {
+        logger.warn('[TRIAGE CARD SERVICE] Redis error (non-critical, will fallback to DB)', { error: err.message });
       });
     }
-    
-    redisClient.on('error', (err) => {
-      logger.warn('[TRIAGE CARD SERVICE] Redis error (non-critical, will fallback to DB)', { error: err.message });
-    });
   }
   return redisClient;
 }

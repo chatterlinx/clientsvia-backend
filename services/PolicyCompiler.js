@@ -11,23 +11,16 @@
 
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
-const Redis = require('ioredis');
 const logger = require('../utils/logger');
+const { createIORedisClient, isRedisConfigured } = require('./redisClientFactory');
 
-// Redis client (lazy initialization)
+// Redis client (lazy initialization via factory)
 let redisClient = null;
 function getRedisClient() {
-  if (!redisClient) {
-    redisClient = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: process.env.REDIS_PORT || 6379,
-      password: process.env.REDIS_PASSWORD || null,
-      db: process.env.REDIS_DB || 0,
+  if (!redisClient && isRedisConfigured()) {
+    // Use centralized factory - REDIS_URL only, no localhost fallback
+    redisClient = createIORedisClient({
       retryDelayOnFailover: 100,
-      retryStrategy(times) {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-      }
     });
   }
   return redisClient;
