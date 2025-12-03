@@ -878,6 +878,25 @@ class CheatSheetManager {
             </div>
           </div>
           
+          <!-- LIVE VARIABLES PREVIEW -->
+          <div id="frontline-variables-preview" class="mb-4 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-lg">
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="text-sm font-semibold text-emerald-900 flex items-center">
+                <span class="mr-2">🔤</span>
+                Variables Found in Script
+              </h4>
+              <span id="frontline-variables-count" class="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full">
+                0 variables
+              </span>
+            </div>
+            <div id="frontline-variables-list" class="flex flex-wrap gap-2">
+              <span class="text-sm text-gray-500 italic">Type {variableName} in your script to add variables</span>
+            </div>
+            <p class="text-xs text-emerald-600 mt-2">
+              💡 Variables like {companyName}, {greeting}, {emergencyPhone} are auto-replaced with actual values at runtime
+            </p>
+          </div>
+          
           <!-- Textarea -->
           <div class="mb-4">
             <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -888,6 +907,7 @@ class CheatSheetManager {
               class="w-full h-96 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm resize-y"
               placeholder="Enter your Frontline-Intel protocols here..."
               onchange="cheatSheetManager.updateFrontlineIntel()"
+              oninput="cheatSheetManager.updateVariablesPreview(this.value)"
             >${instructions}</textarea>
             
             <!-- Character Counter -->
@@ -920,6 +940,75 @@ class CheatSheetManager {
         </div>
       </div>
     `;
+    
+    // Initialize variables preview with existing content
+    setTimeout(() => {
+      this.updateVariablesPreview(instructions);
+    }, 100);
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // LIVE VARIABLES PREVIEW - Simple client-side extraction
+  // ═══════════════════════════════════════════════════════════════════
+  
+  updateVariablesPreview(text) {
+    const listContainer = document.getElementById('frontline-variables-list');
+    const countBadge = document.getElementById('frontline-variables-count');
+    
+    if (!listContainer || !countBadge) return;
+    
+    // Extract all {variable} patterns
+    const matches = text.match(/\{([a-zA-Z0-9_]+)\}/g) || [];
+    const uniqueVars = [...new Set(matches.map(m => m.slice(1, -1)))]; // Remove { }
+    
+    // Update count badge
+    countBadge.textContent = `${uniqueVars.length} variable${uniqueVars.length !== 1 ? 's' : ''}`;
+    
+    if (uniqueVars.length === 0) {
+      listContainer.innerHTML = `<span class="text-sm text-gray-500 italic">Type {variableName} in your script to add variables</span>`;
+      return;
+    }
+    
+    // Categorize variables for color coding
+    const getCategory = (v) => {
+      const lower = v.toLowerCase();
+      if (lower.includes('company') || lower.includes('business') || lower.includes('name')) return { color: 'blue', label: 'Company' };
+      if (lower.includes('phone') || lower.includes('email') || lower.includes('contact')) return { color: 'purple', label: 'Contact' };
+      if (lower.includes('hour') || lower.includes('time') || lower.includes('schedule')) return { color: 'orange', label: 'Schedule' };
+      if (lower.includes('greeting') || lower.includes('message')) return { color: 'pink', label: 'Message' };
+      if (lower.includes('url') || lower.includes('booking') || lower.includes('website')) return { color: 'cyan', label: 'URL' };
+      if (lower.includes('area') || lower.includes('service') || lower.includes('type')) return { color: 'green', label: 'Service' };
+      return { color: 'gray', label: 'General' };
+    };
+    
+    // Count occurrences
+    const countOccurrences = (varName) => {
+      const regex = new RegExp(`\\{${varName}\\}`, 'gi');
+      return (text.match(regex) || []).length;
+    };
+    
+    // Render variable chips
+    listContainer.innerHTML = uniqueVars.map(v => {
+      const cat = getCategory(v);
+      const count = countOccurrences(v);
+      const colors = {
+        blue: 'bg-blue-100 text-blue-800 border-blue-200',
+        purple: 'bg-purple-100 text-purple-800 border-purple-200',
+        orange: 'bg-orange-100 text-orange-800 border-orange-200',
+        pink: 'bg-pink-100 text-pink-800 border-pink-200',
+        cyan: 'bg-cyan-100 text-cyan-800 border-cyan-200',
+        green: 'bg-green-100 text-green-800 border-green-200',
+        gray: 'bg-gray-100 text-gray-800 border-gray-200'
+      };
+      return `
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${colors[cat.color]}">
+          <span class="font-mono">{${v}}</span>
+          <span class="ml-2 text-xs opacity-70">×${count}</span>
+        </span>
+      `;
+    }).join('');
+    
+    console.log(`[CHEAT SHEET] 🔤 Variables preview updated: ${uniqueVars.length} variables found`);
   }
   
   // ═══════════════════════════════════════════════════════════════════
