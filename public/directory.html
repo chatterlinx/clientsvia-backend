@@ -247,6 +247,13 @@
            
            ============================================================================ */
         
+        // GLOBAL: Logout function (must be in global scope for onclick)
+        function logout() {
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('adminUser');
+            window.location.href = '/login.html';
+        }
+        
         // Initialize directory with modern system
         document.addEventListener('DOMContentLoaded', function() {
             console.log('[Directory] Initializing modern directory system...');
@@ -670,16 +677,6 @@
                         "'": '&#039;'
                     })[match]);
                 }
-            }
-            
-            // Logout function
-            function logout() {
-                // Clear stored tokens
-                localStorage.removeItem('adminToken');
-                localStorage.removeItem('adminUser');
-                
-                // Redirect to login page
-                window.location.href = '/login.html';
             }
             
             // Initialize the directory manager
