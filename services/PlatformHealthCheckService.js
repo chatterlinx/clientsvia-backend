@@ -32,12 +32,8 @@
 const mongoose = require('mongoose');
 const logger = require('../utils/logger.js');
 
-// ✅ CRITICAL FIX: Import entire clients module to access redisClient via getter
-// OLD WAY (BROKEN): const { redisClient } = require('../clients'); 
-// - This captures redisClient at module load time (when it's null)
-// NEW WAY (CORRECT): Import clients module and use db.redisClient getter
-// - This accesses redisClient dynamically after Redis has initialized
-const db = require('../db');
+// ✅ Use centralized Redis factory - single source of truth
+const { getSharedRedisClient, isRedisConfigured } = require('./redisClientFactory');
 const smsClient = require('../clients/smsClient');
 const v2Company = require('../models/v2Company');
 const HealthCheckLog = require('../models/HealthCheckLog');
@@ -428,10 +424,13 @@ Suggested Actions:
         const startTime = Date.now();
         
         try {
-            // ✅ CRITICAL: Check if Redis client is ready (cold start protection)
-            const redisClient = db.redisClient;
-            if (!redisClient || !redisClient.isReady) {
-                throw new Error('Redis client not initialized (cold start)');
+            // ✅ Use centralized factory for Redis client
+            if (!isRedisConfigured()) {
+                throw new Error('REDIS_URL not configured');
+            }
+            const redisClient = getSharedRedisClient();
+            if (!redisClient.isOpen) {
+                await redisClient.connect();
             }
             
             // Test write

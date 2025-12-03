@@ -18,10 +18,21 @@ const FrontlineIntel = require('./FrontlineIntel');
 const CheatSheetEngine = require('./CheatSheetEngine');
 const BehaviorEngine = require('./BehaviorEngine');
 const EdgeCaseHandler = require('./EdgeCaseHandler');
-const redisClient = require('../db').redisClient;
+// Use centralized Redis factory - NO db.redisClient
+const { getSharedRedisClient, isRedisConfigured } = require('./redisClientFactory');
 const defaultCallFlowConfig = require('../config/defaultCallFlowConfig');
 
 class CallFlowExecutor {
+    
+    // Helper to get Redis client from factory
+    static getRedisClient() {
+        if (!isRedisConfigured()) return null;
+        try {
+            return getSharedRedisClient();
+        } catch {
+            return null;
+        }
+    }
     
     /**
      * ═════════════════════════════════════════════════════════════════════
@@ -372,8 +383,13 @@ class CallFlowExecutor {
                     logger.info(`[CALL FLOW EXECUTOR] 🧠 Applying CheatSheetEngine...`);
                     
                     // Load compiled policy from Redis
+                    const redisClient = CallFlowExecutor.getRedisClient();
+                    if (!redisClient) {
+                        logger.warn(`[CALL FLOW EXECUTOR] Redis not available for policy lookup`);
+                    }
+                    
                     const redisKey = `policy:${context.companyID}:active`;
-                    const activePolicyKey = await redisClient.get(redisKey);
+                    const activePolicyKey = redisClient && redisClient.isOpen ? await redisClient.get(redisKey) : null;
                     
                     if (activePolicyKey) {
                         const policyCached = await redisClient.get(activePolicyKey);

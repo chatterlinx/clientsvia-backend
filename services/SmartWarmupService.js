@@ -27,7 +27,8 @@ const CostLog = {
   create: async () => ({}),
   find: async () => []
 };
-const redisClient = require('../db').redisClient;
+// Use centralized Redis factory - NO db.redisClient
+const { getSharedRedisClient, isRedisConfigured } = require('./redisClientFactory');
 
 // Use centralized OpenAI client (handles missing API key gracefully)
 const openai = require('../config/openai');
@@ -297,10 +298,22 @@ class SmartWarmupService {
     // HELPER METHODS
     // ═══════════════════════════════════════════════════════════════════════════
 
+    // Get Redis client from factory (may be null if not configured)
+    getRedisClient() {
+        if (!isRedisConfigured()) return null;
+        try {
+            return getSharedRedisClient();
+        } catch {
+            return null;
+        }
+    }
+
     async getWarmupSettings(companyId) {
         try {
+            const redisClient = this.getRedisClient();
+            
             // Try Redis cache first (if available)
-            if (redisClient && typeof redisClient.get === 'function') {
+            if (redisClient && redisClient.isOpen) {
                 const cacheKey = `company:${companyId}:warmup_settings`;
                 const cached = await redisClient.get(cacheKey);
                 if (cached) {
@@ -326,7 +339,10 @@ class SmartWarmupService {
             };
 
             // Cache for 5 minutes
-            await redisClient.setex(cacheKey, 300, JSON.stringify(settings));
+            if (redisClient && redisClient.isOpen) {
+                const cacheKey = `company:${companyId}:warmup_settings`;
+                await redisClient.setEx(cacheKey, 300, JSON.stringify(settings));
+            }
 
             return settings;
 
@@ -348,11 +364,12 @@ class SmartWarmupService {
 
     async getTodayWarmupSpend(companyId) {
         try {
+            const redisClient = this.getRedisClient();
             const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
             const cacheKey = `company:${companyId}:warmup_spend:${today}`;
             
             // Check Redis cache (if available)
-            if (redisClient && typeof redisClient.get === 'function') {
+            if (redisClient && redisClient.isOpen) {
                 const cached = await redisClient.get(cacheKey);
                 if (cached) {
                     return parseFloat(cached);
@@ -383,8 +400,8 @@ class SmartWarmupService {
             const totalSpend = result.length > 0 ? result[0].totalCost : 0;
 
             // Cache for 5 minutes (if Redis available)
-            if (redisClient && typeof redisClient.setex === 'function') {
-                await redisClient.setex(cacheKey, 300, totalSpend.toString());
+            if (redisClient && redisClient.isOpen) {
+                await redisClient.setEx(cacheKey, 300, totalSpend.toString());
             }
 
             return totalSpend;
@@ -397,8 +414,10 @@ class SmartWarmupService {
 
     async incrementDailySpend(companyId, amount) {
         try {
+            const redisClient = this.getRedisClient();
+            
             // Skip if Redis not available
-            if (!redisClient || typeof redisClient.get !== 'function') {
+            if (!redisClient || !redisClient.isOpen) {
                 return 0;
             }
             
@@ -410,7 +429,7 @@ class SmartWarmupService {
             
             // Cache until end of day
             const secondsUntilMidnight = this.getSecondsUntilMidnight();
-            await redisClient.setex(cacheKey, secondsUntilMidnight, newTotal.toString());
+            await redisClient.setEx(cacheKey, secondsUntilMidnight, newTotal.toString());
 
             return newTotal;
 
@@ -472,8 +491,11 @@ class SmartWarmupService {
             });
 
             // Clear cache
-            const cacheKey = `company:${companyId}:warmup_settings`;
-            await redisClient.del(cacheKey);
+            const redisClient = this.getRedisClient();
+            if (redisClient && redisClient.isOpen) {
+                const cacheKey = `company:${companyId}:warmup_settings`;
+                await redisClient.del(cacheKey);
+            }
 
             // TODO: Send notification to company admin
             // await NotificationService.send({

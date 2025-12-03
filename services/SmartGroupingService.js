@@ -37,12 +37,14 @@
 // 3. Never remove the circuit breaker - it prevents catastrophic loops
 // ============================================================================
 
-const db = require('../db');
+// Use centralized Redis factory - single source of truth
+const { getSharedRedisClient, isRedisConfigured } = require('./redisClientFactory');
 const logger = require('../utils/logger');
 
 class SmartGroupingService {
     static getRedisClient() {
-        return db.redisClient;
+        if (!isRedisConfigured()) return null;
+        return getSharedRedisClient();
     }
     
     /**
