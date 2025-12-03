@@ -43,11 +43,19 @@ router.get('/whoami', (req, res) => {
  * REDIS SEVERITY CLASSIFICATION
  * Strict rules: No fake green. If Redis is borderline, call it WARNING.
  * 
- * HEALTHY:  <150ms, no evictions, no rejections, memory <80%
- * WARNING:  150-250ms OR memory 80-85% OR approaching limits
- * CRITICAL: >250ms OR rejections>0 OR evicting keys OR SET/GET/DEL failed
+ * Uses configurable thresholds from AdminSettings if available:
+ * - alertThresholds.responseTime (default: 200ms)
+ * - alertThresholds.memory (default: 85%)
+ * 
+ * HEALTHY:  < responseTimeThreshold, no evictions, no rejections, memory < memoryThreshold
+ * WARNING:  responseTimeThreshold - 350ms OR memory 80-memoryThreshold OR approaching limits
+ * CRITICAL: >350ms OR rejections>0 OR evicting keys OR SET/GET/DEL failed
  */
-function classifyRedis(redisStats) {
+function classifyRedis(redisStats, thresholds = {}) {
+    // Use configured thresholds or defaults
+    const responseTimeThreshold = thresholds.responseTime || 200;
+    const memoryThreshold = thresholds.memory || 85;
+    
     // Hard fail cases first
     if (!redisStats.setGetDelOk) {
         return {
@@ -65,7 +73,7 @@ function classifyRedis(redisStats) {
         };
     }
 
-    if (redisStats.evictedKeys > 0 && redisStats.usedMemoryPercent >= 85) {
+    if (redisStats.evictedKeys > 0 && redisStats.usedMemoryPercent >= memoryThreshold) {
         return {
             level: 'CRITICAL',
             headline: 'Redis evicting keys due to memory pressure',
@@ -73,8 +81,8 @@ function classifyRedis(redisStats) {
         };
     }
 
-    // Critical latency threshold
-    if (redisStats.roundTripMs >= 250) {
+    // Critical latency threshold (fixed at 350ms - severe impact)
+    if (redisStats.roundTripMs >= 350) {
         return {
             level: 'CRITICAL',
             headline: 'Redis latency critical',
@@ -82,20 +90,20 @@ function classifyRedis(redisStats) {
         };
     }
 
-    // Warning band - this is where 180-198ms will land
-    if (redisStats.roundTripMs >= 150 && redisStats.roundTripMs < 250) {
+    // Warning band - between configured threshold and critical
+    if (redisStats.roundTripMs >= responseTimeThreshold && redisStats.roundTripMs < 350) {
         return {
             level: 'WARNING',
             headline: 'Redis latency high',
-            detail: `${redisStats.roundTripMs.toFixed(0)}ms round-trip. Region mismatch or saturation.`
+            detail: `${redisStats.roundTripMs.toFixed(0)}ms round-trip (threshold: ${responseTimeThreshold}ms).`
         };
     }
 
-    if (redisStats.usedMemoryPercent >= 80 && redisStats.usedMemoryPercent < 85) {
+    if (redisStats.usedMemoryPercent >= 80 && redisStats.usedMemoryPercent < memoryThreshold) {
         return {
             level: 'WARNING',
             headline: 'Redis memory high',
-            detail: `Memory at ${redisStats.usedMemoryPercent}%. Approaching eviction range.`
+            detail: `Memory at ${redisStats.usedMemoryPercent}%. Approaching threshold (${memoryThreshold}%).`
         };
     }
 
@@ -103,7 +111,7 @@ function classifyRedis(redisStats) {
     return {
         level: 'HEALTHY',
         headline: 'All tests passed',
-        detail: 'No evictions, no rejects, latency acceptable (<150ms).'
+        detail: `No evictions, no rejects, latency OK (<${responseTimeThreshold}ms).`
     };
 }
 
@@ -368,13 +376,21 @@ router.post('/selfcheck', async (req, res) => {
                 
                 // ────────────────────────────────────────────────────────────────────
                 // CLASSIFY REDIS SEVERITY (HONEST, NO-BS LOGIC)
+                // Uses configured thresholds from AdminSettings
                 // ────────────────────────────────────────────────────────────────────
+                const AdminSettings = require('../../models/AdminSettings');
+                const settings = await AdminSettings.findOne({});
+                const alertThresholds = settings?.notificationCenter?.alertThresholds || {};
+                
                 const redisClassification = classifyRedis({
                     setGetDelOk: true,
                     roundTripMs: parseFloat(roundTripMs),
                     evictedKeys,
                     rejectedConnections,
                     usedMemoryPercent: parseFloat(usedMemoryPercent)
+                }, {
+                    responseTime: alertThresholds.responseTime || 200,
+                    memory: alertThresholds.memory || 85
                 });
                 
                 incidentPacket.redis.healthLevel = redisClassification.level;       // 'HEALTHY' | 'WARNING' | 'CRITICAL'
