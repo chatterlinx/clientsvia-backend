@@ -785,8 +785,41 @@ class CheatSheetManager {
     
     const charCount = instructions.length;
     
+    // Check if Frontline-Intel is enabled
+    const frontlineEnabled = this.isFrontlineIntelEnabled();
+    
     container.innerHTML = `
       <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+        
+        <!-- Enable Toggle Banner -->
+        <div class="px-6 py-3 ${frontlineEnabled ? 'bg-green-50 border-b border-green-200' : 'bg-yellow-50 border-b border-yellow-200'}">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <span class="text-xl">${frontlineEnabled ? '✅' : '⚠️'}</span>
+              <div>
+                <span class="font-medium ${frontlineEnabled ? 'text-green-800' : 'text-yellow-800'}">
+                  Frontline-Intel is ${frontlineEnabled ? 'ENABLED' : 'DISABLED'}
+                </span>
+                <p class="text-xs ${frontlineEnabled ? 'text-green-600' : 'text-yellow-600'}">
+                  ${frontlineEnabled 
+                    ? 'Your AI receptionist is processing every call before routing' 
+                    : 'Calls go directly to 3-Tier matching without intelligent preprocessing'}
+                </p>
+              </div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input 
+                type="checkbox" 
+                id="frontline-intel-toggle"
+                class="sr-only peer" 
+                ${frontlineEnabled ? 'checked' : ''}
+                onchange="cheatSheetManager.toggleFrontlineIntel(this.checked)"
+              >
+              <div class="w-14 h-7 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-green-500"></div>
+              <span class="ms-3 text-sm font-medium text-gray-700">${frontlineEnabled ? 'ON' : 'OFF'}</span>
+            </label>
+          </div>
+        </div>
         
         <!-- Header -->
         <div class="bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-gray-200 px-6 py-4">
@@ -958,6 +991,114 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     
     console.log('[CHEAT SHEET] ✅ Reset complete (using default template)');
     this.showNotification('✅ Frontline-Intel reset to default template!', 'success');
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // FRONTLINE-INTEL ENABLE/DISABLE TOGGLE
+  // ═══════════════════════════════════════════════════════════════════
+  
+  /**
+   * Check if Frontline-Intel is enabled for this company
+   */
+  isFrontlineIntelEnabled() {
+    // Check company's callFlowConfig for frontlineIntel step
+    const callFlowConfig = this.companyData?.aiAgentSettings?.callFlowConfig || [];
+    const frontlineStep = callFlowConfig.find(s => s.id === 'frontlineIntel');
+    
+    // If no config exists, check if we have a script (default to enabled if script exists)
+    if (!frontlineStep) {
+      // No explicit config - enabled if there's a Frontline-Intel script
+      const hasScript = this.cheatSheet?.frontlineIntel && 
+        (typeof this.cheatSheet.frontlineIntel === 'string' ? 
+          this.cheatSheet.frontlineIntel.trim().length > 0 : 
+          this.cheatSheet.frontlineIntel?.instructions?.trim().length > 0);
+      return hasScript;
+    }
+    
+    return frontlineStep.enabled === true;
+  }
+  
+  /**
+   * Toggle Frontline-Intel on/off
+   */
+  async toggleFrontlineIntel(enabled) {
+    console.log('[CHEAT SHEET] Toggling Frontline-Intel:', enabled);
+    
+    try {
+      const authToken = localStorage.getItem('adminToken');
+      if (!authToken) {
+        this.showNotification('❌ Not authenticated', 'error');
+        return;
+      }
+      
+      // Get current callFlowConfig or create default
+      let callFlowConfig = this.companyData?.aiAgentSettings?.callFlowConfig || [];
+      
+      // If empty, initialize with frontlineIntel step
+      if (callFlowConfig.length === 0) {
+        callFlowConfig = [
+          { id: 'spamFilter', enabled: true, locked: true, params: {} },
+          { id: 'edgeCases', enabled: true, locked: false, params: {} },
+          { id: 'transferRules', enabled: true, locked: false, params: {} },
+          { id: 'frontlineIntel', enabled: enabled, locked: false, params: {} },
+          { id: 'scenarioMatching', enabled: true, locked: false, params: {} },
+          { id: 'guardrails', enabled: true, locked: false, params: {} },
+          { id: 'behaviorPolish', enabled: true, locked: false, params: {} },
+          { id: 'contextInjection', enabled: true, locked: false, params: {} }
+        ];
+      } else {
+        // Find and update frontlineIntel step
+        const frontlineIndex = callFlowConfig.findIndex(s => s.id === 'frontlineIntel');
+        if (frontlineIndex >= 0) {
+          callFlowConfig[frontlineIndex].enabled = enabled;
+        } else {
+          // Add frontlineIntel step if missing
+          callFlowConfig.push({ id: 'frontlineIntel', enabled: enabled, locked: false, params: {} });
+        }
+      }
+      
+      // Save to backend
+      const response = await fetch(`/api/company/${this.companyId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          'aiAgentSettings.callFlowConfig': callFlowConfig
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to save: ${response.status}`);
+      }
+      
+      // Update local state
+      if (!this.companyData.aiAgentSettings) {
+        this.companyData.aiAgentSettings = {};
+      }
+      this.companyData.aiAgentSettings.callFlowConfig = callFlowConfig;
+      
+      // Re-render the Frontline-Intel tab to show updated toggle
+      this.renderCompanyInstructions();
+      
+      this.showNotification(
+        enabled 
+          ? '✅ Frontline-Intel ENABLED - Your AI receptionist is now active!' 
+          : '⚠️ Frontline-Intel DISABLED - Calls go straight to 3-Tier matching',
+        enabled ? 'success' : 'warning'
+      );
+      
+      console.log('[CHEAT SHEET] ✅ Frontline-Intel toggle saved:', enabled);
+      
+    } catch (error) {
+      console.error('[CHEAT SHEET] ❌ Failed to toggle Frontline-Intel:', error);
+      this.showNotification('❌ Failed to save toggle: ' + error.message, 'error');
+      
+      // Revert toggle UI
+      const toggle = document.getElementById('frontline-intel-toggle');
+      if (toggle) toggle.checked = !enabled;
+    }
   }
   
   // ═══════════════════════════════════════════════════════════════════

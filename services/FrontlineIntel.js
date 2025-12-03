@@ -59,10 +59,16 @@ class FrontlineIntel {
      */
     static async run(userInput, company, callerPhone, options = {}) {
         const startTime = Date.now();
-        const config = company?.aiAgentSettings?.callFlowConfig?.find(s => s.id === 'frontlineIntel');
         
-        if (!config || !config.enabled) {
-            logger.info('🎯 [FRONTLINE-INTEL] Disabled, using raw input');
+        // Get config from company's callFlowConfig, or use default (enabled: true)
+        const defaultCallFlowConfig = require('../config/defaultCallFlowConfig');
+        const companyCallFlowConfig = company?.aiAgentSettings?.callFlowConfig;
+        const callFlowConfig = companyCallFlowConfig?.length > 0 ? companyCallFlowConfig : defaultCallFlowConfig;
+        const config = callFlowConfig.find(s => s.id === 'frontlineIntel');
+        
+        // Check if Frontline-Intel is explicitly disabled
+        if (config && config.enabled === false) {
+            logger.info('🎯 [FRONTLINE-INTEL] Explicitly disabled in callFlowConfig');
             return {
                 skipped: true,
                 cleanedInput: userInput,
@@ -75,6 +81,31 @@ class FrontlineIntel {
                 cost: 0
             };
         }
+        
+        // Check if there's a Frontline-Intel script to use
+        const frontlineScript = company?.cheatSheets?.[0]?.frontlineIntel || 
+                               company?.frontlineIntel ||
+                               '';
+        const hasScript = typeof frontlineScript === 'string' ? 
+                         frontlineScript.trim().length > 100 : 
+                         frontlineScript?.instructions?.trim().length > 100;
+        
+        if (!hasScript) {
+            logger.info('🎯 [FRONTLINE-INTEL] No script configured (< 100 chars), using raw input');
+            return {
+                skipped: true,
+                cleanedInput: userInput,
+                customer: null,
+                callValidation: { correctCompany: true, correctService: true },
+                shouldShortCircuit: false,
+                context: null,
+                confidence: 1.0,
+                timeMs: 0,
+                cost: 0
+            };
+        }
+        
+        logger.info('🎯 [FRONTLINE-INTEL] ENABLED - Processing call with AI receptionist');
         
         try {
             logger.info('🧠 [FRONTLINE-INTEL] Processing call...');
