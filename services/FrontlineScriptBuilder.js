@@ -106,25 +106,56 @@ class FrontlineScriptBuilder {
             trade: company.trade
         });
         
-        // Path 1: Try clonedFrom template
+        // Path 1: Try clonedFrom template or any template reference
         const templateId = company.configuration?.clonedFrom || 
                           company.aiAgentSettings?.templateId ||
                           company.templateId;
         
-        if (templateId) {
-            const template = await GlobalInstantResponseTemplate.findById(templateId).lean();
+        // Also check aiAgentSettings.templates array for templateId references
+        const templatesArray = company.aiAgentSettings?.fillerWords?.templatesScanned || 
+                              company.configuration?.fillerScan?.templatesScanned || [];
+        const firstTemplateId = templatesArray[0]?.templateId;
+        
+        const effectiveTemplateId = templateId || firstTemplateId;
+        
+        if (effectiveTemplateId) {
+            const template = await GlobalInstantResponseTemplate.findById(effectiveTemplateId).lean();
             if (template) {
                 brain2 = this.extractBrain2Data(template);
                 logger.info('[SCRIPT BUILDER] Path 1 SUCCESS: Found Brain-2 data from template', { 
-                    templateId, 
+                    templateId: effectiveTemplateId, 
+                    templateName: template.name,
                     categories: brain2.categories.length,
                     scenarios: brain2.scenarios.length
                 });
             } else {
-                logger.warn('[SCRIPT BUILDER] Path 1 FAILED: Template not found', { templateId });
+                logger.warn('[SCRIPT BUILDER] Path 1 FAILED: Template not found', { templateId: effectiveTemplateId });
             }
         } else {
-            logger.debug('[SCRIPT BUILDER] Path 1 SKIPPED: No templateId found');
+            logger.debug('[SCRIPT BUILDER] Path 1 SKIPPED: No templateId found in any location');
+        }
+        
+        // Path 1b: Try to find template by company name match
+        if (brain2.categories.length === 0) {
+            const companyName = company.companyName || company.businessName || company.name || '';
+            if (companyName) {
+                const matchingTemplate = await GlobalInstantResponseTemplate.findOne({
+                    $or: [
+                        { 'assignedCompanies': companyId },
+                        { 'companies': companyId },
+                        { name: { $regex: companyName.split(' ')[0], $options: 'i' } }
+                    ]
+                }).lean();
+                
+                if (matchingTemplate) {
+                    brain2 = this.extractBrain2Data(matchingTemplate);
+                    logger.info('[SCRIPT BUILDER] Path 1b SUCCESS: Found template by company match', { 
+                        templateName: matchingTemplate.name,
+                        categories: brain2.categories.length,
+                        scenarios: brain2.scenarios.length
+                    });
+                }
+            }
         }
         
         // Path 2: If no template, try embedded aiAgentSettings.categories
@@ -228,28 +259,43 @@ class FrontlineScriptBuilder {
             }
         }
         
-        // Path 6: FINAL FALLBACK - Try ANY active GlobalInstantResponseTemplate for HVAC trade
+        // Path 6: FINAL FALLBACK - Try ANY active GlobalInstantResponseTemplate
         if (brain2.categories.length === 0) {
             logger.info('[SCRIPT BUILDER] Path 6: Trying ANY GlobalInstantResponseTemplate...');
             
-            const anyTemplate = await GlobalInstantResponseTemplate.findOne({
+            // First try HVAC-specific
+            let anyTemplate = await GlobalInstantResponseTemplate.findOne({
                 $or: [
                     { trade: { $regex: 'hvac|heating|cooling|air', $options: 'i' } },
                     { tradeName: { $regex: 'hvac|heating|cooling|air', $options: 'i' } },
-                    { name: { $regex: 'hvac|heating|cooling|air', $options: 'i' } },
-                    { isActive: true }
-                ]
+                    { name: { $regex: 'hvac|heating|cooling|air', $options: 'i' } }
+                ],
+                isActive: { $ne: false }
             }).lean();
+            
+            // If not found, try ANY template
+            if (!anyTemplate) {
+                anyTemplate = await GlobalInstantResponseTemplate.findOne({
+                    isActive: { $ne: false },
+                    'categories.0': { $exists: true } // Has at least one category
+                }).lean();
+            }
             
             if (anyTemplate) {
                 brain2 = this.extractBrain2Data(anyTemplate);
                 logger.info('[SCRIPT BUILDER] Path 6 SUCCESS: Found fallback template', {
+                    templateId: anyTemplate._id?.toString(),
                     templateName: anyTemplate.name,
                     categories: brain2.categories.length,
                     scenarios: brain2.scenarios.length
                 });
             } else {
-                logger.warn('[SCRIPT BUILDER] Path 6 FAILED: No templates found at all');
+                // Last resort: List what templates exist
+                const allTemplates = await GlobalInstantResponseTemplate.find({}).select('name trade isActive').lean();
+                logger.warn('[SCRIPT BUILDER] Path 6 FAILED: No templates found. Available:', {
+                    count: allTemplates.length,
+                    templates: allTemplates.map(t => ({ name: t.name, trade: t.trade, active: t.isActive }))
+                });
             }
         }
         
@@ -386,22 +432,46 @@ class FrontlineScriptBuilder {
                 categories.push({
                     id: cat._id?.toString() || cat.id,
                     name: cat.name,
-                    description: cat.description || ''
+                    description: cat.description || '',
+                    keywords: cat.keywords || []
                 });
                 
                 if (cat.scenarios && Array.isArray(cat.scenarios)) {
                     for (const scn of cat.scenarios) {
+                        // Extract ALL data from scenario, not just basics
                         scenarios.push({
                             id: scn._id?.toString() || scn.id,
                             categoryId: cat._id?.toString() || cat.id,
-                            title: scn.name || scn.title,
-                            goal: scn.objective || scn.goal || '',
-                            keyPhrases: scn.triggerPhrases || scn.keyPhrases || []
+                            categoryName: cat.name,
+                            title: scn.name || scn.title || scn.scenarioName,
+                            goal: scn.objective || scn.goal || scn.description || '',
+                            keyPhrases: scn.triggerPhrases || scn.keyPhrases || scn.triggers || scn.keywords || [],
+                            // Include ALL responses (the 7 responses the user mentioned)
+                            quickReplies: scn.quickReplies || [],
+                            fullReplies: scn.fullReplies || [],
+                            responses: scn.responses || scn.replies || [],
+                            // Include sub-scenarios if any
+                            subScenarios: scn.subScenarios || scn.children || [],
+                            // Include routing info
+                            routing: scn.routing || scn.action || null,
+                            priority: scn.priority || 5,
+                            status: scn.status || 'active'
                         });
                     }
                 }
             }
         }
+        
+        logger.debug('[SCRIPT BUILDER] Extracted Brain-2 data', {
+            categoriesCount: categories.length,
+            scenariosCount: scenarios.length,
+            sampleScenario: scenarios[0] ? {
+                title: scenarios[0].title,
+                quickRepliesCount: scenarios[0].quickReplies?.length || 0,
+                fullRepliesCount: scenarios[0].fullReplies?.length || 0,
+                responsesCount: scenarios[0].responses?.length || 0
+            } : null
+        });
         
         return { categories, scenarios };
     }
