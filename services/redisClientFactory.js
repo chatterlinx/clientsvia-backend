@@ -48,28 +48,61 @@ let sharedClient = null;
 let sharedClientConnected = false;
 
 /**
- * Get the shared Redis client (singleton)
- * Creates one if it doesn't exist, returns existing if it does
- * @returns {Object|null} - The shared node-redis client or null
+ * Get the shared Redis client (singleton) - ASYNC
+ * Creates one if it doesn't exist, connects it, returns existing if already connected
+ * @returns {Promise<Object|null>} - The connected shared node-redis client or null
  */
-function getSharedRedisClient() {
+async function getSharedRedisClient() {
   if (!REDIS_URL) {
     return null;
   }
   
+  // If we have a connected client, return it
+  if (sharedClient && sharedClientConnected) {
+    return sharedClient;
+  }
+  
+  // If client exists but disconnected, try to reconnect
+  if (sharedClient && !sharedClientConnected) {
+    try {
+      await sharedClient.connect();
+      return sharedClient;
+    } catch (err) {
+      console.warn('[REDIS FACTORY] Reconnect failed, creating new client:', err.message);
+      sharedClient = null;
+      sharedClientConnected = false;
+    }
+  }
+  
+  // Create new client
   if (!sharedClient) {
     sharedClient = createNodeRedisClient();
     
     if (sharedClient) {
       sharedClient.on('ready', () => {
         sharedClientConnected = true;
-        console.log('[REDIS FACTORY] ✅ Shared client connected');
+        console.log('[REDIS FACTORY] ✅ Shared client ready');
       });
       
       sharedClient.on('end', () => {
         sharedClientConnected = false;
         console.log('[REDIS FACTORY] Shared client disconnected');
       });
+      
+      sharedClient.on('error', (err) => {
+        console.error('[REDIS FACTORY] Shared client error:', err.message);
+      });
+      
+      // CRITICAL: Connect the client!
+      try {
+        await sharedClient.connect();
+        console.log('[REDIS FACTORY] ✅ Shared client connected');
+      } catch (err) {
+        console.error('[REDIS FACTORY] ❌ Shared client connect failed:', err.message);
+        sharedClient = null;
+        sharedClientConnected = false;
+        return null;
+      }
     }
   }
   

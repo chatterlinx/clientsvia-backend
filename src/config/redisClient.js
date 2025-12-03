@@ -12,12 +12,14 @@
 const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
 
 // Re-export for backwards compatibility
+// NOTE: getRedisClient is now async!
 module.exports = {
-  get redisClient() {
+  async getRedisClient() {
     if (!isRedisConfigured()) {
       return null;
     }
-    return getSharedRedisClient();
-  }
+    return await getSharedRedisClient();
+  },
+  isRedisConfigured
 };
 

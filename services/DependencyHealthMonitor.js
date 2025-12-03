@@ -218,13 +218,13 @@ class DependencyHealthMonitor {
         }
 
         try {
-            // CHECKPOINT 2: Get shared client from factory
-            const redisClient = getSharedRedisClient();
+            // CHECKPOINT 2: Get shared client from factory (now async - handles connection)
+            const redisClient = await getSharedRedisClient();
             
             checkpoints.push({
                 name: 'Redis client from factory',
                 status: redisClient ? 'passed' : 'failed',
-                message: redisClient ? 'Client created' : 'Factory returned null'
+                message: redisClient ? 'Client connected' : 'Factory returned null (connection failed)'
             });
             
             if (!redisClient) {
@@ -232,7 +232,7 @@ class DependencyHealthMonitor {
                     name: 'Redis',
                     status: 'DOWN',
                     critical: false,
-                    message: 'Redis client creation failed',
+                    message: 'Redis client connection failed',
                     responseTime: 0,
                     impact: 'Sessions and caching unavailable',
                     checkpoints

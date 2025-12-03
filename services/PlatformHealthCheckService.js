@@ -424,13 +424,13 @@ Suggested Actions:
         const startTime = Date.now();
         
         try {
-            // ✅ Use centralized factory for Redis client
+            // ✅ Use centralized factory for Redis client (async)
             if (!isRedisConfigured()) {
                 throw new Error('REDIS_URL not configured');
             }
-            const redisClient = getSharedRedisClient();
-            if (!redisClient.isOpen) {
-                await redisClient.connect();
+            const redisClient = await getSharedRedisClient();
+            if (!redisClient) {
+                throw new Error('Could not connect to Redis');
             }
             
             // Test write

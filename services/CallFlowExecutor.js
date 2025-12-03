@@ -24,11 +24,11 @@ const defaultCallFlowConfig = require('../config/defaultCallFlowConfig');
 
 class CallFlowExecutor {
     
-    // Helper to get Redis client from factory
-    static getRedisClient() {
+    // Helper to get Redis client from factory (async)
+    static async getRedisClient() {
         if (!isRedisConfigured()) return null;
         try {
-            return getSharedRedisClient();
+            return await getSharedRedisClient();
         } catch {
             return null;
         }
@@ -382,14 +382,14 @@ class CallFlowExecutor {
                 try {
                     logger.info(`[CALL FLOW EXECUTOR] 🧠 Applying CheatSheetEngine...`);
                     
-                    // Load compiled policy from Redis
-                    const redisClient = CallFlowExecutor.getRedisClient();
+                    // Load compiled policy from Redis (getRedisClient is now async)
+                    const redisClient = await CallFlowExecutor.getRedisClient();
                     if (!redisClient) {
                         logger.warn(`[CALL FLOW EXECUTOR] Redis not available for policy lookup`);
                     }
                     
                     const redisKey = `policy:${context.companyID}:active`;
-                    const activePolicyKey = redisClient && redisClient.isOpen ? await redisClient.get(redisKey) : null;
+                    const activePolicyKey = redisClient ? await redisClient.get(redisKey) : null;
                     
                     if (activePolicyKey) {
                         const policyCached = await redisClient.get(activePolicyKey);

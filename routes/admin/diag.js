@@ -175,12 +175,11 @@ router.post('/selfcheck', async (req, res) => {
                     notes: ['REDIS_URL environment variable is missing']
                 };
             } else {
-                // Get shared client from factory
-                const redisClient = getSharedRedisClient();
+                // Get shared client from factory (now async - handles connection internally)
+                const redisClient = await getSharedRedisClient();
                 
-                // Ensure connected
-                if (!redisClient.isOpen) {
-                    await redisClient.connect();
+                if (!redisClient) {
+                    throw new Error('Could not connect to Redis');
                 }
                 // Real round-trip test
                 const testKey = `healthcheck:${Date.now()}`;

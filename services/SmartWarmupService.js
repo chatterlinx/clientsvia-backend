@@ -298,11 +298,11 @@ class SmartWarmupService {
     // HELPER METHODS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    // Get Redis client from factory (may be null if not configured)
-    getRedisClient() {
+    // Get Redis client from factory (may be null if not configured) - async
+    async getRedisClient() {
         if (!isRedisConfigured()) return null;
         try {
-            return getSharedRedisClient();
+            return await getSharedRedisClient();
         } catch {
             return null;
         }
@@ -310,10 +310,10 @@ class SmartWarmupService {
 
     async getWarmupSettings(companyId) {
         try {
-            const redisClient = this.getRedisClient();
+            const redisClient = await this.getRedisClient();
             
             // Try Redis cache first (if available)
-            if (redisClient && redisClient.isOpen) {
+            if (redisClient) {
                 const cacheKey = `company:${companyId}:warmup_settings`;
                 const cached = await redisClient.get(cacheKey);
                 if (cached) {
@@ -364,12 +364,12 @@ class SmartWarmupService {
 
     async getTodayWarmupSpend(companyId) {
         try {
-            const redisClient = this.getRedisClient();
+            const redisClient = await this.getRedisClient();
             const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
             const cacheKey = `company:${companyId}:warmup_spend:${today}`;
             
             // Check Redis cache (if available)
-            if (redisClient && redisClient.isOpen) {
+            if (redisClient) {
                 const cached = await redisClient.get(cacheKey);
                 if (cached) {
                     return parseFloat(cached);
@@ -414,10 +414,10 @@ class SmartWarmupService {
 
     async incrementDailySpend(companyId, amount) {
         try {
-            const redisClient = this.getRedisClient();
+            const redisClient = await this.getRedisClient();
             
             // Skip if Redis not available
-            if (!redisClient || !redisClient.isOpen) {
+            if (!redisClient) {
                 return 0;
             }
             
@@ -491,8 +491,8 @@ class SmartWarmupService {
             });
 
             // Clear cache
-            const redisClient = this.getRedisClient();
-            if (redisClient && redisClient.isOpen) {
+            const redisClient = await this.getRedisClient();
+            if (redisClient) {
                 const cacheKey = `company:${companyId}:warmup_settings`;
                 await redisClient.del(cacheKey);
             }

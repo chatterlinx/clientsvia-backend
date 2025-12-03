@@ -42,9 +42,9 @@ const { getSharedRedisClient, isRedisConfigured } = require('./redisClientFactor
 const logger = require('../utils/logger');
 
 class SmartGroupingService {
-    static getRedisClient() {
+    static async getRedisClient() {
         if (!isRedisConfigured()) return null;
-        return getSharedRedisClient();
+        return await getSharedRedisClient();
     }
     
     /**
