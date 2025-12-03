@@ -157,17 +157,23 @@ router.post('/selfcheck', async (req, res) => {
         // CHECK 1: REDIS ROUND-TRIP TEST (SET → GET → DEL with timing)
         // ========================================================================
         try {
-            const db = require('../../db');
-            const redisClient = db.redisClient;
+            const { getSharedRedisClient, isRedisConfigured, REDIS_URL } = require('../../services/redisClientFactory');
             
-            if (!redisClient || !redisClient.isReady) {
-                criticalIssues.push('Redis client not initialized or not ready');
+            if (!isRedisConfigured()) {
+                criticalIssues.push('REDIS_URL not configured');
                 incidentPacket.redis = {
                     setGetDelOk: false,
-                    error: 'Redis client not ready',
-                    notes: ['REDIS_URL environment variable may be missing or invalid']
+                    error: 'REDIS_URL not set',
+                    notes: ['REDIS_URL environment variable is missing']
                 };
             } else {
+                // Get shared client from factory
+                const redisClient = getSharedRedisClient();
+                
+                // Ensure connected
+                if (!redisClient.isOpen) {
+                    await redisClient.connect();
+                }
                 // Real round-trip test
                 const testKey = `healthcheck:${Date.now()}`;
                 const testValue = 'triage-test';
