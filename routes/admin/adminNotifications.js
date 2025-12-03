@@ -870,8 +870,10 @@ router.get('/settings', authenticateJWT, requireRole('admin'), async (req, res) 
 // ============================================================================
 // UPDATE NOTIFICATION SETTINGS (Twilio + Admin Contacts)
 // ============================================================================
+// FIX 2025-12-03: Path was '/admin/notifications/settings' which doubled with mount point
+// Router mounted at /api/admin/notifications, so route should be '/settings'
 
-router.put('/admin/notifications/settings', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
+router.put('/settings', authenticateJWT, requireRole('admin'), captureAuditInfo, requireIdempotency, configWriteRateLimit, async (req, res) => {
     try {
         const AdminSettings = require('../../models/AdminSettings');
         const { twilio, twilioTest, adminContacts, escalation } = req.body;
