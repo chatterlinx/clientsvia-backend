@@ -1943,12 +1943,17 @@ router.post('/:companyId/configuration/variables/sync-from-script', async (req, 
             }
         }
         
-        // Save
-        company.aiAgentSettings.variableDefinitions = existingDefs;
-        company.aiAgentSettings.variables = existingVars;
-        company.markModified('aiAgentSettings.variableDefinitions');
-        company.markModified('aiAgentSettings.variables');
-        await company.save();
+        // Save using targeted update (avoids validating entire document)
+        await Company.findByIdAndUpdate(
+            companyId,
+            {
+                $set: {
+                    'aiAgentSettings.variableDefinitions': existingDefs,
+                    'aiAgentSettings.variables': existingVars
+                }
+            },
+            { runValidators: false } // Skip validation on other fields
+        );
         
         logger.info(`✅ [VARIABLE SYNC] Complete: ${addedCount} added, ${updatedCount} updated, ${existingDefs.length} total`);
         
