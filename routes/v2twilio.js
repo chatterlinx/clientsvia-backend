@@ -65,8 +65,18 @@ try {
 const fs = require('fs');
 const path = require('path');
 const { synthesizeSpeech } = require('../services/v2elevenLabsService');
-const { redisClient } = require('../clients');
+const { getSharedRedisClient, isRedisConfigured } = require('../services/redisClientFactory');
 const { normalizePhoneNumber, extractDigits, numbersMatch, } = require('../utils/phone');
+
+// Helper: Get Redis client safely (returns null if unavailable)
+async function getRedis() {
+  if (!isRedisConfigured()) return null;
+  try {
+    return await getSharedRedisClient();
+  } catch {
+    return null;
+  }
+}
 const { stripMarkdown, cleanTextForTTS } = require('../utils/textUtils');
 // Legacy personality system removed - using modern AI Agent Logic responseCategories
 
@@ -521,7 +531,8 @@ async function getCompanyByPhoneNumber(phoneNumber) {
     
     // 🏢 CHECK 3: Regular company lookup (production customer calls)
     const cacheStartTime = Date.now();
-    const cachedCompany = await redisClient.get(cacheKey);
+    const redisClient = await getRedis();
+    const cachedCompany = redisClient ? await redisClient.get(cacheKey) : null;
     if (cachedCompany) {
       logger.debug(`[CACHE HIT] [FAST] Company found in cache for ${phoneNumber} in ${Date.now() - cacheStartTime}ms`);
       company = JSON.parse(cachedCompany);
@@ -566,8 +577,10 @@ async function getCompanyByPhoneNumber(phoneNumber) {
       if (company) {
         const dbEndTime = Date.now();
         logger.debug(`[DB SUCCESS] [OK] Company found in database in ${dbEndTime - dbStartTime}ms`);
-        await redisClient.setEx(cacheKey, 3600, JSON.stringify(company)); // Cache for 1 hour
-        logger.debug(`[CACHE SAVE] 💾 Company cached for phone: ${phoneNumber}`);
+        if (redisClient) {
+          await redisClient.setEx(cacheKey, 3600, JSON.stringify(company)); // Cache for 1 hour
+          logger.debug(`[CACHE SAVE] 💾 Company cached for phone: ${phoneNumber}`);
+        }
       } else {
         const dbEndTime = Date.now();
         logger.debug(`[DB MISS] [ERROR] No company found in database for ${phoneNumber} (${dbEndTime - dbStartTime}ms)`);
@@ -1224,6 +1237,9 @@ router.post('/handle-speech', async (req, res) => {
   logger.debug(`[SPEECH START] [SPEECH] Speech processing started at: ${new Date().toISOString()}`);
   
   try {
+    // Get Redis client once at start (may be null if Redis unavailable)
+    const redisClient = await getRedis();
+    
     logger.debug(`[TWILIO TIMING] Speech webhook received at: ${new Date().toISOString()}`);
     logger.debug(`[TWILIO TIMING] Twilio sent SpeechResult: "${req.body.SpeechResult}" with confidence: ${req.body.Confidence}`);
     logger.debug('[POST /api/twilio/handle-speech] Incoming speech:', req.body);
@@ -1290,8 +1306,8 @@ router.post('/handle-speech', async (req, res) => {
     
     if (confidence < threshold) {
       logger.info(`[CONFIDENCE REJECT] Low confidence (${confidence} < ${threshold}) - asking user to repeat`);
-      const repeats = await redisClient.incr(repeatKey);
-      if (repeats === 1) {
+      const repeats = redisClient ? await redisClient.incr(repeatKey) : 1;
+      if (repeats === 1 && redisClient) {
         await redisClient.expire(repeatKey, 600);
       }
       if (repeats > (company.aiSettings?.maxRepeats ?? 3)) {
@@ -1301,7 +1317,7 @@ router.post('/handle-speech', async (req, res) => {
                    "I want to make sure you get the help you need. Please hold while I transfer you to our team.";
         const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
         twiml.hangup();
-        await redisClient.del(repeatKey);
+        if (redisClient) await redisClient.del(repeatKey);
         res.type('text/xml');
         res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
         return;
@@ -1351,7 +1367,7 @@ router.post('/handle-speech', async (req, res) => {
           
           // Store audio in Redis for fast serving
           const audioKey = `audio:retry:${callSid}`;
-          await redisClient.setEx(audioKey, 300, buffer.toString('base64'));
+          if (redisClient) await redisClient.setEx(audioKey, 300, buffer.toString('base64'));
           
           const audioUrl = `https://${req.get('host')}/api/twilio/audio/retry/${callSid}`;
           gather.play(audioUrl);
@@ -1366,7 +1382,7 @@ router.post('/handle-speech', async (req, res) => {
       res.type('text/xml');
       return res.send(twiml.toString());
     }
-    await redisClient.del(repeatKey);
+    if (redisClient) await redisClient.del(repeatKey);
 
     // Process QA matching using new Company Q&A system
     const companyId = company._id.toString();
@@ -1392,7 +1408,7 @@ router.post('/handle-speech', async (req, res) => {
       // Check conversation history for repetition detection
       let conversationHistory = [];
       const historyKey = `conversation-history:${callSid}`;
-      const storedHistory = await redisClient.get(historyKey);
+      const storedHistory = redisClient ? await redisClient.get(historyKey) : null;
       if (storedHistory) {
         conversationHistory = JSON.parse(storedHistory);
       }
@@ -1436,7 +1452,7 @@ router.post('/handle-speech', async (req, res) => {
         // Add to conversation history
         conversationHistory.push({ role: 'user', text: speechText });
         conversationHistory.push({ role: 'assistant', text: clarification });
-        await redisClient.setEx(historyKey, 60, JSON.stringify(conversationHistory));
+        if (redisClient) await redisClient.setEx(historyKey, 60, JSON.stringify(conversationHistory));
         
         res.type('text/xml');
         return res.send(twiml.toString());
@@ -1473,7 +1489,7 @@ router.post('/handle-speech', async (req, res) => {
           });
           
           const audioKey = `audio:qa:${callSid}`;
-          await redisClient.setEx(audioKey, 300, buffer.toString('base64'));
+          if (redisClient) await redisClient.setEx(audioKey, 300, buffer.toString('base64'));
           
           const audioUrl = `https://${req.get('host')}/api/twilio/audio/qa/${callSid}`;
           gather.play(audioUrl);
@@ -1488,7 +1504,7 @@ router.post('/handle-speech', async (req, res) => {
       // Add to conversation history
       conversationHistory.push({ role: 'user', text: speechText });
       conversationHistory.push({ role: 'assistant', text: cachedAnswer });
-      await redisClient.setEx(historyKey, 60, JSON.stringify(conversationHistory));
+      if (redisClient) await redisClient.setEx(historyKey, 60, JSON.stringify(conversationHistory));
       logger.debug(`[Q&A HISTORY] 💾 Saved Q&A exchange to conversation history`);
 
       res.type('text/xml');
@@ -1505,7 +1521,7 @@ router.post('/handle-speech', async (req, res) => {
     // Retrieve conversation history
     let conversationHistory = [];
     const historyKey = `conversation-history:${callSid}`;
-    const storedHistory = await redisClient.get(historyKey);
+    const storedHistory = redisClient ? await redisClient.get(historyKey) : null;
     if (storedHistory) {
       conversationHistory = JSON.parse(storedHistory);
     }
@@ -1544,7 +1560,7 @@ router.post('/handle-speech', async (req, res) => {
 
       // Add AI response to history
       conversationHistory.push({ role: 'assistant', text: answerObj.text });
-      await redisClient.setEx(historyKey, 60, JSON.stringify(conversationHistory));
+      if (redisClient) await redisClient.setEx(historyKey, 60, JSON.stringify(conversationHistory));
       logger.debug(`[AI HISTORY] 💾 Saved conversation history (${conversationHistory.length} messages)`);
 
     } catch (err) {
@@ -1593,7 +1609,7 @@ router.post('/handle-speech', async (req, res) => {
 
         // Store audio in Redis for fast serving
         const audioKey = `audio:ai:${callSid}`;
-        await redisClient.setEx(audioKey, 300, buffer.toString('base64'));
+        if (redisClient) await redisClient.setEx(audioKey, 300, buffer.toString('base64'));
         
         const audioUrl = `https://${req.get('host')}/api/twilio/audio/ai/${callSid}`;
         gather.play(audioUrl);
@@ -1668,7 +1684,8 @@ router.get('/audio/:type/:callSid', async (req, res) => {
     const { type, callSid } = req.params;
     const audioKey = `audio:${type}:${callSid}`;
     
-    const audioBase64 = await redisClient.get(audioKey);
+    const redisClient = await getRedis();
+    const audioBase64 = redisClient ? await redisClient.get(audioKey) : null;
     if (!audioBase64) {
       return res.status(404).send('Audio not found');
     }
@@ -2233,10 +2250,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           
           // 🔥 CRITICAL FIX: Fallback to disk if Redis unavailable
           const storageStart = Date.now();
-          if (redisClient && redisClient.isReady) {
+          const audioRedis = await getRedis();
+          if (audioRedis) {
             // Store audio in Redis for serving (preferred method)
             const audioKey = `audio:v2:${callSid}_${timestamp}`;
-            await redisClient.setEx(audioKey, 300, audioBuffer.toString('base64'));
+            await audioRedis.setEx(audioKey, 300, audioBuffer.toString('base64'));
             audioUrl = `https://${req.get('host')}/api/twilio/audio/v2/${callSid}_${timestamp}`;
             storageMethod = 'Redis';
             logger.info(`✅ V2 ELEVENLABS: Audio stored in Redis at ${audioUrl}`);
