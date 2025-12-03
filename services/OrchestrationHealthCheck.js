@@ -30,14 +30,15 @@ class OrchestrationHealthCheck {
     // ========================================================================
     // PERFORMANCE THRESHOLDS (Realistic Production Grade)
     // ========================================================================
-    // NOTE: LLM thresholds adjusted 2025-12-01 for realistic OpenAI latency
-    // Cold start: 800-1500ms, Warm: 300-600ms
+    // NOTE: Thresholds adjusted 2025-12-03 for realistic variance
+    // Preprocessing: 10-80ms normal, 100ms+ is concerning
+    // LLM: Cold start 800-1500ms, Warm 300-600ms
     // Old values were too aggressive, causing false DEGRADED alerts
     static THRESHOLDS = {
-        componentLoad: { healthy: 5, degraded: 15 },      // ms - local module load
-        testExecution: { healthy: 10, degraded: 50 },     // ms - local function test
+        componentLoad: { healthy: 10, degraded: 30 },     // ms - local module load
+        testExecution: { healthy: 50, degraded: 100 },    // ms - preprocessing/local tests
         llmResponse: { healthy: 800, degraded: 1500 },    // ms - OpenAI API (includes cold start)
-        totalPipeline: { healthy: 200, degraded: 800 }    // ms - full pipeline
+        totalPipeline: { healthy: 300, degraded: 1000 }   // ms - full pipeline
     };
     
     /**
