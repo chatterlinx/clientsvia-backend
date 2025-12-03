@@ -854,7 +854,13 @@ class EnterpriseVariableScanService {
                 throw new Error(`Company ${companyId} not found`);
             }
             
-            const cheatSheet = company.aiAgentSettings?.cheatSheet || {};
+            // V2 CheatSheet system: cheatSheets array with config object
+            // Fallback to legacy aiAgentSettings.cheatSheet for backward compatibility
+            const cheatSheet = company.cheatSheets?.[0]?.config || 
+                              company.aiAgentSettings?.cheatSheet || 
+                              {};
+            
+            logger.info(`📋 [CHEAT SHEET SCAN ${scanId}] Data source: ${company.cheatSheets?.[0]?.config ? 'V2 CheatSheets' : 'Legacy aiAgentSettings'}`);
             const allVariables = new Map();
             const sourcesScanned = [];
             
