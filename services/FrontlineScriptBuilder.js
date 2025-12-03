@@ -21,6 +21,7 @@ const Company = require('../models/v2Company');
 const TriageCard = require('../models/TriageCard');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const FrontlineScriptDraft = require('../models/FrontlineScriptDraft');
+const v2TradeCategory = require('../models/v2TradeCategory');
 const openaiClient = require('../config/openai');
 
 // ============================================================================
@@ -132,6 +133,77 @@ class FrontlineScriptBuilder {
             }
         }
         
+        // Path 4: Try v2TradeCategory - company-specific categories and scenarios
+        if (brain2.categories.length === 0) {
+            const tradeCategories = await v2TradeCategory.find({
+                companyId: companyId,
+                isActive: { $ne: false }
+            }).lean();
+            
+            if (tradeCategories.length > 0) {
+                logger.debug('[SCRIPT BUILDER] Found categories from v2TradeCategory', { count: tradeCategories.length });
+                
+                for (const cat of tradeCategories) {
+                    brain2.categories.push({
+                        id: cat._id.toString(),
+                        name: cat.name || cat.categoryName,
+                        description: cat.description || ''
+                    });
+                    
+                    // Extract scenarios from category
+                    const catScenarios = cat.scenarios || cat.items || [];
+                    for (const scn of catScenarios) {
+                        brain2.scenarios.push({
+                            id: scn._id?.toString() || scn.id || `scn_${brain2.scenarios.length}`,
+                            categoryId: cat._id.toString(),
+                            title: scn.name || scn.scenarioName || scn.title,
+                            goal: scn.objective || scn.goal || scn.description || '',
+                            keyPhrases: scn.triggerPhrases || scn.triggers || scn.keywords || []
+                        });
+                    }
+                }
+            }
+        }
+        
+        // Path 5: Try global categories by trade if still empty
+        if (brain2.categories.length === 0 && company.trade) {
+            const globalCategories = await v2TradeCategory.find({
+                companyId: 'global',
+                $or: [
+                    { trade: company.trade },
+                    { tradeName: company.trade },
+                    { name: { $regex: company.trade, $options: 'i' } }
+                ],
+                isActive: true
+            }).lean();
+            
+            if (globalCategories.length > 0) {
+                logger.debug('[SCRIPT BUILDER] Found global categories for trade', { 
+                    trade: company.trade, 
+                    count: globalCategories.length 
+                });
+                
+                for (const cat of globalCategories) {
+                    brain2.categories.push({
+                        id: cat._id.toString(),
+                        name: cat.name || cat.categoryName,
+                        description: cat.description || ''
+                    });
+                    
+                    const catScenarios = cat.scenarios || cat.items || [];
+                    for (const scn of catScenarios) {
+                        brain2.scenarios.push({
+                            id: scn._id?.toString() || scn.id,
+                            categoryId: cat._id.toString(),
+                            title: scn.name || scn.scenarioName || scn.title,
+                            goal: scn.objective || scn.goal || scn.description || '',
+                            keyPhrases: scn.triggerPhrases || scn.triggers || scn.keywords || []
+                        });
+                    }
+                }
+            }
+        }
+        
         // ====================================================================
         // LOAD TRIAGE CARDS (try multiple query patterns)
         // ====================================================================
@@ -170,18 +242,20 @@ class FrontlineScriptBuilder {
         const context = {
             companyId: companyId.toString(),
             company: {
-                name: company.name || getVar('companyName', 'Company'),
-                trade: company.trade || company.industry || getVar('companyType', 'Service'),
-                mainPhone: company.twilioConfig?.phoneNumber || company.primaryPhone || getVar('companyPhone', ''),
-                emergencyPhone: company.twilioConfig?.emergencyPhone || getVar('emergencyPhone', ''),
-                billingPhone: getVar('billingPhone', ''),
-                techSupportPhone: getVar('techSupportPhone', ''),
+                // Check multiple possible field names for company name
+                name: company.companyName || company.businessName || company.name || getVar('companyName', 'Company'),
+                // Check multiple possible field names for trade
+                trade: company.trade || company.industry || company.companyType || getVar('companyType', 'Service'),
+                mainPhone: company.twilioConfig?.phoneNumber || company.primaryPhone || company.phone || getVar('companyPhone', ''),
+                emergencyPhone: company.twilioConfig?.emergencyPhone || company.emergencyPhone || getVar('emergencyPhone', ''),
+                billingPhone: company.billingPhone || getVar('billingPhone', ''),
+                techSupportPhone: company.techSupportPhone || getVar('techSupportPhone', ''),
                 serviceAreas: company.serviceAreas || getVar('serviceAreas', []),
                 businessHours: company.agentSetup?.operatingHours ? 
                     this.formatOperatingHours(company.agentSetup.operatingHours) : 
-                    getVar('businessHours', 'Contact for hours'),
-                greeting: getVar('greeting', 'Thank you for calling. How can I help you today?'),
-                bookingUrl: getVar('bookingUrl', '')
+                    (company.businessHours || company.hours || getVar('businessHours', 'Contact for hours')),
+                greeting: company.aiAgentSettings?.greeting || getVar('greeting', 'Thank you for calling. How can I help you today?'),
+                bookingUrl: company.bookingUrl || getVar('bookingUrl', '')
             },
             brain2,
             triage: {
