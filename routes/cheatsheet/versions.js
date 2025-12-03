@@ -35,6 +35,7 @@ const {
 } = require('../../validators/cheatsheet');
 const { authenticateJWT: authMiddleware } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
+const VariableSyncService = require('../../services/VariableSyncService');
 
 // ============================================================================
 // MIDDLEWARE
@@ -163,6 +164,20 @@ router.patch(
         expectedVersion,
         metadata
       );
+      
+      // ═══════════════════════════════════════════════════════════════════════
+      // AUTO-SYNC VARIABLES: Extract {variables} from saved config
+      // Non-blocking - runs in background after response sent
+      // ═══════════════════════════════════════════════════════════════════════
+      VariableSyncService.syncFromCheatSheet(companyId, config)
+        .then(syncResult => {
+          if (syncResult.added > 0) {
+            logger.info(`🔄 [VARIABLE SYNC] Auto-synced ${syncResult.added} new variables on CheatSheet save`);
+          }
+        })
+        .catch(syncErr => {
+          logger.warn(`🔄 [VARIABLE SYNC] Background sync failed (non-critical): ${syncErr.message}`);
+        });
       
       res.json({
         success: true,
@@ -299,6 +314,21 @@ router.post(
       // Invalidate cache (import at top of file)
       const { CheatSheetRuntimeService } = require('../../services/cheatsheet');
       await CheatSheetRuntimeService.invalidateCache(companyId);
+      
+      // ═══════════════════════════════════════════════════════════════════════
+      // AUTO-SYNC VARIABLES: Sync variables when pushing to live
+      // ═══════════════════════════════════════════════════════════════════════
+      if (newLive.config) {
+        VariableSyncService.syncFromCheatSheet(companyId, newLive.config)
+          .then(syncResult => {
+            if (syncResult.added > 0) {
+              logger.info(`🔄 [VARIABLE SYNC] Auto-synced ${syncResult.added} new variables on push-live`);
+            }
+          })
+          .catch(syncErr => {
+            logger.warn(`🔄 [VARIABLE SYNC] Background sync failed (non-critical): ${syncErr.message}`);
+          });
+      }
       
       res.json({
         success: true,
