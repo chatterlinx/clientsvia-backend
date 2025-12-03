@@ -97,6 +97,15 @@ class FrontlineScriptBuilder {
         // ====================================================================
         let brain2 = { categories: [], scenarios: [] };
         
+        // Log what we're looking for
+        logger.info('[SCRIPT BUILDER] Searching for Brain-2 data...', {
+            companyId,
+            clonedFrom: company.configuration?.clonedFrom,
+            templateId: company.aiAgentSettings?.templateId,
+            hasCategories: !!company.aiAgentSettings?.categories,
+            trade: company.trade
+        });
+        
         // Path 1: Try clonedFrom template
         const templateId = company.configuration?.clonedFrom || 
                           company.aiAgentSettings?.templateId ||
@@ -106,14 +115,27 @@ class FrontlineScriptBuilder {
             const template = await GlobalInstantResponseTemplate.findById(templateId).lean();
             if (template) {
                 brain2 = this.extractBrain2Data(template);
-                logger.debug('[SCRIPT BUILDER] Found Brain-2 data from template', { templateId });
+                logger.info('[SCRIPT BUILDER] Path 1 SUCCESS: Found Brain-2 data from template', { 
+                    templateId, 
+                    categories: brain2.categories.length,
+                    scenarios: brain2.scenarios.length
+                });
+            } else {
+                logger.warn('[SCRIPT BUILDER] Path 1 FAILED: Template not found', { templateId });
             }
+        } else {
+            logger.debug('[SCRIPT BUILDER] Path 1 SKIPPED: No templateId found');
         }
         
         // Path 2: If no template, try embedded aiAgentSettings.categories
         if (brain2.categories.length === 0 && company.aiAgentSettings?.categories) {
             brain2 = this.extractBrain2FromEmbedded(company.aiAgentSettings);
-            logger.debug('[SCRIPT BUILDER] Found Brain-2 data from embedded aiAgentSettings');
+            logger.info('[SCRIPT BUILDER] Path 2 SUCCESS: Found Brain-2 data from embedded aiAgentSettings', {
+                categories: brain2.categories.length,
+                scenarios: brain2.scenarios.length
+            });
+        } else if (brain2.categories.length === 0) {
+            logger.debug('[SCRIPT BUILDER] Path 2 SKIPPED: No embedded categories');
         }
         
         // Path 3: If still empty, try globalInstantResponseTemplates by trade
@@ -178,7 +200,7 @@ class FrontlineScriptBuilder {
             }).lean();
             
             if (globalCategories.length > 0) {
-                logger.debug('[SCRIPT BUILDER] Found global categories for trade', { 
+                logger.info('[SCRIPT BUILDER] Path 5 SUCCESS: Found global categories for trade', { 
                     trade: company.trade, 
                     count: globalCategories.length 
                 });
@@ -201,8 +223,43 @@ class FrontlineScriptBuilder {
                         });
                     }
                 }
+            } else {
+                logger.debug('[SCRIPT BUILDER] Path 5 FAILED: No global categories found for trade', { trade: company.trade });
             }
         }
+        
+        // Path 6: FINAL FALLBACK - Try ANY active GlobalInstantResponseTemplate for HVAC trade
+        if (brain2.categories.length === 0) {
+            logger.info('[SCRIPT BUILDER] Path 6: Trying ANY GlobalInstantResponseTemplate...');
+            
+            const anyTemplate = await GlobalInstantResponseTemplate.findOne({
+                $or: [
+                    { trade: { $regex: 'hvac|heating|cooling|air', $options: 'i' } },
+                    { tradeName: { $regex: 'hvac|heating|cooling|air', $options: 'i' } },
+                    { name: { $regex: 'hvac|heating|cooling|air', $options: 'i' } },
+                    { isActive: true }
+                ]
+            }).lean();
+            
+            if (anyTemplate) {
+                brain2 = this.extractBrain2Data(anyTemplate);
+                logger.info('[SCRIPT BUILDER] Path 6 SUCCESS: Found fallback template', {
+                    templateName: anyTemplate.name,
+                    categories: brain2.categories.length,
+                    scenarios: brain2.scenarios.length
+                });
+            } else {
+                logger.warn('[SCRIPT BUILDER] Path 6 FAILED: No templates found at all');
+            }
+        }
+        
+        // Final summary log
+        logger.info('[SCRIPT BUILDER] Brain-2 data summary', {
+            companyId,
+            categoriesFound: brain2.categories.length,
+            scenariosFound: brain2.scenarios.length,
+            categoryNames: brain2.categories.map(c => c.name).slice(0, 5)
+        });
         
         // ====================================================================
         // LOAD TRIAGE CARDS (try multiple query patterns)
