@@ -9,6 +9,11 @@ const express = require('express');
 const logger = require('../utils/logger.js');
 logger.debug('🚀 [V2TWILIO] ========== LOADING v2twilio.js FILE ==========');
 
+// ============================================================================
+// 📊 CALL FLOW TRACER - Real-time call journey tracking
+// ============================================================================
+const { getTracer, removeTracer, STAGES } = require('../services/CallFlowTracer');
+
 const twilio = require('twilio');
 const Company = require('../models/v2Company');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
@@ -1884,24 +1889,17 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
   const callSid = req.body.CallSid || 'UNKNOWN';
   const fromNumber = req.body.From || 'UNKNOWN';
   const speechResult = req.body.SpeechResult || '';
+  const { companyID } = req.params;
   
-  // 🐰 RABBIT HOLE CHECKPOINT #3: WE MADE IT! TWILIO CALLED THE CORRECT ENDPOINT!
-  console.log('═'.repeat(80));
-  console.log('[🐰 CHECKPOINT #3] ✅ TWILIO HIT THE CORRECT ENDPOINT!');
-  console.log('Endpoint:', '/api/twilio/v2-agent-respond/:companyID');
-  console.log('Method:', req.method);
-  console.log('URL:', req.originalUrl);
-  console.log('CompanyID:', req.params.companyID);
-  console.log('User Speech:', speechResult);
-  console.log('CallSid:', callSid);
-  console.log('From:', fromNumber);
-  console.log('This is the SECOND LEG - time to process AI response!');
-  console.log('═'.repeat(80));
-  
-  logger.info('🎯 CHECKPOINT 11: AI Agent Response Handler Called');
-  logger.info(`📞 Call Details: SID=${callSid}, From=${fromNumber}`);
-  logger.info(`🗣️ User Speech: "${speechResult}"`);
-  logger.info('📋 Full request body:', JSON.stringify(req.body, null, 2));
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 📊 CALL FLOW TRACER - Track this turn
+  // ═══════════════════════════════════════════════════════════════════════════
+  const tracer = getTracer(callSid, companyID, fromNumber);
+  tracer.newTurn(speechResult);
+  tracer.step('SPEECH_RECEIVED', `Twilio delivered speech: "${speechResult?.substring(0, 40)}..."`, {
+    confidence: req.body.Confidence,
+    speechLength: speechResult?.length
+  });
   
   try {
     const { companyID } = req.params;
@@ -1990,12 +1988,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                          company?.agentSettings?.llm0Enabled === true;
       
       if (llm0Enabled && company) {
-        logger.debug('🧠 CHECKPOINT 14: LLM-0 ORCHESTRATION (Brain 1)');
-        logger.info('[LLM-0] Using LLM-0 as entry point', {
-          companyId: companyID,
-          callSid,
-          speechLength: speechResult?.length
-        });
+        tracer.step('BRAIN1_START', 'LLM-0 Orchestration (Brain-1) analyzing...');
         
         // STEP 1: LLM-0 decides what to do
         const llm0Decision = await decideNextStep({
@@ -2006,12 +1999,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           turnHistory: callState.turnHistory || []
         });
         
-        logger.info('[LLM-0] Decision received', {
-          companyId: companyID,
-          callSid,
-          action: llm0Decision.action,
-          intentTag: llm0Decision.intentTag,
-          flags: llm0Decision.flags
+        tracer.decision(llm0Decision?.action || 'UNKNOWN', {
+          intent: llm0Decision?.intentTag,
+          confidence: llm0Decision?.confidence,
+          flags: llm0Decision?.flags
         });
         
         // STEP 2: Route through Triage and execute
@@ -2032,22 +2023,19 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         
       } else {
         // Legacy path: Use V2 AI Agent Runtime directly
-        logger.debug('🎯 CHECKPOINT 14: Calling V2 AI Agent Runtime processUserInput (legacy)');
+        tracer.step('BRAIN2_START', 'Using legacy V2 AI Agent Runtime (Brain-2 direct)');
         result = await processUserInput(
           companyID,
           callSid,
           speechResult,
           callState
         );
+        tracer.step('BRAIN2_RESULT', `Got response: "${result?.text?.substring(0, 40) || result?.response?.substring(0, 40)}..."`);
       }
       
     } catch (llm0Error) {
       // If LLM-0 fails, fall back to legacy system
-      logger.error('[LLM-0] LLM-0 processing failed, using legacy fallback', {
-        companyId: companyID,
-        callSid,
-        error: llm0Error.message
-      });
+      tracer.error('LLM-0 failed, using legacy fallback', llm0Error);
       
       result = await processUserInput(
         companyID,
@@ -2055,6 +2043,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         speechResult,
         callState
       );
+      tracer.step('BRAIN2_RESULT', 'Fallback response ready');
     }
     
     perfCheckpoints.aiProcessing = Date.now() - aiProcessStart;
@@ -2371,12 +2360,21 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     }
     console.log('═'.repeat(80) + '\n');
     
+    tracer.step('TWIML_SEND', `Sending TwiML (${twimlString.length} bytes)`, {
+      hasGather: twimlString.includes('<Gather'),
+      hasHangup: twimlString.includes('<Hangup'),
+      hasDial: twimlString.includes('<Dial')
+    });
+    
     res.type('text/xml');
     res.send(twimlString);
     
     logger.info('✅ CHECKPOINT 23: Response sent successfully', { perfCheckpoints });
     
   } catch (error) {
+    const tracer = getTracer(req.body.CallSid, req.params.companyID);
+    tracer.error('AI Agent Respond failed', error);
+    
     logger.error('❌ CHECKPOINT ERROR: AI Agent Respond error:', error);
     logger.error('❌ Error stack:', error.stack);
     
