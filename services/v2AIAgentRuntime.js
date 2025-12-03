@@ -487,8 +487,22 @@ class V2AIAgentRuntime {
             // ═════════════════════════════════════════════════════════════════
             
             const adminSettings = await AdminSettings.findOne({}).lean();
+            // Brain-1 / LLM-0 is enabled if:
+            // 1. Global admin setting enables it
+            // 2. Company-specific setting enables it
+            // 3. Company uses LLM-0 Enhanced orchestration mode (default for all companies)
+            const orchestrationMode = company?.aiAgentSettings?.orchestrationMode || 'LLM0_ENHANCED';
             const brain1Enabled = adminSettings?.globalProductionIntelligence?.brain1Enabled === true ||
-                                  company?.agentSettings?.brain1Enabled === true;
+                                  company?.agentSettings?.brain1Enabled === true ||
+                                  orchestrationMode.includes('LLM0');
+            
+            logger.debug('[V2 AGENT] Brain-1 check', {
+                companyId: companyID,
+                orchestrationMode,
+                brain1Enabled,
+                globalSetting: adminSettings?.globalProductionIntelligence?.brain1Enabled,
+                companySetting: company?.agentSettings?.brain1Enabled
+            });
             
             if (brain1Enabled) {
                 logger.info('[V2 AGENT] 🧠 Using Brain-1 Runtime (new architecture)', {
