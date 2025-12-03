@@ -38,6 +38,7 @@ const logger = require('../utils/logger');
 // ═══════════════════════════════════════════════════════════════════════════
 
 const CALL_OUTCOMES = {
+  IN_PROGRESS: 'in_progress',    // Call is still active
   COMPLETED: 'completed',         // Call finished successfully
   TRANSFERRED: 'transferred',     // Transferred to human/external
   VOICEMAIL: 'voicemail',        // Went to voicemail
@@ -292,7 +293,7 @@ const CallSummarySchema = new mongoose.Schema({
       values: Object.values(CALL_OUTCOMES),
       message: '{VALUE} is not a valid call outcome'
     },
-    required: [true, 'outcome is required'],
+    default: CALL_OUTCOMES.IN_PROGRESS,  // Set at call start, updated at call end
     index: true
   },
   
