@@ -23,7 +23,7 @@ const RoutingDecisionLog = require('../../models/routing/RoutingDecisionLog');
 const PromptVersion = require('../../models/routing/PromptVersion');
 const CheatSheetVersion = require('../../models/cheatsheet/CheatSheetVersion');
 const TriageCard = require('../../models/TriageCard');
-const redisClientModule = require('../../src/config/redisClient');
+const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
 
 // ✅ INTEGRATION: Leverage existing Notification Center health services
 const DependencyHealthMonitor = require('../../services/DependencyHealthMonitor');
@@ -640,11 +640,18 @@ function buildComponentStatus(company) {
 
 async function getCacheStatus(companyId) {
   try {
-    const redis = redisClientModule.redisClient;
+    if (!isRedisConfigured()) {
+      return {
+        status: 'unavailable',
+        error: 'REDIS_URL not configured'
+      };
+    }
+    
+    const redis = await getSharedRedisClient();
     if (!redis) {
       return {
         status: 'unavailable',
-        error: 'Redis client not initialized'
+        error: 'Redis connection failed'
       };
     }
 
@@ -742,11 +749,20 @@ async function checkDatabase(companyId) {
 
 async function checkRedis(companyId) {
   try {
-    const redis = redisClientModule.redisClient;
+    if (!isRedisConfigured()) {
+      return {
+        status: 'down',
+        message: 'REDIS_URL not configured',
+        responseTime: 0
+      };
+    }
+    
+    const startTime = Date.now();
+    const redis = await getSharedRedisClient();
     if (!redis) {
       return {
         status: 'down',
-        message: 'Redis client not initialized',
+        message: 'Redis connection failed',
         responseTime: 0
       };
     }
@@ -758,10 +774,12 @@ async function checkRedis(companyId) {
     const value = await redis.get(testKey);
     await redis.del(testKey);
     
+    const responseTime = Date.now() - startTime;
+    
     return {
       status: value === 'test' ? 'healthy' : 'degraded',
       message: value === 'test' ? 'Redis read/write successful' : 'Redis read/write failed',
-      responseTime: 0
+      responseTime
     };
   } catch (error) {
     return {
