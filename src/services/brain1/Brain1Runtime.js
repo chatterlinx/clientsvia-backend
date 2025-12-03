@@ -546,8 +546,12 @@ function applyGuardrails(text, company) {
     
     // Price guardrail - don't quote specific prices unless configured
     const pricePattern = /\$\d+(\.\d{2})?/g;
-    const hasPriceConfig = company?.configuration?.variables?.has('serviceCallPrice') || 
-                          company?.configuration?.variables?.has('diagnosticFee');
+    // Check for price variables in company configuration (could be object, array, or Map)
+    const variables = company?.configuration?.variables || company?.aiAgentSettings?.variables || {};
+    const hasPriceConfig = (typeof variables === 'object') 
+        ? (variables['serviceCallPrice'] || variables['diagnosticFee'] || 
+           variables.serviceCallPrice || variables.diagnosticFee)
+        : false;
     
     if (!hasPriceConfig && pricePattern.test(safeText)) {
         logger.warn('[GUARDRAILS] Price pattern detected without config, softening', {
