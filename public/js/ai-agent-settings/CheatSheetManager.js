@@ -982,7 +982,7 @@ class CheatSheetManager {
     }
     
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('adminToken');
       
       // Build variable definitions
       const variableDefinitions = uniqueVars.map(varName => {
