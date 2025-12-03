@@ -83,12 +83,28 @@ class FrontlineIntel {
         }
         
         // Check if there's a Frontline-Intel script to use
-        const frontlineScript = company?.cheatSheets?.[0]?.frontlineIntel || 
+        // V2 CheatSheet stores it in config.frontlineIntel
+        const frontlineScript = company?.cheatSheets?.[0]?.config?.frontlineIntel || 
+                               company?.cheatSheets?.[0]?.frontlineIntel ||
                                company?.frontlineIntel ||
                                '';
-        const hasScript = typeof frontlineScript === 'string' ? 
-                         frontlineScript.trim().length > 100 : 
-                         frontlineScript?.instructions?.trim().length > 100;
+        
+        // Handle both string and object formats
+        let scriptText = '';
+        if (typeof frontlineScript === 'string') {
+            scriptText = frontlineScript;
+        } else if (frontlineScript?.instructions) {
+            scriptText = frontlineScript.instructions;
+        }
+        
+        const hasScript = scriptText.trim().length > 100;
+        
+        logger.debug('🎯 [FRONTLINE-INTEL] Script check', {
+            hasCheatSheet: !!company?.cheatSheets?.[0],
+            hasConfig: !!company?.cheatSheets?.[0]?.config,
+            scriptLength: scriptText.length,
+            hasScript
+        });
         
         if (!hasScript) {
             logger.info('🎯 [FRONTLINE-INTEL] No script configured (< 100 chars), using raw input');
