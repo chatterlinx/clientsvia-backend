@@ -149,7 +149,26 @@ class AdminNotificationService {
             if (policy.logOnly) {
                 logger.info(`📋 [POLICY] ${severity} alerts are log-only. Skipping SMS/Email delivery for ${code}`);
                 
-                // Create log entry but don't send notifications
+                // DEDUPLICATION: For INFO heartbeats, update existing entry instead of creating duplicates
+                // Find existing log with same code from last 24 hours and update it
+                const existingLog = await NotificationLog.findOne({
+                    code: code.toUpperCase(),
+                    severity: 'INFO',
+                    createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+                }).sort({ createdAt: -1 });
+                
+                if (existingLog) {
+                    // Update existing - just bump the timestamp
+                    existingLog.updatedAt = new Date();
+                    existingLog.message = message;
+                    existingLog.details = details;
+                    await existingLog.save();
+                    
+                    logger.debug(`🔄 [DEDUP] Updated existing INFO log: ${existingLog.alertId}`);
+                    return { success: true, alertId: existingLog.alertId, policyAction: 'log-only-updated' };
+                }
+                
+                // Create new log entry (first occurrence in 24h)
                 const notificationLog = await NotificationLog.create({
                     code: code.toUpperCase(),
                     severity,
