@@ -152,7 +152,7 @@ const notificationLogSchema = new mongoose.Schema({
             recipientName: String,       // 'Marc'
             status: {
                 type: String,
-                enum: ['pending', 'sent', 'delivered', 'failed', 'undelivered']
+                enum: ['pending', 'sent', 'delivered', 'failed', 'undelivered', 'skipped']
             },
             twilioSid: String,
             twilioStatus: String,
