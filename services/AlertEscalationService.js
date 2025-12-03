@@ -224,15 +224,29 @@ Time: ${new Date().toLocaleTimeString()}
         );
         
         // Use receiveSMS filter (matches AdminNotificationService)
+        const fromNumber = settings.notificationCenter.twilio.phoneNumber;
         const smsContacts = adminContacts.filter(c => c.receiveSMS !== false);
         
         for (const contact of smsContacts) {
             try {
+                // Skip if To and From are the same (Twilio will reject this)
+                if (contact.phone === fromNumber || 
+                    contact.phone.replace(/\D/g, '') === fromNumber.replace(/\D/g, '')) {
+                    logger.warn(`⚠️ [ESCALATION SMS] Skipping ${contact.name} - phone same as Twilio number`);
+                    results.push({
+                        recipient: contact.phone,
+                        recipientName: contact.name,
+                        status: 'skipped',
+                        reason: 'To and From numbers cannot be the same'
+                    });
+                    continue;
+                }
+                
                 logger.info(`📱 [ESCALATION SMS] Sending to ${contact.name} (${contact.phone})...`);
                 
                 const result = await twilioClient.messages.create({
                     to: contact.phone,
-                    from: settings.notificationCenter.twilio.phoneNumber,
+                    from: fromNumber,
                     body: smsMessage
                 });
                 

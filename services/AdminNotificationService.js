@@ -630,15 +630,29 @@ View: https://app.clientsvia.com/admin-notification-center.html
         logger.info(`✅ [SMS] Using Twilio credentials from AdminSettings (SID: ...${settings.notificationCenter.twilio.accountSid.slice(-4)})`);
         
         // Send to all admin contacts with SMS enabled
+        const fromNumber = settings.notificationCenter.twilio.phoneNumber;
         const smsContacts = adminContacts.filter(c => c.receiveSMS !== false);
         
         for (const contact of smsContacts) {
             try {
+                // Skip if To and From are the same (Twilio rejects this)
+                if (contact.phone === fromNumber || 
+                    contact.phone.replace(/\D/g, '') === fromNumber.replace(/\D/g, '')) {
+                    logger.warn(`⚠️ [SMS] Skipping ${contact.name} - phone same as Twilio number`);
+                    results.push({
+                        recipient: contact.phone,
+                        recipientName: contact.name,
+                        status: 'skipped',
+                        reason: 'To and From numbers cannot be the same'
+                    });
+                    continue;
+                }
+                
                 logger.info(`📱 [SMS] Sending to ${contact.name} (${contact.phone})...`);
                 
                 const result = await twilioClient.messages.create({
                     to: contact.phone,
-                    from: settings.notificationCenter.twilio.phoneNumber,
+                    from: fromNumber,
                     body: smsMessage
                 });
                 
@@ -1008,11 +1022,18 @@ No further notifications will be sent.
 To reopen: Text "REOPEN ${alert.alertId}"
             `.trim();
             
+            const fromNumber = settings.notificationCenter.twilio.phoneNumber;
             for (const contact of adminContacts) {
                 try {
+                    // Skip if To and From are the same
+                    if (contact.phone === fromNumber || 
+                        contact.phone.replace(/\D/g, '') === fromNumber.replace(/\D/g, '')) {
+                        logger.warn(`⚠️ [SMS] Skipping ACK to ${contact.name} - phone same as Twilio number`);
+                        continue;
+                    }
                     await twilioClient.messages.create({
                         to: contact.phone,
-                        from: settings.notificationCenter.twilio.phoneNumber,
+                        from: fromNumber,
                         body: message
                     });
                     logger.info(`✅ [SMS] Sent ACK confirmation to ${contact.name}`);
