@@ -105,7 +105,7 @@ class SmartGroupingService {
             const sentTime = Date.now();
             
             // Store when we sent the grouped alert
-            const redisClient = this.getRedisClient();
+            const redisClient = await this.getRedisClient();
             if (!redisClient) {
                 logger.warn('⚠️ [SMART GROUPING] Redis client unavailable when marking grouped alert');
                 return false;
@@ -134,7 +134,7 @@ class SmartGroupingService {
     static async hasRecentGroupedAlert(groupKey) {
         try {
             const sentKey = `${groupKey}:sent`;
-            const redisClient = this.getRedisClient();
+            const redisClient = await this.getRedisClient();
             if (!redisClient) {
                 logger.warn('⚠️ [SMART GROUPING] Redis client unavailable when checking recent alerts');
                 return { alreadySent: false };
@@ -171,7 +171,7 @@ class SmartGroupingService {
      */
     static async getGroupCount(groupKey) {
         try {
-            const redisClient = this.getRedisClient();
+            const redisClient = await this.getRedisClient();
             if (!redisClient) {
                 logger.warn('⚠️ [SMART GROUPING] Redis client unavailable when getting group count');
                 return 0;
@@ -191,7 +191,7 @@ class SmartGroupingService {
      */
     static async resetGroupCounter(groupKey) {
         try {
-            const redisClient = this.getRedisClient();
+            const redisClient = await this.getRedisClient();
             if (!redisClient) {
                 logger.warn('⚠️ [SMART GROUPING] Redis client unavailable when resetting counter');
                 return false;
@@ -215,7 +215,7 @@ class SmartGroupingService {
     static async incrementCounter(key, expirationSeconds) {
         try {
             // Increment the counter
-            const redisClient = this.getRedisClient();
+            const redisClient = await this.getRedisClient();
             if (!redisClient) {
                 logger.warn('⚠️ [SMART GROUPING] Redis client unavailable when incrementing counter');
                 return 0;
