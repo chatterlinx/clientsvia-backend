@@ -31,14 +31,57 @@ const logger = require('../utils/logger');
 const REDIS_URL = process.env.REDIS_URL;
 
 if (!REDIS_URL) {
-  console.error('[REDIS] ❌ REDIS_URL is NOT SET – failing hard.');
-  console.error('[REDIS] ❌ Set REDIS_URL in Render environment variables');
-  logger.error('[REDIS] REDIS_URL environment variable is missing');
+  console.error('[REDIS FACTORY] ❌ REDIS_URL is NOT SET');
+  console.error('[REDIS FACTORY] ❌ Set REDIS_URL in Render environment variables');
+  logger.error('[REDIS FACTORY] REDIS_URL environment variable is missing');
 } else {
   // Sanitize URL for logging (hide password if present)
   const sanitizedUrl = REDIS_URL.replace(/:([^@]+)@/, ':***@');
-  console.log('[REDIS] ✅ Using REDIS_URL:', sanitizedUrl);
-  logger.info('[REDIS] Redis URL configured', { urlLength: REDIS_URL.length });
+  console.log('[REDIS FACTORY] ✅ Using REDIS_URL:', sanitizedUrl);
+  logger.info('[REDIS FACTORY] Redis URL configured', { urlLength: REDIS_URL.length });
+}
+
+// ============================================================================
+// SHARED CLIENT SINGLETON - For health checks and reuse
+// ============================================================================
+let sharedClient = null;
+let sharedClientConnected = false;
+
+/**
+ * Get the shared Redis client (singleton)
+ * Creates one if it doesn't exist, returns existing if it does
+ * @returns {Object|null} - The shared node-redis client or null
+ */
+function getSharedRedisClient() {
+  if (!REDIS_URL) {
+    return null;
+  }
+  
+  if (!sharedClient) {
+    sharedClient = createNodeRedisClient();
+    
+    if (sharedClient) {
+      sharedClient.on('ready', () => {
+        sharedClientConnected = true;
+        console.log('[REDIS FACTORY] ✅ Shared client connected');
+      });
+      
+      sharedClient.on('end', () => {
+        sharedClientConnected = false;
+        console.log('[REDIS FACTORY] Shared client disconnected');
+      });
+    }
+  }
+  
+  return sharedClient;
+}
+
+/**
+ * Check if shared client is connected and ready
+ * @returns {boolean}
+ */
+function isSharedClientReady() {
+  return sharedClient && sharedClientConnected;
 }
 
 // ============================================================================
@@ -280,6 +323,8 @@ async function warmupRedis() {
 module.exports = {
   createIORedisClient,
   createNodeRedisClient,
+  getSharedRedisClient,
+  isSharedClientReady,
   isRedisConfigured,
   getSanitizedRedisUrl,
   warmupRedis,

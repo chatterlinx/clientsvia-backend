@@ -13,11 +13,15 @@
 // ============================================================================
 
 const mongoose = require('mongoose');
-// IMPORTANT: Don't destructure redisClient! It's null at module load time.
-// Access via db.redisClient to get the live value after initialization.
-const db = require('../db');
 const logger = require('../utils/logger.js');
 const OrchestrationHealthCheck = require('./OrchestrationHealthCheck');
+// Use the centralized Redis factory - single source of truth
+const { 
+    getSharedRedisClient, 
+    isRedisConfigured, 
+    getSanitizedRedisUrl,
+    REDIS_URL 
+} = require('./redisClientFactory');
 
 class DependencyHealthMonitor {
 
@@ -167,115 +171,89 @@ class DependencyHealthMonitor {
     }
 
     // ========================================================================
-    // REDIS HEALTH CHECK (with inline diagnostics)
+    // REDIS HEALTH CHECK - Uses centralized redisClientFactory
     // ========================================================================
     async checkRedis() {
         const startTime = Date.now();
-        
-        // ========================================================================
-        // INLINE DIAGNOSTIC CHECKPOINTS - These will appear in debug reports!
-        // ========================================================================
         const checkpoints = [];
         
-        // CHECKPOINT 1: Check REDIS_URL environment variable
-        const redisUrlExists = !!process.env.REDIS_URL;
-        const redisHostExists = !!process.env.REDIS_HOST;
+        // CHECKPOINT 1: Check REDIS_URL via factory
+        const redisConfigured = isRedisConfigured();
         
         checkpoints.push({
             name: 'REDIS_URL environment variable',
-            status: redisUrlExists ? 'passed' : 'failed',
-            message: redisUrlExists 
-                ? `Set (${process.env.REDIS_URL.length} chars)` 
-                : 'MISSING - This is the root cause!'
+            status: redisConfigured ? 'passed' : 'failed',
+            message: redisConfigured 
+                ? `Set (${REDIS_URL.length} chars)` 
+                : 'MISSING - Set REDIS_URL in Render environment'
         });
         
-        if (redisUrlExists) {
-            // CHECKPOINT 1.5: Validate URL format
-            const url = process.env.REDIS_URL;
-            const validProtocol = url.startsWith('redis://') || url.startsWith('rediss://');
-            checkpoints.push({
-                name: 'REDIS_URL format',
-                status: validProtocol ? 'passed' : 'failed',
-                message: validProtocol 
-                    ? `Valid protocol (${url.startsWith('rediss://') ? 'rediss (TLS)' : 'redis (plain)'})` 
-                    : `Invalid - must start with redis:// or rediss://. Got: ${url.substring(0, 15)}...`
-            });
-            
-            // Show sanitized URL for debugging
-            const sanitizedUrl = url.replace(/:([^@]+)@/, ':***@');
+        if (redisConfigured) {
+            // Show sanitized URL
             checkpoints.push({
                 name: 'REDIS_URL (sanitized)',
                 status: 'info',
-                message: sanitizedUrl.substring(0, 50) + (sanitizedUrl.length > 50 ? '...' : '')
-            });
-        } else if (redisHostExists) {
-            checkpoints.push({
-                name: 'REDIS_HOST fallback',
-                status: 'warning',
-                message: `REDIS_URL missing, falling back to REDIS_HOST=${process.env.REDIS_HOST}:${process.env.REDIS_PORT || 6379}`
+                message: getSanitizedRedisUrl()
             });
         }
         
-        // CHECKPOINT 2: Check if client was initialized
-        // IMPORTANT: Access db.redisClient dynamically (not destructured at load time)
-        const redisClient = db.redisClient;
-        
-        checkpoints.push({
-            name: 'Redis client initialized',
-            status: redisClient ? 'passed' : 'failed',
-            message: redisClient ? 'Client exists' : 'NOT INITIALIZED - Check server startup logs for init errors'
-        });
+        // If not configured, return early
+        if (!redisConfigured) {
+            return {
+                name: 'Redis',
+                status: 'DOWN',
+                critical: false,
+                message: 'REDIS_URL not configured',
+                responseTime: 0,
+                impact: 'Sessions and caching unavailable',
+                rootCause: 'REDIS_URL environment variable is not set',
+                fixAction: 'Set REDIS_URL in Render environment variables',
+                checkpoints,
+                troubleshooting: [
+                    '1. Go to Render Dashboard → Your Service → Environment',
+                    '2. Add REDIS_URL with your Render Redis internal URL',
+                    '3. Redeploy the service'
+                ]
+            };
+        }
 
         try {
+            // CHECKPOINT 2: Get shared client from factory
+            const redisClient = getSharedRedisClient();
+            
+            checkpoints.push({
+                name: 'Redis client from factory',
+                status: redisClient ? 'passed' : 'failed',
+                message: redisClient ? 'Client created' : 'Factory returned null'
+            });
+            
             if (!redisClient) {
-                // Provide detailed diagnostic information
-                const missingVars = [];
-                if (!process.env.REDIS_URL) missingVars.push('REDIS_URL');
-                
-                let rootCause = 'Unknown';
-                let fixAction = 'Check server startup logs for Redis initialization errors';
-                
-                if (!process.env.REDIS_URL && !process.env.REDIS_HOST) {
-                    rootCause = 'REDIS_URL environment variable is not set';
-                    fixAction = 'Set REDIS_URL in Render environment variables (Dashboard → Environment)';
-                } else if (process.env.REDIS_URL) {
-                    // URL exists but client is null - initialization failed
-                    rootCause = 'Redis client initialization failed at server startup';
-                    fixAction = 'Check Render server logs for "REDIS CHECKPOINT" messages to see where init failed';
-                }
-                
-                checkpoints.push({
-                    name: 'Redis ping test',
-                    status: 'failed',
-                    message: 'Cannot ping - client is null'
-                });
-                
                 return {
                     name: 'Redis',
                     status: 'DOWN',
                     critical: false,
-                    message: 'Redis client not initialized',
+                    message: 'Redis client creation failed',
                     responseTime: 0,
                     impact: 'Sessions and caching unavailable',
-                    rootCause,
-                    fixAction,
-                    missingVars: missingVars.length > 0 ? missingVars : undefined,
-                    checkpoints,
-                    envCheck: {
-                        REDIS_URL_set: redisUrlExists,
-                        REDIS_URL_length: redisUrlExists ? process.env.REDIS_URL.length : 0,
-                        REDIS_HOST_set: redisHostExists,
-                        NODE_ENV: process.env.NODE_ENV || 'development'
-                    },
-                    troubleshooting: [
-                        '1. Go to Render Dashboard → Your Service → Environment',
-                        '2. Verify REDIS_URL is listed and has a value',
-                        '3. Check if Redis addon is connected (should start with redis:// or rediss://)',
-                        '4. Go to Render Logs and search for "REDIS CHECKPOINT" to see startup diagnostics',
-                        '5. If URL exists but client is null: restart the service to re-attempt connection'
-                    ]
+                    checkpoints
                 };
             }
+            
+            // CHECKPOINT 3: Ensure client is connected
+            if (!redisClient.isOpen) {
+                checkpoints.push({
+                    name: 'Client connection',
+                    status: 'pending',
+                    message: 'Connecting...'
+                });
+                await redisClient.connect();
+            }
+            
+            checkpoints.push({
+                name: 'Client connected',
+                status: 'passed',
+                message: 'Connected to Redis'
+            });
 
             // CHECKPOINT 3: Test connection with MULTIPLE pings
             // This helps diagnose if high latency is TLS handshake (first ping slow) or consistent (network issue)
