@@ -58,7 +58,9 @@ const scenarioSchema = new Schema({
     scenarioId: {
         type: String,
         required: true,
-        unique: true,
+        // NOTE: unique:true removed - it creates a GLOBAL index on sub-documents
+        // which breaks when adding categories with empty scenarios arrays.
+        // Uniqueness is enforced at application level in pre-save hook.
         trim: true
         // ULID or UUID for stable, collision-free IDs across environments
     },
@@ -1814,12 +1816,62 @@ globalInstantResponseTemplateSchema.index({ templateType: 1 });
 globalInstantResponseTemplateSchema.index({ 'lineage.clonedFrom': 1 });
 
 // ============================================================================
+// FIX: Drop broken unique index on categories.scenarios.scenarioId
+// This index was incorrectly created by "unique: true" on sub-document field
+// and prevents adding new categories. Must be dropped from MongoDB on startup.
+// ============================================================================
+globalInstantResponseTemplateSchema.statics.dropBrokenScenarioIdIndex = async function() {
+    try {
+        const collection = this.collection;
+        const indexes = await collection.indexes();
+        
+        // Look for the problematic index on scenarioId
+        const brokenIndex = indexes.find(idx => 
+            idx.key && idx.key['categories.scenarios.scenarioId'] !== undefined
+        );
+        
+        if (brokenIndex) {
+            console.log('[GlobalInstantResponseTemplate] ⚠️ Found broken scenarioId index, dropping:', brokenIndex.name);
+            await collection.dropIndex(brokenIndex.name);
+            console.log('[GlobalInstantResponseTemplate] ✅ Broken index dropped - categories can now be added freely');
+            return true;
+        }
+        
+        return false;
+    } catch (error) {
+        // Index might not exist, that's fine
+        if (error.code !== 27) { // 27 = IndexNotFound
+            console.error('[GlobalInstantResponseTemplate] Error checking indexes:', error.message);
+        }
+        return false;
+    }
+};
+
+// ============================================================================
 // P1 CHECKPOINT: Template Integrity Validation (pre-save)
 // ============================================================================
 globalInstantResponseTemplateSchema.pre('save', async function(next) {
     // Skip validation for new templates (they might not have scenarios yet)
     if (this.isNew) {
         return next();
+    }
+    
+    // =========================================================================
+    // SCENARIO ID UNIQUENESS CHECK (Application-level enforcement)
+    // Since we removed unique:true from schema, validate here instead
+    // =========================================================================
+    const allScenarioIds = [];
+    for (const category of this.categories || []) {
+        for (const scenario of category.scenarios || []) {
+            if (scenario.scenarioId) {
+                if (allScenarioIds.includes(scenario.scenarioId)) {
+                    const error = new Error(`Duplicate scenarioId found: ${scenario.scenarioId}`);
+                    error.code = 'DUPLICATE_SCENARIO_ID';
+                    return next(error);
+                }
+                allScenarioIds.push(scenario.scenarioId);
+            }
+        }
     }
     
     try {

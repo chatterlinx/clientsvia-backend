@@ -771,6 +771,18 @@ async function startServer() {
             // Don't crash server - indexes might already be correct
         }
         
+        // Fix broken unique index on GlobalInstantResponseTemplate.categories.scenarios.scenarioId
+        // This index prevents adding new categories - must be dropped
+        try {
+            const GlobalInstantResponseTemplate = require('./models/GlobalInstantResponseTemplate');
+            const dropped = await GlobalInstantResponseTemplate.dropBrokenScenarioIdIndex();
+            if (dropped) {
+                console.log('[Server] ✅ Fixed GlobalInstantResponseTemplate: broken scenarioId index dropped');
+            }
+        } catch (indexFixError) {
+            console.warn('[Server] ⚠️ Could not check GlobalInstantResponseTemplate indexes:', indexFixError.message);
+        }
+        
         // V2 DELETED: Legacy agent prompts loading - V2 uses aiAgentSettings system
         console.log('[Server] Step 3/6: Skipping legacy agent prompts (V2 uses aiAgentSettings)...');
         console.log(`[Server] ✅ Step 3 COMPLETE: Legacy agent prompts skipped - V2 system active`);
