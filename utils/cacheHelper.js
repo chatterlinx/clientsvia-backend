@@ -37,7 +37,7 @@
  * ============================================================================
  */
 
-const { redisClient } = require('../db');
+const { getSharedRedisClient, isRedisConfigured } = require('../services/redisClientFactory');
 const logger = require('./logger');
 
 // Track cache failures for alert throttling
@@ -47,6 +47,74 @@ const CACHE_FAILURE_ALERT_THRESHOLD = 5; // Alert after 5 consecutive failures
 const CACHE_FAILURE_ALERT_COOLDOWN = 300000; // 5 minutes between alerts
 
 class CacheHelper {
+    /**
+     * ============================================================================
+     * GENERIC GET - Read a value from cache
+     * ============================================================================
+     * @param {String} key - Cache key
+     * @returns {Promise<String|null>} - Cached value or null
+     */
+    static async get(key) {
+        if (!key || !isRedisConfigured()) return null;
+        
+        try {
+            const redis = await getSharedRedisClient();
+            if (!redis) return null;
+            
+            return await redis.get(key);
+        } catch (error) {
+            logger.warn('[CACHE HELPER] get() failed:', error.message);
+            return null;
+        }
+    }
+
+    /**
+     * ============================================================================
+     * GENERIC SET - Store a value in cache
+     * ============================================================================
+     * @param {String} key - Cache key
+     * @param {String} value - Value to cache
+     * @param {Number} ttlSeconds - Time to live in seconds
+     * @returns {Promise<Boolean>} - Success status
+     */
+    static async set(key, value, ttlSeconds = 3600) {
+        if (!key || !isRedisConfigured()) return false;
+        
+        try {
+            const redis = await getSharedRedisClient();
+            if (!redis) return false;
+            
+            await redis.set(key, value, { EX: ttlSeconds });
+            return true;
+        } catch (error) {
+            logger.warn('[CACHE HELPER] set() failed:', error.message);
+            return false;
+        }
+    }
+
+    /**
+     * ============================================================================
+     * GENERIC INVALIDATE - Delete a specific cache key
+     * ============================================================================
+     * @param {String} key - Cache key to invalidate
+     * @returns {Promise<Boolean>} - Success status
+     */
+    static async invalidate(key) {
+        if (!key || !isRedisConfigured()) return false;
+        
+        try {
+            const redis = await getSharedRedisClient();
+            if (!redis) return false;
+            
+            await redis.del(key);
+            logger.debug('[CACHE HELPER] Key invalidated:', key);
+            return true;
+        } catch (error) {
+            logger.warn('[CACHE HELPER] invalidate() failed:', error.message);
+            return false;
+        }
+    }
+
     /**
      * ============================================================================
      * TEMPLATE CACHE INVALIDATION
@@ -89,22 +157,27 @@ class CacheHelper {
             // This ensures AiCore Live Scenarios and runtime stay in sync
             try {
                 const Company = require('../models/v2Company');
+                const redisClient = await getSharedRedisClient();
                 
-                // Find all companies using this template (new or legacy system)
-                const companies = await Company.find({
-                    $or: [
-                        { 'aiAgentSettings.templateReferences.templateId': templateId.toString() },
-                        { 'configuration.clonedFrom': templateId.toString() }
-                    ]
-                }).select('_id companyName').lean();
-                
-                if (companies.length > 0) {
-                    logger.info(`🔄 [CACHE HELPER] Invalidating live-scenarios cache for ${companies.length} companies using template ${templateId}`);
+                if (!redisClient) {
+                    logger.warn('⚠️ [CACHE HELPER] Redis not available for company scenario cache invalidation');
+                } else {
+                    // Find all companies using this template (new or legacy system)
+                    const companies = await Company.find({
+                        $or: [
+                            { 'aiAgentSettings.templateReferences.templateId': templateId.toString() },
+                            { 'configuration.clonedFrom': templateId.toString() }
+                        ]
+                    }).select('_id companyName').lean();
                     
-                    for (const company of companies) {
-                        const companyKey = `live-scenarios:${company._id.toString()}`;
-                        await redisClient.del(companyKey);
-                        logger.debug(`  ✅ Cleared: ${companyKey} (${company.companyName})`);
+                    if (companies.length > 0) {
+                        logger.info(`🔄 [CACHE HELPER] Invalidating live-scenarios cache for ${companies.length} companies using template ${templateId}`);
+                        
+                        for (const company of companies) {
+                            const companyKey = `live-scenarios:${company._id.toString()}`;
+                            await redisClient.del(companyKey);
+                            logger.debug(`  ✅ Cleared: ${companyKey} (${company.companyName})`);
+                        }
                     }
                 }
             } catch (companyInvalidationError) {
@@ -408,8 +481,13 @@ class CacheHelper {
         if (!keys || keys.length === 0) return 0;
 
         try {
-            // Check if Redis client is connected
-            if (!redisClient || !redisClient.isOpen) {
+            if (!isRedisConfigured()) {
+                logger.warn('⚠️ [CACHE HELPER] Redis not configured, skipping deletion');
+                return 0;
+            }
+            
+            const redisClient = await getSharedRedisClient();
+            if (!redisClient) {
                 logger.warn('⚠️ [CACHE HELPER] Redis client not connected, skipping deletion');
                 return 0;
             }
@@ -420,7 +498,7 @@ class CacheHelper {
             const results = await pipeline.exec();
 
             // Count successful deletions
-            const deleted = results.filter(r => r[1] > 0).length;
+            const deleted = results.filter(r => r && r > 0).length;
 
             return deleted;
 
@@ -445,8 +523,13 @@ class CacheHelper {
      */
     static async _deleteByPattern(pattern) {
         try {
-            // Check if Redis client is connected
-            if (!redisClient || !redisClient.isOpen) {
+            if (!isRedisConfigured()) {
+                logger.warn('⚠️ [CACHE HELPER] Redis not configured, skipping pattern deletion');
+                return 0;
+            }
+            
+            const redisClient = await getSharedRedisClient();
+            if (!redisClient) {
                 logger.warn('⚠️ [CACHE HELPER] Redis client not connected, skipping pattern deletion');
                 return 0;
             }
@@ -472,7 +555,7 @@ class CacheHelper {
                 const pipeline = redisClient.multi();
                 keysToDelete.forEach(key => pipeline.del(key));
                 const results = await pipeline.exec();
-                deleted = results.filter(r => r[1] > 0).length;
+                deleted = results.filter(r => r && r > 0).length;
             }
 
             logger.debug('🗑️ [CACHE HELPER] Pattern deletion complete', {
