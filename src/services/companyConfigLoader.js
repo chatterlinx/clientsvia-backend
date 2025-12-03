@@ -268,6 +268,7 @@ async function buildVariables(company, templates) {
 function buildFillerWords(company, templates) {
   const inherited = [];
   const custom = [];
+  let active = []; // Declare outside try block to ensure it's always defined
   
   try {
     // Get from aiAgentSettings first (new)
@@ -304,7 +305,7 @@ function buildFillerWords(company, templates) {
     }
     
     // Build active list (merged unique)
-    const active = [...new Set([...inherited, ...custom])];
+    active = [...new Set([...inherited, ...custom])];
     
     logger.debug(`[COMPANY CONFIG LOADER] Built filler words`, {
       inherited: inherited.length,
@@ -316,6 +317,8 @@ function buildFillerWords(company, templates) {
     logger.error(`[COMPANY CONFIG LOADER] Error building filler words`, {
       error: error.message
     });
+    // Ensure active has a fallback value even on error
+    active = [...new Set([...inherited, ...custom])];
   }
   
   return { inherited, custom, active };
