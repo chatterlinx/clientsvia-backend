@@ -23,6 +23,7 @@ const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTe
 const FrontlineScriptDraft = require('../models/FrontlineScriptDraft');
 const v2TradeCategory = require('../models/v2TradeCategory');
 const openaiClient = require('../config/openai');
+const ActiveScenariosHelper = require('./ActiveScenariosHelper');
 
 // ============================================================================
 // TONE PRESETS
@@ -93,64 +94,95 @@ class FrontlineScriptBuilder {
         }
         
         // ====================================================================
-        // LOAD BRAIN-2 DATA (multiple paths)
+        // LOAD BRAIN-2 DATA (via ActiveScenariosHelper - respects scenarioControls!)
+        // ====================================================================
+        // CRITICAL: ActiveScenariosHelper filters by company.aiAgentSettings.scenarioControls
+        // This ensures disabled scenarios are NOT included in script generation
         // ====================================================================
         let brain2 = { categories: [], scenarios: [] };
         
-        // Log what we're looking for
-        logger.info('[SCRIPT BUILDER] Searching for Brain-2 data...', {
-            companyId,
-            clonedFrom: company.configuration?.clonedFrom,
-            templateId: company.aiAgentSettings?.templateId,
-            hasCategories: !!company.aiAgentSettings?.categories,
-            trade: company.trade
+        logger.info('[SCRIPT BUILDER] 🎯 Loading Brain-2 via ActiveScenariosHelper (respects disabled cards)...', {
+            companyId
         });
         
-        // Path 1: Try clonedFrom template or any template reference
-        const templateId = company.configuration?.clonedFrom || 
-                          company.aiAgentSettings?.templateId ||
-                          company.templateId;
-        
-        // Also check aiAgentSettings.templates array for templateId references
-        const templatesArray = company.aiAgentSettings?.fillerWords?.templatesScanned || 
-                              company.configuration?.fillerScan?.templatesScanned || [];
-        const firstTemplateId = templatesArray[0]?.templateId;
-        
-        const effectiveTemplateId = templateId || firstTemplateId;
-        
-        if (effectiveTemplateId) {
-            const template = await GlobalInstantResponseTemplate.findById(effectiveTemplateId).lean();
-            if (template) {
-                brain2 = this.extractBrain2Data(template);
-                logger.info('[SCRIPT BUILDER] Path 1 SUCCESS: Found Brain-2 data from template', { 
-                    templateId: effectiveTemplateId, 
-                    templateName: template.name,
-                    categories: brain2.categories.length,
-                    scenarios: brain2.scenarios.length
+        try {
+            const activeScenariosResult = await ActiveScenariosHelper.getActiveScenariosForCompany(companyId);
+            
+            if (activeScenariosResult.success && activeScenariosResult.count > 0) {
+                // Group scenarios by category for better organization
+                const categoryMap = new Map();
+                
+                for (const scenario of activeScenariosResult.scenarios) {
+                    const categoryKey = scenario.categoryKey || scenario.categoryName || 'general';
+                    
+                    if (!categoryMap.has(categoryKey)) {
+                        categoryMap.set(categoryKey, {
+                            id: categoryKey,
+                            name: scenario.categoryName || categoryKey,
+                            description: '',
+                            keywords: []
+                        });
+                    }
+                    
+                    // Add scenario with full data
+                    brain2.scenarios.push({
+                        id: scenario.scenarioId || scenario.scenarioKey,
+                        categoryId: categoryKey,
+                        categoryName: scenario.categoryName,
+                        title: scenario.name,
+                        goal: scenario.description || '',
+                        keyPhrases: scenario.triggers || [],
+                        hasQuickReplies: scenario.hasQuickReplies,
+                        hasFullReplies: scenario.hasFullReplies,
+                        templateId: scenario.templateId,
+                        templateName: scenario.templateName
+                    });
+                }
+                
+                // Convert category map to array
+                brain2.categories = Array.from(categoryMap.values());
+                
+                logger.info('[SCRIPT BUILDER] ✅ ActiveScenariosHelper SUCCESS', {
+                    companyId,
+                    categoriesFound: brain2.categories.length,
+                    scenariosFound: brain2.scenarios.length,
+                    disabledByControls: activeScenariosResult.meta?.scenariosDisabledByControl || 0,
+                    templatesLoaded: activeScenariosResult.meta?.templatesLoaded || 0,
+                    categoryNames: brain2.categories.map(c => c.name).slice(0, 5)
                 });
             } else {
-                logger.warn('[SCRIPT BUILDER] Path 1 FAILED: Template not found', { templateId: effectiveTemplateId });
+                logger.warn('[SCRIPT BUILDER] ⚠️ ActiveScenariosHelper returned no scenarios', {
+                    companyId,
+                    message: activeScenariosResult.message,
+                    trade: activeScenariosResult.trade
+                });
             }
-        } else {
-            logger.debug('[SCRIPT BUILDER] Path 1 SKIPPED: No templateId found in any location');
+        } catch (helperError) {
+            logger.error('[SCRIPT BUILDER] ❌ ActiveScenariosHelper failed, falling back to direct load', {
+                error: helperError.message
+            });
         }
         
-        // Path 1b: Try to find template by company name match
-        if (brain2.categories.length === 0) {
-            const companyName = company.companyName || company.businessName || company.name || '';
-            if (companyName) {
-                const matchingTemplate = await GlobalInstantResponseTemplate.findOne({
+        // FALLBACK: If ActiveScenariosHelper returned nothing, try direct template load
+        // This is a safety net but should rarely be needed
+        if (brain2.scenarios.length === 0) {
+            logger.warn('[SCRIPT BUILDER] 🔄 Fallback: Trying direct template load...');
+            
+            // Try trade-based template lookup
+            if (company.trade) {
+                const tradeTemplate = await GlobalInstantResponseTemplate.findOne({
                     $or: [
-                        { 'assignedCompanies': companyId },
-                        { 'companies': companyId },
-                        { name: { $regex: companyName.split(' ')[0], $options: 'i' } }
-                    ]
+                        { trade: company.trade },
+                        { tradeName: company.trade },
+                        { name: { $regex: company.trade, $options: 'i' } }
+                    ],
+                    isActive: { $ne: false }
                 }).lean();
                 
-                if (matchingTemplate) {
-                    brain2 = this.extractBrain2Data(matchingTemplate);
-                    logger.info('[SCRIPT BUILDER] Path 1b SUCCESS: Found template by company match', { 
-                        templateName: matchingTemplate.name,
+                if (tradeTemplate) {
+                    brain2 = this.extractBrain2Data(tradeTemplate);
+                    logger.info('[SCRIPT BUILDER] Fallback SUCCESS: Found template by trade', {
+                        templateName: tradeTemplate.name,
                         categories: brain2.categories.length,
                         scenarios: brain2.scenarios.length
                     });
@@ -158,149 +190,8 @@ class FrontlineScriptBuilder {
             }
         }
         
-        // Path 2: If no template, try embedded aiAgentSettings.categories
-        if (brain2.categories.length === 0 && company.aiAgentSettings?.categories) {
-            brain2 = this.extractBrain2FromEmbedded(company.aiAgentSettings);
-            logger.info('[SCRIPT BUILDER] Path 2 SUCCESS: Found Brain-2 data from embedded aiAgentSettings', {
-                categories: brain2.categories.length,
-                scenarios: brain2.scenarios.length
-            });
-        } else if (brain2.categories.length === 0) {
-            logger.debug('[SCRIPT BUILDER] Path 2 SKIPPED: No embedded categories');
-        }
-        
-        // Path 3: If still empty, try globalInstantResponseTemplates by trade
-        if (brain2.categories.length === 0 && company.trade) {
-            const tradeTemplate = await GlobalInstantResponseTemplate.findOne({
-                $or: [
-                    { trade: company.trade },
-                    { tradeName: company.trade },
-                    { name: { $regex: company.trade, $options: 'i' } }
-                ],
-                isActive: true
-            }).lean();
-            
-            if (tradeTemplate) {
-                brain2 = this.extractBrain2Data(tradeTemplate);
-                logger.debug('[SCRIPT BUILDER] Found Brain-2 data from trade template', { trade: company.trade });
-            }
-        }
-        
-        // Path 4: Try v2TradeCategory - company-specific categories and scenarios
-        if (brain2.categories.length === 0) {
-            const tradeCategories = await v2TradeCategory.find({
-                companyId: companyId,
-                isActive: { $ne: false }
-            }).lean();
-            
-            if (tradeCategories.length > 0) {
-                logger.debug('[SCRIPT BUILDER] Found categories from v2TradeCategory', { count: tradeCategories.length });
-                
-                for (const cat of tradeCategories) {
-                    brain2.categories.push({
-                        id: cat._id.toString(),
-                        name: cat.name || cat.categoryName,
-                        description: cat.description || ''
-                    });
-                    
-                    // Extract scenarios from category
-                    const catScenarios = cat.scenarios || cat.items || [];
-                    for (const scn of catScenarios) {
-                        brain2.scenarios.push({
-                            id: scn._id?.toString() || scn.id || `scn_${brain2.scenarios.length}`,
-                            categoryId: cat._id.toString(),
-                            title: scn.name || scn.scenarioName || scn.title,
-                            goal: scn.objective || scn.goal || scn.description || '',
-                            keyPhrases: scn.triggerPhrases || scn.triggers || scn.keywords || []
-                        });
-                    }
-                }
-            }
-        }
-        
-        // Path 5: Try global categories by trade if still empty
-        if (brain2.categories.length === 0 && company.trade) {
-            const globalCategories = await v2TradeCategory.find({
-                companyId: 'global',
-                $or: [
-                    { trade: company.trade },
-                    { tradeName: company.trade },
-                    { name: { $regex: company.trade, $options: 'i' } }
-                ],
-                isActive: true
-            }).lean();
-            
-            if (globalCategories.length > 0) {
-                logger.info('[SCRIPT BUILDER] Path 5 SUCCESS: Found global categories for trade', { 
-                    trade: company.trade, 
-                    count: globalCategories.length 
-                });
-                
-                for (const cat of globalCategories) {
-                    brain2.categories.push({
-                        id: cat._id.toString(),
-                        name: cat.name || cat.categoryName,
-                        description: cat.description || ''
-                    });
-                    
-                    const catScenarios = cat.scenarios || cat.items || [];
-                    for (const scn of catScenarios) {
-                        brain2.scenarios.push({
-                            id: scn._id?.toString() || scn.id,
-                            categoryId: cat._id.toString(),
-                            title: scn.name || scn.scenarioName || scn.title,
-                            goal: scn.objective || scn.goal || scn.description || '',
-                            keyPhrases: scn.triggerPhrases || scn.triggers || scn.keywords || []
-                        });
-                    }
-                }
-            } else {
-                logger.debug('[SCRIPT BUILDER] Path 5 FAILED: No global categories found for trade', { trade: company.trade });
-            }
-        }
-        
-        // Path 6: FINAL FALLBACK - Try ANY active GlobalInstantResponseTemplate
-        if (brain2.categories.length === 0) {
-            logger.info('[SCRIPT BUILDER] Path 6: Trying ANY GlobalInstantResponseTemplate...');
-            
-            // First try HVAC-specific
-            let anyTemplate = await GlobalInstantResponseTemplate.findOne({
-                $or: [
-                    { trade: { $regex: 'hvac|heating|cooling|air', $options: 'i' } },
-                    { tradeName: { $regex: 'hvac|heating|cooling|air', $options: 'i' } },
-                    { name: { $regex: 'hvac|heating|cooling|air', $options: 'i' } }
-                ],
-                isActive: { $ne: false }
-            }).lean();
-            
-            // If not found, try ANY template
-            if (!anyTemplate) {
-                anyTemplate = await GlobalInstantResponseTemplate.findOne({
-                    isActive: { $ne: false },
-                    'categories.0': { $exists: true } // Has at least one category
-                }).lean();
-            }
-            
-            if (anyTemplate) {
-                brain2 = this.extractBrain2Data(anyTemplate);
-                logger.info('[SCRIPT BUILDER] Path 6 SUCCESS: Found fallback template', {
-                    templateId: anyTemplate._id?.toString(),
-                    templateName: anyTemplate.name,
-                    categories: brain2.categories.length,
-                    scenarios: brain2.scenarios.length
-                });
-            } else {
-                // Last resort: List what templates exist
-                const allTemplates = await GlobalInstantResponseTemplate.find({}).select('name trade isActive').lean();
-                logger.warn('[SCRIPT BUILDER] Path 6 FAILED: No templates found. Available:', {
-                    count: allTemplates.length,
-                    templates: allTemplates.map(t => ({ name: t.name, trade: t.trade, active: t.isActive }))
-                });
-            }
-        }
-        
         // Final summary log
-        logger.info('[SCRIPT BUILDER] Brain-2 data summary', {
+        logger.info('[SCRIPT BUILDER] Brain-2 data summary (FILTERED by scenarioControls)', {
             companyId,
             categoriesFound: brain2.categories.length,
             scenariosFound: brain2.scenarios.length,
