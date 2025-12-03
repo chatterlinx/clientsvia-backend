@@ -15,8 +15,13 @@ router.post('/admin/setup-notification-center', authenticateJWT, requireRole('ad
     try {
         logger.security('🔔 [SETUP] Setting up Notification Center...');
         
-        // Check if exists
-        let company = await v2Company.findOne({ 'metadata.isNotificationCenter': true });
+        // Check if exists - look for metadata flag OR name pattern
+        let company = await v2Company.findOne({ 
+            $or: [
+                { 'metadata.isNotificationCenter': true },
+                { companyName: { $regex: /notification center/i } }
+            ]
+        });
         
         if (company) {
             logger.info('📋 [SETUP] Notification Center already exists:', company._id);
@@ -87,6 +92,68 @@ router.post('/admin/setup-notification-center', authenticateJWT, requireRole('ad
         
     } catch (error) {
         logger.error('❌ [SETUP] Failed:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============================================================================
+// CLEANUP: Remove duplicate Notification Center companies
+// ============================================================================
+router.delete('/admin/setup-notification-center/cleanup', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        logger.security('🧹 [CLEANUP] Removing duplicate Notification Centers...');
+        
+        // Find all Notification Center companies
+        const allNotificationCenters = await v2Company.find({
+            $or: [
+                { 'metadata.isNotificationCenter': true },
+                { companyName: { $regex: /notification center/i } }
+            ]
+        }).sort({ createdAt: 1 }); // Oldest first
+        
+        if (allNotificationCenters.length <= 1) {
+            return res.json({
+                success: true,
+                message: 'No duplicates found',
+                count: allNotificationCenters.length
+            });
+        }
+        
+        // Keep the first one (oldest), delete the rest
+        const keepCompany = allNotificationCenters[0];
+        const duplicates = allNotificationCenters.slice(1);
+        
+        logger.info(`🧹 [CLEANUP] Keeping: ${keepCompany._id} (${keepCompany.companyName})`);
+        logger.info(`🧹 [CLEANUP] Deleting ${duplicates.length} duplicates...`);
+        
+        const deleteIds = duplicates.map(c => c._id);
+        const result = await v2Company.deleteMany({ _id: { $in: deleteIds } });
+        
+        // Ensure the kept one has the proper metadata flag
+        if (!keepCompany.metadata?.isNotificationCenter) {
+            keepCompany.metadata = keepCompany.metadata || {};
+            keepCompany.metadata.isNotificationCenter = true;
+            await keepCompany.save();
+            logger.info('✅ [CLEANUP] Added isNotificationCenter flag to kept company');
+        }
+        
+        logger.info(`✅ [CLEANUP] Deleted ${result.deletedCount} duplicate Notification Centers`);
+        
+        res.json({
+            success: true,
+            message: `Cleaned up ${result.deletedCount} duplicate Notification Centers`,
+            kept: {
+                id: keepCompany._id,
+                name: keepCompany.companyName
+            },
+            deleted: deleteIds
+        });
+        
+    } catch (error) {
+        logger.error('❌ [CLEANUP] Failed:', error);
         res.status(500).json({
             success: false,
             error: error.message
