@@ -874,6 +874,26 @@ router.patch('/company/:id', async (req, res) => {
             logger.debug(`⚡ AI Agent Logic cache invalidated for company: ${companyId}`);
         }
 
+        // ═══════════════════════════════════════════════════════════════════════
+        // AUTO-SYNC VARIABLES: Extract {variables} from saved cheatSheet
+        // Non-blocking - runs in background after response sent
+        // ═══════════════════════════════════════════════════════════════════════
+        if (cheatSheetPayload) {
+            const VariableSyncService = require('../services/VariableSyncService');
+            VariableSyncService.syncFromCheatSheet(companyId, cheatSheetPayload)
+                .then(syncResult => {
+                    if (syncResult.added > 0) {
+                        logger.info(`🔄 [VARIABLE SYNC] Auto-synced ${syncResult.added} new variables on CheatSheet save`);
+                        logger.info(`🔄 [VARIABLE SYNC] Variables: ${syncResult.variables?.join(', ')}`);
+                    } else {
+                        logger.info(`🔄 [VARIABLE SYNC] No new variables detected (${syncResult.synced} total)`);
+                    }
+                })
+                .catch(syncErr => {
+                    logger.warn(`🔄 [VARIABLE SYNC] Background sync failed (non-critical): ${syncErr.message}`);
+                });
+        }
+
         console.log('🟢 BACKEND SAVE CHECKPOINT FINAL: Returning success response');
         console.log('   - Company ID:', companyId);
         console.log('   - Updated company exists?:', !!updatedCompany);
