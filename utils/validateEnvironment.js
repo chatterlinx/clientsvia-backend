@@ -61,8 +61,8 @@ function validateEnvironment() {
   const importantVars = {
     REDIS_URL: {
       validator: (val) => !val || val.startsWith('redis://') || val.startsWith('rediss://'),
-      message: 'Must be a valid Redis connection string',
-      fallback: 'Will use REDIS_HOST and REDIS_PORT if available'
+      message: 'Must be a valid Redis connection string (redis:// or rediss://)',
+      fallback: 'Redis caching will be disabled'
     },
     TWILIO_ACCOUNT_SID: {
       validator: (val) => !val || (val.length >= 30 && val.startsWith('AC')),
@@ -129,16 +129,24 @@ function validateEnvironment() {
   }
   
   // ============================================================================
-  // REDIS CONFIGURATION CHECK
+  // REDIS CONFIGURATION CHECK (REDIS_URL ONLY - no HOST/PORT fallback)
   // ============================================================================
   
   if (!process.env.REDIS_URL) {
-    // Check for individual Redis parameters as fallback
-    if (!process.env.REDIS_HOST) {
-      warnings.push('⚠️  Neither REDIS_URL nor REDIS_HOST is set - Redis caching will be disabled');
-    } else {
-      logger.debug('✅ Redis configuration using individual parameters (REDIS_HOST, REDIS_PORT)');
-    }
+    warnings.push('⚠️  REDIS_URL is not set - Redis caching will be disabled');
+  } else {
+    logger.debug('✅ REDIS_URL configured');
+  }
+  
+  // Warn if deprecated Redis env vars still exist
+  if (process.env.REDIS_HOST) {
+    warnings.push('⚠️  REDIS_HOST is deprecated - use REDIS_URL only. Delete REDIS_HOST from environment.');
+  }
+  if (process.env.REDIS_PORT) {
+    warnings.push('⚠️  REDIS_PORT is deprecated - use REDIS_URL only. Delete REDIS_PORT from environment.');
+  }
+  if (process.env.REDIS_PASSWORD) {
+    warnings.push('⚠️  REDIS_PASSWORD is deprecated - use REDIS_URL only. Delete REDIS_PASSWORD from environment.');
   }
   
   // ============================================================================
