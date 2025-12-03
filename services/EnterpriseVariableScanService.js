@@ -873,7 +873,15 @@ class EnterpriseVariableScanService {
             // ═══════════════════════════════════════════════════════════════
             logger.info(`📋 [CHEAT SHEET SCAN ${scanId}] Scanning Frontline-Intel...`);
             
-            const frontlineIntel = cheatSheet.frontlineIntel || '';
+            // Handle both string and object {instructions: "text"} formats
+            let frontlineIntel = '';
+            if (typeof cheatSheet.frontlineIntel === 'string') {
+                frontlineIntel = cheatSheet.frontlineIntel;
+            } else if (typeof cheatSheet.frontlineIntel === 'object' && cheatSheet.frontlineIntel) {
+                frontlineIntel = cheatSheet.frontlineIntel.instructions || cheatSheet.frontlineIntel.text || '';
+            }
+            logger.info(`📋 [CHEAT SHEET SCAN ${scanId}] Frontline-Intel text extracted: ${frontlineIntel.length} chars`);
+            
             const frontlineIntelReport = {
                 source: 'Frontline-Intel',
                 enabled: true,

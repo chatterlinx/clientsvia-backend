@@ -22,6 +22,22 @@ const Company = require('../models/v2Company');
 class VariableSyncService {
     
     /**
+     * Normalize frontlineIntel to string
+     * Frontend may save as string OR object {instructions: "text"}
+     * @param {string|Object} frontlineIntel - The frontlineIntel field
+     * @returns {string} The extracted text content
+     */
+    static normalizeFrontlineIntel(frontlineIntel) {
+        if (!frontlineIntel) return '';
+        if (typeof frontlineIntel === 'string') return frontlineIntel;
+        if (typeof frontlineIntel === 'object') {
+            // V1 format: {instructions: "text"}
+            return frontlineIntel.instructions || frontlineIntel.text || '';
+        }
+        return '';
+    }
+    
+    /**
      * Extract all {variable} placeholders from text
      * @param {string} text - Text containing {variables}
      * @returns {string[]} Array of unique variable names (without braces)
@@ -93,7 +109,10 @@ class VariableSyncService {
             // ═══════════════════════════════════════════════════════════════
             // SCAN 1: Frontline-Intel
             // ═══════════════════════════════════════════════════════════════
-            const frontlineVars = this.extractVariables(config.frontlineIntel || '');
+            // Handle both string and object {instructions: "text"} formats
+            const frontlineText = this.normalizeFrontlineIntel(config.frontlineIntel);
+            logger.debug(`🔄 [VARIABLE SYNC] Frontline-Intel text length: ${frontlineText.length}`);
+            const frontlineVars = this.extractVariables(frontlineText);
             if (frontlineVars.length > 0) {
                 frontlineVars.forEach(v => {
                     if (!variablesBySource.has(v)) {
@@ -103,7 +122,7 @@ class VariableSyncService {
                     variablesBySource.get(v).count++;
                 });
             }
-            logger.debug(`🔄 [VARIABLE SYNC] Frontline-Intel: ${frontlineVars.length} variables`);
+            logger.info(`🔄 [VARIABLE SYNC] Frontline-Intel: ${frontlineVars.length} variables found: ${frontlineVars.join(', ') || 'none'}`);
             
             // ═══════════════════════════════════════════════════════════════
             // SCAN 2: Edge Cases
@@ -326,7 +345,9 @@ class VariableSyncService {
             
             switch (section) {
                 case 'frontlineIntel':
-                    variables = this.extractVariables(content || '');
+                    // Handle both string and object {instructions: "text"} formats
+                    const frontlineText = this.normalizeFrontlineIntel(content);
+                    variables = this.extractVariables(frontlineText);
                     break;
                 case 'edgeCases':
                     variables = this.extractFromArray(content || [], ['responseText', 'name']);
