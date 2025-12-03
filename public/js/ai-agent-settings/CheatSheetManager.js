@@ -885,9 +885,19 @@ class CheatSheetManager {
                 <span class="mr-2">🔤</span>
                 Variables Found in Script
               </h4>
-              <span id="frontline-variables-count" class="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full">
-                0 variables
-              </span>
+              <div class="flex items-center space-x-2">
+                <span id="frontline-variables-count" class="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full">
+                  0 variables
+                </span>
+                <button 
+                  id="sync-variables-btn"
+                  onclick="cheatSheetManager.syncVariablesToTable()"
+                  class="px-3 py-1 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-700 transition-colors flex items-center space-x-1"
+                >
+                  <span>⬆️</span>
+                  <span>Sync to Variables Tab</span>
+                </button>
+              </div>
             </div>
             <div id="frontline-variables-list" class="flex flex-wrap gap-2">
               <span class="text-sm text-gray-500 italic">Type {variableName} in your script to add variables</span>
@@ -950,6 +960,112 @@ class CheatSheetManager {
   // ═══════════════════════════════════════════════════════════════════
   // LIVE VARIABLES PREVIEW - Simple client-side extraction
   // ═══════════════════════════════════════════════════════════════════
+  
+  async syncVariablesToTable() {
+    const textarea = document.getElementById('company-instructions-textarea');
+    const text = textarea?.value || '';
+    const syncBtn = document.getElementById('sync-variables-btn');
+    
+    // Extract variables
+    const matches = text.match(/\{([a-zA-Z0-9_]+)\}/g) || [];
+    const uniqueVars = [...new Set(matches.map(m => m.slice(1, -1)))];
+    
+    if (uniqueVars.length === 0) {
+      this.showNotification('⚠️ No variables found in script', 'warning');
+      return;
+    }
+    
+    // Show loading state
+    if (syncBtn) {
+      syncBtn.disabled = true;
+      syncBtn.innerHTML = '<span>⏳</span><span>Syncing...</span>';
+    }
+    
+    try {
+      const token = localStorage.getItem('authToken');
+      
+      // Build variable definitions
+      const variableDefinitions = uniqueVars.map(varName => {
+        const lower = varName.toLowerCase();
+        let category = 'General';
+        let type = 'text';
+        let example = `Enter ${varName}`;
+        
+        // Categorize
+        if (lower.includes('company') || lower.includes('business') || lower.includes('name')) {
+          category = 'Company Info';
+          example = 'e.g., Atlas Air Conditioning';
+        } else if (lower.includes('phone')) {
+          category = 'Contact';
+          type = 'phone';
+          example = 'e.g., (239) 555-0100';
+        } else if (lower.includes('email')) {
+          category = 'Contact';
+          type = 'email';
+          example = 'e.g., info@company.com';
+        } else if (lower.includes('hour') || lower.includes('schedule')) {
+          category = 'Scheduling';
+          example = 'e.g., Mon-Fri 8AM-5PM';
+        } else if (lower.includes('url') || lower.includes('booking') || lower.includes('website')) {
+          category = 'General';
+          type = 'url';
+          example = 'e.g., https://company.com';
+        } else if (lower.includes('greeting')) {
+          category = 'General';
+          example = 'e.g., Thanks for calling!';
+        } else if (lower.includes('area') || lower.includes('service')) {
+          category = 'Services';
+          example = 'e.g., Naples, Fort Myers';
+        }
+        
+        // Count occurrences
+        const regex = new RegExp(`\\{${varName}\\}`, 'gi');
+        const count = (text.match(regex) || []).length;
+        
+        return {
+          key: varName,
+          normalizedKey: lower,
+          label: varName.replace(/([A-Z])/g, ' $1').trim(),
+          category: category,
+          type: type,
+          example: example,
+          usageCount: count,
+          required: false,
+          source: 'Frontline-Intel',
+          locations: [{ source: 'Frontline-Intel', category: 'Cheat Sheet' }]
+        };
+      });
+      
+      // Send to backend
+      const response = await fetch(`/api/company/${this.companyId}/configuration/variables/sync-from-script`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ variableDefinitions })
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        this.showNotification(`✅ Synced ${uniqueVars.length} variables to Variables tab!`, 'success');
+        console.log('[CHEAT SHEET] ✅ Variables synced:', result);
+      } else {
+        throw new Error(result.message || 'Sync failed');
+      }
+      
+    } catch (error) {
+      console.error('[CHEAT SHEET] ❌ Variables sync failed:', error);
+      this.showNotification(`❌ Sync failed: ${error.message}`, 'error');
+    } finally {
+      // Reset button
+      if (syncBtn) {
+        syncBtn.disabled = false;
+        syncBtn.innerHTML = '<span>⬆️</span><span>Sync to Variables Tab</span>';
+      }
+    }
+  }
   
   updateVariablesPreview(text) {
     const listContainer = document.getElementById('frontline-variables-list');

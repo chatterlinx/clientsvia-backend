@@ -1871,6 +1871,107 @@ router.post('/:companyId/configuration/variables/scan-cheatsheet', async (req, r
 
 /**
  * ============================================================================
+ * POST /api/company/:companyId/configuration/variables/sync-from-script
+ * SIMPLE SYNC: Push variables from Frontline-Intel directly to Variables tab
+ * No complex scanning - just receive and save
+ * ============================================================================
+ */
+router.post('/:companyId/configuration/variables/sync-from-script', async (req, res) => {
+    const companyId = req.params.companyId;
+    logger.info(`⬆️ [VARIABLE SYNC] POST /configuration/variables/sync-from-script for company: ${companyId}`);
+    
+    try {
+        const { variableDefinitions } = req.body;
+        
+        if (!variableDefinitions || !Array.isArray(variableDefinitions)) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'variableDefinitions array is required' 
+            });
+        }
+        
+        logger.info(`⬆️ [VARIABLE SYNC] Received ${variableDefinitions.length} variables to sync`);
+        logger.info(`⬆️ [VARIABLE SYNC] Variables: ${variableDefinitions.map(v => v.key).join(', ')}`);
+        
+        // Get company
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ success: false, error: 'Company not found' });
+        }
+        
+        // Initialize if needed
+        if (!company.aiAgentSettings) {
+            company.aiAgentSettings = {};
+        }
+        if (!company.aiAgentSettings.variableDefinitions) {
+            company.aiAgentSettings.variableDefinitions = [];
+        }
+        if (!company.aiAgentSettings.variables) {
+            company.aiAgentSettings.variables = {};
+        }
+        
+        const existingDefs = company.aiAgentSettings.variableDefinitions;
+        const existingVars = company.aiAgentSettings.variables;
+        const existingKeys = new Set(existingDefs.map(d => (d.key || '').toLowerCase()));
+        
+        let addedCount = 0;
+        let updatedCount = 0;
+        
+        // Merge new definitions
+        for (const newDef of variableDefinitions) {
+            const normalizedKey = (newDef.key || '').toLowerCase();
+            
+            if (!existingKeys.has(normalizedKey)) {
+                // New variable - add to definitions
+                existingDefs.push(newDef);
+                existingKeys.add(normalizedKey);
+                addedCount++;
+                logger.info(`  ➕ Added: {${newDef.key}}`);
+                
+                // Also add to variables object (for value storage)
+                if (!existingVars[newDef.key]) {
+                    existingVars[newDef.key] = '';
+                }
+            } else {
+                // Existing - update usage count
+                const existingIdx = existingDefs.findIndex(d => (d.key || '').toLowerCase() === normalizedKey);
+                if (existingIdx !== -1) {
+                    existingDefs[existingIdx].usageCount = newDef.usageCount;
+                    existingDefs[existingIdx].source = newDef.source || existingDefs[existingIdx].source;
+                    updatedCount++;
+                }
+            }
+        }
+        
+        // Save
+        company.aiAgentSettings.variableDefinitions = existingDefs;
+        company.aiAgentSettings.variables = existingVars;
+        company.markModified('aiAgentSettings.variableDefinitions');
+        company.markModified('aiAgentSettings.variables');
+        await company.save();
+        
+        logger.info(`✅ [VARIABLE SYNC] Complete: ${addedCount} added, ${updatedCount} updated, ${existingDefs.length} total`);
+        
+        res.json({
+            success: true,
+            message: `Synced ${variableDefinitions.length} variables`,
+            added: addedCount,
+            updated: updatedCount,
+            total: existingDefs.length
+        });
+        
+    } catch (error) {
+        logger.error(`❌ [VARIABLE SYNC] Error:`, error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to sync variables',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * ============================================================================
  * GET /api/company/:companyId/configuration/variables/scan-history
  * Get scan history for audit trail and validation (ENTERPRISE)
  * ============================================================================
