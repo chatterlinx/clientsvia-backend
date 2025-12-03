@@ -87,6 +87,7 @@ class FrontlineIntel {
         let scriptText = '';
         
         try {
+            logger.info(`📜 [FRONTLINE-INTEL] Loading roadmap from CheatSheetRuntimeService...`);
             const CheatSheetRuntimeService = require('./CheatSheetRuntimeService');
             const liveConfig = await CheatSheetRuntimeService.getLiveConfig(company._id.toString());
             
@@ -97,15 +98,19 @@ class FrontlineIntel {
                 } else if (frontlineScript?.instructions) {
                     scriptText = frontlineScript.instructions;
                 }
+                logger.info(`✅ [FRONTLINE-INTEL] Roadmap FOUND in live CheatSheet!`, {
+                    scriptLength: scriptText.length,
+                    versionId: liveConfig.versionId,
+                    versionName: liveConfig.name
+                });
+            } else {
+                logger.warn(`⚠️ [FRONTLINE-INTEL] Live CheatSheet exists but NO frontlineIntel field!`, {
+                    hasLiveConfig: !!liveConfig,
+                    configKeys: liveConfig?.config ? Object.keys(liveConfig.config) : []
+                });
             }
-            
-            logger.debug('🎯 [FRONTLINE-INTEL] Script loaded from CheatSheetRuntimeService', {
-                companyId: company._id.toString(),
-                hasLiveConfig: !!liveConfig,
-                scriptLength: scriptText.length
-            });
         } catch (loadErr) {
-            logger.warn('🎯 [FRONTLINE-INTEL] Failed to load from CheatSheetRuntimeService', {
+            logger.warn('⚠️ [FRONTLINE-INTEL] CheatSheetRuntimeService failed, trying fallback...', {
                 error: loadErr.message
             });
             
@@ -119,12 +124,28 @@ class FrontlineIntel {
             } else if (frontlineScript?.instructions) {
                 scriptText = frontlineScript.instructions;
             }
+            
+            if (scriptText.length > 0) {
+                logger.info(`✅ [FRONTLINE-INTEL] Fallback succeeded, found script in company document`, {
+                    scriptLength: scriptText.length
+                });
+            } else {
+                logger.warn(`❌ [FRONTLINE-INTEL] Fallback also failed - NO script anywhere!`);
+            }
         }
         
         const hasScript = scriptText.trim().length > 100;
         
         if (!hasScript) {
-            logger.info('🎯 [FRONTLINE-INTEL] No script configured (< 100 chars), using raw input');
+            // 🚨 CRITICAL CHECKPOINT: No roadmap found!
+            logger.warn(`🚨 [FRONTLINE-INTEL] ═══════════════════════════════════════════════════`);
+            logger.warn(`🚨 [FRONTLINE-INTEL] NO FRONTLINE SCRIPT FOUND!`);
+            logger.warn(`🚨 [FRONTLINE-INTEL] The AI has NO roadmap to follow!`);
+            logger.warn(`🚨 [FRONTLINE-INTEL] Script length: ${scriptText.length} chars (need > 100)`);
+            logger.warn(`🚨 [FRONTLINE-INTEL] Company: ${company.companyName || company.businessName}`);
+            logger.warn(`🚨 [FRONTLINE-INTEL] CompanyId: ${company._id?.toString()}`);
+            logger.warn(`🚨 [FRONTLINE-INTEL] FIX: Go to Cheat Sheet → Frontline-Intel → Save script → Push Live`);
+            logger.warn(`🚨 [FRONTLINE-INTEL] ═══════════════════════════════════════════════════`);
             return {
                 skipped: true,
                 cleanedInput: userInput,
@@ -198,6 +219,16 @@ class FrontlineIntel {
                     frontlineScript: scriptText  // Pass the pre-processed script with variables substituted
                 });
             }
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // 🗺️ ROADMAP CHECKPOINT: Log what instructions OpenAI is receiving
+            // ═══════════════════════════════════════════════════════════════════
+            logger.info(`📜 [FRONTLINE-INTEL] ═══════════════════════════════════════════════════`);
+            logger.info(`📜 [FRONTLINE-INTEL] SYSTEM PROMPT BEING SENT TO OPENAI:`);
+            logger.info(`📜 [FRONTLINE-INTEL] Length: ${systemPrompt.length} characters`);
+            logger.info(`📜 [FRONTLINE-INTEL] Preview (first 500 chars):`);
+            logger.info(`📜 [FRONTLINE-INTEL] ${systemPrompt.substring(0, 500)}`);
+            logger.info(`📜 [FRONTLINE-INTEL] ═══════════════════════════════════════════════════`);
             
             // Step 3: Call OpenAI with timeout and retry logic
             const llmResult = await this.callLLMWithRetry(
