@@ -182,16 +182,12 @@
         </div>
         <!-- ============ END SIMPLE VARIABLES EDITOR ============ -->
 
-        <div class="card">
-          <h2>Variables <span class="badge">AiCore Config</span></h2>
-          <p class="muted">Company-level and trade-level variables used inside templates, scenarios, and orchestrator prompts.</p>
-          
-          <!-- Variables Manager Container (uses same API as company-profile.html) -->
-          <div id="variables-container" style="margin-top: 20px;">
-            <div style="text-align: center; padding: 40px; color: #6b7280;">
-              <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
-              <p>Loading variables...</p>
-            </div>
+        <!-- OLD Complex Variables Manager - HIDDEN (kept for backward compatibility) -->
+        <div id="legacy-variables-manager" style="display: none;">
+          <div class="card">
+            <h2>Variables <span class="badge">AiCore Config</span></h2>
+            <p class="muted">Company-level and trade-level variables used inside templates, scenarios, and orchestrator prompts.</p>
+            <div id="variables-container" style="margin-top: 20px;"></div>
           </div>
         </div>
       </div>
